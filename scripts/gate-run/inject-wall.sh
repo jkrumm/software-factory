@@ -23,8 +23,10 @@ FACTORY_SESSION=$session factory hook stop-failure <<<"$payload"
 body=$(jq -nc --arg r "$reset" --argjson five "$(jq '.fiveHourUsed // 0' <<<"$real")" --argjson wk "$(jq '.weeklyUsed // 0' <<<"$real")" \
   --arg wr "$(jq -r '.weeklyResetsAt // empty' <<<"$real")" \
   '{fiveHourUsed:100,weeklyUsed:$wk,fiveHourResetsAt:$r,weeklyResetsAt:(if $wr == "" then null else $wr end),exhaustedUntil:$r,ageS:0}')
-token=$(secrets-run run --env-file="$ROOT/.env.tpl" -- printenv FACTORY_TOKEN)
-curl -fsS -X PUT "${FACTORY_URL:-http://127.0.0.1:7793}/quota/accounts/$account" \
-  -H "Authorization: Bearer $token" \
-  -H 'Content-Type: application/json' -d "$body" | jq -c '{account,fiveHourUsed,fiveHourResetsAt,exhaustedUntil}' | scrub
+# secrets-run redacts a secret it prints to a pipe, so the call runs inside it and the body travels in the environment.
+# shellcheck disable=SC2016  # the inner shell expands them
+GATE_BODY=$body GATE_URL="${FACTORY_URL:-http://127.0.0.1:7793}/quota/accounts/$account" \
+  secrets-run run --env-file="$ROOT/.env.tpl" -- sh -c \
+  'curl -fsS -X PUT "$GATE_URL" -H "Authorization: Bearer $FACTORY_TOKEN" -H "Content-Type: application/json" -d "$GATE_BODY"' |
+  jq -c '{account,fiveHourUsed,fiveHourResetsAt,exhaustedUntil}' | scrub
 log "wall: hook stop-failure rate_limit for $session at $hook_at; TEST ROW on $account, reset $reset (+${minutes} min), five-hour use 100 for the row"

@@ -6,7 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 for name in "${CHAINS[@]}"; do
   for n in 1 2 3 4 5; do
-    rd close "$name-w$n" 2>&1 | scrub | sed "s/^/teardown: $name-w$n: /" || true
+    rd close "$name-w$n" 2>&1 | head -1 | scrub | sed "s/^/teardown: $name-w$n: /" || true
   done
 done
 for name in "${CHAINS[@]}"; do

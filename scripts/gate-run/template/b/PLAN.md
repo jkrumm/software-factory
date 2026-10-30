@@ -1,23 +1,23 @@
-# factory-gate-b: a tiny number module
+# __NAME__: a tiny number module
 **Goal:** `src/num.ts` exports `clamp`, `lerp`, `mean` and `median`, each with tests in `src/num.test.ts`.
 **Gate:** `make check` passes before the close-out commit.
 
 ## Wave 1 — clamp            <!-- status: active -->
 - [ ] Add `clamp(value: number, min: number, max: number): number` to `src/num.ts`: `value` limited to `[min, max]`.
 - [ ] Add tests for it to `src/num.test.ts` (below, inside, above, min equal to max).
-- [ ] Run `make check`, commit, update this plan, commit, push, then spawn the next wave with `rd wave factory-gate-b 'Read docs/waves/PLAN.md. Execute the active wave (Wave 2). Follow the /wave skill.'`
+- [ ] Run `make check`, commit, update this plan, commit, push, then spawn the next wave with `rd wave __NAME__ 'Read docs/waves/PLAN.md. Execute the active wave (Wave 2). Follow the /wave skill.'`
 **Left behind:**
 
 ## Wave 2 — lerp            <!-- status: pending -->
 - [ ] Add `lerp(a: number, b: number, t: number): number` to `src/num.ts`: `a + (b - a) * t`, `t` not limited.
 - [ ] Add tests for it to `src/num.test.ts` (`t` of 0, 1, 0.5 and outside 0 to 1).
-- [ ] Run `make check`, commit, update this plan, commit, push, then run `rd wave factory-gate-b 'Read docs/waves/PLAN.md. Execute the active wave (Wave 3). Follow the /wave skill.'`
+- [ ] Run `make check`, commit, update this plan, commit, push, then run `rd wave __NAME__ 'Read docs/waves/PLAN.md. Execute the active wave (Wave 3). Follow the /wave skill.'`
 **Left behind:**
 
 ## Wave 3 — mean            <!-- status: pending -->
 - [ ] Add `mean(values: number[]): number` to `src/num.ts`: the arithmetic mean, `NaN` for an empty list.
 - [ ] Add tests for it to `src/num.test.ts` (one value, several values, empty list).
-- [ ] Run `make check`, commit, update this plan, commit, push, then run `rd wave factory-gate-b 'Read docs/waves/PLAN.md. Execute the active wave (Wave 4). Follow the /wave skill.'`
+- [ ] Run `make check`, commit, update this plan, commit, push, then run `rd wave __NAME__ 'Read docs/waves/PLAN.md. Execute the active wave (Wave 4). Follow the /wave skill.'`
 **Left behind:**
 
 ## Wave 4 — median            <!-- status: pending -->

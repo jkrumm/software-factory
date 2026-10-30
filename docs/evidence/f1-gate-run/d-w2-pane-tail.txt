@@ -1,0 +1,30 @@
+      look
+
+⏺ Wave 2 is done and pushed: truncate and its 4 tests are committed, make check passes with 8 tests, and the plan is
+  closed out. Wave 3 is queued, not running. rd wave printed queued: wave, so the factory starts factory-gate-d-w3 when
+  it releases the hold. I'm ending the turn without waiting on it.
+
+✻ Sautéed for 13s · done 7:20 PM
+
+❯ continue
+
+⏺ Bash(factory spawn get factory-gate-d-w3 2>&1 | head -15; rd agents 2>&1 | head -10)
+  ⎿  {
+       "key": "factory-gate-d-w3",
+       "status": "queued",
+     … +28 lines (ctrl+o to expand)
+
+⏺ Wave 3 is still queued with a hold of wave and resumeAt 2026-10-30T18:31:46Z. It has 0 attempts and no pane, so it
+  hasn't started.
+
+  The factory starts it when the hold releases. Respawning it myself would bypass that hold. AGENTS.md says to never
+  wait in the background, so I'm ending the turn here. Wave 2 is complete and pushed.
+
+✻ Churned for 3s · done 7:31 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  MAX IU · Sonnet 5.5 · high | 40k/600k 6% | Σ44k | ⚡92% | 11min | iu 4/52 ↺268m · me 4/53 · me2 0/100 · ∑60%
+  factory-gate-d | ✓ master
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 2 agents

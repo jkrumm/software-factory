@@ -8,7 +8,10 @@ ROOT=$(cd "$GATE_DIR/../.." && pwd)
 SOURCE_ROOT=${GATE_SOURCE_ROOT:-$HOME/SourceRoot}
 REMOTES=${GATE_REMOTES:-$HOME/.local/share/factory/gate-remotes}
 EVIDENCE=${GATE_EVIDENCE:-$ROOT/docs/evidence/f1-gate-run}
-CHAINS=(factory-gate-a factory-gate-b)
+# "name:variant" per chain (variant a = text module, b = number module); a rerun needs fresh names because the
+# factory keeps a spawn row per agent name for good.
+read -ra CHAIN_SPECS <<<"${GATE_CHAINS:-factory-gate-a:a factory-gate-b:b}"
+CHAINS=("${CHAIN_SPECS[@]%%:*}")
 
 # The factory CLI with the token resolved at run time (never in a tracked file).
 fx() { secrets-run run --env-file="$ROOT/.env.tpl" -- factory "$@"; }
