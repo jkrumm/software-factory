@@ -85,6 +85,13 @@ export async function recordReadings(sql: SQL, readings: readonly NamedQuota[], 
            weekly_resets_at, exhausted_until)
         VALUES (${r.account}, ${now}, ${sampledAt}, ${r.enabled}, ${r.authOk}, ${r.fiveHourUsed}, ${r.weeklyUsed},
                 ${r.fiveHourResetsAt}, ${r.weeklyResetsAt}, ${r.exhaustedUntil})`
+      // For one release the previous server's table is still fed, so a rollback finds live readings, not frozen ones.
+      const resetsAt = r.fiveHourResetsAt ?? r.weeklyResetsAt
+      if (r.fiveHourUsed !== null && r.weeklyUsed !== null && resetsAt) {
+        await tx`
+          INSERT INTO factory.capacity_readings (account, weekly_used, five_hour_used, resets_at)
+          VALUES (${r.account}, ${r.weeklyUsed}, ${r.fiveHourUsed}, ${resetsAt})`
+      }
     }
     const latest = await latestReadings(tx)
     if (pickEligible(latest, await currentLoads(tx, latest), { now })) await wakeWaiting(tx, now)

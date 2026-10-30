@@ -506,6 +506,16 @@ describe('factory role', () => {
     expect(r.stderr).toContain('unknown role nobody')
   })
 
+  // rd branches on this: an unknown role is a usage error to report, not a failure to ignore.
+  test('an unknown role answers error.kind not_found on stderr, nothing on stdout, whatever the format', async () => {
+    for (const format of ['json', 'plain']) {
+      const r = await factory(['role', 'get', 'nobody', '--format', format])
+      expect(r).toMatchObject({ code: 4, stdout: '' })
+      expect(r.code).toBe(EXIT.not_found)
+      expect(JSON.parse(r.stderr).error.kind).toBe('not_found')
+    }
+  })
+
   test('FACTORY_ROLES_FILE points at another table; an unusable one is a failure', async () => {
     const dir = mkdtempSync('/tmp/factory-roles-')
     try {

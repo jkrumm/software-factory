@@ -1,7 +1,7 @@
 -- Quota readings from the account picker, one row per account per poll. Percentages are of the window; a null is "the
 -- picker has no sample". `sampled_at` is when the sample behind the row was taken (read_at minus its age): a spawn
--- assigned after it is not in the numbers yet. Replaces capacity_readings, which stays for one release and is no
--- longer written.
+-- assigned after it is not in the numbers yet. Replaces capacity_readings, which is still fed for one release so a
+-- rollback finds live readings.
 CREATE TABLE factory.quota_readings (
   id                  bigserial PRIMARY KEY,
   account             text NOT NULL,

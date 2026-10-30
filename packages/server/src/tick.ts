@@ -118,8 +118,9 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       }
 
       // A reclaimed claim may already have its pane; finish it on the account it has instead of asking again.
+      const reclaimed = row.status === 'starting' && row.account !== null
       const decision: Decision =
-        row.status === 'starting' && row.account
+        reclaimed && row.account
           ? { kind: 'start', account: row.account }
           : await admit(tx, { key: row.key, repo: row.repo, role: row.role, prefer: row.account }, now, live)
       if (decision.kind !== 'start') {
@@ -137,7 +138,8 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       }
       await tx`
         UPDATE factory.spawns
-        SET status = 'starting', account = ${decision.account}, assigned_at = COALESCE(assigned_at, ${now}), hold = NULL,
+        SET status = 'starting', account = ${decision.account},
+            assigned_at = CASE WHEN ${reclaimed} THEN COALESCE(assigned_at, ${now}) ELSE ${now} END, hold = NULL,
             claimed_at = ${now}, resume_at = NULL, attempts = attempts + 1,
             first_claimed_at = COALESCE(first_claimed_at, ${now})
         WHERE key = ${row.key}`

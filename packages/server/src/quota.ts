@@ -83,6 +83,7 @@ export const POLL_EVERY_MS = 60_000
  */
 export class QuotaPoller {
   private lastAttemptAt = Number.NEGATIVE_INFINITY
+  private inFlight: Promise<NamedQuota[]> | undefined
 
   constructor(private readonly deps: { sql: SQL; source: QuotaSource; clock: Clock; everyMs?: number }) {}
 
@@ -92,8 +93,18 @@ export class QuotaPoller {
     await this.poll()
   }
 
-  /** Reads and stores now; returns the readings. Throws what the source throws. */
-  async poll(): Promise<NamedQuota[]> {
+  /**
+   * Reads and stores now; returns the readings. Throws what the source throws. A poll already running is joined, not
+   * repeated: two overlapping polls could store an older sample after a newer one, and the newest row wins.
+   */
+  poll(): Promise<NamedQuota[]> {
+    this.inFlight ??= this.read().finally(() => {
+      this.inFlight = undefined
+    })
+    return this.inFlight
+  }
+
+  private async read(): Promise<NamedQuota[]> {
     this.lastAttemptAt = this.deps.clock.now().getTime()
     const readings = await this.deps.source.read()
     await recordReadings(this.deps.sql, readings, this.deps.clock.now())
