@@ -111,8 +111,8 @@ export interface Derived {
   since: Date | null
 }
 
-/** What only a live session produces. */
-const HOOK_KINDS: readonly EventKind[] = [
+/** What only a live session produces: an event of one of these kinds after a moment shows the session was there. */
+export const HOOK_KINDS: readonly EventKind[] = [
   'session_started',
   'turn_started',
   'turn_ended',

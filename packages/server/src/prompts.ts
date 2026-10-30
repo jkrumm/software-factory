@@ -2,7 +2,7 @@ import type { Effort, Prompt, PromptStatus, Tier } from '@software-factory/contr
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
-import { getSession } from './sessions.ts'
+import { getSession, HOOK_KINDS } from './sessions.ts'
 
 /** A typed prompt is proven by the next `turn_started`; none within this long and it is typed once more. */
 export const CONFIRM_MS = 60_000
@@ -71,18 +71,33 @@ export interface NewPrompt {
   failed?: string
 }
 
-/** Records a prompt under its id, before anything is typed. A repeated id returns the stored prompt untouched. */
+/**
+ * A rule's prompt that gave up is recorded again, as if new, once this long after it did and only if the rule still asks
+ * for it: the condition (a session still blocked, an account still at 94 %) has outlived the prompt.
+ */
+export const REARM_AFTER_MS = 30 * 60_000
+
+/**
+ * Records a prompt under its id, before anything is typed. A repeated id returns the stored prompt untouched, except that
+ * with `rearm` (a rule asking again) a `failed` one older than `REARM_AFTER_MS` starts over; `created` is true then too.
+ */
 export async function recordPrompt(
   sql: SQL,
   input: NewPrompt,
   now: Date,
+  options: { rearm?: boolean } = {},
 ): Promise<{ prompt: Prompt; created: boolean }> {
+  const rearmable = new Date(now.getTime() - REARM_AFTER_MS)
   const [row]: PromptRow[] = await sql`
     INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, error, failed_at)
     VALUES (${input.id}, ${input.session}, ${input.source}, ${input.via ?? 'type'}, ${input.text},
             ${input.failed ? 'failed' : 'pending'}, ${now}, ${now}, ${input.failed ?? null},
             ${input.failed ? now : null})
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT (id) DO UPDATE
+      SET status = 'pending', created_at = EXCLUDED.created_at, next_at = EXCLUDED.next_at, claimed_at = NULL,
+          sent_at = NULL, sent_count = 0, failures = 0, failed_at = NULL, error = NULL
+      WHERE ${options.rearm === true} AND factory.prompts.status = 'failed' AND EXCLUDED.status = 'pending'
+        AND factory.prompts.failed_at <= ${rearmable}
     RETURNING *`
   if (row) return { prompt: toPrompt(row), created: true }
   const [existing]: PromptRow[] = await sql`SELECT * FROM factory.prompts WHERE id = ${input.id}`
@@ -110,18 +125,31 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   await sql`
     UPDATE factory.prompts SET status = 'sent', sent_at = ${now}, sent_count = sent_count + 1
     WHERE status = 'typing' AND claimed_at <= ${leaseEnd}`
-  await sql`
-    UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
-    WHERE p.status = 'sent' AND EXISTS (
-      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
+  // One statement, so a turn_started that lands meanwhile cannot be missed between "proven" and "unconfirmed": a sent
+  // prompt with a turn after its claim is delivered, whatever else is true of it.
   const stale = new Date(now.getTime() - CONFIRM_MS)
   await sql`
-    UPDATE factory.prompts
-    SET status = CASE WHEN sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
-        failed_at = CASE WHEN sent_count < ${MAX_SENDS} THEN NULL ELSE ${now}::timestamptz END,
-        error = CASE WHEN sent_count < ${MAX_SENDS} THEN 'no turn started within a minute of typing it: typed again'
-                     ELSE 'no turn started within a minute of the retry: not delivered' END
-    WHERE status = 'sent' AND sent_at <= ${stale}`
+    UPDATE factory.prompts p
+    SET status = s.next, next_at = ${now},
+        delivered_at = CASE WHEN s.next = 'delivered' THEN ${now}::timestamptz END,
+        failed_at = CASE WHEN s.next = 'failed' THEN ${now}::timestamptz END,
+        error = CASE s.next
+                  WHEN 'delivered' THEN NULL
+                  WHEN 'pending' THEN 'no turn started within a minute of typing it: typed again'
+                  ELSE 'no turn started within a minute of the retry: not delivered' END
+    FROM (
+      SELECT q.id,
+             CASE WHEN EXISTS (
+                    SELECT 1 FROM factory.events e
+                    WHERE e.session = q.session AND e.kind = 'turn_started' AND e.at >= q.claimed_at) THEN 'delivered'
+                  WHEN q.sent_count < ${MAX_SENDS} THEN 'pending'
+                  ELSE 'failed' END AS next
+      FROM factory.prompts q
+      WHERE q.status = 'sent'
+        AND (q.sent_at <= ${stale} OR EXISTS (
+               SELECT 1 FROM factory.events e
+               WHERE e.session = q.session AND e.kind = 'turn_started' AND e.at >= q.claimed_at))) s
+    WHERE p.id = s.id AND p.status = 'sent'`
   await sql`
     UPDATE factory.prompts
     SET status = 'failed', failed_at = ${now}, error = 'expired: the session never took it'
@@ -160,7 +188,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
         SELECT (EXISTS (
                   SELECT 1 FROM factory.events
                   WHERE session = ${id} AND at > ${since}
-                    AND kind IN ('session_started', 'turn_started', 'turn_ended', 'limit_stop', 'quota_resume'))
+                    AND kind IN ${sql(HOOK_KINDS)})
                 OR (SELECT herdr_seen_at > ${since} FROM factory.sessions WHERE id = ${id})) AS alive`
       return row?.alive === true
     },
@@ -210,8 +238,12 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     SELECT * FROM factory.prompts WHERE status = 'pending' AND next_at <= ${clock.now()}
     ORDER BY created_at, id LIMIT 500`
   let attempts = 0
+  // A second prompt typed while the first is still waiting for its turn would only queue, and the same turn would then
+  // "prove" both: one per session per pass.
+  const typedTo = new Set<string>()
   for (const prompt of due) {
     if (attempts >= DELIVER_BATCH) break
+    if (typedTo.has(prompt.session)) continue
     const target = await targetOf(sql, prompt.session, clock.now())
     const refusal = !target
       ? `unknown session ${prompt.session}`
@@ -233,6 +265,7 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       WHERE id = ${prompt.id} AND status = 'pending' RETURNING id`
     if (claimed.length === 0) continue
     attempts++
+    typedTo.add(prompt.session)
 
     let outcome: 'typed' | 'busy'
     try {
@@ -292,7 +325,10 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
     effort: spawn.effort,
     resume: claudeSessionId,
   })
-  await deps.sql`UPDATE factory.sessions SET pane = ${pane}, pane_misses = 0 WHERE id = ${prompt.session}`
-  await deps.sql`UPDATE factory.spawns SET session = ${pane} WHERE key = ${spawn.key}`
+  // The new pane in one transaction, after the call: a crash between the two rows would leave the spawn pointing at a dead pane.
+  await deps.sql.begin(async (tx) => {
+    await tx`UPDATE factory.sessions SET pane = ${pane}, pane_misses = 0 WHERE id = ${prompt.session}`
+    await tx`UPDATE factory.spawns SET session = ${pane} WHERE key = ${spawn.key}`
+  })
   return 'typed'
 }
