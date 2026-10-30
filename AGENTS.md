@@ -114,6 +114,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   - *Rotation*: role `mother` or `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
   - *Blocked*: `blocked` for 2 minutes is a line in `factory status`; if the session has a live parent, also a note to it,
     `blocked:<event key>`.
+  - *Wake*: a session `waiting` with `--on workers`, with at least one child session and none unfinished, gets one note,
+    `workers done: <child> <state>, …`, `wake:<session>:<the wait's declared event key>` (one per declared wait; a new wait
+    can wake again). A child is finished when `dead` or `idle` after a turn of its current life (`liveSessions`' `finished`);
+    a spawn of the session's that has no session yet (queued, held, waiting for capacity, starting) is not. A failed spawn
+    does not hold the wake: it is a line in `factory status`. A parent that is not `waiting` gets nothing (send-back covers
+    a working one). This is what resumes an orchestrator that ended its turn on a wait.
   - *herdr restart*: a `herdr_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
     at that time, has had no hook event since and that herdr has not shown since is resumed by id (`Runner.start` with
     `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
