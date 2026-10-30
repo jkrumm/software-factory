@@ -43,7 +43,7 @@ code itself.
 | IR | iris: fleet, waves and quota screens on the factory API | iris | F1 | pending |
 | F3 | Intake and self-heal (Kuma, GitHub, TickTick, Beszel, HyperDX), dedup with the golden set | software-factory | F2 | pending |
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
-| D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | Plan in dotfiles (one wave); Wave 1 running (`dotfiles-w1`). The evidence lands in `docs/evidence/` here through a worktree, not the lead's checkout |
+| D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | Done 2026-10-30, reviewed: archived to `dotfiles/docs/archive/factory-v2.4/`, evidence in `docs/evidence/`. Open: the one-line `agent-workflows/docs/factory-input.md` repoint, after I1 Wave 1 |
 | L | Later, owner-timed: finances on the mini behind Touch ID; calendar and mail via email-gateway | finances (MacBook), argo, email-gateway | A1 | not started |
 
 ## Track notes (the findings each track inherits)
@@ -58,7 +58,7 @@ in the UI. Full list of kept sweep hits: `dotfiles/docs/waves/archive/2026-10-cl
 routes (no caller; `aiComplete` stays), `startChatTurn` in the dashboard's telemetry, the 50 MB body limit.
 
 ### F0: design, Effect skill, spike, skeleton
-1. **`docs/design.md`:** the factory's design from TDD v2.4 (`dotfiles/docs/factory/tdd/03`–`10`) plus
+1. **`docs/design.md`:** the factory's design from TDD v2.4 (`dotfiles/docs/archive/factory-v2.4/tdd/03`–`10`) plus
    `docs/decisions.md`. Keep what carries over, rewrite what changed, drop the rest. Data model for the fleet
    (sessions, events, queue, accounts) and the Issue machine (TDD §6's tables). Verdict first, short.
 2. **Effect skill**, done and removed with the verdict. It pinned `effect@4.0.6`: 4.1.0 and 4.0.7 were inside the

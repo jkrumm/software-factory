@@ -6,8 +6,8 @@ projects, Issues, sessions, the queue and capacity. It never calls a model itsel
 Issue machine, because the waves are what build everything else. Argo moves to the mini as the analysis
 cockpit, iris is the live personal surface, Hermes is the conversation layer behind iris.
 
-Inputs: the owner's voice notes (`dotfiles/docs/factory/feedback/2026-10-30-owner-voice-note-replan.md` and
-the chat after it), `agent-workflows/docs/factory-input.md`, TDD v2.4 (`dotfiles/docs/factory/tdd/`,
+Inputs: the owner's voice notes (`dotfiles/docs/archive/factory-v2.4/feedback/2026-10-30-owner-voice-note-replan.md` and
+the chat after it), `agent-workflows/docs/factory-input.md`, TDD v2.4 (`dotfiles/docs/archive/factory-v2.4/tdd/`,
 superseded by this page where they disagree), the research in `docs/research/`, and four investigations
 of 2026-10-30 (Argo and usage, Claude Code setup, wave maturity, infra and iris). Their findings are quoted
 in `docs/program.md` where a track needs them.
@@ -86,5 +86,5 @@ Hermes is behind iris, not Slack; cards and push go to iris, not Argo web push; 
 - **warden, agent-gateway, research-gateway, audio-gateway:** archived and deleted from disk after their final
   backups are checked (warden done 2026-10-30).
 - **weatherorb's alert issues** stay as they are for now.
-- **TDD v2.4 and the rest of `dotfiles/docs/factory/`** are archived once `docs/design.md` here holds what
-  carries over; the evidence the factory still uses (golden set, intervention KPIs) moves here.
+- **TDD v2.4 and the rest of `dotfiles/docs/factory/`** are archived in `dotfiles/docs/archive/factory-v2.4/`
+  (2026-10-30); the evidence the factory still uses (golden set, intervention KPIs) is in `docs/evidence/` here.
