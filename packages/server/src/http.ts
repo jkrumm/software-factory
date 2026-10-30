@@ -221,6 +221,9 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
         const input = await parseBody(req, SpawnInput)
+        // A replay of a known key answers with the row it made, whatever the role table says now.
+        const known = await getSpawn(sql, input.key)
+        if (known) return respond(Spawn, known)
         const entry = roles.get(input.role)
         if (!entry) throw new Refusal(`unknown role ${input.role} (${[...roles.keys()].join(', ')})`, 422)
         // The policy decides before anything is stored; the row keeps the resolved path.

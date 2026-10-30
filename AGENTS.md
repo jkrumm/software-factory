@@ -95,7 +95,11 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `GET /quota` shows the newest row per account. `quota_readings` keeps every row: percent of the 5-hour window and the week
   (null = no sample), both resets, `enabled`, `auth_ok`, `exhausted_until`, `read_at`, and `sampled_at` (read time minus the
   sample's age). `PUT /quota/accounts/:account` stores a reading by hand (tests, operators); the next poll supersedes it.
-  A reading not renewed for 10 minutes is stale and admits nothing (a stopped poller, an account that left the registry).
+  A reading not renewed for 10 minutes is stale and admits nothing (a stopped poller, an account that left the registry); the
+  age of the picker's own sample is not judged, only stored. A window the picker has no number for counts as unused (as the
+  picker weighs it); both without, or no sample time, is no sample and the account is closed. Rows older than a week are
+  deleted, the newest of each account kept. `capacity_readings` (the previous release's table) is still fed for one release so a
+  rollback finds live readings; drop it, and this sentence, in the release after.
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count once they
@@ -104,7 +108,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
   `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
   pace the moment the elapsed share reaches the use); none if no reading names a time, a new reading wakes it.
-  **The spawn cost is not a number:** an account takes one new spawn per sample. A spawn assigned (`assigned_at`) at or after
+  **The spawn cost is not a number:** an account takes one new spawn per sample. A spawn assigned (`assigned_at`, set again at every claim that is not a reclaim) at or after
   an account's latest `sampled_at` is not in its numbers yet, so that account is not offered again until a sample taken after
   the assignment exists (the poll shows it within about a minute). A burst starts as many spawns as there are open accounts
   and the rest wait for the next sample.
@@ -114,7 +118,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   stays `queued` with `hold` set (`drain|pace|wave`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
   `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 - **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
-  model id) and effort (`low|medium|high|xhigh|max`). `POST /spawns` takes `role` (default `worker`; unknown = 422) and
+  model id) and effort (`low|medium|high|xhigh|max`). `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
+  of a known key answers with its row) and
   stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
   at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one). `factory role list|get <role>` reads the file
   itself, with no server and no token: `rd --role` depends on `role get <role> --format json` printing exactly

@@ -8,6 +8,9 @@ export const FIVE_HOUR_LIMIT = 85
 
 export const WEEK_MS = 7 * 24 * 3_600_000
 
+/** Readings older than this are deleted, except the newest of each account: the table stays small enough to scan. */
+export const READINGS_KEEP_MS = WEEK_MS
+
 /**
  * A reading the poller has not renewed for this long says nothing about the account now: a stopped poller, or an
  * account that left the registry, must not keep admitting on old numbers.
@@ -93,9 +96,19 @@ export async function recordReadings(sql: SQL, readings: readonly NamedQuota[], 
           VALUES (${r.account}, ${r.weeklyUsed}, ${r.fiveHourUsed}, ${resetsAt})`
       }
     }
+    await pruneReadings(tx, now)
     const latest = await latestReadings(tx)
     if (pickEligible(latest, await currentLoads(tx, latest), { now })) await wakeWaiting(tx, now)
   })
+}
+
+async function pruneReadings(tx: SQL, now: Date): Promise<void> {
+  const before = new Date(now.getTime() - READINGS_KEEP_MS)
+  await tx`
+    DELETE FROM factory.quota_readings
+    WHERE read_at < ${before} AND id NOT IN (SELECT max(id) FROM factory.quota_readings GROUP BY account)`
+  // The previous release's table has no clock: it keeps the newest hundred thousand rows.
+  await tx`DELETE FROM factory.capacity_readings WHERE id < (SELECT max(id) FROM factory.capacity_readings) - 100000`
 }
 
 /** Test and ops convenience: one reading of one account. */
@@ -149,23 +162,29 @@ export function elapsedWeekShare(r: Reading, now: Date): number | null {
 }
 
 /**
- * Whether an account can take a new spawn on this reading alone: enabled, auth fine, a sample, not marked exhausted,
+ * Whether an account can take a new spawn on this reading alone: enabled, auth fine, a sample (a window without a number
+ * counts as unused, both without is no sample), not marked exhausted,
  * below both limits. With `pace`, also at or below the elapsed share of its week. A closed account says when it
  * opens, if the reading says so: the reset of the window that closed it (both: the later), or for pace the moment
  * the week's elapsed share reaches its use. A window whose reset is already past is a stale reading and names no time.
  */
 export function standing(r: Reading, now: Date, pace = false): Standing {
-  if (!r.enabled || !r.authOk || r.fiveHourUsed === null || r.weeklyUsed === null) return { open: false, until: null }
+  if (!r.enabled || !r.authOk || !r.sampledAt || (r.fiveHourUsed === null && r.weeklyUsed === null)) {
+    return { open: false, until: null }
+  }
+  // A window the picker has no number for counts as unused, as the picker itself weighs it.
+  const fiveHour = r.fiveHourUsed ?? 0
+  const weekly = r.weeklyUsed ?? 0
   const reopens: (Date | null)[] = []
   const ahead = (at: Date | null) => (at && at > now ? at : null)
   if (r.exhaustedUntil && r.exhaustedUntil > now) reopens.push(r.exhaustedUntil)
-  if (r.fiveHourUsed >= FIVE_HOUR_LIMIT) reopens.push(ahead(r.fiveHourResetsAt))
-  if (r.weeklyUsed >= WEEKLY_LIMIT) reopens.push(ahead(r.weeklyResetsAt))
+  if (fiveHour >= FIVE_HOUR_LIMIT) reopens.push(ahead(r.fiveHourResetsAt))
+  if (weekly >= WEEKLY_LIMIT) reopens.push(ahead(r.weeklyResetsAt))
   if (pace) {
     const share = elapsedWeekShare(r, now)
     if (share === null) reopens.push(null)
-    else if (r.weeklyUsed > share && r.weeklyResetsAt) {
-      reopens.push(new Date(r.weeklyResetsAt.getTime() - WEEK_MS + (r.weeklyUsed / 100) * WEEK_MS))
+    else if (weekly > share && r.weeklyResetsAt) {
+      reopens.push(new Date(r.weeklyResetsAt.getTime() - WEEK_MS + (weekly / 100) * WEEK_MS))
     }
   }
   if (reopens.length === 0) return { open: true }
