@@ -81,7 +81,7 @@ export class HerdrCli implements HerdrView {
     const result = await runProcess([this.options.psBin ?? 'ps', '-axo', 'pid=,lstart=,command='], timeoutMs).catch(
       () => undefined,
     )
-    if (!result || result.exitCode !== 0) return undefined
+    if (result?.exitCode !== 0) return undefined
     const servers = result.stdout.split('\n').flatMap((line) => {
       const match = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]{8}\s+\d{4})\s+(\S*herdr)\s+server$/.exec(line)
       return match ? [`${match[1]}@${(match[2] ?? '').replace(/\s+/g, ' ')}`] : []
@@ -109,7 +109,7 @@ export const gitProbe = async (cwd: string, gitBin = 'git'): Promise<Date | unde
   const git = (...args: string[]) =>
     runProcess([gitBin, '-C', cwd, ...GIT_SAFE, ...args], GIT_TIMEOUT_MS, env).catch(() => undefined)
   const head = await git('log', '-1', '--format=%ct')
-  if (!head || head.exitCode !== 0) return undefined
+  if (head?.exitCode !== 0) return undefined
   let newest = Number(head.stdout.trim()) * 1000 || 0
   // `status` lists paths from the repository root, wherever in the worktree the agent stands.
   const [top, status] = await Promise.all([

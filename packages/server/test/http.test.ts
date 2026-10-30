@@ -261,7 +261,7 @@ describe('body size', () => {
       headers: { ...bearer(TEST_TOKEN), ...json },
       body: stream,
       duplex: 'half',
-    } as RequestInit)
+    })
     expect(res.status).toBe(413)
   })
 

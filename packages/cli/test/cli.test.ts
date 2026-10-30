@@ -154,9 +154,9 @@ beforeAll(() => {
     },
   })
 })
-afterAll(() => {
-  fake.stop(true)
-  sock.stop(true)
+afterAll(async () => {
+  await fake.stop(true)
+  await sock.stop(true)
   rmSync(sockDir, { recursive: true, force: true })
 })
 

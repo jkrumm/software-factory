@@ -175,6 +175,7 @@ describe('the witness', () => {
     await pass()
     view.down = true
     view.server = '999@elsewhere'
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
     await expect(pass()).rejects.toThrow('timed out')
     view.down = false
     view.list = []
@@ -288,8 +289,10 @@ describe('the herdr adapter', () => {
 
   test('a herdr that hangs is cut off at the process timeout, an error body is an error', async () => {
     await herdr.plan('agent list:hang')
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
     await expect(new HerdrCli({ bin: herdr.bin, timeoutMs: 300 }).agents()).rejects.toThrow('timed out after 300 ms')
     await herdr.plan('agent list:garbage')
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
     await expect(new HerdrCli({ bin: herdr.bin }).agents()).rejects.toThrow('unexpected')
   })
 

@@ -51,6 +51,7 @@ describe('migrate', () => {
     try {
       await writeFile(join(bad, '001_ok.sql'), 'CREATE TABLE factory.rolled_back (id int);')
       await writeFile(join(bad, '002_bad.sql'), 'SELECT nope FROM nowhere;')
+      // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
       await expect(migrate(db.sql, bad)).rejects.toThrow()
       const [{ count }] = await db.sql`
         SELECT count(*)::int AS count FROM information_schema.tables WHERE table_name = 'rolled_back'`
