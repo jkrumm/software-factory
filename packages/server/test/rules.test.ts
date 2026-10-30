@@ -408,6 +408,15 @@ describe('wake', () => {
     expect(await notes()).toHaveLength(1)
   })
 
+  test('a retried spawn that kept its finished session does not hold the wake', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    await w.emit('w2', 'turn_ended', w.at(5))
+    await db.sql`UPDATE factory.spawns SET status = 'queued', hold = 'drain' WHERE key = 'w2'`
+    await evaluate()
+    expect(await notes()).toHaveLength(1)
+  })
+
   test('says nothing to a parent that is not waiting on workers, or has no child session', async () => {
     await waitingLead()
     await w.emit('w1', 'turn_ended', w.at(5))

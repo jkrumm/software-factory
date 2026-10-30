@@ -156,7 +156,8 @@ function blockedParents(sessions: readonly Loaded[], now: Date): Candidate[] {
  * Wake: `wake:<session>:<wait event key>`, one note per declared wait. A session that is `waiting` on its workers, has
  * at least one child session and no child unfinished is told which are done. Unfinished is a child that is not `dead` and
  * not `idle` after a turn of its life (the `finished` of `liveSessions`), or a spawn of the session's that has not become
- * a session yet (queued, held, waiting for capacity, starting). A spawn that failed will not become one: status shows it.
+ * a session yet (queued, held, waiting for capacity, starting); a retried spawn that kept its session is judged by the
+ * session. A spawn that failed will not become one: status shows it.
  */
 async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<Candidate[]> {
   const waiting = sessions.flatMap(({ view, facts }) => {
@@ -165,12 +166,12 @@ async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<C
   })
   if (waiting.length === 0) return []
   const ids = waiting.map((w) => w.id)
-  const workers = await loadWorkers(sql, ids, now)
+  // Spawns first: one that becomes a session between the two reads then shows up as a worker (working) instead of in neither read.
   const unstarted: { parent: string }[] = await sql`
     SELECT DISTINCT p.parent FROM factory.spawns p
-    WHERE p.parent IN ${sql(ids)}
-      AND (p.status IN ('queued', 'waiting', 'starting')
-        OR (p.status = 'started' AND NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.spawn_key = p.key)))`
+    WHERE p.parent IN ${sql(ids)} AND p.status IN ('queued', 'waiting', 'starting', 'started')
+      AND NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.spawn_key = p.key OR s.id = p.key)`
+  const workers = await loadWorkers(sql, ids, now)
   const pending = new Set(unstarted.map((u) => u.parent))
   return waiting.flatMap(({ id, event }) => {
     const children = workers.filter((c) => c.view.parent === id)
