@@ -2,15 +2,15 @@
 
 Written at the end of rotation 1, 2026-10-30. State lives in `docs/program.md`; this page holds what that table does not.
 
-## Running now
+## Running now (rotation 2 stopped on the usage limit, 11:10)
 
-| Agent | Repo | Wave | Next when it closes |
+| Agent | Repo | State | Next |
 |-|-|-|-|
-| `dotfiles-w2` | dotfiles | R0 Wave 2, the last | Review. R0 done unblocks D and I1 Wave 2 |
-| `argo-w1` | argo | A1 Wave 1 of 6 | Review, spawn Wave 2. It names the target that creates `shared`; F1's plan uses the same one |
-| `agent-workflows-w1` | agent-workflows | I1 Wave 1 of 3 | Review. Wave 2 waits for R0 |
+| `argo-w1` | argo | A1 Wave 1, working on `me2` | Review its close-out; it names the `shared` target F1 Wave 1 needs |
+| `agent-workflows-w1` | agent-workflows | I1 Wave 1 finished its turn but hit `me`'s 5-hour wall mid-close-out; plan still `active`, tree clean | After 12:40 check it closed out (PLAN flip, push); type "continue" if not. Then review, spawn I1 Wave 2 (R0 is done) |
 
-All three are orchestrated: they stop at their close-out and you spawn the next. Review as in `docs/program.md`.
+Rotation 2 done: R0 closed, track D done (one-line `agent-workflows/docs/factory-input.md` repoint still open, exact edit in
+`dotfiles/docs/waves/PLAN.md` Left behind), F0 done (skeleton PR #1 merged), F1 planned in `docs/waves/f1.md`.
 
 ## Watch
 

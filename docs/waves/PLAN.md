@@ -25,12 +25,14 @@ Handoff: `docs/waves/handoff/program.md`.
 Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves/handoff/program.md` first.
 
 - [ ] Take over the three running waves from the handoff; review each close-out and spawn the next.
-- [ ] F0 step 4: the skeleton as one `rd fan` worker, based on `spike/plain` with its review findings fixed; land it with
+- [x] F0 step 4: the skeleton as one `rd fan` worker, based on `spike/plain` with its review findings fixed; land it with
   `rd merge`.
-- [ ] Author F1's plan in this repo from `docs/design.md` §3 and start it once the skeleton is on master and `shared` exists.
-- [ ] Start track D once R0 is closed.
+- [x] Author F1's plan in this repo from `docs/design.md` §3 and start it once the skeleton is on master and `shared` exists.
+- [x] Start track D once R0 is closed.
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
-**Left behind:**
+**Left behind:** stopped: `me`'s 5-hour window hit 100 % (reset 12:40), so this rotation could not spawn its successor.
+R0 and D done and reviewed; F0 done (skeleton merged, PR #1); F1 plan written, Wave 1 waits for `shared` from A1 Wave 1.
+Still running: `argo-w1`; `agent-workflows-w1` walled mid-close-out. Step 1 stays open for those two. Handoff updated.
 
 ## Wave 3 — Program lead, rotation 3            <!-- status: pending -->
