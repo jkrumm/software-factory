@@ -13,7 +13,12 @@ done
 spawns=""
 for name in "${CHAINS[@]}"; do
   for n in 1 2 3 4 5; do
-    spawns+=$(fx spawn get "$name-w$n" --format json 2>/dev/null | jq -r '" \(.key)=\(.status)\(if .hold then "(" + .hold + ")" else "" end)"' 2>/dev/null || true)
+    # Exit 4 is "no such spawn" (the chain has not got that far); anything else is shown, not dropped.
+    if out=$(fx spawn get "$name-w$n" --format json 2>/dev/null); then
+      spawns+=$(jq -r '" \(.key)=\(.status)\(if .hold then "(" + .hold + ")" else "" end)"' <<<"$out")
+    elif [[ $? -ne 4 ]]; then
+      spawns+=" $name-w$n=lookup-failed"
+    fi
   done
 done
 line=$(jq -r --arg queues "$queues" --arg spawns "$spawns" --argjson names "$(printf '%s\n' "${CHAINS[@]}" | jq -R . | jq -sc .)" '

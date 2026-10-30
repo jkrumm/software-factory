@@ -11,7 +11,7 @@ name=${1:?repo name} prefix=${2:?subject prefix} want=${3:?count} bound=${4:?sec
 shift 5
 end=$((SECONDS + bound))
 while ((SECONDS < end)); do
-  have=$(git -C "$SOURCE_ROOT/$name" log --format=%s 2>/dev/null | awk -v p="$prefix" 'index($0, p) == 1' | wc -l | tr -d ' ')
+  have=$(git -C "$SOURCE_ROOT/$name" log --format=%s 2>/dev/null | GATE_PREFIX=$prefix awk 'index($0, ENVIRON["GATE_PREFIX"]) == 1' | wc -l | tr -d ' ')
   if ((have >= want)); then
     log "when-commits: $name has $have commits starting '$prefix' (wanted $want)"
     cmd=$1
