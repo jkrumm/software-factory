@@ -7,7 +7,7 @@ those facts when read, and every effect carries a deterministic key, so a replay
 twice. The fleet layer (§3) ships first and carries today's `/wave`. The Issue machine (§4) sits on top of it.
 
 **This page wins over TDD v2.4 wherever they disagree.** The reasons behind each choice are in `docs/decisions.md`,
-the build order is in `docs/program.md`, and nothing here depends on whether the F0 spike picks Effect.
+the build order is in `docs/program.md`. The code is plain TypeScript and zod (SF6).
 
 ## 1. Principles
 
@@ -173,6 +173,15 @@ that applies wins.
 
 The send-back counts only child sessions the factory knows. A background shell inside a session is invisible to
 a hook; that gap stays until a measured failure says otherwise.
+
+**The tick.** Four rules, each from a defect both spike arms shipped (`docs/spikes/2026-10-30-effect/verdict.md`):
+
+- **Never call a port inside a transaction.** Claim the row and commit, call `Runner`, record the result in a new
+  transaction. The key recorded at the claim is what makes a crash between the two safe.
+- **Every port call has a timeout.** A hung `herdr` must fail the call, not stall the tick.
+- **Attempts are capped.** A spawn out of attempts is `failed` with a reason and leaves the batch, so it cannot starve
+  the ones behind it. The tick loop itself survives any single failure and logs it.
+- **Eligibility is rechecked at start,** not only when the spawn is queued. A stored account is a hint.
 
 **Prompt delivery.** `factory session note` is the one way anything types into a session. It records the prompt
 under its id before typing, holds it while the session is `working` (a prompt typed into a busy session only

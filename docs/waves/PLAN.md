@@ -9,13 +9,28 @@ pushed, and the handoff written.
 Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md` first. This wave spawns other repos'
 waves in orchestrated mode; it spawns its own next rotation in chain mode.
 
-- [ ] Take over R0 and R1: watch `dotfiles-w1` and `argo-w1`, review each close-out, spawn R0 Wave 2.
-- [ ] F0 step 1: `docs/design.md`.
-- [ ] F0 step 2 and 3: the Effect skill, then the spike with its pre-written rule; record the verdict.
-- [ ] Author and start what can run in parallel now: A1's plan in argo once R1 closed (the price-catalog
+- [x] Take over R0 and R1: watch `dotfiles-w1` and `argo-w1`, review each close-out, spawn R0 Wave 2.
+- [x] F0 step 1: `docs/design.md`.
+- [x] F0 step 2 and 3: the Effect skill, then the spike with its pre-written rule; record the verdict.
+- [x] Author and start what can run in parallel now: A1's plan in argo once R1 closed (the price-catalog
   research first), I1's plan in agent-workflows.
-- [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context.
+- [x] Keep `docs/program.md` current at every track change; rotate at about 60 % context.
+
+**Left behind:** R1 done; R0 Wave 2, A1 Wave 1 and I1 Wave 1 running; F0 steps 1–3 done, plain TypeScript won the spike
+(`docs/spikes/2026-10-30-effect/verdict.md`). `docs/design.md` carries the spike's lessons. No code on master yet, so no
+`make check` exists; the gate here was the review of every close-out and `/code-review high` on both arms.
+Handoff: `docs/waves/handoff/program.md`.
+
+## Wave 2 — Program lead, rotation 2            <!-- status: active -->
+Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves/handoff/program.md` first.
+
+- [ ] Take over the three running waves from the handoff; review each close-out and spawn the next.
+- [ ] F0 step 4: the skeleton as one `rd fan` worker, based on `spike/plain` with its review findings fixed; land it with
+  `rd merge`.
+- [ ] Author F1's plan in this repo from `docs/design.md` §3 and start it once the skeleton is on master and `shared` exists.
+- [ ] Start track D once R0 is closed.
+- [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
 **Left behind:**
 
-## Wave 2 — Program lead, rotation 2            <!-- status: pending -->
+## Wave 3 — Program lead, rotation 3            <!-- status: pending -->

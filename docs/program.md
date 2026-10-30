@@ -33,7 +33,7 @@ code itself.
 |-|-|-|-|-|
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 done and reviewed; Wave 2 running (`dotfiles-w2`) |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
-| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1 and 2 done; spike running (`spike/plain`, `spike/effect`) |
+| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1–3 done: plain TypeScript won the spike. Skeleton (step 4) next |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | Plan in argo (six waves); Wave 1 running (`argo-w1`) |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
@@ -58,19 +58,15 @@ routes (no caller; `aiComplete` stays), `startChatTurn` in the dashboard's telem
 1. **`docs/design.md`:** the factory's design from TDD v2.4 (`dotfiles/docs/factory/tdd/03`–`10`) plus
    `docs/decisions.md`. Keep what carries over, rewrite what changed, drop the rest. Data model for the fleet
    (sessions, events, queue, accounts) and the Issue machine (TDD §6's tables). Verdict first, short.
-2. **Effect skill** (`.claude/skills/effect/SKILL.md`), done: built from the package's `AGENTS.md` and `ai-docs/`
-   (`LLMS.md` is not in the package, and Effect publishes no skill or official docs MCP), every snippet compiled
-   and run on the pin, including `@effect/sql-pg` on Bun against a private Postgres. `@effect/tsgo` puts Effect's
-   diagnostics into `tsc`. The pin is `effect@4.0.6`, not 4.1.0: 4.1.0 and 4.0.7 are inside the machine's 3-day
-   release-age cooldown until 2026-11-01 and a third-party exclude is not ours to add. If Effect wins, the skeleton
-   moves to 4.1.0 once it clears, with the skill's pins and rename table rechecked.
-3. **Spike, rule written first** (`docs/spikes/2026-10-30-effect/spec.md` fixes how each number is taken): one
+2. **Effect skill**, done and removed with the verdict. It pinned `effect@4.0.6`: 4.1.0 and 4.0.7 were inside the
+   machine's 3-day release-age cooldown, which is not ours to relax for a third-party package.
+3. **Spike, rule written first, done: plain TypeScript** (`docs/spikes/2026-10-30-effect/verdict.md`). One
    slice built twice by Sonnet workers in `rd fan` worktrees, plain
    TypeScript + zod vs Effect 4.1 with the skill. Slice: a hook event in → session state → a queued spawn with
    a resume-at → a herdr adapter with retries, Postgres-backed, tested. Both get `/code-review` on Max.
    **Effect wins** if its slice has no more review findings than the plain one, no v3-API mistake survives to
    review, and its worker tokens are at most 1.5× the plain one's. Record the numbers in `docs/spikes/`.
-4. **Skeleton** in the winning style: Bun workspace, `make check|test|verify|deploy`, CI on hosted runners,
+4. **Skeleton** in plain TypeScript, from `spike/plain` with its review findings fixed: Bun workspace, `make check|test|verify|deploy`, CI on hosted runners,
    the `factory` schema migrations, the CLI contract (SF4), release-directory deploy like agw.
 
 ### F1: fleet layer
@@ -91,6 +87,8 @@ Two more failure modes, seen in this program's first rotation (2026-10-30):
   limit rotates before the wall, not after it.
 - **Folder trust on a new repo path.** `rd wave` failed for this repo until `claude-pretrust.sh` ran. The spawn
   path must pre-trust every path it starts in, new repos as well as worktrees.
+- **`rd close` refuses a tab not named `wave <n>`,** so a fan tab or a wave in a renamed first tab stays open until
+  `rd reap`. The lifecycle should follow the session, not the tab's name.
 
 ### A1: shared database, Argo on the mini, Kuma door, usage v2
 - **Argo today** (investigation 2026-10-30): Bun, Elysia, Drizzle, Postgres 18 on the VPS (schema `argo`),

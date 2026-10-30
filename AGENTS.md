@@ -22,8 +22,8 @@ learns. CLI `factory`. Status: being planned and built; `docs/program.md` is the
 - **Interactive Claude Code in herdr only.** Never headless `claude -p`.
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes,
   never prompts.
-- Bun, TypeScript strict, exact pins. Whether the code is written in Effect 4 is decided by the F0 spike
-  (`docs/program.md`); until then nothing here depends on it.
+- Bun, TypeScript strict, zod at boundaries, exact pins. No Effect: the F0 spike decided that
+  (`docs/spikes/2026-10-30-effect/verdict.md`).
 - Direct-to-master, conventional commits, no AI attribution. Update this file in the same commit as the
   code it describes.
 
