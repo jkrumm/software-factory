@@ -172,7 +172,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 async function recordStarted(sql: SQL, key: string, session: string, at: Date): Promise<boolean> {
   return sql.begin(async (tx) => {
     const rows = await tx`
-      UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL
+      UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL, assigned_at = ${at}
       WHERE key = ${key} AND status = 'starting'
       RETURNING key`
     // The spawn is a session from here on: `starting` until its first hook event says otherwise.

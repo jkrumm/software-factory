@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QuotaList } from '@software-factory/contract'
@@ -115,6 +115,18 @@ describe('the claude-account adapter', () => {
     ])
   })
 
+  test('one row that does not parse is skipped, the other accounts are still read', async () => {
+    const bad = { ...PICKER_OUTPUT.accounts[1], id: '../x' }
+    const bin = printing('partial', { accounts: [PICKER_OUTPUT.accounts[0], bad] })
+    const logged = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await new ClaudeAccountSource({ bin }).read()).map((r) => r.account)).toEqual(['iu'])
+      expect(logged).toHaveBeenCalledTimes(1)
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   test('is called with `usage --json`', async () => {
     const args = join(dir, 'args.txt')
     const bin = picker('args', `echo "$@" > ${args}\necho '{"accounts":[]}'`)
@@ -207,6 +219,21 @@ describe('the poller', () => {
       { account: 'gone', five_hour_used: 2, weekly_used: 2 },
       { account: 'a', five_hour_used: 3, weekly_used: 3 },
     ])
+  })
+
+  test('the read time is stamped before the picker is asked', async () => {
+    const resets = new Date(clock.now().getTime() + 3_600_000)
+    const before = clock.now()
+    const slow = {
+      async read() {
+        clock.advance(8_000)
+        return [{ account: 'a', ...usage(1, 1, resets, { ageS: 0 }) }]
+      },
+    }
+    await new QuotaPoller({ sql: db.sql, source: slow, clock }).poll()
+    const [row] = await db.sql`SELECT read_at, sampled_at FROM factory.quota_readings`
+    expect(row.read_at).toEqual(before)
+    expect(row.sampled_at).toEqual(before)
   })
 
   test('overlapping polls share one read, so an older sample never lands after a newer one', async () => {

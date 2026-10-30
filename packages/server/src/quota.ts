@@ -36,7 +36,7 @@ const UsageRow = z.looseObject({
   age_s: z.number().nullable(),
   exhausted_until: epoch,
 })
-const Usage = z.looseObject({ accounts: z.array(UsageRow) })
+const Usage = z.looseObject({ accounts: z.array(z.unknown()) })
 
 const at = (seconds: number | null): Date | null => (seconds === null ? null : new Date(seconds * 1000))
 
@@ -54,13 +54,21 @@ export class ClaudeAccountSource implements QuotaSource {
     }
     if (result.exitCode === EXIT_TIMEOUT) throw new QuotaError(`${bin} usage did not answer within ${timeoutMs} ms`)
     if (result.exitCode !== 0) throw new QuotaError(`${bin} usage exited ${result.exitCode}`)
-    let usage: z.infer<typeof Usage>
+    let rows: unknown[]
     try {
-      usage = Usage.parse(JSON.parse(result.stdout))
+      rows = Usage.parse(JSON.parse(result.stdout)).accounts
     } catch (cause) {
       throw new QuotaError(`${bin} usage --json did not print the expected shape: ${String(cause).slice(0, 300)}`)
     }
-    return usage.accounts.map((a) => ({
+    // One row that does not parse must not freeze the other accounts; all of them failing is a drifted shape.
+    const parsed = rows.map((row) => UsageRow.safeParse(row))
+    const accounts = parsed.flatMap((p) => (p.success ? [p.data] : []))
+    const rejected = parsed.flatMap((p) => (p.success ? [] : [p.error.issues[0]?.message ?? 'invalid']))
+    if (rows.length > 0 && accounts.length === 0) {
+      throw new QuotaError(`${bin} usage --json did not print the expected shape: ${rejected[0]}`)
+    }
+    for (const reason of rejected) console.error(`quota: skipped an account row of ${bin} usage --json: ${reason}`)
+    return accounts.map((a) => ({
       account: a.id,
       enabled: a.enabled,
       authOk: a.auth_ok,
@@ -105,9 +113,11 @@ export class QuotaPoller {
   }
 
   private async read(): Promise<NamedQuota[]> {
-    this.lastAttemptAt = this.deps.clock.now().getTime()
+    // Stamped before the picker is asked: a claim that commits while it answers is then never older than its sample.
+    const readAt = this.deps.clock.now()
+    this.lastAttemptAt = readAt.getTime()
     const readings = await this.deps.source.read()
-    await recordReadings(this.deps.sql, readings, this.deps.clock.now())
+    await recordReadings(this.deps.sql, readings, readAt)
     return readings
   }
 }
