@@ -292,6 +292,39 @@ export async function listSessions(sql: SQL, now: Date, options: { all?: boolean
   return options.all ? sessions : sessions.filter((s) => s.state !== 'dead')
 }
 
+/** A session the factory started, that is not dead: what the one-wave-per-repo and pace rules count. */
+export interface LiveSession {
+  id: string
+  repo: string
+  role: string
+}
+
+/**
+ * The sessions of spawns whose derived state is not `dead`, with the repo and role of the spawn. A session whose last
+ * life event is `session_ended` is dead whatever else is known and is left out in the query; the rest are derived.
+ */
+export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> {
+  const rows: (SessionRow & { repo: string; role: string })[] = await sql`
+    SELECT s.*, p.repo, p.role FROM factory.sessions s
+    JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE NOT EXISTS (
+      SELECT 1 FROM (
+        SELECT kind FROM factory.events
+        WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
+        ORDER BY at DESC, id DESC LIMIT 1) l
+      WHERE l.kind = 'session_ended')`
+  const facts = groupFacts(
+    await factRows(
+      sql,
+      rows.map((r) => r.id),
+    ),
+  )
+  return rows.flatMap((row) => {
+    const state = view(row, facts.get(row.id) ?? [], now)?.state
+    return state && state !== 'dead' ? [{ id: row.id, repo: row.repo, role: row.role }] : []
+  })
+}
+
 /**
  * `factory session wait --on …` and `--done`: a fact like any other, with a key of its own (the call is made once, by
  * the session, not replayed from a spool). Undefined when no such session exists.

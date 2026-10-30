@@ -1,9 +1,12 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { loadRoleTable, type RoleTable } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
 import { serve } from '../../src/http.ts'
+import { QuotaPoller } from '../../src/quota.ts'
+import { FakeQuotaSource } from './quota.ts'
 
 export const TEST_TOKEN = 'test-token-0123456789'
 
@@ -13,8 +16,12 @@ export const TEST_REPO = join(TEST_ROOT, 'repo')
 mkdirSync(TEST_REPO)
 process.on('exit', () => rmSync(TEST_ROOT, { recursive: true, force: true }))
 
+export const TEST_ROLES: RoleTable = await loadRoleTable()
+
 export interface TestApp {
   url: URL
+  /** what `POST /quota/refresh` reads */
+  quotaSource: FakeQuotaSource
   /** what the ticker would report to `/health`; tests drive it directly */
   monitor: TickMonitor
   /** all of these carry the bearer token and, with a body, the JSON content type */
@@ -36,7 +43,9 @@ export function startApp(deps: {
   clock: Clock
   monitor?: TickMonitor
   repoRoots?: readonly string[]
+  roles?: RoleTable
 }): TestApp {
+  const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)
   // A server in a test has ticked, unless the test brings a monitor of its own.
   if (!deps.monitor) monitor.passSucceeded()
@@ -44,6 +53,8 @@ export function startApp(deps: {
     ...deps,
     monitor,
     repoRoots: deps.repoRoots ?? [TEST_ROOT],
+    roles: deps.roles ?? TEST_ROLES,
+    quota: new QuotaPoller({ sql: deps.sql, clock: deps.clock, source: quotaSource }),
     port: 0,
     version: 'test',
     token: TEST_TOKEN,
@@ -51,6 +62,7 @@ export function startApp(deps: {
   const url = (path: string) => new URL(path, server.url)
   return {
     monitor,
+    quotaSource,
     url: server.url,
     get: (path) => fetch(url(path), { headers: authed }),
     send: (method, path, body) => fetch(url(path), { method, headers: json, body: JSON.stringify(body) }),

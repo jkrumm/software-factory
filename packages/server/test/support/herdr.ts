@@ -55,7 +55,16 @@ export async function createFakeHerdr(): Promise<FakeHerdr> {
   )
   await chmod(pretrustBin, 0o755)
   const accountsFile = join(dir, 'accounts.json')
-  await writeFile(accountsFile, JSON.stringify({ accounts: { a: { dir: null }, b: { dir: '~/.claude-b' } } }))
+  await writeFile(
+    accountsFile,
+    JSON.stringify({
+      accounts: {
+        a: { dir: null },
+        b: { dir: '~/.claude-b' },
+        ...Object.fromEntries(['c', 'd', 'e', 'f'].map((id) => [id, { dir: `~/.claude-${id}` }])),
+      },
+    }),
+  )
 
   const read = async (): Promise<FakeState & { plan: string[] }> =>
     JSON.parse(await readFile(join(dir, 'state.json'), 'utf8'))

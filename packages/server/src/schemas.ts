@@ -1,4 +1,4 @@
-import { EVENT_KINDS, WaitOn } from '@software-factory/contract'
+import { EVENT_KINDS, QueueState, RoleName, WaitOn } from '@software-factory/contract'
 import { z } from 'zod'
 
 export { EVENT_KINDS }
@@ -36,9 +36,13 @@ const RepoPath = z
   .max(1024)
   .regex(/^\/[^\0]*$/, 'not an absolute path')
 
+/** What a spawn is started as when the caller says nothing. */
+export const DEFAULT_ROLE = 'worker'
+
 export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
+  role: RoleName.default(DEFAULT_ROLE),
   prompt: z
     .string()
     .min(1)
@@ -47,12 +51,28 @@ export const SpawnInput = z.object({
 })
 export type SpawnInput = z.infer<typeof SpawnInput>
 
-export const CapacityInput = z.object({
-  weeklyUsed: z.number().min(0),
-  fiveHourUsed: z.number().min(0),
-  resetsAt: timestamp,
+/**
+ * One account's quota reading: what `claude-account usage --json` says, or what a test or an operator injects.
+ * Percentages are of the window; null means the picker has no sample. `ageS` is the age of the sample behind it.
+ */
+export const QuotaInput = z.object({
+  enabled: z.boolean().default(true),
+  authOk: z.boolean().default(true),
+  fiveHourUsed: z.number().min(0).nullable(),
+  weeklyUsed: z.number().min(0).nullable(),
+  fiveHourResetsAt: timestamp.nullable().default(null),
+  weeklyResetsAt: timestamp.nullable().default(null),
+  exhaustedUntil: timestamp.nullable().default(null),
+  ageS: z.number().min(0).nullable().default(0),
 })
-export type CapacityInput = z.infer<typeof CapacityInput>
+export type QuotaInput = z.output<typeof QuotaInput>
+
+/** `PUT /queue`: the state of the global scope, or of one project. */
+export const QueueInput = z.object({
+  state: QueueState,
+  project: RepoPath.optional(),
+})
+export type QueueInput = z.infer<typeof QueueInput>
 
 /** `factory session wait --on …` declares a wait, `--done` closes it. */
 export const WaitInput = z.union([z.strictObject({ on: WaitOn }), z.strictObject({ done: z.literal(true) })])

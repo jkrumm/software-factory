@@ -1,0 +1,12 @@
+{
+  "roles": {
+    "mother": { "tier": "opus", "effort": "medium" },
+    "lead": { "tier": "opus", "effort": "high" },
+    "wave": { "tier": "sonnet", "effort": "high" },
+    "worker": { "tier": "sonnet", "effort": "high" },
+    "mechanical": { "tier": "haiku", "effort": "low" },
+    "implementer": { "tier": "sonnet", "effort": "high" },
+    "verifier": { "tier": "sonnet", "effort": "high" },
+    "Explore": { "tier": "haiku", "effort": "low" }
+  }
+}

@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { Effort, RoleName, Tier } from './roles.ts'
 
+export * from './roles.ts'
 export { EVENT_KINDS, type EventKind } from './spool.ts'
 
 /**
@@ -10,9 +12,17 @@ export { EVENT_KINDS, type EventKind } from './spool.ts'
 export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'failed'])
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
+/** Why a queued spawn is not starting although capacity may be there: the queue state, or the one-wave-per-repo rule. */
+export const HoldReason = z.enum(['drain', 'pace', 'wave'])
+export type HoldReason = z.infer<typeof HoldReason>
+
 export const Spawn = z.object({
   key: z.string(),
   status: SpawnStatus,
+  role: RoleName,
+  tier: Tier,
+  effort: Effort,
+  hold: HoldReason.nullable(),
   account: z.string().nullable(),
   resumeAt: z.string().nullable(),
   attempts: z.number().int(),
@@ -58,13 +68,43 @@ export type SessionList = z.infer<typeof SessionList>
 export const EventAck = z.object({ duplicate: z.boolean() })
 export type EventAck = z.infer<typeof EventAck>
 
-export const CapacityAck = z.object({
+/** One reading of one account's quota, as stored; `fresh` is false once the poller has not confirmed it for a while. */
+export const Quota = z.object({
   account: z.string(),
-  weeklyUsed: z.number(),
-  fiveHourUsed: z.number(),
-  resetsAt: z.string(),
+  enabled: z.boolean(),
+  authOk: z.boolean(),
+  /** percent of the 5-hour window used; null when the picker has no sample */
+  fiveHourUsed: z.number().nullable(),
+  weeklyUsed: z.number().nullable(),
+  fiveHourResetsAt: z.string().nullable(),
+  weeklyResetsAt: z.string().nullable(),
+  /** when the picker marked the account exhausted until */
+  exhaustedUntil: z.string().nullable(),
+  /** when the sample behind the reading was taken */
+  sampledAt: z.string().nullable(),
+  readAt: z.string(),
+  fresh: z.boolean(),
 })
-export type CapacityAck = z.infer<typeof CapacityAck>
+export type Quota = z.infer<typeof Quota>
+
+export const QuotaList = z.object({ quota: z.array(Quota) })
+export type QuotaList = z.infer<typeof QuotaList>
+
+export const QueueState = z.enum(['run', 'pace', 'drain'])
+export type QueueState = z.infer<typeof QueueState>
+
+/**
+ * The queue state of a scope: `project` null is the global one. `state` is what was set at exactly this scope (`run`
+ * when nothing was), `effective` the most restrictive of it and the scopes above it. `scopes` lists everything set.
+ */
+export const QueueView = z.object({
+  scope: z.object({ project: z.string().nullable() }),
+  state: QueueState,
+  effective: QueueState,
+  setAt: z.string().nullable(),
+  scopes: z.array(z.object({ project: z.string().nullable(), state: QueueState, setAt: z.string() })),
+})
+export type QueueView = z.infer<typeof QueueView>
 
 /**
  * `GET /health`: 200 with `status: ok`, or 503 with `status: unhealthy` and the reason, in the same shape. A tick

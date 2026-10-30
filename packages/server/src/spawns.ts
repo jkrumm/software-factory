@@ -1,13 +1,17 @@
-import type { Spawn, SpawnStatus } from '@software-factory/contract'
+import type { Effort, HoldReason, Spawn, SpawnStatus, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
-import type { SpawnInput } from './schemas.ts'
+import { admit, HOLD_RECHECK_MS } from './admission.ts'
+import { lockCapacity } from './capacity.ts'
 
 export type SpawnView = Spawn
 
 interface SpawnRow {
   key: string
   status: SpawnStatus
+  role: string
+  tier: Tier
+  effort: Effort
+  hold: HoldReason | null
   account: string | null
   resume_at: Date | null
   attempts: number
@@ -18,6 +22,10 @@ interface SpawnRow {
 export const toView = (row: SpawnRow): SpawnView => ({
   key: row.key,
   status: row.status,
+  role: row.role,
+  tier: row.tier,
+  effort: row.effort,
+  hold: row.hold,
   account: row.account,
   resumeAt: row.resume_at?.toISOString() ?? null,
   attempts: row.attempts,
@@ -27,26 +35,37 @@ export const toView = (row: SpawnRow): SpawnView => ({
 
 export async function getSpawn(sql: SQL, key: string): Promise<SpawnView | undefined> {
   const [row]: SpawnRow[] = await sql`
-    SELECT key, status, account, resume_at, attempts, session, error FROM factory.spawns WHERE key = ${key}`
+    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error FROM factory.spawns WHERE key = ${key}`
   return row && toView(row)
 }
 
 export async function listSpawns(sql: SQL, limit = 200): Promise<SpawnView[]> {
   const rows: SpawnRow[] = await sql`
-    SELECT key, status, account, resume_at, attempts, session, error FROM factory.spawns
+    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error FROM factory.spawns
     ORDER BY created_at DESC, key LIMIT ${limit}`
   return rows.map(toView)
 }
 
+/** A spawn as it is stored: the role has been looked up, so its tier and effort are the table's of that moment. */
+export interface NewSpawn {
+  key: string
+  repo: string
+  prompt: string
+  role: string
+  tier: Tier
+  effort: Effort
+}
+
 /**
- * Stores a spawn. With capacity it is `queued` on an account and the next tick starts it; without, it is
- * `waiting` with `resume_at` at the first reset still ahead (none if every reading is stale: a new reading wakes it).
- * The account is chosen in the same transaction as the insert, behind the capacity lock, counting every spawn
- * already assigned against the same readings. A repeated key returns the existing row untouched.
+ * Stores a spawn, always `queued` or `waiting`, never dropped. Admission decides in the same transaction as the insert,
+ * behind the capacity lock: with room it is `queued` on an account and the next tick starts it; held by the queue state
+ * or the one-wave-per-repo rule it is `queued` with its reason and no account; without capacity it is `waiting` with
+ * `resume_at` at the first opening (none if no reading names one: a new reading wakes it). A repeated key returns the
+ * existing row untouched.
  */
 export async function createSpawn(
   sql: SQL,
-  input: SpawnInput,
+  input: NewSpawn,
   now: Date,
 ): Promise<{ spawn: SpawnView; created: boolean }> {
   return sql.begin(async (tx) => {
@@ -54,16 +73,22 @@ export async function createSpawn(
     const existing = await getSpawn(tx, input.key)
     if (existing) return { spawn: existing, created: false }
 
-    const readings = await latestReadings(tx)
-    const picked = pickEligible(readings, await currentLoads(tx, readings))
-    const status: SpawnStatus = picked ? 'queued' : 'waiting'
-    const resumeAt = picked ? null : (nextReset(readings, now) ?? null)
+    const decision = await admit(tx, { key: input.key, repo: input.repo, role: input.role }, now)
+    const status: SpawnStatus = decision.kind === 'wait' ? 'waiting' : 'queued'
+    const account = decision.kind === 'start' ? decision.account : null
+    const hold = decision.kind === 'hold' ? decision.reason : null
+    const resumeAt =
+      decision.kind === 'wait'
+        ? decision.resumeAt
+        : decision.kind === 'hold'
+          ? new Date(now.getTime() + HOLD_RECHECK_MS)
+          : null
 
     const [row]: SpawnRow[] = await tx`
-      INSERT INTO factory.spawns (key, repo, prompt, status, account, reading_id, resume_at, created_at)
-      VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${status}, ${picked?.account ?? null}, ${picked?.id ?? null},
-              ${resumeAt}, ${now})
-      RETURNING key, status, account, resume_at, attempts, session, error`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at)
+      VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${input.role}, ${input.tier}, ${input.effort}, ${status},
+              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now})
+      RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     return { spawn: toView(row), created: true }
   })
@@ -79,9 +104,10 @@ export async function requeueSpawn(
 ): Promise<{ spawn: SpawnView } | { problem: 'unknown' | 'not_failed'; status?: SpawnStatus }> {
   const [row]: SpawnRow[] = await sql`
     UPDATE factory.spawns
-    SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL
+    SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
+        hold = NULL
     WHERE key = ${key} AND status = 'failed'
-    RETURNING key, status, account, resume_at, attempts, session, error`
+    RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error`
   if (row) return { spawn: toView(row) }
   const current = await getSpawn(sql, key)
   return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }

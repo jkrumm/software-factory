@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
+import type { Effort, Tier } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, type ProcessResult, runProcess } from './exec.ts'
@@ -10,6 +11,9 @@ export interface StartInput {
   prompt: string
   /** a key of the account registry: where `CLAUDE_CONFIG_DIR` comes from */
   account: string
+  /** the role's tier and effort: `--model <tier>` (an alias, never a model id) and `--effort` */
+  tier: Tier
+  effort: Effort
 }
 
 export interface StartResult {
@@ -59,10 +63,6 @@ export interface HerdrRunnerOptions {
   pretrustBin: string
   /** `dotfiles/config/claude-accounts.json`: the registry that maps an account to its config directory */
   accountsFile: string
-  /** `--model` for the agent: an alias, never a model id */
-  model?: string
-  /** `--effort` for the agent; none by default */
-  effort?: string
   /** `USAGE_LANE` of the pane, how the usage record tells the sessions apart */
   usageLane?: string
   processTimeoutMs?: number
@@ -169,7 +169,7 @@ export class HerdrRunner implements Runner {
     }
     if (!agent) {
       await this.pretrust(input.repo, budget)
-      agent = await this.startAgent(input.key, pane, budget)
+      agent = await this.startAgent(input, pane, budget)
     }
 
     await this.deliver(pane, input.prompt, budget)
@@ -293,8 +293,8 @@ export class HerdrRunner implements Runner {
     }
   }
 
-  private async startAgent(key: string, pane: string, budget: Budget): Promise<Agent> {
-    const { model = 'sonnet', effort } = this.options
+  private async startAgent(input: StartInput, pane: string, budget: Budget): Promise<Agent> {
+    const { key, tier, effort } = input
     const args = [
       'agent',
       'start',
@@ -306,8 +306,9 @@ export class HerdrRunner implements Runner {
       '--',
       '--dangerously-skip-permissions',
       '--model',
-      model,
-      ...(effort ? ['--effort', effort] : []),
+      tier,
+      '--effort',
+      effort,
     ]
     for (let busy = 0; ; busy++) {
       const result = await this.exec([this.options.bin, ...args], budget, AGENT_START_TIMEOUT_MS)

@@ -273,7 +273,14 @@ describe('the herdr adapter', () => {
       home: '/home/me',
       deliverWaitMs: 3_000,
     })
-    const { session } = await runner.start({ key: 'spawn-1', repo: '/work/repo', prompt: 'go', account: 'a' })
+    const { session } = await runner.start({
+      key: 'spawn-1',
+      repo: '/work/repo',
+      prompt: 'go',
+      account: 'a',
+      tier: 'sonnet',
+      effort: 'high',
+    })
     const agents = await new HerdrCli({ bin: herdr.bin }).agents()
     expect(agents).toHaveLength(1)
     expect(agents[0]).toMatchObject({ paneId: session, name: 'spawn-1', status: 'working' })

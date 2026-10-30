@@ -1,11 +1,13 @@
 import { chmodSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
+import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { DEFAULT_START_BUDGET_MS, HerdrRunner } from './runner.ts'
 import { SpoolReplayer } from './spool.ts'
 import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
@@ -16,13 +18,16 @@ const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
 
 const config = loadConfig(process.env)
 
-// The runner depends on two files of the dotfiles checkout: a server that cannot start anything must not call itself up.
-for (const file of [config.pretrustBin, config.accountsFile]) {
+// The runner and the quota source depend on files of the dotfiles checkout, and every spawn on the role table: a
+// server that cannot start anything must not call itself up.
+for (const file of [config.pretrustBin, config.accountsFile, config.claudeAccountBin]) {
   if (!(await Bun.file(file).exists())) {
     console.error(`${file} does not exist; exiting`)
     process.exit(1)
   }
 }
+
+const roles = await loadRoleTable(config.rolesFile)
 
 // The factory role may hold 10 connections: the pool (one of them kept for the one-process lock) leaves room for a psql.
 const sql = new SQL({ url: config.databaseUrl, max: 8 })
@@ -44,6 +49,7 @@ if (!singleton) {
 await migrate(sql)
 
 const clock = systemClock
+const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
 const runner = new HerdrRunner({
   bin: config.herdrBin,
   clock,
@@ -61,6 +67,8 @@ const server = serve({
   token: config.token,
   monitor,
   repoRoots: config.repoRoots,
+  roles,
+  quota,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -79,7 +87,7 @@ chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
 const ticker = startTicker(
-  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool },
+  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool, quota },
   TICK_INTERVAL_MS,
   monitor,
 )
