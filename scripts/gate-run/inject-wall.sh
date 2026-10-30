@@ -17,16 +17,24 @@ claude_session=$(fx session get "$session" --format json | jq -r '.claudeSession
 payload=$(jq -nc --arg s "$claude_session" '{hook_event_name:"StopFailure",session_id:$s,error:"rate_limit",error_details:"injected by the F1 gate run"}')
 reset=$(date -u -v+"${minutes}M" +%Y-%m-%dT%H:%M:%SZ)
 
+# secrets-run redacts a secret it prints to a pipe, so the call runs inside it and the body travels in the environment.
+# The token goes to curl through a config on stdin, not through its arguments.
+put_reading() { # <json body>
+  # shellcheck disable=SC2016  # the inner shell expands them
+  GATE_BODY=$1 GATE_URL="${FACTORY_URL:-http://127.0.0.1:7793}/quota/accounts/$account" \
+    secrets-run run --env-file="$ROOT/.env.tpl" -- sh -c \
+    'printf "header = \"Authorization: Bearer %s\"\n" "$FACTORY_TOKEN" | curl -fsS -X PUT "$GATE_URL" -K - -H "Content-Type: application/json" -d "$GATE_BODY"' |
+    jq -c '{account,fiveHourUsed,fiveHourResetsAt,exhaustedUntil}' | scrub
+}
+
+body=$(jq -nc --arg r "$reset" --argjson wk "$(jq '.weeklyUsed // 0' <<<"$real")" --arg wr "$(jq -r '.weeklyResetsAt // empty' <<<"$real")" \
+  '{fiveHourUsed:100,weeklyUsed:$wk,fiveHourResetsAt:$r,weeklyResetsAt:(if $wr == "" then null else $wr end),exhaustedUntil:$r,ageS:0}')
+# Preflight: the same call with the account's real values, so a bad token or body fails before the session is walled.
+put_reading "$(jq -c '{fiveHourUsed:(.fiveHourUsed // 0),weeklyUsed:(.weeklyUsed // 0),fiveHourResetsAt,weeklyResetsAt,exhaustedUntil,ageS:0}' <<<"$real")" >/dev/null
+
 hook_at=$(now_utc)
 FACTORY_SESSION=$session factory hook stop-failure <<<"$payload"
-# The test row right after the wall: the first reading at or after the wall that names an end is the one the watchdog uses.
-body=$(jq -nc --arg r "$reset" --argjson five "$(jq '.fiveHourUsed // 0' <<<"$real")" --argjson wk "$(jq '.weeklyUsed // 0' <<<"$real")" \
-  --arg wr "$(jq -r '.weeklyResetsAt // empty' <<<"$real")" \
-  '{fiveHourUsed:100,weeklyUsed:$wk,fiveHourResetsAt:$r,weeklyResetsAt:(if $wr == "" then null else $wr end),exhaustedUntil:$r,ageS:0}')
-# secrets-run redacts a secret it prints to a pipe, so the call runs inside it and the body travels in the environment.
-# shellcheck disable=SC2016  # the inner shell expands them
-GATE_BODY=$body GATE_URL="${FACTORY_URL:-http://127.0.0.1:7793}/quota/accounts/$account" \
-  secrets-run run --env-file="$ROOT/.env.tpl" -- sh -c \
-  'curl -fsS -X PUT "$GATE_URL" -H "Authorization: Bearer $FACTORY_TOKEN" -H "Content-Type: application/json" -d "$GATE_BODY"' |
-  jq -c '{account,fiveHourUsed,fiveHourResetsAt,exhaustedUntil}' | scrub
+# The test row right after the wall: the first reading at or after the wall that names an end is the one the watchdog uses
+# (a quota poll in between would win; the log line below says what was stored, `resume:<session>:<reset>` what was used).
+put_reading "$body"
 log "wall: hook stop-failure rate_limit for $session at $hook_at; TEST ROW on $account, reset $reset (+${minutes} min), five-hour use 100 for the row"

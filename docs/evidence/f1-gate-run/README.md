@@ -19,7 +19,8 @@ code fix (deployed mid-run) and exposed one design conflict that needs a decisio
 1. **A chain wave could never spawn its successor (fixed).** Both Wave 1s ended their turn, `rd wave` printed `queued:
    wave`, and the successors stayed held for 13 minutes. Admission's one-wave-per-repo rule counted the finished
    predecessor, which chain mode leaves open in its tab (a wave cannot close its own tab). Fix `5625f5f` (deployed as release `3ec1f17`): a `wave` session
-   that is `idle` after at least one turn no longer holds the repo; one mid-turn, `walled`, `blocked`, `starting` or
+   that is `idle` after a turn that ended in its current life no longer holds the repo (review round one: a resumed session
+   that has not worked yet still holds it, `packages/server/src/sessions.ts`, tested); one mid-turn, `walled`, `blocked`, `starting` or
    `waiting` still does. The test fails on the old code. Deployed from the branch at 18:15:29Z; both held successors started
    30 s later with no input.
 2. **`drain` stops a chain at the next boundary and nothing restarts it (open, needs a decision).** `rd wave` runs
