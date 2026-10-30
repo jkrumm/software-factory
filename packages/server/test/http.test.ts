@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { loadConfig } from '../src/config.ts'
 import { MAX_BODY_BYTES } from '../src/http.ts'
 import { MAX_PAYLOAD_CHARS, MAX_PROMPT_CHARS } from '../src/schemas.ts'
-import { startApp, TEST_TOKEN, type TestApp } from './support/app.ts'
+import { startApp, TEST_REPO, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 
@@ -75,9 +75,18 @@ describe('config (finding 5)', () => {
       pretrustBin: '/home/me/SourceRoot/dotfiles/scripts/claude-pretrust.sh',
       accountsFile: '/home/me/SourceRoot/dotfiles/config/claude-accounts.json',
       retryBudgetMs: 30 * 60_000,
+      repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
+  })
+
+  test('FACTORY_REPO_ROOTS replaces the default roots', () => {
+    expect(loadConfig({ ...env, FACTORY_REPO_ROOTS: '/srv/a:/srv/b::' }).repoRoots).toEqual(['/srv/a', '/srv/b'])
+  })
+
+  test.each(['relative/path', '/srv/a:rel', ':'])('FACTORY_REPO_ROOTS %p is refused', (value) => {
+    expect(() => loadConfig({ ...env, FACTORY_REPO_ROOTS: value })).toThrow(/FACTORY_REPO_ROOTS/)
   })
 
   test.each(['abc', '0', '5', '1.5'])('FACTORY_RETRY_BUDGET_MS %p is refused', (value) => {
@@ -105,7 +114,7 @@ const ROUTES: [string, string][] = [
   ['POST', '/events'],
   ['PUT', '/capacity/a'],
 ]
-const SPAWN = JSON.stringify({ key: 'k', repo: '/r', prompt: 'p' })
+const SPAWN = JSON.stringify({ key: 'k', repo: TEST_REPO, prompt: 'p' })
 const json = { 'content-type': 'application/json' }
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 
@@ -247,7 +256,7 @@ describe('body size', () => {
 
   test('a body just under the cap is read', async () => {
     const prompt = 'p'.repeat(MAX_PROMPT_CHARS)
-    const res = await post(JSON.stringify({ key: 'big', repo: '/r', prompt }))
+    const res = await post(JSON.stringify({ key: 'big', repo: TEST_REPO, prompt }))
     expect(res.status).toBe(201)
   })
 

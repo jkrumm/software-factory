@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { HerdrRunner } from '../src/runner.ts'
 import { tick } from '../src/tick.ts'
-import { startApp, type TestApp } from './support/app.ts'
+import { startApp, TEST_REPO, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -43,7 +43,7 @@ const tabs = async () => (await herdr.state()).tabs.map((t) => t.label)
 const inHours = (h: number) => new Date(clock.now().getTime() + h * 3_600_000).toISOString()
 const reading = (account: string, weeklyUsed: number, fiveHourUsed: number, resetsAt: string) =>
   app.send('PUT', `/capacity/${account}`, { weeklyUsed, fiveHourUsed, resetsAt })
-const spawn = (key: string) => app.send('POST', '/spawns', { key, repo: '/work/repo', prompt: 'do it' })
+const spawn = (key: string) => app.send('POST', '/spawns', { key, repo: TEST_REPO, prompt: 'do it' })
 const status = async (key: string) => (await app.get(`/spawns/${key}`)).json() as Promise<Record<string, unknown>>
 
 describe('a spawn with capacity', () => {
@@ -321,10 +321,10 @@ describe('requeue', () => {
 
 describe('the prompt', () => {
   test("cannot start with '-': herdr would read it as an option", async () => {
-    const res = await app.send('POST', '/spawns', { key: 'dash', repo: '/work/repo', prompt: '-rf everything' })
+    const res = await app.send('POST', '/spawns', { key: 'dash', repo: TEST_REPO, prompt: '-rf everything' })
     expect(res.status).toBe(400)
     expect(
-      await app.send('POST', '/spawns', { key: 'dash', repo: '/work/repo', prompt: 'a - b' }).then((r) => r.status),
+      await app.send('POST', '/spawns', { key: 'dash', repo: TEST_REPO, prompt: 'a - b' }).then((r) => r.status),
     ).not.toBe(400)
   })
 })

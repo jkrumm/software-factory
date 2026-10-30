@@ -7,6 +7,7 @@ import type { Clock } from './clock.ts'
 import { AccountName, CapacityInput, EventInput, SpawnInput } from './schemas.ts'
 import { getSession, recordEvent } from './sessions.ts'
 import type { TickMonitor } from './health.ts'
+import { RepoRefused, resolveRepo } from './repos.ts'
 import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
@@ -18,6 +19,8 @@ export interface AppDeps {
   token: string
   /** what the ticker reports; `/health` is unhealthy when it goes quiet */
   monitor: TickMonitor
+  /** the directories a spawn's repo must be inside */
+  repoRoots: readonly string[]
 }
 
 /** Largest request body the server reads. */
@@ -133,7 +136,7 @@ function failure(error: unknown): Response {
 }
 
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version, token, monitor }: AppDeps) {
+export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   return {
     '/health': {
@@ -162,7 +165,12 @@ export function routes({ sql, clock, version, token, monitor }: AppDeps) {
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
-        const { spawn, created } = await createSpawn(sql, await parseBody(req, SpawnInput), clock.now())
+        const input = await parseBody(req, SpawnInput)
+        // The policy decides before anything is stored; the row keeps the resolved path.
+        const repo = await resolveRepo(input.repo, repoRoots).catch((error) => {
+          throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
+        })
+        const { spawn, created } = await createSpawn(sql, { ...input, repo }, clock.now())
         return respond(Spawn, spawn, created ? 201 : 200)
       }),
     },

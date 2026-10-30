@@ -1,9 +1,17 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
 import { serve } from '../../src/http.ts'
 
 export const TEST_TOKEN = 'test-token-0123456789'
+
+/** The one allowed root of a test server, and a repo inside it (both real paths: /tmp is a link on macOS). */
+export const TEST_ROOT = realpathSync(mkdtempSync('/tmp/factory-roots-'))
+export const TEST_REPO = join(TEST_ROOT, 'repo')
+mkdirSync(TEST_REPO)
+process.on('exit', () => rmSync(TEST_ROOT, { recursive: true, force: true }))
 
 export interface TestApp {
   url: URL
@@ -23,11 +31,23 @@ const authed = { authorization: `Bearer ${TEST_TOKEN}` }
 const json = { ...authed, 'content-type': 'application/json' }
 
 /** The real server on a loopback port the OS picks. */
-export function startApp(deps: { sql: SQL; clock: Clock; monitor?: TickMonitor }): TestApp {
+export function startApp(deps: {
+  sql: SQL
+  clock: Clock
+  monitor?: TickMonitor
+  repoRoots?: readonly string[]
+}): TestApp {
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)
   // A server in a test has ticked, unless the test brings a monitor of its own.
   if (!deps.monitor) monitor.passSucceeded()
-  const server = serve({ ...deps, monitor, port: 0, version: 'test', token: TEST_TOKEN })
+  const server = serve({
+    ...deps,
+    monitor,
+    repoRoots: deps.repoRoots ?? [TEST_ROOT],
+    port: 0,
+    version: 'test',
+    token: TEST_TOKEN,
+  })
   const url = (path: string) => new URL(path, server.url)
   return {
     monitor,
