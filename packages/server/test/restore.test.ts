@@ -3,7 +3,7 @@
 // of everything after it; the server stops, the dump is restored into a database of its own, a new server starts on it
 // against the same herdr and the same spool directory. What the tests read is what the new server does to the panes
 // that are still there.
-import { appendFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { EMPTY_SUMMARY, type EventKind, nextKey, parseSpool, summarize } from '@software-factory/contract/spool'
 import { SQL } from 'bun'
@@ -45,11 +45,19 @@ afterAll(async () => {
 
 // --- the scratch cluster's own tools ---------------------------------------------------------------------------------
 
-function pgTool(name: string): string {
-  const dir = process.env.PG_BIN_DIR
-  if (dir) return join(dir, name)
-  return Bun.which(name) ?? join('/usr/lib/postgresql', '17', 'bin', name)
+/** The binaries beside the ones the harness starts the cluster with: `PG_BIN_DIR`, else PATH, else the newest installed major. */
+let pgBin: string | undefined
+async function pgBinDir(): Promise<string> {
+  if (pgBin) return pgBin
+  if (process.env.PG_BIN_DIR) return (pgBin = process.env.PG_BIN_DIR)
+  const onPath = Bun.which('initdb')
+  if (onPath) return (pgBin = dirname(onPath))
+  const majors = await readdir('/usr/lib/postgresql').catch(() => [] as string[])
+  const newest = majors.sort((a, b) => Number(b) - Number(a))[0]
+  if (!newest) throw new Error('no PostgreSQL binaries: put initdb on PATH or set PG_BIN_DIR')
+  return (pgBin = join('/usr/lib/postgresql', newest, 'bin'))
 }
+const pgTool = async (name: string): Promise<string> => join(await pgBinDir(), name)
 
 async function run(cmd: string[]): Promise<void> {
   const proc = Bun.spawn(cmd, { stdout: 'ignore', stderr: 'pipe' })
@@ -66,13 +74,13 @@ const connect = (database: string): SQL => {
   return pool
 }
 
-const dump = (file: string) =>
-  run([pgTool('pg_dump'), ...connection(), '-d', 'postgres', '--schema=factory', '-f', file])
+const dump = async (file: string) =>
+  run([await pgTool('pg_dump'), ...connection(), '-d', 'postgres', '--schema=factory', '-f', file])
 
 /** The dump restored into a database of its own: the live one is never touched. */
 async function restore(file: string, name: string): Promise<SQL> {
   await db.sql.unsafe(`CREATE DATABASE ${name}`)
-  await run([pgTool('psql'), ...connection(), '-d', name, '-q', '-v', 'ON_ERROR_STOP=1', '-f', file])
+  await run([await pgTool('psql'), ...connection(), '-d', name, '-q', '-v', 'ON_ERROR_STOP=1', '-f', file])
   return connect(name)
 }
 
@@ -249,15 +257,17 @@ describe('the database restored from an earlier dump', () => {
       const pane = paneOf(world.after, key)
       expect(world.after.agents.filter((a) => a.pane_id === pane)).toHaveLength(1)
       expect(tabs[0]?.tab_id).toBe(tabsOf(world.before, key)[0]?.tab_id as string)
-      expect(promptsOf(world.after, key)[0]?.text).toBe(`work on ${key}`)
+      expect(promptsOf(world.after, key).filter((p) => p.text === `work on ${key}`)).toHaveLength(1)
     }
   })
 
-  test('a client that asks again for a spawn whose row was lost gets its running pane back, with no second tab or prompt', () => {
+  test('a client that asks again for a spawn whose row was lost gets its running pane back, with no second tab or prompt', async () => {
     expect(world.retriedB.created).toBe(true)
     expect(tabsOf(world.after, 'b')).toHaveLength(1)
     expect(promptsOf(world.after, 'b')).toHaveLength(1)
     expect(world.after.agents.filter((a) => a.pane_id === paneOf(world.after, 'b'))).toHaveLength(1)
+    const [row] = await world.restored.sql`SELECT status, session FROM factory.spawns WHERE key = 'b'`
+    expect(row).toEqual({ status: 'started', session: paneOf(world.after, 'b') })
   })
 
   test('the restored server starts no agent in a pane that already has one, and opens no extra space', () => {
@@ -300,50 +310,84 @@ describe('the database restored from an earlier dump', () => {
   })
 
   // --- the two places where the restored server does something twice ---------------------------------------------
+  // Each pin is preceded by a test of its setup, so an expected failure cannot pass because the world was not built.
+
+  const wakeNotes = (state: FakeState) => promptsOf(state, 'o').filter((p) => p.text.startsWith('workers done:')).length
+  const firstPrompts = (state: FakeState, key: string) =>
+    state.prompts.filter((p) => p.text === `work on ${key}`).length
+
+  test('setup: `c` ran once before the restore and its tab was closed; its session ended in the spool', async () => {
+    expect(world.loaded.spawns).toContain('c')
+    expect(tabsOf(world.before, 'c')).toHaveLength(0)
+    expect(firstPrompts(world.before, 'c')).toBe(1)
+    const kinds = (await world.restored.sql`SELECT kind FROM factory.events WHERE session = 'c' ORDER BY at, id`).map(
+      (r: { kind: string }) => r.kind,
+    )
+    expect(kinds).toEqual(['session_started', 'turn_started', 'turn_ended', 'session_ended'])
+    const [row] = await world.restored.sql`SELECT status FROM factory.spawns WHERE key = 'c'`
+    expect(row?.status).toBe('started')
+  })
 
   test.failing('a spawn that ran and finished after the dump is not started again from its stale queued row', () => {
     // `c` was `queued` at the dump, started, worked, ended and had its tab closed afterwards. The restored row says
-    // queued, the spool says the session lived and ended; the restored server starts it a second time.
+    // queued, the spool says the session lived and ended; the restored server starts it a second time (a new tab, a
+    // second "work on c" typed). What must hold: still exactly the one prompt and no tab.
+    expect(firstPrompts(world.after, 'c')).toBe(1)
     expect(tabsOf(world.after, 'c')).toHaveLength(0)
+  })
+
+  test('setup: `o` was woken exactly once before the restore, by a note the dump does not have', () => {
+    expect(wakeNotes(world.before)).toBe(1)
+    expect(promptsOf(world.before, 'o')[0]?.text).toBe('work on o')
+    expect(world.loaded.wakeRows).toBe(0)
   })
 
   test.failing('a wake note that was typed and delivered after the dump is not typed again', () => {
     // `o` was woken, cleared its wait and went on. The wait's clearing and the note's row were database-only facts
     // after the dump: the restored database has the wait open and no note, and the wake rule asks again.
-    expect(promptsOf(world.after, 'o')).toHaveLength(2)
+    expect(wakeNotes(world.after)).toBe(1)
   })
 })
 
 describe('the spool is not the whole history once it has been rotated', () => {
-  test.failing('events of a rotated spool file that came after the dump are gone for good', async () => {
+  let kinds: string[] = []
+  let rotated: string[] = []
+
+  beforeAll(async () => {
     const dir = join(scratch, 'rotating')
     await mkdir(dir)
     const real = () => new Date()
-    const line = (session: string, kind: EventKind, key: string, at: Date) =>
-      `${JSON.stringify({ key, session, kind, at: at.toISOString(), payload: {} })}\n`
+    const line = (kind: EventKind, key: string, at: Date) =>
+      `${JSON.stringify({ key, session: 'r', kind, at: at.toISOString(), payload: {} })}\n`
     const file = join(dir, 'r.jsonl')
     const t0 = new Date(Date.now() - 60_000)
 
     const live = connect('postgres')
     const first = new SpoolReplayer({ sql: live, dir, now: real, rotateBytes: 1, quietMs: 0 })
-    await appendFile(file, line('r', 'session_started', 'r:session_started:0', t0))
+    await appendFile(file, line('session_started', 'r:session_started:0', t0))
     await first.replay()
     const dumpFile = join(scratch, 'rotating.sql')
     await dump(dumpFile)
 
-    // After the dump the session works two turns; the spool file is rotated (its lines stored, the file retired).
-    await appendFile(file, line('r', 'turn_started', 'r:turn_started:1', new Date(t0.getTime() + 1_000)))
-    await appendFile(file, line('r', 'turn_ended', 'r:turn_ended:1', new Date(t0.getTime() + 2_000)))
-    const rotated = await first.replay()
-    expect(rotated.rotated).toEqual(['r.jsonl'])
+    // After the dump the session works a turn; the spool file is rotated (its lines stored, the file retired).
+    await appendFile(file, line('turn_started', 'r:turn_started:1', new Date(t0.getTime() + 1_000)))
+    await appendFile(file, line('turn_ended', 'r:turn_ended:1', new Date(t0.getTime() + 2_000)))
+    rotated = (await first.replay()).rotated
 
     // The restored database replays what is left of the spool: nothing, the lines were in the retired file.
     const sql = await restore(dumpFile, 'restored_rotated')
-    const second = new SpoolReplayer({ sql, dir, now: real, rotateBytes: 1_000_000 })
-    await second.replay()
-    const kinds = (await sql`SELECT kind FROM factory.events WHERE session = 'r' ORDER BY id`).map(
+    await new SpoolReplayer({ sql, dir, now: real, rotateBytes: 1_000_000 }).replay()
+    kinds = (await sql`SELECT kind FROM factory.events WHERE session = 'r' ORDER BY id`).map(
       (r: { kind: string }) => r.kind,
     )
+  }, 60_000)
+
+  test('setup: the file was rotated after the dump and the restored database knows the session', () => {
+    expect(rotated).toEqual(['r.jsonl'])
+    expect(kinds).toContain('session_started')
+  })
+
+  test.failing('events of a rotated spool file that came after the dump are gone for good', () => {
     expect(kinds).toEqual(['session_started', 'turn_started', 'turn_ended'])
   })
 })
