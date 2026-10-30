@@ -119,7 +119,14 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     can wake again). A child is finished when `dead` or `idle` after a turn of its current life (`liveSessions`' `finished`);
     a spawn of the session's that has no session yet (queued, held, waiting for capacity, starting) is not. A failed spawn
     does not hold the wake: it is a line in `factory status`. A parent that is not `waiting` gets nothing (send-back covers
-    a working one). This is what resumes an orchestrator that ended its turn on a wait.
+    a working one). This is what resumes an orchestrator that ended its turn on a wait. **A delivered wake ends the wait it
+    answers:** in the transaction that records the delivery (the `turn_started` that proves the note, in `settlePrompts` and
+    in the retry path of `deliverPrompts`) the factory records a `wait_cleared` (key `<session>:wait_cleared:<prompt id>`,
+    dated at that turn's start), so the session reads `idle` when the woken turn ends and send-back sees no wait again; the
+    orchestrator needs no `--done`. Only while the wake's wait is still the session's latest wait event: a `wait_declared`
+    after it (the woken turn waits again) or a `--done` already there is left alone. At delivery, not at creation: until a
+    turn proves the note the session stays `waiting` (true: it has not woken), and a wake that fails or expires clears
+    nothing, so the rule can ask again after 30 min.
   - *herdr restart*: a `herdr_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
     at that time, has had no hook event since and that herdr has not shown since is resumed by id (`Runner.start` with
     `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
@@ -146,7 +153,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   later turn_started; a turn that ends after `quota_resume fired` ends it too), `blocked` (prompt_blocked with no later
   turn_started or turn_ended), `working` (open turn; `stuck` when herdr says working within 5 minutes and neither the
   worktree nor the turn moved for 45 minutes), `waiting` (an open `factory session wait --on workers|deploy|owner`, no
-  open turn), `idle`. Events are ordered by event time, then arrival. Only `limit_stop` from `StopFailure rate_limit`
+  open turn; the wait ends with `--done` or when a delivered wake answers it), `idle`. Events are ordered by event time, then arrival. Only `limit_stop` from `StopFailure rate_limit`
   is a wall; other stop failures are ignored.
 - **`factory.sessions` is what the factory follows; `usage` owns the session entity.** Row id = `FACTORY_SESSION`; a spawn
   gets its row when the tick claims it (`starting` until its first event; the pane is added when the Runner returns it; a
