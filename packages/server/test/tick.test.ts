@@ -237,8 +237,20 @@ describe('replay and crashes (finding 3)', () => {
         return { session: 'pane-s1', attempts: 1 }
       },
     }
-    await tick(deps(runner))
+    expect(await tick(deps(runner))).toMatchObject({ started: [], errors: [expect.stringContaining('claim was lost')] })
     expect(await spawnRow('s1')).toMatchObject({ status: 'failed', session: null })
+  })
+})
+
+describe('reclaiming a claim', () => {
+  test('keeps its account when that account has no reading any more', async () => {
+    await addSpawn('s1')
+    await claimDue(deps(herdrRunner()))
+    await db.sql`DELETE FROM factory.capacity_readings`
+    clock.advance(DEFAULT_LEASE_MS)
+    const { claims, skipped } = await claimDue(deps(herdrRunner()))
+    expect(skipped).toBe(0)
+    expect(claims).toMatchObject([{ key: 's1', account: 'a', attempts: 2 }])
   })
 })
 

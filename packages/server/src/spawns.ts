@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { currentLoads, latestReadings, nextReset, pickEligible } from './capacity.ts'
+import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
 import type { SpawnInput } from './schemas.ts'
 
 export type SpawnStatus = 'queued' | 'waiting' | 'starting' | 'started' | 'failed'
@@ -23,11 +23,6 @@ interface SpawnRow {
   session: string | null
   error: string | null
 }
-
-/** Serializes everything that assigns an account, so each assignment sees the ones before it. */
-const CAPACITY_LOCK = 7_093_002
-
-export const lockCapacity = (tx: SQL) => tx`SELECT pg_advisory_xact_lock(${CAPACITY_LOCK})`
 
 export const toView = (row: SpawnRow): SpawnView => ({
   key: row.key,
