@@ -8,6 +8,8 @@ ROOT="${FACTORY_ROOT:-$HOME/.software-factory}"
 REPO_DIR="$ROOT/repo"
 SHA_FILE="$ROOT/data/deployed-sha"
 PORT=7793
+# Must be the ref `make deploy` was given (FACTORY_REF, default master).
+REF="${FACTORY_REF:-master}"
 HEALTH_URL="http://127.0.0.1:$PORT/health"
 
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -25,13 +27,13 @@ health=$(curl -fsS --max-time 5 "$HEALTH_URL") || fail "no answer from $HEALTH_U
 version=$(echo "$health" | jq -r '.version')
 ok "/health ok (version ${version:0:12})"
 
-# 2. the deployed build is origin/master, and it is the one serving
+# 2. the deployed build is origin/$REF, and it is the one serving
 deployed=$(cat "$SHA_FILE" 2>/dev/null) || fail "$SHA_FILE missing: nothing was deployed"
-remote=$(git -C "$REPO_DIR" ls-remote origin refs/heads/master | awk '{print $1}')
-[[ -n "$remote" ]] || fail "cannot read origin/master from $REPO_DIR (run make deploy first)"
-[[ "$deployed" == "$remote" ]] || fail "deployed ${deployed:0:12} is not origin/master ${remote:0:12}"
+remote=$(git -C "$REPO_DIR" ls-remote origin "refs/heads/$REF" | awk '{print $1}')
+[[ -n "$remote" ]] || fail "cannot read origin/$REF from $REPO_DIR (run make deploy first)"
+[[ "$deployed" == "$remote" ]] || fail "deployed ${deployed:0:12} is not origin/$REF ${remote:0:12}"
 [[ "$version" == "$deployed" ]] || fail "the running server reports ${version:0:12}, deployed is ${deployed:0:12}"
-ok "deployed sha is origin/master (${deployed:0:12})"
+ok "deployed sha is origin/$REF (${deployed:0:12})"
 
 # 3. the API refuses a caller without the token
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/spawns")

@@ -21,6 +21,8 @@ set -u
 
 LABEL="com.jkrumm.software-factory"
 PORT=7793
+# The branch to deploy: master, or another branch to prove a change live before it is merged (FACTORY_REF=<branch>).
+REF="${FACTORY_REF:-master}"
 ROOT="${FACTORY_ROOT:-$HOME/.software-factory}"
 REPO_DIR="$ROOT/repo"
 RELEASES="$ROOT/releases"
@@ -239,10 +241,10 @@ main() {
 
   if [[ -n "$DRY_RUN" ]]; then
     old=$(read_sha "$SHA_FILE")
-    sha=$(git -C "$SELF_DIR" rev-parse origin/master 2>/dev/null) || sha="<origin/master>"
+    sha=$(git -C "$SELF_DIR" rev-parse "origin/$REF" 2>/dev/null) || sha="<origin/$REF>"
     log "DRY RUN: nothing is fetched, stopped, started or written"
     log "would deploy ${sha:0:12} (live: ${old:-none}) from ${repo_url:-<no origin url>}"
-    act git -C "$REPO_DIR" fetch --prune origin master
+    act git -C "$REPO_DIR" fetch --prune origin "$REF"
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
     act "check every ref of .env.tpl through secrets-run"
     log "rendered $PLIST (points at the release, not at current):"
@@ -279,8 +281,8 @@ main() {
       log "cloning the repository -> $REPO_DIR"
       git clone --quiet "$repo_url" "$REPO_DIR" || die "git clone failed"
     fi
-    git -C "$REPO_DIR" fetch --quiet --prune origin master || die "git fetch origin master failed (network or credential helper)"
-    sha=$(git -C "$REPO_DIR" rev-parse origin/master)
+    git -C "$REPO_DIR" fetch --quiet --prune origin "$REF" || die "git fetch origin $REF failed (network or credential helper)"
+    sha=$(git -C "$REPO_DIR" rev-parse FETCH_HEAD)
   else
     sha="$FACTORY_DEPLOY_SHA"
   fi

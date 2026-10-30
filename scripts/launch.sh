@@ -43,5 +43,8 @@ exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
     eval "value=\${$key-}"
     [ -n "$value" ] || { echo "software-factory: $key resolved to an empty value; refusing to start." >&2; exit 78; }
   done
+  # The password is hex, so it needs no URL encoding; role, database and host are fixed facts of the shared database.
+  export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@127.0.0.1:5432/shared"
+  unset FACTORY_DB_PASSWORD
   exec bun packages/server/src/main.ts
 ' sh $keys
