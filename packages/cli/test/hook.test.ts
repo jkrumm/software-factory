@@ -286,7 +286,7 @@ describe('the binary', () => {
     ['session-end', { reason: 'other' }],
     ['no-such-hook', {}],
   ])('%s prints nothing on stdout or stderr, with the server up and down', async (event, input) => {
-    for (const extra of [{}, { FACTORY_SOCKET: join(dir, 'nobody-listens.sock') }]) {
+    for (const extra of [{}, { FACTORY_SOCKET: join(dir, 'nobody-listens.sock') }] as Record<string, string>[]) {
       const r = await run(['hook', event], JSON.stringify(input), env(extra))
       expect(r).toMatchObject({ code: 0, stdout: '', stderr: '' })
     }

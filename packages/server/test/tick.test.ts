@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from '
 import { recordReading } from '../src/capacity.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from '../src/config.ts'
 import { HerdrRunner, RunnerError, type Runner, type StartInput } from '../src/runner.ts'
+import { getSession } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { claimDue, DEFAULT_LEASE_MS, retryDelayMs, startTicker, tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
@@ -74,6 +75,43 @@ function gatedRunner() {
   }
   return { runner, release, until, entered }
 }
+
+describe('the session of a spawn', () => {
+  const sessionState = async (key: string) => (await getSession(db.sql, key, clock.now()))?.state
+  const sessionRows = (key: string) => db.sql`SELECT pane FROM factory.sessions WHERE id = ${key}`
+
+  test('is `starting` from the claim on, and has its pane once the Runner returns it', async () => {
+    await addSpawn('s1')
+    let during: unknown
+    const runner: Runner = {
+      start: async () => {
+        during = await sessionState('s1')
+        return { session: 'w1:p1' }
+      },
+    }
+    await tick(deps(runner))
+    expect(during).toBe('starting')
+    expect(await sessionRows('s1')).toEqual([{ pane: 'w1:p1' }])
+    expect(await sessionState('s1')).toBe('starting')
+  })
+
+  test('a start that will be retried is still starting; one that failed for good never was a session', async () => {
+    await addSpawn('retry')
+    await addSpawn('bad')
+    const runner: Runner = {
+      start: (input) =>
+        Promise.reject(input.key === 'bad' ? new RunnerError('refused', true) : new RunnerError('later', false)),
+    }
+    const quiet = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await tick(deps(runner))
+    } finally {
+      quiet.mockRestore()
+    }
+    expect(await sessionState('retry')).toBe('starting')
+    expect(await sessionRows('bad')).toEqual([])
+  })
+})
 
 describe('failures', () => {
   test('a permanent refusal marks the spawn failed and does not stop the others', async () => {
