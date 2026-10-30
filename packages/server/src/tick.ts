@@ -1,22 +1,20 @@
 import type { SQL } from 'bun'
 import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
 import type { Clock } from './clock.ts'
-import {
-  backoffMs,
-  DEFAULT_PROCESS_TIMEOUT_MS,
-  DEFAULT_RETRY,
-  RunnerError,
-  type Runner,
-  type RetryPolicy,
-  worstCaseMs,
-} from './runner.ts'
+import type { TickMonitor } from './health.ts'
+import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
 
-/** Claims a spawn may take before it is `failed`: a claim that dies mid-flight counts like one that errors. */
-export const MAX_ATTEMPTS = 3
+/**
+ * How long a spawn stays retryable, counted from its first claim: a herdr that restarts for a few minutes fails
+ * nothing. Only a start that failed counts; time spent waiting for capacity does not (the clock resets there).
+ */
+export const DEFAULT_RETRY_BUDGET_MS = 30 * 60_000
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
-export const RETRY_DELAY: RetryPolicy = { retries: MAX_ATTEMPTS, baseMs: 30_000, capMs: 300_000 }
+export const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
+export const retryDelayMs = (attempt: number): number =>
+  Math.min(RETRY_DELAY.capMs, RETRY_DELAY.baseMs * 2 ** (attempt - 1))
 /** A claim older than this is a crashed tick's: the longest a `HerdrRunner.start` can run, plus a minute. */
-export const DEFAULT_LEASE_MS = worstCaseMs(DEFAULT_RETRY, DEFAULT_PROCESS_TIMEOUT_MS) + 60_000
+export const DEFAULT_LEASE_MS = DEFAULT_START_BUDGET_MS + 60_000
 /** Most spawns one tick claims; the rest wait for the next. */
 export const DEFAULT_BATCH = 20
 
@@ -26,6 +24,7 @@ export interface TickDeps {
   clock: Clock
   leaseMs?: number
   batch?: number
+  retryBudgetMs?: number
 }
 
 export interface TickResult {
@@ -45,6 +44,8 @@ export interface Claim {
   prompt: string
   account: string
   attempts: number
+  /** when this spawn's retry budget started */
+  firstClaimedAt: Date
 }
 
 interface DueRow {
@@ -55,7 +56,15 @@ interface DueRow {
   account: string | null
   attempts: number
   error: string | null
+  first_claimed_at: Date | null
 }
+
+/** One line per spawn that leaves the queue for good, so the reason is in the log whatever else is read. */
+function logFailed(key: string, reason: string): void {
+  console.error('spawn failed', { key, reason })
+}
+
+const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
 
 /**
  * Phase 1: in one short transaction, take the spawns that are due and mark them `starting`. The pane is named after
@@ -69,10 +78,10 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const now = clock.now()
   const staleBefore = new Date(now.getTime() - (deps.leaseMs ?? DEFAULT_LEASE_MS))
 
-  return sql.begin(async (tx) => {
+  const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, prompt, status, account, attempts, error FROM factory.spawns
+      SELECT key, repo, prompt, status, account, attempts, error, first_claimed_at FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
          OR (status = 'starting' AND claimed_at <= ${staleBefore})
@@ -82,14 +91,15 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 
     const readings = await latestReadings(tx)
     const claims: Claim[] = []
-    const failed: string[] = []
+    const failed: { key: string; reason: string }[] = []
     let skipped = 0
+    const budgetMs = deps.retryBudgetMs ?? DEFAULT_RETRY_BUDGET_MS
 
     for (const row of due) {
-      if (row.attempts >= MAX_ATTEMPTS) {
-        const reason = `gave up after ${row.attempts} attempts${row.error ? `: ${row.error}` : ''}`
+      if (row.first_claimed_at && now.getTime() - row.first_claimed_at.getTime() >= budgetMs) {
+        const reason = `gave up: the ${minutes(budgetMs)} retry budget is spent after ${row.attempts} attempts${row.error ? `: ${row.error}` : ''}`
         await tx`UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason} WHERE key = ${row.key}`
-        failed.push(row.key)
+        failed.push({ key: row.key, reason })
         continue
       }
 
@@ -102,7 +112,8 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         const resumeAt = nextReset(readings, now) ?? null
         await tx`
           UPDATE factory.spawns
-          SET status = 'waiting', account = NULL, reading_id = NULL, claimed_at = NULL, resume_at = ${resumeAt}
+          SET status = 'waiting', account = NULL, reading_id = NULL, claimed_at = NULL, resume_at = ${resumeAt},
+              first_claimed_at = NULL
           WHERE key = ${row.key}`
         skipped++
         continue
@@ -110,7 +121,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       await tx`
         UPDATE factory.spawns
         SET status = 'starting', account = ${picked.account}, reading_id = COALESCE(${picked.id}, reading_id), claimed_at = ${now},
-            resume_at = NULL, attempts = attempts + 1
+            resume_at = NULL, attempts = attempts + 1, first_claimed_at = COALESCE(first_claimed_at, ${now})
         WHERE key = ${row.key}`
       claims.push({
         key: row.key,
@@ -118,10 +129,13 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         prompt: row.prompt,
         account: picked.account,
         attempts: row.attempts + 1,
+        firstClaimedAt: row.first_claimed_at ?? now,
       })
     }
     return { claims, failed, skipped }
   })
+  for (const { key, reason } of outcome.failed) logFailed(key, reason)
+  return { claims: outcome.claims, failed: outcome.failed.map((f) => f.key), skipped: outcome.skipped }
 }
 
 /** Phase 3: record the outcome in a transaction of its own. Only a row still `starting` is touched. */
@@ -135,14 +149,22 @@ async function recordStarted(sql: SQL, key: string, session: string): Promise<bo
 
 async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Promise<'failed' | 'retrying'> {
   const message = error instanceof Error ? error.message : String(error)
-  const final = (error instanceof RunnerError && error.permanent) || claim.attempts >= MAX_ATTEMPTS
-  if (final) {
-    await deps.sql`
-      UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${message}
-      WHERE key = ${claim.key} AND status = 'starting'`
+  const now = deps.clock.now()
+  const budgetMs = deps.retryBudgetMs ?? DEFAULT_RETRY_BUDGET_MS
+  const permanent = error instanceof RunnerError && error.permanent
+  const spent = now.getTime() - claim.firstClaimedAt.getTime() >= budgetMs
+  if (permanent || spent) {
+    const reason = permanent
+      ? message
+      : `gave up: the ${minutes(budgetMs)} retry budget is spent after ${claim.attempts} attempts: ${message}`
+    const rows = await deps.sql`
+      UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason}
+      WHERE key = ${claim.key} AND status = 'starting'
+      RETURNING key`
+    if (rows.length > 0) logFailed(claim.key, reason)
     return 'failed'
   }
-  const retryAt = new Date(deps.clock.now().getTime() + backoffMs(RETRY_DELAY, claim.attempts))
+  const retryAt = new Date(now.getTime() + retryDelayMs(claim.attempts))
   await deps.sql`
     UPDATE factory.spawns SET status = 'queued', claimed_at = NULL, resume_at = ${retryAt}, error = ${message}
     WHERE key = ${claim.key} AND status = 'starting'`
@@ -153,7 +175,12 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
 async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'failed' | 'retrying' | 'lost'> {
   let session: string
   try {
-    ;({ session } = await deps.runner.start({ key: claim.key, repo: claim.repo, prompt: claim.prompt }))
+    ;({ session } = await deps.runner.start({
+      key: claim.key,
+      repo: claim.repo,
+      prompt: claim.prompt,
+      account: claim.account,
+    }))
   } catch (error) {
     return recordFailure(deps, claim, error)
   }
@@ -191,20 +218,28 @@ export const TICK_INTERVAL_MS = 5_000
  * is logged, never fatal. `stop` waits for the pass in flight, so a shutdown cannot cut a start between the Runner
  * call and its record.
  */
-export function startTicker(deps: TickDeps, intervalMs: number = TICK_INTERVAL_MS): { stop(): Promise<void> } {
+export function startTicker(
+  deps: TickDeps,
+  intervalMs: number = TICK_INTERVAL_MS,
+  monitor?: TickMonitor,
+): { stop(): Promise<void> } {
   let inFlight: Promise<void> | undefined
   let stopped = false
 
   const pass = () => {
     if (stopped || inFlight) return
+    monitor?.passStarted()
     inFlight = (async () => {
       try {
         const { started, failed, retrying, errors } = await tick(deps)
         if (started.length || failed.length || retrying.length || errors.length) {
           console.log('tick', { started, failed, retrying, errors })
         }
+        if (errors.length) monitor?.noteError(errors.join('; '))
+        monitor?.passSucceeded()
       } catch (error) {
         console.error('tick failed', error)
+        monitor?.passFailed(error instanceof Error ? error.message : String(error))
       } finally {
         inFlight = undefined
       }

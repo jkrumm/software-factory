@@ -1,11 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { CapacityAck, EventAck, Health, Session, Spawn, SpawnList } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import { recordReading } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { AccountName, CapacityInput, EventInput, SpawnInput } from './schemas.ts'
 import { getSession, recordEvent } from './sessions.ts'
-import { createSpawn, getSpawn, listSpawns } from './spawns.ts'
+import type { TickMonitor } from './health.ts'
+import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
   sql: SQL
@@ -14,6 +16,8 @@ export interface AppDeps {
   version: string
   /** the bearer token every route except `GET /health` requires */
   token: string
+  /** what the ticker reports; `/health` is unhealthy when it goes quiet */
+  monitor: TickMonitor
 }
 
 /** Largest request body the server reads. */
@@ -21,6 +25,10 @@ export const MAX_BODY_BYTES = 64 * 1024
 
 const json = (body: unknown, status = 200, headers?: Record<string, string>): Response =>
   Response.json(body, { status, headers })
+
+/** The body goes through the contract's schema on its way out: a server that drifts from it fails here, not in a client. */
+const respond = <S extends z.ZodType>(schema: S, body: z.input<S>, status = 200): Response =>
+  json(schema.parse(body), status)
 
 class BadRequest extends Error {}
 
@@ -125,7 +133,7 @@ function failure(error: unknown): Response {
 }
 
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version, token }: AppDeps) {
+export function routes({ sql, clock, version, token, monitor }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   return {
     '/health': {
@@ -133,7 +141,8 @@ export function routes({ sql, clock, version, token }: AppDeps) {
         token,
         async () => {
           await sql`SELECT 1`
-          return json({ status: 'ok', version })
+          const health = { version, ...monitor.snapshot() }
+          return respond(Health, health, health.status === 'ok' ? 200 : 503)
         },
         { open: true },
       ),
@@ -141,26 +150,34 @@ export function routes({ sql, clock, version, token }: AppDeps) {
     '/events': {
       POST: route(async (req: Request) => {
         const { duplicate } = await recordEvent(sql, await parseBody(req, EventInput))
-        return json({ duplicate }, duplicate ? 200 : 201)
+        return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
       }),
     },
     '/sessions/:id': {
       GET: route(async (req: Bun.BunRequest<'/sessions/:id'>) => {
         const session = await getSession(sql, req.params.id)
-        return session ? json(session) : json({ error: 'unknown session' }, 404)
+        return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
       }),
     },
     '/spawns': {
-      GET: route(async () => json({ spawns: await listSpawns(sql) })),
+      GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
         const { spawn, created } = await createSpawn(sql, await parseBody(req, SpawnInput), clock.now())
-        return json(spawn, created ? 201 : 200)
+        return respond(Spawn, spawn, created ? 201 : 200)
       }),
     },
     '/spawns/:key': {
       GET: route(async (req: Bun.BunRequest<'/spawns/:key'>) => {
         const spawn = await getSpawn(sql, req.params.key)
-        return spawn ? json(spawn) : json({ error: 'unknown spawn' }, 404)
+        return spawn ? respond(Spawn, spawn) : json({ error: 'unknown spawn' }, 404)
+      }),
+    },
+    '/spawns/:key/requeue': {
+      POST: route(async (req: Bun.BunRequest<'/spawns/:key/requeue'>) => {
+        const result = await requeueSpawn(sql, req.params.key)
+        if ('spawn' in result) return respond(Spawn, result.spawn)
+        if (result.problem === 'unknown') return json({ error: 'unknown spawn' }, 404)
+        return json({ error: `spawn is ${result.status}; only a failed spawn can be re-queued` }, 409)
       }),
     },
     '/capacity/:account': {
@@ -168,7 +185,7 @@ export function routes({ sql, clock, version, token }: AppDeps) {
         const account = parseParam(AccountName, req.params.account)
         const reading = await parseBody(req, CapacityInput)
         await recordReading(sql, account, reading, clock.now())
-        return json({ account, ...reading, resetsAt: reading.resetsAt.toISOString() })
+        return respond(CapacityAck, { account, ...reading, resetsAt: reading.resetsAt.toISOString() })
       }),
     },
   } as const

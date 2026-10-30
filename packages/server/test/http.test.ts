@@ -44,15 +44,26 @@ describe('routing (finding 8)', () => {
     }
   })
 
-  test('/health answers ok with the version', async () => {
+  test('/health answers ok with the version and the tick record', async () => {
     const res = await app.get('/health')
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ status: 'ok', version: 'test' })
+    expect(await res.json()).toEqual({
+      status: 'ok',
+      version: 'test',
+      reason: null,
+      tick: { lastSuccessAt: null, lastError: null },
+    })
   })
 })
 
 describe('config (finding 5)', () => {
-  const env = { DATABASE_URL: 'postgres://x', HERDR_BIN: 'herdr', PORT: '7793', FACTORY_TOKEN: 'a-token-of-16-chars' }
+  const env = {
+    DATABASE_URL: 'postgres://x',
+    HERDR_BIN: 'herdr',
+    PORT: '7793',
+    FACTORY_TOKEN: 'a-token-of-16-chars',
+    HOME: '/home/me',
+  }
 
   test('reads the environment', () => {
     expect(loadConfig({ ...env, FACTORY_VERSION: 'abc' })).toEqual({
@@ -61,8 +72,16 @@ describe('config (finding 5)', () => {
       token: 'a-token-of-16-chars',
       port: 7793,
       version: 'abc',
+      pretrustBin: '/home/me/SourceRoot/dotfiles/scripts/claude-pretrust.sh',
+      accountsFile: '/home/me/SourceRoot/dotfiles/config/claude-accounts.json',
+      retryBudgetMs: 30 * 60_000,
     })
     expect(loadConfig(env).version).toBe('dev')
+    expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
+  })
+
+  test.each(['abc', '0', '5', '1.5'])('FACTORY_RETRY_BUDGET_MS %p is refused', (value) => {
+    expect(() => loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: value })).toThrow(/FACTORY_RETRY_BUDGET_MS/)
   })
 
   test.each(['abc', '', '0', '65536', '80.5', '-1', 'NaN', ' '])('PORT %p is refused', (port) => {
