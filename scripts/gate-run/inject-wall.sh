@@ -2,6 +2,8 @@
 # Inject one limit wall into a session through the real hook path, then give its account a reading that names the reset.
 # Usage: inject-wall.sh <session> <minutes-until-reset>
 #   The hook runs as the pane would run it (FACTORY_SESSION set, a rate_limit StopFailure payload on stdin).
+#   The test row is keyed by account, not session: no other session of that account may be walled meanwhile, and `resume:<session>:<reset>`
+#   in factory.prompts shows which reading the watchdog used (a quota poll between hook and PUT would win).
 #   The reading is a TEST ROW (PUT /quota/accounts/<account>) unless the account's real 5-hour reset already falls
 #   inside the run: the real reading carries a time too, but hours away, which the watchdog would wait for.
 # shellcheck disable=SC1091
@@ -29,8 +31,8 @@ put_reading() { # <json body>
 
 body=$(jq -nc --arg r "$reset" --argjson wk "$(jq '.weeklyUsed // 0' <<<"$real")" --arg wr "$(jq -r '.weeklyResetsAt // empty' <<<"$real")" \
   '{fiveHourUsed:100,weeklyUsed:$wk,fiveHourResetsAt:$r,weeklyResetsAt:(if $wr == "" then null else $wr end),exhaustedUntil:$r,ageS:0}')
-# Preflight: the same call with the account's real values, so a bad token or body fails before the session is walled.
-put_reading "$(jq -c '{fiveHourUsed:(.fiveHourUsed // 0),weeklyUsed:(.weeklyUsed // 0),fiveHourResetsAt,weeklyResetsAt,exhaustedUntil,ageS:0}' <<<"$real")" >/dev/null
+# Preflight, read-only: the token works and the account has a reading. The PUT itself is the one call that cannot be tried first.
+fx quota get --format json | jq -e --arg a "$account" '.quota[] | select(.account == $a)' >/dev/null
 
 hook_at=$(now_utc)
 FACTORY_SESSION=$session factory hook stop-failure <<<"$payload"
