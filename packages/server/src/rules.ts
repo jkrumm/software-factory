@@ -170,7 +170,7 @@ async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<C
   const unstarted: { parent: string }[] = await sql`
     SELECT DISTINCT p.parent FROM factory.spawns p
     WHERE p.parent IN ${sql(ids)} AND p.status IN ('queued', 'waiting', 'starting', 'started')
-      AND NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.spawn_key = p.key OR s.id = p.key)`
+      AND NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.spawn_key = p.key)`
   const workers = await loadWorkers(sql, ids, now)
   const pending = new Set(unstarted.map((u) => u.parent))
   return waiting.flatMap(({ id, event }) => {
