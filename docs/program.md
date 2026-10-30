@@ -35,11 +35,11 @@ code itself.
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
 | F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1 and 2 done; spike running (`spike/plain`, `spike/effect`) |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
-| A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | pending |
+| A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | Plan in argo (six waves); Wave 1 running (`argo-w1`) |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
 | F2 | Issue machine: inbox, leads in worktrees, evidence, hold, `project.yaml` v0 | software-factory | F1 | pending |
 | A2 | Argo pages: Fleet and Factory, agw insight, Infra (Beszel), Usage v2 | argo | A1, F1 | pending |
-| I1 | `icon` into `agw image`, the studio app on agw, image-gateway retired | agent-workflows, image-gateway, vps, dotfiles | — | pending |
+| I1 | `icon` into `agw image`, the studio app on agw, image-gateway retired | agent-workflows, image-gateway, vps, dotfiles | — | Plan in agent-workflows (three waves); Wave 1 running (`agent-workflows-w1`); Wave 2 needs R0 closed |
 | IR | iris: fleet, waves and quota screens on the factory API | iris | F1 | pending |
 | F3 | Intake and self-heal (Kuma, GitHub, TickTick, Beszel, HyperDX), dedup with the golden set | software-factory | F2 | pending |
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
