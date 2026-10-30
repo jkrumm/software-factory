@@ -122,7 +122,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     a working one). This is what resumes an orchestrator that ended its turn on a wait. **A delivered wake ends the wait it
     answers:** in the transaction that records the delivery (the `turn_started` that proves the note, in `settlePrompts` and
     in the retry path of `deliverPrompts`) the factory records a `wait_cleared` (key `<session>:wait_cleared:<prompt id>`,
-    dated 1 ms before that turn's start; the Stop hook's `stop-check` settles the session's own wake first), so the session reads `idle` when the woken turn ends and send-back sees no wait again; the
+    dated 1 ms before that turn's start, never before the wait it ends; the Stop hook's `stop-check` settles the session's own wake first), so the session reads `idle` when the woken turn ends and send-back sees no wait again; the
     orchestrator needs no `--done`. Only while the wake's wait is still the session's latest wait event: a `wait_declared`
     after it (the woken turn waits again) or a `--done` already there is left alone. At delivery, not at creation: until a
     turn proves the note the session stays `waiting` (true: it has not woken), and a wake that fails or expires clears

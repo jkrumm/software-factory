@@ -484,7 +484,8 @@ export async function declareWait(
  * A delivered wake ends the wait it answers: `wait_cleared` under the key `<session>:wait_cleared:<prompt id>`, so a replay
  * records nothing. Only while that wait is still the session's latest wait event: a `wait_declared` after it (the woken turn
  * waits again) or a `--done` already there stays as it is. The event is dated 1 ms before the turn that proved the
- * delivery, so a wait the woken turn declares sorts after the clear whatever the event ids say, whenever this runs.
+ * delivery (never before the wait it ends), so a wait the woken turn declares sorts after the clear whatever the event ids
+ * say, whenever this runs.
  */
 export async function clearAnsweredWait(
   tx: SQL,
