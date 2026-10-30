@@ -6,7 +6,9 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
+import { deliverPrompts } from './prompts.ts'
 import type { QuotaPoller } from './quota.ts'
+import { evaluateRules } from './rules.ts'
 import { dropEmptySession, type LiveSession, openSession } from './sessions.ts'
 import type { SpoolReplayer } from './spool.ts'
 
@@ -247,10 +249,18 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   } catch (error) {
     quotaError = `quota poll: ${error instanceof Error ? error.message : String(error)}`
   }
+  // The rules read the facts and the readings just stored; what they record is typed after the claims.
+  let rulesError: string | undefined
+  try {
+    await evaluateRules(deps.sql, deps.clock.now())
+  } catch (error) {
+    rulesError = `rules: ${error instanceof Error ? error.message : String(error)}`
+  }
   const { claims, failed, skipped } = await claimDue(deps)
   const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [], replayed }
   if (replayError) result.errors.push(replayError)
   if (quotaError) result.errors.push(quotaError)
+  if (rulesError) result.errors.push(rulesError)
 
   await Promise.all(
     claims.map(async (claim) => {
@@ -265,6 +275,11 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
       }
     }),
   )
+  try {
+    await deliverPrompts({ sql: deps.sql, runner: deps.runner, clock: deps.clock })
+  } catch (error) {
+    result.errors.push(`prompts: ${error instanceof Error ? error.message : String(error)}`)
+  }
   return result
 }
 

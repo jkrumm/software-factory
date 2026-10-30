@@ -14,6 +14,8 @@ export interface StartInput {
   /** the role's tier and effort: `--model <tier>` (an alias, never a model id) and `--effort` */
   tier: Tier
   effort: Effort
+  /** Claude's own session id: start the agent as `claude --resume <id>`, so the conversation carries on (herdr restart) */
+  resume?: string
 }
 
 export interface StartResult {
@@ -21,9 +23,14 @@ export interface StartResult {
   session: string
 }
 
-/** Starts one agent session. Implementations must be idempotent per `key`. */
+/** Starts one agent session and types into running ones. `start` must be idempotent per `key`. */
 export interface Runner {
   start(input: StartInput): Promise<StartResult>
+  /**
+   * Submits `text` to the agent in `pane`. `busy` when the agent is working: a prompt typed into a busy session only
+   * queues in Claude Code, so nothing was sent. An error means nothing is known to have arrived.
+   */
+  type(input: { pane: string; text: string }): Promise<'typed' | 'busy'>
 }
 
 /** The runner gave up: `permanent` for a refusal that retrying cannot fix, otherwise the spawn is retried later. */
@@ -176,6 +183,17 @@ export class HerdrRunner implements Runner {
     return { session: pane }
   }
 
+  async type(input: { pane: string; text: string }): Promise<'typed' | 'busy'> {
+    const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
+    const agent = await this.snapshot(input.pane, budget)
+    if (!agent) throw new RunnerError(`${input.pane}'s state is unreadable; nothing was typed`, false)
+    if (agent.agent_status === 'working') return 'busy'
+    const sent = await this.exec([this.options.bin, 'agent', 'prompt', input.pane, input.text], budget)
+    const failure = herdrFailure(sent)
+    if (failure) throw new RunnerError(`herdr agent prompt for ${input.pane}: ${failure.text}`, false)
+    return 'typed'
+  }
+
   private serialized<T>(step: () => Promise<T>): Promise<T> {
     const run = this.creating.then(step, step)
     this.creating = run.catch(() => {})
@@ -309,6 +327,7 @@ export class HerdrRunner implements Runner {
       tier,
       '--effort',
       effort,
+      ...(input.resume ? ['--resume', input.resume] : []),
     ]
     for (let busy = 0; ; busy++) {
       const result = await this.exec([this.options.bin, ...args], budget, AGENT_START_TIMEOUT_MS)

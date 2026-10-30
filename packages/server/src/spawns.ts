@@ -17,6 +17,7 @@ interface SpawnRow {
   attempts: number
   session: string | null
   error: string | null
+  parent: string | null
 }
 
 export const toView = (row: SpawnRow): SpawnView => ({
@@ -31,17 +32,18 @@ export const toView = (row: SpawnRow): SpawnView => ({
   attempts: row.attempts,
   session: row.session,
   error: row.error,
+  parent: row.parent,
 })
 
 export async function getSpawn(sql: SQL, key: string): Promise<SpawnView | undefined> {
   const [row]: SpawnRow[] = await sql`
-    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error FROM factory.spawns WHERE key = ${key}`
+    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error, parent FROM factory.spawns WHERE key = ${key}`
   return row && toView(row)
 }
 
 export async function listSpawns(sql: SQL, limit = 200): Promise<SpawnView[]> {
   const rows: SpawnRow[] = await sql`
-    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error FROM factory.spawns
+    SELECT key, status, role, tier, effort, hold, account, resume_at, attempts, session, error, parent FROM factory.spawns
     ORDER BY created_at DESC, key LIMIT ${limit}`
   return rows.map(toView)
 }
@@ -54,6 +56,8 @@ export interface NewSpawn {
   role: string
   tier: Tier
   effort: Effort
+  /** the session that asked for it */
+  parent?: string | null
 }
 
 /**
@@ -85,10 +89,10 @@ export async function createSpawn(
           : null
 
     const [row]: SpawnRow[] = await tx`
-      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at)
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent)
       VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${input.role}, ${input.tier}, ${input.effort}, ${status},
-              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now})
-      RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error`
+              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null})
+      RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error, parent`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     return { spawn: toView(row), created: true }
   })
@@ -107,7 +111,7 @@ export async function requeueSpawn(
     SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
         hold = NULL, assigned_at = NULL
     WHERE key = ${key} AND status = 'failed'
-    RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error`
+    RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error, parent`
   if (row) return { spawn: toView(row) }
   const current = await getSpawn(sql, key)
   return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }

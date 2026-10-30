@@ -10,6 +10,8 @@ let dir: string
 let socket: string
 let received: unknown[]
 let delayMs = 0
+let stopChecks: string[]
+let stopAnswer: unknown
 let server: ReturnType<typeof Bun.serve>
 
 beforeAll(() => {
@@ -19,6 +21,10 @@ beforeAll(() => {
     unix: socket,
     fetch: async (req) => {
       if (delayMs) await Bun.sleep(delayMs)
+      if (new URL(req.url).pathname.endsWith('/stop-check')) {
+        stopChecks.push(new URL(req.url).pathname)
+        return Response.json(stopAnswer)
+      }
       received.push(await req.json())
       return Response.json({ duplicate: false }, { status: 201 })
     },
@@ -30,6 +36,8 @@ afterAll(async () => {
 })
 beforeEach(() => {
   received = []
+  stopChecks = []
+  stopAnswer = { sendBack: false, message: null }
   delayMs = 0
   rmSync(join(dir, 'spool'), { recursive: true, force: true })
 })
@@ -333,5 +341,79 @@ describe('the binary', () => {
       `hook wall time over 8 runs: min ${times[0]?.toFixed(0)} ms, median ${times[4]?.toFixed(0)} ms, max ${times[7]?.toFixed(0)} ms`,
     )
     expect(times[7]).toBeLessThan(1000)
+  })
+})
+
+describe('the account of a session', () => {
+  test('session-start reports the account the picker chose, for the sessions no spawn row describes', async () => {
+    await fire('session-start', { source: 'startup', session_id: 'c-1' }, { CLAUDE_ACCOUNT_PICKED: 'iu' })
+    expect(lines('s')[0]?.payload).toMatchObject({ claudeSessionId: 'c-1', account: 'iu' })
+    expect(toEvent('session-start', { source: 'startup' }, {})?.payload).toEqual({ source: 'startup' })
+  })
+})
+
+describe('send-back (FL5)', () => {
+  const stop = (input: object, extra: Record<string, string> = {}) => {
+    const err: string[] = []
+    return hookMain(
+      ['stop'],
+      env(extra),
+      async () => JSON.stringify(input),
+      (text) => void err.push(text),
+    ).then((code) => ({ code, err }))
+  }
+  const line = '2 workers still running: wait for them (`factory session wait --on workers`) or collect them'
+
+  test('a stop the server turns back exits 2 with its one line on stderr', async () => {
+    stopAnswer = { sendBack: true, message: line }
+    expect(await stop({ stop_hook_active: false })).toEqual({ code: 2, err: [`${line}\n`] })
+    expect(stopChecks).toEqual(['/sessions/s/stop-check'])
+    // The event was spooled and posted first.
+    expect(lines('s').map((l) => l.kind)).toEqual(['turn_ended'])
+    expect(received).toHaveLength(1)
+  })
+
+  test('is not asked when the stop is already a send-back, and other events never ask', async () => {
+    stopAnswer = { sendBack: true, message: line }
+    expect(await stop({ stop_hook_active: true })).toEqual({ code: 0, err: [] })
+    expect(await stop({})).toMatchObject({ code: 2 })
+    stopChecks.length = 0
+    for (const event of ['user-prompt-submit', 'session-start', 'session-end']) {
+      expect(
+        await hookMain(
+          [event],
+          env(),
+          async () => '{}',
+          () => {},
+        ),
+      ).toBe(0)
+    }
+    expect(stopChecks).toEqual([])
+  })
+
+  test('fails open: a server that is down, slow, wrong or silent lets the session end', async () => {
+    stopAnswer = { sendBack: true, message: line }
+    expect(await stop({}, { FACTORY_SOCKET: join(dir, 'nobody.sock') })).toEqual({ code: 0, err: [] })
+
+    delayMs = 500
+    expect(await stop({})).toEqual({ code: 0, err: [] })
+    delayMs = 0
+
+    for (const odd of [
+      { sendBack: 'yes', message: line },
+      { sendBack: true },
+      { sendBack: true, message: '' },
+      null,
+      'x',
+    ]) {
+      stopAnswer = odd
+      expect(await stop({})).toEqual({ code: 0, err: [] })
+    }
+  })
+
+  test('does nothing for a session the factory does not follow', async () => {
+    stopAnswer = { sendBack: true, message: line }
+    expect(await stop({}, { FACTORY_SESSION: '' })).toEqual({ code: 0, err: [] })
+    expect(stopChecks).toEqual([])
   })
 })

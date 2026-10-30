@@ -5,6 +5,7 @@ import {
   ErrorBody,
   Health,
   loadRoleTable,
+  Prompt,
   type Quota,
   QueueState,
   QueueView,
@@ -14,6 +15,7 @@ import {
   SessionList,
   Spawn,
   SpawnList,
+  Status,
   WaitOn,
 } from '@software-factory/contract'
 import type { z } from 'zod'
@@ -31,14 +33,22 @@ commands:
   version         the CLI's version
   health          the server's /health
   spawn list      the spawn queue, newest first
+  spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>]
+                  queue a spawn (the parent defaults to $FACTORY_SESSION: the send-back rule counts a session's workers)
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
+  status          one screen: what needs a look, sessions by state (walled, blocked, stuck first), the queue with its
+                  hold reasons, accounts with their readings, notes not yet delivered
   session list [--all]
                   the sessions, newest first, with their derived state (--all adds the dead)
   session get <id>
                   one session: state, turn, wait, pane, Claude session id, herdr's last word
   session wait --on workers|deploy|owner | --done [--session <id>]
                   declare what this session is waiting on, or that the wait is over (default: $FACTORY_SESSION)
+  session note <session> <text> [--id <id>]
+                  type <text> into the session once it is at its prompt (held while it works), confirmed by its next
+                  turn; --id makes a repeated call one note (default: a fresh id per call). Use -- before text that
+                  starts with a dash
   queue get [--project <path>]
                   the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
   queue set run|pace|drain [--project <path>]
@@ -55,13 +65,15 @@ commands:
 --on <what>      session wait: workers, deploy or owner
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
+--id <id>        session note: the note's idempotency key
+--repo, --prompt, --role, --parent  spawn create
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
-FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait and role)
+FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note and role)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
-FACTORY_SOCKET   the server's unix socket for session wait (default ~/.local/share/factory/hook.sock)
+FACTORY_SOCKET   the server's unix socket for session wait and note (default ~/.local/share/factory/hook.sock)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
 `
@@ -175,6 +187,50 @@ const quotaLine = (q: Quota) =>
     .map(cell)
     .join('\t')
 
+const promptLine = (p: Prompt) =>
+  [p.id, p.session, p.status, p.sentCount, p.sentAt, p.deliveredAt, p.error].map(cell).join('\t')
+
+/** The status screen: attention first, then each section a header and tab-separated rows. */
+export function statusScreen(s: Status): string {
+  const section = (title: string, rows: string[]) => [title, ...(rows.length ? rows.map((r) => `  ${r}`) : ['  -'])]
+  return [
+    ...section('ATTENTION', s.attention),
+    ...section(
+      'SESSIONS',
+      s.sessions.map((x) =>
+        [
+          x.state,
+          x.since ?? '-',
+          x.id,
+          x.role ?? '-',
+          x.account ?? '-',
+          `turn ${x.turn}`,
+          x.wait ? `wait ${x.wait}` : '',
+        ]
+          .filter(Boolean)
+          .join('\t'),
+      ),
+    ),
+    ...section(
+      `QUEUE (${s.queue.effective})`,
+      s.queue.spawns.map((x) =>
+        [
+          x.key,
+          x.status,
+          x.hold ? `hold ${x.hold}` : '',
+          x.account ?? '-',
+          x.resumeAt ? `at ${x.resumeAt}` : '',
+          x.error ?? '',
+        ]
+          .filter(Boolean)
+          .join('\t'),
+      ),
+    ),
+    ...section('ACCOUNTS', s.accounts.map(quotaLine)),
+    ...section('NOTES', s.notes.map(promptLine)),
+  ].join('\n')
+}
+
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
 const sessionLine = (s: Session) =>
@@ -186,6 +242,11 @@ interface Flags {
   done?: boolean
   session?: string
   project?: string
+  id?: string
+  repo?: string
+  prompt?: string
+  role?: string
+  parent?: string
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -208,6 +269,46 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const lines = body.spawns.map(spawnLine)
     if (format === 'plain' && !lines.length) return
     return print(body, lines.join('\n'))
+  }
+
+  if (words[0] === 'spawn' && words[1] === 'create') {
+    const name = words[2]
+    if (!name || words.length > 3 || !flags.repo || !flags.prompt) {
+      throw usage('usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>]')
+    }
+    const parent = flags.parent ?? io.env.FACTORY_SESSION
+    const { body } = await call(io, '/spawns', {
+      method: 'POST',
+      auth: true,
+      schema: Spawn,
+      body: {
+        key: name,
+        repo: resolve(flags.repo),
+        prompt: flags.prompt,
+        ...(flags.role ? { role: flags.role } : {}),
+        ...(parent ? { parent } : {}),
+      },
+    })
+    return print(body, spawnLine(body))
+  }
+
+  if (key === 'status') {
+    const { body } = await call(io, '/status', { auth: true, schema: Status })
+    return print(body, statusScreen(body))
+  }
+
+  if (words[0] === 'session' && words[1] === 'note') {
+    const target = words[2]
+    const text = words.slice(3).join(' ')
+    if (!target || !text) throw usage('usage: session note <session> <text> [--id <id>]')
+    const { body } = await call(io, `/sessions/${encodeURIComponent(target)}/note`, {
+      method: 'POST',
+      auth: false,
+      socket: true,
+      schema: Prompt,
+      body: { id: flags.id ?? `note:${crypto.randomUUID()}`, text },
+    })
+    return print(body, promptLine(body))
   }
 
   if (words[0] === 'spawn' && words[1] === 'requeue') {
@@ -343,5 +444,10 @@ const OPTIONS = {
   done: { type: 'boolean' },
   session: { type: 'string' },
   project: { type: 'string' },
+  id: { type: 'string' },
+  repo: { type: 'string' },
+  prompt: { type: 'string' },
+  role: { type: 'string' },
+  parent: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

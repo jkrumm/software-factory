@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import {
   EventAck,
   Health,
+  Prompt,
   Quota,
   QuotaList,
   QueueView,
@@ -10,14 +11,28 @@ import {
   SessionList,
   Spawn,
   SpawnList,
+  Status,
+  StopCheck,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
-import { isFresh, latestReadings, type Reading, recordReading } from './capacity.ts'
+import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
 import { getQueue, setQueue } from './queue.ts'
-import { AccountName, EventInput, QueueInput, QuotaInput, SpawnInput, WaitInput } from './schemas.ts'
+import { recordPrompt } from './prompts.ts'
+import { stopCheck } from './rules.ts'
+import {
+  AccountName,
+  EventInput,
+  NoteInput,
+  QueueInput,
+  QuotaInput,
+  SpawnInput,
+  StopCheckInput,
+  WaitInput,
+} from './schemas.ts'
+import { buildStatus } from './status.ts'
 import { declareWait, getSession, listSessions, recordEvent } from './sessions.ts'
 import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
@@ -163,19 +178,28 @@ const waitHandler =
     return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
   }
 
-const quotaView = (r: Reading, now: Date): Quota => ({
-  account: r.account,
-  enabled: r.enabled,
-  authOk: r.authOk,
-  fiveHourUsed: r.fiveHourUsed,
-  weeklyUsed: r.weeklyUsed,
-  fiveHourResetsAt: r.fiveHourResetsAt?.toISOString() ?? null,
-  weeklyResetsAt: r.weeklyResetsAt?.toISOString() ?? null,
-  exhaustedUntil: r.exhaustedUntil?.toISOString() ?? null,
-  sampledAt: r.sampledAt?.toISOString() ?? null,
-  readAt: r.readAt.toISOString(),
-  fresh: isFresh(r, now),
-})
+/** `POST /sessions/:id/note`: records the text under its id; the tick types it when the session is at its prompt. */
+const noteHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/sessions/:id/note'>): Promise<Response> => {
+    const note = await parseBody(req, NoteInput)
+    const now = clock.now()
+    if (!(await getSession(sql, req.params.id, now))) return json({ error: 'unknown session' }, 404)
+    const { prompt, created } = await recordPrompt(
+      sql,
+      { id: note.id, session: req.params.id, source: 'note', text: note.text },
+      now,
+    )
+    return respond(Prompt, prompt, created ? 201 : 200)
+  }
+
+/** `POST /sessions/:id/stop-check`: the `Stop` hook asks whether the session may end its turn. */
+const stopCheckHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/sessions/:id/stop-check'>): Promise<Response> => {
+    const input = await parseBody(req, StopCheckInput)
+    return respond(StopCheck, await stopCheck(sql, req.params.id, input, clock.now()))
+  }
 
 /** The project of a queue request, as a spawn's repo is: a real directory inside the allowed roots. */
 const resolveProject = (project: string, repoRoots: readonly string[]): Promise<string> =>
@@ -217,6 +241,8 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       }),
     },
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
+    '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
+    '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now()))) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
@@ -253,7 +279,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
     '/quota': {
       GET: route(async () => {
         const now = clock.now()
-        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => quotaView(r, now)) })
+        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => toQuota(r, now)) })
       }),
     },
     '/quota/refresh': {
@@ -262,7 +288,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
           throw error instanceof QuotaError ? new Refusal(error.message, 502) : error
         })
         const now = clock.now()
-        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => quotaView(r, now)) })
+        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => toQuota(r, now)) })
       }),
     },
     // A reading by hand, for tests and operators; the next poll of the picker supersedes it.
@@ -272,7 +298,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
         const now = clock.now()
         await recordReading(sql, { account, ...(await parseBody(req, QuotaInput)) }, now)
         const stored = (await latestReadings(sql)).find((r) => r.account === account)
-        return stored ? respond(Quota, quotaView(stored, now)) : json({ error: 'reading not stored' }, 500)
+        return stored ? respond(Quota, toQuota(stored, now)) : json({ error: 'reading not stored' }, 500)
       }),
     },
     '/queue': {
@@ -319,8 +345,8 @@ export function serve(deps: AppDeps & { port: number }) {
 }
 
 /**
- * The sessions' way in: a unix socket in the owner's directory, with `POST /events` and `POST /sessions/:id/wait` and
- * nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600 is
+ * The sessions' way in: a unix socket in the owner's directory, with `POST /events`, `POST /sessions/:id/wait`,
+ * `POST /sessions/:id/note` and `POST /sessions/:id/stop-check` and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600 is
  * what only the owner's processes can pass.
  */
 export function serveHooks(deps: { sql: SQL; clock: Clock; token: string; socketPath: string }) {
@@ -334,9 +360,16 @@ export function serveHooks(deps: { sql: SQL; clock: Clock; token: string; socket
     open,
   )
   const wait = guarded(deps.token, waitHandler(deps.sql, deps.clock), open)
+  const note = guarded(deps.token, noteHandler(deps.sql, deps.clock), open)
+  const check = guarded(deps.token, stopCheckHandler(deps.sql, deps.clock), open)
   return Bun.serve({
     unix: deps.socketPath,
-    routes: { '/events': { POST: post }, '/sessions/:id/wait': { POST: wait } },
+    routes: {
+      '/events': { POST: post },
+      '/sessions/:id/wait': { POST: wait },
+      '/sessions/:id/note': { POST: note },
+      '/sessions/:id/stop-check': { POST: check },
+    },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,
   })

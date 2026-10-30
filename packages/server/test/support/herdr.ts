@@ -25,7 +25,11 @@ export interface FakeHerdr {
   /** every herdr call so far, as its arguments */
   calls(): Promise<string[]>
   pretrustCalls(): Promise<string[]>
+  /** one line per pretrust call: how many `agent start` calls herdr had seen by then, and the path */
+  pretrustOrder(): Promise<string[]>
   setPretrustExit(code: number): Promise<void>
+  /** what herdr says about the agent in `pane` from now on (`idle`, `working`, `blocked`, ...) */
+  setAgentStatus(pane: string, status: string): Promise<void>
   /** forgets everything */
   reset(): Promise<void>
   cleanup(): Promise<void>
@@ -51,7 +55,7 @@ export async function createFakeHerdr(): Promise<FakeHerdr> {
   const pretrustBin = join(dir, 'pretrust.sh')
   await writeFile(
     pretrustBin,
-    `#!/bin/sh\necho "$@" >> '${dir}/pretrust-calls'\nexit "$(cat '${dir}/pretrust-exit')"\n`,
+    `#!/bin/sh\necho "$@" >> '${dir}/pretrust-calls'\necho "$(grep -o 'agent start' '${dir}/state.json' | wc -l | tr -d ' ') $@" >> '${dir}/pretrust-order'\nexit "$(cat '${dir}/pretrust-exit')"\n`,
   )
   await chmod(pretrustBin, 0o755)
   const accountsFile = join(dir, 'accounts.json')
@@ -71,6 +75,7 @@ export async function createFakeHerdr(): Promise<FakeHerdr> {
   const reset = async () => {
     await writeFile(join(dir, 'state.json'), JSON.stringify(EMPTY))
     await writeFile(join(dir, 'pretrust-calls'), '')
+    await writeFile(join(dir, 'pretrust-order'), '')
     await writeFile(join(dir, 'pretrust-exit'), '0')
   }
   await reset()
@@ -86,7 +91,13 @@ export async function createFakeHerdr(): Promise<FakeHerdr> {
     state: read,
     calls: async () => (await read()).calls,
     pretrustCalls: async () => (await readFile(join(dir, 'pretrust-calls'), 'utf8')).split('\n').filter(Boolean),
+    pretrustOrder: async () => (await readFile(join(dir, 'pretrust-order'), 'utf8')).split('\n').filter(Boolean),
     setPretrustExit: (code) => writeFile(join(dir, 'pretrust-exit'), String(code)),
+    setAgentStatus: async (pane, status) => {
+      const state = await read()
+      for (const agent of state.agents) if (agent.pane_id === pane) agent.agent_status = status
+      await writeFile(join(dir, 'state.json'), JSON.stringify(state))
+    },
     reset,
     cleanup: () => rm(dir, { recursive: true, force: true }),
   }

@@ -1,4 +1,4 @@
-import type { Session, SessionState, WaitOn } from '@software-factory/contract'
+import type { Effort, Session, SessionState, Tier, WaitOn } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { EVENT_KINDS, EventInput } from './schemas.ts'
 
@@ -47,7 +47,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
     await tx`
       UPDATE factory.sessions
       SET claude_session_id = ${text('claudeSessionId')}, transcript_path = ${text('transcriptPath')},
-          cwd = COALESCE(${text('cwd')}, cwd), bound_at = ${event.at}
+          cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${text('account')}, account), bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
   return { duplicate: false }
@@ -82,6 +82,8 @@ export async function dropEmptySession(tx: SQL, id: string): Promise<boolean> {
 export interface Fact {
   kind: EventKind
   at: Date
+  /** the event's key: what a rule that answers one event (a blocked prompt) names its effect after */
+  key?: string
   detail?: string | null
 }
 
@@ -105,6 +107,8 @@ export interface Derived {
   state: SessionState
   wait: WaitOn | null
   turn: number
+  /** when the session came to be in this state: the event that put it there */
+  since: Date | null
 }
 
 /** What only a live session produces. */
@@ -154,7 +158,7 @@ export function deriveState(input: DeriveInput): Derived | undefined {
   const open = iWait >= 0 && facts[iWait]?.kind === 'wait_declared'
   const wait = open ? parseWait(facts[iWait]?.detail) : null
 
-  if (facts.length === 0) return input.known ? { state: 'starting', wait: null, turn } : undefined
+  if (facts.length === 0) return input.known ? { state: 'starting', wait: null, turn, since: null } : undefined
 
   const iLife = lastIndex(facts, 'session_started', 'session_ended', 'pane_gone')
   const life = facts[iLife]
@@ -166,7 +170,7 @@ export function deriveState(input: DeriveInput): Derived | undefined {
         hookAfter: facts.slice(iLife + 1).some((f) => HOOK_KINDS.includes(f.kind)),
         herdrSeenAt: herdr?.status != null ? (herdr.seenAt ?? null) : null,
       })
-    if (!proven) return { state: 'dead', wait: null, turn }
+    if (!proven) return { state: 'dead', wait: null, turn, since: life.at }
   }
 
   // This life only: from the last session_started on.
@@ -174,14 +178,19 @@ export function deriveState(input: DeriveInput): Derived | undefined {
   const here = facts.slice(from)
   const iStart = lastIndex(here, 'turn_started')
   const iEnd = lastIndex(here, 'turn_ended')
-  if (from === 0 && iStart < 0 && iEnd < 0) return { state: 'starting', wait: null, turn }
+  if (from === 0 && iStart < 0 && iEnd < 0) return { state: 'starting', wait: null, turn, since: null }
 
   const iWall = lastIndex(here, 'limit_stop', 'quota_resume')
   const wall = here[iWall]
   const carriedOn = wall?.kind === 'quota_resume' && wall.detail === 'fired' && iEnd > iWall
-  if (iWall > iStart && !carriedOn) return { state: 'walled', wait, turn }
+  if (iWall > iStart && !carriedOn) {
+    // The wall began with the first limit event after the last turn; the ones that follow (a quota_resume) are news about it.
+    const first = here.findIndex((f, i) => i > iStart && (f.kind === 'limit_stop' || f.kind === 'quota_resume'))
+    return { state: 'walled', wait, turn, since: here[first]?.at ?? null }
+  }
 
-  if (lastIndex(here, 'prompt_blocked') > Math.max(iStart, iEnd)) return { state: 'blocked', wait, turn }
+  const iBlocked = lastIndex(here, 'prompt_blocked')
+  if (iBlocked > Math.max(iStart, iEnd)) return { state: 'blocked', wait, turn, since: here[iBlocked]?.at ?? null }
 
   if (iStart > iEnd) {
     const startedAt = here[iStart]?.at.getTime() ?? 0
@@ -189,9 +198,10 @@ export function deriveState(input: DeriveInput): Derived | undefined {
     const herdrAgrees =
       herdr?.status === 'working' && herdr.seenAt !== null && now.getTime() - herdr.seenAt.getTime() <= HERDR_FRESH_MS
     const stuck = herdrAgrees && now.getTime() - quietSince >= STUCK_AFTER_MS
-    return { state: stuck ? 'stuck' : 'working', wait, turn }
+    return { state: stuck ? 'stuck' : 'working', wait, turn, since: here[iStart]?.at ?? null }
   }
-  return { state: open ? 'waiting' : 'idle', wait, turn }
+  const settled = open ? facts[iWait] : (here[iEnd] ?? facts[lastIndex(facts, 'session_started')])
+  return { state: open ? 'waiting' : 'idle', wait, turn, since: settled?.at ?? null }
 }
 
 function parseWait(detail: string | null | undefined): WaitOn | null {
@@ -200,6 +210,7 @@ function parseWait(detail: string | null | undefined): WaitOn | null {
 
 // --- reading ----------------------------------------------------------------------------------------------------
 
+/** A session joined with what its spawn knows: the role, account, repo and parent of the spawn. */
 interface SessionRow {
   id: string
   spawn_key: string | null
@@ -207,14 +218,22 @@ interface SessionRow {
   claude_session_id: string | null
   transcript_path: string | null
   cwd: string | null
+  account: string | null
   created_at: Date
   herdr_status: string | null
   herdr_seen_at: Date | null
   worktree_changed_at: Date | null
+  spawn_account: string | null
+  role: string | null
+  repo: string | null
+  tier: Tier | null
+  effort: Effort | null
+  parent: string | null
 }
 
 interface FactRow {
   session: string
+  key: string
   kind: EventKind
   at: Date
   detail: string | null
@@ -241,6 +260,10 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
     cwd: row.cwd,
     herdrStatus: row.herdr_status,
     herdrSeenAt: row.herdr_seen_at?.toISOString() ?? null,
+    role: row.role,
+    account: row.spawn_account ?? row.account,
+    parent: row.parent,
+    since: derived.since?.toISOString() ?? null,
   }
 }
 
@@ -248,7 +271,7 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
 function factRows(sql: SQL, ids: readonly string[]): Promise<FactRow[]> {
   if (ids.length === 0) return Promise.resolve([])
   return sql`
-    SELECT session, kind, at, COALESCE(payload->>'on', payload->>'state') AS detail
+    SELECT session, key, kind, at, COALESCE(payload->>'on', payload->>'state', payload->>'message') AS detail
     FROM factory.events WHERE session IN ${sql(ids)} ORDER BY session, at, id`
 }
 
@@ -256,14 +279,25 @@ function groupFacts(rows: readonly FactRow[]): Map<string, Fact[]> {
   const bySession = new Map<string, Fact[]>()
   for (const row of rows) {
     const list = bySession.get(row.session) ?? []
-    list.push({ kind: row.kind, at: row.at, detail: row.detail })
+    list.push({ kind: row.kind, at: row.at, key: row.key, detail: row.detail })
     bySession.set(row.session, list)
   }
   return bySession
 }
 
+/** A session whose last life event is `session_ended` is dead whatever else is known: left out in the query. */
+const NOT_ENDED = (sql: SQL) => sql`
+  NOT EXISTS (
+    SELECT 1 FROM (
+      SELECT kind FROM factory.events
+      WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
+      ORDER BY at DESC, id DESC LIMIT 1) l
+    WHERE l.kind = 'session_ended')`
+
 export async function getSession(sql: SQL, id: string, now: Date): Promise<Session | undefined> {
-  const [row]: SessionRow[] = await sql`SELECT * FROM factory.sessions WHERE id = ${id}`
+  const [row]: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key WHERE s.id = ${id}`
   if (!row) return undefined
   return view(row, groupFacts(await factRows(sql, [id])).get(id) ?? [], now)
 }
@@ -274,15 +308,14 @@ export const LIST_LIMIT = 200
 export async function listSessions(sql: SQL, now: Date, options: { all?: boolean } = {}): Promise<Session[]> {
   // A session that ended is dead whatever else is known, so it is left out before the limit, not after it.
   const rows: SessionRow[] = options.all
-    ? await sql`SELECT * FROM factory.sessions ORDER BY created_at DESC, id LIMIT ${LIST_LIMIT}`
+    ? await sql`
+        SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+        FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
+        ORDER BY s.created_at DESC, s.id LIMIT ${LIST_LIMIT}`
     : await sql`
-        SELECT s.* FROM factory.sessions s
-        WHERE NOT EXISTS (
-          SELECT 1 FROM (
-            SELECT kind FROM factory.events
-            WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
-            ORDER BY at DESC, id DESC LIMIT 1) l
-          WHERE l.kind = 'session_ended')
+        SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+        FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
+        WHERE ${NOT_ENDED(sql)}
         ORDER BY s.created_at DESC, s.id LIMIT ${LIST_LIMIT}`
   const facts = groupFacts(
     await factRows(
@@ -306,15 +339,10 @@ export interface LiveSession {
  * life event is `session_ended` is dead whatever else is known and is left out in the query; the rest are derived.
  */
 export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> {
-  const rows: (SessionRow & { repo: string; role: string })[] = await sql`
-    SELECT s.*, p.repo, p.role FROM factory.sessions s
-    JOIN factory.spawns p ON p.key = s.spawn_key
-    WHERE NOT EXISTS (
-      SELECT 1 FROM (
-        SELECT kind FROM factory.events
-        WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
-        ORDER BY at DESC, id DESC LIMIT 1) l
-      WHERE l.kind = 'session_ended')`
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE ${NOT_ENDED(sql)}`
   const facts = groupFacts(
     await factRows(
       sql,
@@ -323,7 +351,56 @@ export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> 
   )
   return rows.flatMap((row) => {
     const state = view(row, facts.get(row.id) ?? [], now)?.state
-    return state && state !== 'dead' ? [{ id: row.id, repo: row.repo, role: row.role }] : []
+    return state && state !== 'dead' && row.repo && row.role ? [{ id: row.id, repo: row.repo, role: row.role }] : []
+  })
+}
+
+/** A session with its events and what a rule needs to act on it: what its spawn was, and where it runs. */
+export interface Loaded {
+  view: Session
+  facts: readonly Fact[]
+  /** the spawn's repo, tier and effort: what resuming it needs; null for an `rd` session */
+  repo: string | null
+  tier: Tier | null
+  effort: Effort | null
+  herdrSeenAt: Date | null
+}
+
+/** Sessions with an event this recent are the ones a rule looks at: a wall can outlast a weekend, not a month. */
+export const RULES_HORIZON_MS = 7 * 24 * 3_600_000
+
+/**
+ * Every session that is not ended and had an event within the horizon, derived (dead ones by a gone pane included: a
+ * herdr restart makes those, and they are what the restart rule resumes).
+ */
+export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
+  const since = new Date(now.getTime() - RULES_HORIZON_MS)
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE ${NOT_ENDED(sql)}
+      AND (s.created_at > ${since} OR EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id AND e.at > ${since}))`
+  const facts = groupFacts(
+    await factRows(
+      sql,
+      rows.map((r) => r.id),
+    ),
+  )
+  return rows.flatMap((row) => {
+    const list = facts.get(row.id) ?? []
+    const session = view(row, list, now)
+    return session
+      ? [
+          {
+            view: session,
+            facts: list,
+            repo: row.repo,
+            tier: row.tier,
+            effort: row.effort,
+            herdrSeenAt: row.herdr_seen_at,
+          },
+        ]
+      : []
   })
 }
 

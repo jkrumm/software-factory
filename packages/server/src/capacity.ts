@@ -1,3 +1,4 @@
+import type { Quota } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { LOCKS } from './locks.ts'
 import type { QuotaInput } from './schemas.ts'
@@ -67,6 +68,21 @@ const toReading = (r: ReadingRow): Reading => ({
 })
 
 export const isFresh = (r: Reading, now: Date): boolean => now.getTime() - r.readAt.getTime() <= READING_MAX_AGE_MS
+
+/** A reading as the API shows it; `fresh` is false once the poller has not confirmed it for a while. */
+export const toQuota = (r: Reading, now: Date): Quota => ({
+  account: r.account,
+  enabled: r.enabled,
+  authOk: r.authOk,
+  fiveHourUsed: r.fiveHourUsed,
+  weeklyUsed: r.weeklyUsed,
+  fiveHourResetsAt: r.fiveHourResetsAt?.toISOString() ?? null,
+  weeklyResetsAt: r.weeklyResetsAt?.toISOString() ?? null,
+  exhaustedUntil: r.exhaustedUntil?.toISOString() ?? null,
+  sampledAt: r.sampledAt?.toISOString() ?? null,
+  readAt: r.readAt.toISOString(),
+  fresh: isFresh(r, now),
+})
 
 /** One account's reading with the account named: what the poller and the injection route hand over. */
 export type NamedQuota = QuotaInput & { account: string }

@@ -2,9 +2,10 @@ import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import type { TickMonitor } from '../../src/health.ts'
 import type { Runner } from '../../src/runner.ts'
+import { noType } from './runner.ts'
 import { startTicker } from '../../src/tick.ts'
 
-const idle: Runner = { start: () => Promise.reject(new Error('no spawn is expected')) }
+const idle: Runner = { ...noType, start: () => Promise.reject(new Error('no spawn is expected')) }
 
 /** The real ticker over an empty queue, reporting to `monitor`. */
 export function startTick(sql: SQL, clock: Clock, monitor: TickMonitor) {
