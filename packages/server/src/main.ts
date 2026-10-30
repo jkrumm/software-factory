@@ -15,11 +15,25 @@ const config = loadConfig(process.env)
 const sql = new SQL({ url: config.databaseUrl, max: 8 })
 
 // One process: a second copy finds the lock taken and leaves before it touches anything.
-const singleton = await acquireSingleton(sql)
+const singleton = await acquireSingleton(sql, {
+  onLost: (reason) => {
+    // launchd restarts the process, which takes the lock again (or finds another copy holding it).
+    console.error(`lost the database lock: ${reason}; exiting`)
+    process.exit(1)
+  },
+})
 if (!singleton) {
   console.error('another factory server holds the database lock; exiting')
   await sql.close()
   process.exit(1)
+}
+
+// The runner depends on two files of the dotfiles checkout: a server that cannot start anything must not call itself up.
+for (const file of [config.pretrustBin, config.accountsFile]) {
+  if (!(await Bun.file(file).exists())) {
+    console.error(`${file} does not exist; exiting`)
+    process.exit(1)
+  }
 }
 await migrate(sql)
 

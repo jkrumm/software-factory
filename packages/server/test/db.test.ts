@@ -101,6 +101,22 @@ describe('one process', () => {
     }
   })
 
+  test('a server whose lock connection is lost is told, so it can exit', async () => {
+    const lostReasons: string[] = []
+    const holder = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
+    try {
+      expect(await acquireSingleton(holder, { checkMs: 30, onLost: (r) => lostReasons.push(r) })).toBeDefined()
+      await Bun.sleep(100)
+      expect(lostReasons).toEqual([])
+      await db.sql`
+        SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND objid = ${LOCKS.singleton} AND granted`
+      for (let i = 0; i < 100 && lostReasons.length === 0; i++) await Bun.sleep(20)
+      expect(lostReasons).toHaveLength(1)
+    } finally {
+      await holder.close().catch(() => {})
+    }
+  })
+
   test('a holder whose connection dies frees the lock', async () => {
     const dying = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
     expect(await acquireSingleton(dying)).toBeDefined()
