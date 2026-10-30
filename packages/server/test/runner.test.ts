@@ -266,7 +266,7 @@ describe('herdr adapter: whose tab it is', () => {
   test('an agent that took its prompt is left running even when herdr does not call it ready', async () => {
     await runner.start(input)
     await put((state) => {
-      state.agents[0]!.interactive_ready = false
+      if (state.agents[0]) state.agents[0].interactive_ready = false
     })
     await runner.start(input)
     const state = await herdr.state()
