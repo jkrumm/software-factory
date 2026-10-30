@@ -1,0 +1,2334 @@
+{
+  "meta": {
+    "script": "evidence/kpi/cost.py",
+    "as_of": "2026-10-22T08:00:00Z",
+    "definitions": "evidence/DEFINITIONS.md",
+    "cohort": "items by created_at in window; cost of every job attributable to those items up to AS_OF; denominator = resolved items"
+  },
+  "attribution_coverage": {
+    "universe": "warden-owned agw jobs created before AS_OF: every dispatches.job_id plus decision_shadow llm_job and decision_job",
+    "jobs_total": 1662,
+    "jobs_priced_exact": 1224,
+    "jobs_priced_exact_share": 0.7365,
+    "jobs_priced_incl_windowed": 1576,
+    "jobs_priced_incl_windowed_share": 0.9483,
+    "jobs_no_spend_expected": 24,
+    "jobs_priced_share_excluding_no_spend_expected": 0.9621,
+    "link_to_item": {
+      "direct": 1541,
+      "no_origin_event": 34,
+      "via_duplicate_parent": 87
+    },
+    "cost_of_jobs_without_an_item": {
+      "jobs": 34,
+      "iu_cash_usd": 4.7753,
+      "max_list_usd": 1.6955,
+      "note": "not in any window: dispatches without an origin event, or whose duplicate row has no parent"
+    },
+    "by_tier": {
+      "triage": {
+        "jobs": 177,
+        "priced_exact": 0,
+        "priced_windowed_only": 175,
+        "unpriced": 2,
+        "priced_share": 0.9887,
+        "linked_to_item": 177
+      },
+      "investigate": {
+        "jobs": 522,
+        "priced_exact": 465,
+        "priced_windowed_only": 0,
+        "unpriced": 57,
+        "priced_share": 0.8908,
+        "linked_to_item": 497
+      },
+      "implement": {
+        "jobs": 490,
+        "priced_exact": 464,
+        "priced_windowed_only": 0,
+        "unpriced": 26,
+        "priced_share": 0.9469,
+        "linked_to_item": 483
+      },
+      "review": {
+        "jobs": 294,
+        "priced_exact": 294,
+        "priced_windowed_only": 0,
+        "unpriced": 0,
+        "priced_share": 1.0,
+        "linked_to_item": 294
+      },
+      "check": {
+        "jobs": 0,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "unpriced": 0,
+        "priced_share": null,
+        "linked_to_item": 0
+      },
+      "author": {
+        "jobs": 2,
+        "priced_exact": 1,
+        "priced_windowed_only": 0,
+        "unpriced": 1,
+        "priced_share": 0.5,
+        "linked_to_item": 0
+      },
+      "decide": {
+        "jobs": 177,
+        "priced_exact": 0,
+        "priced_windowed_only": 177,
+        "unpriced": 0,
+        "priced_share": 1.0,
+        "linked_to_item": 177
+      }
+    },
+    "by_backend": {
+      "iu": {
+        "jobs": 1356,
+        "priced": 1314,
+        "priced_share": 0.969
+      },
+      "max": {
+        "jobs": 22,
+        "priced": 22,
+        "priced_share": 1.0
+      },
+      "both": {
+        "jobs": 240,
+        "priced": 240,
+        "priced_share": 1.0
+      },
+      "unknown": {
+        "jobs": 44,
+        "priced": 0,
+        "priced_share": 0.0
+      }
+    },
+    "by_week": [
+      {
+        "week": "2026-W31",
+        "start": "2026-07-27",
+        "jobs": 4,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W32",
+        "start": "2026-08-03",
+        "jobs": 3,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W33",
+        "start": "2026-08-10",
+        "jobs": 2,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W34",
+        "start": "2026-08-17",
+        "jobs": 1,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W35",
+        "start": "2026-08-24",
+        "jobs": 3,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W36",
+        "start": "2026-08-31",
+        "jobs": 1,
+        "priced_exact": 0,
+        "priced_windowed_only": 0,
+        "priced_share": 0.0,
+        "iu_cash_usd": 0.0,
+        "max_list_usd": 0.0
+      },
+      {
+        "week": "2026-W37",
+        "start": "2026-09-07",
+        "jobs": 37,
+        "priced_exact": 33,
+        "priced_windowed_only": 0,
+        "priced_share": 0.8919,
+        "iu_cash_usd": 0.9054,
+        "max_list_usd": 11.9205
+      },
+      {
+        "week": "2026-W38",
+        "start": "2026-09-14",
+        "jobs": 133,
+        "priced_exact": 124,
+        "priced_windowed_only": 0,
+        "priced_share": 0.9323,
+        "iu_cash_usd": 21.2367,
+        "max_list_usd": 30.4609
+      },
+      {
+        "week": "2026-W39",
+        "start": "2026-09-21",
+        "jobs": 65,
+        "priced_exact": 63,
+        "priced_windowed_only": 0,
+        "priced_share": 0.9692,
+        "iu_cash_usd": 29.1255,
+        "max_list_usd": 14.462
+      },
+      {
+        "week": "2026-W40",
+        "start": "2026-09-28",
+        "jobs": 171,
+        "priced_exact": 170,
+        "priced_windowed_only": 0,
+        "priced_share": 0.9942,
+        "iu_cash_usd": 6.5136,
+        "max_list_usd": 91.2563
+      },
+      {
+        "week": "2026-W41",
+        "start": "2026-10-05",
+        "jobs": 338,
+        "priced_exact": 330,
+        "priced_windowed_only": 0,
+        "priced_share": 0.9763,
+        "iu_cash_usd": 53.3377,
+        "max_list_usd": 150.7742
+      },
+      {
+        "week": "2026-W42",
+        "start": "2026-10-12",
+        "jobs": 636,
+        "priced_exact": 392,
+        "priced_windowed_only": 196,
+        "priced_share": 0.9245,
+        "iu_cash_usd": 30.2391,
+        "max_list_usd": 100.3139
+      },
+      {
+        "week": "2026-W43",
+        "start": "2026-10-19",
+        "jobs": 268,
+        "priced_exact": 112,
+        "priced_windowed_only": 156,
+        "priced_share": 1.0,
+        "iu_cash_usd": 4.4011,
+        "max_list_usd": 0.0
+      }
+    ],
+    "last_day_with_an_exactly_priced_job": "2026-10-22",
+    "last_day_with_a_max_priced_job": "2026-10-15",
+    "unpriced_jobs_by_reason": {
+      "created_before_the_first_priced_job": {
+        "total": 14,
+        "by_tier": {
+          "author": 1,
+          "implement": 5,
+          "investigate": 8
+        }
+      },
+      "created_in_the_opencode_collector_gap": {
+        "total": 29,
+        "by_tier": {
+          "implement": 14,
+          "investigate": 15
+        }
+      },
+      "failed_or_cancelled_without_any_usage_row": {
+        "total": 24,
+        "by_tier": {
+          "implement": 3,
+          "investigate": 21
+        }
+      },
+      "no_usage_row_at_all": {
+        "total": 6,
+        "by_tier": {
+          "investigate": 4,
+          "triage": 2
+        }
+      },
+      "sessions_row_only": {
+        "total": 13,
+        "by_tier": {
+          "implement": 4,
+          "investigate": 9
+        }
+      }
+    },
+    "opencode_collector_gap": {
+      "from": "2026-10-13T12:34:45Z",
+      "to": "2026-10-14T12:36:04Z"
+    },
+    "validation_job_tiers": {
+      "investigate": 2,
+      "review": 280
+    },
+    "first_day_of_job_store": "2026-10-09",
+    "usage_rows_matched_to_warden_jobs": 35337,
+    "exact_rows_without_cost": 54,
+    "windowed_attribution_agent_gateway_iu_rows": {
+      "rows": 6590,
+      "usd": 308.5672,
+      "to_warden_jobs_usd": 18.404,
+      "to_other_agw_jobs_usd": 182.1633,
+      "buckets": {
+        "before_job_store": {
+          "rows": 1378,
+          "usd": 100.719
+        },
+        "no_candidate_job": {
+          "rows": 39,
+          "usd": 3.6405
+        },
+        "shared_between_jobs": {
+          "rows": 3205,
+          "usd": 78.7326
+        },
+        "unique_job": {
+          "rows": 1857,
+          "usd": 121.8347
+        },
+        "unmapped_sub_tool": {
+          "rows": 111,
+          "usd": 3.6403
+        }
+      },
+      "slack_seconds": 5.0,
+      "warden_share_of_matched_usd": 0.0918,
+      "before_job_store_usd_if_warden_share_applied": 9.242
+    },
+    "opencode_v2_store": {
+      "available": true,
+      "path": "~/.local/share/agent-gateway/opencode/opencode.db",
+      "sessions": 5603,
+      "sessions_with_agw_job_id": 5266,
+      "sessions_of_warden_jobs": 874,
+      "first_session": "2026-10-14T12:36:04Z",
+      "last_session": "2026-10-22T07:55:32Z",
+      "total_cost_usd": 58.1128,
+      "warden_jobs_cost_usd": 14.4346,
+      "providers": {
+        "iu-anthropic": 5137,
+        "iu-chat": 466
+      }
+    }
+  },
+  "windows": {
+    "14d": {
+      "from": "2026-10-08T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "key": "cost_per_resolved_item",
+      "items": 230,
+      "resolved_items": 151,
+      "jobs_attributable_to_items": 947,
+      "jobs_priced": 907,
+      "jobs_priced_share": 0.9578,
+      "jobs_priced_exact": 585,
+      "jobs_priced_windowed_only": 322,
+      "cost_usd": {
+        "iu_cash": 54.5757,
+        "max_list_equivalent": 162.4586,
+        "total_list_equivalent": 217.0343,
+        "exact": 200.4096,
+        "windowed_estimate": 16.6246
+      },
+      "per_resolved_item_usd": {
+        "iu_cash": 0.3614,
+        "max_list_equivalent": 1.0759,
+        "total_list_equivalent": 1.4373,
+        "iu_cash_exact_only": 0.2513
+      },
+      "per_item_usd": {
+        "iu_cash": 0.2373,
+        "max_list_equivalent": 0.7063
+      },
+      "by_tier": {
+        "triage": {
+          "jobs": 162,
+          "priced": 160,
+          "priced_exact": 0,
+          "priced_windowed_only": 160,
+          "priced_share": 0.9877,
+          "iu_cash_usd": 0.1934,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.1934,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0013,
+            "max_list": 0.0
+          }
+        },
+        "investigate": {
+          "jobs": 199,
+          "priced": 174,
+          "priced_exact": 174,
+          "priced_windowed_only": 0,
+          "priced_share": 0.8744,
+          "iu_cash_usd": 2.4136,
+          "max_list_usd": 0.0,
+          "exact_usd": 2.4136,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.016,
+            "max_list": 0.0
+          }
+        },
+        "implement": {
+          "jobs": 262,
+          "priced": 249,
+          "priced_exact": 249,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9504,
+          "iu_cash_usd": 28.1328,
+          "max_list_usd": 0.0,
+          "exact_usd": 28.1328,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.1863,
+            "max_list": 0.0
+          }
+        },
+        "review": {
+          "jobs": 162,
+          "priced": 162,
+          "priced_exact": 162,
+          "priced_windowed_only": 0,
+          "priced_share": 1.0,
+          "iu_cash_usd": 23.7962,
+          "max_list_usd": 162.4586,
+          "exact_usd": 169.8632,
+          "windowed_usd": 16.3916,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.1576,
+            "max_list": 1.0759
+          }
+        },
+        "check": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "author": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "decide": {
+          "jobs": 162,
+          "priced": 162,
+          "priced_exact": 0,
+          "priced_windowed_only": 162,
+          "priced_share": 1.0,
+          "iu_cash_usd": 0.0396,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.0396,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0003,
+            "max_list": 0.0
+          }
+        }
+      },
+      "by_backend": {
+        "iu": {
+          "jobs": 846,
+          "priced": 824,
+          "iu_cash_usd": 42.512,
+          "max_list_usd": 0.0
+        },
+        "max": {
+          "jobs": 0,
+          "priced": 0,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0
+        },
+        "both": {
+          "jobs": 83,
+          "priced": 83,
+          "iu_cash_usd": 12.0636,
+          "max_list_usd": 162.4586
+        },
+        "unknown": {
+          "jobs": 18,
+          "priced": 0,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 0.0
+        }
+      },
+      "by_source": {
+        "agent-gateway-iu(windowed)/iu": 16.6246,
+        "claude-code/iu": 12.675,
+        "claude-code/max": 162.4586,
+        "opencode-v2/iu": 14.2959,
+        "opencode/iu": 10.9801
+      }
+    },
+    "30d": {
+      "from": "2026-09-22T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "key": "cost_per_resolved_item",
+      "items": 364,
+      "resolved_items": 280,
+      "jobs_attributable_to_items": 1343,
+      "jobs_priced": 1299,
+      "jobs_priced_share": 0.9672,
+      "jobs_priced_exact": 969,
+      "jobs_priced_windowed_only": 330,
+      "cost_usd": {
+        "iu_cash": 114.4318,
+        "max_list_equivalent": 341.2876,
+        "total_list_equivalent": 455.7194,
+        "exact": 438.0526,
+        "windowed_estimate": 17.6669
+      },
+      "per_resolved_item_usd": {
+        "iu_cash": 0.4087,
+        "max_list_equivalent": 1.2189,
+        "total_list_equivalent": 1.6276,
+        "iu_cash_exact_only": 0.3456
+      },
+      "per_item_usd": {
+        "iu_cash": 0.3144,
+        "max_list_equivalent": 0.9376
+      },
+      "by_tier": {
+        "triage": {
+          "jobs": 166,
+          "priced": 164,
+          "priced_exact": 0,
+          "priced_windowed_only": 164,
+          "priced_share": 0.988,
+          "iu_cash_usd": 0.1967,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.1967,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0007,
+            "max_list": 0.0
+          }
+        },
+        "investigate": {
+          "jobs": 340,
+          "priced": 311,
+          "priced_exact": 311,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9147,
+          "iu_cash_usd": 5.7181,
+          "max_list_usd": 0.5716,
+          "exact_usd": 6.2897,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0204,
+            "max_list": 0.002
+          }
+        },
+        "implement": {
+          "jobs": 412,
+          "priced": 399,
+          "priced_exact": 399,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9684,
+          "iu_cash_usd": 79.4882,
+          "max_list_usd": 10.429,
+          "exact_usd": 89.9173,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.2839,
+            "max_list": 0.0372
+          }
+        },
+        "review": {
+          "jobs": 259,
+          "priced": 259,
+          "priced_exact": 259,
+          "priced_windowed_only": 0,
+          "priced_share": 1.0,
+          "iu_cash_usd": 28.9887,
+          "max_list_usd": 330.287,
+          "exact_usd": 341.8456,
+          "windowed_usd": 17.4301,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.1035,
+            "max_list": 1.1796
+          }
+        },
+        "check": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "author": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "decide": {
+          "jobs": 166,
+          "priced": 166,
+          "priced_exact": 0,
+          "priced_windowed_only": 166,
+          "priced_share": 1.0,
+          "iu_cash_usd": 0.0402,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.0402,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0001,
+            "max_list": 0.0
+          }
+        }
+      },
+      "by_backend": {
+        "iu": {
+          "jobs": 1122,
+          "priced": 1100,
+          "iu_cash_usd": 93.5743,
+          "max_list_usd": 0.0
+        },
+        "max": {
+          "jobs": 0,
+          "priced": 0,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0
+        },
+        "both": {
+          "jobs": 199,
+          "priced": 199,
+          "iu_cash_usd": 20.8575,
+          "max_list_usd": 341.2876
+        },
+        "unknown": {
+          "jobs": 22,
+          "priced": 0,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 0.0
+        }
+      },
+      "by_source": {
+        "agent-gateway-iu(windowed)/iu": 17.6669,
+        "claude-code/iu": 50.071,
+        "claude-code/max": 341.2876,
+        "opencode-v2/iu": 14.3386,
+        "opencode/iu": 32.3553
+      }
+    },
+    "90d": {
+      "from": "2026-07-24T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "key": "cost_per_resolved_item",
+      "items": 556,
+      "resolved_items": 452,
+      "jobs_attributable_to_items": 1628,
+      "jobs_priced": 1556,
+      "jobs_priced_share": 0.9558,
+      "jobs_priced_exact": 1204,
+      "jobs_priced_windowed_only": 352,
+      "cost_usd": {
+        "iu_cash": 140.9837,
+        "max_list_equivalent": 397.4923,
+        "total_list_equivalent": 538.476,
+        "exact": 520.0721,
+        "windowed_estimate": 18.404
+      },
+      "per_resolved_item_usd": {
+        "iu_cash": 0.3119,
+        "max_list_equivalent": 0.8794,
+        "total_list_equivalent": 1.1913,
+        "iu_cash_exact_only": 0.2712
+      },
+      "per_item_usd": {
+        "iu_cash": 0.2536,
+        "max_list_equivalent": 0.7149
+      },
+      "by_tier": {
+        "triage": {
+          "jobs": 177,
+          "priced": 175,
+          "priced_exact": 0,
+          "priced_windowed_only": 175,
+          "priced_share": 0.9887,
+          "iu_cash_usd": 0.2069,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.2069,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0005,
+            "max_list": 0.0
+          }
+        },
+        "investigate": {
+          "jobs": 497,
+          "priced": 448,
+          "priced_exact": 448,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9014,
+          "iu_cash_usd": 12.9145,
+          "max_list_usd": 8.4896,
+          "exact_usd": 21.404,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0286,
+            "max_list": 0.0188
+          }
+        },
+        "implement": {
+          "jobs": 483,
+          "priced": 462,
+          "priced_exact": 462,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9565,
+          "iu_cash_usd": 97.2766,
+          "max_list_usd": 12.9391,
+          "exact_usd": 110.2156,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.2152,
+            "max_list": 0.0286
+          }
+        },
+        "review": {
+          "jobs": 294,
+          "priced": 294,
+          "priced_exact": 294,
+          "priced_windowed_only": 0,
+          "priced_share": 1.0,
+          "iu_cash_usd": 30.5437,
+          "max_list_usd": 376.0637,
+          "exact_usd": 388.4524,
+          "windowed_usd": 18.1551,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0676,
+            "max_list": 0.832
+          }
+        },
+        "check": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "author": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "decide": {
+          "jobs": 177,
+          "priced": 177,
+          "priced_exact": 0,
+          "priced_windowed_only": 177,
+          "priced_share": 1.0,
+          "iu_cash_usd": 0.042,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.042,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0001,
+            "max_list": 0.0
+          }
+        }
+      },
+      "by_backend": {
+        "iu": {
+          "jobs": 1340,
+          "priced": 1298,
+          "iu_cash_usd": 117.3864,
+          "max_list_usd": 0.0
+        },
+        "max": {
+          "jobs": 18,
+          "priced": 18,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 9.2392
+        },
+        "both": {
+          "jobs": 240,
+          "priced": 240,
+          "iu_cash_usd": 23.5973,
+          "max_list_usd": 388.2531
+        },
+        "unknown": {
+          "jobs": 30,
+          "priced": 0,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 0.0
+        }
+      },
+      "by_source": {
+        "agent-gateway-iu(windowed)/iu": 18.404,
+        "claude-code/iu": 72.263,
+        "claude-code/max": 397.4923,
+        "opencode-v2/iu": 14.4119,
+        "opencode/iu": 35.9049
+      }
+    },
+    "all": {
+      "from": null,
+      "to": "2026-10-22T08:00:00Z",
+      "key": "cost_per_resolved_item",
+      "items": 556,
+      "resolved_items": 452,
+      "jobs_attributable_to_items": 1628,
+      "jobs_priced": 1556,
+      "jobs_priced_share": 0.9558,
+      "jobs_priced_exact": 1204,
+      "jobs_priced_windowed_only": 352,
+      "cost_usd": {
+        "iu_cash": 140.9837,
+        "max_list_equivalent": 397.4923,
+        "total_list_equivalent": 538.476,
+        "exact": 520.0721,
+        "windowed_estimate": 18.404
+      },
+      "per_resolved_item_usd": {
+        "iu_cash": 0.3119,
+        "max_list_equivalent": 0.8794,
+        "total_list_equivalent": 1.1913,
+        "iu_cash_exact_only": 0.2712
+      },
+      "per_item_usd": {
+        "iu_cash": 0.2536,
+        "max_list_equivalent": 0.7149
+      },
+      "by_tier": {
+        "triage": {
+          "jobs": 177,
+          "priced": 175,
+          "priced_exact": 0,
+          "priced_windowed_only": 175,
+          "priced_share": 0.9887,
+          "iu_cash_usd": 0.2069,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.2069,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0005,
+            "max_list": 0.0
+          }
+        },
+        "investigate": {
+          "jobs": 497,
+          "priced": 448,
+          "priced_exact": 448,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9014,
+          "iu_cash_usd": 12.9145,
+          "max_list_usd": 8.4896,
+          "exact_usd": 21.404,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0286,
+            "max_list": 0.0188
+          }
+        },
+        "implement": {
+          "jobs": 483,
+          "priced": 462,
+          "priced_exact": 462,
+          "priced_windowed_only": 0,
+          "priced_share": 0.9565,
+          "iu_cash_usd": 97.2766,
+          "max_list_usd": 12.9391,
+          "exact_usd": 110.2156,
+          "windowed_usd": 0.0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.2152,
+            "max_list": 0.0286
+          }
+        },
+        "review": {
+          "jobs": 294,
+          "priced": 294,
+          "priced_exact": 294,
+          "priced_windowed_only": 0,
+          "priced_share": 1.0,
+          "iu_cash_usd": 30.5437,
+          "max_list_usd": 376.0637,
+          "exact_usd": 388.4524,
+          "windowed_usd": 18.1551,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0676,
+            "max_list": 0.832
+          }
+        },
+        "check": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "author": {
+          "jobs": 0,
+          "priced": 0,
+          "priced_exact": 0,
+          "priced_windowed_only": 0,
+          "priced_share": null,
+          "iu_cash_usd": 0,
+          "max_list_usd": 0,
+          "exact_usd": 0,
+          "windowed_usd": 0,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0,
+            "max_list": 0.0
+          }
+        },
+        "decide": {
+          "jobs": 177,
+          "priced": 177,
+          "priced_exact": 0,
+          "priced_windowed_only": 177,
+          "priced_share": 1.0,
+          "iu_cash_usd": 0.042,
+          "max_list_usd": 0.0,
+          "exact_usd": 0.0,
+          "windowed_usd": 0.042,
+          "per_resolved_item_usd": {
+            "iu_cash": 0.0001,
+            "max_list": 0.0
+          }
+        }
+      },
+      "by_backend": {
+        "iu": {
+          "jobs": 1340,
+          "priced": 1298,
+          "iu_cash_usd": 117.3864,
+          "max_list_usd": 0.0
+        },
+        "max": {
+          "jobs": 18,
+          "priced": 18,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 9.2392
+        },
+        "both": {
+          "jobs": 240,
+          "priced": 240,
+          "iu_cash_usd": 23.5973,
+          "max_list_usd": 388.2531
+        },
+        "unknown": {
+          "jobs": 30,
+          "priced": 0,
+          "iu_cash_usd": 0.0,
+          "max_list_usd": 0.0
+        }
+      },
+      "by_source": {
+        "agent-gateway-iu(windowed)/iu": 18.404,
+        "claude-code/iu": 72.263,
+        "claude-code/max": 397.4923,
+        "opencode-v2/iu": 14.4119,
+        "opencode/iu": 35.9049
+      }
+    }
+  },
+  "by_creation_week": [
+    {
+      "week": "2026-W37",
+      "start": "2026-09-07",
+      "items": 88,
+      "resolved_items": 69,
+      "jobs": 128,
+      "jobs_priced_share": 0.8672,
+      "iu_cash_usd": 8.1142,
+      "max_list_usd": 20.8834,
+      "per_resolved_iu_cash": 0.1176,
+      "per_resolved_max_list": 0.3027
+    },
+    {
+      "week": "2026-W38",
+      "start": "2026-09-14",
+      "items": 93,
+      "resolved_items": 92,
+      "jobs": 136,
+      "jobs_priced_share": 0.9265,
+      "iu_cash_usd": 17.1868,
+      "max_list_usd": 31.0561,
+      "per_resolved_iu_cash": 0.1868,
+      "per_resolved_max_list": 0.3376
+    },
+    {
+      "week": "2026-W39",
+      "start": "2026-09-21",
+      "items": 36,
+      "resolved_items": 34,
+      "jobs": 54,
+      "jobs_priced_share": 0.9815,
+      "iu_cash_usd": 26.9662,
+      "max_list_usd": 13.4047,
+      "per_resolved_iu_cash": 0.7931,
+      "per_resolved_max_list": 0.3943
+    },
+    {
+      "week": "2026-W40",
+      "start": "2026-09-28",
+      "items": 76,
+      "resolved_items": 74,
+      "jobs": 209,
+      "jobs_priced_share": 0.9809,
+      "iu_cash_usd": 11.5594,
+      "max_list_usd": 101.3363,
+      "per_resolved_iu_cash": 0.1562,
+      "per_resolved_max_list": 1.3694
+    },
+    {
+      "week": "2026-W41",
+      "start": "2026-10-05",
+      "items": 57,
+      "resolved_items": 55,
+      "jobs": 282,
+      "jobs_priced_share": 0.9894,
+      "iu_cash_usd": 43.0804,
+      "max_list_usd": 132.3331,
+      "per_resolved_iu_cash": 0.7833,
+      "per_resolved_max_list": 2.4061
+    },
+    {
+      "week": "2026-W42",
+      "start": "2026-10-12",
+      "items": 156,
+      "resolved_items": 95,
+      "jobs": 615,
+      "jobs_priced_share": 0.9398,
+      "iu_cash_usd": 30.2717,
+      "max_list_usd": 98.4788,
+      "per_resolved_iu_cash": 0.3186,
+      "per_resolved_max_list": 1.0366
+    },
+    {
+      "week": "2026-W43",
+      "start": "2026-10-19",
+      "items": 50,
+      "resolved_items": 33,
+      "jobs": 204,
+      "jobs_priced_share": 1.0,
+      "iu_cash_usd": 3.8049,
+      "max_list_usd": 0.0,
+      "per_resolved_iu_cash": 0.1153,
+      "per_resolved_max_list": 0.0
+    }
+  ],
+  "context_agent_cost_last_30d": {
+    "window": "[2026-09-22T08:00:00Z, 2026-10-22T08:00:00Z)",
+    "note": "usd = usage-tracker cost_usd: IU rows are cash per token, Max rows are list-price equivalents of a flat subscription",
+    "total_by_source_usd": {
+      "claude-code/max": 16552.1284,
+      "agent-gateway-iu/iu": 283.1536,
+      "claude-code/iu": 131.2059,
+      "research-gateway/iu": 75.8836,
+      "opencode/iu": 58.9659,
+      "opencode-v2/iu (not in usage.db)": 58.1128,
+      "hermes/iu": 17.9862,
+      "astra/iu": 0.7754,
+      "codex/iu": 0.1636,
+      "agent-gateway-sessions/iu": 0.0,
+      "agent-gateway-sessions/max": 0.0
+    },
+    "total_iu_cash_usd": 626.2471,
+    "total_max_list_usd": 16552.1287,
+    "daily": [
+      {
+        "day": "2026-09-22",
+        "partial": true,
+        "iu_cash_usd": 3.252,
+        "max_list_usd": 139.4145,
+        "by_source": {
+          "agent-gateway-iu/iu": 0.1484,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "astra/iu": 0.7754,
+          "claude-code/iu": 1.0445,
+          "claude-code/max": 139.4145,
+          "codex/iu": 0.1636,
+          "hermes/iu": 0.3757,
+          "opencode/iu": 0.7445
+        }
+      },
+      {
+        "day": "2026-09-23",
+        "partial": false,
+        "iu_cash_usd": 83.0785,
+        "max_list_usd": 1097.857,
+        "by_source": {
+          "agent-gateway-iu/iu": 1.0989,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 80.1381,
+          "claude-code/max": 1097.857,
+          "hermes/iu": 1.8415
+        }
+      },
+      {
+        "day": "2026-09-24",
+        "partial": false,
+        "iu_cash_usd": 8.7645,
+        "max_list_usd": 436.5888,
+        "by_source": {
+          "agent-gateway-iu/iu": 2.0601,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 5.589,
+          "claude-code/max": 436.5888,
+          "hermes/iu": 0.244,
+          "opencode/iu": 0.8714
+        }
+      },
+      {
+        "day": "2026-09-25",
+        "partial": false,
+        "iu_cash_usd": 15.5674,
+        "max_list_usd": 317.1119,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.8845,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.4695,
+          "claude-code/max": 317.1119,
+          "hermes/iu": 0.095,
+          "opencode/iu": 1.0455,
+          "research-gateway/iu": 10.073
+        }
+      },
+      {
+        "day": "2026-09-26",
+        "partial": false,
+        "iu_cash_usd": 7.581,
+        "max_list_usd": 247.8771,
+        "by_source": {
+          "agent-gateway-iu/iu": 2.9823,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.1953,
+          "claude-code/max": 247.8771,
+          "hermes/iu": 0.5755,
+          "opencode/iu": 0.0639,
+          "research-gateway/iu": 3.7639
+        }
+      },
+      {
+        "day": "2026-09-27",
+        "partial": false,
+        "iu_cash_usd": 7.1785,
+        "max_list_usd": 771.5603,
+        "by_source": {
+          "agent-gateway-iu/iu": 5.1085,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.7333,
+          "claude-code/max": 771.5603,
+          "opencode/iu": 0.4951,
+          "research-gateway/iu": 0.8417
+        }
+      },
+      {
+        "day": "2026-09-28",
+        "partial": false,
+        "iu_cash_usd": 19.7361,
+        "max_list_usd": 650.4165,
+        "by_source": {
+          "agent-gateway-iu/iu": 12.2126,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 1.8932,
+          "claude-code/max": 650.4165,
+          "hermes/iu": 2.4237,
+          "opencode/iu": 3.0561,
+          "research-gateway/iu": 0.1505
+        }
+      },
+      {
+        "day": "2026-09-29",
+        "partial": false,
+        "iu_cash_usd": 13.1579,
+        "max_list_usd": 481.9382,
+        "by_source": {
+          "agent-gateway-iu/iu": 6.0776,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.9598,
+          "claude-code/max": 481.9382,
+          "hermes/iu": 2.9657,
+          "opencode/iu": 2.12,
+          "research-gateway/iu": 1.0349
+        }
+      },
+      {
+        "day": "2026-09-30",
+        "partial": false,
+        "iu_cash_usd": 8.9388,
+        "max_list_usd": 373.8295,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.2564,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.9634,
+          "claude-code/max": 373.8295,
+          "hermes/iu": 1.4945,
+          "opencode/iu": 2.1248,
+          "research-gateway/iu": 1.0996
+        }
+      },
+      {
+        "day": "2026-10-01",
+        "partial": false,
+        "iu_cash_usd": 25.6972,
+        "max_list_usd": 431.1817,
+        "by_source": {
+          "agent-gateway-iu/iu": 15.4546,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 1.8692,
+          "claude-code/max": 431.1817,
+          "hermes/iu": 6.0796,
+          "opencode/iu": 1.4849,
+          "research-gateway/iu": 0.8089
+        }
+      },
+      {
+        "day": "2026-10-02",
+        "partial": false,
+        "iu_cash_usd": 4.5534,
+        "max_list_usd": 321.1183,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.5068,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.4667,
+          "claude-code/max": 321.1183,
+          "hermes/iu": 0.1869,
+          "opencode/iu": 0.0295,
+          "research-gateway/iu": 0.3635
+        }
+      },
+      {
+        "day": "2026-10-03",
+        "partial": false,
+        "iu_cash_usd": 0.0719,
+        "max_list_usd": 42.0812,
+        "by_source": {
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.0,
+          "claude-code/max": 42.0812,
+          "hermes/iu": 0.0719
+        }
+      },
+      {
+        "day": "2026-10-04",
+        "partial": false,
+        "iu_cash_usd": 6.366,
+        "max_list_usd": 321.0855,
+        "by_source": {
+          "agent-gateway-iu/iu": 2.7548,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.0,
+          "claude-code/max": 321.0855,
+          "hermes/iu": 0.3569,
+          "opencode/iu": 3.0571,
+          "research-gateway/iu": 0.1971
+        }
+      },
+      {
+        "day": "2026-10-05",
+        "partial": false,
+        "iu_cash_usd": 15.3199,
+        "max_list_usd": 457.3935,
+        "by_source": {
+          "agent-gateway-iu/iu": 6.8949,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.0,
+          "claude-code/max": 457.3935,
+          "hermes/iu": 0.0535,
+          "opencode/iu": 7.3956,
+          "research-gateway/iu": 0.9758
+        }
+      },
+      {
+        "day": "2026-10-06",
+        "partial": false,
+        "iu_cash_usd": 11.7435,
+        "max_list_usd": 369.494,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.3269,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 2.2723,
+          "claude-code/max": 369.494,
+          "hermes/iu": 0.0708,
+          "opencode/iu": 5.4249,
+          "research-gateway/iu": 0.6486
+        }
+      },
+      {
+        "day": "2026-10-07",
+        "partial": false,
+        "iu_cash_usd": 23.9528,
+        "max_list_usd": 291.9461,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.0499,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 7.9174,
+          "claude-code/max": 291.9461,
+          "hermes/iu": 0.0531,
+          "opencode/iu": 6.6934,
+          "research-gateway/iu": 6.2389
+        }
+      },
+      {
+        "day": "2026-10-08",
+        "partial": false,
+        "iu_cash_usd": 12.2516,
+        "max_list_usd": 208.0077,
+        "by_source": {
+          "agent-gateway-iu/iu": 0.8707,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.9873,
+          "claude-code/max": 208.0077,
+          "hermes/iu": 0.1033,
+          "opencode/iu": 1.231,
+          "research-gateway/iu": 9.0593
+        }
+      },
+      {
+        "day": "2026-10-09",
+        "partial": false,
+        "iu_cash_usd": 16.2052,
+        "max_list_usd": 293.8948,
+        "by_source": {
+          "agent-gateway-iu/iu": 3.807,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 4.4311,
+          "claude-code/max": 293.8948,
+          "hermes/iu": 0.0478,
+          "opencode/iu": 3.6761,
+          "research-gateway/iu": 4.2432
+        }
+      },
+      {
+        "day": "2026-10-10",
+        "partial": false,
+        "iu_cash_usd": 22.8419,
+        "max_list_usd": 199.7338,
+        "by_source": {
+          "agent-gateway-iu/iu": 5.4396,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 7.6026,
+          "claude-code/max": 199.7338,
+          "opencode/iu": 9.7907,
+          "research-gateway/iu": 0.0091
+        }
+      },
+      {
+        "day": "2026-10-11",
+        "partial": false,
+        "iu_cash_usd": 12.1611,
+        "max_list_usd": 133.0514,
+        "by_source": {
+          "agent-gateway-iu/iu": 2.4901,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 3.1074,
+          "claude-code/max": 133.0514,
+          "hermes/iu": 0.015,
+          "opencode/iu": 5.8838,
+          "research-gateway/iu": 0.6647
+        }
+      },
+      {
+        "day": "2026-10-12",
+        "partial": false,
+        "iu_cash_usd": 7.4906,
+        "max_list_usd": 180.5392,
+        "by_source": {
+          "agent-gateway-iu/iu": 2.966,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 0.6243,
+          "claude-code/max": 180.5392,
+          "hermes/iu": 0.0857,
+          "opencode/iu": 2.1041,
+          "research-gateway/iu": 1.7105
+        }
+      },
+      {
+        "day": "2026-10-13",
+        "partial": false,
+        "iu_cash_usd": 22.8619,
+        "max_list_usd": 675.1364,
+        "by_source": {
+          "agent-gateway-iu/iu": 13.4647,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 4.0286,
+          "claude-code/max": 675.1364,
+          "hermes/iu": 0.0797,
+          "opencode/iu": 1.6735,
+          "research-gateway/iu": 3.6153
+        }
+      },
+      {
+        "day": "2026-10-14",
+        "partial": false,
+        "iu_cash_usd": 38.534,
+        "max_list_usd": 1224.1235,
+        "by_source": {
+          "agent-gateway-iu/iu": 27.4653,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 2.5455,
+          "claude-code/max": 1224.1235,
+          "hermes/iu": 0.0886,
+          "opencode-v2/iu (not in usage.db)": 5.2528,
+          "research-gateway/iu": 3.1818
+        }
+      },
+      {
+        "day": "2026-10-15",
+        "partial": false,
+        "iu_cash_usd": 38.7479,
+        "max_list_usd": 1100.8064,
+        "by_source": {
+          "agent-gateway-iu/iu": 26.6004,
+          "agent-gateway-sessions/iu": 0.0,
+          "agent-gateway-sessions/max": 0.0,
+          "claude-code/iu": 3.2753,
+          "claude-code/max": 1100.8064,
+          "hermes/iu": 0.063,
+          "opencode-v2/iu (not in usage.db)": 7.5513,
+          "research-gateway/iu": 1.258
+        }
+      },
+      {
+        "day": "2026-10-16",
+        "partial": false,
+        "iu_cash_usd": 49.4094,
+        "max_list_usd": 1196.8825,
+        "by_source": {
+          "agent-gateway-iu/iu": 30.922,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/iu": 0.0067,
+          "claude-code/max": 1196.8825,
+          "hermes/iu": 0.0561,
+          "opencode-v2/iu (not in usage.db)": 11.7334,
+          "research-gateway/iu": 6.6911
+        }
+      },
+      {
+        "day": "2026-10-17",
+        "partial": false,
+        "iu_cash_usd": 42.2088,
+        "max_list_usd": 1362.5815,
+        "by_source": {
+          "agent-gateway-iu/iu": 25.5235,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/max": 1362.5815,
+          "hermes/iu": 0.0173,
+          "opencode-v2/iu (not in usage.db)": 10.2584,
+          "research-gateway/iu": 6.4096
+        }
+      },
+      {
+        "day": "2026-10-18",
+        "partial": false,
+        "iu_cash_usd": 50.5299,
+        "max_list_usd": 1743.0441,
+        "by_source": {
+          "agent-gateway-iu/iu": 39.4208,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/max": 1743.0441,
+          "hermes/iu": 0.021,
+          "opencode-v2/iu (not in usage.db)": 9.7925,
+          "research-gateway/iu": 1.2956
+        }
+      },
+      {
+        "day": "2026-10-19",
+        "partial": false,
+        "iu_cash_usd": 37.1112,
+        "max_list_usd": 713.9517,
+        "by_source": {
+          "agent-gateway-iu/iu": 23.4291,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/max": 713.9517,
+          "hermes/iu": 0.0796,
+          "opencode-v2/iu (not in usage.db)": 9.5427,
+          "research-gateway/iu": 4.0599
+        }
+      },
+      {
+        "day": "2026-10-20",
+        "partial": false,
+        "iu_cash_usd": 8.2108,
+        "max_list_usd": 255.023,
+        "by_source": {
+          "agent-gateway-iu/iu": 1.6102,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/iu": 0.0046,
+          "claude-code/max": 255.023,
+          "hermes/iu": 0.0742,
+          "opencode-v2/iu (not in usage.db)": 0.5029,
+          "research-gateway/iu": 6.0189
+        }
+      },
+      {
+        "day": "2026-10-21",
+        "partial": false,
+        "iu_cash_usd": 9.9545,
+        "max_list_usd": 402.5444,
+        "by_source": {
+          "agent-gateway-iu/iu": 5.7226,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/iu": 0.0808,
+          "claude-code/max": 402.5444,
+          "hermes/iu": 0.3301,
+          "opencode-v2/iu (not in usage.db)": 3.0233,
+          "research-gateway/iu": 0.7976
+        }
+      },
+      {
+        "day": "2026-10-22",
+        "partial": true,
+        "iu_cash_usd": 2.7689,
+        "max_list_usd": 111.9142,
+        "by_source": {
+          "agent-gateway-iu/iu": 1.6045,
+          "agent-gateway-sessions/iu": 0.0,
+          "claude-code/max": 111.9142,
+          "hermes/iu": 0.0365,
+          "opencode-v2/iu (not in usage.db)": 0.4555,
+          "research-gateway/iu": 0.6724
+        }
+      }
+    ],
+    "claude_code_by_sub_tool": [
+      {
+        "sub_tool": "wave",
+        "billing": "max",
+        "rows": 69728,
+        "usd": 4885.5594
+      },
+      {
+        "sub_tool": "interactive",
+        "billing": "max",
+        "rows": 57313,
+        "usd": 4363.6409
+      },
+      {
+        "sub_tool": "fleet",
+        "billing": "max",
+        "rows": 40555,
+        "usd": 3257.7647
+      },
+      {
+        "sub_tool": "fan",
+        "billing": "max",
+        "rows": 27786,
+        "usd": 2010.6094
+      },
+      {
+        "sub_tool": "agent-gateway:review",
+        "billing": "max",
+        "rows": 35044,
+        "usd": 1942.8806
+      },
+      {
+        "sub_tool": "agent-gateway:dispatch",
+        "billing": "iu",
+        "rows": 2013,
+        "usd": 85.4523
+      },
+      {
+        "sub_tool": "agent-gateway:check",
+        "billing": "iu",
+        "rows": 5681,
+        "usd": 35.9852
+      },
+      {
+        "sub_tool": "agent-gateway:narrative",
+        "billing": "max",
+        "rows": 180,
+        "usd": 23.3253
+      },
+      {
+        "sub_tool": "bg",
+        "billing": "max",
+        "rows": 405,
+        "usd": 19.3535
+      },
+      {
+        "sub_tool": "agent-gateway:check",
+        "billing": "max",
+        "rows": 1104,
+        "usd": 13.8812
+      },
+      {
+        "sub_tool": "agent-gateway:ab",
+        "billing": "max",
+        "rows": 225,
+        "usd": 10.3287
+      },
+      {
+        "sub_tool": "agent-gateway:ab-judge",
+        "billing": "max",
+        "rows": 209,
+        "usd": 8.6574
+      }
+    ],
+    "agent_gateway_job_store_by_tool": {
+      "decide": {
+        "jobs": 1430,
+        "warden_owned": 177,
+        "warden_owned_priced": 177
+      },
+      "review": {
+        "jobs": 1192,
+        "warden_owned": 174,
+        "warden_owned_priced": 174
+      },
+      "dispatch": {
+        "jobs": 582,
+        "warden_owned": 514,
+        "warden_owned_priced": 463
+      },
+      "triage": {
+        "jobs": 266,
+        "warden_owned": 177,
+        "warden_owned_priced": 175
+      },
+      "update_pr": {
+        "jobs": 192,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      },
+      "narrative": {
+        "jobs": 68,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      },
+      "check": {
+        "jobs": 39,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      },
+      "overview": {
+        "jobs": 18,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      },
+      "prose": {
+        "jobs": 16,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      },
+      "excalidraw_diagram": {
+        "jobs": 1,
+        "warden_owned": 0,
+        "warden_owned_priced": 0
+      }
+    },
+    "opencode_v2_sessions_by_tool": {
+      "review:angle": {
+        "sessions": 4054,
+        "usd": 39.9052
+      },
+      "dispatch": {
+        "sessions": 415,
+        "usd": 10.9435
+      },
+      "review:synthesis": {
+        "sessions": 779,
+        "usd": 3.7876
+      },
+      "narrative": {
+        "sessions": 44,
+        "usd": 0.2139
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/typescript:2:9c76b1a7": {
+        "sessions": 1,
+        "usd": 0.0993
+      },
+      "overview": {
+        "sessions": 17,
+        "usd": 0.0991
+      },
+      "check": {
+        "sessions": 47,
+        "usd": 0.0966
+      },
+      "bench:DeepSeek-V4-Pro:check-make-target-prereq:2:fcb80e14": {
+        "sessions": 1,
+        "usd": 0.0906
+      },
+      "bench:DeepSeek-V4-Pro:check-make-target-prereq:1:99703acd": {
+        "sessions": 1,
+        "usd": 0.0837
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/qa:2:2bd71cbe": {
+        "sessions": 1,
+        "usd": 0.0821
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/typescript:1:51357d32": {
+        "sessions": 1,
+        "usd": 0.0703
+      },
+      "excalidraw-diagram": {
+        "sessions": 10,
+        "usd": 0.0593
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/typescript:2:de64bc47": {
+        "sessions": 1,
+        "usd": 0.0592
+      },
+      "bench:DeepSeek-V4-Pro:routing-per-angle-fallback:1:eed7d0ed": {
+        "sessions": 1,
+        "usd": 0.0592
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/qa:2:886256bc": {
+        "sessions": 1,
+        "usd": 0.0555
+      },
+      "bench:DeepSeek-V4-Pro:warden-board-null-repo:1:24239a43": {
+        "sessions": 1,
+        "usd": 0.0537
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/qa:1:46eabf8f": {
+        "sessions": 1,
+        "usd": 0.0524
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/senior-dev:2:8bf359a3": {
+        "sessions": 1,
+        "usd": 0.0515
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/senior-dev:2:00f862dd": {
+        "sessions": 1,
+        "usd": 0.0505
+      },
+      "bench:DeepSeek-V4-Pro:routing-per-angle-fallback:2:d867dc46": {
+        "sessions": 1,
+        "usd": 0.0466
+      },
+      "bench:DeepSeek-V4-Pro:make-check-target/senior-dev:1:e95b630f": {
+        "sessions": 1,
+        "usd": 0.044
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/qa:1:adedffde": {
+        "sessions": 1,
+        "usd": 0.0399
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/typescript:1:2a23fa23": {
+        "sessions": 1,
+        "usd": 0.0387
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/typescript:2:514abd31": {
+        "sessions": 1,
+        "usd": 0.0377
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/typescript:1:f9c49c5e": {
+        "sessions": 1,
+        "usd": 0.0362
+      },
+      "bench:deepseek-v4.1-flash:check-make-target-prereq:2:40ce9188": {
+        "sessions": 1,
+        "usd": 0.0353
+      },
+      "bench:claude-haiku-5-5-eu:check-make-target-prereq:1:6f1fedaf": {
+        "sessions": 1,
+        "usd": 0.0325
+      },
+      "bench:DeepSeek-V4-Pro:warden-board-null-repo:2:15bfe5fe": {
+        "sessions": 1,
+        "usd": 0.0318
+      },
+      "bench:DeepSeek-V4-Pro:opencode-2x-stream/senior-dev:1:64a99a01": {
+        "sessions": 1,
+        "usd": 0.0294
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/senior-dev:1:d6903edb": {
+        "sessions": 1,
+        "usd": 0.0288
+      },
+      "bench:deepseek-v4.1-flash:check-make-target-prereq:2:b75249dd": {
+        "sessions": 1,
+        "usd": 0.0272
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/senior-dev:2:d24aedd8": {
+        "sessions": 1,
+        "usd": 0.027
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/qa:1:63ce9ca4": {
+        "sessions": 1,
+        "usd": 0.0259
+      },
+      "bench:deepseek-v4.1-flash:check-make-target-prereq:1:6fd3a57e": {
+        "sessions": 1,
+        "usd": 0.0237
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/qa:2:87a6f309": {
+        "sessions": 1,
+        "usd": 0.0229
+      },
+      "bench:deepseek-v4.1-flash:check-make-target-prereq:1:110c4e9f": {
+        "sessions": 1,
+        "usd": 0.0223
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/qa:1:aca8770e": {
+        "sessions": 1,
+        "usd": 0.022
+      },
+      "bench:claude-haiku-5-5-eu:check-make-target-prereq:2:5761f273": {
+        "sessions": 1,
+        "usd": 0.0219
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:1:1c9d32a4": {
+        "sessions": 1,
+        "usd": 0.0216
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/senior-dev:1:caf29d0d": {
+        "sessions": 1,
+        "usd": 0.021
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/typescript:1:37386016": {
+        "sessions": 1,
+        "usd": 0.021
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/qa:2:5672914d": {
+        "sessions": 1,
+        "usd": 0.021
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/typescript:2:73500821": {
+        "sessions": 1,
+        "usd": 0.02
+      },
+      "bench:deepseek-v4.1-flash:routing-per-angle-fallback:2:ac36dc6c": {
+        "sessions": 1,
+        "usd": 0.0193
+      },
+      "bench:claude-haiku-5-5-eu:check-make-target-prereq:2:3ceb6969": {
+        "sessions": 1,
+        "usd": 0.0192
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:2:27d6c63c": {
+        "sessions": 1,
+        "usd": 0.0189
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:2:6cb62648": {
+        "sessions": 1,
+        "usd": 0.0184
+      },
+      "bench:deepseek-v4.1-flash:make-check-target/senior-dev:2:107b8e10": {
+        "sessions": 1,
+        "usd": 0.0183
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:2:df1804bb": {
+        "sessions": 1,
+        "usd": 0.0182
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:1:708f9057": {
+        "sessions": 1,
+        "usd": 0.0178
+      },
+      "bench:DeepSeek-V4-Pro:wire-to-provider:2:3939ac0b": {
+        "sessions": 1,
+        "usd": 0.0172
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:1:901ed015": {
+        "sessions": 1,
+        "usd": 0.0169
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:2:3b97d4b5": {
+        "sessions": 1,
+        "usd": 0.0169
+      },
+      "bench:DeepSeek-V4-Pro:wire-to-provider:1:24cf089d": {
+        "sessions": 1,
+        "usd": 0.0166
+      },
+      "bench:claude-haiku-5-5-eu:check-make-target-prereq:1:0e5049e0": {
+        "sessions": 1,
+        "usd": 0.0157
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:1:866a5041": {
+        "sessions": 1,
+        "usd": 0.0156
+      },
+      "bench:DeepSeek-V4-Pro:repo-lease:1:8cbd717a": {
+        "sessions": 1,
+        "usd": 0.0156
+      },
+      "bench:DeepSeek-V4-Pro:idle-watchdog:2:70f3eea8": {
+        "sessions": 1,
+        "usd": 0.0153
+      },
+      "bench:deepseek-v4.1-flash:routing-per-angle-fallback:1:2faacee7": {
+        "sessions": 1,
+        "usd": 0.0153
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:1:b5024781": {
+        "sessions": 1,
+        "usd": 0.0145
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:1:e1dfded5": {
+        "sessions": 1,
+        "usd": 0.014
+      },
+      "bench:DeepSeek-V4-Pro:repo-lease:2:5afab678": {
+        "sessions": 1,
+        "usd": 0.0135
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/typescript:2:61f914a8": {
+        "sessions": 1,
+        "usd": 0.0134
+      },
+      "bench:DeepSeek-V4-Pro:idle-watchdog:1:104eaab7": {
+        "sessions": 1,
+        "usd": 0.0132
+      },
+      "bench:deepseek-v4.1-flash:warden-board-null-repo:2:eb2e342b": {
+        "sessions": 1,
+        "usd": 0.0131
+      },
+      "bench:deepseek-v4.1-flash:warden-board-null-repo:1:814c3fcd": {
+        "sessions": 1,
+        "usd": 0.0131
+      },
+      "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:1:708bb818": {
+        "sessions": 1,
+        "usd": 0.013
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:2:9a59ee0f": {
+        "sessions": 1,
+        "usd": 0.0127
+      },
+      "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:2:320c3417": {
+        "sessions": 1,
+        "usd": 0.0122
+      },
+      "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:2:21ef6672": {
+        "sessions": 1,
+        "usd": 0.0122
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:1:9eab0f2f": {
+        "sessions": 1,
+        "usd": 0.0121
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:1:e45f90df": {
+        "sessions": 1,
+        "usd": 0.0116
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:2:2228525f": {
+        "sessions": 1,
+        "usd": 0.0113
+      },
+      "bench:deepseek-v4.1-flash:routing-per-angle-fallback:2:96774965": {
+        "sessions": 1,
+        "usd": 0.0113
+      },
+      "bench:deepseek-v4.1-flash:warden-board-null-repo:1:648bcfac": {
+        "sessions": 1,
+        "usd": 0.0111
+      },
+      "bench:frontend:a:6264775:1:cad061c6": {
+        "sessions": 1,
+        "usd": 0.011
+      },
+      "bench:deepseek-v4.1-flash:routing-per-angle-fallback:1:867ab617": {
+        "sessions": 1,
+        "usd": 0.0109
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/qa:1:5ea311c6": {
+        "sessions": 1,
+        "usd": 0.0106
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/qa:2:0b098303": {
+        "sessions": 1,
+        "usd": 0.0105
+      },
+      "bench:claude-haiku-5-5-eu:warden-board-null-repo:1:d6bd8d28": {
+        "sessions": 1,
+        "usd": 0.0102
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:2:94cb90db": {
+        "sessions": 1,
+        "usd": 0.0102
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:1:ef018988": {
+        "sessions": 1,
+        "usd": 0.0091
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:2:8071a06d": {
+        "sessions": 1,
+        "usd": 0.0089
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/typescript:1:18f8a55e": {
+        "sessions": 1,
+        "usd": 0.0088
+      },
+      "bench:claude-haiku-5-5-eu:warden-board-null-repo:2:4fed970d": {
+        "sessions": 1,
+        "usd": 0.0087
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:1:a4def527": {
+        "sessions": 1,
+        "usd": 0.0086
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:2:96651373": {
+        "sessions": 1,
+        "usd": 0.0084
+      },
+      "bench:frontend:a:6264775:2:46889f5d": {
+        "sessions": 1,
+        "usd": 0.0078
+      },
+      "bench:deepseek-v4.1-flash:warden-board-null-repo:2:80743b2d": {
+        "sessions": 1,
+        "usd": 0.0069
+      },
+      "bench:frontend:a:4ea52bf:2:405e351f": {
+        "sessions": 1,
+        "usd": 0.0069
+      },
+      "bench:frontend:a:5de4e2d:2:a514f0b1": {
+        "sessions": 1,
+        "usd": 0.0067
+      },
+      "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:1:3b9c1e27": {
+        "sessions": 1,
+        "usd": 0.0064
+      },
+      "bench:frontend:a:5de4e2d:1:3fc3079f": {
+        "sessions": 1,
+        "usd": 0.0064
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:2:f9cf4cf2": {
+        "sessions": 1,
+        "usd": 0.006
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/qa:2:fcf24ba8": {
+        "sessions": 1,
+        "usd": 0.0059
+      },
+      "bench:frontend:a:4ea52bf:1:2dd6ef5d": {
+        "sessions": 1,
+        "usd": 0.0057
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:11a7792d": {
+        "sessions": 1,
+        "usd": 0.0057
+      },
+      "bench:claude-haiku-5-5-eu:warden-board-null-repo:1:6995b0ef": {
+        "sessions": 1,
+        "usd": 0.0056
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:8623903a": {
+        "sessions": 1,
+        "usd": 0.0054
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:2:ac6f0cab": {
+        "sessions": 1,
+        "usd": 0.0054
+      },
+      "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:2:33811e5b": {
+        "sessions": 1,
+        "usd": 0.0053
+      },
+      "bench:deepseek-v4.1-flash:idle-watchdog:1:a68e2777": {
+        "sessions": 1,
+        "usd": 0.0053
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:8ae486c7": {
+        "sessions": 1,
+        "usd": 0.0051
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:2:81c62189": {
+        "sessions": 1,
+        "usd": 0.0049
+      },
+      "bench:deepseek-v4.1-flash:repo-lease:1:850ec426": {
+        "sessions": 1,
+        "usd": 0.0048
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:1:1f532e72": {
+        "sessions": 1,
+        "usd": 0.0048
+      },
+      "bench:deepseek-v4.1-flash:repo-lease:2:b20749a6": {
+        "sessions": 1,
+        "usd": 0.0047
+      },
+      "bench:deepseek-v4.1-flash:wire-to-provider:1:4ae9867b": {
+        "sessions": 1,
+        "usd": 0.0044
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/typescript:2:704beeb2": {
+        "sessions": 1,
+        "usd": 0.0042
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/qa:1:ae3101ba": {
+        "sessions": 1,
+        "usd": 0.0042
+      },
+      "bench:deepseek-v4.1-flash:repo-lease:2:bf2f5dda": {
+        "sessions": 1,
+        "usd": 0.0042
+      },
+      "bench:deepseek-v4.1-flash:idle-watchdog:2:c33034bd": {
+        "sessions": 1,
+        "usd": 0.0041
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:2:ec6e362a": {
+        "sessions": 1,
+        "usd": 0.0039
+      },
+      "bench:deepseek-v4.1-flash:wire-to-provider:2:3412c9ac": {
+        "sessions": 1,
+        "usd": 0.0039
+      },
+      "bench:claude-haiku-5-5-eu:warden-board-null-repo:2:db08e8c4": {
+        "sessions": 1,
+        "usd": 0.0036
+      },
+      "bench:deepseek-v4.1-flash:wire-to-provider:1:7cbb68fe": {
+        "sessions": 1,
+        "usd": 0.0036
+      },
+      "bench:deepseek-v4.1-flash:repo-lease:1:d8e1db4f": {
+        "sessions": 1,
+        "usd": 0.0036
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:1:40cfc6b3": {
+        "sessions": 1,
+        "usd": 0.0035
+      },
+      "bench:deepseek-v4.1-flash:wire-to-provider:2:88e7d437": {
+        "sessions": 1,
+        "usd": 0.0034
+      },
+      "bench:deepseek-v4.1-flash:idle-watchdog:1:d036eb1e": {
+        "sessions": 1,
+        "usd": 0.0034
+      },
+      "bench:deepseek-v4.1-flash:idle-watchdog:2:52882eaf": {
+        "sessions": 1,
+        "usd": 0.0031
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:2:404c091f": {
+        "sessions": 1,
+        "usd": 0.0028
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:1:ad2d04b1": {
+        "sessions": 1,
+        "usd": 0.0028
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:2:d2ac1510": {
+        "sessions": 1,
+        "usd": 0.002
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:1:0b15eaf3": {
+        "sessions": 1,
+        "usd": 0.0015
+      },
+      "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:2:fd90d2d0": {
+        "sessions": 1,
+        "usd": 0.0014
+      },
+      "bench:claude-haiku-5-5-eu:make-check-target/typescript:1:6c64e022": {
+        "sessions": 1,
+        "usd": 0.0013
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:a70af3f5": {
+        "sessions": 1,
+        "usd": 0.0011
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:2:9f459a20": {
+        "sessions": 1,
+        "usd": 0.001
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:c1c18184": {
+        "sessions": 1,
+        "usd": 0.0009
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:23784e57": {
+        "sessions": 1,
+        "usd": 0.0008
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:2:66cd7240": {
+        "sessions": 1,
+        "usd": 0.0008
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:ba6e057d": {
+        "sessions": 1,
+        "usd": 0.0008
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:4d18603e": {
+        "sessions": 1,
+        "usd": 0.0006
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:abd9c7a9": {
+        "sessions": 1,
+        "usd": 0.0006
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:15c154bb": {
+        "sessions": 1,
+        "usd": 0.0005
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:2:2cbd9dbe": {
+        "sessions": 1,
+        "usd": 0.0005
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:76d5473c": {
+        "sessions": 1,
+        "usd": 0.0005
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:b1a6ad89": {
+        "sessions": 1,
+        "usd": 0.0005
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:193b8c4e": {
+        "sessions": 1,
+        "usd": 0.0
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:0324c965": {
+        "sessions": 1,
+        "usd": 0.0
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:7013a98c": {
+        "sessions": 1,
+        "usd": 0.0
+      },
+      "bench:claude-haiku-5-5-eu:wire-to-provider:1:b9481963": {
+        "sessions": 1,
+        "usd": 0.0
+      },
+      "bench:claude-haiku-5-5-eu:idle-watchdog:1:e2a84f11": {
+        "sessions": 1,
+        "usd": 0.0
+      },
+      "bench:claude-haiku-5-5-eu:repo-lease:1:16c0368d": {
+        "sessions": 1,
+        "usd": 0.0
+      }
+    }
+  },
+  "data_quality": {
+    "snapshot_dir": "~/.local/share/factory/snapshots/2026-10-22",
+    "usage_tracker_opencode_collector_last_row": "2026-10-13T12:34:45.777Z",
+    "usage_rows_with_job_worktree_last_day": "2026-10-22",
+    "agent_gateway_sessions_rows_carry_tokens": 0,
+    "median_cost_per_priced_job_usd": {
+      "triage": 0.0008,
+      "investigate": 0.0219,
+      "implement": 0.1106,
+      "review": 1.1415,
+      "check": null,
+      "author": 0.2874,
+      "decide": 0.0002
+    },
+    "p90_cost_per_priced_job_usd": {
+      "triage": 0.0022,
+      "investigate": 0.0923,
+      "implement": 0.4625,
+      "review": 2.9735,
+      "check": null,
+      "author": 0.2874,
+      "decide": 0.0004
+    },
+    "check_tier_jobs_owned_by_warden": 0,
+    "usage_db_cost_semantics": "Max rows are list-price equivalents (sunk); IU rows are per-token cash"
+  }
+}

@@ -1,0 +1,1735 @@
+{
+  "as_of": "2026-10-22T08:00:00Z",
+  "at_as_of": {
+    "five_hour_pct": 6,
+    "minutes_before_as_of": 0.6,
+    "seven_day_pct": 14,
+    "time": "2026-10-22T07:59:21Z"
+  },
+  "best_history": {
+    "choice": "~/Library/Logs/devhost-health.log (heartbeat, one `quota 5h N% · 7d N%` per run)",
+    "files_read": [
+      "devhost-health.log"
+    ],
+    "limits": [
+      "no timestamps in the file: the axis is reconstructed (see time_axis)",
+      "only the overall 5h and 7d figures are recorded; model-scoped weekly caps (seven_day_sonnet, weekly_scoped such as Fable at 50 % of the weekly allowance) are not in the history",
+      "integer percentages sampled every ~5 min: peaks shorter than a run can be missed",
+      "a stale cache is indistinguishable from idleness without a second source (see suspect_flat_segments)"
+    ],
+    "why": "the only source that spans weeks; ~/.claude/logs fetch_usage has real timestamps but 3-day retention; usage.db has no utilisation columns; agent-gateway logs carry request metadata only"
+  },
+  "coverage": {
+    "calendar_days_touched": 45,
+    "first_run": "2026-09-08T17:50:01Z",
+    "last_run": "2026-10-22T07:59:21Z",
+    "readings_5h": 12083,
+    "readings_7d": 12082,
+    "runs": 12441,
+    "span_days": 43.6,
+    "unavailable_runs": 358
+  },
+  "daily": [
+    {
+      "date": "2026-09-08",
+      "max_5h": 29,
+      "max_7d": 85,
+      "runs": 74,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-09",
+      "max_5h": 52,
+      "max_7d": 100,
+      "runs": 286,
+      "samples_7d_ge_90": 82,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-10",
+      "max_5h": 64,
+      "max_7d": 31,
+      "runs": 287,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-11",
+      "max_5h": 53,
+      "max_7d": 50,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-12",
+      "max_5h": 28,
+      "max_7d": 59,
+      "runs": 287,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-13",
+      "max_5h": 30,
+      "max_7d": 72,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-14",
+      "max_5h": 42,
+      "max_7d": 82,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-15",
+      "max_5h": 41,
+      "max_7d": 96,
+      "runs": 287,
+      "samples_7d_ge_90": 173,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-16",
+      "max_5h": 3,
+      "max_7d": 96,
+      "runs": 286,
+      "samples_7d_ge_90": 286,
+      "suspect_flat": true
+    },
+    {
+      "date": "2026-09-17",
+      "max_5h": 0,
+      "max_7d": 96,
+      "runs": 287,
+      "samples_7d_ge_90": 287,
+      "suspect_flat": true
+    },
+    {
+      "date": "2026-09-18",
+      "max_5h": 0,
+      "max_7d": 96,
+      "runs": 286,
+      "samples_7d_ge_90": 286,
+      "suspect_flat": true
+    },
+    {
+      "date": "2026-09-19",
+      "max_5h": 0,
+      "max_7d": 96,
+      "runs": 286,
+      "samples_7d_ge_90": 286,
+      "suspect_flat": true
+    },
+    {
+      "date": "2026-09-20",
+      "max_5h": 32,
+      "max_7d": 96,
+      "runs": 287,
+      "samples_7d_ge_90": 79,
+      "suspect_flat": true
+    },
+    {
+      "date": "2026-09-21",
+      "max_5h": 7,
+      "max_7d": 16,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-22",
+      "max_5h": 12,
+      "max_7d": 22,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-23",
+      "max_5h": 53,
+      "max_7d": 55,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-24",
+      "max_5h": 26,
+      "max_7d": 18,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-25",
+      "max_5h": 31,
+      "max_7d": 29,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-26",
+      "max_5h": 25,
+      "max_7d": 38,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-27",
+      "max_5h": 42,
+      "max_7d": 61,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-28",
+      "max_5h": 70,
+      "max_7d": 85,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-29",
+      "max_5h": 27,
+      "max_7d": 100,
+      "runs": 286,
+      "samples_7d_ge_90": 241,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-09-30",
+      "max_5h": 36,
+      "max_7d": 100,
+      "runs": 284,
+      "samples_7d_ge_90": 190,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-01",
+      "max_5h": 49,
+      "max_7d": 18,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-02",
+      "max_5h": 21,
+      "max_7d": 36,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-03",
+      "max_5h": 21,
+      "max_7d": 37,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-04",
+      "max_5h": 14,
+      "max_7d": 46,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-05",
+      "max_5h": 25,
+      "max_7d": 59,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-06",
+      "max_5h": 19,
+      "max_7d": 71,
+      "runs": 286,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-07",
+      "max_5h": 15,
+      "max_7d": 79,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-08",
+      "max_5h": 12,
+      "max_7d": 8,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-09",
+      "max_5h": 17,
+      "max_7d": 17,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-10",
+      "max_5h": 17,
+      "max_7d": 24,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-11",
+      "max_5h": 12,
+      "max_7d": 27,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-12",
+      "max_5h": 20,
+      "max_7d": 34,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-13",
+      "max_5h": 56,
+      "max_7d": 55,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-14",
+      "max_5h": 53,
+      "max_7d": 79,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-15",
+      "max_5h": 61,
+      "max_7d": 46,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-16",
+      "max_5h": 59,
+      "max_7d": 78,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-17",
+      "max_5h": 34,
+      "max_7d": 98,
+      "runs": 284,
+      "samples_7d_ge_90": 54,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-18",
+      "max_5h": 49,
+      "max_7d": 68,
+      "runs": 285,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-19",
+      "max_5h": 30,
+      "max_7d": 88,
+      "runs": 284,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-20",
+      "max_5h": 21,
+      "max_7d": 96,
+      "runs": 284,
+      "samples_7d_ge_90": 136,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-21",
+      "max_5h": 30,
+      "max_7d": 98,
+      "runs": 285,
+      "samples_7d_ge_90": 189,
+      "suspect_flat": false
+    },
+    {
+      "date": "2026-10-22",
+      "max_5h": 12,
+      "max_7d": 14,
+      "runs": 95,
+      "samples_7d_ge_90": 0,
+      "suspect_flat": false
+    }
+  ],
+  "definition_keys": [
+    "max_headroom"
+  ],
+  "fetch_usage": {
+    "fetch_errors": 8,
+    "files": 4,
+    "first": "2026-10-18T23:01:36Z",
+    "last": "2026-10-22T07:55:39Z",
+    "max_5h": 30,
+    "max_7d": 98,
+    "note": "fetch_error rows are local cache-file write races, not quota failures",
+    "samples": 209
+  },
+  "five_hour": {
+    "distribution_excluding_suspect_flat": {
+      "hours_ge": {
+        "100": 0.0,
+        "80": 0.0,
+        "90": 0.0,
+        "95": 0.0
+      },
+      "max": 70,
+      "mean": 8.32,
+      "min": 0,
+      "n": 10972,
+      "p10": 0.0,
+      "p25": 0.0,
+      "p5": 0.0,
+      "p50": 4.0,
+      "p75": 13.0,
+      "p90": 23.0,
+      "p95": 31.0,
+      "p99": 49.0,
+      "share_ge": {
+        "100": 0.0,
+        "50": 0.0092,
+        "70": 0.0001,
+        "80": 0.0,
+        "90": 0.0,
+        "95": 0.0
+      }
+    },
+    "distribution_raw": {
+      "hours_ge": {
+        "100": 0.0,
+        "80": 0.0,
+        "90": 0.0,
+        "95": 0.0
+      },
+      "max": 70,
+      "mean": 7.56,
+      "min": 0,
+      "n": 12083,
+      "p10": 0.0,
+      "p25": 0.0,
+      "p5": 0.0,
+      "p50": 2.0,
+      "p75": 12.0,
+      "p90": 22.0,
+      "p95": 30.0,
+      "p99": 48.0,
+      "share_ge": {
+        "100": 0.0,
+        "50": 0.0084,
+        "70": 0.0001,
+        "80": 0.0,
+        "90": 0.0,
+        "95": 0.0
+      }
+    },
+    "last_at_100": null,
+    "last_at_100_reason": "never sampled at 100 % in the heartbeat history (max 70 %); fetch_usage max 30 % over 209 samples",
+    "max": 70
+  },
+  "full_days": 43,
+  "headline": {
+    "complete_weekly_cycles_peak_values": [
+      96,
+      55,
+      100,
+      79,
+      79,
+      98,
+      98
+    ],
+    "days_with_peak_ge_90": [
+      12,
+      45
+    ],
+    "days_with_peak_ge_90_excluding_frozen_span": 7,
+    "five_hour_ever_at_100": false,
+    "five_hour_p50_p90_p99_max": [
+      2.0,
+      22.0,
+      48.0,
+      70
+    ],
+    "last_at_100_end": "2026-09-30T15:57:27Z",
+    "seven_day_p50_p90_p99_max": [
+      46.0,
+      96.0,
+      100.0,
+      100
+    ],
+    "seven_day_share_of_samples_ge_90": 0.1895,
+    "weekly_reset": "Wednesday 16:00:00 UTC; plus unscheduled full resets on 2026-09-20, 2026-10-17"
+  },
+  "max_vs_iu": {
+    "by_billing_and_source_all": {
+      "iu/agent-gateway-iu": {
+        "cost_usd": 308.57,
+        "io_tokens": 337763329,
+        "records": 6590
+      },
+      "iu/agent-gateway-sessions": {
+        "cost_usd": 0,
+        "io_tokens": 0,
+        "records": 8469
+      },
+      "iu/astra": {
+        "cost_usd": 3.86,
+        "io_tokens": 114892,
+        "records": 14
+      },
+      "iu/audio-proxy": {
+        "cost_usd": 6.26,
+        "io_tokens": 577934,
+        "records": 389
+      },
+      "iu/claude-code": {
+        "cost_usd": 215.01,
+        "io_tokens": 152205812,
+        "records": 24182
+      },
+      "iu/codex": {
+        "cost_usd": 90.95,
+        "io_tokens": 333802,
+        "records": 481
+      },
+      "iu/feuer": {
+        "cost_usd": 2332.9,
+        "io_tokens": 1563138493,
+        "records": 4621
+      },
+      "iu/hermes": {
+        "cost_usd": 246.16,
+        "io_tokens": 154773964,
+        "records": 5156
+      },
+      "iu/litellm": {
+        "cost_usd": 221.79,
+        "io_tokens": 167322496,
+        "records": 6000
+      },
+      "iu/modelpick": {
+        "cost_usd": 43.77,
+        "io_tokens": 8089925,
+        "records": 472
+      },
+      "iu/opencode": {
+        "cost_usd": 64.71,
+        "io_tokens": 94739333,
+        "records": 22051
+      },
+      "iu/research-gateway": {
+        "cost_usd": 75.88,
+        "io_tokens": 177409930,
+        "records": 1971
+      },
+      "max/agent-gateway-sessions": {
+        "cost_usd": 0,
+        "io_tokens": 0,
+        "records": 5917
+      },
+      "max/claude-code": {
+        "cost_usd": 54728.5,
+        "io_tokens": 552844425,
+        "records": 584923
+      }
+    },
+    "first_day": "2026-04-14",
+    "notes": [
+      "Max cost_usd is the API-list-price equivalent of subscription usage (sunk cost), IU cost_usd is billed per token: the two are not the same currency of effort.",
+      "Weeks are ISO weeks (Mon-Sun UTC), not Max reset windows (Wed 16:00 UTC).",
+      "Sources agent-gateway-iu and opencode can describe the same OpenCode episodes; no de-duplication is attempted here (cost attribution owns that).",
+      "agent-gateway-sessions rows are session markers with no tokens."
+    ],
+    "source": "snapshot usage.db, usage_record, billing = max | iu (ts < AS_OF)",
+    "weeks": {
+      "2026-W16": {
+        "iu": {
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "cost_usd": 0,
+          "input_output_reasoning_tokens": 4602749,
+          "records": 52,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.0,
+        "max_share_of_cost": null,
+        "max_share_of_io_tokens": 0.0
+      },
+      "2026-W18": {
+        "iu": {
+          "cache_read_tokens": 2033584,
+          "cache_write_tokens": 4762285,
+          "cost_usd": 19.41,
+          "input_output_reasoning_tokens": 64458,
+          "records": 233,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 346578531,
+          "cache_write_tokens": 7570441,
+          "cost_usd": 255.12,
+          "input_output_reasoning_tokens": 1780943,
+          "records": 2307,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9811,
+        "max_share_of_cost": 0.9293,
+        "max_share_of_io_tokens": 0.9651
+      },
+      "2026-W19": {
+        "iu": {
+          "cache_read_tokens": 2553511,
+          "cache_write_tokens": 6688405,
+          "cost_usd": 26.45,
+          "input_output_reasoning_tokens": 41373,
+          "records": 337,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 823575168,
+          "cache_write_tokens": 16779256,
+          "cost_usd": 567.58,
+          "input_output_reasoning_tokens": 3106843,
+          "records": 4382,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9891,
+        "max_share_of_cost": 0.9555,
+        "max_share_of_io_tokens": 0.9869
+      },
+      "2026-W20": {
+        "iu": {
+          "cache_read_tokens": 7960534,
+          "cache_write_tokens": 4456599,
+          "cost_usd": 20.17,
+          "input_output_reasoning_tokens": 71663,
+          "records": 184,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 1267369305,
+          "cache_write_tokens": 23438670,
+          "cost_usd": 905.09,
+          "input_output_reasoning_tokens": 6085549,
+          "records": 7990,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9905,
+        "max_share_of_cost": 0.9782,
+        "max_share_of_io_tokens": 0.9884
+      },
+      "2026-W21": {
+        "iu": {
+          "cache_read_tokens": 20285469,
+          "cache_write_tokens": 912666,
+          "cost_usd": 42.56,
+          "input_output_reasoning_tokens": 34882761,
+          "records": 1078,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 2294362324,
+          "cache_write_tokens": 49144097,
+          "cost_usd": 1761.49,
+          "input_output_reasoning_tokens": 14557263,
+          "records": 13027,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9768,
+        "max_share_of_cost": 0.9764,
+        "max_share_of_io_tokens": 0.2944
+      },
+      "2026-W22": {
+        "iu": {
+          "cache_read_tokens": 385739264,
+          "cache_write_tokens": 0,
+          "cost_usd": 257.77,
+          "input_output_reasoning_tokens": 175446595,
+          "records": 2344,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 866797452,
+          "cache_write_tokens": 18189228,
+          "cost_usd": 670.11,
+          "input_output_reasoning_tokens": 5220355,
+          "records": 5349,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.6133,
+        "max_share_of_cost": 0.7222,
+        "max_share_of_io_tokens": 0.0289
+      },
+      "2026-W23": {
+        "iu": {
+          "cache_read_tokens": 212931527,
+          "cache_write_tokens": 0,
+          "cost_usd": 1747.87,
+          "input_output_reasoning_tokens": 1186368474,
+          "records": 2543,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 430298082,
+          "cache_write_tokens": 12641567,
+          "cost_usd": 396.97,
+          "input_output_reasoning_tokens": 4822033,
+          "records": 2335,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.2424,
+        "max_share_of_cost": 0.1851,
+        "max_share_of_io_tokens": 0.004
+      },
+      "2026-W24": {
+        "iu": {
+          "cache_read_tokens": 779008,
+          "cache_write_tokens": 18094,
+          "cost_usd": 513.39,
+          "input_output_reasoning_tokens": 344914403,
+          "records": 2174,
+          "unpriced_records": 3
+        },
+        "max": {
+          "cache_read_tokens": 933978627,
+          "cache_write_tokens": 27126749,
+          "cost_usd": 867.59,
+          "input_output_reasoning_tokens": 9315561,
+          "records": 4924,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.7373,
+        "max_share_of_cost": 0.6282,
+        "max_share_of_io_tokens": 0.0263
+      },
+      "2026-W25": {
+        "iu": {
+          "cache_read_tokens": 63004928,
+          "cache_write_tokens": 0,
+          "cost_usd": 15.76,
+          "input_output_reasoning_tokens": 6481545,
+          "records": 1433,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 886492768,
+          "cache_write_tokens": 32694342,
+          "cost_usd": 927.45,
+          "input_output_reasoning_tokens": 11715240,
+          "records": 7012,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9305,
+        "max_share_of_cost": 0.9833,
+        "max_share_of_io_tokens": 0.6438
+      },
+      "2026-W26": {
+        "iu": {
+          "cache_read_tokens": 2925568,
+          "cache_write_tokens": 0,
+          "cost_usd": 2.04,
+          "input_output_reasoning_tokens": 1215132,
+          "records": 31,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.0,
+        "max_share_of_cost": 0.0,
+        "max_share_of_io_tokens": 0.0
+      },
+      "2026-W27": {
+        "iu": {
+          "cache_read_tokens": 166670976,
+          "cache_write_tokens": 0,
+          "cost_usd": 15.38,
+          "input_output_reasoning_tokens": 3163013,
+          "records": 1812,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 1056212170,
+          "cache_write_tokens": 47186752,
+          "cost_usd": 731.56,
+          "input_output_reasoning_tokens": 10175883,
+          "records": 6968,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.8677,
+        "max_share_of_cost": 0.9794,
+        "max_share_of_io_tokens": 0.7629
+      },
+      "2026-W28": {
+        "iu": {
+          "cache_read_tokens": 12463744,
+          "cache_write_tokens": 0,
+          "cost_usd": 3.57,
+          "input_output_reasoning_tokens": 1965355,
+          "records": 205,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 2405292685,
+          "cache_write_tokens": 100156123,
+          "cost_usd": 1538.33,
+          "input_output_reasoning_tokens": 22759903,
+          "records": 16535,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9943,
+        "max_share_of_cost": 0.9977,
+        "max_share_of_io_tokens": 0.9205
+      },
+      "2026-W29": {
+        "iu": {
+          "cache_read_tokens": 9609216,
+          "cache_write_tokens": 0,
+          "cost_usd": 3.42,
+          "input_output_reasoning_tokens": 1374123,
+          "records": 57,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 4470193410,
+          "cache_write_tokens": 120035655,
+          "cost_usd": 3096.26,
+          "input_output_reasoning_tokens": 24858172,
+          "records": 29949,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9976,
+        "max_share_of_cost": 0.9989,
+        "max_share_of_io_tokens": 0.9476
+      },
+      "2026-W30": {
+        "iu": {
+          "cache_read_tokens": 3462144,
+          "cache_write_tokens": 0,
+          "cost_usd": 2.89,
+          "input_output_reasoning_tokens": 1426564,
+          "records": 60,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 2119831964,
+          "cache_write_tokens": 63957253,
+          "cost_usd": 1550.26,
+          "input_output_reasoning_tokens": 11227916,
+          "records": 16692,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9978,
+        "max_share_of_cost": 0.9981,
+        "max_share_of_io_tokens": 0.8873
+      },
+      "2026-W31": {
+        "iu": {
+          "cache_read_tokens": 88141977,
+          "cache_write_tokens": 289433,
+          "cost_usd": 17.29,
+          "input_output_reasoning_tokens": 12521330,
+          "records": 740,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 4813226201,
+          "cache_write_tokens": 123946416,
+          "cost_usd": 3479.63,
+          "input_output_reasoning_tokens": 24671666,
+          "records": 31083,
+          "unpriced_records": 1
+        },
+        "max_share_of_all_tokens": 0.9801,
+        "max_share_of_cost": 0.9951,
+        "max_share_of_io_tokens": 0.6633
+      },
+      "2026-W32": {
+        "iu": {
+          "cache_read_tokens": 46094976,
+          "cache_write_tokens": 136394,
+          "cost_usd": 48.78,
+          "input_output_reasoning_tokens": 21027445,
+          "records": 526,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 6017042928,
+          "cache_write_tokens": 153022466,
+          "cost_usd": 3852.1,
+          "input_output_reasoning_tokens": 29099298,
+          "records": 37334,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9893,
+        "max_share_of_cost": 0.9875,
+        "max_share_of_io_tokens": 0.5805
+      },
+      "2026-W33": {
+        "iu": {
+          "cache_read_tokens": 23199007,
+          "cache_write_tokens": 1335688,
+          "cost_usd": 4.93,
+          "input_output_reasoning_tokens": 5176024,
+          "records": 173,
+          "unpriced_records": 1
+        },
+        "max": {
+          "cache_read_tokens": 3093808673,
+          "cache_write_tokens": 71283439,
+          "cost_usd": 1888.91,
+          "input_output_reasoning_tokens": 12435644,
+          "records": 17589,
+          "unpriced_records": 0
+        },
+        "max_share_of_all_tokens": 0.9907,
+        "max_share_of_cost": 0.9974,
+        "max_share_of_io_tokens": 0.7061
+      },
+      "2026-W34": {
+        "iu": {
+          "cache_read_tokens": 19476211,
+          "cache_write_tokens": 5670098,
+          "cost_usd": 5.16,
+          "input_output_reasoning_tokens": 1134881,
+          "records": 257,
+          "unpriced_records": 0
+        },
+        "max": {
+          "cache_read_tokens": 5575266508,
+          "cache_write_tokens": 149759629,
+          "cost_usd": 4181.49,
+          "input_output_reasoning_tokens": 33968907,
+          "records": 35486,
+          "unpriced_records": 22
+        },
+        "max_share_of_all_tokens": 0.9955,
+        "max_share_of_cost": 0.9988,
+        "max_share_of_io_tokens": 0.9677
+      },
+      "2026-W35": {
+        "iu": {
+          "cache_read_tokens": 124529105,
+          "cache_write_tokens": 15155231,
+          "cost_usd": 10.21,
+          "input_output_reasoning_tokens": 3638416,
+          "records": 831,
+          "unpriced_records": 4
+        },
+        "max": {
+          "cache_read_tokens": 4484902961,
+          "cache_write_tokens": 115048212,
+          "cost_usd": 3682.39,
+          "input_output_reasoning_tokens": 25392322,
+          "records": 26626,
+          "unpriced_records": 28
+        },
+        "max_share_of_all_tokens": 0.9699,
+        "max_share_of_cost": 0.9972,
+        "max_share_of_io_tokens": 0.8747
+      },
+      "2026-W36": {
+        "iu": {
+          "cache_read_tokens": 1668541279,
+          "cache_write_tokens": 11758663,
+          "cost_usd": 97.67,
+          "input_output_reasoning_tokens": 20085367,
+          "records": 4502,
+          "unpriced_records": 6
+        },
+        "max": {
+          "cache_read_tokens": 5363702362,
+          "cache_write_tokens": 134875797,
+          "cost_usd": 2781.38,
+          "input_output_reasoning_tokens": 14397340,
+          "records": 30747,
+          "unpriced_records": 41
+        },
+        "max_share_of_all_tokens": 0.7643,
+        "max_share_of_cost": 0.9661,
+        "max_share_of_io_tokens": 0.4175
+      },
+      "2026-W37": {
+        "iu": {
+          "cache_read_tokens": 363068405,
+          "cache_write_tokens": 35586810,
+          "cost_usd": 118.8,
+          "input_output_reasoning_tokens": 25439481,
+          "records": 3019,
+          "unpriced_records": 302
+        },
+        "max": {
+          "cache_read_tokens": 6965859276,
+          "cache_write_tokens": 167323617,
+          "cost_usd": 4002.1,
+          "input_output_reasoning_tokens": 35019383,
+          "records": 43908,
+          "unpriced_records": 36
+        },
+        "max_share_of_all_tokens": 0.9441,
+        "max_share_of_cost": 0.9712,
+        "max_share_of_io_tokens": 0.5792
+      },
+      "2026-W38": {
+        "iu": {
+          "cache_read_tokens": 1425753555,
+          "cache_write_tokens": 185791,
+          "cost_usd": 64.67,
+          "input_output_reasoning_tokens": 103548557,
+          "records": 7777,
+          "unpriced_records": 40
+        },
+        "max": {
+          "cache_read_tokens": 1983186990,
+          "cache_write_tokens": 51013191,
+          "cost_usd": 1003.75,
+          "input_output_reasoning_tokens": 30540131,
+          "records": 13719,
+          "unpriced_records": 3
+        },
+        "max_share_of_all_tokens": 0.5745,
+        "max_share_of_cost": 0.9395,
+        "max_share_of_io_tokens": 0.2278
+      },
+      "2026-W39": {
+        "iu": {
+          "cache_read_tokens": 602838831,
+          "cache_write_tokens": 509485,
+          "cost_usd": 128.96,
+          "input_output_reasoning_tokens": 125582082,
+          "records": 6390,
+          "unpriced_records": 122
+        },
+        "max": {
+          "cache_read_tokens": 8412989218,
+          "cache_write_tokens": 167466403,
+          "cost_usd": 3047.24,
+          "input_output_reasoning_tokens": 42964222,
+          "records": 44043,
+          "unpriced_records": 58
+        },
+        "max_share_of_all_tokens": 0.9221,
+        "max_share_of_cost": 0.9594,
+        "max_share_of_io_tokens": 0.2549
+      },
+      "2026-W40": {
+        "iu": {
+          "cache_read_tokens": 1674694970,
+          "cache_write_tokens": 4166823,
+          "cost_usd": 78.52,
+          "input_output_reasoning_tokens": 111744162,
+          "records": 11468,
+          "unpriced_records": 179
+        },
+        "max": {
+          "cache_read_tokens": 5598508818,
+          "cache_write_tokens": 173422773,
+          "cost_usd": 2621.65,
+          "input_output_reasoning_tokens": 37066455,
+          "records": 36811,
+          "unpriced_records": 39
+        },
+        "max_share_of_all_tokens": 0.7644,
+        "max_share_of_cost": 0.9709,
+        "max_share_of_io_tokens": 0.2491
+      },
+      "2026-W41": {
+        "iu": {
+          "cache_read_tokens": 1396494775,
+          "cache_write_tokens": 9415593,
+          "cost_usd": 114.48,
+          "input_output_reasoning_tokens": 131916116,
+          "records": 17793,
+          "unpriced_records": 224
+        },
+        "max": {
+          "cache_read_tokens": 3447568558,
+          "cache_write_tokens": 137037424,
+          "cost_usd": 1953.52,
+          "input_output_reasoning_tokens": 25480863,
+          "records": 28287,
+          "unpriced_records": 53
+        },
+        "max_share_of_all_tokens": 0.7013,
+        "max_share_of_cost": 0.9446,
+        "max_share_of_io_tokens": 0.1619
+      },
+      "2026-W42": {
+        "iu": {
+          "cache_read_tokens": 1952506745,
+          "cache_write_tokens": 4876189,
+          "cost_usd": 205.19,
+          "input_output_reasoning_tokens": 266050591,
+          "records": 11934,
+          "unpriced_records": 238
+        },
+        "max": {
+          "cache_read_tokens": 16025920993,
+          "cache_write_tokens": 399216497,
+          "cost_usd": 7483.11,
+          "input_output_reasoning_tokens": 99876925,
+          "records": 107510,
+          "unpriced_records": 34
+        },
+        "max_share_of_all_tokens": 0.8814,
+        "max_share_of_cost": 0.9733,
+        "max_share_of_io_tokens": 0.2729
+      },
+      "2026-W43": {
+        "iu": {
+          "cache_read_tokens": 422390825,
+          "cache_write_tokens": 1014510,
+          "cost_usd": 44.52,
+          "input_output_reasoning_tokens": 66587250,
+          "records": 2443,
+          "unpriced_records": 99
+        },
+        "max": {
+          "cache_read_tokens": 3057769388,
+          "cache_write_tokens": 84031133,
+          "cost_usd": 1483.43,
+          "input_output_reasoning_tokens": 16305608,
+          "records": 20227,
+          "unpriced_records": 4
+        },
+        "max_share_of_all_tokens": 0.8657,
+        "max_share_of_cost": 0.9709,
+        "max_share_of_io_tokens": 0.1967
+      }
+    },
+    "windows": {
+      "14d": {
+        "iu": {
+          "cache_read_tokens": 3045932568,
+          "cache_write_tokens": 11184283,
+          "cost_usd": 300.92,
+          "input_output_reasoning_tokens": 382972237,
+          "records": 23354,
+          "unpriced_records": 377
+        },
+        "max": {
+          "cache_read_tokens": 20166997089,
+          "cache_write_tokens": 528903550,
+          "cost_usd": 9593.23,
+          "input_output_reasoning_tokens": 125620597,
+          "records": 138063,
+          "unpriced_records": 46
+        },
+        "max_share_of_all_tokens": 0.8582,
+        "max_share_of_cost": 0.9696,
+        "max_share_of_io_tokens": 0.247
+      },
+      "30d": {
+        "iu": {
+          "cache_read_tokens": 5940309154,
+          "cache_write_tokens": 19694463,
+          "cost_usd": 564.88,
+          "input_output_reasoning_tokens": 693821903,
+          "records": 48713,
+          "unpriced_records": 862
+        },
+        "max": {
+          "cache_read_tokens": 36265182805,
+          "cache_write_tokens": 950692197,
+          "cost_usd": 16412.71,
+          "input_output_reasoning_tokens": 220161406,
+          "records": 235026,
+          "unpriced_records": 188
+        },
+        "max_share_of_all_tokens": 0.8491,
+        "max_share_of_cost": 0.9667,
+        "max_share_of_io_tokens": 0.2409
+      },
+      "90d": {
+        "iu": {
+          "cache_read_tokens": 9808362213,
+          "cache_write_tokens": 90100708,
+          "cost_usd": 939.48,
+          "input_output_reasoning_tokens": 894590311,
+          "records": 67862,
+          "unpriced_records": 1215
+        },
+        "max": {
+          "cache_read_tokens": 74983846878,
+          "cache_write_tokens": 1931725245,
+          "cost_usd": 41587.47,
+          "input_output_reasoning_tokens": 428242335,
+          "records": 474553,
+          "unpriced_records": 319
+        },
+        "max_share_of_all_tokens": 0.8775,
+        "max_share_of_cost": 0.9779,
+        "max_share_of_io_tokens": 0.3237
+      },
+      "all": {
+        "iu": {
+          "cache_read_tokens": 10698150134,
+          "cache_write_tokens": 106938757,
+          "cost_usd": 3609.86,
+          "input_output_reasoning_tokens": 2656469910,
+          "records": 80396,
+          "unpriced_records": 1218
+        },
+        "max": {
+          "cache_read_tokens": 92740735360,
+          "cache_write_tokens": 2446367130,
+          "cost_usd": 54728.5,
+          "input_output_reasoning_tokens": 552844425,
+          "records": 590840,
+          "unpriced_records": 319
+        },
+        "max_share_of_all_tokens": 0.8767,
+        "max_share_of_cost": 0.9381,
+        "max_share_of_io_tokens": 0.1723
+      }
+    }
+  },
+  "notes": [
+    "Utilisation is what Anthropic's usage endpoint reports (integer percent of the plan limit), relayed by agent-gateway GET /api/usage into the heartbeat.",
+    "Small downward steps (1-4 points) inside a week exist in the series and are not resets; a reset is a drop of >= 20 points to <= 15.",
+    "Both windows reset together on unscheduled resets (5h falls as well): those are not the weekly schedule."
+  ],
+  "reset_schedule": {
+    "evidence": "6 of 8 detected 7-day drops land within 63 minutes of Wednesday 16:00 UTC on the reboot-only axis (residuals in `resets`); the live cache names the same weekday and time for the next reset; fetch_usage saw the last one between 15:58 and 16:04 UTC. The other drops are unscheduled full resets",
+    "live": {
+      "next_weekly_reset_utc": "2026-10-28T16:00:00Z",
+      "note": "live read at run time; used only to confirm the weekly reset schedule",
+      "time_of_day_utc": "16:00",
+      "weekday": "Wed"
+    },
+    "scheduled": "Wednesday 16:00:00 UTC (18:00 CEST / 17:00 CET)",
+    "scheduled_resets_seen": 6,
+    "unscheduled_resets_seen": 2
+  },
+  "resets": [
+    {
+      "also_reset_5h": false,
+      "five_from": 1,
+      "five_to": 1,
+      "from": 100,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-09-09T14:56:51Z",
+      "residual_vs_wed_1600_min": -63.1,
+      "run": 265,
+      "scheduled": true,
+      "time": "2026-09-09T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    },
+    {
+      "also_reset_5h": false,
+      "five_from": 0,
+      "five_to": 3,
+      "from": 96,
+      "gap_runs": 1,
+      "kind": "unscheduled",
+      "provisional_time": "2026-09-20T06:30:07Z",
+      "residual_vs_wed_1600_min": -4889.9,
+      "run": 3303,
+      "scheduled": false,
+      "time": "2026-09-20T06:38:08Z",
+      "to": 2,
+      "weekday": "Sun"
+    },
+    {
+      "also_reset_5h": false,
+      "five_from": 17,
+      "five_to": 17,
+      "from": 55,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-09-23T16:10:55Z",
+      "residual_vs_wed_1600_min": 10.9,
+      "run": 4274,
+      "scheduled": true,
+      "time": "2026-09-23T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    },
+    {
+      "also_reset_5h": false,
+      "five_from": 0,
+      "five_to": 0,
+      "from": 100,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-09-30T16:15:09Z",
+      "residual_vs_wed_1600_min": 15.2,
+      "run": 6272,
+      "scheduled": true,
+      "time": "2026-09-30T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    },
+    {
+      "also_reset_5h": true,
+      "five_from": 15,
+      "five_to": 0,
+      "from": 79,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-10-07T16:14:19Z",
+      "residual_vs_wed_1600_min": 14.3,
+      "run": 8269,
+      "scheduled": true,
+      "time": "2026-10-07T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    },
+    {
+      "also_reset_5h": false,
+      "five_from": 4,
+      "five_to": 5,
+      "from": 79,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-10-14T15:43:13Z",
+      "residual_vs_wed_1600_min": -16.8,
+      "run": 10260,
+      "scheduled": true,
+      "time": "2026-10-14T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    },
+    {
+      "also_reset_5h": true,
+      "five_from": 34,
+      "five_to": 0,
+      "from": 98,
+      "gap_runs": 1,
+      "kind": "unscheduled",
+      "provisional_time": "2026-10-17T13:02:05Z",
+      "residual_vs_wed_1600_min": 4142.1,
+      "run": 11084,
+      "scheduled": false,
+      "time": "2026-10-17T13:34:13Z",
+      "to": 0,
+      "weekday": "Sat"
+    },
+    {
+      "also_reset_5h": false,
+      "five_from": 2,
+      "five_to": 3,
+      "from": 98,
+      "gap_runs": 1,
+      "kind": "scheduled weekly (Wed 16:00 UTC)",
+      "provisional_time": "2026-10-21T15:12:07Z",
+      "residual_vs_wed_1600_min": -47.9,
+      "run": 12251,
+      "scheduled": true,
+      "time": "2026-10-21T16:02:30Z",
+      "to": 0,
+      "weekday": "Wed"
+    }
+  ],
+  "script": "quota.py",
+  "seven_day": {
+    "days_with_max_ge_100": {
+      "count": 3,
+      "dates": [
+        "2026-09-09",
+        "2026-09-29",
+        "2026-09-30"
+      ]
+    },
+    "days_with_max_ge_90": {
+      "count": 12,
+      "count_excluding_suspect_flat_days": 7,
+      "dates": [
+        "2026-09-09",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+        "2026-09-19",
+        "2026-09-20",
+        "2026-09-29",
+        "2026-09-30",
+        "2026-10-17",
+        "2026-10-20",
+        "2026-10-21"
+      ],
+      "of_days": 45
+    },
+    "distribution_excluding_suspect_flat": {
+      "hours_ge": {
+        "100": 25.6,
+        "80": 179.4,
+        "90": 99.1,
+        "95": 81.1
+      },
+      "max": 100,
+      "mean": 45.4,
+      "min": 0,
+      "n": 10971,
+      "p10": 8.0,
+      "p25": 17.0,
+      "p5": 4.0,
+      "p50": 38.0,
+      "p75": 72.0,
+      "p90": 91.0,
+      "p95": 96.0,
+      "p99": 100.0,
+      "share_ge": {
+        "100": 0.0277,
+        "50": 0.4171,
+        "70": 0.2648,
+        "80": 0.1945,
+        "90": 0.1074,
+        "95": 0.088
+      }
+    },
+    "distribution_raw": {
+      "hours_ge": {
+        "100": 25.6,
+        "80": 272.9,
+        "90": 192.5,
+        "95": 174.6
+      },
+      "max": 100,
+      "mean": 50.05,
+      "min": 0,
+      "n": 12082,
+      "p10": 8.0,
+      "p25": 20.0,
+      "p5": 5.0,
+      "p50": 46.0,
+      "p75": 82.0,
+      "p90": 96.0,
+      "p95": 96.0,
+      "p99": 100.0,
+      "share_ge": {
+        "100": 0.0252,
+        "50": 0.4707,
+        "70": 0.3324,
+        "80": 0.2686,
+        "90": 0.1895,
+        "95": 0.1718
+      }
+    },
+    "last_at_100": {
+      "end": "2026-09-30T15:57:27Z",
+      "hours_before_as_of": 520.0,
+      "start": "2026-09-29T16:14:45Z"
+    },
+    "never_reached_100_in_history": false,
+    "segments_at_100": [
+      {
+        "end": "2026-09-09T15:57:28Z",
+        "first_run": 244,
+        "hours": 1.7,
+        "last_run": 264,
+        "runs": 21,
+        "start": "2026-09-09T14:16:54Z"
+      },
+      {
+        "end": "2026-09-30T15:57:27Z",
+        "first_run": 5989,
+        "hours": 23.7,
+        "last_run": 6271,
+        "runs": 283,
+        "start": "2026-09-29T16:14:45Z"
+      }
+    ]
+  },
+  "suspect_flat_segments": [
+    {
+      "end": "2026-09-20T06:33:06Z",
+      "five_hour_pct": 0,
+      "heartbeat_lines_naming_failing_max_routes": 739,
+      "hours": 93.0,
+      "reading": "readings did not move although a weekly reset falls inside the span, and Max usage in usage.db fell to 0.0341 of the prior week's rate while 739 heartbeat lines name failing Max routes: Max was effectively unavailable for these days (a limit the heartbeat does not record, or a stale reading, or both); the 7-day value inside the span is not trustworthy",
+      "runs": 1111,
+      "seven_day_pct": 96,
+      "start": "2026-09-16T09:31:49Z"
+    }
+  ],
+  "suspect_flat_segments_max_usage_corroboration": [
+    {
+      "inside_vs_before": 0.0341,
+      "max_records_per_day_inside": [
+        {
+          "date": "2026-09-17",
+          "notional_cost_usd": 2.9,
+          "records": 54
+        },
+        {
+          "date": "2026-09-18",
+          "notional_cost_usd": 30.0,
+          "records": 487
+        },
+        {
+          "date": "2026-09-19",
+          "notional_cost_usd": 1.1,
+          "records": 10
+        }
+      ],
+      "mean_records_per_day_7_days_before": 5379.1,
+      "mean_records_per_day_inside": 183.7,
+      "span_end": "2026-09-20T06:33:06Z",
+      "span_start": "2026-09-16T09:31:49Z"
+    }
+  ],
+  "time_axis": {
+    "anchors_used": [
+      {
+        "kind": "reboot",
+        "run": 3725,
+        "time": "2026-09-21T18:00:02Z"
+      },
+      {
+        "kind": "reboot",
+        "run": 6460,
+        "time": "2026-10-01T08:04:01Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 265,
+        "time": "2026-09-09T16:02:30Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 4274,
+        "time": "2026-09-23T16:02:30Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 6272,
+        "time": "2026-09-30T16:02:30Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 8269,
+        "time": "2026-10-07T16:02:30Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 10260,
+        "time": "2026-10-14T16:02:30Z"
+      },
+      {
+        "kind": "weekly reset (Wed 16:00 UTC + 150 s detection delay)",
+        "run": 12251,
+        "time": "2026-10-21T16:02:30Z"
+      }
+    ],
+    "median_seconds_per_run": 302.7,
+    "method": "piecewise-linear over anchors: host reboots (wtmp + kern.boottime) and scheduled weekly resets snapped to Wednesday 16:00:00 UTC",
+    "method_state": "anchored",
+    "scheduled_reset_residuals_min_on_reboot_only_axis": [
+      -63.1,
+      -47.9,
+      -16.8,
+      10.9,
+      14.3,
+      15.2
+    ],
+    "segments_seconds_per_run": [
+      {
+        "from_run": 265,
+        "seconds_per_run": 301.69,
+        "to_run": 3725
+      },
+      {
+        "from_run": 3725,
+        "seconds_per_run": 301.91,
+        "to_run": 4274
+      },
+      {
+        "from_run": 4274,
+        "seconds_per_run": 302.7,
+        "to_run": 6272
+      },
+      {
+        "from_run": 6272,
+        "seconds_per_run": 306.87,
+        "to_run": 6460
+      },
+      {
+        "from_run": 6460,
+        "seconds_per_run": 302.44,
+        "to_run": 8269
+      },
+      {
+        "from_run": 8269,
+        "seconds_per_run": 303.77,
+        "to_run": 10260
+      },
+      {
+        "from_run": 10260,
+        "seconds_per_run": 303.77,
+        "to_run": 12251
+      }
+    ],
+    "validation": {
+      "available": true,
+      "best_offset_s": 0,
+      "match_5h_at_best_offset": 0.99,
+      "match_5h_within_2pts_at_offset_0": 0.99,
+      "match_7d_at_best_offset": 1.0,
+      "match_7d_within_1pt_at_offset_0": 1.0,
+      "overlap_samples": 209,
+      "reading": "offset_s is how far the rebuilt axis would have to shift to match the real timestamps best; a 5 h reading moves in ~5-minute steps, so a match rate near 1 at small offsets confirms the axis"
+    }
+  },
+  "weekly_cycles": [
+    {
+      "end": "2026-09-09T15:57:28Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 6.9,
+      "partial": true,
+      "peak_7d": 100,
+      "peak_time": "2026-09-09T14:16:54Z",
+      "runs": 265,
+      "start": "2026-09-08T17:50:01Z",
+      "start_is_reset": false,
+      "start_kind": null
+    },
+    {
+      "end": "2026-09-20T06:33:06Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 117.5,
+      "partial": false,
+      "peak_7d": 96,
+      "peak_time": "2026-09-15T14:05:16Z",
+      "runs": 3038,
+      "start": "2026-09-09T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    },
+    {
+      "end": "2026-09-23T15:57:28Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 0.0,
+      "partial": false,
+      "peak_7d": 55,
+      "peak_time": "2026-09-23T15:37:20Z",
+      "runs": 971,
+      "start": "2026-09-20T06:38:08Z",
+      "start_is_reset": true,
+      "start_kind": "unscheduled"
+    },
+    {
+      "end": "2026-09-30T15:57:27Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 36.2,
+      "partial": false,
+      "peak_7d": 100,
+      "peak_time": "2026-09-29T16:14:45Z",
+      "runs": 1998,
+      "start": "2026-09-23T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    },
+    {
+      "end": "2026-10-07T15:57:27Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 0.0,
+      "partial": false,
+      "peak_7d": 79,
+      "peak_time": "2026-10-07T15:02:00Z",
+      "runs": 1997,
+      "start": "2026-09-30T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    },
+    {
+      "end": "2026-10-14T15:57:26Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 0.0,
+      "partial": false,
+      "peak_7d": 79,
+      "peak_time": "2026-10-14T15:42:14Z",
+      "runs": 1991,
+      "start": "2026-10-07T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    },
+    {
+      "end": "2026-10-17T13:29:10Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 4.5,
+      "partial": false,
+      "peak_7d": 98,
+      "peak_time": "2026-10-17T13:19:02Z",
+      "runs": 824,
+      "start": "2026-10-14T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    },
+    {
+      "end": "2026-10-21T15:57:26Z",
+      "ended_by_reset": true,
+      "hours_ge_90": 27.3,
+      "partial": false,
+      "peak_7d": 98,
+      "peak_time": "2026-10-21T12:39:59Z",
+      "runs": 1167,
+      "start": "2026-10-17T13:34:13Z",
+      "start_is_reset": true,
+      "start_kind": "unscheduled"
+    },
+    {
+      "end": "2026-10-22T07:59:21Z",
+      "ended_by_reset": false,
+      "hours_ge_90": 0.0,
+      "partial": true,
+      "peak_7d": 14,
+      "peak_time": "2026-10-22T07:59:21Z",
+      "runs": 190,
+      "start": "2026-10-21T16:02:30Z",
+      "start_is_reset": true,
+      "start_kind": "scheduled weekly (Wed 16:00 UTC)"
+    }
+  ],
+  "weekly_cycles_complete_summary": {
+    "cycles": 7,
+    "cycles_peaking_ge_90": 4,
+    "median_peak_7d": 96,
+    "peak_7d_values": [
+      96,
+      55,
+      100,
+      79,
+      79,
+      98,
+      98
+    ]
+  }
+}

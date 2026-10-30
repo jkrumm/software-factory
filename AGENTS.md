@@ -6,7 +6,8 @@ own a piece of work from root cause to production evidence, follows them through
 learns. CLI `factory`. Status: being planned and built; `docs/program.md` is the current state.
 
 **Start here:** `docs/decisions.md` (what was decided and why) → `docs/program.md` (tracks, who runs them) →
-`docs/design.md` (the design) → `docs/research/`.
+`docs/design.md` (the design) → `docs/research/` → `docs/evidence/` (the golden set and the
+intervention KPIs, moved from dotfiles; `README.md` there says what still re-runs).
 
 ## Rules
 

@@ -1,0 +1,3785 @@
+{
+ "coverage": {
+  "homelab_private_containers_counted_not_named": 11,
+  "homelab_public_containers": 25,
+  "homelab_public_containers_without_docker_monitor": [
+   "docker-socket-proxy-claude",
+   "garmin-collector",
+   "homelab-watchdog-logs",
+   "proton-bridge"
+  ],
+  "hyperdx_alerts": 21,
+  "hyperdx_alerts_mapped_to_project": 21,
+  "item_repos_not_in_sourceroot": [
+   "ntfy-mac",
+   "sideclaw"
+  ],
+  "items_total": 556,
+  "items_without_repo": 117,
+  "iuroot_launchd_jobs_counted_not_named": 7,
+  "kuma_docker_monitors_without_a_running_container": [],
+  "kuma_homelab_private_monitors_counted_not_named": 22,
+  "kuma_monitors_live_total": 120,
+  "kuma_public_leaf_mapped_to_host_service_project": 77,
+  "kuma_public_leaf_monitors": 77,
+  "kuma_public_leaf_monitors_by_target_host": {
+   "external": 1,
+   "homelab": 34,
+   "macbook": 1,
+   "mini": 16,
+   "vps": 25
+  },
+  "kuma_public_leaf_unmapped": [],
+  "kuma_public_yaml_declared": 94,
+  "kuma_work_monitors_counted_not_named": 4,
+  "mini_launchd_jobs_mapped": 54,
+  "mini_launchd_jobs_with_kuma_push": 13,
+  "policy_rule_repos_not_in_sourceroot": [],
+  "policy_rules": 74,
+  "slack_alert_signal_rows": 347,
+  "slack_alert_signal_rows_attributed_to_project": 215,
+  "slack_alert_signal_rows_host_only": 81,
+  "slack_row_attribution_by_topology": {
+   "beszel": {
+    "host_only": 11
+   },
+   "better_stack": {
+    "unattributed": 16
+   },
+   "hermes_chat": {
+    "not_a_signal": 98
+   },
+   "homelab_private": {
+    "attributed": 16
+   },
+   "homelab_watchdog": {
+    "host_only": 5
+   },
+   "hyperdx": {
+    "attributed": 13
+   },
+   "rollhook": {
+    "attributed": 669
+   },
+   "test_canary": {
+    "not_a_signal": 4
+   },
+   "uptime_kuma": {
+    "attributed": 186,
+    "group_only": 65,
+    "unattributed": 35
+   },
+   "watchtower": {
+    "host_only": 3
+   }
+  },
+  "vps_container_services_without_kuma": [
+   "basalt-ui-marketing",
+   "beszel-agent",
+   "cloudflared",
+   "dozzle",
+   "jkrumm-com",
+   "rollhook-marketing",
+   "shutterflow-imgproxy",
+   "shutterflow-imgproxy-small",
+   "shutterflow-key-broker",
+   "shutterflow-share",
+   "socket-proxy",
+   "socket-proxy-monitoring",
+   "socket-proxy-rollhook",
+   "socket-proxy-watchtower",
+   "valkey",
+   "watchtower",
+   "weatherorb-account",
+   "weatherorb-egress",
+   "weatherorb-probe"
+  ],
+  "vps_containers": 36,
+  "vps_containers_with_a_kuma_monitor_or_push": 17
+ },
+ "edges": [
+  {
+   "evidence": "monitors.yaml VPS group; architecture.md Monitoring (ACL homelab -> vps)",
+   "from": "homelab:uptime-kuma",
+   "kind": "probes over http (outside-in)",
+   "to": "vps:*"
+  },
+  {
+   "evidence": "architecture.md Monitoring",
+   "from": "mini:*",
+   "kind": "push monitors (no inbound path to the mini)",
+   "to": "homelab:uptime-kuma"
+  },
+  {
+   "evidence": "monitors.yaml comments",
+   "from": "vps:cron and fpp-analytics-updater",
+   "kind": "push monitors",
+   "to": "homelab:uptime-kuma"
+  },
+  {
+   "evidence": "monitors.yaml WeatherOrb Accounts Backup and Archive comments",
+   "from": "homelab:cron",
+   "kind": "pulls weatherorb dumps and archive, then pushes to Kuma",
+   "to": "vps and mini"
+  },
+  {
+   "evidence": "architecture.md Repos (research-gateway mini-only); observability/alerts",
+   "from": "vps:clickstack",
+   "kind": "OTel alerts read the vps ClickStack while the service runs on the mini",
+   "to": "mini:research-gateway"
+  },
+  {
+   "evidence": "monitors.yaml WeatherOrb - HTTP comment",
+   "from": "vps:weatherorb-edge",
+   "kind": "edge proxies tiles from the mini",
+   "to": "mini:weatherorb"
+  },
+  {
+   "evidence": "monitors.yaml Hermes - HTTP comment",
+   "from": "vps:argo-api",
+   "kind": "Hermes health route and chat",
+   "to": "mini:hermes"
+  },
+  {
+   "evidence": "watchdog-poll.py API_BASE",
+   "from": "mini:warden",
+   "kind": "polls Slack and docker summaries through Argo",
+   "to": "vps:argo-api"
+  },
+  {
+   "evidence": "architecture.md Repos (email-gateway)",
+   "from": "vps:email-gateway",
+   "kind": "mail through the homelab Bridge",
+   "to": "homelab:proton-bridge"
+  },
+  {
+   "evidence": "vps README stack table",
+   "from": "vps:rollhook",
+   "kind": "deploys every RollHook-managed container; Watchtower updates the rest at 04:00 on both hosts",
+   "to": "vps:apps"
+  },
+  {
+   "evidence": "architecture.md Monitoring",
+   "from": "homelab:beszel hub",
+   "kind": "system metrics (push from the mini)",
+   "to": "vps and mini agents"
+  }
+ ],
+ "hosts": {
+  "external": {
+   "evidence": "monitors.yaml",
+   "kuma": "probed or polled",
+   "role": "SaaS: Better Stack (external monitors), Vercel (FPP frontend), GitHub"
+  },
+  "homelab": {
+   "beszel": "hub",
+   "evidence": "docker ps probe; homelab AGENTS.md; architecture.md Monitoring",
+   "kuma": "the one Uptime Kuma instance (docker socket, outbound probes, inbound pushes)",
+   "reaches_ingest_door": true,
+   "role": "own hardware, remote; docker compose (projects homelab, homelab-private)",
+   "units": 25,
+   "units_withheld": 11,
+   "updates": "Watchtower 04:00"
+  },
+  "macbook": {
+   "evidence": "architecture.md",
+   "kuma": "push only",
+   "role": "client; a few launchd jobs (opbackup pushes to Kuma)"
+  },
+  "mini": {
+   "beszel": "agent (push)",
+   "evidence": "architecture.md LaunchAgents and Doors",
+   "kuma": "none (push only; the ACL grants nothing inbound from the homelab)",
+   "reaches_ingest_door": "hosts it: warden-api, /ingest/* only",
+   "role": "always-on dev host; launchd (warden, agent-gateway, hermes, gateways, weatherorb, dotfiles jobs)",
+   "units": 54,
+   "units_withheld": 7,
+   "updates": "own deploy paths (warden deploys itself; research-gateway deploy poller)"
+  },
+  "vps": {
+   "beszel": "agent",
+   "evidence": "docker ps probe; vps README",
+   "kuma": "none (probed from the homelab; its crons push)",
+   "reaches_ingest_door": true,
+   "role": "cloud VPS; docker compose (networking, infra, monitoring, apps/*); RollHook deploys; ClickStack and HyperDX",
+   "units": 36,
+   "updates": "RollHook for apps, Watchtower 04:00 for the rest"
+  }
+ },
+ "hyperdx_alerts": [
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "audio-gateway",
+   "interval": "1h",
+   "name": "audio-gateway podcast.failed >= 1 (1h)",
+   "project": "audio-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "1h",
+   "name": "email-gateway bounced or complained >= 1 (1h)",
+   "project": "email-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "15m",
+   "name": "email-gateway job failed >= 1 (15m)",
+   "project": "email-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "15m",
+   "name": "email-gateway LLM lane erroring >= 3 (15m)",
+   "project": "email-gateway",
+   "threshold": 3,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "15m",
+   "name": "email-gateway send failed >= 1 (15m)",
+   "project": "email-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "1h",
+   "name": "email-gateway SES sending paused >= 1 (1h)",
+   "project": "email-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "email-gateway",
+   "interval": "1h",
+   "name": "email-gateway sync stalled (0 ok ticks) < 1 (1h)",
+   "project": "email-gateway",
+   "threshold": 1,
+   "type": "below"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "Argo API",
+   "interval": "30m",
+   "name": "OTel ingest stalled — 0 argo-api spans (30m)",
+   "project": "argo",
+   "threshold": 1,
+   "type": "below"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "1h",
+   "name": "research-gateway cost spike >= 1 (1h)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "15m",
+   "name": "research-gateway crash-loop guard >= 1 (15m)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "1h",
+   "name": "research-gateway drain cut live jobs >= 1 (1h)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "15m",
+   "name": "research-gateway job.error >= 1 (15m)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "15m",
+   "name": "research-gateway LLM provider failures >= 3 (15m)",
+   "project": "research-gateway",
+   "threshold": 3,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "15m",
+   "name": "research-gateway memory pressure >= 1 (15m)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "1h",
+   "name": "research-gateway partial rate too high (>30% over 24h, n>=10)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "1h",
+   "name": "research-gateway solver spawn errors >= 1 (1h)",
+   "project": "research-gateway",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "research-gateway",
+   "interval": "1h",
+   "name": "research-gateway synthesis/consistency failures >= 3 (1h)",
+   "project": "research-gateway",
+   "threshold": 3,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "shutterflow",
+   "interval": "15m",
+   "name": "shutterflow email-otp mail send failed >= 1 (15m)",
+   "project": "shutterflow",
+   "threshold": 1,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "VPS — Overview",
+   "interval": "5m",
+   "name": "VPS edge 5xx rate > 5% (5m)",
+   "project": "vps",
+   "threshold": 0.05,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "VPS — Overview",
+   "interval": "15m",
+   "name": "VPS edge p95 > 3s (15m)",
+   "project": "vps",
+   "threshold": 3000000000,
+   "type": "above"
+  },
+  {
+   "channels": [
+    "Slack #alerts",
+    "Warden ingest"
+   ],
+   "dashboard": "VPS — Overview",
+   "interval": "15m",
+   "name": "VPS error logs >= 20 (15m)",
+   "project": "vps",
+   "threshold": 20,
+   "type": "above"
+  }
+ ],
+ "kuma_monitors": [
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 4,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "HomeLab",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 8,
+   "interval_s": 133,
+   "maxretries": 5,
+   "name": "Samba - Docker",
+   "project": "homelab",
+   "service": "samba",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 9,
+   "interval_s": 136,
+   "maxretries": 5,
+   "name": "Beszel - Docker",
+   "project": "homelab",
+   "service": "beszel",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 10,
+   "interval_s": 139,
+   "maxretries": 5,
+   "name": "Beszel Agent - Docker",
+   "project": "homelab",
+   "service": "beszel-agent",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 11,
+   "interval_s": 148,
+   "maxretries": 5,
+   "name": "Glance - Docker",
+   "project": "homelab",
+   "service": "glance",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 14,
+   "interval_s": 130,
+   "maxretries": 5,
+   "name": "Uptime Kuma - Docker",
+   "project": "homelab",
+   "service": "uptime-kuma",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 15,
+   "interval_s": 205,
+   "maxretries": 3,
+   "name": "FreePlanningPoker",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "external",
+   "id": 16,
+   "interval_s": 60,
+   "maxretries": 3,
+   "name": "FPP - Frontend - HTTP",
+   "project": "free-planning-poker",
+   "service": "fpp-frontend",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "vps",
+   "id": 17,
+   "interval_s": 60,
+   "maxretries": 3,
+   "name": "FPP - Server - HTTP",
+   "project": "free-planning-poker",
+   "service": "fpp-server",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "vps",
+   "id": 18,
+   "interval_s": 70,
+   "maxretries": 3,
+   "name": "FPP - Analytics - HTTP",
+   "project": "free-planning-poker",
+   "service": "fpp-analytics",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 20,
+   "interval_s": 130,
+   "maxretries": 5,
+   "name": "Uptime Kuma - Uptime",
+   "project": "homelab",
+   "service": "uptime-kuma",
+   "type": "http",
+   "via": "better-stack-api"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "vps",
+   "id": 21,
+   "interval_s": 60,
+   "maxretries": 3,
+   "name": "FPP - DB - MySQL",
+   "project": "free-planning-poker",
+   "service": "mariadb",
+   "type": "mysql",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 26,
+   "interval_s": 165,
+   "maxretries": 5,
+   "name": "Immich Server - Docker",
+   "project": "homelab",
+   "service": "immich-server",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 27,
+   "interval_s": 170,
+   "maxretries": 5,
+   "name": "Immich ML - Docker",
+   "project": "homelab",
+   "service": "immich-machine-learning",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 28,
+   "interval_s": 175,
+   "maxretries": 5,
+   "name": "Immich Redis - Docker",
+   "project": "homelab",
+   "service": "immich_redis",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 29,
+   "interval_s": 180,
+   "maxretries": 5,
+   "name": "Immich Postgres - Docker",
+   "project": "homelab",
+   "service": "immich_postgres",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "HomeLab"
+   ],
+   "id": 30,
+   "interval_s": 220,
+   "maxretries": 3,
+   "name": "Immich",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 31,
+   "interval_s": 140,
+   "maxretries": 5,
+   "name": "Immich - Uptime",
+   "project": "homelab",
+   "service": "immich_server",
+   "type": "http",
+   "via": "better-stack-api"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 35,
+   "interval_s": 215,
+   "maxretries": 3,
+   "name": "Websites",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Websites"
+   ],
+   "host": "vps",
+   "id": 36,
+   "interval_s": 60,
+   "maxretries": 3,
+   "name": "Photos - HTTP",
+   "project": "vps",
+   "service": "photo-gallery",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Websites"
+   ],
+   "host": "vps",
+   "id": 37,
+   "interval_s": 145,
+   "maxretries": 5,
+   "name": "Photos - Uptime",
+   "project": "vps",
+   "service": "photo-gallery",
+   "type": "http",
+   "via": "better-stack-api"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Files",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 39,
+   "interval_s": 170,
+   "maxretries": 5,
+   "name": "FileBrowser - Docker",
+   "project": "homelab",
+   "service": "filebrowser",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "vps",
+   "id": 40,
+   "interval_s": 650,
+   "maxretries": 1,
+   "name": "FPP - Analytics Readmodel - Push",
+   "project": "free-planning-poker",
+   "pusher": "fpp-analytics-updater",
+   "service": "fpp-analytics-updater",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 41,
+   "interval_s": 700,
+   "maxretries": 1,
+   "name": "HomeLab Watchdog - Push",
+   "project": "homelab",
+   "pusher": "cron homelab_watchdog.sh",
+   "service": "cron homelab_watchdog.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 42,
+   "interval_s": 118,
+   "maxretries": 5,
+   "name": "Caddy - Docker",
+   "project": "homelab",
+   "service": "caddy",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 43,
+   "interval_s": 121,
+   "maxretries": 5,
+   "name": "Cloudflared - Docker",
+   "project": "homelab",
+   "service": "cloudflared",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 52,
+   "interval_s": 150,
+   "maxretries": 3,
+   "name": "Glance - HTTP",
+   "project": "homelab",
+   "service": "glance",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 53,
+   "interval_s": 153,
+   "maxretries": 5,
+   "name": "Dozzle - Docker",
+   "project": "homelab",
+   "service": "dozzle",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 54,
+   "interval_s": 155,
+   "maxretries": 3,
+   "name": "Dozzle - HTTP",
+   "project": "homelab",
+   "service": "dozzle",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "HomeLab"
+   ],
+   "id": 55,
+   "interval_s": 200,
+   "maxretries": 3,
+   "name": "Infrastructure",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 56,
+   "interval_s": 115,
+   "maxretries": 5,
+   "name": "Docker Socket Proxy - Docker",
+   "project": "homelab",
+   "service": "docker-socket-proxy",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "HomeLab"
+   ],
+   "id": 62,
+   "interval_s": 215,
+   "maxretries": 3,
+   "name": "Files",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 84,
+   "interval_s": 127,
+   "maxretries": 5,
+   "name": "Watchtower - Docker",
+   "project": "homelab",
+   "service": "watchtower",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 92,
+   "interval_s": 116,
+   "maxretries": 5,
+   "name": "Docker Socket Proxy Watchtower - Docker",
+   "project": "homelab",
+   "service": "docker-socket-proxy-watchtower",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 93,
+   "interval_s": 185,
+   "maxretries": 3,
+   "name": "Immich - HTTP",
+   "project": "homelab",
+   "service": "immich_server",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 95,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "VPS",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "VPS"
+   ],
+   "id": 96,
+   "interval_s": 200,
+   "maxretries": 3,
+   "name": "Networking",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Networking",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 97,
+   "interval_s": 121,
+   "maxretries": 3,
+   "name": "Traefik - HTTP",
+   "project": "vps",
+   "service": "traefik",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "VPS"
+   ],
+   "id": 98,
+   "interval_s": 205,
+   "maxretries": 3,
+   "name": "Infra",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infra",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 99,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Postgres - Backup - Push",
+   "project": "vps",
+   "pusher": "cron pg backup",
+   "service": "cron pg backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Networking",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 100,
+   "interval_s": 131,
+   "maxretries": 3,
+   "name": "RollHook - HTTP",
+   "project": "rollhook",
+   "service": "rollhook",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Monitoring",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 136,
+   "interval_s": 141,
+   "maxretries": 3,
+   "name": "HyperDX - HTTP",
+   "project": "vps",
+   "service": "clickstack",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "VPS"
+   ],
+   "id": 138,
+   "interval_s": 210,
+   "maxretries": 3,
+   "name": "Monitoring",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Monitoring",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 139,
+   "interval_s": 131,
+   "maxretries": 3,
+   "name": "ClickStack OTel - HTTP",
+   "project": "vps",
+   "service": "clickstack",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Monitoring",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 140,
+   "interval_s": 151,
+   "maxretries": 3,
+   "name": "Umami - HTTP",
+   "project": "vps",
+   "service": "umami",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "homelab-private",
+   "id": 141,
+   "name": null,
+   "type": "group"
+  },
+  {
+   "class": "homelab-private",
+   "id": 142,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 143,
+   "name": null,
+   "type": "http"
+  },
+  {
+   "class": "homelab-private",
+   "id": 144,
+   "name": null,
+   "type": "group"
+  },
+  {
+   "class": "homelab-private",
+   "id": 145,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 146,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 147,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 148,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 149,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 150,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 151,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "macbook",
+   "id": 152,
+   "interval_s": 691200,
+   "maxretries": 1,
+   "name": "1Password Backup - Push",
+   "project": "dotfiles",
+   "pusher": "opbackup",
+   "service": "opbackup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "vps",
+   "id": 165,
+   "interval_s": 43200,
+   "maxretries": 1,
+   "name": "Garmin Collector - Push",
+   "project": "argo",
+   "pusher": "argo garmin-sync cron",
+   "service": "argo garmin-sync cron",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Hermes Agent"
+   ],
+   "host": "mini",
+   "id": 172,
+   "interval_s": 360,
+   "maxretries": 1,
+   "name": "Hermes Agent - Push",
+   "project": "hermes-agent",
+   "pusher": "com.jkrumm.hermes-liveness",
+   "service": "com.jkrumm.hermes-liveness",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Hermes Agent"
+   ],
+   "host": "mini",
+   "id": 173,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Hermes Backup - Push",
+   "project": "hermes-agent",
+   "pusher": "com.jkrumm.hermes-backup",
+   "service": "com.jkrumm.hermes-backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 175,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "Hermes Agent",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 176,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Restic Backup - Push",
+   "project": "homelab",
+   "pusher": "restic-backup",
+   "service": "restic-backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 177,
+   "interval_s": 142,
+   "maxretries": 5,
+   "name": "Restic Backup - Docker",
+   "project": "homelab",
+   "service": "restic-backup",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "FreePlanningPoker"
+   ],
+   "host": "vps",
+   "id": 178,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "FPP - DB Backup - Push",
+   "project": "free-planning-poker",
+   "pusher": "cron fpp mariadb backup",
+   "service": "cron fpp mariadb backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "VPS"
+   ],
+   "id": 179,
+   "interval_s": 215,
+   "maxretries": 3,
+   "name": "Services",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infra",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 181,
+   "interval_s": 120,
+   "maxretries": 1,
+   "name": "Postgres - DB - Push",
+   "project": "vps",
+   "pusher": "cron health-pg.sh",
+   "service": "cron health-pg.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Services",
+    "VPS"
+   ],
+   "id": 182,
+   "interval_s": 200,
+   "maxretries": 3,
+   "name": "Argo",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Argo",
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 183,
+   "interval_s": 145,
+   "maxretries": 3,
+   "name": "Dashboard - HTTP",
+   "project": "argo",
+   "service": "argo-dashboard",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Argo",
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 184,
+   "interval_s": 150,
+   "maxretries": 3,
+   "name": "API - HTTP",
+   "project": "argo",
+   "service": "argo-api",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 186,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "Local",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "HomeLab"
+   ],
+   "id": 187,
+   "interval_s": 248,
+   "maxretries": 3,
+   "name": "Karakeep",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Karakeep",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 188,
+   "interval_s": 202,
+   "maxretries": 5,
+   "name": "Karakeep - Docker",
+   "project": "homelab",
+   "service": "karakeep",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Karakeep",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 189,
+   "interval_s": 205,
+   "maxretries": 5,
+   "name": "Karakeep Chrome - Docker",
+   "project": "homelab",
+   "service": "karakeep-chrome",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Karakeep",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 190,
+   "interval_s": 208,
+   "maxretries": 5,
+   "name": "Karakeep Meili - Docker",
+   "project": "homelab",
+   "service": "karakeep-meili",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Karakeep",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 191,
+   "interval_s": 211,
+   "maxretries": 3,
+   "name": "Karakeep - HTTP",
+   "project": "homelab",
+   "service": "karakeep",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 192,
+   "interval_s": 150,
+   "maxretries": 3,
+   "name": "Audio Gateway - HTTP",
+   "project": "audio-gateway",
+   "service": "audio-gateway",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "homelab-private",
+   "id": 194,
+   "name": null,
+   "type": "group"
+  },
+  {
+   "class": "homelab-private",
+   "id": 195,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 196,
+   "name": null,
+   "type": "http"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 197,
+   "interval_s": 691200,
+   "maxretries": 1,
+   "name": "MacMini Secret Seed - Push",
+   "project": "dotfiles",
+   "pusher": "secrets-freshness check",
+   "service": "secrets-freshness check",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infra",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 198,
+   "interval_s": 165,
+   "maxretries": 3,
+   "name": "ImageCDN - HTTP",
+   "project": "vps",
+   "service": "imgproxy",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infra",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 199,
+   "interval_s": 175,
+   "maxretries": 3,
+   "name": "ImageCDN Origin - HTTP",
+   "project": "vps",
+   "service": "imgproxy",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 204,
+   "interval_s": 600,
+   "maxretries": 1,
+   "name": "MacMini Dev Host - Push",
+   "project": "dotfiles",
+   "pusher": "com.jkrumm.devhost-health",
+   "service": "com.jkrumm.devhost-health",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 205,
+   "interval_s": 14400,
+   "maxretries": 1,
+   "name": "MacMini Collie - Push",
+   "project": "dotfiles",
+   "pusher": "collie behavioural check",
+   "service": "collie behavioural check",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Networking",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 206,
+   "interval_s": 134,
+   "maxretries": 3,
+   "name": "RollHook - Ready - HTTP",
+   "project": "rollhook",
+   "service": "rollhook",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 207,
+   "interval_s": 240,
+   "maxretries": 1,
+   "name": "Home Line - Push",
+   "project": "linewatch",
+   "pusher": "com.jkrumm.linewatch-heartbeat",
+   "service": "com.jkrumm.linewatch-heartbeat",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 208,
+   "interval_s": 600,
+   "maxretries": 2,
+   "name": "Home Line - Watchdog",
+   "project": "linewatch",
+   "pusher": "com.jkrumm.linewatch-watchdog",
+   "service": "com.jkrumm.linewatch-watchdog",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 209,
+   "interval_s": 14400,
+   "maxretries": 1,
+   "name": "Brain Sync - Push",
+   "project": "dotfiles",
+   "pusher": "com.jkrumm.brain-sync",
+   "service": "com.jkrumm.brain-sync",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 210,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Brain Backup - Push",
+   "project": "dotfiles",
+   "pusher": "com.jkrumm.brain-backup",
+   "service": "com.jkrumm.brain-backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Infrastructure",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 211,
+   "interval_s": 14400,
+   "maxretries": 1,
+   "name": "Garmin Auto-Relogin - Push",
+   "project": "homelab",
+   "pusher": "cron garmin-auto-relogin.sh",
+   "service": "cron garmin-auto-relogin.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 212,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 213,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 215,
+   "interval_s": 172800,
+   "maxretries": 1,
+   "name": "MacMini Drift - Push",
+   "project": "dotfiles",
+   "pusher": "com.jkrumm.drift-check",
+   "service": "com.jkrumm.drift-check",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "work",
+   "id": 216,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "work",
+   "id": 217,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "work",
+   "id": 218,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 220,
+   "interval_s": 2100,
+   "maxretries": 1,
+   "name": "WeatherOrb Watchdog - Push",
+   "project": "weatherorb",
+   "pusher": "com.jkrumm.weatherorb.watchdog",
+   "service": "com.jkrumm.weatherorb.watchdog",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 223,
+   "name": null,
+   "type": "group"
+  },
+  {
+   "class": "homelab-private",
+   "id": 224,
+   "name": null,
+   "type": "docker"
+  },
+  {
+   "class": "homelab-private",
+   "id": 225,
+   "name": null,
+   "type": "http"
+  },
+  {
+   "class": "homelab-private",
+   "id": 226,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 228,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Immich Backup - Push",
+   "project": "homelab",
+   "pusher": "cron immich-backup-check.sh",
+   "service": "cron immich-backup-check.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Argo",
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 229,
+   "interval_s": 160,
+   "maxretries": 3,
+   "name": "Hermes - HTTP",
+   "project": "hermes-agent",
+   "service": "argo-api",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 230,
+   "interval_s": 165,
+   "maxretries": 3,
+   "name": "Image Gen Gateway - HTTP",
+   "project": "image-gateway",
+   "service": "image-gateway",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Websites"
+   ],
+   "host": "vps",
+   "id": 232,
+   "interval_s": 170,
+   "maxretries": 3,
+   "name": "WeatherOrb - HTTP",
+   "project": "weatherorb",
+   "service": "weatherorb-edge",
+   "type": "http",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 233,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "Warden",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Warden"
+   ],
+   "host": "mini",
+   "id": 234,
+   "interval_s": 90000,
+   "maxretries": 1,
+   "name": "Warden Backup - Push",
+   "project": "warden",
+   "pusher": "com.jkrumm.warden-backup",
+   "service": "com.jkrumm.warden-backup",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "work",
+   "id": 235,
+   "name": null,
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Services",
+    "VPS"
+   ],
+   "host": "vps",
+   "id": 236,
+   "interval_s": 161,
+   "maxretries": 3,
+   "name": "EmailGateway - HTTP",
+   "project": "email-gateway",
+   "service": "email-gateway",
+   "type": "keyword",
+   "via": "direct"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 243,
+   "interval_s": 3700,
+   "maxretries": 1,
+   "name": "WeatherOrb Accounts Backup - Push",
+   "project": "weatherorb",
+   "pusher": "cron weatherorb-accounts-pull.sh",
+   "service": "cron weatherorb-accounts-pull.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [],
+   "id": 244,
+   "interval_s": 250,
+   "maxretries": 3,
+   "name": "Agent Gateway",
+   "role": "dashboard tree only; never notifies",
+   "type": "group"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Agent Gateway"
+   ],
+   "host": "mini",
+   "id": 245,
+   "interval_s": 300,
+   "maxretries": 1,
+   "name": "Agent Gateway - Push",
+   "project": "agent-gateway",
+   "pusher": "com.jkrumm.agent-gateway",
+   "service": "com.jkrumm.agent-gateway",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Warden"
+   ],
+   "host": "mini",
+   "id": 246,
+   "interval_s": 1200,
+   "maxretries": 1,
+   "name": "Warden Loop - Push",
+   "project": "warden",
+   "pusher": "com.jkrumm.warden-loop",
+   "service": "com.jkrumm.warden-loop",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Immich",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 247,
+   "interval_s": 3900,
+   "maxretries": 1,
+   "name": "WeatherOrb Archive - Push",
+   "project": "weatherorb",
+   "pusher": "cron weatherorb-archive-pull.sh",
+   "service": "cron weatherorb-archive-pull.sh",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 248,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "homelab-private",
+   "id": 249,
+   "name": null,
+   "type": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Local"
+   ],
+   "host": "mini",
+   "id": 250,
+   "interval_s": 2100,
+   "maxretries": 1,
+   "name": "WeatherOrb Watchdog - Degraded",
+   "project": "weatherorb",
+   "pusher": "com.jkrumm.weatherorb.watchdog",
+   "service": "com.jkrumm.weatherorb.watchdog",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Hermes Agent"
+   ],
+   "host": "mini",
+   "id": 251,
+   "interval_s": 14400,
+   "maxretries": 1,
+   "name": "Hermes Serve - Push",
+   "project": "hermes-agent",
+   "pusher": "com.jkrumm.hermes-serve-liveness",
+   "service": "com.jkrumm.hermes-serve-liveness",
+   "type": "push",
+   "via": "push"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Files",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 253,
+   "interval_s": 181,
+   "maxretries": 5,
+   "name": "S3 Gateway - Docker",
+   "project": "homelab",
+   "service": "versitygw",
+   "type": "docker",
+   "via": "docker socket"
+  },
+  {
+   "class": "public",
+   "group_chain": [
+    "Files",
+    "HomeLab"
+   ],
+   "host": "homelab",
+   "id": 254,
+   "interval_s": 187,
+   "maxretries": 1,
+   "name": "S3 Gateway - HTTP",
+   "project": "homelab",
+   "service": "versitygw",
+   "type": "http",
+   "via": "direct"
+  }
+ ],
+ "meta": {
+  "as_of": "2026-10-22T08:00:00Z",
+  "note": "units are live at probe time; Kuma, HyperDX and policy read from repos at the recorded heads; homelab-private and IuRoot are counted, never named",
+  "probed_at": "2026-10-22T08:40:13Z",
+  "script": "evidence/signals/signals.py"
+ },
+ "projects": {
+  "agent-gateway": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 1,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 16
+  },
+  "argo": {
+   "containers": 2,
+   "deploy_markers_in_retained_window": 625,
+   "hyperdx_alerts": 1,
+   "kuma_leaf_monitors": 3,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 268,
+   "warden_items": 6
+  },
+  "audio-gateway": {
+   "containers": 1,
+   "deploy_markers_in_retained_window": 12,
+   "hyperdx_alerts": 1,
+   "kuma_leaf_monitors": 1,
+   "launchd_jobs": 1,
+   "slack_rows_attributed": 75,
+   "warden_items": 2
+  },
+  "basalt-ui": {
+   "containers": 1,
+   "deploy_markers_in_retained_window": 407,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 70,
+   "warden_items": 2
+  },
+  "basalt-ui-obsidian": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "brain": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 2
+  },
+  "dispatch-scratch": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 3
+  },
+  "dotfiles": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 7,
+   "launchd_jobs": 24,
+   "slack_rows_attributed": 0,
+   "warden_items": 17
+  },
+  "dotfiles-private": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "email-gateway": {
+   "containers": 1,
+   "deploy_markers_in_retained_window": 72,
+   "hyperdx_alerts": 6,
+   "kuma_leaf_monitors": 1,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 42,
+   "warden_items": 2
+  },
+  "free-planning-poker": {
+   "containers": 4,
+   "deploy_markers_in_retained_window": 16,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 6,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 46,
+   "warden_items": 5
+  },
+  "hermes-agent": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 4,
+   "launchd_jobs": 5,
+   "slack_rows_attributed": 5,
+   "warden_items": 78
+  },
+  "homelab": {
+   "containers": 25,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 32,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 58,
+   "warden_items": 42
+  },
+  "homelab-private": {
+   "containers": 11,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 18,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 57,
+   "warden_items": 6
+  },
+  "image-gateway": {
+   "containers": 1,
+   "deploy_markers_in_retained_window": 5,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 1,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 16,
+   "warden_items": 1
+  },
+  "jkrumm.com": {
+   "containers": 1,
+   "deploy_markers_in_retained_window": 37,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 7,
+   "warden_items": 0
+  },
+  "king-smith-walkingpad-mac": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 1,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "kobo-mods": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "linewatch": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 2,
+   "launchd_jobs": 3,
+   "slack_rows_attributed": 3,
+   "warden_items": 1
+  },
+  "modelpick": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 2,
+   "slack_rows_attributed": 0,
+   "warden_items": 1
+  },
+  "ntfy-mac": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 2
+  },
+  "rb": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 3
+  },
+  "research-gateway": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 9,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 3,
+   "slack_rows_attributed": 114,
+   "warden_items": 35
+  },
+  "rollhook": {
+   "containers": 2,
+   "deploy_markers_in_retained_window": 12,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 2,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 18,
+   "warden_items": 7
+  },
+  "rollhook-action": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "shutterflow": {
+   "containers": 4,
+   "deploy_markers_in_retained_window": 56,
+   "hyperdx_alerts": 1,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 22,
+   "warden_items": 1
+  },
+  "sideclaw": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 19
+  },
+  "sy-serendipity": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 3
+  },
+  "tinycast-extensions": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 0,
+   "warden_items": 0
+  },
+  "usage-tracker": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 0,
+   "launchd_jobs": 1,
+   "slack_rows_attributed": 0,
+   "warden_items": 5
+  },
+  "vps": {
+   "containers": 15,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 3,
+   "kuma_leaf_monitors": 10,
+   "launchd_jobs": 0,
+   "slack_rows_attributed": 36,
+   "warden_items": 15
+  },
+  "warden": {
+   "containers": 0,
+   "deploy_markers_in_retained_window": 0,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 2,
+   "launchd_jobs": 5,
+   "slack_rows_attributed": 0,
+   "warden_items": 59
+  },
+  "weatherorb": {
+   "containers": 4,
+   "deploy_markers_in_retained_window": 160,
+   "hyperdx_alerts": 0,
+   "kuma_leaf_monitors": 5,
+   "launchd_jobs": 9,
+   "slack_rows_attributed": 47,
+   "warden_items": 106
+  }
+ },
+ "routing": {
+  "policy": {
+   "ignore_total": 15,
+   "ignore_unstructured_slack_prose": true,
+   "ignores_better_stack_resolved_lines": true,
+   "ignores_kuma_up_lines": true,
+   "rules_by_repo": {
+    "audio-gateway": 2,
+    "brain": 1,
+    "dotfiles": 5,
+    "email-gateway": 1,
+    "free-planning-poker": 1,
+    "hermes-agent": 7,
+    "homelab": 28,
+    "image-gateway": 2,
+    "kobo-mods": 1,
+    "linewatch": 1,
+    "research-gateway": 5,
+    "rollhook": 4,
+    "vps": 10,
+    "warden": 1,
+    "weatherorb": 5
+   },
+   "rules_total": 74
+  }
+ },
+ "units": [
+  {
+   "compose_project": "basalt-ui-marketing",
+   "container": "basalt-ui-marketing-basalt-ui-marketing-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 407,
+   "host": "vps",
+   "image": "basalt-ui-marketing",
+   "kuma_monitors": [],
+   "project": "basalt-ui",
+   "runtime": "container",
+   "service": "basalt-ui-marketing"
+  },
+  {
+   "compose_project": "imgproxy",
+   "container": "imgproxy-imgproxy-*",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "ghcr.io/imgproxy/imgproxy",
+   "kuma_monitors": [
+    "ImageCDN - HTTP",
+    "ImageCDN Origin - HTTP"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "imgproxy"
+  },
+  {
+   "compose_project": "photo-gallery",
+   "container": "photo-gallery",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "nginx",
+   "kuma_monitors": [
+    "Photos - HTTP",
+    "Photos - Uptime"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "photo-gallery"
+  },
+  {
+   "compose_project": "vps",
+   "container": "traefik",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "traefik",
+   "kuma_monitors": [
+    "Traefik - HTTP"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "traefik"
+  },
+  {
+   "compose_project": "vps",
+   "container": "cloudflared",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "cloudflare/cloudflared",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "cloudflared"
+  },
+  {
+   "compose_project": "weatherorb",
+   "container": "weatherorb-weatherorb-account-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 35,
+   "host": "vps",
+   "image": "weatherorb-account",
+   "kuma_monitors": [],
+   "project": "weatherorb",
+   "runtime": "container",
+   "service": "weatherorb-account"
+  },
+  {
+   "compose_project": "weatherorb",
+   "container": "weatherorb-weatherorb-edge-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 125,
+   "host": "vps",
+   "image": "weatherorb-edge",
+   "kuma_monitors": [
+    "WeatherOrb - HTTP"
+   ],
+   "project": "weatherorb",
+   "runtime": "container",
+   "service": "weatherorb-edge"
+  },
+  {
+   "compose_project": "argo",
+   "container": "argo-argo-dashboard-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 311,
+   "host": "vps",
+   "image": "argo-dashboard",
+   "kuma_monitors": [
+    "Dashboard - HTTP"
+   ],
+   "project": "argo",
+   "runtime": "container",
+   "service": "argo-dashboard"
+  },
+  {
+   "compose_project": "argo",
+   "container": "argo-argo-api-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 314,
+   "host": "vps",
+   "image": "argo-api",
+   "kuma_monitors": [
+    "API - HTTP",
+    "Hermes - HTTP"
+   ],
+   "project": "argo",
+   "runtime": "container",
+   "service": "argo-api"
+  },
+  {
+   "compose_project": "jkrumm-com",
+   "container": "jkrumm-com-jkrumm-com-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 37,
+   "host": "vps",
+   "image": "jkrumm-com",
+   "kuma_monitors": [],
+   "project": "jkrumm.com",
+   "runtime": "container",
+   "service": "jkrumm-com"
+  },
+  {
+   "compose_project": "vps",
+   "container": "dozzle",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "amir20/dozzle",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "dozzle"
+  },
+  {
+   "compose_project": "audio-gateway",
+   "container": "audio-gateway-audio-gateway-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 12,
+   "host": "vps",
+   "image": "audio-gateway",
+   "kuma_monitors": [
+    "Audio Gateway - HTTP"
+   ],
+   "project": "audio-gateway",
+   "runtime": "container",
+   "service": "audio-gateway"
+  },
+  {
+   "compose_project": "shutterflow",
+   "container": "shutterflow-shutterflow-share-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 56,
+   "host": "vps",
+   "image": "shutterflow-share",
+   "kuma_monitors": [],
+   "project": "shutterflow",
+   "runtime": "container",
+   "service": "shutterflow-share"
+  },
+  {
+   "compose_project": "shutterflow",
+   "container": "shutterflow-shutterflow-imgproxy-small-*",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "ghcr.io/imgproxy/imgproxy",
+   "kuma_monitors": [],
+   "project": "shutterflow",
+   "runtime": "container",
+   "service": "shutterflow-imgproxy-small"
+  },
+  {
+   "compose_project": "shutterflow",
+   "container": "shutterflow-shutterflow-imgproxy-*",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "ghcr.io/imgproxy/imgproxy",
+   "kuma_monitors": [],
+   "project": "shutterflow",
+   "runtime": "container",
+   "service": "shutterflow-imgproxy"
+  },
+  {
+   "compose_project": "shutterflow",
+   "container": "shutterflow-shutterflow-key-broker-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "shutterflow-key-broker",
+   "kuma_monitors": [],
+   "project": "shutterflow",
+   "runtime": "container",
+   "service": "shutterflow-key-broker"
+  },
+  {
+   "compose_project": "weatherorb",
+   "container": "weatherorb-weatherorb-probe-*",
+   "deploy": "compose or pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "python",
+   "kuma_monitors": [],
+   "project": "weatherorb",
+   "runtime": "container",
+   "service": "weatherorb-probe"
+  },
+  {
+   "compose_project": "weatherorb",
+   "container": "weatherorb-weatherorb-egress-*",
+   "deploy": "compose or pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "python",
+   "kuma_monitors": [],
+   "project": "weatherorb",
+   "runtime": "container",
+   "service": "weatherorb-egress"
+  },
+  {
+   "compose_project": "rollhook-marketing",
+   "container": "rollhook-marketing-rollhook-marketing-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 12,
+   "host": "vps",
+   "image": "ghcr.io/jkrumm/rollhook-marketing",
+   "kuma_monitors": [],
+   "project": "rollhook",
+   "runtime": "container",
+   "service": "rollhook-marketing"
+  },
+  {
+   "compose_project": "vps",
+   "container": "rollhook",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "ghcr.io/jkrumm/rollhook",
+   "kuma_monitors": [
+    "RollHook - HTTP",
+    "RollHook - Ready - HTTP"
+   ],
+   "project": "rollhook",
+   "runtime": "container",
+   "service": "rollhook"
+  },
+  {
+   "compose_project": "email-gateway",
+   "container": "email-gateway-email-gateway-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 72,
+   "host": "vps",
+   "image": "email-gateway",
+   "kuma_monitors": [
+    "EmailGateway - HTTP"
+   ],
+   "project": "email-gateway",
+   "runtime": "container",
+   "service": "email-gateway"
+  },
+  {
+   "compose_project": "vps",
+   "container": "clickstack",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "clickhouse/clickstack-all-in-one",
+   "kuma_monitors": [
+    "HyperDX - HTTP",
+    "ClickStack OTel - HTTP"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "clickstack"
+  },
+  {
+   "compose_project": "image-gateway",
+   "container": "image-gateway-image-gateway-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 5,
+   "host": "vps",
+   "image": "image-gateway",
+   "kuma_monitors": [
+    "Image Gen Gateway - HTTP"
+   ],
+   "project": "image-gateway",
+   "runtime": "container",
+   "service": "image-gateway"
+  },
+  {
+   "compose_project": "vps",
+   "container": "beszel-agent",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "henrygd/beszel-agent",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "beszel-agent"
+  },
+  {
+   "compose_project": "vps",
+   "container": "umami",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "ghcr.io/umami-software/umami",
+   "kuma_monitors": [
+    "Umami - HTTP"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "umami"
+  },
+  {
+   "compose_project": "fpp",
+   "container": "fpp-fpp-analytics-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 6,
+   "host": "vps",
+   "image": "fpp-analytics",
+   "kuma_monitors": [
+    "FPP - Analytics - HTTP"
+   ],
+   "project": "free-planning-poker",
+   "runtime": "container",
+   "service": "fpp-analytics"
+  },
+  {
+   "compose_project": "fpp",
+   "container": "fpp-fpp-server-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 5,
+   "host": "vps",
+   "image": "fpp-server",
+   "kuma_monitors": [
+    "FPP - Server - HTTP"
+   ],
+   "project": "free-planning-poker",
+   "runtime": "container",
+   "service": "fpp-server"
+  },
+  {
+   "compose_project": "fpp",
+   "container": "fpp-fpp-analytics-updater-*",
+   "deploy": "rollhook",
+   "deploy_markers_in_retained_window": 5,
+   "host": "vps",
+   "image": "fpp-analytics-updater",
+   "kuma_monitors": [
+    "FPP - Analytics Readmodel - Push"
+   ],
+   "project": "free-planning-poker",
+   "runtime": "container",
+   "service": "fpp-analytics-updater"
+  },
+  {
+   "compose_project": "vps",
+   "container": "watchtower",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "containrrr/watchtower",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "watchtower"
+  },
+  {
+   "compose_project": "vps",
+   "container": "socket-proxy-monitoring",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "socket-proxy-monitoring"
+  },
+  {
+   "compose_project": "vps",
+   "container": "socket-proxy-watchtower",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "socket-proxy-watchtower"
+  },
+  {
+   "compose_project": "vps",
+   "container": "socket-proxy-rollhook",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "socket-proxy-rollhook"
+  },
+  {
+   "compose_project": "vps",
+   "container": "socket-proxy",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "socket-proxy"
+  },
+  {
+   "compose_project": "fpp",
+   "container": "mariadb",
+   "deploy": "compose or pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "mariadb",
+   "kuma_monitors": [
+    "FPP - DB - MySQL",
+    "FPP - DB Backup - Push"
+   ],
+   "project": "free-planning-poker",
+   "runtime": "container",
+   "service": "mariadb"
+  },
+  {
+   "compose_project": "vps",
+   "container": "postgres",
+   "deploy": "compose or pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "postgres",
+   "kuma_monitors": [
+    "Postgres - Backup - Push",
+    "Postgres - DB - Push"
+   ],
+   "project": "vps",
+   "runtime": "container",
+   "service": "postgres"
+  },
+  {
+   "compose_project": "vps",
+   "container": "redis",
+   "deploy": "compose or pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "vps",
+   "image": "valkey/valkey",
+   "kuma_monitors": [],
+   "project": "vps",
+   "runtime": "container",
+   "service": "valkey"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "dozzle",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "amir20/dozzle",
+   "kuma_monitors": [
+    "Dozzle - Docker",
+    "Dozzle - HTTP"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "dozzle"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "cloudflared",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "cloudflare/cloudflared",
+   "kuma_monitors": [
+    "Cloudflared - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "cloudflared"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "garmin-collector",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "homelab-garmin-collector",
+   "kuma_monitors": [],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "garmin-collector"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "restic-backup",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "mazzolino/restic",
+   "kuma_monitors": [
+    "Restic Backup - Push",
+    "Restic Backup - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "restic-backup"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "versitygw",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "versity/versitygw",
+   "kuma_monitors": [
+    "S3 Gateway - Docker",
+    "S3 Gateway - HTTP"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "versitygw"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "caddy",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "caddybuilds/caddy-cloudflare",
+   "kuma_monitors": [
+    "Caddy - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "caddy"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "immich_server",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/immich-app/immich-server",
+   "kuma_monitors": [
+    "Immich Server - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "immich-server"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "karakeep",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/karakeep-app/karakeep",
+   "kuma_monitors": [
+    "Karakeep - Docker",
+    "Karakeep - HTTP"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "karakeep"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "glance",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "glanceapp/glance",
+   "kuma_monitors": [
+    "Glance - Docker",
+    "Glance - HTTP"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "glance"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "samba",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/servercontainers/samba",
+   "kuma_monitors": [
+    "Samba - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "samba"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "beszel-agent",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "henrygd/beszel-agent",
+   "kuma_monitors": [
+    "Beszel Agent - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "beszel-agent"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "beszel",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "henrygd/beszel",
+   "kuma_monitors": [
+    "Beszel - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "beszel"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "uptime-kuma",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "louislam/uptime-kuma",
+   "kuma_monitors": [
+    "Uptime Kuma - Docker",
+    "Uptime Kuma - Uptime"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "uptime-kuma"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "proton-bridge",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "homelab-proton-bridge",
+   "kuma_monitors": [],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "proton-bridge"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "immich_machine_learning",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/immich-app/immich-machine-learning",
+   "kuma_monitors": [
+    "Immich ML - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "immich-machine-learning"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "immich_redis",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "valkey/valkey",
+   "kuma_monitors": [
+    "Immich Redis - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "immich_redis"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "karakeep-chrome",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/karakeep-app/karakeep-chrome",
+   "kuma_monitors": [
+    "Karakeep Chrome - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "karakeep-chrome"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "docker-socket-proxy-claude",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "docker-socket-proxy-claude"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "docker-socket-proxy-watchtower",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [
+    "Docker Socket Proxy Watchtower - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "docker-socket-proxy-watchtower"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "filebrowser",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "filebrowser/filebrowser",
+   "kuma_monitors": [
+    "FileBrowser - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "filebrowser"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "docker-socket-proxy",
+   "deploy": "watchtower (04:00)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "tecnativa/docker-socket-proxy",
+   "kuma_monitors": [
+    "Docker Socket Proxy - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "docker-socket-proxy"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "karakeep-meili",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "getmeili/meilisearch",
+   "kuma_monitors": [
+    "Karakeep Meili - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "karakeep-meili"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "watchtower",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "containrrr/watchtower",
+   "kuma_monitors": [
+    "Watchtower - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "watchtower"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "immich_postgres",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "ghcr.io/immich-app/postgres",
+   "kuma_monitors": [
+    "Immich Postgres - Docker"
+   ],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "immich_postgres"
+  },
+  {
+   "compose_project": "homelab",
+   "container": "homelab-watchdog-logs",
+   "deploy": "pinned (watchtower off)",
+   "deploy_markers_in_retained_window": null,
+   "host": "homelab",
+   "image": "alpine",
+   "kuma_monitors": [],
+   "project": "homelab",
+   "runtime": "container",
+   "service": "dozzle-watchdog-logs"
+  },
+  {
+   "compose_project": "homelab-private",
+   "container": null,
+   "deploy": "see homelab-private",
+   "host": "homelab",
+   "kuma_monitors": [],
+   "project": "homelab-private",
+   "runtime": "container-group",
+   "service": "11 containers (names withheld)"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.herdr",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "sh.brew.herdr"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.colima",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "sh.brew.colima"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.colima.docker-socket",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "daemon (root)",
+   "service": "com.colima.docker-socket"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.caddy",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "daemon (root)",
+   "service": "sh.brew.caddy"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.dnsmasq",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "daemon (root)",
+   "service": "sh.brew.dnsmasq"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.tailscale",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "daemon (root)",
+   "service": "sh.brew.tailscale"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.postgresql@18",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "sh.brew.postgresql@18"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "sh.brew.sleepwatcher",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "sh.brew.sleepwatcher"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Brain Sync - Push"
+   ],
+   "label": "com.jkrumm.brain-sync",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.brain-sync"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Brain Backup - Push"
+   ],
+   "label": "com.jkrumm.brain-backup",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "03:30 daily",
+   "service": "com.jkrumm.brain-backup"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.brain-web-refresh",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.brain-web-refresh"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "MacMini Dev Host - Push"
+   ],
+   "label": "com.jkrumm.devhost-health",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.devhost-health"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "MacMini Drift - Push"
+   ],
+   "label": "com.jkrumm.drift-check",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "09:40 daily",
+   "service": "com.jkrumm.drift-check"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.beszel-agent",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.beszel-agent"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.lock-at-boot",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "RunAtLoad",
+   "service": "com.jkrumm.lock-at-boot"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.log-rotate",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "3600s",
+   "service": "com.jkrumm.log-rotate"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.disk-sweep",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "04:40 daily",
+   "service": "com.jkrumm.disk-sweep"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.jobrun-canary",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.jobrun-canary"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.herdr-events",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.herdr-events"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.herdr-reap",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "1800s",
+   "service": "com.jkrumm.herdr-reap"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.obsidian-autostart",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "RunAtLoad",
+   "service": "com.jkrumm.obsidian-autostart"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Agent Gateway - Push"
+   ],
+   "label": "com.jkrumm.agent-gateway",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.agent-gateway"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.agent-gateway-opencode",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.agent-gateway-opencode"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "herdr.collie",
+   "project": "dotfiles",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "herdr.collie"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "ai.hermes.gateway",
+   "project": "hermes-agent",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "ai.hermes.gateway"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Hermes Backup - Push"
+   ],
+   "label": "com.jkrumm.hermes-backup",
+   "project": "hermes-agent",
+   "runtime": "launchd",
+   "schedule": "03:00 daily",
+   "service": "com.jkrumm.hermes-backup"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Hermes Agent - Push"
+   ],
+   "label": "com.jkrumm.hermes-liveness",
+   "project": "hermes-agent",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.hermes-liveness"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.hermes-serve",
+   "project": "hermes-agent",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.hermes-serve"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Hermes Serve - Push"
+   ],
+   "label": "com.jkrumm.hermes-serve-liveness",
+   "project": "hermes-agent",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.hermes-serve-liveness"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.warden-api",
+   "project": "warden",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.warden-api"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Warden Loop - Push"
+   ],
+   "label": "com.jkrumm.warden-loop",
+   "project": "warden",
+   "runtime": "launchd",
+   "schedule": "600s",
+   "service": "com.jkrumm.warden-loop"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.warden-poll",
+   "project": "warden",
+   "runtime": "launchd",
+   "schedule": "1800s",
+   "service": "com.jkrumm.warden-poll"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.warden-sweep",
+   "project": "warden",
+   "runtime": "launchd",
+   "schedule": "300s",
+   "service": "com.jkrumm.warden-sweep"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Warden Backup - Push"
+   ],
+   "label": "com.jkrumm.warden-backup",
+   "project": "warden",
+   "runtime": "launchd",
+   "schedule": "daily 03:10",
+   "service": "com.jkrumm.warden-backup"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.modelpick-refresh",
+   "project": "modelpick",
+   "runtime": "launchd",
+   "schedule": "06:00 daily",
+   "service": "com.jkrumm.modelpick-refresh"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.modelpick-web",
+   "project": "modelpick",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.modelpick-web"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.serve",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.serve"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.tileserver",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.tileserver"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.public",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.public"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.sync",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.sync"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "WeatherOrb Watchdog - Push",
+    "WeatherOrb Watchdog - Degraded"
+   ],
+   "label": "com.jkrumm.weatherorb.watchdog",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "900s",
+   "service": "com.jkrumm.weatherorb.watchdog"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.retention",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "daily 04:30",
+   "service": "com.jkrumm.weatherorb.retention"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.verify",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "daily 05:45",
+   "service": "com.jkrumm.weatherorb.verify"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.worker-ingest",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.worker-ingest"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.weatherorb.worker-round",
+   "project": "weatherorb",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.weatherorb.worker-round"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.linewatch-collector-agent",
+   "project": "linewatch",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.linewatch-collector-agent"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Home Line - Watchdog"
+   ],
+   "label": "com.jkrumm.linewatch-watchdog",
+   "project": "linewatch",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.linewatch-watchdog"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [
+    "Home Line - Push"
+   ],
+   "label": "com.jkrumm.linewatch-heartbeat",
+   "project": "linewatch",
+   "runtime": "launchd",
+   "schedule": "60s",
+   "service": "com.jkrumm.linewatch-heartbeat"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.usage-tracker",
+   "project": "usage-tracker",
+   "runtime": "launchd",
+   "schedule": "900s",
+   "service": "com.jkrumm.usage-tracker"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.walkingpad",
+   "project": "king-smith-walkingpad-mac",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.walkingpad"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.audio-gateway",
+   "project": "audio-gateway",
+   "runtime": "launchd",
+   "schedule": "KeepAlive",
+   "service": "com.jkrumm.audio-gateway"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.research-gateway",
+   "project": "research-gateway",
+   "runtime": "launchd",
+   "schedule": "KeepAlive (:7780, loopback)",
+   "service": "com.jkrumm.research-gateway"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.research-gateway-lightpanda",
+   "project": "research-gateway",
+   "runtime": "launchd",
+   "schedule": "KeepAlive (renderer sidecar, :7781, loopback)",
+   "service": "com.jkrumm.research-gateway-lightpanda"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "label": "com.jkrumm.research-gateway-deploy",
+   "project": "research-gateway",
+   "runtime": "launchd",
+   "schedule": "120s — deploy-on-push poller (idle-gated)",
+   "service": "com.jkrumm.research-gateway-deploy"
+  },
+  {
+   "container": null,
+   "host": "mini",
+   "kuma_monitors": [],
+   "project": "IuRoot",
+   "runtime": "launchd-group",
+   "service": "7 launchd jobs (names withheld)"
+  }
+ ]
+}

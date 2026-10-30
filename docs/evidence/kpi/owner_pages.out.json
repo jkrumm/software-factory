@@ -1,0 +1,12 @@
+{
+ "as_of": "2026-10-22T08:00:00Z",
+ "window_days": 28,
+ "needs_decision_entries": 140,
+ "legacy_posts": 71,
+ "reminders_lower_bound": 38,
+ "owner_pages_28d": 249,
+ "owner_pages_per_week": 62.2,
+ "golden_escalated_items": 105,
+ "golden_genuine_items": 4,
+ "genuine_escalation_share": 0.038
+}

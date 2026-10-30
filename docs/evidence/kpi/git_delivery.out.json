@@ -1,0 +1,7407 @@
+{
+  "agent_share": {
+    "commits": 8624,
+    "detected_certain": {
+      "agent_identity_author": 5,
+      "bot_author_automation_not_agent": 100,
+      "claude_session_trailer": 874,
+      "claude_session_trailer_share_of_90d": 0.1013,
+      "warden_ledger_merge_commits": 49
+    },
+    "landed_through_a_branch": {
+      "committer_name_differs_from_author": 2928,
+      "differs_share": 0.3395,
+      "meaning": "committer date differs from author date by > 60 s: the commit was rebased, cherry-picked or rebase-merged after it was written, which is what branch lanes (rd merge, warden merge train, agw dispatch PRs) do. Owner-driven branch work does it too, so this is a lane indicator, not authorship.",
+      "rewritten_committer_date": 3534,
+      "share": 0.4098
+    },
+    "scope": "SourceRoot repos pooled (IuRoot trailer counts stay per repo in repos[].agent_signals)",
+    "trailer_first_to_last_day": {
+      "commits_in_period": 2585,
+      "first_day": "2026-08-01",
+      "last_day": "2026-09-23",
+      "share": 0.3381,
+      "with_trailer": 874
+    },
+    "trailer_peak_week": {
+      "share": 0.8825,
+      "week": "2026-W37"
+    },
+    "trailer_saturated_weeks": {
+      "commits": 896,
+      "rule": "weeks with >= 100 commits where >= 50% carry the trailer; its value is a claude.ai/code session URL, so a Claude Code session wrote the commit",
+      "share": 0.8806,
+      "weeks": [
+        "2026-W36",
+        "2026-W37"
+      ],
+      "with_trailer": 789
+    },
+    "trailer_weekly": {
+      "2026-W30": {
+        "commits": 64,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W31": {
+        "commits": 432,
+        "trailer": 8,
+        "trailer_share": 0.0185
+      },
+      "2026-W32": {
+        "commits": 192,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W33": {
+        "commits": 68,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W34": {
+        "commits": 351,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W35": {
+        "commits": 254,
+        "trailer": 21,
+        "trailer_share": 0.0827
+      },
+      "2026-W36": {
+        "commits": 309,
+        "trailer": 271,
+        "trailer_share": 0.877
+      },
+      "2026-W37": {
+        "commits": 587,
+        "trailer": 518,
+        "trailer_share": 0.8825
+      },
+      "2026-W38": {
+        "commits": 200,
+        "trailer": 55,
+        "trailer_share": 0.275
+      },
+      "2026-W39": {
+        "commits": 671,
+        "trailer": 1,
+        "trailer_share": 0.0015
+      },
+      "2026-W40": {
+        "commits": 766,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W41": {
+        "commits": 764,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W42": {
+        "commits": 3412,
+        "trailer": 0,
+        "trailer_share": 0.0
+      },
+      "2026-W43": {
+        "commits": 554,
+        "trailer": 0,
+        "trailer_share": 0.0
+      }
+    }
+  },
+  "as_of": "2026-10-22T08:00:00Z",
+  "definition_keys": [
+    "revert_rate",
+    "rework_share"
+  ],
+  "history_read_from": "2026-07-14T08:00:00Z",
+  "inventory": {
+    "IuRoot": 20,
+    "SourceRoot": 33,
+    "analysed": 53,
+    "checkouts_created_after_as_of": [
+      "prometheus-epx"
+    ],
+    "non_git_dirs": 6,
+    "worktrees_skipped": 2
+  },
+  "non_git_dirs": [
+    {
+      "dir": "_ext",
+      "root": "SourceRoot"
+    },
+    {
+      "dir": "brain-sources",
+      "root": "SourceRoot"
+    },
+    {
+      "dir": "sy-serendipity-compare",
+      "root": "SourceRoot"
+    },
+    {
+      "dir": "crm-bridge-retry-tool",
+      "root": "IuRoot"
+    },
+    {
+      "dir": "epos.student-enrolment.struct-cache",
+      "root": "IuRoot"
+    },
+    {
+      "dir": "worktrees",
+      "root": "IuRoot"
+    }
+  ],
+  "notes": [
+    "commits excludes merge commits (reported as merge_commits); the findings' fix-proxy numbers excluded them too.",
+    "ref is the remote-tracking default branch when present; live.local_ahead_of_remote / live.local_behind_remote show where the local branch differs (a local branch behind the remote is why older counts, e.g. shutterflow, are lower). No fetch is run: tip_date (last commit on the ref at or before AS_OF) shows how fresh each ref is. Everything under `live` is true of the checkout at run time, not at AS_OF, and is the only part of this file that changes between re-runs.",
+    "rework_share uses committer dates; history is read from AS_OF - 100 d so a fix in the first week of the window still sees its 7-day past. share_excl_bot_commits drops bot-authored commits both as the fix and as the 'other commit' (release bumps touch package.json/CHANGELOG).",
+    "Agent attribution cannot come from identity: agents commit as the owner by design (agent-gateway dispatch-git.ts: 'there is no bot author here'). The Claude-Session trailer is the only direct marker and exists only for part of the window; detection methods are listed in agent_share.",
+    "A merge-commit's branch name is parsed from the subject; branches deleted after a rebase-merge leave no trace in git, so branch-name detection undercounts.",
+    "Not done here: after W39 no marker survives in git. Joining the Claude Code transcripts (a `git commit` tool result per commit, matched on author time and subject) would close the gap but means streaming ~15 GB of transcripts for the window, which is not a re-runnable stdlib step.",
+    "IuRoot repos are reduced to counts: no subjects, paths, branch names, identities or SHAs are written for them.",
+    "The set of checkouts is live, not frozen: a repo cloned after AS_OF is still analysed (its history predates AS_OF) and is flagged checkout_created_after_as_of."
+  ],
+  "pooled": {
+    "IuRoot": {
+      "authors": {
+        "agent_identity": 0,
+        "bot": 1,
+        "other_human": 331,
+        "owner": 317
+      },
+      "claude_session_trailer": 46,
+      "commits": 649,
+      "commits_per_week": 50.5,
+      "fix_prefixed": 172,
+      "fix_proxy_share": 0.265,
+      "merge_commits": 51,
+      "repos": 20,
+      "repos_with_commits": 13,
+      "revert_count": 2,
+      "revert_rate": 0.0031,
+      "rework_count": 107,
+      "rework_share": 0.1649,
+      "rewritten_committer_date": 163
+    },
+    "SourceRoot": {
+      "authors": {
+        "agent_identity": 5,
+        "bot": 100,
+        "other_human": 0,
+        "owner": 8519
+      },
+      "claude_session_trailer": 874,
+      "commits": 8624,
+      "commits_per_week": 670.8,
+      "fix_prefixed": 2392,
+      "fix_proxy_share": 0.2774,
+      "merge_commits": 8,
+      "repos": 33,
+      "repos_with_commits": 33,
+      "revert_count": 12,
+      "revert_rate": 0.0014,
+      "rework_count": 2267,
+      "rework_share": 0.2629,
+      "rewritten_committer_date": 3534
+    },
+    "all": {
+      "authors": {
+        "agent_identity": 5,
+        "bot": 101,
+        "other_human": 331,
+        "owner": 8836
+      },
+      "claude_session_trailer": 920,
+      "commits": 9273,
+      "commits_per_week": 721.2,
+      "fix_prefixed": 2564,
+      "fix_proxy_share": 0.2765,
+      "merge_commits": 59,
+      "repos": 53,
+      "repos_with_commits": 46,
+      "revert_count": 14,
+      "revert_rate": 0.0015,
+      "rework_count": 2374,
+      "rework_share": 0.256,
+      "rewritten_committer_date": 3697
+    }
+  },
+  "rankings": {
+    "min_commits": 25,
+    "top_revert_count": [
+      {
+        "commits": 269,
+        "fix_proxy_share": 0.4238,
+        "repo": "research-gateway",
+        "revert_rate": 0.0112,
+        "reverts": 3,
+        "rework": 106,
+        "rework_share": 0.3941,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 1140,
+        "fix_proxy_share": 0.5246,
+        "repo": "argo",
+        "revert_rate": 0.0018,
+        "reverts": 2,
+        "rework": 591,
+        "rework_share": 0.5184,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 984,
+        "fix_proxy_share": 0.2409,
+        "repo": "weatherorb",
+        "revert_rate": 0.002,
+        "reverts": 2,
+        "rework": 232,
+        "rework_share": 0.2358,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 179,
+        "fix_proxy_share": 0.2905,
+        "repo": "vps",
+        "revert_rate": 0.0112,
+        "reverts": 2,
+        "rework": 46,
+        "rework_share": 0.257,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 258,
+        "fix_proxy_share": 0.3721,
+        "repo": "agent-gateway",
+        "revert_rate": 0.0039,
+        "reverts": 1,
+        "rework": 90,
+        "rework_share": 0.3488,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 94,
+        "fix_proxy_share": 0.3511,
+        "repo": "homelab",
+        "revert_rate": 0.0106,
+        "reverts": 1,
+        "rework": 26,
+        "rework_share": 0.2766,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 56,
+        "fix_proxy_share": 0.2857,
+        "repo": "epos_fe.booking",
+        "revert_rate": 0.0179,
+        "reverts": 1,
+        "rework": 8,
+        "rework_share": 0.1429,
+        "root": "IuRoot"
+      },
+      {
+        "commits": 54,
+        "fix_proxy_share": 0.1667,
+        "repo": "rollhook",
+        "revert_rate": 0.0185,
+        "reverts": 1,
+        "rework": 8,
+        "rework_share": 0.1481,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 20,
+        "fix_proxy_share": 0.4,
+        "repo": "epos.finance-bridge",
+        "revert_rate": 0.05,
+        "reverts": 1,
+        "rework": 6,
+        "rework_share": 0.3,
+        "root": "IuRoot"
+      },
+      {
+        "commits": 1884,
+        "fix_proxy_share": 0.3073,
+        "repo": "basalt-ui",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 571,
+        "rework_share": 0.3031,
+        "root": "SourceRoot"
+      }
+    ],
+    "top_revert_rate": [
+      {
+        "commits": 54,
+        "fix_proxy_share": 0.1667,
+        "repo": "rollhook",
+        "revert_rate": 0.0185,
+        "reverts": 1,
+        "rework": 8,
+        "rework_share": 0.1481,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 56,
+        "fix_proxy_share": 0.2857,
+        "repo": "epos_fe.booking",
+        "revert_rate": 0.0179,
+        "reverts": 1,
+        "rework": 8,
+        "rework_share": 0.1429,
+        "root": "IuRoot"
+      },
+      {
+        "commits": 269,
+        "fix_proxy_share": 0.4238,
+        "repo": "research-gateway",
+        "revert_rate": 0.0112,
+        "reverts": 3,
+        "rework": 106,
+        "rework_share": 0.3941,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 179,
+        "fix_proxy_share": 0.2905,
+        "repo": "vps",
+        "revert_rate": 0.0112,
+        "reverts": 2,
+        "rework": 46,
+        "rework_share": 0.257,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 94,
+        "fix_proxy_share": 0.3511,
+        "repo": "homelab",
+        "revert_rate": 0.0106,
+        "reverts": 1,
+        "rework": 26,
+        "rework_share": 0.2766,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 258,
+        "fix_proxy_share": 0.3721,
+        "repo": "agent-gateway",
+        "revert_rate": 0.0039,
+        "reverts": 1,
+        "rework": 90,
+        "rework_share": 0.3488,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 984,
+        "fix_proxy_share": 0.2409,
+        "repo": "weatherorb",
+        "revert_rate": 0.002,
+        "reverts": 2,
+        "rework": 232,
+        "rework_share": 0.2358,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 1140,
+        "fix_proxy_share": 0.5246,
+        "repo": "argo",
+        "revert_rate": 0.0018,
+        "reverts": 2,
+        "rework": 591,
+        "rework_share": 0.5184,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 1884,
+        "fix_proxy_share": 0.3073,
+        "repo": "basalt-ui",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 571,
+        "rework_share": 0.3031,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 818,
+        "fix_proxy_share": 0.1002,
+        "repo": "shutterflow",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 80,
+        "rework_share": 0.0978,
+        "root": "SourceRoot"
+      }
+    ],
+    "top_rework_count": [
+      {
+        "commits": 1140,
+        "fix_proxy_share": 0.5246,
+        "repo": "argo",
+        "revert_rate": 0.0018,
+        "reverts": 2,
+        "rework": 591,
+        "rework_share": 0.5184,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 1884,
+        "fix_proxy_share": 0.3073,
+        "repo": "basalt-ui",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 571,
+        "rework_share": 0.3031,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 984,
+        "fix_proxy_share": 0.2409,
+        "repo": "weatherorb",
+        "revert_rate": 0.002,
+        "reverts": 2,
+        "rework": 232,
+        "rework_share": 0.2358,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 528,
+        "fix_proxy_share": 0.286,
+        "repo": "warden",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 151,
+        "rework_share": 0.286,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 558,
+        "fix_proxy_share": 0.2384,
+        "repo": "dotfiles",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 119,
+        "rework_share": 0.2133,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 269,
+        "fix_proxy_share": 0.4238,
+        "repo": "research-gateway",
+        "revert_rate": 0.0112,
+        "reverts": 3,
+        "rework": 106,
+        "rework_share": 0.3941,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 258,
+        "fix_proxy_share": 0.3721,
+        "repo": "agent-gateway",
+        "revert_rate": 0.0039,
+        "reverts": 1,
+        "rework": 90,
+        "rework_share": 0.3488,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 818,
+        "fix_proxy_share": 0.1002,
+        "repo": "shutterflow",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 80,
+        "rework_share": 0.0978,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 306,
+        "fix_proxy_share": 0.1928,
+        "repo": "hermes-agent",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 49,
+        "rework_share": 0.1601,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 179,
+        "fix_proxy_share": 0.2905,
+        "repo": "vps",
+        "revert_rate": 0.0112,
+        "reverts": 2,
+        "rework": 46,
+        "rework_share": 0.257,
+        "root": "SourceRoot"
+      }
+    ],
+    "top_rework_share": [
+      {
+        "commits": 1140,
+        "fix_proxy_share": 0.5246,
+        "repo": "argo",
+        "revert_rate": 0.0018,
+        "reverts": 2,
+        "rework": 591,
+        "rework_share": 0.5184,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 269,
+        "fix_proxy_share": 0.4238,
+        "repo": "research-gateway",
+        "revert_rate": 0.0112,
+        "reverts": 3,
+        "rework": 106,
+        "rework_share": 0.3941,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 82,
+        "fix_proxy_share": 0.3902,
+        "repo": "audio-gateway",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 30,
+        "rework_share": 0.3659,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 258,
+        "fix_proxy_share": 0.3721,
+        "repo": "agent-gateway",
+        "revert_rate": 0.0039,
+        "reverts": 1,
+        "rework": 90,
+        "rework_share": 0.3488,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 107,
+        "fix_proxy_share": 0.3925,
+        "repo": "homelab-private",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 37,
+        "rework_share": 0.3458,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 1884,
+        "fix_proxy_share": 0.3073,
+        "repo": "basalt-ui",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 571,
+        "rework_share": 0.3031,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 125,
+        "fix_proxy_share": 0.392,
+        "repo": "rb",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 37,
+        "rework_share": 0.296,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 528,
+        "fix_proxy_share": 0.286,
+        "repo": "warden",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 151,
+        "rework_share": 0.286,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 25,
+        "fix_proxy_share": 0.28,
+        "repo": "tinycast-extensions",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 7,
+        "rework_share": 0.28,
+        "root": "SourceRoot"
+      },
+      {
+        "commits": 140,
+        "fix_proxy_share": 0.4643,
+        "repo": "epos.student-enrolment",
+        "revert_rate": 0.0,
+        "reverts": 0,
+        "rework": 39,
+        "rework_share": 0.2786,
+        "root": "IuRoot"
+      }
+    ]
+  },
+  "repos": [
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 35,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-30",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 8
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "cfn-kafka",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-05-18",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 7,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 19,
+        "owner": 0
+      },
+      "commits": 19,
+      "commits_14d": 3,
+      "commits_30d": 5,
+      "commits_per_week": 1.48,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-09",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-09",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 2,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-14",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos-customers-frontend",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-09",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 9,
+        "ci": 3,
+        "docs": 1,
+        "feat": 3,
+        "refactor": 3
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W37": {
+          "commits": 12,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W38": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {
+          "other_named": 1
+        },
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 1,
+        "owner": 0
+      },
+      "commits": 1,
+      "commits_14d": 1,
+      "commits_30d": 1,
+      "commits_per_week": 0.08,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-10-13",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-13",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 11,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-06-10",
+        "last_fetch_date": "2026-10-20",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 10
+      },
+      "merge_commits": 1,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos-data-analytics",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-13",
+      "typed_share": 1.0,
+      "types": {
+        "docs": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W42": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 8,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 47,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 67,
+        "owner": 0
+      },
+      "commits": 67,
+      "commits_14d": 2,
+      "commits_30d": 22,
+      "commits_per_week": 5.21,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-30",
+      "fix_proxy": {
+        "fix_prefixed": 9,
+        "fix_typed": 9,
+        "share": 0.1343
+      },
+      "last_commit_in_window": "2026-10-13",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 22,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-14",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos-orchestrator-frontend",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 4,
+        "fix_commits": 4,
+        "fix_or_revert_commits": 9,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0597,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.4444
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-13",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 28,
+        "ci": 4,
+        "docs": 3,
+        "feat": 19,
+        "fix": 9,
+        "refactor": 2,
+        "test": 2
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 9,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 11,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 9,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W38": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 14,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 52,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2023-01-26",
+        "last_fetch_date": "2026-07-26",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 33
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.crm-bridge",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-07-06",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 17,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2023-01-26",
+        "last_fetch_date": "2026-07-26",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.dam",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-05-19",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 16,
+        "merge_commit_branch_names": {
+          "other_named": 21
+        },
+        "rewritten_committer_date": 1,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 36,
+        "owner": 0
+      },
+      "commits": 36,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 2.8,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 12,
+        "fix_typed": 12,
+        "share": 0.3333
+      },
+      "last_commit_in_window": "2026-08-26",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 78,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2024-03-07",
+        "last_fetch_date": "2026-08-28",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 2339
+      },
+      "merge_commits": 21,
+      "owner_share": 0.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.exam",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 4,
+        "fix_commits": 4,
+        "fix_or_revert_commits": 12,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1111,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.3333
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-08-26",
+      "typed_share": 0.9722,
+      "types": {
+        "chore": 19,
+        "feat": 4,
+        "fix": 12,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 2,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 9,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 5,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 4,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 10,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {
+          "other_named": 12
+        },
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 20,
+        "owner": 0
+      },
+      "commits": 20,
+      "commits_14d": 7,
+      "commits_30d": 7,
+      "commits_per_week": 1.56,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 8,
+        "fix_typed": 8,
+        "share": 0.4
+      },
+      "last_commit_in_window": "2026-10-13",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 22,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2025-03-07",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 32
+      },
+      "merge_commits": 12,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.finance-bridge",
+      "revert": {
+        "count": 1,
+        "rate": 0.05,
+        "subject_mentions_revert_loose": 1
+      },
+      "rework": {
+        "count": 6,
+        "fix_commits": 6,
+        "fix_or_revert_commits": 9,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.3,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.6667
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-14",
+      "typed_share": 0.7,
+      "types": {
+        "chore": 4,
+        "fix": 8,
+        "revert": 1,
+        "untyped": 6
+      },
+      "types_other": 1,
+      "weekly": {
+        "2026-W31": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 1,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 7,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 18,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2024-05-06",
+        "last_fetch_date": "2026-07-26",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.iam",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-03-12",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 13,
+        "committer_name_differs_from_author": 1,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 51,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 54,
+        "owner": 86
+      },
+      "commits": 140,
+      "commits_14d": 46,
+      "commits_30d": 57,
+      "commits_per_week": 10.89,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-27",
+      "fix_proxy": {
+        "fix_prefixed": 65,
+        "fix_typed": 65,
+        "share": 0.4643
+      },
+      "last_commit_in_window": "2026-10-21",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 1,
+        "branches_total": 190,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2023-01-26",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 21
+      },
+      "merge_commits": 0,
+      "owner_share": 0.6143,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.student-enrolment",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 39,
+        "fix_commits": 39,
+        "fix_or_revert_commits": 65,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.2786,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.6
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-21",
+      "typed_share": 0.9929,
+      "types": {
+        "chore": 16,
+        "ci": 1,
+        "docs": 6,
+        "feat": 45,
+        "fix": 65,
+        "perf": 2,
+        "refactor": 3,
+        "test": 1,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 24,
+          "fix_proxy": 11,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 9,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 5,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 13,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 7
+        },
+        "2026-W37": {
+          "commits": 10,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 6
+        },
+        "2026-W38": {
+          "commits": 10,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 4,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 18,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 24,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 8,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 15,
+        "merge_commit_branch_names": {
+          "other_named": 17
+        },
+        "rewritten_committer_date": 3,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 39,
+        "owner": 0
+      },
+      "commits": 39,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 3.03,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 12,
+        "fix_typed": 12,
+        "share": 0.3077
+      },
+      "last_commit_in_window": "2026-09-08",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 207,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2024-01-05",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 17,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos.study-progress",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 6,
+        "fix_commits": 6,
+        "fix_or_revert_commits": 12,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1538,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.5
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-09-08",
+      "typed_share": 0.9744,
+      "types": {
+        "chore": 15,
+        "feat": 10,
+        "fix": 12,
+        "test": 1,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 7,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 13,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 2,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 1,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 4,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 3,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 1,
+        "other_human": 30,
+        "owner": 0
+      },
+      "commits": 31,
+      "commits_14d": 0,
+      "commits_30d": 3,
+      "commits_per_week": 2.41,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-29",
+      "fix_proxy": {
+        "fix_prefixed": 8,
+        "fix_typed": 8,
+        "share": 0.2581
+      },
+      "last_commit_in_window": "2026-10-06",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 38,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2025-02-10",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos_fe.academic-profile",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 3,
+        "fix_commits": 3,
+        "fix_or_revert_commits": 8,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0968,
+        "share_excl_bot_commits": 0.1,
+        "share_of_fix_or_revert": 0.375
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-06",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 11,
+        "feat": 12,
+        "fix": 8
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 17,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 3,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 2,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 3,
+        "committer_name_differs_from_author": 27,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 33,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 52,
+        "owner": 4
+      },
+      "commits": 56,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 4.36,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-27",
+      "fix_proxy": {
+        "fix_prefixed": 16,
+        "fix_typed": 16,
+        "share": 0.2857
+      },
+      "last_commit_in_window": "2026-09-21",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 52,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2024-05-24",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 2
+      },
+      "merge_commits": 0,
+      "owner_share": 0.0714,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos_fe.booking",
+      "revert": {
+        "count": 1,
+        "rate": 0.0179,
+        "subject_mentions_revert_loose": 1
+      },
+      "rework": {
+        "count": 8,
+        "fix_commits": 7,
+        "fix_or_revert_commits": 17,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 1,
+        "share": 0.1429,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.4706
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-09-21",
+      "typed_share": 0.9821,
+      "types": {
+        "chore": 29,
+        "ci": 1,
+        "feat": 7,
+        "fix": 16,
+        "revert": 1,
+        "test": 1,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 3,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 8,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 36,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W36": {
+          "commits": 4,
+          "fix_proxy": 3,
+          "revert": 1,
+          "rework": 1,
+          "trailer": 2
+        },
+        "2026-W39": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 3,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 4,
+        "owner": 0
+      },
+      "commits": 4,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.31,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-09",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-09-09",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 3,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-18",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 4
+      },
+      "merge_commits": 0,
+      "owner_share": 0.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos_fe.customer-navigation",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-09-09",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 3,
+        "ci": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W37": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 17,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2024-05-24",
+        "last_fetch_date": "2026-10-14",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "epos_fe.spa-orchestrator",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-07-20",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 10,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 5,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 3,
+        "owner": 89
+      },
+      "commits": 92,
+      "commits_14d": 56,
+      "commits_30d": 58,
+      "commits_per_week": 7.16,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-28",
+      "fix_proxy": {
+        "fix_prefixed": 17,
+        "fix_typed": 17,
+        "share": 0.1848
+      },
+      "last_commit_in_window": "2026-10-20",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 24,
+        "checkout_created_after_as_of": true,
+        "checkout_created_date": "2026-10-22",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": 0.9674,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "prometheus-epx",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 15,
+        "fix_commits": 15,
+        "fix_or_revert_commits": 17,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.163,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8824
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-20",
+      "typed_share": 0.9457,
+      "types": {
+        "chore": 8,
+        "docs": 31,
+        "feat": 28,
+        "fix": 17,
+        "perf": 1,
+        "refactor": 1,
+        "style": 1,
+        "untyped": 5
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 15,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 10
+        },
+        "2026-W38": {
+          "commits": 9,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 33,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 16,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-17",
+        "last_fetch_date": "2026-07-26",
+        "local_ahead_of_remote": 1,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "prometheus-feuer-agent",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-06-10",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 10,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 5,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 3,
+        "owner": 89
+      },
+      "commits": 92,
+      "commits_14d": 56,
+      "commits_30d": 58,
+      "commits_per_week": 7.16,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-28",
+      "fix_proxy": {
+        "fix_prefixed": 17,
+        "fix_typed": 17,
+        "share": 0.1848
+      },
+      "last_commit_in_window": "2026-10-20",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 38,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2023-01-26",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 2
+      },
+      "merge_commits": 0,
+      "owner_share": 0.9674,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "prometheus-scripts",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 15,
+        "fix_commits": 15,
+        "fix_or_revert_commits": 17,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.163,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8824
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-20",
+      "typed_share": 0.9457,
+      "types": {
+        "chore": 8,
+        "docs": 31,
+        "feat": 28,
+        "fix": 17,
+        "perf": 1,
+        "refactor": 1,
+        "style": 1,
+        "untyped": 5
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 15,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 10
+        },
+        "2026-W38": {
+          "commits": 9,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 33,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 16,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 10,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 5,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 3,
+        "owner": 49
+      },
+      "commits": 52,
+      "commits_14d": 16,
+      "commits_30d": 18,
+      "commits_per_week": 4.04,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-28",
+      "fix_proxy": {
+        "fix_prefixed": 8,
+        "fix_typed": 8,
+        "share": 0.1538
+      },
+      "last_commit_in_window": "2026-10-15",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 24,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-14",
+        "last_fetch_date": "2026-10-15"
+      },
+      "merge_commits": 0,
+      "owner_share": 0.9423,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "prometheus-stack",
+      "revert": {
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 7,
+        "fix_commits": 7,
+        "fix_or_revert_commits": 8,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1346,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.875
+      },
+      "root": "IuRoot",
+      "tip_date": "2026-10-15",
+      "typed_share": 0.9038,
+      "types": {
+        "chore": 4,
+        "docs": 18,
+        "feat": 17,
+        "fix": 8,
+        "untyped": 5
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 15,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 10
+        },
+        "2026-W38": {
+          "commits": 9,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 9,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 0
+      },
+      "commits": 0,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.0,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": null,
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": null
+      },
+      "last_commit_in_window": null,
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 12,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-14",
+        "last_fetch_date": "2026-07-26",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "owner_share": null,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "terraform-monitoring",
+      "revert": {
+        "count": 0,
+        "rate": null,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": null,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "IuRoot",
+      "tip_date": "2025-12-03",
+      "typed_share": null,
+      "types": {},
+      "types_other": 0,
+      "weekly": {}
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 1,
+        "bot_author": 0,
+        "claude_session_trailer": 40,
+        "committer_name_differs_from_author": 32,
+        "merge_commit_branch_names": {
+          "agent_named": 1
+        },
+        "rewritten_committer_date": 53,
+        "warden_ledger_merge_commits": 5
+      },
+      "authors": {
+        "agent_identity": 1,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 257
+      },
+      "commits": 258,
+      "commits_14d": 124,
+      "commits_30d": 192,
+      "commits_per_week": 20.07,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 96,
+        "fix_typed": 96,
+        "share": 0.3721
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 9,
+        "branches_total": 10,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 1,
+      "non_owner_identities": [
+        "Hermes"
+      ],
+      "owner_share": 0.9961,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "agent-gateway",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-10-14",
+            "sha": "ee1a27d179"
+          }
+        ],
+        "count": 1,
+        "rate": 0.0039,
+        "subject_mentions_revert_loose": 2
+      },
+      "rework": {
+        "count": 90,
+        "fix_commits": 89,
+        "fix_or_revert_commits": 97,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 1,
+        "share": 0.3488,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9278
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 11,
+        "docs": 39,
+        "feat": 90,
+        "fix": 96,
+        "perf": 1,
+        "refactor": 12,
+        "revert": 1,
+        "style": 3,
+        "test": 4
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 5,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 7,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 6,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 5
+        },
+        "2026-W37": {
+          "commits": 36,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 9,
+          "trailer": 34
+        },
+        "2026-W38": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 1
+        },
+        "2026-W39": {
+          "commits": 21,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 23,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 54,
+          "fix_proxy": 23,
+          "revert": 0,
+          "rework": 21,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 75,
+          "fix_proxy": 33,
+          "revert": 1,
+          "rework": 34,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 19,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 41,
+        "committer_name_differs_from_author": 762,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 751,
+        "warden_ledger_merge_commits": 1
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 1140
+      },
+      "commits": 1140,
+      "commits_14d": 959,
+      "commits_30d": 977,
+      "commits_per_week": 88.67,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 598,
+        "fix_typed": 598,
+        "share": 0.5246
+      },
+      "last_commit_in_window": "2026-10-21",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 11,
+        "branches_total": 16,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-10",
+        "last_fetch_date": "2026-10-21",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "argo",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-08-18",
+            "sha": "f4f8de0c3d"
+          },
+          {
+            "date": "2026-10-18",
+            "sha": "7ed314937a"
+          }
+        ],
+        "count": 2,
+        "rate": 0.0018,
+        "subject_mentions_revert_loose": 3
+      },
+      "rework": {
+        "count": 591,
+        "fix_commits": 589,
+        "fix_or_revert_commits": 600,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 2,
+        "share": 0.5184,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.985
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-21",
+      "typed_share": 1.0,
+      "types": {
+        "build": 10,
+        "chore": 63,
+        "ci": 1,
+        "docs": 210,
+        "feat": 140,
+        "fix": 598,
+        "refactor": 101,
+        "revert": 2,
+        "style": 1,
+        "test": 14
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 19,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 29,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 14,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 50,
+          "fix_proxy": 12,
+          "revert": 1,
+          "rework": 13,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 18,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 16
+        },
+        "2026-W37": {
+          "commits": 24,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 23
+        },
+        "2026-W38": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 2
+        },
+        "2026-W39": {
+          "commits": 5,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 10,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 794,
+          "fix_proxy": 480,
+          "revert": 1,
+          "rework": 479,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 162,
+          "fix_proxy": 86,
+          "revert": 0,
+          "rework": 85,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 39,
+        "committer_name_differs_from_author": 8,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 14,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 82
+      },
+      "commits": 82,
+      "commits_14d": 17,
+      "commits_30d": 24,
+      "commits_per_week": 6.38,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 32,
+        "fix_typed": 32,
+        "share": 0.3902
+      },
+      "last_commit_in_window": "2026-10-19",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-06-17",
+        "last_fetch_date": "2026-10-19",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "audio-gateway",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 30,
+        "fix_commits": 30,
+        "fix_or_revert_commits": 32,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.3659,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9375
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-19",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 7,
+        "docs": 5,
+        "feat": 29,
+        "fix": 32,
+        "perf": 3,
+        "test": 1
+      },
+      "types_other": 4,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 17,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 26,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 9,
+          "trailer": 26
+        },
+        "2026-W37": {
+          "commits": 13,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 13
+        },
+        "2026-W39": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 12,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 4,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 2
+      },
+      "commits": 2,
+      "commits_14d": 2,
+      "commits_30d": 2,
+      "commits_per_week": 0.16,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-10-18",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-18",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 0,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-18",
+        "last_fetch_date": "2026-10-19"
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "master",
+      "ref_found_by": "local master",
+      "repo": "basalt-expr-trial",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-18",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 1,
+        "feat": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W42": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 4
+      },
+      "commits": 4,
+      "commits_14d": 4,
+      "commits_30d": 4,
+      "commits_per_week": 0.31,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-10-18",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-18",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 0,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-18",
+        "last_fetch_date": "2026-10-19"
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "master",
+      "ref_found_by": "local master",
+      "repo": "basalt-expr-trial-v1",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-18",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 3,
+        "feat": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W42": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 100,
+        "claude_session_trailer": 108,
+        "committer_name_differs_from_author": 1784,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 1730,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 100,
+        "other_human": 0,
+        "owner": 1784
+      },
+      "commits": 1884,
+      "commits_14d": 1304,
+      "commits_30d": 1537,
+      "commits_per_week": 146.53,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-27",
+      "fix_proxy": {
+        "fix_prefixed": 579,
+        "fix_typed": 579,
+        "share": 0.3073
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 2,
+        "agent_named_branches_total": 13,
+        "branches_total": 26,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [
+        "semantic-release-bot"
+      ],
+      "owner_share": 0.9469,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "basalt-ui",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 571,
+        "fix_commits": 571,
+        "fix_or_revert_commits": 579,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.3031,
+        "share_excl_bot_commits": 0.3201,
+        "share_of_fix_or_revert": 0.9862
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "build": 10,
+        "chore": 314,
+        "ci": 33,
+        "docs": 498,
+        "feat": 326,
+        "fix": 579,
+        "perf": 3,
+        "refactor": 56,
+        "style": 1,
+        "test": 64
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 85,
+          "fix_proxy": 13,
+          "revert": 0,
+          "rework": 10,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 27,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 104,
+          "fix_proxy": 27,
+          "revert": 0,
+          "rework": 27,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 14,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 103,
+          "fix_proxy": 16,
+          "revert": 0,
+          "rework": 16,
+          "trailer": 99
+        },
+        "2026-W37": {
+          "commits": 12,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 9
+        },
+        "2026-W39": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 215,
+          "fix_proxy": 64,
+          "revert": 0,
+          "rework": 62,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 25,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 1120,
+          "fix_proxy": 360,
+          "revert": 0,
+          "rework": 358,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 172,
+          "fix_proxy": 81,
+          "revert": 0,
+          "rework": 81,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 5,
+        "committer_name_differs_from_author": 2,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 3,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 64
+      },
+      "commits": 64,
+      "commits_14d": 22,
+      "commits_30d": 32,
+      "commits_per_week": 4.98,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-08-08",
+      "fix_proxy": {
+        "fix_prefixed": 7,
+        "fix_typed": 7,
+        "share": 0.1094
+      },
+      "last_commit_in_window": "2026-10-15",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-08-08",
+        "last_fetch_date": "2026-10-16",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "basalt-ui-obsidian",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 5,
+        "fix_commits": 5,
+        "fix_or_revert_commits": 7,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0781,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.7143
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-15",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 27,
+        "ci": 1,
+        "docs": 14,
+        "feat": 13,
+        "fix": 7,
+        "refactor": 2
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W32": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 9,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 13,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 5
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 7,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 21,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 74,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 1,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 493
+      },
+      "commits": 493,
+      "commits_14d": 110,
+      "commits_30d": 226,
+      "commits_per_week": 38.34,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 8,
+        "fix_typed": 8,
+        "share": 0.0162
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 2,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-05",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "brain",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 2
+      },
+      "rework": {
+        "count": 8,
+        "fix_commits": 8,
+        "fix_or_revert_commits": 8,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0162,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 1.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 0.9858,
+      "types": {
+        "chore": 28,
+        "docs": 259,
+        "feat": 25,
+        "fix": 8,
+        "refactor": 4,
+        "untyped": 7
+      },
+      "types_other": 162,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 36,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 31,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 31,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 24,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 41,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 33
+        },
+        "2026-W37": {
+          "commits": 56,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 32
+        },
+        "2026-W38": {
+          "commits": 37,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 9
+        },
+        "2026-W39": {
+          "commits": 81,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 22,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 38,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 50,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 42,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 6,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 9
+      },
+      "commits": 9,
+      "commits_14d": 0,
+      "commits_30d": 0,
+      "commits_per_week": 0.7,
+      "committer_is_web_flow": 6,
+      "first_commit_in_window": "2026-08-02",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-08-03",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-08-02",
+        "last_fetch_date": "2026-10-15",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "dispatch-scratch",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-08-03",
+      "typed_share": 0.8889,
+      "types": {
+        "docs": 7,
+        "test": 1,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 117,
+        "committer_name_differs_from_author": 13,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 65,
+        "warden_ledger_merge_commits": 4
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 558
+      },
+      "commits": 558,
+      "commits_14d": 162,
+      "commits_30d": 233,
+      "commits_per_week": 43.4,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 133,
+        "fix_typed": 133,
+        "share": 0.2384
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 12,
+        "branches_total": 13,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "dotfiles",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 119,
+        "fix_commits": 119,
+        "fix_or_revert_commits": 133,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.2133,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8947
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 37,
+        "docs": 220,
+        "feat": 154,
+        "fix": 133,
+        "refactor": 11,
+        "test": 3
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 26,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 9,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 81,
+          "fix_proxy": 19,
+          "revert": 0,
+          "rework": 18,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 30,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 19,
+          "fix_proxy": 12,
+          "revert": 0,
+          "rework": 9,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 29,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 5
+        },
+        "2026-W36": {
+          "commits": 31,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 25
+        },
+        "2026-W37": {
+          "commits": 86,
+          "fix_proxy": 19,
+          "revert": 0,
+          "rework": 18,
+          "trailer": 77
+        },
+        "2026-W38": {
+          "commits": 20,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 10
+        },
+        "2026-W39": {
+          "commits": 38,
+          "fix_proxy": 10,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 26,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 68,
+          "fix_proxy": 16,
+          "revert": 0,
+          "rework": 14,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 82,
+          "fix_proxy": 14,
+          "revert": 0,
+          "rework": 14,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 19,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 23,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 12,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 88
+      },
+      "commits": 88,
+      "commits_14d": 17,
+      "commits_30d": 24,
+      "commits_per_week": 6.84,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 4,
+        "fix_typed": 4,
+        "share": 0.0455
+      },
+      "last_commit_in_window": "2026-10-20",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-15",
+        "last_fetch_date": "2026-10-19",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "dotfiles-private",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 2,
+        "fix_commits": 2,
+        "fix_or_revert_commits": 4,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0227,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.5
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-20",
+      "typed_share": 0.9432,
+      "types": {
+        "chore": 4,
+        "docs": 32,
+        "feat": 42,
+        "fix": 4,
+        "refactor": 1,
+        "untyped": 5
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 13,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 8,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 7,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 11,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 2
+        },
+        "2026-W36": {
+          "commits": 9,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 7
+        },
+        "2026-W37": {
+          "commits": 10,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 10
+        },
+        "2026-W38": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 4
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 11,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 1,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 5,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 102
+      },
+      "commits": 102,
+      "commits_14d": 45,
+      "commits_30d": 89,
+      "commits_per_week": 7.93,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-30",
+      "fix_proxy": {
+        "fix_prefixed": 17,
+        "fix_typed": 17,
+        "share": 0.1667
+      },
+      "last_commit_in_window": "2026-10-14",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-08",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "email-gateway",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 16,
+        "fix_commits": 16,
+        "fix_or_revert_commits": 17,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1569,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9412
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-14",
+      "typed_share": 1.0,
+      "types": {
+        "build": 3,
+        "chore": 10,
+        "docs": 34,
+        "feat": 35,
+        "fix": 17,
+        "refactor": 3
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W38": {
+          "commits": 11,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 15,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 24,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 7,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 43,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 3,
+        "committer_name_differs_from_author": 16,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 16,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 16
+      },
+      "commits": 16,
+      "commits_14d": 2,
+      "commits_30d": 6,
+      "commits_per_week": 1.24,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 1,
+        "fix_typed": 1,
+        "share": 0.0625
+      },
+      "last_commit_in_window": "2026-10-11",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 5,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "free-planning-poker",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 1,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-11",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 9,
+        "ci": 2,
+        "docs": 2,
+        "fix": 1,
+        "refactor": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 3
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 4,
+        "bot_author": 0,
+        "claude_session_trailer": 79,
+        "committer_name_differs_from_author": 1,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 13,
+        "warden_ledger_merge_commits": 1
+      },
+      "authors": {
+        "agent_identity": 4,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 302
+      },
+      "commits": 306,
+      "commits_14d": 40,
+      "commits_30d": 98,
+      "commits_per_week": 23.8,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 59,
+        "fix_typed": 59,
+        "share": 0.1928
+      },
+      "last_commit_in_window": "2026-10-21",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 9,
+        "branches_total": 12,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-04",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [
+        "Hermes",
+        "hermes"
+      ],
+      "owner_share": 0.9869,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "hermes-agent",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 49,
+        "fix_commits": 49,
+        "fix_or_revert_commits": 59,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1601,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8305
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-21",
+      "typed_share": 0.9804,
+      "types": {
+        "chore": 26,
+        "docs": 102,
+        "feat": 76,
+        "fix": 59,
+        "refactor": 9,
+        "test": 2,
+        "untyped": 6
+      },
+      "types_other": 26,
+      "weekly": {
+        "2026-W30": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 31,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 13,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 7,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 22,
+          "fix_proxy": 10,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 8,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 5
+        },
+        "2026-W37": {
+          "commits": 65,
+          "fix_proxy": 14,
+          "revert": 0,
+          "rework": 11,
+          "trailer": 65
+        },
+        "2026-W38": {
+          "commits": 48,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 9
+        },
+        "2026-W39": {
+          "commits": 23,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 36,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 28,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 11,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 7,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 14,
+        "committer_name_differs_from_author": 12,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 19,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 94
+      },
+      "commits": 94,
+      "commits_14d": 31,
+      "commits_30d": 46,
+      "commits_per_week": 7.31,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 33,
+        "fix_typed": 33,
+        "share": 0.3511
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 6,
+        "branches_total": 9,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "homelab",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-09-03",
+            "sha": "50737bc66a"
+          }
+        ],
+        "count": 1,
+        "rate": 0.0106,
+        "subject_mentions_revert_loose": 1
+      },
+      "rework": {
+        "count": 26,
+        "fix_commits": 25,
+        "fix_or_revert_commits": 34,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 1,
+        "share": 0.2766,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.7647
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 10,
+        "docs": 12,
+        "feat": 33,
+        "fix": 33,
+        "refactor": 3,
+        "revert": 1,
+        "test": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 5,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 12,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 1
+        },
+        "2026-W32": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 7,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 1,
+          "rework": 1,
+          "trailer": 1
+        },
+        "2026-W37": {
+          "commits": 11,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 11
+        },
+        "2026-W38": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W39": {
+          "commits": 11,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 15,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 11,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 53,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 9,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 107
+      },
+      "commits": 107,
+      "commits_14d": 16,
+      "commits_30d": 21,
+      "commits_per_week": 8.32,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-26",
+      "fix_proxy": {
+        "fix_prefixed": 42,
+        "fix_typed": 42,
+        "share": 0.3925
+      },
+      "last_commit_in_window": "2026-10-19",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 2,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "homelab-private",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 37,
+        "fix_commits": 37,
+        "fix_or_revert_commits": 42,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.3458,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.881
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-19",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 3,
+        "docs": 21,
+        "feat": 38,
+        "fix": 42,
+        "perf": 1,
+        "refactor": 2
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 27,
+          "fix_proxy": 14,
+          "revert": 0,
+          "rework": 12,
+          "trailer": 3
+        },
+        "2026-W36": {
+          "commits": 10,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 10
+        },
+        "2026-W37": {
+          "commits": 39,
+          "fix_proxy": 13,
+          "revert": 0,
+          "rework": 12,
+          "trailer": 39
+        },
+        "2026-W38": {
+          "commits": 3,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 1
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 2,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 11,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 9,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 12,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 45
+      },
+      "commits": 45,
+      "commits_14d": 8,
+      "commits_30d": 20,
+      "commits_per_week": 3.5,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 7,
+        "fix_typed": 7,
+        "share": 0.1556
+      },
+      "last_commit_in_window": "2026-10-13",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-16",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "image-gateway",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 5,
+        "fix_commits": 5,
+        "fix_or_revert_commits": 7,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.1111,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.7143
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-13",
+      "typed_share": 1.0,
+      "types": {
+        "build": 5,
+        "chore": 19,
+        "docs": 6,
+        "feat": 8,
+        "fix": 7
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 4,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 19,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 9
+        },
+        "2026-W39": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 23
+      },
+      "commits": 23,
+      "commits_14d": 8,
+      "commits_30d": 18,
+      "commits_per_week": 1.79,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-27",
+      "fix_proxy": {
+        "fix_prefixed": 2,
+        "fix_typed": 2,
+        "share": 0.087
+      },
+      "last_commit_in_window": "2026-10-15",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-05",
+        "last_fetch_date": "2026-10-15",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "jkrumm.com",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 2,
+        "fix_commits": 2,
+        "fix_or_revert_commits": 2,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.087,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 1.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-15",
+      "typed_share": 0.9565,
+      "types": {
+        "build": 1,
+        "chore": 6,
+        "ci": 1,
+        "docs": 7,
+        "feat": 5,
+        "fix": 2,
+        "untyped": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 7,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 2,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 9
+      },
+      "commits": 9,
+      "commits_14d": 1,
+      "commits_30d": 6,
+      "commits_per_week": 0.7,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 1,
+        "fix_typed": 1,
+        "share": 0.1111
+      },
+      "last_commit_in_window": "2026-10-10",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-17",
+        "last_fetch_date": "2026-10-11",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "king-smith-walkingpad-mac",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 1,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-10",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 5,
+        "docs": 3,
+        "fix": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 2
+        },
+        "2026-W39": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 0,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 2
+      },
+      "commits": 2,
+      "commits_14d": 1,
+      "commits_30d": 2,
+      "commits_per_week": 0.16,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-23",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-10",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-06-17",
+        "last_fetch_date": "2026-10-11",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "kobo-mods",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-10",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 1,
+        "docs": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W39": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 14,
+        "committer_name_differs_from_author": 2,
+        "merge_commit_branch_names": {
+          "other_named": 2,
+          "unparsed": 1
+        },
+        "rewritten_committer_date": 37,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 141
+      },
+      "commits": 141,
+      "commits_14d": 43,
+      "commits_30d": 52,
+      "commits_per_week": 10.97,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-30",
+      "fix_proxy": {
+        "fix_prefixed": 34,
+        "fix_typed": 34,
+        "share": 0.2411
+      },
+      "last_commit_in_window": "2026-10-15",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 8,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-30",
+        "last_fetch_date": "2026-10-16",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 3,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "linewatch",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 32,
+        "fix_commits": 32,
+        "fix_or_revert_commits": 34,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.227,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9412
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-15",
+      "typed_share": 1.0,
+      "types": {
+        "build": 6,
+        "chore": 29,
+        "docs": 25,
+        "feat": 25,
+        "fix": 34,
+        "refactor": 21
+      },
+      "types_other": 1,
+      "weekly": {
+        "2026-W31": {
+          "commits": 60,
+          "fix_proxy": 22,
+          "revert": 0,
+          "rework": 22,
+          "trailer": 7
+        },
+        "2026-W32": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 19,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W37": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 6
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 40,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 18,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 12,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 113
+      },
+      "commits": 113,
+      "commits_14d": 42,
+      "commits_30d": 60,
+      "commits_per_week": 8.79,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 16,
+        "fix_typed": 16,
+        "share": 0.1416
+      },
+      "last_commit_in_window": "2026-10-21",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 2,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-24",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "modelpick",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 8,
+        "fix_commits": 8,
+        "fix_or_revert_commits": 16,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0708,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.5
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-21",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 15,
+        "docs": 32,
+        "feat": 50,
+        "fix": 16
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 5,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W33": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 10,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 16,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 10
+        },
+        "2026-W37": {
+          "commits": 7,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 7
+        },
+        "2026-W38": {
+          "commits": 11,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W39": {
+          "commits": 15,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 14,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 20,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 10,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 6,
+        "committer_name_differs_from_author": 8,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 38,
+        "warden_ledger_merge_commits": 2
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 125
+      },
+      "commits": 125,
+      "commits_14d": 39,
+      "commits_30d": 106,
+      "commits_per_week": 9.72,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 49,
+        "fix_typed": 49,
+        "share": 0.392
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 2,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-07-16",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "rb",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 37,
+        "fix_commits": 37,
+        "fix_or_revert_commits": 49,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.296,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.7551
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 16,
+        "ci": 2,
+        "docs": 18,
+        "feat": 28,
+        "fix": 49,
+        "refactor": 11
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 8,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 3,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 6,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 6
+        },
+        "2026-W39": {
+          "commits": 61,
+          "fix_proxy": 31,
+          "revert": 0,
+          "rework": 31,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 4,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 24,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 11,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 20,
+        "committer_name_differs_from_author": 60,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 64,
+        "warden_ledger_merge_commits": 1
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 269
+      },
+      "commits": 269,
+      "commits_14d": 66,
+      "commits_30d": 176,
+      "commits_per_week": 20.92,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 114,
+        "fix_typed": 114,
+        "share": 0.4238
+      },
+      "last_commit_in_window": "2026-10-16",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 17,
+        "branches_total": 27,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-06-17",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "research-gateway",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-08-02",
+            "sha": "a8d615c0f4"
+          },
+          {
+            "date": "2026-08-03",
+            "sha": "87bea6efbf"
+          },
+          {
+            "date": "2026-09-23",
+            "sha": "23577320f0"
+          }
+        ],
+        "count": 3,
+        "rate": 0.0112,
+        "subject_mentions_revert_loose": 3
+      },
+      "rework": {
+        "count": 106,
+        "fix_commits": 103,
+        "fix_or_revert_commits": 117,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 3,
+        "share": 0.3941,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.906
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-16",
+      "typed_share": 1.0,
+      "types": {
+        "build": 3,
+        "chore": 15,
+        "ci": 3,
+        "docs": 50,
+        "feat": 67,
+        "fix": 114,
+        "perf": 6,
+        "refactor": 5,
+        "revert": 3,
+        "test": 3
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 2,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 44,
+          "fix_proxy": 12,
+          "revert": 1,
+          "rework": 12,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 21,
+          "fix_proxy": 4,
+          "revert": 1,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 5,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 20,
+          "fix_proxy": 9,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 20
+        },
+        "2026-W39": {
+          "commits": 67,
+          "fix_proxy": 29,
+          "revert": 1,
+          "rework": 29,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 43,
+          "fix_proxy": 33,
+          "revert": 0,
+          "rework": 33,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 60,
+          "fix_proxy": 21,
+          "revert": 0,
+          "rework": 16,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 6,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 3,
+        "committer_name_differs_from_author": 50,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 48,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 54
+      },
+      "commits": 54,
+      "commits_14d": 22,
+      "commits_30d": 38,
+      "commits_per_week": 4.2,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 9,
+        "fix_typed": 9,
+        "share": 0.1667
+      },
+      "last_commit_in_window": "2026-10-15",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 2,
+        "branches_total": 13,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "rollhook",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-09-28",
+            "sha": "ecec910ff2"
+          }
+        ],
+        "count": 1,
+        "rate": 0.0185,
+        "subject_mentions_revert_loose": 1
+      },
+      "rework": {
+        "count": 8,
+        "fix_commits": 7,
+        "fix_or_revert_commits": 10,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 1,
+        "share": 0.1481,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-15",
+      "typed_share": 1.0,
+      "types": {
+        "build": 1,
+        "chore": 22,
+        "ci": 1,
+        "docs": 13,
+        "feat": 7,
+        "fix": 9,
+        "revert": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W37": {
+          "commits": 11,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 3
+        },
+        "2026-W38": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 5,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 9,
+          "fix_proxy": 3,
+          "revert": 1,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 21,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 9,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 8,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 12
+      },
+      "commits": 12,
+      "commits_14d": 1,
+      "commits_30d": 9,
+      "commits_per_week": 0.93,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 0,
+        "fix_typed": 0,
+        "share": 0.0
+      },
+      "last_commit_in_window": "2026-10-13",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 1,
+        "branches_total": 4,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-13",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/main",
+      "ref_found_by": "origin/HEAD",
+      "repo": "rollhook-action",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 0,
+        "fix_commits": 0,
+        "fix_or_revert_commits": 0,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": null
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-13",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 6,
+        "ci": 2,
+        "feat": 3,
+        "test": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 7,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 282,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 818
+      },
+      "commits": 818,
+      "commits_14d": 344,
+      "commits_30d": 780,
+      "commits_per_week": 63.62,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-08-13",
+      "fix_proxy": {
+        "fix_prefixed": 82,
+        "fix_typed": 82,
+        "share": 0.1002
+      },
+      "last_commit_in_window": "2026-10-18",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-14",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 274
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "shutterflow",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 5
+      },
+      "rework": {
+        "count": 80,
+        "fix_commits": 80,
+        "fix_or_revert_commits": 82,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0978,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9756
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-18",
+      "typed_share": 1.0,
+      "types": {
+        "build": 2,
+        "chore": 362,
+        "ci": 2,
+        "docs": 96,
+        "feat": 214,
+        "fix": 82,
+        "perf": 3,
+        "refactor": 5,
+        "test": 52
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W33": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 30,
+          "fix_proxy": 6,
+          "revert": 0,
+          "rework": 6,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 6,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 206,
+          "fix_proxy": 15,
+          "revert": 0,
+          "rework": 15,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 129,
+          "fix_proxy": 15,
+          "revert": 0,
+          "rework": 15,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 154,
+          "fix_proxy": 12,
+          "revert": 0,
+          "rework": 11,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 292,
+          "fix_proxy": 34,
+          "revert": 0,
+          "rework": 33,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 18,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {
+          "other_named": 1,
+          "unparsed": 1
+        },
+        "rewritten_committer_date": 7,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 42
+      },
+      "commits": 42,
+      "commits_14d": 13,
+      "commits_30d": 16,
+      "commits_per_week": 3.27,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-10",
+      "fix_proxy": {
+        "fix_prefixed": 3,
+        "fix_typed": 3,
+        "share": 0.0714
+      },
+      "last_commit_in_window": "2026-10-14",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 3,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-09-10",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 2,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "sy-serendipity",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 3,
+        "fix_commits": 3,
+        "fix_or_revert_commits": 3,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.0714,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 1.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-14",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 6,
+        "ci": 1,
+        "docs": 2,
+        "feat": 26,
+        "fix": 3,
+        "perf": 1,
+        "refactor": 1,
+        "style": 2
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W37": {
+          "commits": 22,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 18
+        },
+        "2026-W38": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W39": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 12,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 0,
+        "committer_name_differs_from_author": 0,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 6,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 25
+      },
+      "commits": 25,
+      "commits_14d": 18,
+      "commits_30d": 25,
+      "commits_per_week": 1.94,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-27",
+      "fix_proxy": {
+        "fix_prefixed": 7,
+        "fix_typed": 7,
+        "share": 0.28
+      },
+      "last_commit_in_window": "2026-10-16",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 4,
+        "branches_total": 5,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-10-16",
+        "last_fetch_date": "2026-10-16",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "tinycast-extensions",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 7,
+        "fix_commits": 7,
+        "fix_or_revert_commits": 7,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.28,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 1.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-16",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 3,
+        "docs": 3,
+        "feat": 12,
+        "fix": 7
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W39": {
+          "commits": 4,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 3,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 18,
+          "fix_proxy": 7,
+          "revert": 0,
+          "rework": 7,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 14,
+        "committer_name_differs_from_author": 7,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 10,
+        "warden_ledger_merge_commits": 1
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 48
+      },
+      "commits": 48,
+      "commits_14d": 11,
+      "commits_30d": 27,
+      "commits_per_week": 3.73,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-31",
+      "fix_proxy": {
+        "fix_prefixed": 19,
+        "fix_typed": 19,
+        "share": 0.3958
+      },
+      "last_commit_in_window": "2026-10-19",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 1,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-05-21",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "usage-tracker",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 0
+      },
+      "rework": {
+        "count": 6,
+        "fix_commits": 6,
+        "fix_or_revert_commits": 19,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.125,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.3158
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-19",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 5,
+        "docs": 5,
+        "feat": 16,
+        "fix": 19,
+        "perf": 1,
+        "refactor": 1,
+        "test": 1
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W31": {
+          "commits": 4,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 2,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 1,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 1
+        },
+        "2026-W37": {
+          "commits": 12,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 12
+        },
+        "2026-W39": {
+          "commits": 14,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 1
+        },
+        "2026-W40": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 6,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 5,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 37,
+        "committer_name_differs_from_author": 4,
+        "merge_commit_branch_names": {},
+        "rewritten_committer_date": 12,
+        "warden_ledger_merge_commits": 0
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 179
+      },
+      "commits": 179,
+      "commits_14d": 70,
+      "commits_30d": 100,
+      "commits_per_week": 13.92,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-07-24",
+      "fix_proxy": {
+        "fix_prefixed": 52,
+        "fix_typed": 52,
+        "share": 0.2905
+      },
+      "last_commit_in_window": "2026-10-18",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 0,
+        "branches_total": 5,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-04-13",
+        "last_fetch_date": "2026-10-18",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 0,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "vps",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-10-14",
+            "sha": "69b9b280c1"
+          },
+          {
+            "date": "2026-10-14",
+            "sha": "58e7c82dd5"
+          }
+        ],
+        "count": 2,
+        "rate": 0.0112,
+        "subject_mentions_revert_loose": 2
+      },
+      "rework": {
+        "count": 46,
+        "fix_commits": 44,
+        "fix_or_revert_commits": 54,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 2,
+        "share": 0.257,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.8519
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-18",
+      "typed_share": 0.9888,
+      "types": {
+        "chore": 17,
+        "docs": 17,
+        "feat": 86,
+        "fix": 52,
+        "refactor": 3,
+        "revert": 2,
+        "untyped": 2
+      },
+      "types_other": 0,
+      "weekly": {
+        "2026-W30": {
+          "commits": 2,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W31": {
+          "commits": 12,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W32": {
+          "commits": 4,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W34": {
+          "commits": 1,
+          "fix_proxy": 0,
+          "revert": 0,
+          "rework": 0,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 15,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W36": {
+          "commits": 13,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 10
+        },
+        "2026-W37": {
+          "commits": 24,
+          "fix_proxy": 11,
+          "revert": 0,
+          "rework": 9,
+          "trailer": 23
+        },
+        "2026-W38": {
+          "commits": 8,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 4
+        },
+        "2026-W39": {
+          "commits": 20,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 4,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 9,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 8,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 63,
+          "fix_proxy": 15,
+          "revert": 2,
+          "rework": 16,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 88,
+        "committer_name_differs_from_author": 53,
+        "merge_commit_branch_names": {
+          "unparsed": 1
+        },
+        "rewritten_committer_date": 66,
+        "warden_ledger_merge_commits": 12
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 528
+      },
+      "commits": 528,
+      "commits_14d": 241,
+      "commits_30d": 410,
+      "commits_per_week": 41.07,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-09-09",
+      "fix_proxy": {
+        "fix_prefixed": 151,
+        "fix_typed": 151,
+        "share": 0.286
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 16,
+        "branches_total": 17,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-09-09",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 1,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "warden",
+      "revert": {
+        "commits": [],
+        "count": 0,
+        "rate": 0.0,
+        "subject_mentions_revert_loose": 7
+      },
+      "rework": {
+        "count": 151,
+        "fix_commits": 151,
+        "fix_or_revert_commits": 151,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 0,
+        "share": 0.286,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 1.0
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "chore": 20,
+        "docs": 246,
+        "feat": 90,
+        "fix": 151,
+        "refactor": 13,
+        "test": 6
+      },
+      "types_other": 2,
+      "weekly": {
+        "2026-W37": {
+          "commits": 84,
+          "fix_proxy": 13,
+          "revert": 0,
+          "rework": 13,
+          "trailer": 80
+        },
+        "2026-W38": {
+          "commits": 31,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 8
+        },
+        "2026-W39": {
+          "commits": 19,
+          "fix_proxy": 5,
+          "revert": 0,
+          "rework": 5,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 59,
+          "fix_proxy": 18,
+          "revert": 0,
+          "rework": 18,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 188,
+          "fix_proxy": 58,
+          "revert": 0,
+          "rework": 58,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 144,
+          "fix_proxy": 48,
+          "revert": 0,
+          "rework": 48,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 3,
+          "fix_proxy": 1,
+          "revert": 0,
+          "rework": 1,
+          "trailer": 0
+        }
+      }
+    },
+    {
+      "agent_signals": {
+        "agent_identity_author": 0,
+        "bot_author": 0,
+        "claude_session_trailer": 48,
+        "committer_name_differs_from_author": 99,
+        "merge_commit_branch_names": {
+          "unparsed": 1
+        },
+        "rewritten_committer_date": 241,
+        "warden_ledger_merge_commits": 22
+      },
+      "authors": {
+        "agent_identity": 0,
+        "bot": 0,
+        "other_human": 0,
+        "owner": 984
+      },
+      "commits": 984,
+      "commits_14d": 612,
+      "commits_30d": 793,
+      "commits_per_week": 76.53,
+      "committer_is_web_flow": 0,
+      "first_commit_in_window": "2026-08-20",
+      "fix_proxy": {
+        "fix_prefixed": 237,
+        "fix_typed": 237,
+        "share": 0.2409
+      },
+      "last_commit_in_window": "2026-10-22",
+      "live": {
+        "agent_named_branches_merged_into_default": 0,
+        "agent_named_branches_total": 35,
+        "branches_total": 38,
+        "checkout_created_after_as_of": false,
+        "checkout_created_date": "2026-08-20",
+        "last_fetch_date": "2026-10-22",
+        "local_ahead_of_remote": 0,
+        "local_behind_remote": 0
+      },
+      "merge_commits": 1,
+      "non_owner_identities": [],
+      "owner_share": 1.0,
+      "ref": "origin/master",
+      "ref_found_by": "origin/HEAD",
+      "repo": "weatherorb",
+      "revert": {
+        "commits": [
+          {
+            "date": "2026-10-16",
+            "sha": "da3ba946db"
+          },
+          {
+            "date": "2026-10-18",
+            "sha": "5df65bf184"
+          }
+        ],
+        "count": 2,
+        "rate": 0.002,
+        "subject_mentions_revert_loose": 3
+      },
+      "rework": {
+        "count": 232,
+        "fix_commits": 230,
+        "fix_or_revert_commits": 239,
+        "fix_or_revert_without_files": 0,
+        "revert_commits": 2,
+        "share": 0.2358,
+        "share_excl_bot_commits": null,
+        "share_of_fix_or_revert": 0.9707
+      },
+      "root": "SourceRoot",
+      "tip_date": "2026-10-22",
+      "typed_share": 1.0,
+      "types": {
+        "build": 11,
+        "chore": 19,
+        "ci": 6,
+        "docs": 363,
+        "feat": 236,
+        "fix": 237,
+        "perf": 13,
+        "refactor": 58,
+        "revert": 2,
+        "test": 38
+      },
+      "types_other": 1,
+      "weekly": {
+        "2026-W34": {
+          "commits": 70,
+          "fix_proxy": 8,
+          "revert": 0,
+          "rework": 8,
+          "trailer": 0
+        },
+        "2026-W35": {
+          "commits": 79,
+          "fix_proxy": 23,
+          "revert": 0,
+          "rework": 23,
+          "trailer": 11
+        },
+        "2026-W36": {
+          "commits": 22,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 22
+        },
+        "2026-W37": {
+          "commits": 11,
+          "fix_proxy": 3,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 10
+        },
+        "2026-W38": {
+          "commits": 9,
+          "fix_proxy": 2,
+          "revert": 0,
+          "rework": 2,
+          "trailer": 5
+        },
+        "2026-W39": {
+          "commits": 12,
+          "fix_proxy": 4,
+          "revert": 0,
+          "rework": 3,
+          "trailer": 0
+        },
+        "2026-W40": {
+          "commits": 121,
+          "fix_proxy": 25,
+          "revert": 0,
+          "rework": 25,
+          "trailer": 0
+        },
+        "2026-W41": {
+          "commits": 67,
+          "fix_proxy": 15,
+          "revert": 0,
+          "rework": 13,
+          "trailer": 0
+        },
+        "2026-W42": {
+          "commits": 506,
+          "fix_proxy": 138,
+          "revert": 2,
+          "rework": 136,
+          "trailer": 0
+        },
+        "2026-W43": {
+          "commits": 87,
+          "fix_proxy": 16,
+          "revert": 0,
+          "rework": 16,
+          "trailer": 0
+        }
+      }
+    }
+  ],
+  "rework_lookback_days": 7,
+  "script": "git_delivery.py",
+  "skipped_worktrees": [
+    {
+      "dir": "homelab-w7",
+      "root": "SourceRoot",
+      "worktree_of": "homelab"
+    },
+    {
+      "dir": "warden-w8",
+      "root": "SourceRoot",
+      "worktree_of": "warden"
+    }
+  ],
+  "warden_revert_half": {
+    "definition": "items (not duplicates) created in the window; merged = merged_sha set; reverted = revert_pr or reverting_sha set",
+    "items": 556,
+    "merge_operations_in_window": {
+      "done": 49,
+      "total": 50
+    },
+    "merged_by_warden": 39,
+    "per_repo": {
+      "agent-gateway": {
+        "items": 35,
+        "merged": 4,
+        "reverted": 0
+      },
+      "dotfiles": {
+        "items": 17,
+        "merged": 4,
+        "reverted": 0
+      },
+      "hermes-agent": {
+        "items": 78,
+        "merged": 1,
+        "reverted": 0
+      },
+      "rb": {
+        "items": 3,
+        "merged": 2,
+        "reverted": 0
+      },
+      "research-gateway": {
+        "items": 35,
+        "merged": 1,
+        "reverted": 0
+      },
+      "usage-tracker": {
+        "items": 5,
+        "merged": 1,
+        "reverted": 0
+      },
+      "warden": {
+        "items": 59,
+        "merged": 12,
+        "reverted": 0
+      },
+      "weatherorb": {
+        "items": 106,
+        "merged": 14,
+        "reverted": 0
+      }
+    },
+    "revert_rate": 0.0,
+    "reverted": 0
+  },
+  "weekly_pooled": {
+    "2026-W30": {
+      "commits": 67,
+      "fix_proxy": 22,
+      "revert": 0,
+      "rework": 17,
+      "rework_share": 0.2537,
+      "top_repo": "dotfiles",
+      "top_repo_share": 0.3881
+    },
+    "2026-W31": {
+      "commits": 475,
+      "fix_proxy": 111,
+      "revert": 1,
+      "rework": 91,
+      "rework_share": 0.1916,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.1789
+    },
+    "2026-W32": {
+      "commits": 246,
+      "fix_proxy": 57,
+      "revert": 1,
+      "rework": 48,
+      "rework_share": 0.1951,
+      "top_repo": "brain",
+      "top_repo_share": 0.126
+    },
+    "2026-W33": {
+      "commits": 150,
+      "fix_proxy": 29,
+      "revert": 0,
+      "rework": 16,
+      "rework_share": 0.1067,
+      "top_repo": "epos_fe.booking",
+      "top_repo_share": 0.24
+    },
+    "2026-W34": {
+      "commits": 383,
+      "fix_proxy": 82,
+      "revert": 1,
+      "rework": 73,
+      "rework_share": 0.1906,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.2715
+    },
+    "2026-W35": {
+      "commits": 295,
+      "fix_proxy": 80,
+      "revert": 0,
+      "rework": 62,
+      "rework_share": 0.2102,
+      "top_repo": "weatherorb",
+      "top_repo_share": 0.2678
+    },
+    "2026-W36": {
+      "commits": 343,
+      "fix_proxy": 57,
+      "revert": 3,
+      "rework": 51,
+      "rework_share": 0.1487,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.3003
+    },
+    "2026-W37": {
+      "commits": 676,
+      "fix_proxy": 135,
+      "revert": 0,
+      "rework": 117,
+      "rework_share": 0.1731,
+      "top_repo": "dotfiles",
+      "top_repo_share": 0.1272
+    },
+    "2026-W38": {
+      "commits": 241,
+      "fix_proxy": 43,
+      "revert": 0,
+      "rework": 36,
+      "rework_share": 0.1494,
+      "top_repo": "hermes-agent",
+      "top_repo_share": 0.1992
+    },
+    "2026-W39": {
+      "commits": 680,
+      "fix_proxy": 128,
+      "revert": 1,
+      "rework": 115,
+      "rework_share": 0.1691,
+      "top_repo": "shutterflow",
+      "top_repo_share": 0.3029
+    },
+    "2026-W40": {
+      "commits": 789,
+      "fix_proxy": 191,
+      "revert": 1,
+      "rework": 181,
+      "rework_share": 0.2294,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.2725
+    },
+    "2026-W41": {
+      "commits": 813,
+      "fix_proxy": 192,
+      "revert": 0,
+      "rework": 165,
+      "rework_share": 0.203,
+      "top_repo": "warden",
+      "top_repo_share": 0.2312
+    },
+    "2026-W42": {
+      "commits": 3521,
+      "fix_proxy": 1217,
+      "revert": 6,
+      "rework": 1194,
+      "rework_share": 0.3391,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.3181
+    },
+    "2026-W43": {
+      "commits": 594,
+      "fix_proxy": 220,
+      "revert": 0,
+      "rework": 208,
+      "rework_share": 0.3502,
+      "top_repo": "basalt-ui",
+      "top_repo_share": 0.2896
+    }
+  },
+  "weeks": [
+    "2026-W30",
+    "2026-W31",
+    "2026-W32",
+    "2026-W33",
+    "2026-W34",
+    "2026-W35",
+    "2026-W36",
+    "2026-W37",
+    "2026-W38",
+    "2026-W39",
+    "2026-W40",
+    "2026-W41",
+    "2026-W42",
+    "2026-W43"
+  ],
+  "window_days": 90,
+  "window_start": "2026-07-24T08:00:00Z"
+}

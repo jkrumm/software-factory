@@ -1,0 +1,458 @@
+{
+  "agents": {
+    "by_kind": {
+      "claude": 25
+    },
+    "by_root": {
+      "IuRoot": 4,
+      "SourceRoot": 21
+    },
+    "by_status": {
+      "blocked": 1,
+      "done": 17,
+      "idle": 3,
+      "working": 4
+    },
+    "hand_started": 11,
+    "latest_state_change_seq": 8005,
+    "named_by_rd": 14,
+    "total": 25
+  },
+  "as_of": "2026-10-22T08:00:00Z",
+  "claude_bg_leftovers": {
+    "by_state": {
+      "blocked": 2
+    },
+    "count": 2,
+    "items": [
+      {
+        "age_hours": 705.4,
+        "id": "4eca7240",
+        "last_activity_age_hours": 705.1,
+        "repo": "research-gateway",
+        "root": "SourceRoot",
+        "started_at": "2026-09-22T23:32:10Z",
+        "state": "blocked"
+      },
+      {
+        "age_hours": 386.7,
+        "id": "7d5572c0",
+        "last_activity_age_hours": 386.7,
+        "repo": "weatherorb",
+        "root": "SourceRoot",
+        "started_at": "2026-10-06T06:15:02Z",
+        "state": "blocked"
+      }
+    ],
+    "older_than_24h": 2,
+    "source": "claude agents --json (kind = background)"
+  },
+  "definition_keys": [
+    "herdr_hygiene"
+  ],
+  "finished_but_open_tabs": {
+    "age_available": "no: the herdr API returns sequence counters, not timestamps; age_hours is the time since the last entry in the agent's Claude transcript",
+    "age_buckets": {
+      "1-6h": 6,
+      "6-24h": 1,
+      "<1h": 11,
+      ">3d": 2
+    },
+    "count": 20,
+    "definition": "tabs whose agent_status is done or idle",
+    "done": 17,
+    "idle": 3,
+    "older_than_24h": {
+      "count": 2,
+      "count_if_all_unknown_were_stale": 2,
+      "of_known_age": 20,
+      "unknown_age": 0
+    },
+    "share_of_agent_tabs": 0.8,
+    "share_of_tabs": 0.4,
+    "tabs": [
+      {
+        "age_hours": 193.4,
+        "agents": 1,
+        "events_since_state_change": 7031,
+        "group": "APPS",
+        "panes": 2,
+        "repo": "sy-serendipity",
+        "root": "SourceRoot",
+        "state_change_seq": 974,
+        "status": "idle",
+        "tab_id": "w35:t1",
+        "tab_label": "1",
+        "workspace": "sy-serendipity"
+      },
+      {
+        "age_hours": 89.2,
+        "agents": 1,
+        "events_since_state_change": 1883,
+        "group": "TOOLING",
+        "panes": 1,
+        "repo": "dotfiles",
+        "root": "SourceRoot",
+        "state_change_seq": 6122,
+        "status": "idle",
+        "tab_id": "wR:tJ",
+        "tab_label": "1",
+        "workspace": "dotfiles"
+      },
+      {
+        "age_hours": 21.9,
+        "agents": 1,
+        "events_since_state_change": 424,
+        "group": "OTHER",
+        "panes": 1,
+        "repo": null,
+        "root": "SourceRoot",
+        "state_change_seq": 7581,
+        "status": "idle",
+        "tab_id": "w1Z:t3",
+        "tab_label": "1",
+        "workspace": "SourceRoot"
+      },
+      {
+        "age_hours": 3.4,
+        "agents": 1,
+        "events_since_state_change": 88,
+        "group": "APPS",
+        "panes": 1,
+        "repo": "basalt-ui",
+        "root": "SourceRoot",
+        "state_change_seq": 7917,
+        "status": "done",
+        "tab_id": "wK:tAG",
+        "tab_label": "fan w44-fixtures",
+        "workspace": "basalt-ui"
+      },
+      {
+        "age_hours": 1.6,
+        "agents": 1,
+        "events_since_state_change": 70,
+        "group": "OTHER",
+        "panes": 1,
+        "repo": "homelab-private",
+        "root": "SourceRoot",
+        "state_change_seq": 7935,
+        "status": "done",
+        "tab_id": "w3Q:t1",
+        "tab_label": "1",
+        "workspace": "homelab-private"
+      },
+      {
+        "age_hours": 1.5,
+        "agents": 1,
+        "events_since_state_change": 60,
+        "group": "TOOLING",
+        "panes": 1,
+        "repo": "rb",
+        "root": "SourceRoot",
+        "state_change_seq": 7945,
+        "status": "done",
+        "tab_id": "w21:t1",
+        "tab_label": "1",
+        "workspace": "rb"
+      },
+      {
+        "age_hours": 1.4,
+        "agents": 1,
+        "events_since_state_change": 56,
+        "group": "INFRA",
+        "panes": 1,
+        "repo": "homelab",
+        "root": "SourceRoot",
+        "state_change_seq": 7949,
+        "status": "done",
+        "tab_id": "w3N:t1",
+        "tab_label": "1",
+        "workspace": "homelab"
+      },
+      {
+        "age_hours": 1.3,
+        "agents": 1,
+        "events_since_state_change": 53,
+        "group": "APPS",
+        "panes": 1,
+        "repo": "basalt-ui",
+        "root": "SourceRoot",
+        "state_change_seq": 7952,
+        "status": "done",
+        "tab_id": "wK:tAF",
+        "tab_label": "fan w44-seam",
+        "workspace": "basalt-ui"
+      },
+      {
+        "age_hours": 1.0,
+        "agents": 1,
+        "events_since_state_change": 42,
+        "group": "PERSONAL",
+        "panes": 1,
+        "repo": "weatherorb",
+        "root": "SourceRoot",
+        "state_change_seq": 7963,
+        "status": "done",
+        "tab_id": "w22:t12",
+        "tab_label": "orchestrator",
+        "workspace": "weatherorb"
+      },
+      {
+        "age_hours": 0.9,
+        "agents": 1,
+        "events_since_state_change": 32,
+        "group": "TOOLING",
+        "panes": 1,
+        "repo": "hermes-agent",
+        "root": "SourceRoot",
+        "state_change_seq": 7973,
+        "status": "done",
+        "tab_id": "w3D:t1",
+        "tab_label": "1",
+        "workspace": "hermes-agent"
+      },
+      {
+        "age_hours": 0.9,
+        "agents": 1,
+        "events_since_state_change": 33,
+        "group": "WORK",
+        "panes": 1,
+        "repo": "epos.student-enrolment",
+        "root": "IuRoot",
+        "state_change_seq": 7972,
+        "status": "done",
+        "tab_id": "w3E:t1",
+        "tab_label": "1",
+        "workspace": "epos.student-enrolment"
+      },
+      {
+        "age_hours": 0.8,
+        "agents": 1,
+        "events_since_state_change": 28,
+        "group": "APPS",
+        "panes": 1,
+        "repo": "basalt-ui",
+        "root": "SourceRoot",
+        "state_change_seq": 7977,
+        "status": "done",
+        "tab_id": "wK:t5N",
+        "tab_label": "mother",
+        "workspace": "basalt-ui"
+      },
+      {
+        "age_hours": 0.7,
+        "agents": 1,
+        "events_since_state_change": 26,
+        "group": "TOOLING",
+        "panes": 1,
+        "repo": "agent-gateway",
+        "root": "SourceRoot",
+        "state_change_seq": 7979,
+        "status": "done",
+        "tab_id": "w12:tS",
+        "tab_label": "wave 12",
+        "workspace": "agent-gateway"
+      },
+      {
+        "age_hours": 0.6,
+        "agents": 1,
+        "events_since_state_change": 21,
+        "group": "WORK",
+        "panes": 1,
+        "repo": "prometheus-scripts",
+        "root": "IuRoot",
+        "state_change_seq": 7984,
+        "status": "done",
+        "tab_id": "wJ:t31",
+        "tab_label": "2",
+        "workspace": "prometheus-scripts"
+      },
+      {
+        "age_hours": 0.3,
+        "agents": 1,
+        "events_since_state_change": 11,
+        "group": "WORK",
+        "panes": 1,
+        "repo": "prometheus-scripts",
+        "root": "IuRoot",
+        "state_change_seq": 7994,
+        "status": "done",
+        "tab_id": "wJ:t2Z",
+        "tab_label": "<label withheld>",
+        "workspace": "prometheus-scripts"
+      },
+      {
+        "age_hours": 0.3,
+        "agents": 1,
+        "events_since_state_change": 4,
+        "group": "APPS",
+        "panes": 1,
+        "repo": "basalt-ui",
+        "root": "SourceRoot",
+        "state_change_seq": 8001,
+        "status": "done",
+        "tab_id": "wK:tAH",
+        "tab_label": "fan w44-eventlist",
+        "workspace": "basalt-ui"
+      },
+      {
+        "age_hours": 0.3,
+        "agents": 1,
+        "events_since_state_change": 12,
+        "group": "APPS",
+        "panes": 1,
+        "repo": "basalt-ui",
+        "root": "SourceRoot",
+        "state_change_seq": 7993,
+        "status": "done",
+        "tab_id": "wK:tAJ",
+        "tab_label": "fan w44-s5page",
+        "workspace": "basalt-ui"
+      },
+      {
+        "age_hours": 0.2,
+        "agents": 1,
+        "events_since_state_change": 2,
+        "group": "OTHER",
+        "panes": 1,
+        "repo": null,
+        "root": "SourceRoot",
+        "state_change_seq": 8003,
+        "status": "done",
+        "tab_id": "w1Z:t5",
+        "tab_label": "2",
+        "workspace": "SourceRoot"
+      },
+      {
+        "age_hours": 0.2,
+        "agents": 1,
+        "events_since_state_change": 1,
+        "group": "OTHER",
+        "panes": 1,
+        "repo": "prometheus-epx",
+        "root": "IuRoot",
+        "state_change_seq": 8004,
+        "status": "done",
+        "tab_id": "w3S:t1",
+        "tab_label": "1",
+        "workspace": "prometheus-epx"
+      },
+      {
+        "age_hours": 0.1,
+        "agents": 1,
+        "events_since_state_change": 0,
+        "group": "TOOLING",
+        "panes": 1,
+        "repo": "usage-tracker",
+        "root": "SourceRoot",
+        "state_change_seq": 8005,
+        "status": "done",
+        "tab_id": "w34:t3",
+        "tab_label": "wave 1",
+        "workspace": "usage-tracker"
+      }
+    ]
+  },
+  "kind": "live measurement; herdr keeps no history, so AS_OF itself cannot be reconstructed",
+  "measured_at": "2026-10-22T08:55:23Z",
+  "notes": [
+    "Tabs with agent_status `unknown` hold a plain shell or an agent herdr does not detect; they are not counted as finished.",
+    "Separator workspaces (labels starting with a rule) only group the sidebar and are excluded from repo_workspaces.",
+    "age_hours is the time since the agent's last transcript entry; a later resume or a janitor message writes a new entry and makes the tab look younger.",
+    "Terminal titles are free text and are not written to this file."
+  ],
+  "phase0_warning": "A Phase 0 janitor wave (rd reap, herdr event recorder) is running while the baseline is taken and may close finished tabs or kill claude --bg leftovers. Treat these numbers as the state at measured_at, not as a stable baseline; compare against the next run, not against AS_OF.",
+  "rd_agents": {
+    "bg_statuses": {
+      "?": 2
+    },
+    "by_lane": {
+      "bg": 2,
+      "herdr": 25
+    },
+    "crosscheck": {
+      "bg_rows": 2,
+      "claude_bg_agents": 2,
+      "consistent": true,
+      "herdr_agent_list": 25,
+      "herdr_lane_rows": 25
+    },
+    "note": "rd agents merges the herdr lane with `claude agents --json`; a Claude running in a herdr pane is listed once",
+    "rows": 27
+  },
+  "script": "herdr_hygiene.py",
+  "tabs": {
+    "by_agent_status": {
+      "blocked": 1,
+      "done": 17,
+      "idle": 3,
+      "unknown": 25,
+      "working": 4
+    },
+    "panes": 51,
+    "per_workspace_max": 6,
+    "total": 50,
+    "wave_fan_mother_orchestrator_labelled": 12
+  },
+  "workspaces": {
+    "by_agent_status": {
+      "blocked": 1,
+      "done": 11,
+      "idle": 1,
+      "unknown": 14,
+      "working": 2
+    },
+    "by_group": {
+      "APPS": {
+        "status_done": 1,
+        "status_idle": 1,
+        "status_unknown": 2,
+        "tabs": 9,
+        "workspaces": 4
+      },
+      "HERD": {
+        "status_unknown": 1,
+        "tabs": 1,
+        "workspaces": 1
+      },
+      "INFRA": {
+        "status_done": 1,
+        "status_unknown": 2,
+        "tabs": 3,
+        "workspaces": 3
+      },
+      "OTHER": {
+        "status_blocked": 1,
+        "status_done": 2,
+        "tabs": 5,
+        "workspaces": 3
+      },
+      "PERSONAL": {
+        "status_done": 1,
+        "status_unknown": 1,
+        "tabs": 3,
+        "workspaces": 2
+      },
+      "TOOLING": {
+        "status_done": 4,
+        "status_unknown": 7,
+        "status_working": 2,
+        "tabs": 18,
+        "workspaces": 13
+      },
+      "WORK": {
+        "status_done": 2,
+        "status_unknown": 1,
+        "tabs": 4,
+        "workspaces": 3
+      }
+    },
+    "duplicate_labels": {
+      "hermes-agent": 2,
+      "homelab-private": 2
+    },
+    "repo_workspaces": 29,
+    "separators": 7,
+    "total": 36
+  }
+}

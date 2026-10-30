@@ -1,0 +1,2542 @@
+{
+  "meta": {
+    "script": "evidence/kpi/baseline.py",
+    "as_of": "2026-10-22T08:00:00Z",
+    "definitions": "evidence/DEFINITIONS.md",
+    "windows": {
+      "14d": "[AS_OF - 14 d, AS_OF)",
+      "30d": "[AS_OF - 30 d, AS_OF)",
+      "90d": "[AS_OF - 90 d, AS_OF)",
+      "all": "[beginning, AS_OF)"
+    },
+    "cohort": "triage_items.created_at in window; outcomes observed up to AS_OF",
+    "percentile_method": "linear interpolation between order statistics (numpy default)"
+  },
+  "headline": {
+    "14d": {
+      "items": 230,
+      "duplicate_rows": 39,
+      "escalated_rate": 0.3217,
+      "owner_touch_rate": 0.3565,
+      "autonomy_rate": 0.6435,
+      "resolved_rate": 0.6565,
+      "ignored_share": 0.1696,
+      "failed_share": 0.0087,
+      "time_to_resolve_median_h": 0.72,
+      "time_to_resolve_p90_h": 14.89,
+      "time_to_resolve_censored_n": 40,
+      "reopen_rate": 0.1036,
+      "regression_rate": null,
+      "regression_evaluable_fixes": 0,
+      "warden_revert_rate": 0.0
+    },
+    "30d": {
+      "items": 364,
+      "duplicate_rows": 39,
+      "escalated_rate": 0.2885,
+      "owner_touch_rate": 0.478,
+      "autonomy_rate": 0.522,
+      "resolved_rate": 0.7692,
+      "ignored_share": 0.1209,
+      "failed_share": 0.0055,
+      "time_to_resolve_median_h": 1.1,
+      "time_to_resolve_p90_h": 49.21,
+      "time_to_resolve_censored_n": 40,
+      "reopen_rate": 0.1529,
+      "regression_rate": null,
+      "regression_evaluable_fixes": 0,
+      "warden_revert_rate": 0.0
+    },
+    "all": {
+      "items": 556,
+      "duplicate_rows": 41,
+      "escalated_rate": 0.205,
+      "owner_touch_rate": 0.4748,
+      "autonomy_rate": 0.5252,
+      "resolved_rate": 0.8129,
+      "ignored_share": 0.1241,
+      "failed_share": 0.0054,
+      "time_to_resolve_median_h": 1.68,
+      "time_to_resolve_p90_h": 107.31,
+      "time_to_resolve_censored_n": 40,
+      "reopen_rate": 0.1753,
+      "regression_rate": 0.1042,
+      "regression_evaluable_fixes": 48,
+      "warden_revert_rate": 0.0
+    }
+  },
+  "data_quality": {
+    "snapshot_file": "~/.local/share/factory/snapshots/2026-10-22/warden.db",
+    "snapshot_mtime_utc": "2026-10-22T07:51:56Z",
+    "data_horizon": {
+      "latest_transition": "2026-10-22T07:33:03Z",
+      "latest_row_update": "2026-10-22T07:43:08Z"
+    },
+    "transition_log_starts": "2026-09-09T19:43:30Z",
+    "transitions_total_in_file": 4005,
+    "transitions_at_or_after_as_of_dropped": 0,
+    "rows_before_transition_log_without_creation_transition": 90,
+    "rows_with_no_transitions_at_all": 33,
+    "rows_with_no_transitions_by_state": {
+      "closed": 9,
+      "quiet": 24
+    },
+    "rows_without_repo": 139,
+    "fixed_by_pr_populated": 0,
+    "revert_columns_populated": 0,
+    "merge_operation_done_but_merged_sha_null": 9,
+    "closed_transitions_with_inferred_reason": 95,
+    "event_first_seen_later_than_item_first_seen": 52,
+    "t0_rule": "min(events.first_seen, triage_items.first_seen, triage_items.created_at)",
+    "owner_or_cli_operations_total": 3,
+    "owner_or_cli_operations_without_an_item": 1,
+    "windows_90d_equals_all": true,
+    "item_signature_distinct_of_rows": [
+      597,
+      597
+    ]
+  },
+  "windows": {
+    "14d": {
+      "from": "2026-10-08T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "item": {
+        "key": "item",
+        "rows": 269,
+        "items": 230,
+        "duplicates": 39,
+        "duplicate_share_of_rows": 0.145,
+        "duplicate_parents": 24,
+        "duplicate_parent_missing": 0,
+        "duplicate_parent_is_duplicate": 1,
+        "duplicates_that_escalated": 0
+      },
+      "escalated": {
+        "key": "escalated",
+        "n": 74,
+        "d": 230,
+        "rate": 0.3217,
+        "needs_decision_transitions": 88,
+        "still_awaiting_owner_at_as_of": 41
+      },
+      "owner_touch": {
+        "key": "owner_touch",
+        "n": 82,
+        "d": 230,
+        "rate": 0.3565,
+        "components_any": {
+          "escalated": 74,
+          "closed_by_hand": 22,
+          "re_investigation_requested": 7,
+          "operation_owner_or_cli": 1
+        },
+        "touched_without_escalation": 8,
+        "closed_by_hand_actor_hint": {
+          "hermes": 1,
+          "owner_or_unspecified": 21
+        },
+        "sensitivity_unlisted_owner_like_notes": {
+          "extra_items": 2,
+          "autonomy_rate_if_counted": 0.6348,
+          "prefixes": [
+            "retried by owner",
+            "adopted by owner",
+            "aborted:",
+            "revived by scripts/reset-frozen-notes.py"
+          ]
+        }
+      },
+      "autonomy_rate": {
+        "key": "autonomy_rate",
+        "n_untouched": 148,
+        "d": 230,
+        "rate": 0.6435,
+        "target": 0.999
+      },
+      "resolved": {
+        "key": "resolved",
+        "resolved_ever": {
+          "n": 151,
+          "d": 230,
+          "rate": 0.6565,
+          "by_first_route": {
+            "closed_fixed_by": 1,
+            "closed_resolved": 93,
+            "fixed": 28,
+            "quiet_recovery": 29
+          },
+          "first_route_inferred_from_note": 8
+        },
+        "reopened_after_resolution": 3,
+        "outcome_at_as_of": {
+          "resolved": 148,
+          "ignored": 39,
+          "failed": 2,
+          "awaiting_owner": 41,
+          "in_progress": 0,
+          "quiet_unrecovered": 0,
+          "closed_unknown": 0
+        },
+        "ignored_share": 0.1696,
+        "failed_share": 0.0087,
+        "closed_by_hand_resolved": 22,
+        "closed_by_hand_reads_as_dismissal": 4,
+        "hand_closed_duplicates_not_flagged_duplicate": 0
+      },
+      "time_to_resolve": {
+        "key": "time_to_resolve",
+        "unit": "hours",
+        "n": 151,
+        "censored_n": 40,
+        "excluded_ignored_n": 39,
+        "resolved_time_unobservable_n": 0,
+        "negative_clamped_n": 0,
+        "median_h": 0.72,
+        "p90_h": 14.89,
+        "km_median_h": 1.95,
+        "km_p90_h": null
+      },
+      "time_to_resolve_by_source_family": {
+        "slack_alert": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 10,
+          "censored_n": 16,
+          "excluded_ignored_n": 36,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.69,
+          "p90_h": 4.86,
+          "km_median_h": null,
+          "km_p90_h": null
+        },
+        "slack_update": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 0,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": null,
+          "p90_h": null,
+          "km_median_h": null,
+          "km_p90_h": null
+        },
+        "human": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 37,
+          "censored_n": 5,
+          "excluded_ignored_n": 3,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.4,
+          "p90_h": 5.21,
+          "km_median_h": 1.74,
+          "km_p90_h": null
+        },
+        "hermes_log": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 4,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 4.1,
+          "p90_h": 23.87,
+          "km_median_h": 0.65,
+          "km_p90_h": 30.87
+        },
+        "github_*": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 63,
+          "censored_n": 16,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.43,
+          "p90_h": 12.89,
+          "km_median_h": 2.39,
+          "km_p90_h": null
+        },
+        "uk": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 30,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.35,
+          "p90_h": 15.18,
+          "km_median_h": 1.8,
+          "km_p90_h": 15.2
+        },
+        "hyperdx": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 3,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.29,
+          "p90_h": 50.31,
+          "km_median_h": 0.29,
+          "km_p90_h": 62.81
+        },
+        "other": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 4,
+          "censored_n": 3,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.4,
+          "p90_h": 0.78,
+          "km_median_h": 0.83,
+          "km_p90_h": null
+        }
+      },
+      "reopen_rate": {
+        "key": "reopen_rate",
+        "n": 20,
+        "d": 193,
+        "rate": 0.1036,
+        "reopen_transitions_by_from_state": {
+          "closed": 16,
+          "quiet": 29,
+          "fixed": 1,
+          "failed": 9
+        },
+        "reopen_transitions_owner_initiated": 5,
+        "excluding_failed_redrives": {
+          "n": 15,
+          "d": 190,
+          "rate": 0.0789
+        }
+      },
+      "regression_rate": {
+        "key": "regression_rate",
+        "look_ahead_days": 30,
+        "fixes_resolved_by_a_change": 42,
+        "resolved_items_with_change_evidence_but_no_anchor": 0,
+        "evidence_classes": {
+          "hand_close_commit": 9,
+          "merge_operation": 29,
+          "merged_sha": 29,
+          "pr_url": 38
+        },
+        "evaluable_fixes": 0,
+        "not_yet_evaluable_fixes": 42,
+        "regressed_evaluable": 0,
+        "rate": null,
+        "arms_evaluable": {
+          "signature_same_item_reopened": 0,
+          "normalised_title_other_row": 0
+        },
+        "strict_evidence_only": {
+          "evaluable": 0,
+          "regressed": 0,
+          "rate": null
+        },
+        "lower_bound_all_fixes_partial_follow_up": {
+          "regressed": 4,
+          "d": 42,
+          "rate": 0.0952,
+          "signature": 2,
+          "title": 2
+        },
+        "note": "signature is unique per item in this ledger, so the signature arm is 'the same item left a terminal state again within 30 d'; the title arm looks for another row with the same normalised title"
+      },
+      "revert_rate_warden": {
+        "key": "revert_rate (warden's own)",
+        "merged_by_warden": 30,
+        "merges_on_rows_later_closed_as_duplicate_excluded": 1,
+        "with_revert_pr_or_reverting_sha": 0,
+        "rate": 0.0,
+        "verification_failed_after_merge": 1,
+        "verification_failed_cannot_auto_revert": 1,
+        "revert_needed_rate_if_impossible_counted": 0.0333
+      }
+    },
+    "30d": {
+      "from": "2026-09-22T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "item": {
+        "key": "item",
+        "rows": 403,
+        "items": 364,
+        "duplicates": 39,
+        "duplicate_share_of_rows": 0.0968,
+        "duplicate_parents": 24,
+        "duplicate_parent_missing": 0,
+        "duplicate_parent_is_duplicate": 1,
+        "duplicates_that_escalated": 0
+      },
+      "escalated": {
+        "key": "escalated",
+        "n": 105,
+        "d": 364,
+        "rate": 0.2885,
+        "needs_decision_transitions": 129,
+        "still_awaiting_owner_at_as_of": 42
+      },
+      "owner_touch": {
+        "key": "owner_touch",
+        "n": 174,
+        "d": 364,
+        "rate": 0.478,
+        "components_any": {
+          "escalated": 105,
+          "closed_by_hand": 110,
+          "re_investigation_requested": 17,
+          "operation_owner_or_cli": 2
+        },
+        "touched_without_escalation": 69,
+        "closed_by_hand_actor_hint": {
+          "hermes": 10,
+          "improve_loop": 19,
+          "owner_or_unspecified": 81
+        },
+        "sensitivity_unlisted_owner_like_notes": {
+          "extra_items": 17,
+          "autonomy_rate_if_counted": 0.4753,
+          "prefixes": [
+            "retried by owner",
+            "adopted by owner",
+            "aborted:",
+            "revived by scripts/reset-frozen-notes.py"
+          ]
+        }
+      },
+      "autonomy_rate": {
+        "key": "autonomy_rate",
+        "n_untouched": 190,
+        "d": 364,
+        "rate": 0.522,
+        "target": 0.999
+      },
+      "resolved": {
+        "key": "resolved",
+        "resolved_ever": {
+          "n": 280,
+          "d": 364,
+          "rate": 0.7692,
+          "by_first_route": {
+            "closed_fixed_by": 1,
+            "closed_resolved": 206,
+            "fixed": 33,
+            "quiet_recovery": 40
+          },
+          "first_route_inferred_from_note": 16
+        },
+        "reopened_after_resolution": 4,
+        "outcome_at_as_of": {
+          "resolved": 276,
+          "ignored": 44,
+          "failed": 2,
+          "awaiting_owner": 42,
+          "in_progress": 0,
+          "quiet_unrecovered": 0,
+          "closed_unknown": 0
+        },
+        "ignored_share": 0.1209,
+        "failed_share": 0.0055,
+        "closed_by_hand_resolved": 110,
+        "closed_by_hand_reads_as_dismissal": 30,
+        "hand_closed_duplicates_not_flagged_duplicate": 4
+      },
+      "time_to_resolve": {
+        "key": "time_to_resolve",
+        "unit": "hours",
+        "n": 280,
+        "censored_n": 40,
+        "excluded_ignored_n": 44,
+        "resolved_time_unobservable_n": 0,
+        "negative_clamped_n": 0,
+        "median_h": 1.1,
+        "p90_h": 49.21,
+        "km_median_h": 1.88,
+        "km_p90_h": 140.07
+      },
+      "time_to_resolve_by_source_family": {
+        "slack_alert": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 16,
+          "censored_n": 16,
+          "excluded_ignored_n": 40,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.76,
+          "p90_h": 17.1,
+          "km_median_h": 32.67,
+          "km_p90_h": null
+        },
+        "slack_update": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 0,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": null,
+          "p90_h": null,
+          "km_median_h": null,
+          "km_p90_h": null
+        },
+        "human": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 103,
+          "censored_n": 5,
+          "excluded_ignored_n": 4,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.65,
+          "p90_h": 89.72,
+          "km_median_h": 1.95,
+          "km_p90_h": 95.66
+        },
+        "hermes_log": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 23,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.63,
+          "p90_h": 49.21,
+          "km_median_h": 0.63,
+          "km_p90_h": 49.21
+        },
+        "github_*": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 85,
+          "censored_n": 16,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.52,
+          "p90_h": 37.05,
+          "km_median_h": 3.56,
+          "km_p90_h": 152.01
+        },
+        "uk": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 35,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.74,
+          "p90_h": 15.16,
+          "km_median_h": 0.74,
+          "km_p90_h": 15.18
+        },
+        "hyperdx": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 3,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.29,
+          "p90_h": 50.31,
+          "km_median_h": 0.29,
+          "km_p90_h": 62.81
+        },
+        "other": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 15,
+          "censored_n": 3,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.62,
+          "p90_h": 16.59,
+          "km_median_h": 0.66,
+          "km_p90_h": 24.84
+        }
+      },
+      "reopen_rate": {
+        "key": "reopen_rate",
+        "n": 50,
+        "d": 327,
+        "rate": 0.1529,
+        "reopen_transitions_by_from_state": {
+          "closed": 24,
+          "quiet": 32,
+          "fixed": 1,
+          "failed": 46
+        },
+        "reopen_transitions_owner_initiated": 9,
+        "excluding_failed_redrives": {
+          "n": 22,
+          "d": 324,
+          "rate": 0.0679
+        }
+      },
+      "regression_rate": {
+        "key": "regression_rate",
+        "look_ahead_days": 30,
+        "fixes_resolved_by_a_change": 112,
+        "resolved_items_with_change_evidence_but_no_anchor": 0,
+        "evidence_classes": {
+          "hand_close_commit": 58,
+          "merge_operation": 44,
+          "merged_sha": 36,
+          "pr_url": 81
+        },
+        "evaluable_fixes": 0,
+        "not_yet_evaluable_fixes": 112,
+        "regressed_evaluable": 0,
+        "rate": null,
+        "arms_evaluable": {
+          "signature_same_item_reopened": 0,
+          "normalised_title_other_row": 0
+        },
+        "strict_evidence_only": {
+          "evaluable": 0,
+          "regressed": 0,
+          "rate": null
+        },
+        "lower_bound_all_fixes_partial_follow_up": {
+          "regressed": 7,
+          "d": 112,
+          "rate": 0.0625,
+          "signature": 3,
+          "title": 4
+        },
+        "note": "signature is unique per item in this ledger, so the signature arm is 'the same item left a terminal state again within 30 d'; the title arm looks for another row with the same normalised title"
+      },
+      "revert_rate_warden": {
+        "key": "revert_rate (warden's own)",
+        "merged_by_warden": 46,
+        "merges_on_rows_later_closed_as_duplicate_excluded": 1,
+        "with_revert_pr_or_reverting_sha": 0,
+        "rate": 0.0,
+        "verification_failed_after_merge": 3,
+        "verification_failed_cannot_auto_revert": 2,
+        "revert_needed_rate_if_impossible_counted": 0.0435
+      }
+    },
+    "90d": {
+      "from": "2026-07-24T08:00:00Z",
+      "to": "2026-10-22T08:00:00Z",
+      "item": {
+        "key": "item",
+        "rows": 597,
+        "items": 556,
+        "duplicates": 41,
+        "duplicate_share_of_rows": 0.0687,
+        "duplicate_parents": 26,
+        "duplicate_parent_missing": 0,
+        "duplicate_parent_is_duplicate": 1,
+        "duplicates_that_escalated": 0
+      },
+      "escalated": {
+        "key": "escalated",
+        "n": 114,
+        "d": 556,
+        "rate": 0.205,
+        "needs_decision_transitions": 140,
+        "still_awaiting_owner_at_as_of": 43
+      },
+      "owner_touch": {
+        "key": "owner_touch",
+        "n": 264,
+        "d": 556,
+        "rate": 0.4748,
+        "components_any": {
+          "escalated": 114,
+          "closed_by_hand": 200,
+          "re_investigation_requested": 19,
+          "operation_owner_or_cli": 2
+        },
+        "touched_without_escalation": 150,
+        "closed_by_hand_actor_hint": {
+          "hermes": 23,
+          "improve_loop": 19,
+          "owner_or_unspecified": 158
+        },
+        "sensitivity_unlisted_owner_like_notes": {
+          "extra_items": 43,
+          "autonomy_rate_if_counted": 0.4478,
+          "prefixes": [
+            "retried by owner",
+            "adopted by owner",
+            "aborted:",
+            "revived by scripts/reset-frozen-notes.py"
+          ]
+        }
+      },
+      "autonomy_rate": {
+        "key": "autonomy_rate",
+        "n_untouched": 292,
+        "d": 556,
+        "rate": 0.5252,
+        "target": 0.999
+      },
+      "resolved": {
+        "key": "resolved",
+        "resolved_ever": {
+          "n": 452,
+          "d": 556,
+          "rate": 0.8129,
+          "by_first_route": {
+            "closed_fixed_by": 1,
+            "closed_resolved": 319,
+            "fixed": 34,
+            "quiet_recovery": 98
+          },
+          "first_route_inferred_from_note": 25
+        },
+        "reopened_after_resolution": 11,
+        "outcome_at_as_of": {
+          "resolved": 441,
+          "ignored": 69,
+          "failed": 3,
+          "awaiting_owner": 43,
+          "in_progress": 0,
+          "quiet_unrecovered": 0,
+          "closed_unknown": 0
+        },
+        "ignored_share": 0.1241,
+        "failed_share": 0.0054,
+        "closed_by_hand_resolved": 193,
+        "closed_by_hand_reads_as_dismissal": 66,
+        "hand_closed_duplicates_not_flagged_duplicate": 22
+      },
+      "time_to_resolve": {
+        "key": "time_to_resolve",
+        "unit": "hours",
+        "n": 452,
+        "censored_n": 40,
+        "excluded_ignored_n": 64,
+        "resolved_time_unobservable_n": 0,
+        "negative_clamped_n": 0,
+        "median_h": 1.68,
+        "p90_h": 107.31,
+        "km_median_h": 2.12,
+        "km_p90_h": 168.1
+      },
+      "time_to_resolve_by_source_family": {
+        "slack_alert": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 52,
+          "censored_n": 16,
+          "excluded_ignored_n": 60,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 9.59,
+          "p90_h": 261.97,
+          "km_median_h": 168.03,
+          "km_p90_h": 272.36
+        },
+        "slack_update": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 0,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": null,
+          "p90_h": null,
+          "km_median_h": null,
+          "km_p90_h": null
+        },
+        "human": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 153,
+          "censored_n": 5,
+          "excluded_ignored_n": 4,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.43,
+          "p90_h": 67.75,
+          "km_median_h": 1.66,
+          "km_p90_h": 93.96
+        },
+        "hermes_log": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 62,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.6,
+          "p90_h": 135.46,
+          "km_median_h": 0.61,
+          "km_p90_h": 140.07
+        },
+        "github_*": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 105,
+          "censored_n": 16,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.52,
+          "p90_h": 38.83,
+          "km_median_h": 3.23,
+          "km_p90_h": 151.25
+        },
+        "uk": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 56,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 4.24,
+          "p90_h": 58.88,
+          "km_median_h": 3.3,
+          "km_p90_h": 58.88
+        },
+        "hyperdx": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 3,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.29,
+          "p90_h": 50.31,
+          "km_median_h": 0.29,
+          "km_p90_h": 62.81
+        },
+        "other": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 21,
+          "censored_n": 3,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.83,
+          "p90_h": 17.31,
+          "km_median_h": 1.23,
+          "km_p90_h": 24.84
+        }
+      },
+      "reopen_rate": {
+        "key": "reopen_rate",
+        "n": 91,
+        "d": 519,
+        "rate": 0.1753,
+        "reopen_transitions_by_from_state": {
+          "closed": 86,
+          "quiet": 123,
+          "fixed": 2,
+          "failed": 57
+        },
+        "reopen_transitions_owner_initiated": 12,
+        "excluding_failed_redrives": {
+          "n": 61,
+          "d": 516,
+          "rate": 0.1182
+        }
+      },
+      "regression_rate": {
+        "key": "regression_rate",
+        "look_ahead_days": 30,
+        "fixes_resolved_by_a_change": 170,
+        "resolved_items_with_change_evidence_but_no_anchor": 0,
+        "evidence_classes": {
+          "hand_close_commit": 101,
+          "merge_operation": 47,
+          "merged_sha": 38,
+          "pr_url": 110
+        },
+        "evaluable_fixes": 48,
+        "not_yet_evaluable_fixes": 122,
+        "regressed_evaluable": 5,
+        "rate": 0.1042,
+        "arms_evaluable": {
+          "signature_same_item_reopened": 4,
+          "normalised_title_other_row": 1
+        },
+        "strict_evidence_only": {
+          "evaluable": 37,
+          "regressed": 5,
+          "rate": 0.1351
+        },
+        "lower_bound_all_fixes_partial_follow_up": {
+          "regressed": 15,
+          "d": 170,
+          "rate": 0.0882,
+          "signature": 10,
+          "title": 5
+        },
+        "note": "signature is unique per item in this ledger, so the signature arm is 'the same item left a terminal state again within 30 d'; the title arm looks for another row with the same normalised title"
+      },
+      "revert_rate_warden": {
+        "key": "revert_rate (warden's own)",
+        "merged_by_warden": 52,
+        "merges_on_rows_later_closed_as_duplicate_excluded": 1,
+        "with_revert_pr_or_reverting_sha": 0,
+        "rate": 0.0,
+        "verification_failed_after_merge": 4,
+        "verification_failed_cannot_auto_revert": 3,
+        "revert_needed_rate_if_impossible_counted": 0.0577
+      }
+    },
+    "all": {
+      "from": null,
+      "to": "2026-10-22T08:00:00Z",
+      "item": {
+        "key": "item",
+        "rows": 597,
+        "items": 556,
+        "duplicates": 41,
+        "duplicate_share_of_rows": 0.0687,
+        "duplicate_parents": 26,
+        "duplicate_parent_missing": 0,
+        "duplicate_parent_is_duplicate": 1,
+        "duplicates_that_escalated": 0
+      },
+      "escalated": {
+        "key": "escalated",
+        "n": 114,
+        "d": 556,
+        "rate": 0.205,
+        "needs_decision_transitions": 140,
+        "still_awaiting_owner_at_as_of": 43
+      },
+      "owner_touch": {
+        "key": "owner_touch",
+        "n": 264,
+        "d": 556,
+        "rate": 0.4748,
+        "components_any": {
+          "escalated": 114,
+          "closed_by_hand": 200,
+          "re_investigation_requested": 19,
+          "operation_owner_or_cli": 2
+        },
+        "touched_without_escalation": 150,
+        "closed_by_hand_actor_hint": {
+          "hermes": 23,
+          "improve_loop": 19,
+          "owner_or_unspecified": 158
+        },
+        "sensitivity_unlisted_owner_like_notes": {
+          "extra_items": 43,
+          "autonomy_rate_if_counted": 0.4478,
+          "prefixes": [
+            "retried by owner",
+            "adopted by owner",
+            "aborted:",
+            "revived by scripts/reset-frozen-notes.py"
+          ]
+        }
+      },
+      "autonomy_rate": {
+        "key": "autonomy_rate",
+        "n_untouched": 292,
+        "d": 556,
+        "rate": 0.5252,
+        "target": 0.999
+      },
+      "resolved": {
+        "key": "resolved",
+        "resolved_ever": {
+          "n": 452,
+          "d": 556,
+          "rate": 0.8129,
+          "by_first_route": {
+            "closed_fixed_by": 1,
+            "closed_resolved": 319,
+            "fixed": 34,
+            "quiet_recovery": 98
+          },
+          "first_route_inferred_from_note": 25
+        },
+        "reopened_after_resolution": 11,
+        "outcome_at_as_of": {
+          "resolved": 441,
+          "ignored": 69,
+          "failed": 3,
+          "awaiting_owner": 43,
+          "in_progress": 0,
+          "quiet_unrecovered": 0,
+          "closed_unknown": 0
+        },
+        "ignored_share": 0.1241,
+        "failed_share": 0.0054,
+        "closed_by_hand_resolved": 193,
+        "closed_by_hand_reads_as_dismissal": 66,
+        "hand_closed_duplicates_not_flagged_duplicate": 22
+      },
+      "time_to_resolve": {
+        "key": "time_to_resolve",
+        "unit": "hours",
+        "n": 452,
+        "censored_n": 40,
+        "excluded_ignored_n": 64,
+        "resolved_time_unobservable_n": 0,
+        "negative_clamped_n": 0,
+        "median_h": 1.68,
+        "p90_h": 107.31,
+        "km_median_h": 2.12,
+        "km_p90_h": 168.1
+      },
+      "time_to_resolve_by_source_family": {
+        "slack_alert": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 52,
+          "censored_n": 16,
+          "excluded_ignored_n": 60,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 9.59,
+          "p90_h": 261.97,
+          "km_median_h": 168.03,
+          "km_p90_h": 272.36
+        },
+        "slack_update": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 0,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": null,
+          "p90_h": null,
+          "km_median_h": null,
+          "km_p90_h": null
+        },
+        "human": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 153,
+          "censored_n": 5,
+          "excluded_ignored_n": 4,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.43,
+          "p90_h": 67.75,
+          "km_median_h": 1.66,
+          "km_p90_h": 93.96
+        },
+        "hermes_log": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 62,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.6,
+          "p90_h": 135.46,
+          "km_median_h": 0.61,
+          "km_p90_h": 140.07
+        },
+        "github_*": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 105,
+          "censored_n": 16,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 1.52,
+          "p90_h": 38.83,
+          "km_median_h": 3.23,
+          "km_p90_h": 151.25
+        },
+        "uk": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 56,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 4.24,
+          "p90_h": 58.88,
+          "km_median_h": 3.3,
+          "km_p90_h": 58.88
+        },
+        "hyperdx": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 3,
+          "censored_n": 0,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.29,
+          "p90_h": 50.31,
+          "km_median_h": 0.29,
+          "km_p90_h": 62.81
+        },
+        "other": {
+          "key": "time_to_resolve",
+          "unit": "hours",
+          "n": 21,
+          "censored_n": 3,
+          "excluded_ignored_n": 0,
+          "resolved_time_unobservable_n": 0,
+          "negative_clamped_n": 0,
+          "median_h": 0.83,
+          "p90_h": 17.31,
+          "km_median_h": 1.23,
+          "km_p90_h": 24.84
+        }
+      },
+      "reopen_rate": {
+        "key": "reopen_rate",
+        "n": 91,
+        "d": 519,
+        "rate": 0.1753,
+        "reopen_transitions_by_from_state": {
+          "closed": 86,
+          "quiet": 123,
+          "fixed": 2,
+          "failed": 57
+        },
+        "reopen_transitions_owner_initiated": 12,
+        "excluding_failed_redrives": {
+          "n": 61,
+          "d": 516,
+          "rate": 0.1182
+        }
+      },
+      "regression_rate": {
+        "key": "regression_rate",
+        "look_ahead_days": 30,
+        "fixes_resolved_by_a_change": 170,
+        "resolved_items_with_change_evidence_but_no_anchor": 0,
+        "evidence_classes": {
+          "hand_close_commit": 101,
+          "merge_operation": 47,
+          "merged_sha": 38,
+          "pr_url": 110
+        },
+        "evaluable_fixes": 48,
+        "not_yet_evaluable_fixes": 122,
+        "regressed_evaluable": 5,
+        "rate": 0.1042,
+        "arms_evaluable": {
+          "signature_same_item_reopened": 4,
+          "normalised_title_other_row": 1
+        },
+        "strict_evidence_only": {
+          "evaluable": 37,
+          "regressed": 5,
+          "rate": 0.1351
+        },
+        "lower_bound_all_fixes_partial_follow_up": {
+          "regressed": 15,
+          "d": 170,
+          "rate": 0.0882,
+          "signature": 10,
+          "title": 5
+        },
+        "note": "signature is unique per item in this ledger, so the signature arm is 'the same item left a terminal state again within 30 d'; the title arm looks for another row with the same normalised title"
+      },
+      "revert_rate_warden": {
+        "key": "revert_rate (warden's own)",
+        "merged_by_warden": 52,
+        "merges_on_rows_later_closed_as_duplicate_excluded": 1,
+        "with_revert_pr_or_reverting_sha": 0,
+        "rate": 0.0,
+        "verification_failed_after_merge": 4,
+        "verification_failed_cannot_auto_revert": 3,
+        "revert_needed_rate_if_impossible_counted": 0.0577
+      }
+    }
+  },
+  "by_source_family": {
+    "14d": {
+      "slack_alert": {
+        "items": 62,
+        "escalated": 17,
+        "escalated_rate": 0.2742,
+        "needs_decision_transitions": 17,
+        "owner_touch": 17,
+        "autonomy_rate": 0.7258,
+        "resolved_ever": 10
+      },
+      "slack_update": {
+        "items": 0,
+        "escalated": 0,
+        "escalated_rate": null,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": null,
+        "resolved_ever": 0
+      },
+      "human": {
+        "items": 45,
+        "escalated": 14,
+        "escalated_rate": 0.3111,
+        "needs_decision_transitions": 18,
+        "owner_touch": 19,
+        "autonomy_rate": 0.5778,
+        "resolved_ever": 37
+      },
+      "hermes_log": {
+        "items": 4,
+        "escalated": 1,
+        "escalated_rate": 0.25,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 4
+      },
+      "github_*": {
+        "items": 79,
+        "escalated": 22,
+        "escalated_rate": 0.2785,
+        "needs_decision_transitions": 29,
+        "owner_touch": 23,
+        "autonomy_rate": 0.7089,
+        "resolved_ever": 63
+      },
+      "uk": {
+        "items": 30,
+        "escalated": 12,
+        "escalated_rate": 0.4,
+        "needs_decision_transitions": 15,
+        "owner_touch": 12,
+        "autonomy_rate": 0.6,
+        "resolved_ever": 30
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "other": {
+        "items": 7,
+        "escalated": 7,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 7,
+        "owner_touch": 7,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 4
+      }
+    },
+    "30d": {
+      "slack_alert": {
+        "items": 72,
+        "escalated": 20,
+        "escalated_rate": 0.2778,
+        "needs_decision_transitions": 20,
+        "owner_touch": 21,
+        "autonomy_rate": 0.7083,
+        "resolved_ever": 16
+      },
+      "slack_update": {
+        "items": 0,
+        "escalated": 0,
+        "escalated_rate": null,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": null,
+        "resolved_ever": 0
+      },
+      "human": {
+        "items": 112,
+        "escalated": 33,
+        "escalated_rate": 0.2946,
+        "needs_decision_transitions": 43,
+        "owner_touch": 69,
+        "autonomy_rate": 0.3839,
+        "resolved_ever": 103
+      },
+      "hermes_log": {
+        "items": 23,
+        "escalated": 6,
+        "escalated_rate": 0.2609,
+        "needs_decision_transitions": 7,
+        "owner_touch": 14,
+        "autonomy_rate": 0.3913,
+        "resolved_ever": 23
+      },
+      "github_*": {
+        "items": 101,
+        "escalated": 26,
+        "escalated_rate": 0.2574,
+        "needs_decision_transitions": 36,
+        "owner_touch": 40,
+        "autonomy_rate": 0.604,
+        "resolved_ever": 85
+      },
+      "uk": {
+        "items": 35,
+        "escalated": 12,
+        "escalated_rate": 0.3429,
+        "needs_decision_transitions": 15,
+        "owner_touch": 14,
+        "autonomy_rate": 0.6,
+        "resolved_ever": 35
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "other": {
+        "items": 18,
+        "escalated": 7,
+        "escalated_rate": 0.3889,
+        "needs_decision_transitions": 7,
+        "owner_touch": 14,
+        "autonomy_rate": 0.2222,
+        "resolved_ever": 15
+      }
+    },
+    "90d": {
+      "slack_alert": {
+        "items": 128,
+        "escalated": 23,
+        "escalated_rate": 0.1797,
+        "needs_decision_transitions": 23,
+        "owner_touch": 29,
+        "autonomy_rate": 0.7734,
+        "resolved_ever": 52
+      },
+      "slack_update": {
+        "items": 0,
+        "escalated": 0,
+        "escalated_rate": null,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": null,
+        "resolved_ever": 0
+      },
+      "human": {
+        "items": 162,
+        "escalated": 33,
+        "escalated_rate": 0.2037,
+        "needs_decision_transitions": 43,
+        "owner_touch": 98,
+        "autonomy_rate": 0.3951,
+        "resolved_ever": 153
+      },
+      "hermes_log": {
+        "items": 62,
+        "escalated": 7,
+        "escalated_rate": 0.1129,
+        "needs_decision_transitions": 8,
+        "owner_touch": 40,
+        "autonomy_rate": 0.3548,
+        "resolved_ever": 62
+      },
+      "github_*": {
+        "items": 121,
+        "escalated": 26,
+        "escalated_rate": 0.2149,
+        "needs_decision_transitions": 36,
+        "owner_touch": 53,
+        "autonomy_rate": 0.562,
+        "resolved_ever": 105
+      },
+      "uk": {
+        "items": 56,
+        "escalated": 17,
+        "escalated_rate": 0.3036,
+        "needs_decision_transitions": 22,
+        "owner_touch": 26,
+        "autonomy_rate": 0.5357,
+        "resolved_ever": 56
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "other": {
+        "items": 24,
+        "escalated": 7,
+        "escalated_rate": 0.2917,
+        "needs_decision_transitions": 7,
+        "owner_touch": 16,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 21
+      }
+    },
+    "all": {
+      "slack_alert": {
+        "items": 128,
+        "escalated": 23,
+        "escalated_rate": 0.1797,
+        "needs_decision_transitions": 23,
+        "owner_touch": 29,
+        "autonomy_rate": 0.7734,
+        "resolved_ever": 52
+      },
+      "slack_update": {
+        "items": 0,
+        "escalated": 0,
+        "escalated_rate": null,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": null,
+        "resolved_ever": 0
+      },
+      "human": {
+        "items": 162,
+        "escalated": 33,
+        "escalated_rate": 0.2037,
+        "needs_decision_transitions": 43,
+        "owner_touch": 98,
+        "autonomy_rate": 0.3951,
+        "resolved_ever": 153
+      },
+      "hermes_log": {
+        "items": 62,
+        "escalated": 7,
+        "escalated_rate": 0.1129,
+        "needs_decision_transitions": 8,
+        "owner_touch": 40,
+        "autonomy_rate": 0.3548,
+        "resolved_ever": 62
+      },
+      "github_*": {
+        "items": 121,
+        "escalated": 26,
+        "escalated_rate": 0.2149,
+        "needs_decision_transitions": 36,
+        "owner_touch": 53,
+        "autonomy_rate": 0.562,
+        "resolved_ever": 105
+      },
+      "uk": {
+        "items": 56,
+        "escalated": 17,
+        "escalated_rate": 0.3036,
+        "needs_decision_transitions": 22,
+        "owner_touch": 26,
+        "autonomy_rate": 0.5357,
+        "resolved_ever": 56
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "other": {
+        "items": 24,
+        "escalated": 7,
+        "escalated_rate": 0.2917,
+        "needs_decision_transitions": 7,
+        "owner_touch": 16,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 21
+      }
+    }
+  },
+  "by_source": {
+    "30d": {
+      "human": {
+        "items": 112,
+        "escalated": 33,
+        "escalated_rate": 0.2946,
+        "needs_decision_transitions": 43,
+        "owner_touch": 69,
+        "autonomy_rate": 0.3839,
+        "resolved_ever": 103
+      },
+      "github_go": {
+        "items": 101,
+        "escalated": 26,
+        "escalated_rate": 0.2574,
+        "needs_decision_transitions": 36,
+        "owner_touch": 40,
+        "autonomy_rate": 0.604,
+        "resolved_ever": 85
+      },
+      "slack_alert": {
+        "items": 72,
+        "escalated": 20,
+        "escalated_rate": 0.2778,
+        "needs_decision_transitions": 20,
+        "owner_touch": 21,
+        "autonomy_rate": 0.7083,
+        "resolved_ever": 16
+      },
+      "uk": {
+        "items": 35,
+        "escalated": 12,
+        "escalated_rate": 0.3429,
+        "needs_decision_transitions": 15,
+        "owner_touch": 14,
+        "autonomy_rate": 0.6,
+        "resolved_ever": 35
+      },
+      "hermes_log": {
+        "items": 23,
+        "escalated": 6,
+        "escalated_rate": 0.2609,
+        "needs_decision_transitions": 7,
+        "owner_touch": 14,
+        "autonomy_rate": 0.3913,
+        "resolved_ever": 23
+      },
+      "job": {
+        "items": 7,
+        "escalated": 7,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 7,
+        "owner_touch": 7,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 4
+      },
+      "warden_self": {
+        "items": 7,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 7,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 7
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "docker_homelab": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 2
+      },
+      "docker_vps": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      },
+      "op_refs_homelab": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      }
+    },
+    "all": {
+      "human": {
+        "items": 162,
+        "escalated": 33,
+        "escalated_rate": 0.2037,
+        "needs_decision_transitions": 43,
+        "owner_touch": 98,
+        "autonomy_rate": 0.3951,
+        "resolved_ever": 153
+      },
+      "slack_alert": {
+        "items": 128,
+        "escalated": 23,
+        "escalated_rate": 0.1797,
+        "needs_decision_transitions": 23,
+        "owner_touch": 29,
+        "autonomy_rate": 0.7734,
+        "resolved_ever": 52
+      },
+      "github_go": {
+        "items": 121,
+        "escalated": 26,
+        "escalated_rate": 0.2149,
+        "needs_decision_transitions": 36,
+        "owner_touch": 53,
+        "autonomy_rate": 0.562,
+        "resolved_ever": 105
+      },
+      "hermes_log": {
+        "items": 62,
+        "escalated": 7,
+        "escalated_rate": 0.1129,
+        "needs_decision_transitions": 8,
+        "owner_touch": 40,
+        "autonomy_rate": 0.3548,
+        "resolved_ever": 62
+      },
+      "uk": {
+        "items": 56,
+        "escalated": 17,
+        "escalated_rate": 0.3036,
+        "needs_decision_transitions": 22,
+        "owner_touch": 26,
+        "autonomy_rate": 0.5357,
+        "resolved_ever": 56
+      },
+      "job": {
+        "items": 7,
+        "escalated": 7,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 7,
+        "owner_touch": 7,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 4
+      },
+      "warden_self": {
+        "items": 7,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 7,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 7
+      },
+      "warden_canary": {
+        "items": 4,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 4
+      },
+      "docker_homelab": {
+        "items": 3,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.6667,
+        "resolved_ever": 3
+      },
+      "hyperdx": {
+        "items": 3,
+        "escalated": 1,
+        "escalated_rate": 0.3333,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 3
+      },
+      "op_refs_homelab": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 2
+      },
+      "docker_vps": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      }
+    }
+  },
+  "by_repo": {
+    "30d": {
+      "weatherorb": {
+        "items": 96,
+        "escalated": 26,
+        "escalated_rate": 0.2708,
+        "needs_decision_transitions": 38,
+        "owner_touch": 39,
+        "autonomy_rate": 0.5938,
+        "resolved_ever": 79
+      },
+      "(none)": {
+        "items": 65,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.9846,
+        "resolved_ever": 25
+      },
+      "warden": {
+        "items": 55,
+        "escalated": 13,
+        "escalated_rate": 0.2364,
+        "needs_decision_transitions": 15,
+        "owner_touch": 35,
+        "autonomy_rate": 0.3636,
+        "resolved_ever": 54
+      },
+      "hermes-agent": {
+        "items": 33,
+        "escalated": 13,
+        "escalated_rate": 0.3939,
+        "needs_decision_transitions": 14,
+        "owner_touch": 23,
+        "autonomy_rate": 0.303,
+        "resolved_ever": 30
+      },
+      "homelab": {
+        "items": 25,
+        "escalated": 13,
+        "escalated_rate": 0.52,
+        "needs_decision_transitions": 13,
+        "owner_touch": 17,
+        "autonomy_rate": 0.32,
+        "resolved_ever": 23
+      },
+      "agent-gateway": {
+        "items": 16,
+        "escalated": 5,
+        "escalated_rate": 0.3125,
+        "needs_decision_transitions": 8,
+        "owner_touch": 6,
+        "autonomy_rate": 0.625,
+        "resolved_ever": 14
+      },
+      "dotfiles": {
+        "items": 15,
+        "escalated": 6,
+        "escalated_rate": 0.4,
+        "needs_decision_transitions": 9,
+        "owner_touch": 11,
+        "autonomy_rate": 0.2667,
+        "resolved_ever": 13
+      },
+      "research-gateway": {
+        "items": 13,
+        "escalated": 3,
+        "escalated_rate": 0.2308,
+        "needs_decision_transitions": 5,
+        "owner_touch": 9,
+        "autonomy_rate": 0.3077,
+        "resolved_ever": 13
+      },
+      "sideclaw": {
+        "items": 13,
+        "escalated": 7,
+        "escalated_rate": 0.5385,
+        "needs_decision_transitions": 8,
+        "owner_touch": 10,
+        "autonomy_rate": 0.2308,
+        "resolved_ever": 13
+      },
+      "vps": {
+        "items": 11,
+        "escalated": 9,
+        "escalated_rate": 0.8182,
+        "needs_decision_transitions": 9,
+        "owner_touch": 9,
+        "autonomy_rate": 0.1818,
+        "resolved_ever": 2
+      },
+      "free-planning-poker": {
+        "items": 5,
+        "escalated": 3,
+        "escalated_rate": 0.6,
+        "needs_decision_transitions": 3,
+        "owner_touch": 4,
+        "autonomy_rate": 0.2,
+        "resolved_ever": 3
+      },
+      "rb": {
+        "items": 3,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 2
+      },
+      "audio-gateway": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 2
+      },
+      "email-gateway": {
+        "items": 2,
+        "escalated": 1,
+        "escalated_rate": 0.5,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      },
+      "homelab-private": {
+        "items": 2,
+        "escalated": 1,
+        "escalated_rate": 0.5,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 2
+      },
+      "rollhook": {
+        "items": 2,
+        "escalated": 2,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 2,
+        "owner_touch": 2,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 0
+      },
+      "argo": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      },
+      "brain": {
+        "items": 1,
+        "escalated": 1,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 0
+      },
+      "image-gateway": {
+        "items": 1,
+        "escalated": 1,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 0
+      },
+      "modelpick": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      },
+      "shutterflow": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      },
+      "usage-tracker": {
+        "items": 1,
+        "escalated": 1,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      }
+    },
+    "all": {
+      "(none)": {
+        "items": 117,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 2,
+        "autonomy_rate": 0.9829,
+        "resolved_ever": 57
+      },
+      "weatherorb": {
+        "items": 106,
+        "escalated": 26,
+        "escalated_rate": 0.2453,
+        "needs_decision_transitions": 38,
+        "owner_touch": 46,
+        "autonomy_rate": 0.566,
+        "resolved_ever": 89
+      },
+      "hermes-agent": {
+        "items": 78,
+        "escalated": 14,
+        "escalated_rate": 0.1795,
+        "needs_decision_transitions": 15,
+        "owner_touch": 53,
+        "autonomy_rate": 0.3205,
+        "resolved_ever": 75
+      },
+      "warden": {
+        "items": 59,
+        "escalated": 13,
+        "escalated_rate": 0.2203,
+        "needs_decision_transitions": 15,
+        "owner_touch": 38,
+        "autonomy_rate": 0.3559,
+        "resolved_ever": 58
+      },
+      "homelab": {
+        "items": 42,
+        "escalated": 16,
+        "escalated_rate": 0.381,
+        "needs_decision_transitions": 16,
+        "owner_touch": 28,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 40
+      },
+      "research-gateway": {
+        "items": 35,
+        "escalated": 3,
+        "escalated_rate": 0.0857,
+        "needs_decision_transitions": 5,
+        "owner_touch": 26,
+        "autonomy_rate": 0.2571,
+        "resolved_ever": 35
+      },
+      "sideclaw": {
+        "items": 19,
+        "escalated": 7,
+        "escalated_rate": 0.3684,
+        "needs_decision_transitions": 8,
+        "owner_touch": 15,
+        "autonomy_rate": 0.2105,
+        "resolved_ever": 19
+      },
+      "dotfiles": {
+        "items": 17,
+        "escalated": 7,
+        "escalated_rate": 0.4118,
+        "needs_decision_transitions": 12,
+        "owner_touch": 13,
+        "autonomy_rate": 0.2353,
+        "resolved_ever": 15
+      },
+      "agent-gateway": {
+        "items": 16,
+        "escalated": 5,
+        "escalated_rate": 0.3125,
+        "needs_decision_transitions": 8,
+        "owner_touch": 6,
+        "autonomy_rate": 0.625,
+        "resolved_ever": 14
+      },
+      "vps": {
+        "items": 15,
+        "escalated": 9,
+        "escalated_rate": 0.6,
+        "needs_decision_transitions": 9,
+        "owner_touch": 10,
+        "autonomy_rate": 0.3333,
+        "resolved_ever": 6
+      },
+      "rollhook": {
+        "items": 7,
+        "escalated": 2,
+        "escalated_rate": 0.2857,
+        "needs_decision_transitions": 2,
+        "owner_touch": 4,
+        "autonomy_rate": 0.4286,
+        "resolved_ever": 5
+      },
+      "argo": {
+        "items": 6,
+        "escalated": 1,
+        "escalated_rate": 0.1667,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.8333,
+        "resolved_ever": 6
+      },
+      "homelab-private": {
+        "items": 6,
+        "escalated": 3,
+        "escalated_rate": 0.5,
+        "needs_decision_transitions": 3,
+        "owner_touch": 5,
+        "autonomy_rate": 0.1667,
+        "resolved_ever": 6
+      },
+      "free-planning-poker": {
+        "items": 5,
+        "escalated": 3,
+        "escalated_rate": 0.6,
+        "needs_decision_transitions": 3,
+        "owner_touch": 4,
+        "autonomy_rate": 0.2,
+        "resolved_ever": 3
+      },
+      "usage-tracker": {
+        "items": 5,
+        "escalated": 1,
+        "escalated_rate": 0.2,
+        "needs_decision_transitions": 1,
+        "owner_touch": 3,
+        "autonomy_rate": 0.4,
+        "resolved_ever": 5
+      },
+      "dispatch-scratch": {
+        "items": 3,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.6667,
+        "resolved_ever": 3
+      },
+      "rb": {
+        "items": 3,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 2
+      },
+      "sy-serendipity": {
+        "items": 3,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.6667,
+        "resolved_ever": 3
+      },
+      "audio-gateway": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 2
+      },
+      "basalt-ui": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 2
+      },
+      "brain": {
+        "items": 2,
+        "escalated": 1,
+        "escalated_rate": 0.5,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.5,
+        "resolved_ever": 1
+      },
+      "email-gateway": {
+        "items": 2,
+        "escalated": 1,
+        "escalated_rate": 0.5,
+        "needs_decision_transitions": 1,
+        "owner_touch": 2,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      },
+      "ntfy-mac": {
+        "items": 2,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 2
+      },
+      "image-gateway": {
+        "items": 1,
+        "escalated": 1,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 0
+      },
+      "linewatch": {
+        "items": 1,
+        "escalated": 1,
+        "escalated_rate": 1.0,
+        "needs_decision_transitions": 1,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      },
+      "modelpick": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 0,
+        "autonomy_rate": 1.0,
+        "resolved_ever": 1
+      },
+      "shutterflow": {
+        "items": 1,
+        "escalated": 0,
+        "escalated_rate": 0.0,
+        "needs_decision_transitions": 0,
+        "owner_touch": 1,
+        "autonomy_rate": 0.0,
+        "resolved_ever": 1
+      }
+    }
+  },
+  "signal_funnel_all_time": {
+    "slack_alert": {
+      "events": 408,
+      "items": 128,
+      "duplicates": 17
+    },
+    "slack_update": {
+      "events": 713,
+      "items": 0,
+      "duplicates": 0
+    },
+    "human": {
+      "events": 162,
+      "items": 162,
+      "duplicates": 0
+    },
+    "hermes_log": {
+      "events": 152,
+      "items": 62,
+      "duplicates": 2
+    },
+    "github_*": {
+      "events": 178,
+      "items": 121,
+      "duplicates": 15
+    },
+    "uk": {
+      "events": 96,
+      "items": 56,
+      "duplicates": 7
+    },
+    "hyperdx": {
+      "events": 4,
+      "items": 3,
+      "duplicates": 0
+    },
+    "other": {
+      "events": 48,
+      "items": 24,
+      "duplicates": 0
+    }
+  },
+  "items_per_week": [
+    {
+      "week": "2026-W37",
+      "start": "2026-09-07",
+      "partial": false,
+      "rows": 89,
+      "items": 88,
+      "duplicates": 1,
+      "escalated": 6,
+      "escalated_rate": 0.0682,
+      "owner_touch": 21,
+      "autonomy_rate": 0.7614,
+      "resolved_ever": 69,
+      "needs_decision_transitions_in_week": 0
+    },
+    {
+      "week": "2026-W38",
+      "start": "2026-09-14",
+      "partial": false,
+      "rows": 94,
+      "items": 93,
+      "duplicates": 1,
+      "escalated": 3,
+      "escalated_rate": 0.0323,
+      "owner_touch": 63,
+      "autonomy_rate": 0.3226,
+      "resolved_ever": 92,
+      "needs_decision_transitions_in_week": 0
+    },
+    {
+      "week": "2026-W39",
+      "start": "2026-09-21",
+      "partial": false,
+      "rows": 36,
+      "items": 36,
+      "duplicates": 0,
+      "escalated": 1,
+      "escalated_rate": 0.0278,
+      "owner_touch": 20,
+      "autonomy_rate": 0.4444,
+      "resolved_ever": 34,
+      "needs_decision_transitions_in_week": 0
+    },
+    {
+      "week": "2026-W40",
+      "start": "2026-09-28",
+      "partial": false,
+      "rows": 76,
+      "items": 76,
+      "duplicates": 0,
+      "escalated": 11,
+      "escalated_rate": 0.1447,
+      "owner_touch": 56,
+      "autonomy_rate": 0.2632,
+      "resolved_ever": 74,
+      "needs_decision_transitions_in_week": 1
+    },
+    {
+      "week": "2026-W41",
+      "start": "2026-10-05",
+      "partial": false,
+      "rows": 60,
+      "items": 57,
+      "duplicates": 3,
+      "escalated": 25,
+      "escalated_rate": 0.4386,
+      "owner_touch": 33,
+      "autonomy_rate": 0.4211,
+      "resolved_ever": 55,
+      "needs_decision_transitions_in_week": 51
+    },
+    {
+      "week": "2026-W42",
+      "start": "2026-10-12",
+      "partial": false,
+      "rows": 169,
+      "items": 156,
+      "duplicates": 13,
+      "escalated": 49,
+      "escalated_rate": 0.3141,
+      "owner_touch": 52,
+      "autonomy_rate": 0.6667,
+      "resolved_ever": 95,
+      "needs_decision_transitions_in_week": 64
+    },
+    {
+      "week": "2026-W43",
+      "start": "2026-10-19",
+      "partial": true,
+      "rows": 73,
+      "items": 50,
+      "duplicates": 23,
+      "escalated": 19,
+      "escalated_rate": 0.38,
+      "owner_touch": 19,
+      "autonomy_rate": 0.62,
+      "resolved_ever": 33,
+      "needs_decision_transitions_in_week": 24
+    }
+  ],
+  "reconciliation": {
+    "round5_targets": {
+      "items_14d": 228,
+      "esc_14d": 74,
+      "items_30d": 368,
+      "esc_30d": 99,
+      "unattended_30d": 201
+    },
+    "findings_nd_ever": {
+      "n": 114,
+      "d": 597
+    },
+    "round5_reproduced": true,
+    "round5_cutoff_consistent_from": "2026-10-21T09:49:00Z",
+    "round5_cutoff_consistent_to": "2026-10-21T11:42:00Z",
+    "round5_cutoff_used": "2026-10-21T09:49:00Z",
+    "round5_window_rule": "lower bound = midnight of (audit day - 14 d / - 30 d), upper bound = audit time; created_at of triage_items rows for the denominators, transition time for the numerators",
+    "ladder_escalated_14d": [
+      {
+        "step": "0 Round 5 as run",
+        "n": 74,
+        "d": 228,
+        "rate": 0.3246,
+        "what_changed": "denominator: every row created since 2026-10-07 (date-granular lower bound, runs to the audit time); numerator: every item with a needs_decision transition in that span, created in it or not"
+      },
+      {
+        "step": "1 numerator limited to the cohort",
+        "n": 61,
+        "d": 228,
+        "rate": 0.2675,
+        "what_changed": "numerator and denominator now describe the same items (items created before the window that escalated again are out)"
+      },
+      {
+        "step": "2 exact window",
+        "n": 61,
+        "d": 225,
+        "rate": 0.2711,
+        "what_changed": "window is exactly 14 d before the audit time, not 14 d plus the elapsed day fraction"
+      },
+      {
+        "step": "3 duplicates are not items",
+        "n": 61,
+        "d": 205,
+        "rate": 0.2976,
+        "what_changed": "rows closed as duplicate (or with duplicate_of) leave numerator and denominator"
+      },
+      {
+        "step": "4 window ends at AS_OF",
+        "n": 74,
+        "d": 230,
+        "rate": 0.3217,
+        "what_changed": "window moved from the audit time (2026-10-21T09:49:00Z) to AS_OF (2026-10-22T08:00:00Z); items and escalations since are included"
+      }
+    ],
+    "ladder_escalated_30d": [
+      {
+        "step": "0 Round 5 as run",
+        "n": 99,
+        "d": 368,
+        "rate": 0.269,
+        "what_changed": "denominator: every row created since 2026-09-21 (date-granular lower bound, runs to the audit time); numerator: every item with a needs_decision transition in that span, created in it or not"
+      },
+      {
+        "step": "1 numerator limited to the cohort",
+        "n": 92,
+        "d": 368,
+        "rate": 0.25,
+        "what_changed": "numerator and denominator now describe the same items (items created before the window that escalated again are out)"
+      },
+      {
+        "step": "2 exact window",
+        "n": 92,
+        "d": 358,
+        "rate": 0.257,
+        "what_changed": "window is exactly 30 d before the audit time, not 30 d plus the elapsed day fraction"
+      },
+      {
+        "step": "3 duplicates are not items",
+        "n": 92,
+        "d": 338,
+        "rate": 0.2722,
+        "what_changed": "rows closed as duplicate (or with duplicate_of) leave numerator and denominator"
+      },
+      {
+        "step": "4 window ends at AS_OF",
+        "n": 105,
+        "d": 364,
+        "rate": 0.2885,
+        "what_changed": "window moved from the audit time (2026-10-21T09:49:00Z) to AS_OF (2026-10-22T08:00:00Z); items and escalations since are included"
+      }
+    ],
+    "ladder_unattended_30d": [
+      {
+        "step": "0 Round 5 'finished unattended' as run",
+        "n": 201,
+        "d": 368,
+        "rate": 0.5462,
+        "what_changed": "created in the 30 d span, no needs_decision transition and no 'closed by hand' / 're-investigation requested' note before the audit time; state is not checked, so 'finished' is a misnomer"
+      },
+      {
+        "step": "1 exact window",
+        "n": 196,
+        "d": 358,
+        "rate": 0.5475,
+        "what_changed": "30 d exactly, not 30 d plus the elapsed day fraction"
+      },
+      {
+        "step": "2 duplicates are not items",
+        "n": 177,
+        "d": 338,
+        "rate": 0.5237,
+        "what_changed": "duplicate rows leave the cohort"
+      },
+      {
+        "step": "3 operations authorised by owner:/cli: count as touches",
+        "n": 176,
+        "d": 338,
+        "rate": 0.5207,
+        "what_changed": "the unified owner_touch also counts operations rows authorised by the owner or the CLI"
+      },
+      {
+        "step": "4 window ends at AS_OF (unified autonomy_rate)",
+        "n": 190,
+        "d": 364,
+        "rate": 0.522,
+        "what_changed": "window ends at AS_OF (2026-10-22T08:00:00Z)"
+      }
+    ],
+    "effects_escalated_14d": {
+      "steps": [
+        {
+          "step": "1 numerator limited to the cohort",
+          "delta_pp": -5.7
+        },
+        {
+          "step": "2 exact window",
+          "delta_pp": 0.4
+        },
+        {
+          "step": "3 duplicates are not items",
+          "delta_pp": 2.6
+        },
+        {
+          "step": "4 window ends at AS_OF",
+          "delta_pp": 2.4
+        }
+      ],
+      "net_pp": -0.3
+    },
+    "effects_escalated_30d": {
+      "steps": [
+        {
+          "step": "1 numerator limited to the cohort",
+          "delta_pp": -1.9
+        },
+        {
+          "step": "2 exact window",
+          "delta_pp": 0.7
+        },
+        {
+          "step": "3 duplicates are not items",
+          "delta_pp": 1.5
+        },
+        {
+          "step": "4 window ends at AS_OF",
+          "delta_pp": 1.6
+        }
+      ],
+      "net_pp": 1.9
+    },
+    "effects_unattended_30d": {
+      "steps": [
+        {
+          "step": "1 exact window",
+          "delta_pp": 0.1
+        },
+        {
+          "step": "2 duplicates are not items",
+          "delta_pp": -2.4
+        },
+        {
+          "step": "3 operations authorised by owner:/cli: count as touches",
+          "delta_pp": -0.3
+        },
+        {
+          "step": "4 window ends at AS_OF (unified autonomy_rate)",
+          "delta_pp": 0.1
+        }
+      ],
+      "net_pp": -2.4
+    },
+    "round5_decision_shadow_cross_check": {
+      "round5_says_settled_rows": 124,
+      "consistent_cutoff_from": "2026-10-21T09:22:00Z",
+      "consistent_cutoff_to": "2026-10-21T09:31:00Z",
+      "note": "a different Round 5 bullet; it matches a cutoff before the one the ledger counts need, so the audit's queries ran over about half an hour"
+    },
+    "findings_ladder": [
+      {
+        "step": "0 findings as run",
+        "n": 114,
+        "d": 597,
+        "rate": 0.191,
+        "what_changed": "every triage_items row (duplicates included), any time, ever a transition into needs_decision"
+      },
+      {
+        "step": "1 duplicates are not items (= unified `escalated`, window all)",
+        "n": 114,
+        "d": 556,
+        "rate": 0.205,
+        "what_changed": "the 41 duplicate rows leave numerator and denominator (0 of them had escalated)"
+      },
+      {
+        "step": "context: currently in needs_decision",
+        "n": 43,
+        "d": 556,
+        "rate": 0.0773,
+        "what_changed": "a third reading ('is waiting for the owner right now'), not used by any definition"
+      }
+    ],
+    "findings_time_to_fixed": {
+      "n": 41,
+      "median_h": 2.37,
+      "p90_h": 227.49,
+      "findings_say": {
+        "n": 41,
+        "median_h": 2.4,
+        "p90_h": 227
+      }
+    },
+    "findings_item_states": {
+      "snapshot": {
+        "closed": 422,
+        "failed": 3,
+        "fixed": 39,
+        "needs_decision": 43,
+        "quiet": 90
+      },
+      "findings_say": {
+        "closed": 422,
+        "quiet": 89,
+        "needs_decision": 43,
+        "fixed": 39,
+        "failed": 3,
+        "new": 1
+      }
+    },
+    "findings_inventory_drift": {
+      "events": {
+        "snapshot": 1761,
+        "findings_say": 1752
+      },
+      "slack_alert_events": {
+        "snapshot": 408,
+        "findings_say": 399
+      },
+      "item_transitions": {
+        "snapshot": 4005,
+        "findings_say": 4004
+      },
+      "triage_items": {
+        "snapshot": 597,
+        "findings_say": 597
+      },
+      "slack_relay_share": {
+        "snapshot": 0.6366,
+        "findings_say": 0.6347
+      }
+    }
+  }
+}

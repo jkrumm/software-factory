@@ -1,0 +1,52 @@
+{
+ "totals": {
+  "labels": 959,
+  "chunks": 21,
+  "groups": 458,
+  "genuine": {
+   "na": 803,
+   "n": 150,
+   "y": 6
+  },
+  "known_fix_y": 20,
+  "uncertain": 185
+ },
+ "agreement": {
+  "05": {
+   "n": 42,
+   "bcubed_p": 1.0,
+   "bcubed_r": 1.0,
+   "bcubed_f1": 1.0,
+   "genuine_kappa": 1.0,
+   "genuine_raw_agreement": 1.0,
+   "known_fix_kappa": 1.0,
+   "known_fix_raw_agreement": 1.0,
+   "groups_a": 21,
+   "groups_b": 21
+  },
+  "13": {
+   "n": 50,
+   "bcubed_p": 1.0,
+   "bcubed_r": 1.0,
+   "bcubed_f1": 1.0,
+   "genuine_kappa": 1.0,
+   "genuine_raw_agreement": 1.0,
+   "known_fix_kappa": 0.0,
+   "known_fix_raw_agreement": 0.92,
+   "groups_a": 29,
+   "groups_b": 29
+  },
+  "19": {
+   "n": 37,
+   "bcubed_p": 1.0,
+   "bcubed_r": 1.0,
+   "bcubed_f1": 1.0,
+   "genuine_kappa": 1.0,
+   "genuine_raw_agreement": 1.0,
+   "known_fix_kappa": 1.0,
+   "known_fix_raw_agreement": 1.0,
+   "groups_a": 31,
+   "groups_b": 31
+  }
+ }
+}

@@ -1,0 +1,38 @@
+{
+ "as_of": "2026-10-22T08:00:00Z",
+ "window": [
+  "2026-10-14T12:36:05.105Z",
+  "2026-10-22T07:55:37.644Z"
+ ],
+ "days": 7.81,
+ "rows": 33414,
+ "tokens": {
+  "input": 19707311,
+  "output": 12178969,
+  "cache_read": 1395791053,
+  "cache_write": 172989123
+ },
+ "iu_cost_usd": 58.08,
+ "iu_cost_per_week_usd": 52.09,
+ "sonnet_list_usd": 872.84,
+ "sonnet_list_per_week_usd": 782.79,
+ "max_list_usd_per_1pct_week": {
+  "median": 32.25,
+  "cycles": [
+   26.86,
+   27.18,
+   30.36,
+   32.26,
+   32.25,
+   35.29,
+   34.47
+  ]
+ },
+ "weekly_window_pct_if_on_max": 24.3,
+ "observed_7d_p50_p90": [
+  46.0,
+  96.0
+ ],
+ "p50_after_move": 70.3,
+ "p90_after_move": 120.3
+}

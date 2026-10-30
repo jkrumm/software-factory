@@ -1,0 +1,3067 @@
+{
+ "as_of": "2026-10-22T08:00:00Z",
+ "classes": {
+  "agw_opencode_impl": {
+   "engine_adr008": "iu (routine fixes, investigate)",
+   "projected": {
+    "iu_tokens_wk": 229523573.0,
+    "iu_usd_wk": 27.87,
+    "max_list_usd_wk": 1.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 636846.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 10.56,
+    "max_list_usd_wk": 1.0,
+    "max_pct_wk": {
+     "high": 0.1,
+     "low": 0.0,
+     "median": 0.0
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 229523573.0,
+    "iu_usd_wk": 27.87,
+    "max_list_usd_wk": 1.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 636846.0
+   }
+  },
+  "agw_tools": {
+   "engine_adr008": "unchanged (unclassified in ADR-008)",
+   "projected": {
+    "iu_tokens_wk": 1206010474.0,
+    "iu_usd_wk": 91.26,
+    "max_list_usd_wk": 469.0,
+    "max_pct_wk": {
+     "high": 17.5,
+     "low": 13.3,
+     "median": 14.5
+    },
+    "max_tokens_wk": 723727151.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 190.47,
+    "max_list_usd_wk": 170.0,
+    "max_pct_wk": {
+     "high": 6.3,
+     "low": 4.8,
+     "median": 5.3
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 1206010474.0,
+    "iu_usd_wk": 91.26,
+    "max_list_usd_wk": 469.0,
+    "max_pct_wk": {
+     "high": 17.5,
+     "low": 13.3,
+     "median": 14.5
+    },
+    "max_tokens_wk": 723727151.0
+   }
+  },
+  "fleet_waves": {
+   "engine_adr008": "max (features, waves, mothers, leads)",
+   "projected": {
+    "iu_tokens_wk": 0.0,
+    "iu_usd_wk": 0.0,
+    "max_list_usd_wk": 3077.0,
+    "max_pct_wk": {
+     "high": 114.5,
+     "low": 87.2,
+     "median": 95.4
+    },
+    "max_tokens_wk": 7199964947.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 0.0,
+    "max_list_usd_wk": 5275.0,
+    "max_pct_wk": {
+     "high": 196.4,
+     "low": 149.5,
+     "median": 163.6
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 0.0,
+    "iu_usd_wk": 0.0,
+    "max_list_usd_wk": 2369.0,
+    "max_pct_wk": {
+     "high": 88.2,
+     "low": 67.1,
+     "median": 73.5
+    },
+    "max_tokens_wk": 5578721015.0
+   }
+  },
+  "hermes": {
+   "engine_adr008": "iu",
+   "projected": {
+    "iu_tokens_wk": 205678538.0,
+    "iu_usd_wk": 4.2,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 0.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 0.64,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 205678538.0,
+    "iu_usd_wk": 4.2,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 0.0
+   }
+  },
+  "other": {
+   "engine_adr008": "unchanged",
+   "projected": {
+    "iu_tokens_wk": 7311279.0,
+    "iu_usd_wk": 0.78,
+    "max_list_usd_wk": 5.0,
+    "max_pct_wk": {
+     "high": 0.2,
+     "low": 0.1,
+     "median": 0.2
+    },
+    "max_tokens_wk": 14424687.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 0.09,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 7311279.0,
+    "iu_usd_wk": 0.78,
+    "max_list_usd_wk": 5.0,
+    "max_pct_wk": {
+     "high": 0.2,
+     "low": 0.1,
+     "median": 0.2
+    },
+    "max_tokens_wk": 14424687.0
+   }
+  },
+  "owner_interactive": {
+   "engine_adr008": "max (owner's choice)",
+   "projected": {
+    "iu_tokens_wk": 192670619.0,
+    "iu_usd_wk": 5.06,
+    "max_list_usd_wk": 1018.0,
+    "max_pct_wk": {
+     "high": 37.9,
+     "low": 28.9,
+     "median": 31.6
+    },
+    "max_tokens_wk": 2462845969.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 0.0,
+    "max_list_usd_wk": 1140.0,
+    "max_pct_wk": {
+     "high": 42.4,
+     "low": 32.3,
+     "median": 35.3
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 192670619.0,
+    "iu_usd_wk": 5.06,
+    "max_list_usd_wk": 1018.0,
+    "max_pct_wk": {
+     "high": 37.9,
+     "low": 28.9,
+     "median": 31.6
+    },
+    "max_tokens_wk": 2462845969.0
+   }
+  },
+  "research": {
+   "engine_adr008": "iu",
+   "projected": {
+    "iu_tokens_wk": 101758584.0,
+    "iu_usd_wk": 17.71,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 0.0
+   },
+   "recent_7d": {
+    "iu_usd_wk": 26.8,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    }
+   },
+   "today_30d": {
+    "iu_tokens_wk": 101758584.0,
+    "iu_usd_wk": 17.71,
+    "max_list_usd_wk": 0.0,
+    "max_pct_wk": {
+     "high": 0.0,
+     "low": 0.0,
+     "median": 0.0
+    },
+    "max_tokens_wk": 0.0
+   }
+  }
+ },
+ "collection": {
+  "live_only_source": "agent-gateway-opencode",
+  "opencode_gap_days_excluded_30d": 1.0,
+  "own_usd_per_1pct_check": [
+   26.86,
+   27.18,
+   30.36,
+   32.26,
+   32.25,
+   35.29,
+   34.47
+  ]
+ },
+ "constants": {
+  "agw_tools_max_to_iu_share": 0.0,
+  "fleet_projects": [
+   "basalt-ui",
+   "argo",
+   "weatherorb",
+   "shutterflow",
+   "dotfiles",
+   "warden"
+  ],
+  "headline_window_days": 30,
+  "iu_usd_per_max_list_usd": 0.0665,
+  "lead_wakes_per_day": 6,
+  "leads": 3,
+  "mother_rotations_per_day": 1,
+  "mother_wakes_per_day": 4,
+  "mothers": 6,
+  "owner_reserve_adr008_pct": 15,
+  "usd_per_1pct_cycles": [
+   26.86,
+   27.18,
+   30.36,
+   32.26,
+   32.25,
+   35.29,
+   34.47
+  ],
+  "usd_per_1pct_median": 32.25,
+  "wake_size_fraction_of_median_wave_session": 0.25,
+  "wave_routine_to_iu_share": 0.0
+ },
+ "cycles": [
+  {
+   "days": 10.6,
+   "end": "2026-09-20T06:33:06Z",
+   "factory_share_of_window_pct": 9.8,
+   "lapsed_pct_today": 4,
+   "max_list_usd": 2578.0,
+   "owner_interactive_usd": 2316.0,
+   "owner_share_of_window_pct": 86.2,
+   "owner_share_per_7d_pct": 56.9,
+   "peak_7d_pct": 96,
+   "projected_demand_pct": 135.9,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 35.9,
+   "start": "2026-09-09T16:02:30Z",
+   "usd_per_1pct": 26.86
+  },
+  {
+   "days": 3.39,
+   "end": "2026-09-23T15:57:28Z",
+   "factory_share_of_window_pct": 16.4,
+   "lapsed_pct_today": 45,
+   "max_list_usd": 1495.0,
+   "owner_interactive_usd": 1048.0,
+   "owner_share_of_window_pct": 38.5,
+   "owner_share_per_7d_pct": 79.6,
+   "peak_7d_pct": 55,
+   "projected_demand_pct": 67.6,
+   "projected_lapsed_pct": 32.4,
+   "projected_overflow_pct": 0.0,
+   "start": "2026-09-20T06:38:08Z",
+   "usd_per_1pct": 27.18
+  },
+  {
+   "days": 7.0,
+   "end": "2026-09-30T15:57:27Z",
+   "factory_share_of_window_pct": 66.5,
+   "lapsed_pct_today": 0.0,
+   "max_list_usd": 3036.0,
+   "owner_interactive_usd": 1016.0,
+   "owner_share_of_window_pct": 33.5,
+   "owner_share_per_7d_pct": 33.5,
+   "peak_7d_pct": 100,
+   "projected_demand_pct": 123.3,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 23.3,
+   "start": "2026-09-23T16:02:30Z",
+   "usd_per_1pct": 30.36
+  },
+  {
+   "days": 7.0,
+   "end": "2026-10-07T15:57:27Z",
+   "factory_share_of_window_pct": 57.1,
+   "lapsed_pct_today": 21,
+   "max_list_usd": 2548.0,
+   "owner_interactive_usd": 707.0,
+   "owner_share_of_window_pct": 21.9,
+   "owner_share_per_7d_pct": 21.9,
+   "peak_7d_pct": 79,
+   "projected_demand_pct": 100.9,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 0.9,
+   "start": "2026-09-30T16:02:30Z",
+   "usd_per_1pct": 32.26
+  },
+  {
+   "days": 7.0,
+   "end": "2026-10-14T15:57:26Z",
+   "factory_share_of_window_pct": 57.6,
+   "lapsed_pct_today": 21,
+   "max_list_usd": 2548.0,
+   "owner_interactive_usd": 689.0,
+   "owner_share_of_window_pct": 21.4,
+   "owner_share_per_7d_pct": 21.4,
+   "peak_7d_pct": 79,
+   "projected_demand_pct": 100.9,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 0.9,
+   "start": "2026-10-07T16:02:30Z",
+   "usd_per_1pct": 32.25
+  },
+  {
+   "days": 2.89,
+   "end": "2026-10-17T13:29:10Z",
+   "factory_share_of_window_pct": 75.5,
+   "lapsed_pct_today": 2,
+   "max_list_usd": 3459.0,
+   "owner_interactive_usd": 796.0,
+   "owner_share_of_window_pct": 22.5,
+   "owner_share_per_7d_pct": 54.5,
+   "peak_7d_pct": 98,
+   "projected_demand_pct": 106.3,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 6.3,
+   "start": "2026-10-14T16:02:30Z",
+   "usd_per_1pct": 35.29
+  },
+  {
+   "days": 4.1,
+   "end": "2026-10-21T15:57:26Z",
+   "factory_share_of_window_pct": 85.3,
+   "lapsed_pct_today": 2,
+   "max_list_usd": 3378.0,
+   "owner_interactive_usd": 438.0,
+   "owner_share_of_window_pct": 12.7,
+   "owner_share_per_7d_pct": 21.7,
+   "peak_7d_pct": 98,
+   "projected_demand_pct": 110.0,
+   "projected_lapsed_pct": 0.0,
+   "projected_overflow_pct": 10.0,
+   "start": "2026-10-17T13:34:13Z",
+   "usd_per_1pct": 34.47
+  }
+ ],
+ "cycles_projected_demand_over_100": 6,
+ "definitions": {
+  "cycle_share": "class Max list USD in a complete weekly cycle / that cycle's USD per 1 %",
+  "lapsed_pct": "100 - the cycle's peak 7-day reading (usage the window could have carried but did not)",
+  "max_pct": "Max list USD per week / (list USD per 1 % of the weekly window); median uses the median cycle value, low/high use the dearest/cheapest cycle",
+  "projected_demand_pct": "cycle peak + weekly Max delta of the design, scaled to the cycle length; may exceed 100 (= demand the guard must defer or flip to IU)",
+  "weekly": "window total x 7 / days covered; OpenCode-collected agw rows exclude the v1->v2 collector gap"
+ },
+ "fleet_waves_split_wk": {
+  "fleet_projects": 2112.0,
+  "other_projects": 257.0
+ },
+ "fleet_waves_top_repos": [
+  {
+   "max_list_usd_wk": 760.0,
+   "repo": "shutterflow"
+  },
+  {
+   "max_list_usd_wk": 530.0,
+   "repo": "basalt-ui"
+  },
+  {
+   "max_list_usd_wk": 378.0,
+   "repo": "weatherorb"
+  },
+  {
+   "max_list_usd_wk": 354.0,
+   "repo": "argo"
+  },
+  {
+   "max_list_usd_wk": 86.0,
+   "repo": "prometheus-scripts"
+  },
+  {
+   "max_list_usd_wk": 73.0,
+   "repo": "email-gateway"
+  },
+  {
+   "max_list_usd_wk": 55.0,
+   "repo": "warden"
+  },
+  {
+   "max_list_usd_wk": 39.0,
+   "repo": "agent-gateway"
+  },
+  {
+   "max_list_usd_wk": 34.0,
+   "repo": "dotfiles"
+  },
+  {
+   "max_list_usd_wk": 17.0,
+   "repo": "linewatch"
+  },
+  {
+   "max_list_usd_wk": 8.0,
+   "repo": "research-gateway"
+  },
+  {
+   "max_list_usd_wk": 6.0,
+   "repo": "hermes-agent"
+  }
+ ],
+ "lapsed_pct": {
+  "projected": {
+   "max": 32.4,
+   "min": 0.0,
+   "p50": 0.0,
+   "p90": 13.0
+  },
+  "today": {
+   "max": 45,
+   "min": 0.0,
+   "p50": 4.0,
+   "p90": 30.6
+  }
+ },
+ "notes": [
+  "Max rows are list-price equivalents (sunk subscription); IU rows are cash.",
+  "Mother/lead load is an assumption set, not a measurement: no mother runs yet (report/05-decisions.md).",
+  "Today's cycle % is the measured 7-day peak by construction ($/1 % is calibrated on the same cycles).",
+  "A cycle's peak is censored at 100 %: where it hit 100, true demand was higher, so design demand and overflow there are lower bounds.",
+  "recent_7d is a calendar 7 days spanning two resets (10-17 unscheduled, 10-21 scheduled); it is a burn-rate signal, not a window reading.",
+  "claude-code agent-gateway:dispatch on IU stopped 2026-09-24; it inflates the 30 d IU rate versus recent_7d."
+ ],
+ "owner_interactive_share_of_window_pct": {
+  "adr008_reserve_pct": 15,
+  "cycles": 7,
+  "cycles_above_reserve": 7,
+  "per_7d": {
+   "max": 79.6,
+   "min": 21.4,
+   "p50": 33.5,
+   "p90": 66.0
+  },
+  "per_cycle": {
+   "max": 86.2,
+   "min": 12.7,
+   "p50": 22.5,
+   "p90": 57.6
+  }
+ },
+ "projected_demand_pct": {
+  "max": 135.9,
+  "min": 67.6,
+  "p50": 106.3,
+  "p90": 128.3
+ },
+ "projected_overflow_pct": {
+  "max": 35.9,
+  "min": 0.0,
+  "p50": 6.3,
+  "p90": 28.3
+ },
+ "question": "cos-1: factory cost per week in Max % of the weekly window and IU dollars, today vs ADR-007/008",
+ "script": "kpi/forecast.py",
+ "sensitivities": {
+  "agw_tools_all_to_iu": {
+   "iu_usd_wk": 178.1,
+   "max_pct_wk": {
+    "high": 152.7,
+    "low": 116.2,
+    "median": 127.2
+   },
+   "max_usd_wk": 4101.0
+  },
+  "no_mothers_or_leads": {
+   "iu_usd_wk": 146.9,
+   "max_pct_wk": {
+    "high": 143.8,
+    "low": 109.4,
+    "median": 119.8
+   },
+   "max_usd_wk": 3862.0
+  },
+  "wake_load_x2": {
+   "iu_usd_wk": 146.9,
+   "max_pct_wk": {
+    "high": 196.5,
+    "low": 149.5,
+    "median": 163.6
+   },
+   "max_usd_wk": 5277.0
+  },
+  "wake_load_x4": {
+   "iu_usd_wk": 146.9,
+   "max_pct_wk": {
+    "high": 249.2,
+    "low": 189.6,
+    "median": 207.5
+   },
+   "max_usd_wk": 6692.0
+  },
+  "waves_routine_10pct_to_iu": {
+   "iu_usd_wk": 162.6,
+   "max_pct_wk": {
+    "high": 161.3,
+    "low": 122.8,
+    "median": 134.3
+   },
+   "max_usd_wk": 4333.0
+  },
+  "waves_routine_25pct_to_iu": {
+   "iu_usd_wk": 186.3,
+   "max_pct_wk": {
+    "high": 148.1,
+    "low": 112.7,
+    "median": 123.3
+   },
+   "max_usd_wk": 3977.0
+  }
+ },
+ "sub_tools": [
+  {
+   "billing": "max",
+   "class": "fleet_waves",
+   "source": "claude-code",
+   "sub_tool": "wave",
+   "tokens_wk": 2612195965.0,
+   "usd_wk": 1139.96
+  },
+  {
+   "billing": "max",
+   "class": "owner_interactive",
+   "source": "claude-code",
+   "sub_tool": "interactive",
+   "tokens_wk": 2462845969.0,
+   "usd_wk": 1018.18
+  },
+  {
+   "billing": "max",
+   "class": "fleet_waves",
+   "source": "claude-code",
+   "sub_tool": "fleet",
+   "tokens_wk": 2001579518.0,
+   "usd_wk": 760.15
+  },
+  {
+   "billing": "max",
+   "class": "fleet_waves",
+   "source": "claude-code",
+   "sub_tool": "fan",
+   "tokens_wk": 964945532.0,
+   "usd_wk": 469.14
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:review",
+   "tokens_wk": 691293515.0,
+   "usd_wk": 453.34
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "review_ocr",
+   "tokens_wk": 711480920.0,
+   "usd_wk": 37.68
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "review:adversary",
+   "tokens_wk": 5886352.0,
+   "usd_wk": 26.61
+  },
+  {
+   "billing": "iu",
+   "class": "agw_opencode_impl",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:dispatch",
+   "tokens_wk": 19938115.0,
+   "usd_wk": 19.94
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "review:angle",
+   "tokens_wk": 271302777.0,
+   "usd_wk": 9.63
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "worker",
+   "tokens_wk": 97171564.0,
+   "usd_wk": 9.03
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:check",
+   "tokens_wk": 43849023.0,
+   "usd_wk": 8.4
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "sonar",
+   "tokens_wk": 37091.0,
+   "usd_wk": 5.95
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:narrative",
+   "tokens_wk": 2207509.0,
+   "usd_wk": 5.44
+  },
+  {
+   "billing": "iu",
+   "class": "agw_opencode_impl",
+   "source": "opencode",
+   "sub_tool": "agent-gateway:dispatch",
+   "tokens_wk": 121909784.0,
+   "usd_wk": 5.13
+  },
+  {
+   "billing": "iu",
+   "class": "owner_interactive",
+   "source": "opencode",
+   "sub_tool": "interactive",
+   "tokens_wk": 192670619.0,
+   "usd_wk": 5.06
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "claude-code",
+   "sub_tool": "bg",
+   "tokens_wk": 14059518.0,
+   "usd_wk": 4.52
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "opencode",
+   "sub_tool": "agent-gateway:review",
+   "tokens_wk": 124115378.0,
+   "usd_wk": 3.67
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:check",
+   "tokens_wk": 20592577.0,
+   "usd_wk": 3.24
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "slack",
+   "tokens_wk": 169932815.0,
+   "usd_wk": 3.07
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "lead",
+   "tokens_wk": 4549928.0,
+   "usd_wk": 2.73
+  },
+  {
+   "billing": "iu",
+   "class": "agw_opencode_impl",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "dispatch",
+   "tokens_wk": 75396505.0,
+   "usd_wk": 2.64
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:ab",
+   "tokens_wk": 3745734.0,
+   "usd_wk": 2.41
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:ab-judge",
+   "tokens_wk": 3250196.0,
+   "usd_wk": 2.02
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:otel",
+   "tokens_wk": 1358239.0,
+   "usd_wk": 1.32
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:review",
+   "tokens_wk": 14049014.0,
+   "usd_wk": 1.07
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:bench",
+   "tokens_wk": 1180084.0,
+   "usd_wk": 0.97
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "review:router",
+   "tokens_wk": 4086565.0,
+   "usd_wk": 0.93
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "review:synthesis",
+   "tokens_wk": 13337789.0,
+   "usd_wk": 0.91
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:overview",
+   "tokens_wk": 890840.0,
+   "usd_wk": 0.84
+  },
+  {
+   "billing": "max",
+   "class": "agw_opencode_impl",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:dispatch",
+   "tokens_wk": 636846.0,
+   "usd_wk": 0.59
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "claude-code",
+   "sub_tool": "headless",
+   "tokens_wk": 365168.0,
+   "usd_wk": 0.57
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "bench",
+   "tokens_wk": 13123820.0,
+   "usd_wk": 0.55
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "slack:background_review",
+   "tokens_wk": 23129943.0,
+   "usd_wk": 0.53
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "cron",
+   "tokens_wk": 5124304.0,
+   "usd_wk": 0.33
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "prose",
+   "tokens_wk": 49517.0,
+   "usd_wk": 0.31
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "narrative",
+   "tokens_wk": 45654.0,
+   "usd_wk": 0.31
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "claude-code",
+   "sub_tool": "desktop",
+   "tokens_wk": 103216.0,
+   "usd_wk": 0.28
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:excalidraw-diagram",
+   "tokens_wk": 42123.0,
+   "usd_wk": 0.21
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "opencode",
+   "sub_tool": "-",
+   "tokens_wk": 6976757.0,
+   "usd_wk": 0.19
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "astra",
+   "sub_tool": "standard",
+   "tokens_wk": 6445.0,
+   "usd_wk": 0.18
+  },
+  {
+   "billing": "iu",
+   "class": "agw_opencode_impl",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "-",
+   "tokens_wk": 12279169.0,
+   "usd_wk": 0.17
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "triage",
+   "tokens_wk": 843587.0,
+   "usd_wk": 0.16
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "slack:compression",
+   "tokens_wk": 154866.0,
+   "usd_wk": 0.12
+  },
+  {
+   "billing": "max",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:overview",
+   "tokens_wk": 57173.0,
+   "usd_wk": 0.1
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "claude-code",
+   "sub_tool": "headless",
+   "tokens_wk": 217613.0,
+   "usd_wk": 0.09
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "decide",
+   "tokens_wk": 1921187.0,
+   "usd_wk": 0.07
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "api_server",
+   "tokens_wk": 3006241.0,
+   "usd_wk": 0.07
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "desktop",
+   "tokens_wk": 4095612.0,
+   "usd_wk": 0.06
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "narrative",
+   "tokens_wk": 255852.0,
+   "usd_wk": 0.05
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "codex",
+   "sub_tool": "-",
+   "tokens_wk": 7248.0,
+   "usd_wk": 0.04
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "overview",
+   "tokens_wk": 67421.0,
+   "usd_wk": 0.02
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "check",
+   "tokens_wk": 571571.0,
+   "usd_wk": 0.02
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-opencode",
+   "sub_tool": "excalidraw-diagram",
+   "tokens_wk": 45196.0,
+   "usd_wk": 0.01
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "oneshot",
+   "tokens_wk": 219437.0,
+   "usd_wk": 0.01
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "desktop:vision",
+   "tokens_wk": 548.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "opencode",
+   "sub_tool": "agent-gateway:check",
+   "tokens_wk": 88009.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "slack:title_generation",
+   "tokens_wk": 12984.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "api_server:title_generation",
+   "tokens_wk": 1035.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "oneshot:title_generation",
+   "tokens_wk": 473.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "hermes",
+   "source": "hermes",
+   "sub_tool": "desktop:title_generation",
+   "tokens_wk": 280.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "agw_opencode_impl",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "dispatch",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "agw_opencode_impl",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "dispatch",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "agent-gateway-iu",
+   "sub_tool": "read_image",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "agw_tools",
+   "source": "claude-code",
+   "sub_tool": "agent-gateway:narrative",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:qa:cheap:0f678b2b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:senior-dev:cheap:40b974bf",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:typescript:cheap:d9303dee",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:qa:cheap:d4c2c2c3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:senior-dev:cheap:2f562a51",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:typescript:cheap:a0b93159",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-afd348d:qa:cheap:2c05e444",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-afd348d:senior-dev:cheap:3524f385",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-fdb5886:qa:cheap:c44e66e7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-fdb5886:senior-dev:cheap:00548ecf",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:frontend:cheap:62752008",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:qa:cheap:3be583bb",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:senior-dev:cheap:61672695",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:typescript:cheap:ba790a37",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:frontend:cheap:87aaf783",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:qa:cheap:e1d221f5",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:senior-dev:cheap:f7b26ca7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:typescript:cheap:c95765cd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:qa:cheap:0fbb31d1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:senior-dev:cheap:9b0010cf",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:typescript:cheap:fbb726dc",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:check-make-target-prereq:1:99703acd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:check-make-target-prereq:2:fcb80e14",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:idle-watchdog:1:104eaab7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:idle-watchdog:2:70f3eea8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/qa:1:46eabf8f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/qa:2:2bd71cbe",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/senior-dev:1:e95b630f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/senior-dev:2:00f862dd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/typescript:1:51357d32",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:make-check-target/typescript:2:9c76b1a7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/qa:1:adedffde",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/qa:2:886256bc",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/senior-dev:1:64a99a01",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/senior-dev:2:8bf359a3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/typescript:1:2a23fa23",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:opencode-2x-stream/typescript:2:de64bc47",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:repo-lease:1:8cbd717a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:repo-lease:2:5afab678",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:routing-per-angle-fallback:1:eed7d0ed",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:routing-per-angle-fallback:2:d867dc46",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:warden-board-null-repo:1:24239a43",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:warden-board-null-repo:2:15bfe5fe",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:wire-to-provider:1:24cf089d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:DeepSeek-V4-Pro:wire-to-provider:2:3939ac0b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:check-make-target-prereq:1:0e5049e0",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:check-make-target-prereq:1:6f1fedaf",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:check-make-target-prereq:2:3ceb6969",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:check-make-target-prereq:2:5761f273",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:0324c965",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:76d5473c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:8ae486c7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:abd9c7a9",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:b1a6ad89",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:1:e2a84f11",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:2:2cbd9dbe",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:idle-watchdog:2:81c62189",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/qa:1:5ea311c6",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/qa:1:ae3101ba",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/qa:2:0b098303",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/qa:2:fcf24ba8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:1:9eab0f2f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:1:ad2d04b1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:2:8071a06d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/senior-dev:2:ec6e362a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/typescript:1:18f8a55e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/typescript:1:6c64e022",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/typescript:2:61f914a8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:make-check-target/typescript:2:704beeb2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:1:40cfc6b3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:1:e45f90df",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:2:2228525f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/qa:2:404c091f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:1:0b15eaf3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:1:a4def527",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:2:96651373",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/senior-dev:2:fd90d2d0",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:1:1f532e72",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:1:ef018988",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:2:94cb90db",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:opencode-2x-stream/typescript:2:d2ac1510",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:16c0368d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:193b8c4e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:8623903a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:a70af3f5",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:ba6e057d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:1:c1c18184",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:2:66cd7240",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:repo-lease:2:f9cf4cf2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:1:3b9c1e27",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:1:708bb818",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:2:320c3417",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:routing-per-angle-fallback:2:33811e5b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:warden-board-null-repo:1:6995b0ef",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:warden-board-null-repo:1:d6bd8d28",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:warden-board-null-repo:2:4fed970d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:warden-board-null-repo:2:db08e8c4",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:11a7792d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:15c154bb",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:23784e57",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:4d18603e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:7013a98c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:1:b9481963",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:2:9f459a20",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:claude-haiku-5-5-eu:wire-to-provider:2:ac6f0cab",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:check-make-target-prereq:1:110c4e9f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:check-make-target-prereq:1:6fd3a57e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:check-make-target-prereq:2:40ce9188",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:check-make-target-prereq:2:b75249dd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:idle-watchdog:1:a68e2777",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:idle-watchdog:1:d036eb1e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:idle-watchdog:2:52882eaf",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:idle-watchdog:2:c33034bd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/qa:1:63ce9ca4",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/qa:1:aca8770e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/qa:2:5672914d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/qa:2:87a6f309",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/senior-dev:1:caf29d0d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/senior-dev:1:d6903edb",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/senior-dev:2:107b8e10",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/senior-dev:2:d24aedd8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/typescript:1:37386016",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/typescript:1:f9c49c5e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/typescript:2:514abd31",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:make-check-target/typescript:2:73500821",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:1:708f9057",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:1:866a5041",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:2:3b97d4b5",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/qa:2:9a59ee0f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:1:1c9d32a4",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:1:901ed015",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:2:21ef6672",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/senior-dev:2:6cb62648",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:1:b5024781",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:1:e1dfded5",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:2:27d6c63c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:opencode-2x-stream/typescript:2:df1804bb",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:repo-lease:1:850ec426",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:repo-lease:1:d8e1db4f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:repo-lease:2:b20749a6",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:repo-lease:2:bf2f5dda",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:routing-per-angle-fallback:1:2faacee7",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:routing-per-angle-fallback:1:867ab617",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:routing-per-angle-fallback:2:96774965",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:routing-per-angle-fallback:2:ac36dc6c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:warden-board-null-repo:1:648bcfac",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:warden-board-null-repo:1:814c3fcd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:warden-board-null-repo:2:80743b2d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:warden-board-null-repo:2:eb2e342b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:wire-to-provider:1:4ae9867b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:wire-to-provider:1:7cbb68fe",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:wire-to-provider:2:3412c9ac",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:deepseek-v4.1-flash:wire-to-provider:2:88e7d437",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:4ea52bf:1:2dd6ef5d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:4ea52bf:2:405e351f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:5de4e2d:1:3fc3079f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:5de4e2d:2:a514f0b1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:6264775:1:cad061c6",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:a:6264775:2:46889f5d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "check",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "dispatch-smoke",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "dispatch-smoke2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "excalidraw-diagram",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "narrative",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "overview",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:DeepSeek-V4-Pro:routing-per-angle-fallback:5dfa5a14",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:DeepSeek-V4-Pro:routing-per-angle-fallback:6dad1c2d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:DeepSeek-V4-Pro:warden-board-null-repo:b45dac46",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:DeepSeek-V4-Pro:warden-board-null-repo:f670c1dd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:deepseek-v4.1-flash:routing-per-angle-fallback:3149f10a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:deepseek-v4.1-flash:routing-per-angle-fallback:7db11d13",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:deepseek-v4.1-flash:warden-board-null-repo:19117fe8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:deepseek-v4.1-flash:warden-board-null-repo:5d95bea1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:gpt-6.1-sol:routing-per-angle-fallback:aead089a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:gpt-6.1-sol:routing-per-angle-fallback:ea27941f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:gpt-6.1-sol:warden-board-null-repo:ae658b59",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "probe:gpt-6.1-sol:warden-board-null-repo:fe68f011",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "review:angle",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "review:router",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "review:synthesis",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "unknown",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-39b4cf9:qa:68cf7af3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-39b4cf9:senior-dev:369596d2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-39b4cf9:typescript:9e86895f",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-71377b5:qa:ffac71b6",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-71377b5:senior-dev:259f57e4",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:sideclaw-71377b5:typescript:b07cf9b2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:warden-afd348d:qa:79baf088",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:warden-afd348d:senior-dev:ebf268f1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:warden-fdb5886:qa:61e7888a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:warden-fdb5886:senior-dev:13a22aec",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-4ea52bf:frontend:f1441177",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-4ea52bf:qa:7dd33c6c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-4ea52bf:senior-dev:e7cdddcb",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-4ea52bf:typescript:b3391f8d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-5de4e2d:frontend:b0e03f58",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-5de4e2d:qa:cd2f8667",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-5de4e2d:senior-dev:4a176fbd",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-5de4e2d:typescript:323a29c2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-9bcf51b:qa:b16ffaa3",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-9bcf51b:senior-dev:16027fd2",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab-judge:weatherorb-9bcf51b:typescript:99539981",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:qa:sonnet:6c41e287",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:senior-dev:sonnet:29eb0af1",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-39b4cf9:typescript:sonnet:e4bba0f5",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:qa:sonnet:cf7817be",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:senior-dev:sonnet:29b1d506",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:sideclaw-71377b5:typescript:sonnet:5c111b66",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-afd348d:qa:sonnet:c4c4a0dc",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-afd348d:senior-dev:sonnet:b55f323c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-fdb5886:qa:sonnet:d73db31c",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:warden-fdb5886:senior-dev:sonnet:8c243d1a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:frontend:sonnet:41adf4b8",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:qa:sonnet:35d7426e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:senior-dev:sonnet:ddacc28a",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-4ea52bf:typescript:sonnet:c777a720",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:frontend:sonnet:c29ed02e",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:qa:sonnet:9dd56e22",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:senior-dev:sonnet:61ff410d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-5de4e2d:typescript:sonnet:1b6e0619",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:qa:sonnet:b514304b",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:senior-dev:sonnet:8e74c735",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "ab:weatherorb-9bcf51b:typescript:sonnet:8165aa78",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:4ea52bf:1:c26a7564",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:4ea52bf:2:f60b3d03",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:5de4e2d:1:e5474bea",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:5de4e2d:2:88e2f28d",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:6264775:1:f9bc6f91",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "bench:frontend:b:6264775:2:9b87fec6",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "check",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "excalidraw-diagram",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "narrative",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "otel",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "overview",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "review:angle",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "max",
+   "class": "other",
+   "source": "agent-gateway-sessions",
+   "sub_tool": "review:synthesis",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "lightpanda",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "tavily",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "tavily-account",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "wayback",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  },
+  {
+   "billing": "iu",
+   "class": "research",
+   "source": "research-gateway",
+   "sub_tool": "ytdlp",
+   "tokens_wk": 0.0,
+   "usd_wk": 0.0
+  }
+ ],
+ "totals": {
+  "projected": {
+   "iu_usd_wk": 146.9,
+   "max_list_usd_wk": 4570.0,
+   "max_pct_wk": {
+    "high": 170.1,
+    "low": 129.5,
+    "median": 141.7
+   }
+  },
+  "recent_7d": {
+   "iu_usd_wk": 228.6,
+   "max_list_usd_wk": 6586.0,
+   "max_pct_wk": {
+    "high": 245.2,
+    "low": 186.6,
+    "median": 204.2
+   }
+  },
+  "today_30d": {
+   "iu_usd_wk": 146.9,
+   "max_list_usd_wk": 3862.0,
+   "max_pct_wk": {
+    "high": 143.8,
+    "low": 109.4,
+    "median": 119.8
+   }
+  }
+ },
+ "wave_session": {
+  "lead_list_usd_wk": 265.0,
+  "lead_pct_wk": {
+   "high": 9.9,
+   "low": 7.5,
+   "median": 8.2
+  },
+  "lead_wakes_per_week": 126,
+  "list_usd_per_wake": 2.11,
+  "median_list_usd": 8.72,
+  "median_tokens": 19300523.0,
+  "mother_list_usd_wk": 442.0,
+  "mother_pct_wk": {
+   "high": 16.5,
+   "low": 12.5,
+   "median": 13.7
+  },
+  "mother_wakes_per_week": 210,
+  "p90_list_usd": 35.53,
+  "p90_tokens": 86098260.0,
+  "sessions_30d": 335,
+  "tokens_per_wake": 4825131.0,
+  "wave_usd_per_million_tokens": 0.44
+ }
+}

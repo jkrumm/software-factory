@@ -1,0 +1,1555 @@
+{
+  "as_of": "2026-10-22T08:00:00Z",
+  "assembly": {
+    "redeploys_same_commit_same_stream_150d_lookback": {
+      "argo": 4,
+      "audio-gateway": 4,
+      "basalt-ui": 1,
+      "email-gateway": 6,
+      "free-planning-poker": 1,
+      "image-gateway": 12,
+      "jkrumm.com": 26,
+      "shutterflow": 1,
+      "weatherorb": 33
+    },
+    "service_level_success_records": 2213,
+    "success_records_without_resolvable_sha": {
+      "actions": 5,
+      "rollhook": 8
+    },
+    "unresolved_shas_by_source": {
+      "actions": 6,
+      "rollhook": 3
+    }
+  },
+  "change_failure_rate": {
+    "definition": "deployment flagged when a failure-signal warden item (origin alert, or [alert] GitHub issue) or a Revert commit on the same repo appears within 24 h after it; alert items are mostly infrastructure signals, so this is an upper bound on deploy-caused failures",
+    "first_triage_item": "2026-08-28T06:00:56Z",
+    "headline_alert_items_or_revert_within_24h": {
+      "deployments": 1190,
+      "flagged": 219,
+      "rate": 0.184
+    },
+    "items_without_repo_dropped": 117,
+    "median_deployments_per_day_in_window": 12,
+    "reading": "The literal rule flags EVERY deploy of the repo in the 24 h before an item or revert, so at the observed rate (median_deployments_per_day_in_window, pooled over repos) one signal flags a whole day of deploys. sensitivity_item_charged_to_latest_deploy_only charges each item/revert to the deploy before it and is the better estimate of deploy-caused failures; the definition in DEFINITIONS.md should say which one is meant.",
+    "sensitivity_alert_items_only": {
+      "deployments": 1190,
+      "flagged": 96,
+      "rate": 0.0807
+    },
+    "sensitivity_any_origin_item_or_revert": {
+      "deployments": 1190,
+      "flagged": 316,
+      "rate": 0.2655
+    },
+    "sensitivity_item_charged_to_latest_deploy_only": {
+      "deployments": 1190,
+      "flagged": 24,
+      "rate": 0.0202
+    },
+    "sensitivity_reverts_only": {
+      "deployments": 1190,
+      "flagged": 165,
+      "rate": 0.1387
+    },
+    "watched_repos_only": {
+      "deployments": 721,
+      "flagged": 219,
+      "rate": 0.3037,
+      "watched_repos": [
+        "agent-gateway",
+        "argo",
+        "audio-gateway",
+        "dotfiles",
+        "email-gateway",
+        "free-planning-poker",
+        "hermes-agent",
+        "homelab",
+        "homelab-private",
+        "image-gateway",
+        "linewatch",
+        "research-gateway",
+        "rollhook",
+        "vps",
+        "warden",
+        "weatherorb"
+      ]
+    },
+    "window_end": "2026-10-21T08:00:00Z",
+    "window_start": "2026-08-28T06:00:56Z"
+  },
+  "coverage": {
+    "commit_share_in_repos_with_deploy_records": 0.8444,
+    "iuroot": "out of scope: deploys run through GitLab CI, which is not queried (counts-only rule)",
+    "repos_with_deploy_records_90d": [
+      "agent-gateway",
+      "argo",
+      "audio-gateway",
+      "basalt-ui",
+      "dotfiles",
+      "email-gateway",
+      "free-planning-poker",
+      "hermes-agent",
+      "image-gateway",
+      "jkrumm.com",
+      "rb",
+      "research-gateway",
+      "rollhook",
+      "shutterflow",
+      "sy-serendipity",
+      "usage-tracker",
+      "warden",
+      "weatherorb"
+    ],
+    "repos_without_records_with_25_plus_commits_90d": [
+      {
+        "commits_90d": 493,
+        "repo": "brain"
+      },
+      {
+        "commits_90d": 179,
+        "repo": "vps"
+      },
+      {
+        "commits_90d": 141,
+        "repo": "linewatch"
+      },
+      {
+        "commits_90d": 113,
+        "repo": "modelpick"
+      },
+      {
+        "commits_90d": 107,
+        "repo": "homelab-private"
+      },
+      {
+        "commits_90d": 94,
+        "repo": "homelab"
+      },
+      {
+        "commits_90d": 88,
+        "repo": "dotfiles-private"
+      },
+      {
+        "commits_90d": 64,
+        "repo": "basalt-ui-obsidian"
+      },
+      {
+        "commits_90d": 25,
+        "repo": "tinycast-extensions"
+      }
+    ],
+    "service_to_repo_unmapped": {},
+    "sources_per_repo_90d": {
+      "agent-gateway": {
+        "warden_op": 4
+      },
+      "argo": {
+        "actions": 376,
+        "rollhook": 83
+      },
+      "audio-gateway": {
+        "actions": 65,
+        "rollhook": 59
+      },
+      "basalt-ui": {
+        "actions": 451,
+        "rollhook": 64
+      },
+      "dotfiles": {
+        "warden_op": 3
+      },
+      "email-gateway": {
+        "actions": 82,
+        "rollhook": 37
+      },
+      "free-planning-poker": {
+        "actions": 7,
+        "rollhook": 5
+      },
+      "hermes-agent": {
+        "warden_op": 1
+      },
+      "image-gateway": {
+        "actions": 12,
+        "rollhook": 9
+      },
+      "jkrumm.com": {
+        "actions": 12,
+        "rollhook": 6
+      },
+      "rb": {
+        "warden_op": 2
+      },
+      "research-gateway": {
+        "poller": 59,
+        "rollhook": 92,
+        "warden_op": 1
+      },
+      "rollhook": {
+        "actions": 11,
+        "rollhook": 9
+      },
+      "shutterflow": {
+        "actions": 60,
+        "rollhook": 21
+      },
+      "sy-serendipity": {
+        "actions": 4
+      },
+      "usage-tracker": {
+        "warden_op": 1
+      },
+      "warden": {
+        "warden_op": 12
+      },
+      "weatherorb": {
+        "actions": 166,
+        "rollhook": 34,
+        "warden_op": 20
+      }
+    }
+  },
+  "definition_keys": [
+    "dora.deployment_frequency",
+    "dora.lead_time",
+    "dora.change_failure_rate",
+    "dora.failed_deployment_recovery",
+    "dora.deployment_rework_rate"
+  ],
+  "deployment_frequency": {
+    "14d": {
+      "calendar_days_in_window": 15,
+      "days_with_a_deployment": 15,
+      "deployments": 960,
+      "per_repo": {
+        "agent-gateway": {
+          "deployments": 4,
+          "per_week": 2.0
+        },
+        "argo": {
+          "deployments": 295,
+          "per_week": 147.5
+        },
+        "audio-gateway": {
+          "deployments": 7,
+          "per_week": 3.5
+        },
+        "basalt-ui": {
+          "deployments": 381,
+          "per_week": 190.5
+        },
+        "dotfiles": {
+          "deployments": 3,
+          "per_week": 1.5
+        },
+        "email-gateway": {
+          "deployments": 42,
+          "per_week": 21.0
+        },
+        "free-planning-poker": {
+          "deployments": 2,
+          "per_week": 1.0
+        },
+        "hermes-agent": {
+          "deployments": 1,
+          "per_week": 0.5
+        },
+        "image-gateway": {
+          "deployments": 5,
+          "per_week": 2.5
+        },
+        "jkrumm.com": {
+          "deployments": 6,
+          "per_week": 3.0
+        },
+        "rb": {
+          "deployments": 2,
+          "per_week": 1.0
+        },
+        "research-gateway": {
+          "deployments": 34,
+          "per_week": 17.0
+        },
+        "rollhook": {
+          "deployments": 5,
+          "per_week": 2.5
+        },
+        "shutterflow": {
+          "deployments": 29,
+          "per_week": 14.5
+        },
+        "sy-serendipity": {
+          "deployments": 4,
+          "per_week": 2.0
+        },
+        "usage-tracker": {
+          "deployments": 1,
+          "per_week": 0.5
+        },
+        "warden": {
+          "deployments": 7,
+          "per_week": 3.5
+        },
+        "weatherorb": {
+          "deployments": 132,
+          "per_week": 66.0
+        }
+      },
+      "per_week": 480.0,
+      "repos_with_deployments": 18,
+      "window_days": 14
+    },
+    "30d": {
+      "calendar_days_in_window": 31,
+      "days_with_a_deployment": 30,
+      "deployments": 1170,
+      "per_repo": {
+        "agent-gateway": {
+          "deployments": 4,
+          "per_week": 0.93
+        },
+        "argo": {
+          "deployments": 310,
+          "per_week": 72.33
+        },
+        "audio-gateway": {
+          "deployments": 12,
+          "per_week": 2.8
+        },
+        "basalt-ui": {
+          "deployments": 407,
+          "per_week": 94.97
+        },
+        "dotfiles": {
+          "deployments": 3,
+          "per_week": 0.7
+        },
+        "email-gateway": {
+          "deployments": 75,
+          "per_week": 17.5
+        },
+        "free-planning-poker": {
+          "deployments": 5,
+          "per_week": 1.17
+        },
+        "hermes-agent": {
+          "deployments": 1,
+          "per_week": 0.23
+        },
+        "image-gateway": {
+          "deployments": 7,
+          "per_week": 1.63
+        },
+        "jkrumm.com": {
+          "deployments": 12,
+          "per_week": 2.8
+        },
+        "rb": {
+          "deployments": 2,
+          "per_week": 0.47
+        },
+        "research-gateway": {
+          "deployments": 81,
+          "per_week": 18.9
+        },
+        "rollhook": {
+          "deployments": 11,
+          "per_week": 2.57
+        },
+        "shutterflow": {
+          "deployments": 60,
+          "per_week": 14.0
+        },
+        "sy-serendipity": {
+          "deployments": 4,
+          "per_week": 0.93
+        },
+        "usage-tracker": {
+          "deployments": 1,
+          "per_week": 0.23
+        },
+        "warden": {
+          "deployments": 12,
+          "per_week": 2.8
+        },
+        "weatherorb": {
+          "deployments": 163,
+          "per_week": 38.03
+        }
+      },
+      "per_week": 273.0,
+      "repos_with_deployments": 18,
+      "window_days": 30
+    },
+    "90d": {
+      "calendar_days_in_window": 91,
+      "days_with_a_deployment": 63,
+      "deployments": 1418,
+      "per_repo": {
+        "agent-gateway": {
+          "deployments": 4,
+          "per_week": 0.31
+        },
+        "argo": {
+          "deployments": 378,
+          "per_week": 29.4
+        },
+        "audio-gateway": {
+          "deployments": 65,
+          "per_week": 5.06
+        },
+        "basalt-ui": {
+          "deployments": 451,
+          "per_week": 35.08
+        },
+        "dotfiles": {
+          "deployments": 3,
+          "per_week": 0.23
+        },
+        "email-gateway": {
+          "deployments": 82,
+          "per_week": 6.38
+        },
+        "free-planning-poker": {
+          "deployments": 7,
+          "per_week": 0.54
+        },
+        "hermes-agent": {
+          "deployments": 1,
+          "per_week": 0.08
+        },
+        "image-gateway": {
+          "deployments": 12,
+          "per_week": 0.93
+        },
+        "jkrumm.com": {
+          "deployments": 12,
+          "per_week": 0.93
+        },
+        "rb": {
+          "deployments": 2,
+          "per_week": 0.16
+        },
+        "research-gateway": {
+          "deployments": 137,
+          "per_week": 10.66
+        },
+        "rollhook": {
+          "deployments": 13,
+          "per_week": 1.01
+        },
+        "shutterflow": {
+          "deployments": 60,
+          "per_week": 4.67
+        },
+        "sy-serendipity": {
+          "deployments": 4,
+          "per_week": 0.31
+        },
+        "usage-tracker": {
+          "deployments": 1,
+          "per_week": 0.08
+        },
+        "warden": {
+          "deployments": 12,
+          "per_week": 0.93
+        },
+        "weatherorb": {
+          "deployments": 174,
+          "per_week": 13.53
+        }
+      },
+      "per_week": 110.3,
+      "repos_with_deployments": 18,
+      "window_days": 90
+    },
+    "service_level_success_records_90d": 2030,
+    "weekly_90d": {
+      "2026-W30": {
+        "deployments": 7,
+        "repos": 4
+      },
+      "2026-W31": {
+        "deployments": 57,
+        "repos": 8
+      },
+      "2026-W32": {
+        "deployments": 27,
+        "repos": 3
+      },
+      "2026-W33": {
+        "deployments": 4,
+        "repos": 2
+      },
+      "2026-W34": {
+        "deployments": 33,
+        "repos": 3
+      },
+      "2026-W35": {
+        "deployments": 21,
+        "repos": 3
+      },
+      "2026-W36": {
+        "deployments": 45,
+        "repos": 5
+      },
+      "2026-W37": {
+        "deployments": 41,
+        "repos": 8
+      },
+      "2026-W38": {
+        "deployments": 13,
+        "repos": 3
+      },
+      "2026-W39": {
+        "deployments": 83,
+        "repos": 11
+      },
+      "2026-W40": {
+        "deployments": 100,
+        "repos": 9
+      },
+      "2026-W41": {
+        "deployments": 80,
+        "repos": 15
+      },
+      "2026-W42": {
+        "deployments": 727,
+        "repos": 15
+      },
+      "2026-W43": {
+        "deployments": 180,
+        "repos": 6
+      }
+    }
+  },
+  "deployment_rework_rate": {
+    "alert_item_merge_commits_in_ledger": 5,
+    "best_estimate_plus_fix_only": {
+      "deployments": 258,
+      "rate": 0.1863,
+      "reading": "adds deployments whose whole changeset is fix/revert commits"
+    },
+    "definition": "deploys that ship an unplanned fix / all deploys; 'unplanned' is not recorded anywhere, so three nested readings bracket it",
+    "deployments_measured": 1385,
+    "lower_bound_confirmed": {
+      "deployments": 21,
+      "rate": 0.0152,
+      "reading": "ships a warden merge that came from an alert item (origin alert or an [alert] issue), or is the first success within 24 h after a failed deployment of its stream"
+    },
+    "upper_bound_plus_any_rework_commit": {
+      "deployments": 658,
+      "rate": 0.4751,
+      "reading": "adds deployments containing any fix/revert commit that touched a file changed in the preceding 7 days (rework_share's commit flag)"
+    }
+  },
+  "failed_deployment_recovery": {
+    "definition": "failed deployment -> next successful deployment in the same stream (service / workflow); a failure with no later success is censored. A failed pipeline leaves production on the previous version, so this is the time until the pipeline is green again, not user-facing downtime",
+    "failed_deployments_90d": 44,
+    "failed_per_source": {
+      "actions": 28,
+      "rollhook": 9,
+      "warden_op": 7
+    },
+    "failure_kinds": {
+      "actions:workflow_failure": 28,
+      "rollhook:compose": 2,
+      "rollhook:docker_pull": 1,
+      "rollhook:other": 4,
+      "rollhook:rolling_deploy": 2,
+      "warden_op:exit": 7
+    },
+    "recovered": 44,
+    "recovered_within_1h": 27,
+    "recovered_within_24h": 35,
+    "recovery": {
+      "max_h": 214.43,
+      "mean_h": 18.09,
+      "median_h": 0.27,
+      "n": 44,
+      "p25_h": 0.11,
+      "p75_h": 8.04,
+      "p90_h": 51.63
+    },
+    "recovery_by_source": {
+      "actions": {
+        "max_h": 80.22,
+        "mean_h": 11.86,
+        "median_h": 0.39,
+        "n": 28,
+        "p25_h": 0.11,
+        "p75_h": 8.04,
+        "p90_h": 51.38
+      },
+      "rollhook": {
+        "max_h": 214.43,
+        "mean_h": 42.06,
+        "median_h": 0.21,
+        "n": 9,
+        "p25_h": 0.03,
+        "p75_h": 35.28,
+        "p90_h": 143.14
+      },
+      "warden_op": {
+        "max_h": 83.74,
+        "mean_h": 12.18,
+        "median_h": 0.17,
+        "n": 7,
+        "p25_h": 0.17,
+        "p75_h": 0.42,
+        "p90_h": 33.75
+      }
+    },
+    "unrecovered_censored": 0
+  },
+  "lead_time_for_changes": {
+    "definition": "per_commit: deploy time - author time, over every commit first shipped by a deployment in the window; per_deployment_first_commit: the oldest commit in each deployment (the 'first commit of a change' reading). Partial sources (warden operations, Slack notices) miss deploys, so commits look older than they were: they are excluded from the headline.",
+    "deployments_90d": 1418,
+    "deployments_measured": 1277,
+    "deployments_measured_all_sources": 1383,
+    "headline_scope": "deployments recorded by a complete source (an Actions workflow per push, or the CI-gated poller)",
+    "per_commit_author_time": {
+      "max_h": 1356.65,
+      "mean_h": 12.65,
+      "median_h": 0.53,
+      "n": 4915,
+      "p25_h": 0.16,
+      "p75_h": 1.77,
+      "p90_h": 16.02
+    },
+    "per_commit_commit_time": {
+      "max_h": 1356.65,
+      "mean_h": 8.2,
+      "median_h": 0.02,
+      "n": 4914,
+      "p25_h": 0.02,
+      "p75_h": 0.47,
+      "p90_h": 6.91
+    },
+    "per_deployment_first_commit_author_time": {
+      "max_h": 1356.65,
+      "mean_h": 7.31,
+      "median_h": 0.26,
+      "n": 1277,
+      "p25_h": 0.03,
+      "p75_h": 0.97,
+      "p90_h": 2.66
+    },
+    "per_deployment_median_commit_author_time": {
+      "max_h": 616.94,
+      "mean_h": 3.48,
+      "median_h": 0.19,
+      "n": 1277,
+      "p25_h": 0.03,
+      "p75_h": 0.57,
+      "p90_h": 1.51
+    },
+    "per_repo": {
+      "agent-gateway": {
+        "author_time": {
+          "max_h": 323.2,
+          "mean_h": 92.22,
+          "median_h": 117.54,
+          "n": 121,
+          "p25_h": 28.76,
+          "p75_h": 145.41,
+          "p90_h": 165.9
+        },
+        "commit_time": {
+          "max_h": 171.35,
+          "mean_h": 88.7,
+          "median_h": 94.72,
+          "n": 121,
+          "p25_h": 28.76,
+          "p75_h": 145.39,
+          "p90_h": 165.12
+        },
+        "commits": 121,
+        "deployments_measured": 3,
+        "first_commit_per_deployment": {
+          "max_h": 323.2,
+          "mean_h": 176.26,
+          "median_h": 175.46,
+          "n": 3,
+          "p25_h": 102.79,
+          "p75_h": 249.33,
+          "p90_h": 293.66
+        },
+        "source_class": "partial"
+      },
+      "argo": {
+        "author_time": {
+          "max_h": 327.57,
+          "mean_h": 3.1,
+          "median_h": 0.24,
+          "n": 1129,
+          "p25_h": 0.06,
+          "p75_h": 0.45,
+          "p90_h": 2.29
+        },
+        "commit_time": {
+          "max_h": 122.05,
+          "mean_h": 2.46,
+          "median_h": 0.02,
+          "n": 1129,
+          "p25_h": 0.02,
+          "p75_h": 0.03,
+          "p90_h": 2.06
+        },
+        "commits": 1140,
+        "deployments_measured": 369,
+        "first_commit_per_deployment": {
+          "max_h": 327.57,
+          "mean_h": 2.1,
+          "median_h": 0.08,
+          "n": 369,
+          "p25_h": 0.02,
+          "p75_h": 0.37,
+          "p90_h": 0.56
+        },
+        "source_class": "complete"
+      },
+      "audio-gateway": {
+        "author_time": {
+          "max_h": 212.2,
+          "mean_h": 4.07,
+          "median_h": 0.02,
+          "n": 83,
+          "p25_h": 0.02,
+          "p75_h": 0.16,
+          "p90_h": 1.62
+        },
+        "commit_time": {
+          "max_h": 212.2,
+          "mean_h": 2.79,
+          "median_h": 0.02,
+          "n": 83,
+          "p25_h": 0.02,
+          "p75_h": 0.05,
+          "p90_h": 0.43
+        },
+        "commits": 83,
+        "deployments_measured": 65,
+        "first_commit_per_deployment": {
+          "max_h": 212.2,
+          "mean_h": 3.93,
+          "median_h": 0.02,
+          "n": 65,
+          "p25_h": 0.02,
+          "p75_h": 0.05,
+          "p90_h": 0.4
+        },
+        "source_class": "complete"
+      },
+      "basalt-ui": {
+        "author_time": {
+          "max_h": 196.34,
+          "mean_h": 4.85,
+          "median_h": 0.62,
+          "n": 1882,
+          "p25_h": 0.26,
+          "p75_h": 1.31,
+          "p90_h": 3.76
+        },
+        "commit_time": {
+          "max_h": 196.34,
+          "mean_h": 1.0,
+          "median_h": 0.02,
+          "n": 1882,
+          "p25_h": 0.02,
+          "p75_h": 0.02,
+          "p90_h": 0.04
+        },
+        "commits": 1884,
+        "deployments_measured": 449,
+        "first_commit_per_deployment": {
+          "max_h": 196.34,
+          "mean_h": 3.99,
+          "median_h": 0.65,
+          "n": 449,
+          "p25_h": 0.22,
+          "p75_h": 1.4,
+          "p90_h": 2.12
+        },
+        "source_class": "complete"
+      },
+      "dotfiles": {
+        "author_time": {
+          "max_h": 371.2,
+          "mean_h": 37.14,
+          "median_h": 21.81,
+          "n": 73,
+          "p25_h": 4.08,
+          "p75_h": 50.75,
+          "p90_h": 71.28
+        },
+        "commit_time": {
+          "max_h": 92.25,
+          "mean_h": 29.74,
+          "median_h": 21.81,
+          "n": 73,
+          "p25_h": 4.08,
+          "p75_h": 50.75,
+          "p90_h": 71.06
+        },
+        "commits": 73,
+        "deployments_measured": 2,
+        "first_commit_per_deployment": {
+          "max_h": 371.2,
+          "mean_h": 211.92,
+          "median_h": 211.92,
+          "n": 2,
+          "p25_h": 132.28,
+          "p75_h": 291.56,
+          "p90_h": 339.34
+        },
+        "source_class": "partial"
+      },
+      "email-gateway": {
+        "author_time": {
+          "max_h": 19.2,
+          "mean_h": 0.36,
+          "median_h": 0.03,
+          "n": 98,
+          "p25_h": 0.02,
+          "p75_h": 0.05,
+          "p90_h": 0.52
+        },
+        "commit_time": {
+          "max_h": 19.2,
+          "mean_h": 0.34,
+          "median_h": 0.03,
+          "n": 98,
+          "p25_h": 0.02,
+          "p75_h": 0.05,
+          "p90_h": 0.37
+        },
+        "commits": 101,
+        "deployments_measured": 78,
+        "first_commit_per_deployment": {
+          "max_h": 19.2,
+          "mean_h": 0.42,
+          "median_h": 0.03,
+          "n": 78,
+          "p25_h": 0.02,
+          "p75_h": 0.05,
+          "p90_h": 0.73
+        },
+        "source_class": "complete"
+      },
+      "free-planning-poker": {
+        "author_time": {
+          "max_h": 816.54,
+          "mean_h": 62.81,
+          "median_h": 0.13,
+          "n": 16,
+          "p25_h": 0.07,
+          "p75_h": 31.07,
+          "p90_h": 33.17
+        },
+        "commit_time": {
+          "max_h": 0.03,
+          "mean_h": 0.02,
+          "median_h": 0.02,
+          "n": 16,
+          "p25_h": 0.02,
+          "p75_h": 0.02,
+          "p90_h": 0.02
+        },
+        "commits": 16,
+        "deployments_measured": 7,
+        "first_commit_per_deployment": {
+          "max_h": 816.54,
+          "mean_h": 121.68,
+          "median_h": 0.11,
+          "n": 7,
+          "p25_h": 0.06,
+          "p75_h": 17.46,
+          "p90_h": 347.47
+        },
+        "source_class": "complete"
+      },
+      "image-gateway": {
+        "author_time": {
+          "max_h": 760.15,
+          "mean_h": 188.94,
+          "median_h": 186.86,
+          "n": 43,
+          "p25_h": 0.23,
+          "p75_h": 377.58,
+          "p90_h": 395.86
+        },
+        "commit_time": {
+          "max_h": 760.15,
+          "mean_h": 97.09,
+          "median_h": 0.03,
+          "n": 43,
+          "p25_h": 0.01,
+          "p75_h": 187.81,
+          "p90_h": 317.54
+        },
+        "commits": 44,
+        "deployments_measured": 11,
+        "first_commit_per_deployment": {
+          "max_h": 760.15,
+          "mean_h": 138.38,
+          "median_h": 0.71,
+          "n": 11,
+          "p25_h": 0.03,
+          "p75_h": 195.96,
+          "p90_h": 367.15
+        },
+        "source_class": "complete"
+      },
+      "jkrumm.com": {
+        "author_time": {
+          "max_h": 137.34,
+          "mean_h": 11.17,
+          "median_h": 0.02,
+          "n": 14,
+          "p25_h": 0.02,
+          "p75_h": 0.23,
+          "p90_h": 12.53
+        },
+        "commit_time": {
+          "max_h": 137.34,
+          "mean_h": 11.17,
+          "median_h": 0.02,
+          "n": 14,
+          "p25_h": 0.02,
+          "p75_h": 0.23,
+          "p90_h": 12.53
+        },
+        "commits": 14,
+        "deployments_measured": 11,
+        "first_commit_per_deployment": {
+          "max_h": 137.34,
+          "mean_h": 12.63,
+          "median_h": 0.02,
+          "n": 11,
+          "p25_h": 0.02,
+          "p75_h": 0.21,
+          "p90_h": 1.02
+        },
+        "source_class": "complete"
+      },
+      "rb": {
+        "author_time": {
+          "max_h": 168.31,
+          "mean_h": 116.5,
+          "median_h": 146.37,
+          "n": 30,
+          "p25_h": 136.75,
+          "p75_h": 146.75,
+          "p90_h": 146.97
+        },
+        "commit_time": {
+          "max_h": 168.31,
+          "mean_h": 116.47,
+          "median_h": 146.37,
+          "n": 30,
+          "p25_h": 136.65,
+          "p75_h": 146.75,
+          "p90_h": 146.97
+        },
+        "commits": 30,
+        "deployments_measured": 1,
+        "first_commit_per_deployment": {
+          "max_h": 168.31,
+          "mean_h": 168.31,
+          "median_h": 168.31,
+          "n": 1,
+          "p25_h": 168.31,
+          "p75_h": 168.31,
+          "p90_h": 168.31
+        },
+        "source_class": "partial"
+      },
+      "research-gateway": {
+        "author_time": {
+          "max_h": 261.23,
+          "mean_h": 9.46,
+          "median_h": 0.05,
+          "n": 269,
+          "p25_h": 0.02,
+          "p75_h": 0.84,
+          "p90_h": 2.74
+        },
+        "commit_time": {
+          "max_h": 261.23,
+          "mean_h": 2.96,
+          "median_h": 0.04,
+          "n": 269,
+          "p25_h": 0.02,
+          "p75_h": 0.07,
+          "p90_h": 0.92
+        },
+        "commits": 269,
+        "deployments_measured": 137,
+        "first_commit_per_deployment": {
+          "max_h": 261.23,
+          "mean_h": 10.15,
+          "median_h": 0.04,
+          "n": 137,
+          "p25_h": 0.02,
+          "p75_h": 0.21,
+          "p90_h": 1.44
+        },
+        "source_class": "complete"
+      },
+      "rollhook": {
+        "author_time": {
+          "max_h": 1356.65,
+          "mean_h": 218.01,
+          "median_h": 0.89,
+          "n": 56,
+          "p25_h": 0.33,
+          "p75_h": 368.28,
+          "p90_h": 833.53
+        },
+        "commit_time": {
+          "max_h": 1356.65,
+          "mean_h": 139.06,
+          "median_h": 0.87,
+          "n": 56,
+          "p25_h": 0.01,
+          "p75_h": 289.14,
+          "p90_h": 395.64
+        },
+        "commits": 56,
+        "deployments_measured": 13,
+        "first_commit_per_deployment": {
+          "max_h": 1356.65,
+          "mean_h": 179.78,
+          "median_h": 0.51,
+          "n": 13,
+          "p25_h": 0.16,
+          "p75_h": 238.26,
+          "p90_h": 370.56
+        },
+        "source_class": "complete"
+      },
+      "shutterflow": {
+        "author_time": {
+          "max_h": 192.13,
+          "mean_h": 29.14,
+          "median_h": 3.56,
+          "n": 710,
+          "p25_h": 1.1,
+          "p75_h": 28.61,
+          "p90_h": 122.14
+        },
+        "commit_time": {
+          "max_h": 180.94,
+          "mean_h": 27.62,
+          "median_h": 2.21,
+          "n": 709,
+          "p25_h": 0.63,
+          "p75_h": 25.63,
+          "p90_h": 122.14
+        },
+        "commits": 713,
+        "deployments_measured": 57,
+        "first_commit_per_deployment": {
+          "max_h": 192.13,
+          "mean_h": 14.68,
+          "median_h": 3.36,
+          "n": 57,
+          "p25_h": 1.52,
+          "p75_h": 18.04,
+          "p90_h": 32.21
+        },
+        "source_class": "complete"
+      },
+      "sy-serendipity": {
+        "author_time": {
+          "max_h": 0.02,
+          "mean_h": 0.02,
+          "median_h": 0.02,
+          "n": 3,
+          "p25_h": 0.02,
+          "p75_h": 0.02,
+          "p90_h": 0.02
+        },
+        "commit_time": {
+          "max_h": 0.02,
+          "mean_h": 0.02,
+          "median_h": 0.02,
+          "n": 3,
+          "p25_h": 0.02,
+          "p75_h": 0.02,
+          "p90_h": 0.02
+        },
+        "commits": 3,
+        "deployments_measured": 3,
+        "first_commit_per_deployment": {
+          "max_h": 0.02,
+          "mean_h": 0.02,
+          "median_h": 0.02,
+          "n": 3,
+          "p25_h": 0.02,
+          "p75_h": 0.02,
+          "p90_h": 0.02
+        },
+        "source_class": "complete"
+      },
+      "warden": {
+        "author_time": {
+          "max_h": 78.9,
+          "mean_h": 18.57,
+          "median_h": 6.3,
+          "n": 266,
+          "p25_h": 2.49,
+          "p75_h": 23.87,
+          "p90_h": 67.91
+        },
+        "commit_time": {
+          "max_h": 78.9,
+          "mean_h": 18.18,
+          "median_h": 6.2,
+          "n": 266,
+          "p25_h": 2.25,
+          "p75_h": 23.87,
+          "p90_h": 66.88
+        },
+        "commits": 266,
+        "deployments_measured": 11,
+        "first_commit_per_deployment": {
+          "max_h": 78.9,
+          "mean_h": 20.92,
+          "median_h": 9.4,
+          "n": 11,
+          "p25_h": 7.06,
+          "p75_h": 25.81,
+          "p90_h": 40.21
+        },
+        "source_class": "partial"
+      },
+      "weatherorb": {
+        "author_time": {
+          "max_h": 211.32,
+          "mean_h": 10.05,
+          "median_h": 1.05,
+          "n": 816,
+          "p25_h": 0.17,
+          "p75_h": 5.12,
+          "p90_h": 12.76
+        },
+        "commit_time": {
+          "max_h": 172.41,
+          "mean_h": 5.54,
+          "median_h": 0.4,
+          "n": 816,
+          "p25_h": 0.06,
+          "p75_h": 3.17,
+          "p90_h": 7.9
+        },
+        "commits": 825,
+        "deployments_measured": 166,
+        "first_commit_per_deployment": {
+          "max_h": 211.32,
+          "mean_h": 7.7,
+          "median_h": 0.29,
+          "n": 166,
+          "p25_h": 0.14,
+          "p75_h": 1.59,
+          "p90_h": 9.04
+        },
+        "source_class": "complete"
+      }
+    },
+    "samples_with_negative_lead_dropped": 29,
+    "sensitivity_all_sources": {
+      "per_commit_author_time": {
+        "max_h": 1356.65,
+        "mean_h": 15.73,
+        "median_h": 0.65,
+        "n": 5609,
+        "p25_h": 0.18,
+        "p75_h": 3.17,
+        "p90_h": 33.07
+      },
+      "per_deployment_first_commit_author_time": {
+        "max_h": 1356.65,
+        "mean_h": 9.08,
+        "median_h": 0.25,
+        "n": 1383,
+        "p25_h": 0.03,
+        "p75_h": 1.03,
+        "p90_h": 3.88
+      }
+    },
+    "skipped": {
+      "empty_changeset": 22,
+      "first_deployment_of_repo": 18
+    }
+  },
+  "metrics": {
+    "change_failure_rate": {
+      "confidence": "low: alert items are mostly infrastructure noise, so this is an upper bound",
+      "coverage": "deployments from 2026-08-28T06:00:56Z (first triage item) to 2026-10-21T08:00:00Z",
+      "headline": "literal rule 18.4% (219/1190); item charged to the latest deploy only 2.0%",
+      "source": "warden triage items + git reverts vs deployments",
+      "value": {
+        "attributed_to_latest_deploy": {
+          "deployments": 1190,
+          "flagged": 24,
+          "rate": 0.0202
+        },
+        "literal_definition": {
+          "deployments": 1190,
+          "flagged": 219,
+          "rate": 0.184
+        }
+      }
+    },
+    "deployment_frequency": {
+      "confidence": "high for repos with an Actions deploy workflow, medium for relay-only repos, absent for the rest",
+      "coverage": "18 repos with records; 84.4% of 90 d commits live in them",
+      "headline": "1418 deployments in 90 d (110.3/week) across 18 repos; 63 of 91 calendar days had one",
+      "source": "actions + rollhook + warden_op + poller, de-duplicated by (repo, commit)",
+      "value_90d": {
+        "deployments": 1418,
+        "per_week": 110.3,
+        "repos": 18
+      }
+    },
+    "deployment_rework_rate": {
+      "confidence": "low: 'unplanned' is not recorded; bracketed, not measured",
+      "coverage": "deployments with a measured changeset",
+      "headline": "between 1.5% (confirmed) and 47.5% (any rework commit); best estimate 18.6%",
+      "source": "warden ledger + failure/redeploy sequence + commit types",
+      "value": {
+        "best": 0.1863,
+        "lower": 0.0152,
+        "upper": 0.4751
+      }
+    },
+    "failed_deployment_recovery_time": {
+      "confidence": "low-medium: small n, recovery = next success of the same stream",
+      "coverage": "failures any source recorded",
+      "failed": 44,
+      "headline": "44 failed deployments, 44 recovered (median 0.27 h, p90 51.63 h), 0 unrecovered; recovery = pipeline green again, not user-facing downtime",
+      "source": "failure records of every source",
+      "value": {
+        "max_h": 214.43,
+        "mean_h": 18.09,
+        "median_h": 0.27,
+        "n": 44,
+        "p25_h": 0.11,
+        "p75_h": 8.04,
+        "p90_h": 51.63
+      }
+    },
+    "lead_time_for_changes": {
+      "confidence": "medium: author time is when a commit was written, not pushed; batches of commits wait for one deploy",
+      "coverage": "deployments whose sha resolves in the local default branch",
+      "headline": "median 0.53 h, p90 16.02 h per commit (4915 commits, 1277 deployments from complete sources); oldest commit per deployment median 0.26 h",
+      "source": "git author times joined to deployment shas",
+      "value_90d": {
+        "commits": 4915,
+        "deployments": 1277,
+        "first_commit_per_deployment_median_h": 0.26,
+        "per_commit_median_h": 0.53,
+        "per_commit_p90_h": 16.02
+      }
+    }
+  },
+  "notes": [
+    "Deployment frequency counts distinct (repo, commit) successes; service_level_success_records_90d counts every service/workflow record before de-duplication.",
+    "The warden Slack relay captures only part of what GitHub Actions ran: compare relay_capture before reading rollhook-only numbers.",
+    "Repos deployed by hand or by launchd on the mini (dotfiles, warden, agent-gateway, hermes-agent, usage-tracker, ...) appear only through warden operations since 2026-09-29: their frequency is a floor, not a measurement.",
+    "dotfiles has no deployment event by design: a merged commit is live once symlinked, so its lead time is its commit time.",
+    "Lead time is computed on the default branch graph as fetched; commits of deployments newer than the last fetch are unresolved and counted in assembly.unresolved_shas_by_source."
+  ],
+  "relay_capture": {
+    "argo": {
+      "actions_deployments": 376,
+      "rollhook_captured_of_actions": 0.2154,
+      "rollhook_notice_deployments": 83
+    },
+    "audio-gateway": {
+      "actions_deployments": 65,
+      "rollhook_captured_of_actions": 0.9077,
+      "rollhook_notice_deployments": 59
+    },
+    "basalt-ui": {
+      "actions_deployments": 451,
+      "rollhook_captured_of_actions": 0.1419,
+      "rollhook_notice_deployments": 64
+    },
+    "email-gateway": {
+      "actions_deployments": 82,
+      "rollhook_captured_of_actions": 0.4512,
+      "rollhook_notice_deployments": 37
+    },
+    "free-planning-poker": {
+      "actions_deployments": 7,
+      "rollhook_captured_of_actions": 0.7143,
+      "rollhook_notice_deployments": 5
+    },
+    "image-gateway": {
+      "actions_deployments": 12,
+      "rollhook_captured_of_actions": 0.75,
+      "rollhook_notice_deployments": 9
+    },
+    "jkrumm.com": {
+      "actions_deployments": 12,
+      "rollhook_captured_of_actions": 0.5,
+      "rollhook_notice_deployments": 6
+    },
+    "rollhook": {
+      "actions_deployments": 11,
+      "rollhook_captured_of_actions": 0.6364,
+      "rollhook_notice_deployments": 9
+    },
+    "shutterflow": {
+      "actions_deployments": 60,
+      "rollhook_captured_of_actions": 0.35,
+      "rollhook_notice_deployments": 21
+    },
+    "weatherorb": {
+      "actions_deployments": 166,
+      "rollhook_captured_of_actions": 0.2048,
+      "rollhook_notice_deployments": 34
+    }
+  },
+  "relay_capture_weekly": {
+    "2026-W30": {
+      "actions_success_runs": 8,
+      "notices_per_run": 1.125,
+      "rollhook_success_notices": 9
+    },
+    "2026-W31": {
+      "actions_success_runs": 28,
+      "notices_per_run": 1.5357,
+      "rollhook_success_notices": 43
+    },
+    "2026-W32": {
+      "actions_success_runs": 12,
+      "notices_per_run": 1.8333,
+      "rollhook_success_notices": 22
+    },
+    "2026-W33": {
+      "actions_success_runs": 4,
+      "notices_per_run": 1.75,
+      "rollhook_success_notices": 7
+    },
+    "2026-W34": {
+      "actions_success_runs": 29,
+      "notices_per_run": 1.5172,
+      "rollhook_success_notices": 44
+    },
+    "2026-W35": {
+      "actions_success_runs": 24,
+      "notices_per_run": 1.0833,
+      "rollhook_success_notices": 26
+    },
+    "2026-W36": {
+      "actions_success_runs": 45,
+      "notices_per_run": 1.1778,
+      "rollhook_success_notices": 53
+    },
+    "2026-W37": {
+      "actions_success_runs": 34,
+      "notices_per_run": 1.4412,
+      "rollhook_success_notices": 49
+    },
+    "2026-W38": {
+      "actions_success_runs": 14,
+      "notices_per_run": 1.3571,
+      "rollhook_success_notices": 19
+    },
+    "2026-W39": {
+      "actions_success_runs": 46,
+      "notices_per_run": 0.9783,
+      "rollhook_success_notices": 45
+    },
+    "2026-W40": {
+      "actions_success_runs": 103,
+      "notices_per_run": 0.9806,
+      "rollhook_success_notices": 101
+    },
+    "2026-W41": {
+      "actions_success_runs": 45,
+      "notices_per_run": 0.1556,
+      "rollhook_success_notices": 7
+    },
+    "2026-W42": {
+      "actions_success_runs": 754,
+      "notices_per_run": 0.0119,
+      "rollhook_success_notices": 9
+    },
+    "2026-W43": {
+      "actions_success_runs": 238,
+      "notices_per_run": 0.0336,
+      "rollhook_success_notices": 8
+    }
+  },
+  "script": "dora.py",
+  "sources": {
+    "actions": {
+      "available": true,
+      "cannot_see": "deploys not run by a workflow (make deploy on the mini, launchd), RollHook-side failures after a green workflow",
+      "covers": "repos with a deploy workflow; push + completion time, sha, conclusion",
+      "deployments_90d": 1246,
+      "errors": [],
+      "note": "skipped and cancelled runs are not deployments; only default-branch runs count",
+      "per_repo": {
+        "argo": {
+          "run_conclusions_since_lookback": {
+            "cancelled": 11,
+            "failure": 7,
+            "success": 417
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "audio-gateway": {
+          "run_conclusions_since_lookback": {
+            "cancelled": 1,
+            "failure": 2,
+            "success": 80
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "basalt-ui": {
+          "run_conclusions_since_lookback": {
+            "failure": 5,
+            "success": 457
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "email-gateway": {
+          "run_conclusions_since_lookback": {
+            "cancelled": 1,
+            "failure": 2,
+            "success": 85
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "free-planning-poker": {
+          "run_conclusions_since_lookback": {
+            "success": 11
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "image-gateway": {
+          "run_conclusions_since_lookback": {
+            "failure": 1,
+            "success": 23
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "jkrumm.com": {
+          "run_conclusions_since_lookback": {
+            "failure": 1,
+            "success": 37
+          },
+          "workflows": [
+            "Deploy"
+          ]
+        },
+        "rollhook": {
+          "run_conclusions_since_lookback": {
+            "success": 11
+          },
+          "workflows": [
+            "Deploy Marketing"
+          ]
+        },
+        "shutterflow": {
+          "run_conclusions_since_lookback": {
+            "failure": 2,
+            "success": 62
+          },
+          "workflows": [
+            "Share server deploy"
+          ]
+        },
+        "sy-serendipity": {
+          "run_conclusions_since_lookback": {
+            "success": 4
+          },
+          "workflows": [
+            "deploy"
+          ]
+        },
+        "weatherorb": {
+          "run_conclusions_since_lookback": {
+            "failure": 20,
+            "skipped": 46,
+            "success": 267
+          },
+          "workflows": [
+            "Deploy account",
+            "Deploy edge"
+          ]
+        }
+      },
+      "repos_with_deploy_workflows": 11
+    },
+    "poller": {
+      "available": true,
+      "cannot_see": "research-gateway deploys before the poller (RollHook notices cover them until 2026-09-26)",
+      "ci_gate_blocks": 16,
+      "covers": "research-gateway on the mini since 2026-09-23 (CI-gated)",
+      "deployments_90d": 59
+    },
+    "rejected": {
+      "github_go_events": "GitHub issues/alerts that start warden work, not deployments",
+      "make_deploy_text_mentions": "free text in warden-cli.log (1 hit), agent-gateway.jsonl (2) and sideclaw.jsonl (1): a close note and review prose, not records"
+    },
+    "rollhook": {
+      "cannot_see": "anything warden's Slack relay dropped or folded; capture ratio vs Actions in relay_capture",
+      "covers": "VPS services behind RollHook",
+      "deployments_90d": 419,
+      "notice_stream_collapse": {
+        "first_week_below_0_25_notices_per_run": "2026-W41",
+        "median_ratio_in_earlier_weeks": 1.18,
+        "ratio_that_week": 0.1556,
+        "weeks_considered": "weeks with >= 20 Actions success runs in repos that have both sources"
+      },
+      "notices_with_unplaced_repeats": 16,
+      "slack_update_not_a_deploy_notice": 42,
+      "success_notices_90d": 539,
+      "weekly_success_notices_90d": {
+        "2026-W30": 11,
+        "2026-W31": 72,
+        "2026-W32": 36,
+        "2026-W33": 7,
+        "2026-W34": 48,
+        "2026-W35": 26,
+        "2026-W36": 54,
+        "2026-W37": 59,
+        "2026-W38": 19,
+        "2026-W39": 82,
+        "2026-W40": 101,
+        "2026-W41": 7,
+        "2026-W42": 9,
+        "2026-W43": 8
+      }
+    },
+    "warden_op": {
+      "cannot_see": "every deploy the owner or a wave ran by hand",
+      "covers": "deploys run by warden's verify lane since 2026-09-29",
+      "deployments_90d": 44,
+      "ops_total": 53
+    }
+  },
+  "window_days": 90,
+  "window_start": "2026-07-24T08:00:00Z"
+}
