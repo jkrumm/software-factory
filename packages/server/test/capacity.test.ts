@@ -149,6 +149,12 @@ describe('nextOpening: the first reset', () => {
     ).toBeUndefined()
   })
 
+  test('is none while a fresh account is open by its standing: only its load can be keeping it from the spawn', () => {
+    const readings = [reading('a'), reading('b', { weeklyUsed: 100, weeklyResetsAt: at(48 * HOUR) })]
+    expect(nextOpening(readings, { now: NOW })).toBeUndefined()
+    expect(nextOpening([readings[1] as Reading], { now: NOW })).toEqual(at(48 * HOUR))
+  })
+
   test('ignores stale readings', () => {
     const old = reading('a', { fiveHourUsed: 90, readAt: at(-HOUR) })
     expect(nextOpening([old], { now: NOW })).toBeUndefined()

@@ -252,6 +252,34 @@ describe('an account takes one spawn per sample', () => {
     ])
   })
 
+  test('open accounts that only their load keeps busy name no opening, whatever a closed account resets at', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await reading('b', 10, 10, inHours(2))
+    await reading('c', 100, 10, inHours(48))
+    expect(await (await spawn('s0')).json()).toMatchObject({ status: 'queued', account: 'a' })
+    expect(await (await spawn('s1')).json()).toMatchObject({ status: 'queued', account: 'b' })
+    expect(await (await spawn('s2')).json()).toMatchObject({ status: 'waiting', account: null, resumeAt: null })
+
+    // The tick looks at it again only when a reading wakes it; one taken before the starts does not show them.
+    expect(await runTick()).toMatchObject({ started: ['s0', 's1'] })
+    clock.advance(60_000)
+    for (const account of ['a', 'b']) {
+      await app.send('PUT', `/quota/accounts/${account}`, {
+        weeklyUsed: 10,
+        fiveHourUsed: 10,
+        fiveHourResetsAt: inHours(2),
+        weeklyResetsAt: inHours(2),
+        ageS: 300,
+      })
+    }
+    expect(await status('s2')).toMatchObject({ status: 'waiting', resumeAt: null })
+
+    // A sample taken after the starts clears the load and wakes it: the null resume_at does not strand it.
+    await reading('a', 12, 11, inHours(2))
+    expect(await runTick()).toMatchObject({ started: ['s2'] })
+    expect(await status('s2')).toMatchObject({ status: 'started', account: 'a' })
+  })
+
   test('a new sample wakes the waiting spawns that now have an account, and only those', async () => {
     await reading('a', 10, 10, inHours(2))
     await spawn('first')
