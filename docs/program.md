@@ -31,8 +31,8 @@ code itself.
 
 | # | Track | Repo(s) | Needs | Status |
 |-|-|-|-|-|
-| R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 running (`dotfiles-w1`); Wave 2 pending |
-| R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Wave 1 running (`argo-w1`) |
+| R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 done and reviewed; Wave 2 running (`dotfiles-w2`) |
+| R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
 | F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1 and 2 done; spike running (`spike/plain`, `spike/effect`) |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | pending |
@@ -49,10 +49,10 @@ code itself.
 ## Track notes (the findings each track inherits)
 
 ### R0, R1
-Plans: `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md` (both committed 2026-10-30, spawned by the
-re-plan session). The lead takes over their watching and review: `rd agents`, `rd read dotfiles-w1`,
-`rd read argo-w1`. R0 Wave 2 starts after Wave 1's close-out is reviewed. Add to R0 Wave 2 if it is not
-there: drop `config/settings.template.json` leftovers the Wave 1 close-out lists.
+Plans: `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md`. R0 Wave 2 carries both close-outs' leftovers.
+Known non-green in dotfiles, predating the wave: `architecture-check` (the `com.iu.*` agents on the mini) and
+`drift-check` (collie pin, tailscale daemon). Dead Argo code for A1 to delete while it moves: the `/ai/v1/*` HTTP
+routes (no caller; `aiComplete` stays), `startChatTurn` in the dashboard's telemetry, the 50 MB body limit.
 
 ### F0: design, Effect skill, spike, skeleton
 1. **`docs/design.md`:** the factory's design from TDD v2.4 (`dotfiles/docs/factory/tdd/03`–`10`) plus
