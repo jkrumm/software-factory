@@ -64,9 +64,18 @@ describe('/health and the tick', () => {
     expect(body).toMatchObject({ status: 'unhealthy', reason: 'no successful tick for 16s (limit 15s)' })
   })
 
-  test('a server that has never ticked goes unhealthy by its own age', async () => {
-    clock.advance(16_000)
-    expect((await health()).status).toBe(503)
+  test('a server whose ticks have never succeeded is unhealthy at once, so a broken ticker fails a deploy', async () => {
+    expect((await health()).body).toMatchObject({ status: 'unhealthy', reason: 'no tick has succeeded yet' })
+    monitor.passStarted()
+    monitor.passFailed('boom')
+    const { status, body } = await health()
+    expect(status).toBe(503)
+    expect(body.tick.lastError?.message).toBe('boom')
+  })
+
+  test('while the first pass is still running the server is not yet called dead', async () => {
+    monitor.passStarted()
+    expect((await health()).status).toBe(200)
   })
 
   test('a pass in flight is healthy until it passes its limit, not after three intervals', async () => {
@@ -81,6 +90,7 @@ describe('/health and the tick', () => {
   })
 
   test('a successful pass makes it healthy again', async () => {
+    monitor.passSucceeded()
     clock.advance(60_000)
     expect((await health()).status).toBe(503)
     monitor.passStarted()

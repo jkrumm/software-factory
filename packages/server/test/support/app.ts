@@ -25,6 +25,8 @@ const json = { ...authed, 'content-type': 'application/json' }
 /** The real server on a loopback port the OS picks. */
 export function startApp(deps: { sql: SQL; clock: Clock; monitor?: TickMonitor }): TestApp {
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)
+  // A server in a test has ticked, unless the test brings a monitor of its own.
+  if (!deps.monitor) monitor.passSucceeded()
   const server = serve({ ...deps, monitor, port: 0, version: 'test', token: TEST_TOKEN })
   const url = (path: string) => new URL(path, server.url)
   return {
