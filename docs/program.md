@@ -39,7 +39,7 @@ code itself.
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
 | F2 | Issue machine: inbox, leads in worktrees, evidence, hold, `project.yaml` v0 | software-factory | F1 | pending |
 | A2 | Argo pages: Fleet and Factory, agw insight, Infra (Beszel), Usage v2 | argo | A1, F1 | pending |
-| I1 | `icon` into `agw image`, the studio app on agw, image-gateway retired | agent-workflows, image-gateway, vps, dotfiles | — | Plan in agent-workflows (three waves); Wave 1 running (`agent-workflows-w1`); Wave 2 needs R0 closed |
+| I1 | `icon` into `agw image`, the studio app on agw, image-gateway retired | agent-workflows, image-gateway, vps, dotfiles | — | Plan in agent-workflows (three waves); Wave 1 done and reviewed (`agw image-icon` live, byte-identical to the gateway). Wave 2 waits for `argo-w2` to leave the agent-workflows checkout (A1 Wave 2's outbox step edits it) |
 | IR | iris: fleet, waves and quota screens on the factory API | iris | F1 | pending |
 | F3 | Intake and self-heal (Kuma, GitHub, TickTick, Beszel, HyperDX), dedup with the golden set | software-factory | F2 | pending |
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
