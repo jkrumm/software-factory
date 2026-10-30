@@ -31,7 +31,7 @@ code itself.
 
 | # | Track | Repo(s) | Needs | Status |
 |-|-|-|-|-|
-| R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 done and reviewed; Wave 2 running (`dotfiles-w2`) |
+| R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Done 2026-10-30, reviewed. Two items open, see the track note |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
 | F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1–3 done: plain TypeScript won the spike. Step 4, the skeleton: `rd fan` worker `software-factory-skeleton` on branch `skeleton`, all ten spike findings in its brief |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
@@ -43,7 +43,7 @@ code itself.
 | IR | iris: fleet, waves and quota screens on the factory API | iris | F1 | pending |
 | F3 | Intake and self-heal (Kuma, GitHub, TickTick, Beszel, HyperDX), dedup with the golden set | software-factory | F2 | pending |
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
-| D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | pending |
+| D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | Plan in dotfiles (one wave); Wave 1 running (`dotfiles-w1`). The evidence lands in `docs/evidence/` here through a worktree, not the lead's checkout |
 | L | Later, owner-timed: finances on the mini behind Touch ID; calendar and mail via email-gateway | finances (MacBook), argo, email-gateway | A1 | not started |
 
 ## Track notes (the findings each track inherits)
@@ -51,7 +51,10 @@ code itself.
 ### R0, R1
 Plans: `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md`. R0 Wave 2 carries both close-outs' leftovers.
 Known non-green in dotfiles, predating the wave: `architecture-check` (the `com.iu.*` agents on the mini) and
-`drift-check` (collie pin, tailscale daemon). Dead Argo code for A1 to delete while it moves: the `/ai/v1/*` HTTP
+`drift-check` (collie pin, tailscale daemon). Open after R0: the Hermes API to loopback (`hermes-agent/.env.tpl` `API_SERVER_HOST` and `iris/.env.local.tpl`
+`HERMES_HOST` together, then `verify.sh`, the `hermes-validate` probe, restarts, a memo routed to Hermes) waits until
+no iris agent is `working`; the Kuma push monitor `Hermes Watchdog - Push` has no pinger and is the owner's to pause
+in the UI. Full list of kept sweep hits: `dotfiles/docs/waves/archive/2026-10-clean-setup-PLAN.md`. Dead Argo code for A1 to delete while it moves: the `/ai/v1/*` HTTP
 routes (no caller; `aiComplete` stays), `startChatTurn` in the dashboard's telemetry, the 50 MB body limit.
 
 ### F0: design, Effect skill, spike, skeleton
