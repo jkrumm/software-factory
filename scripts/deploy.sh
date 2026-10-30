@@ -205,7 +205,11 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
     echo "[deploy] rollback OK: ${2:0:12} is healthy again. deployed-sha unchanged." >&2
   else
     stop_service "$3"
-    echo "[deploy] ROLLBACK FAILED: ${2:0:12} did not become healthy either; left booted out." >&2
+    # The plist on disk is the one of whichever release was rendered last; with RunAtLoad it would start that release at
+    # the next login. Remove it (each call matches only a plist this deploy rendered).
+    remove_failed_plist "$2"
+    remove_failed_plist "$1"
+    echo "[deploy] ROLLBACK FAILED: ${2:0:12} did not become healthy either; left booted out, plist removed." >&2
   fi
 }
 
