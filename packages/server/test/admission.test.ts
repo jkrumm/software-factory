@@ -275,6 +275,15 @@ describe('one active wave per repo', () => {
     expect(await runTick()).toMatchObject({ started: ['wave-1'] })
   })
 
+  test('a wave in a worktree of the repo is held by one in the checkout, whichever started first', async () => {
+    const worktree = join(TEST_REPO, '.claude', 'worktrees', 'w')
+    mkdirSync(worktree, { recursive: true })
+    await spawn('main-wave', { role: 'wave' })
+    expect(await runTick()).toMatchObject({ started: ['main-wave'] })
+    const held = await spawn('tree-wave', { role: 'wave', repo: worktree })
+    expect(await held.json()).toMatchObject({ status: 'queued', hold: 'wave' })
+  })
+
   test('only waves are limited: workers, leads and a wave in another repo run alongside', async () => {
     await spawn('wave-1', { role: 'wave' })
     await spawn('fan-1', { role: 'worker' })

@@ -1,7 +1,7 @@
 import { constants } from 'node:os'
 import { Slot, SlotRelease } from '@software-factory/contract'
 import { usage } from './exit.ts'
-import { call, type Io } from './run.ts'
+import { call, type Io } from './client.ts'
 
 /** How long a caller waits for a slot before it runs without one (`FACTORY_SLOT_WAIT_MS`). */
 export const DEFAULT_SLOT_WAIT_MS = 600_000
@@ -50,11 +50,11 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     engaged = false
     await call(io, path, { method: 'DELETE', auth: false, socket: true, schema: SlotRelease }).catch(() => {})
   }
-  // A signal while waiting leaves the line; while the command runs it is the command's to answer (the terminal's Ctrl-C
-  // already reaches it as well), and the slot goes back when it has.
+  // A signal while waiting leaves the line; while the command runs it is passed on to the command (from the terminal it
+  // reaches the command as well, and a command that is told twice still ends), and the slot goes back when it has ended.
   const onSignal = (signal: NodeJS.Signals) => {
     stopped = signal
-    if (signal !== 'SIGINT') child?.kill(signal)
+    child?.kill(signal)
   }
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
   for (const signal of signals) process.on(signal, onSignal)
@@ -89,11 +89,30 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       io.err(`factory: cannot run ${program}: ${error instanceof Error ? error.message : String(error)}\n`)
       return 127
     }
-    const renew = holding ? setInterval(() => void ask().catch(() => {}), RENEW_MS) : undefined
+    // The lease is renewed while the command runs. A renewal that is answered "wait" means the lease had lapsed (the server
+    // was out of reach for longer than it lasts) and the slot is someone else's: said once, and the line is left.
+    let renewing: Promise<void> = Promise.resolve()
+    let ended = false
+    let warned = false
+    const renew = holding
+      ? setInterval(() => {
+          if (ended || warned) return
+          renewing = renewing.then(async () => {
+            const answer = await ask().catch(() => undefined)
+            if (ended || warned || !answer || answer.body.granted) return
+            warned = true
+            io.err('factory: the test slot lease lapsed while the command ran; it runs on without a slot\n')
+            await release()
+          })
+        }, RENEW_MS)
+      : undefined
     try {
       await child.exited
     } finally {
+      ended = true
       clearInterval(renew)
+      // An answer still on its way would put the holder back after the slot is given up.
+      await renewing
     }
     return exitCodeOf(child)
   } finally {

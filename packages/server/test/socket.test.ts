@@ -125,6 +125,14 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
     expect(await db.sql`SELECT key FROM factory.spawns`).toEqual([])
   })
 
+  test('refuses a space that does not contain the repo (its panes would not find it again)', async () => {
+    const other = join(TEST_ROOT, 'elsewhere')
+    mkdirSync(other, { recursive: true })
+    const res = await viaSocket('POST', '/spawns', { key: 'apart', repo: other, prompt: 'go', space: TEST_REPO })
+    expect(res.status).toBe(422)
+    expect(await db.sql`SELECT key FROM factory.spawns`).toEqual([])
+  })
+
   test('serves a body only as JSON, as the port does', async () => {
     const res = await fetch('http://localhost/spawns', {
       unix: socket,
@@ -209,6 +217,36 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     })
     const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())
     expect(session).toMatchObject({ role: 'wave', pane: 'w7:p3', tab: 'w7:t3', spawn: null })
+  })
+
+  test('a name rd reuses in a new pane is the new pane; a spawn keeps the pane its Runner made', async () => {
+    await event('session_started', { claudeSessionId: 'c1', pane: 'w7:p3', tab: 'w7:t3' })
+    await viaSocket('POST', '/events', {
+      key: 'rd:again',
+      session: 'rd-1',
+      kind: 'session_started',
+      at: '2026-10-30T13:00:00.000Z',
+      payload: { claudeSessionId: 'c2', pane: 'w9:p1', tab: 'w9:t1' },
+    })
+    expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())).toMatchObject({
+      pane: 'w9:p1',
+      tab: 'w9:t1',
+    })
+
+    await viaSocket('POST', '/spawns', { key: 'sp', repo: TEST_REPO, prompt: 'go' })
+    await runTick()
+    const own = Session.parse(await (await viaSocket('GET', '/sessions/sp')).json())
+    await viaSocket('POST', '/events', {
+      key: 'sp:start',
+      session: 'sp',
+      kind: 'session_started',
+      at: '2026-10-30T13:00:00.000Z',
+      payload: { claudeSessionId: 'c3', pane: 'w9:p9', tab: 'w9:t9' },
+    })
+    expect(Session.parse(await (await viaSocket('GET', '/sessions/sp')).json())).toMatchObject({
+      pane: own.pane,
+      tab: own.tab,
+    })
   })
 
   test('a role that is not a word is ignored', async () => {

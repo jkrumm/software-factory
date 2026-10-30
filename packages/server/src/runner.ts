@@ -13,6 +13,11 @@ export interface StartInput {
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean
+  /**
+   * The space an earlier try of this spawn used, as the spawn row recorded it: kept while herdr still has it, whatever the
+   * path says. A retry (or a resume) goes back into it, so a new-space spawn never makes a second space for itself.
+   */
+  workspace?: string | null
   /** goes into the pane as `FACTORY_ROLE`, so the session reports it at its start */
   role: string
   prompt: string
@@ -45,6 +50,8 @@ export interface Runner {
 
 /** The runner gave up: `permanent` for a refusal that retrying cannot fix, otherwise the spawn is retried later. */
 export class RunnerError extends Error {
+  /** the space the start had made or found when it failed: the caller records it for the retry */
+  workspace?: string
   constructor(
     message: string,
     readonly permanent: boolean,
@@ -181,22 +188,41 @@ export class HerdrRunner implements Runner {
   async start(input: StartInput): Promise<StartResult> {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     const env = await this.paneEnv(input)
+    let known: string | undefined
+    try {
+      return await this.startIn(input, env, budget, (workspace) => (known = workspace))
+    } catch (error) {
+      if (error instanceof RunnerError && known) error.workspace ??= known
+      throw error
+    }
+  }
+
+  private async startIn(
+    input: StartInput,
+    env: string[],
+    budget: Budget,
+    noteWorkspace: (workspace: string) => void,
+  ): Promise<StartResult> {
     const space = input.space ?? input.repo
 
     let tab: { tab: string; pane: string; workspace: string } | undefined
-    for (const workspace of await this.findSpaces(space, budget)) {
+    for (const workspace of await this.findSpaces(space, input.workspace, budget)) {
       tab = await this.findTab(workspace, input.key, budget)
       if (tab) break
     }
     let agent = tab ? await this.findAgent(tab.pane, budget) : undefined
-    const home = tab?.workspace
+    const home = tab?.workspace ?? input.workspace ?? undefined
+    if (tab) noteWorkspace(tab.workspace)
     if (tab && !agent) {
       // A tab with no agent has nothing running to keep, and its environment (the account) was fixed when it was made:
       // a retry may be on another account, so it is made again.
       await this.closeTab(tab.tab, budget)
       tab = undefined
     }
-    if (!tab) tab = await this.serialized(() => this.createTab(input, space, home, env, budget))
+    if (!tab) {
+      tab = await this.serialized(() => this.createTab(input, space, home, env, budget))
+      noteWorkspace(tab.workspace)
+    }
     const pane = tab.pane
 
     // An agent that already took its prompt is running, whatever else herdr says about it; only one that never became
@@ -271,18 +297,20 @@ export class HerdrRunner implements Runner {
   /**
    * The spaces of `space`, a path, in herdr's order. A space is found by its path, never by its name: the label (the
    * directory's name, rd's convention) only narrows the candidates, and one counts when one of its panes is in the path
-   * or below it (a worktree). Two repos with the same directory name therefore have two spaces.
+   * or below it (a worktree). Two repos with the same directory name therefore have two spaces. `preferred`, the space an
+   * earlier try recorded, comes first when herdr still has it, with no further evidence asked.
    */
-  private async findSpaces(space: string, budget: Budget): Promise<string[]> {
+  private async findSpaces(space: string, preferred: string | null | undefined, budget: Budget): Promise<string[]> {
     const label = basename(space)
     const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
-    const named = workspaces.filter((w) => w.label === label)
-    if (named.length === 0) return []
-    const { panes } = (await this.herdr(PaneList, ['pane', 'list'], budget)).result
+    const first = workspaces.find((w) => w.workspace_id === preferred)?.workspace_id
+    const named = workspaces.filter((w) => w.label === label && w.workspace_id !== first)
+    const { panes } = named.length ? (await this.herdr(PaneList, ['pane', 'list'], budget)).result : { panes: [] }
     const root = real(space)
-    return named
+    const found = named
       .filter((w) => panes.some((p) => p.workspace_id === w.workspace_id && p.cwd !== undefined && within(root, p.cwd)))
       .map((w) => w.workspace_id)
+    return first ? [first, ...found] : found
   }
 
   /** The spawn's tab in one space, looked for by its label: a tab of that name anywhere else is not ours. */
@@ -301,9 +329,8 @@ export class HerdrRunner implements Runner {
   }
 
   /**
-   * The tab goes into the first existing space of the path; the first spawn there creates the space, and so does a spawn
-   * that asks for a space of its own. `home` is the space an earlier try of this start used: a retry of a new-space
-   * spawn goes back into it rather than making a third.
+   * The tab goes into the space an earlier try used (`home`) while herdr still has it, else into the first existing space
+   * of the path; the first spawn there creates the space, and so does a spawn that asks for a space of its own.
    */
   private async createTab(
     input: StartInput,
@@ -314,11 +341,8 @@ export class HerdrRunner implements Runner {
   ): Promise<{ tab: string; pane: string; workspace: string }> {
     const envArgs = env.flatMap((pair) => ['--env', pair])
     // Looked up again inside the lock: the space may have been made by a start that ran just before this one.
-    const existing = input.newSpace
-      ? home && (await this.workspaceExists(home, budget))
-        ? home
-        : undefined
-      : (await this.findSpaces(space, budget))[0]
+    const spaces = await this.findSpaces(space, home, budget)
+    const existing = home && spaces[0] === home ? home : input.newSpace ? undefined : spaces[0]
     if (existing) {
       const created = await this.herdr(
         Created,
@@ -344,11 +368,6 @@ export class HerdrRunner implements Runner {
       throw error
     }
     return { tab, pane, workspace: spaceId }
-  }
-
-  private async workspaceExists(workspace: string, budget: Budget): Promise<boolean> {
-    const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
-    return workspaces.some((w) => w.workspace_id === workspace)
   }
 
   private async findAgent(pane: string, budget: Budget): Promise<Agent | undefined> {

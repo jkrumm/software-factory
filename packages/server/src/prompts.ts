@@ -169,6 +169,7 @@ interface Target {
     repo: string
     space: string
     new_space: boolean
+    workspace: string | null
     role: string
     account: string | null
     tier: Tier
@@ -183,7 +184,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
   const session = await getSession(sql, id, now)
   if (!session) return undefined
   const [spawn] = session.spawn
-    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
+    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
     : []
   const [life] = await sql`
     SELECT kind FROM factory.events
@@ -398,6 +399,8 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
     key: spawn.key,
     repo: spawn.repo,
     space: spawn.space,
+    // Back into its own space: with several spaces of the same path (`new_space`), the path alone cannot say which.
+    workspace: spawn.workspace,
     role: spawn.role,
     prompt: prompt.text,
     account: spawn.account,

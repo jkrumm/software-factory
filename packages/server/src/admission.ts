@@ -27,9 +27,10 @@ export interface Candidate {
   prefer?: string | null
 }
 
-/** Whether a session started in `at` belongs to `repo`: it started there or in a worktree or folder below it. */
-const inRepo = (at: string, repo: string): boolean =>
-  at === repo || at.startsWith(repo.endsWith('/') ? repo : `${repo}/`)
+const inside = (a: string, b: string): boolean => a === b || a.startsWith(b.endsWith('/') ? b : `${b}/`)
+
+/** Whether two start directories are one repo: the same, or one a worktree or folder of the other, whichever way round. */
+const inRepo = (a: string, b: string): boolean => inside(a, b) || inside(b, a)
 
 async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] }): Promise<LiveSession[]> {
   if (!live) return liveSessions(tx, now)

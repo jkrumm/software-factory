@@ -51,11 +51,14 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
     // What only the pane knows: its role (`FACTORY_ROLE`, the one-wave-per-repo rule counts it) and where herdr put it.
     const role = text('role')
     const roleName = role && ROLE_NAME.test(role) ? role : null
+    // A spawn's pane is the Runner's. A name `rd` reuses in a new pane is the new pane (the bound_at guard keeps older starts out).
     await tx`
       UPDATE factory.sessions
       SET claude_session_id = ${text('claudeSessionId')}, transcript_path = ${text('transcriptPath')},
           cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account),
-          role = COALESCE(${roleName}, role), pane = COALESCE(pane, ${text('pane')}), tab = COALESCE(tab, ${text('tab')}),
+          role = COALESCE(${roleName}, role),
+          pane = CASE WHEN spawn_key IS NULL THEN COALESCE(${text('pane')}, pane) ELSE COALESCE(pane, ${text('pane')}) END,
+          tab = CASE WHEN spawn_key IS NULL THEN COALESCE(${text('tab')}, tab) ELSE COALESCE(tab, ${text('tab')}) END,
           bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
