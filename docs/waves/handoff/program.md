@@ -1,58 +1,46 @@
 # Program lead handoff
 
-Written at the end of rotation 2, 2026-10-30 16:25. State lives in `docs/program.md`; this page holds what that table does not.
+Written at the end of rotation 3, 2026-10-30 19:10. State lives in `docs/program.md`; this page holds what that table does not.
 
 ## Running now
 
 | Agent | Repo | Work | Next when it closes |
 |-|-|-|-|
-| `software-factory-f1-w4-rules` | software-factory (fan worker) | F1 Wave 4, brief `docs/waves/briefs/f1-w4.md` | Review the PR, `rd merge`, `make deploy && make verify` from master, write Wave 4's Left behind in `docs/waves/f1.md`. The send-back needs a one-line change in `dotfiles/config/settings.template.json` (the Stop hook's `; exit 0`): the worker names it, you land it. Then F1 Wave 5 (two workers: software-factory and dotfiles) |
-| `argo-w4` | argo (orchestrated wave) | A1 Wave 4, Argo native on the mini | Review, spawn Wave 5. VPS Argo's usage pages answer 500 until this wave is live, and it must bridge or drop email-gateway's usage posts |
-| `agent-workflows-w2` | agent-workflows (orchestrated wave) | I1 Wave 2, the studio on agw through a tailnet door; its proof needs the owner on the MacBook (`ask-human.sh`) | Review (security on the door), then track T's agent-workflows worker **before** I1 Wave 3 |
+| `software-factory-f1-w6-gate` | software-factory (fan worker, `iu`) | F1 Wave 6's gate run, brief `docs/waves/briefs/f1-w6-gate.md`: two scratch chains (`factory-gate-a|b`), an injected wall, one `drain`, zero owner input. Runs for hours; it observes and must not type into gate panes | Review the evidence and any code fix (`/review`), `rd merge`, `make deploy && make verify` if code changed. Pass → brief the retirement (FL8: `wave-watch.sh` polling, `fleet-keepalive.sh`, the Hermes babysitter cron; the `/wave` skill and `docs/program.md` describe the factory path) as a dotfiles worker, plus hermes-agent for the cron. Fail → fix forward, rerun |
+| `agent-workflows-w3` | agent-workflows (orchestrated wave, idle) | I1 Wave 3 stopped at its gate after step 1 (`imgcli icon` runs `agw image-icon`) | Owner's ImageGen click-through: `ask-human.sh status 20261030T163835-8260`. `done` → `rd close agent-workflows-w3`, then respawn Wave 3 (still `active`, step 1 ticked; its gate line says what to do). Its input box holds an unsent German line ("Klick-through ist durch…") that nobody submitted: not acted on |
 
-## Track T in agent-workflows: the boundary
+## Next tracks
 
-Start `rd fan agent-workflows docs/waves/briefs/t-agent-workflows.md` (path relative to this repo) only when `agent-workflows-w2` has closed
-its wave **and** `rd agents` shows nothing `working` in `agent-workflows/.claude/worktrees/research-self-improve` (two
-non-program agents were working there at 16:20; that branch will need a rebase over the reformat, which is its owner's
-job). After the merge: `make deploy && make verify` in agent-workflows. Then spawn I1 Wave 3.
+- **U** (needs A1, done): author its plan. Repos usage-tracker, argo, dotfiles; `docs/decisions.md` U1–U6. Its inputs: the role-table seeds to measure (FL4), email-gateway's model spend missing from `usage` (`argo/docs/usage-reconciliation.md`), `SPAWN_COST` in `capacity.ts` unmeasured.
+- **F2, A2, IR** wait for F1 (Wave 6). Author F2's plan in this repo once the gate passes.
 
-## How F1 runs
+## How things run now
 
-Not as `rd wave`s here (this repo's PLAN.md is the lead's): each wave is a `rd fan` worker per repo, briefed from
-`roles/worker.md`'s template, landed with `rd merge`, deployed by you from master. Briefs are committed under
-`docs/waves/briefs/`. Workers deploy their branch with `FACTORY_REF=<branch>` for the live proof; you redeploy master
-after the merge. `secrets-run run --env-file=.env.tpl -- factory …` gives you a token for the CLI.
+- **`rd` is a factory client** (dotfiles #51): with the factory answering, `rd wave|fan` create a spawn (`queued: <reason>` instead of dying on no room or `drain`), `rd say` is a held `factory session note`, `rd close` finds the tab through the session. `RD_WAVE_MODEL|EFFORT` do **not** reach a factory spawn: pick the model with `--role`. The rotation spawn is `rd wave --role lead software-factory '…(Wave <n>)…'` (Opus/high).
+- **Send-back is live** (dotfiles `5be93f9`): a session whose factory-known workers still run gets its Stop sent back once per turn. A lead that is truly waiting runs `factory session wait --on workers`. Orchestrated waves and fan workers carry their spawner as parent; chain waves carry none (`728df90`). `f1-w6-gate`'s parent is rotation 3, which has ended: harmless.
+- **`make check` here runs tests through `factory slot run`** (two host-wide slots). Load still reached 100–140 this afternoon.
+- **Sessions started before 2026-10-30 18:40 have no tab in the factory**; `rd close` falls back to the tab-name rule for them ("no session" in its message means "no tab"). Close those with `herdr tab close` after checking clean and pushed.
 
 ## Watch
 
-- **Accounts:** `me2` is at 99 % of its week until 11-01 18:00 and is out. `me` carries most work (5-hour window resets
-  16:40, then 21:40); `iu` is a Max subscription and gets picked for pace. With four agents on `me` the window filled in
-  about an hour this morning.
-- **Workers end turns on background shells** (seen three times today, e.g. `dotfiles-f1-w3-role`). `rd read` a `done` worker
-  before trusting it; if it says "waiting for the background run", `rd say` it to run in the foreground.
-- **Prompt suggestions** ("merge it", "merge it and redeploy from master") sit in finished workers' input boxes. Nobody
-  typed them; never act on them.
-- **Permission prompts under skip-permissions:** an `argo-w4` implementer asked to `rm -rf $(dirname $ARGO_ROOT)`. Answered
-  No (`herdr agent send-keys <agent> 2` then `enter`) and steered it to literal paths.
-- **`rd close` refuses a first tab named `1`:** close it with `herdr tab close <tab>` after checking the checkout is clean
-  and pushed. `rd reap` touches other people's tabs (IuRoot); do not run it.
-- **`make check` flakes above load ~40** in software-factory (test-DB start timeouts); check `uptime` before blaming a change.
-- **Never two `make check` at once in agent-workflows** (load timeouts in the review and opencode tests).
+- **Accounts:** `me2` is at 100 % of its week until 11-01 18:00. `me` and `iu` carry the work; `iu` takes most fan workers.
+- **Workers end turns on background shells** (once more today: `dotfiles-f1-w5-rd`). `rd read` a `done` worker before trusting it.
+- **Prompt suggestions** sit in finished workers' input boxes. Nobody typed them; never act on them.
+- **Workers skip the last review pass.** Every worker this rotation reported "did not re-run review after the fixes"; each extra pass found real blocking bugs (PR #6 needed five). Run one on the fix commits before `rd merge`.
+- **Parallel halves drift from their contract.** F1 Wave 5's two workers disagreed on three JSON keys; check both sides at landing.
+- **agent-workflows CI runs on Ubuntu:** BSD-only tools in scripts its tests run (`stat -f`) break CI only.
+- **`make check` flakes above load ~40** in software-factory; never two `make check` at once in agent-workflows.
 
 ## Decisions taken in this rotation
 
-- **Track T (owner, 2026-10-30):** oxlint and oxfmt, no Biome, for F1 onward and every new TypeScript repo. In `docs/decisions.md`.
-- **F1's plan lives in `docs/waves/f1.md`,** not PLAN.md, and runs as fan workers.
-- **The factory's HTTP API takes a bearer token, JSON only, loopback Host only, and spawn repos under `FACTORY_REPO_ROOTS`;**
-  hooks post to a 0600 unix socket without a token.
-- **The design's state table changed in four places** (folded into `docs/design.md` §3), and a spawn holds its account until a reading
-  shows it, with no per-spawn cost estimate.
-- **dotfiles `docs/architecture.md`** now maps the factory, prices, research-chrome and athena agents; its `make check` is green.
+- **SF11 (lead):** the hook socket is a same-user boundary, not a per-session one. In `docs/decisions.md`.
+- **Panes are clients:** `factory spawn create|get`, `session get`, `queue get` work over the socket without a token; the parent comes from `FACTORY_SESSION`.
+- **A chain wave's successor is not its worker** (no parent); orchestrated waves are the orchestrator's.
+- **email-gateway's usage posts removed:** its model spend is outside `usage` until it routes through agw (track U).
+- **I1 Wave 3's gateway removal waits for the owner's click-through,** written into its plan as a gate.
 
 ## Owner items, not raised
 
-- Pause or delete the Kuma push monitor `Hermes Watchdog - Push` in the Kuma UI (no pinger since warden left).
-- From A1 Wave 2: what ran on the personal IU key on 2026-10-22 ($43 of Claude); a CREATEDB-only test role instead of the
-  admin Postgres credential in `.env.test.tpl` (usage-tracker, agent-workflows).
-- R0 leftover: Hermes API to loopback, when no iris agent is `working`.
+- I1: the ImageGen click-through (pending in the queue since 16:38).
+- A1: a tailnet path to the VPS socket-proxy for `/docker/vps/*` and `/summary` (Hermes' morning briefing uses them): a security call. Dropping the stopped VPS Argo schema, role and containers: asked by `argo-w6`, its recommendation is to wait two weeks.
+- From before: pause or delete the Kuma push monitor `Hermes Watchdog - Push`; what ran on the personal IU key on 2026-10-22 ($43); a CREATEDB-only test role instead of the admin Postgres credential in `.env.test.tpl` (usage-tracker, agent-workflows); R0's Hermes API to loopback, when no iris agent is `working`.

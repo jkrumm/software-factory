@@ -10,7 +10,7 @@ code itself.
 
 - **State is this file** (the Tracks table and each track's Status line) plus `docs/waves/handoff/program.md`.
   Rotate at about 60 % context: write the handoff, commit, push, spawn the next rotation
-  (`RD_WAVE_MODEL=opus rd wave software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill.'`)
+  (`rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill.'`; `RD_WAVE_MODEL` does not reach a factory spawn)
   after flipping this repo's PLAN.md to the next rotation.
 - **Per track:** write or update the plan in the target repo (`/wave` skill, "Authoring a plan"), commit and
   push it, spawn with `RD_ORCHESTRATED=1 rd wave <repo> 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill, but do NOT spawn the next wave — the orchestrator tab does that after reviewing your close-out.'`,

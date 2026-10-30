@@ -39,15 +39,29 @@ software-factory. The first stop on `me`'s wall (11:10–12:40) is recorded in t
 after the reset. Gate: every close-out reviewed against its diff; `make check` and CI green on every merge (`rd merge`);
 `make verify` green after each deploy. Handoff: `docs/waves/handoff/program.md`.
 
-## Wave 3 — Program lead, rotation 3            <!-- status: active -->
+## Wave 3 — Program lead, rotation 3            <!-- status: done -->
 Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves/handoff/program.md` first.
 
-- [ ] Take over the three running agents from the handoff; review each close-out and land or spawn the next.
-- [ ] Track T in agent-workflows at its boundary (brief `docs/waves/briefs/t-agent-workflows.md`), then agw `make deploy` + `make verify`; then I1 Wave 3.
-- [ ] F1 Waves 4–5 landed and deployed; start Wave 6's overnight gate run.
-- [ ] A1 Waves 4–6 to the cutover.
+- [x] Take over the three running agents from the handoff; review each close-out and land or spawn the next.
+- [x] Track T in agent-workflows at its boundary (brief `docs/waves/briefs/t-agent-workflows.md`), then agw `make deploy` + `make verify`; then I1 Wave 3.
+- [x] F1 Waves 4–5 landed and deployed; start Wave 6's overnight gate run.
+- [x] A1 Waves 4–6 to the cutover.
+- [x] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
+
+**Left behind:** A1 and T done; F1 Waves 4–5 merged and live (PRs #6–#7, dotfiles #51, `5be93f9`, `728df90`), Wave 6's gate
+run running as `software-factory-f1-w6-gate`; I1 Wave 3 stopped at its gate after step 1, waiting for the owner's
+click-through. Gate: every close-out reviewed against its diff, an extra review pass on each worker's fix commits (they
+found real blocking bugs in argo Wave 4, PR #6 and argo Wave 5's fixes); `make check` and CI green on every merge; agw,
+factory and Argo `make verify` green after each deploy; F1 Wave 5 proven live by the lead. Master CI in agent-workflows
+was red after I1 Wave 2 (BSD `stat`), fixed in `9803d88`. Handoff: `docs/waves/handoff/program.md`.
+
+## Wave 4 — Program lead, rotation 4            <!-- status: active -->
+Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves/handoff/program.md` first.
+
+- [ ] Take over the two agents from the handoff; review each close-out and land or spawn the next.
+- [ ] F1 Wave 6: review the gate run's evidence; on a pass, the retirement (FL8) as workers, then F1 done.
+- [ ] I1 Wave 3 once the owner's click-through is in.
+- [ ] Author and start track U's plan; author F2's once F1 is done.
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
 **Left behind:**
-
-## Wave 4 — Program lead, rotation 4            <!-- status: pending -->
