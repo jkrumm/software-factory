@@ -13,3 +13,21 @@ The factory runs the lifecycle in plain code. Every judgment that needs a model 
 Claude Code.
 
 Status: planning and early build. Start with [`docs/decisions.md`](docs/decisions.md).
+
+## Develop
+
+Bun and a PostgreSQL install (`initdb`, `pg_ctl`) are needed; the tests run a throwaway cluster of their own.
+
+```sh
+bun install
+make check   # format, lint, shellcheck, types, tests
+```
+
+## Layout
+
+| Path | What |
+|-|-|
+| `packages/server` | the server: HTTP API, tick, `Runner` port, queue, migrations (schema `factory`) |
+| `packages/cli` | the `factory` CLI: `version`, `health`, `spawn list` |
+| `scripts/`, `deploy/` | release-directory deploy, verify, LaunchAgent template |
+| `docs/` | decisions, program, design, research, spikes |

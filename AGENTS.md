@@ -23,11 +23,31 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Interactive Claude Code in herdr only.** Never headless `claude -p`.
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes,
   never prompts.
-- Bun, TypeScript strict, zod at boundaries, exact pins. No Effect: the F0 spike decided that
+- Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day release-age
+  cooldown, never exclude a package from it). No Effect: the F0 spike decided that
   (`docs/spikes/2026-10-30-effect/verdict.md`).
+- **Never call a port inside a transaction.** The tick claims a row and commits, calls the `Runner` (every call has a
+  process timeout), records the result in a new transaction. Attempts are capped, capacity is checked again at start,
+  and only due rows are selected (`docs/design.md` §3, "The tick").
+- **One schema, `factory`,** in the shared database; migrations are advisory-locked and qualify every name.
+  `DATABASE_URL` comes from the environment (`.env.tpl` refs through `secrets-run`), never from a tracked file.
 - Direct-to-master, conventional commits, no AI attribution. Update this file in the same commit as the
   code it describes.
 
+## Layout
+
+- `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr
+  adapter (`runner.ts`), derived session state (`sessions.ts`), the queue and capacity (`spawns.ts`, `capacity.ts`),
+  `migrations/`.
+- `packages/cli` — the `factory` binary (`bin/factory.ts`). v0: `version`, `health`, `spawn list`. Exit codes are
+  agw's table, copied in `src/exit.ts`.
+- `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
+  `verify.sh`, the LaunchAgent plist template).
+
 ## Validate
 
-`make check` (format, lint, types, tests) once the skeleton lands in F0. Until then the repo is docs only.
+`make check` — install (frozen), Biome format and lint, shellcheck, `tsc --noEmit`, `bun test`. The tests start a
+private Postgres cluster with `initdb` in a temp dir (on PATH, or `PG_BIN_DIR`, or `/usr/lib/postgresql/<major>/bin`
+as on GitHub's runners); nothing touches a real database. `make test` runs the tests, `make fmt` formats.
+`make deploy` and `make verify` act on the mini only; `DRY_RUN=1 make deploy` prints the plan. CI runs `make check` on
+`ubuntu-latest`.
