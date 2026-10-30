@@ -9,9 +9,10 @@ out=$EVIDENCE/$key
 mkdir -p "$out"
 result=$out/result.txt
 : >"$result"
+failed=0
 check() { # <name> <expected> <actual>
   local verdict=FAIL
-  [[ $2 == "$3" ]] && verdict=PASS
+  [[ $2 == "$3" ]] && verdict=PASS || failed=1
   printf '%s\t%s\texpected %s\tgot %s\n' "$verdict" "$1" "$2" "$3" | tee -a "$result" | scrub
 }
 
@@ -22,13 +23,15 @@ pane=$(herdr pane list | jq -r --arg t "$tab_id" '[.result.panes[] | select(.tab
 agents=$(herdr agent list | jq -c --arg p "$pane" '[.result.agents[] | select(.pane_id == $p)]')
 echo "$agents" | scrub >"$out/herdr-agents.json"
 fx spawn get "$key" --format json | scrub >"$out/spawn.json"
-fx session get "$key" --format json | scrub >"$out/session.json"
+# The transcript path is read from the raw answer: the scrubbed copy no longer names a file.
+session_raw=$(fx session get "$key" --format json)
+scrub <<<"$session_raw" >"$out/session.json"
 db "SELECT kind, key, to_char(at AT TIME ZONE 'UTC', 'HH24:MI:SS.MS') FROM factory.events WHERE session = '$key' ORDER BY at, id" | scrub >"$out/events.txt"
 db "SELECT id, source, status, sent_count, failures FROM factory.prompts WHERE session = '$key' ORDER BY created_at" | scrub >"$out/prompts.txt"
 db "SELECT key, status, attempts, account, session, tab, workspace, error FROM factory.spawns WHERE key = '$key'" | scrub >"$out/spawn-row.txt"
 [[ -n $pane ]] && herdr agent read "$pane" --lines 120 2>/dev/null | scrub >"$out/pane-tail.txt" || true
 
-transcript=$(jq -r '.transcriptPath // empty' "$out/session.json" 2>/dev/null | sed "s|^~|$HOME|")
+transcript=$(jq -r '.transcriptPath // empty' <<<"$session_raw")
 users=0
 if [[ -n $transcript && -f $transcript ]]; then
   # Prompts typed by the harness are user messages that carry the marker; Claude's echoes are assistant lines.
@@ -45,3 +48,4 @@ check "user messages carrying the prompt in Claude Code's transcript" 1 "$users"
 check "prompt rows (the first prompt is the Runner's, not a row)" 0 "$(wc -l <"$out/prompts.txt" | tr -d ' ')"
 check "commits for the key on the scratch remote" 1 "$(git --git-dir="$REMOTES/$REPO_NAME.git" log --oneline master | grep -c "gameday $key" || true)"
 check "session state" idle "$(jq -r .state "$out/session.json")"
+((failed == 0))

@@ -23,7 +23,7 @@ now_utc() { perl -MTime::HiRes=time -MPOSIX=strftime -e '$t = time; printf "%s.%
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time*1000'; }
 
 # Evidence carries no home directory, host name or address.
-scrub() { sed -E -e "s|$HOME|~|g" -e "s|$(hostname -s)|<host>|g" -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g'; }
+scrub() { sed -E -e "s|$HOME|~|g" -e "s|$(hostname -s)|<host>|g" -e "s|$(id -un)|<user>|g" -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g'; }
 
 # `log <line>` appends to the run's timeline (TIMELINE, else the shared log) and prints it.
 log() { printf '%s %s\n' "$(now_utc)" "$*" | scrub | tee -a "${TIMELINE:-$EVIDENCE/log.txt}"; }

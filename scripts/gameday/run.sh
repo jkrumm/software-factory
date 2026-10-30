@@ -20,8 +20,9 @@ prompt="Scratch gameday, key $key, marker $marker. Do exactly this and nothing e
 [[ -e $repo/.git/factory-gameday ]] || { echo "run: $repo is not a gameday repo; run setup.sh" >&2; exit 1; }
 healthy || { echo "run: the factory is not healthy" >&2; exit 1; }
 case $moment in
-  claimed) watcher=("$GAMEDAY_DIR/when-child.sh" 'herdr agent start' 180 -- kill-server.sh claimed "$key") ;;
-  prompt) watcher=("$GAMEDAY_DIR/when-child.sh" 'herdr agent prompt' 180 -- kill-server.sh prompt "$key") ;;
+  # The pattern names the key, so another session's start or prompt (the host runs others) never triggers the kill.
+  claimed) watcher=("$GAMEDAY_DIR/when-child.sh" "herdr agent start $key " 180 -- kill-server.sh claimed "$key") ;;
+  prompt) watcher=("$GAMEDAY_DIR/when-child.sh" "herdr agent prompt .*$marker" 180 -- kill-server.sh prompt "$key") ;;
   working) watcher=("$GAMEDAY_DIR/when-working.sh" "$key" 300 -- kill-server.sh working "$key") ;;
   *) echo "usage: run.sh <claimed|prompt|working> [run-id]" >&2; exit 2 ;;
 esac
@@ -29,6 +30,8 @@ esac
 log "run $key: release $(fx health --format json | jq -r .version | cut -c1-12), server pid $(server_pid), base commit $(git -C "$ROOT" rev-parse --short HEAD)"
 "${watcher[@]}" >>"$out/kill.out" 2>&1 &
 watcher_pid=$!
+# A watcher left armed would kill the server later, whatever stopped this script.
+trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
 log "run $key: spawn create (role worker, repo $REPO_NAME), watcher $moment armed"
 fx spawn create "$key" --repo "$repo" --prompt "$prompt" --role worker --format json | jq -c '{key,status,account,role,tier,effort}' | scrub | tee -a "$TIMELINE"
 if ! wait "$watcher_pid"; then
@@ -54,7 +57,10 @@ while ((SECONDS < end)); do
   fi
   sleep 3
 done
-[[ -n $done_at ]] || log "run $key: the session did not finish within 15 minutes"
+finished=0
+[[ -n $done_at ]] && finished=1
+((finished)) || log "run $key: the session did not finish within 15 minutes"
 sleep 5 # the last hooks reach the spool and the server
 
-"$GAMEDAY_DIR/collect.sh" "$key" "$marker"
+# The evidence is collected either way; the exit status says whether every check passed.
+"$GAMEDAY_DIR/collect.sh" "$key" "$marker" && ((finished))

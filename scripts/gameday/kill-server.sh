@@ -12,7 +12,8 @@ lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | grep -q '^n.*/\.software-factory/rele
 
 # The dotfiles heartbeat pages on every restart of a KeepAlive job unless an epoch line marks it deliberate (deploy.sh does the same).
 { mkdir -p "$HOME/.local/state/devhost/deliberate-restart" && date +%s >>"$HOME/.local/state/devhost/deliberate-restart/$LABEL"; } 2>/dev/null || true
-children=$(pgrep -P "$pid" -fl 2>/dev/null | cut -c1-110 || true)
+# Only what each child is (its first three words), never its arguments: another session's prompt must not reach the evidence.
+children=$(pgrep -P "$pid" -fl 2>/dev/null | awk '{ print $2, $3, $4 }' | paste -sd ';' - || true)
 t0=$(now_ms)
 kill -9 "$pid"
 log "kill: -9 server pid $pid at moment '$moment' for $key; children at the kill: ${children:-none}"
