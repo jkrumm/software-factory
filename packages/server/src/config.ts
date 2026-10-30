@@ -22,6 +22,8 @@ export interface Config {
   spoolDir: string
   /** the unix socket the hooks post to (`FACTORY_SOCKET`) */
   hookSocket: string
+  /** how many test runs may hold a slot at once (`FACTORY_SLOTS`) */
+  slots: number
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -59,7 +61,19 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
+    slots: slots(env.FACTORY_SLOTS),
   }
+}
+
+/** Test slots (FL7): two to start with, tuned from the load record. */
+export const DEFAULT_SLOTS = 2
+
+function slots(value: string | undefined): number {
+  if (value === undefined || value === '') return DEFAULT_SLOTS
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 1 || n > 64)
+    throw new Error(`FACTORY_SLOTS must be a whole number from 1 to 64, got: ${value}`)
+  return n
 }
 
 function retryBudgetMs(value: string | undefined): number {

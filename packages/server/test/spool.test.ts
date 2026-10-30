@@ -136,7 +136,10 @@ describe('spool replay', () => {
 
   test('the tick replays the spool before it claims anything', async () => {
     hookAppend('s', 'session_started', '2026-10-30T10:00:00.000Z')
-    const runner: Runner = { ...noType, start: async (_input: StartInput) => ({ session: 'p' }) }
+    const runner: Runner = {
+      ...noType,
+      start: async (_input: StartInput) => ({ session: 'p', tab: 't', workspace: 'w' }),
+    }
     const result = await tick({ sql: db.sql, runner, clock, spool: replayer() })
     expect(result.replayed).toBe(1)
     expect(await count()).toBe(1)
@@ -234,7 +237,7 @@ describe('session_started binds', () => {
       clock.now(),
     )
     await createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'p', ...WORKER }, clock.now())
-    const runner: Runner = { ...noType, start: async () => ({ session: pane }) }
+    const runner: Runner = { ...noType, start: async () => ({ session: pane, tab: 't', workspace: 'w' }) }
     await tick({ sql: db.sql, runner, clock })
   }
 

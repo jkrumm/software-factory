@@ -21,11 +21,14 @@ check:
 	@echo "==> typecheck (tsc --noEmit)"
 	@bunx --no-install tsc --noEmit
 	@echo "==> test (bun test)"
-	@bun test
+	@$(MAKE) --no-print-directory test
 	@echo "==> check passed"
 
+# The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
+# load onto each other; without it (CI) the bare command. The checkout's own CLI is the one that takes the slot. It fails
+# open: a server that is down or a full house runs the tests anyway.
 test:
-	@bun test
+	@if command -v factory >/dev/null 2>&1; then bun packages/cli/bin/factory.ts slot run --name "$(notdir $(CURDIR)) test" -- bun test; else bun test; fi
 
 fmt:
 	@bunx --no-install oxfmt --write .

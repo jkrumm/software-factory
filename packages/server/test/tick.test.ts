@@ -76,7 +76,7 @@ function gatedRunner() {
     async start(input) {
       entered.push(input.key)
       await new Promise<void>((resolve) => waiting.set(input.key, resolve))
-      return { session: `pane-${input.key}` }
+      return { session: `pane-${input.key}`, tab: `tab-${input.key}`, workspace: 'w1' }
     },
   }
   const release = (key: string) => waiting.get(key)?.()
@@ -98,7 +98,7 @@ describe('the session of a spawn', () => {
       ...noType,
       start: async () => {
         during = await sessionState('s1')
-        return { session: 'w1:p1' }
+        return { session: 'w1:p1', tab: 'w1:t1', workspace: 'w1' }
       },
     }
     await tick(deps(runner))
@@ -296,7 +296,7 @@ describe('the Runner is never called inside a transaction (finding 1)', () => {
         const [row] = await db.sql`
           SELECT status, attempts, account FROM factory.spawns WHERE key = ${input.key} FOR UPDATE NOWAIT`
         seen = row
-        return { session: 'pane-s1' }
+        return { session: 'pane-s1', tab: 'w1:t1', workspace: 'w1' }
       },
     }
     expect(await tick(deps(runner))).toMatchObject({ started: ['s1'], errors: [] })
@@ -330,6 +330,7 @@ describe('replay and crashes (finding 3)', () => {
     const { session } = await herdrRunner().start({
       key: 's1',
       repo: '/work/repo',
+      role: 'worker',
       prompt: 'do it',
       account: 'a',
       tier: 'sonnet',
@@ -381,7 +382,7 @@ describe('replay and crashes (finding 3)', () => {
       async start(input) {
         // The record's UPDATE will find nothing to do: the row is no longer `starting`.
         await db.sql`UPDATE factory.spawns SET status = 'failed' WHERE key = ${input.key}`
-        return { session: 'pane-s1' }
+        return { session: 'pane-s1', tab: 'w1:t1', workspace: 'w1' }
       },
     }
     expect(await tick(deps(runner))).toMatchObject({ started: [], errors: [expect.stringContaining('claim was lost')] })
@@ -466,7 +467,7 @@ describe('the ticker', () => {
       ...noType,
       async start(input) {
         calls.push(input)
-        return { session: 'x' }
+        return { session: 'x', tab: 't', workspace: 'w' }
       },
     }
     const ticker = startTicker(deps(runner), 10)

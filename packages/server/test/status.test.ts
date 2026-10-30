@@ -6,7 +6,7 @@ import { recordReading } from '../src/capacity.ts'
 import { serveHooks } from '../src/http.ts'
 import { recordPrompt } from '../src/prompts.ts'
 import { buildStatus } from '../src/status.ts'
-import { startApp, TEST_REPO, TEST_TOKEN, type TestApp } from './support/app.ts'
+import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { usage } from './support/quota.ts'
@@ -193,7 +193,15 @@ describe('the hooks socket serves notes and the send-back check', () => {
   beforeAll(() => {
     dir = mkdtempSync('/tmp/factory-sock-')
     socket = join(dir, 'h.sock')
-    hooks = serveHooks({ sql: db.sql, clock, token: TEST_TOKEN, socketPath: socket })
+    hooks = serveHooks({
+      sql: db.sql,
+      clock,
+      token: TEST_TOKEN,
+      socketPath: socket,
+      repoRoots: [TEST_ROOT],
+      roles: TEST_ROLES,
+      slots: 2,
+    })
   })
   afterAll(async () => {
     await hooks.stop(true)

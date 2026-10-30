@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
+import { ROLE_NAME } from './spool.ts'
 
 /** Tier names, never model ids: the ids live in agw's and dotfiles' route tables, the launcher maps a tier to one. */
 export const TIERS = ['haiku', 'sonnet', 'opus'] as const
@@ -12,7 +13,7 @@ export const Effort = z.enum(EFFORTS)
 export type Effort = z.infer<typeof Effort>
 
 /** A role is a word: it ends up in a file name, a CLI argument and a column. */
-export const RoleName = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,31}$/, 'not a valid role name')
+export const RoleName = z.string().regex(ROLE_NAME, 'not a valid role name')
 
 /** What `factory role get <role> --format json` prints; `rd --role` reads exactly this. */
 export const RoleEntry = z.object({ role: RoleName, tier: Tier, effort: Effort })

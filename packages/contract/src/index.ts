@@ -18,7 +18,11 @@ export type HoldReason = z.infer<typeof HoldReason>
 
 export const Spawn = z.object({
   key: z.string(),
+  /** `queued` with a `hold` is held; `starting` is claimed (the Runner is at work); `waiting` is waiting for capacity */
   status: SpawnStatus,
+  repo: z.string(),
+  /** the path whose herdr space the tab goes into (the repo, unless the spawn named another) */
+  space: z.string(),
   role: RoleName,
   tier: Tier,
   effort: Effort,
@@ -26,7 +30,11 @@ export const Spawn = z.object({
   account: z.string().nullable(),
   resumeAt: z.string().nullable(),
   attempts: z.number().int(),
+  /** the pane the agent runs in, once started (the same as `pane`; kept for the clients that read it) */
   session: z.string().nullable(),
+  pane: z.string().nullable(),
+  tab: z.string().nullable(),
+  workspace: z.string().nullable(),
   error: z.string().nullable(),
   /** the session that asked for it, when one did */
   parent: z.string().nullable(),
@@ -54,6 +62,7 @@ export const Session = z.object({
   /** the spawn the factory started it from; null for an `rd` session */
   spawn: z.string().nullable(),
   pane: z.string().nullable(),
+  tab: z.string().nullable(),
   /** what `usage` joins on */
   claudeSessionId: z.string().nullable(),
   transcriptPath: z.string().nullable(),
@@ -61,7 +70,7 @@ export const Session = z.object({
   /** what herdr last said about the agent, and when */
   herdrStatus: z.string().nullable(),
   herdrSeenAt: z.string().nullable(),
-  /** the role of its spawn; null for an `rd` session */
+  /** the role of its spawn, else the `FACTORY_ROLE` its pane reported */
   role: z.string().nullable(),
   /** the account it runs on: its spawn's, else what the hook reported */
   account: z.string().nullable(),
@@ -174,6 +183,25 @@ export const Status = z.object({
   notesMore: z.number().int(),
 })
 export type Status = z.infer<typeof Status>
+
+/**
+ * `PUT /slots/:id` on the socket: a request for a test slot and the renewal of the one held, in one call (FL7). `granted`
+ * false means the caller waits (`ahead` callers are in front of it) and asks again; granted, `slot` is its number and the
+ * lease runs `leaseMs` from this call.
+ */
+export const Slot = z.object({
+  id: z.string(),
+  name: z.string(),
+  granted: z.boolean(),
+  slot: z.number().int().nullable(),
+  leaseMs: z.number().int(),
+  ahead: z.number().int(),
+})
+export type Slot = z.infer<typeof Slot>
+
+/** `DELETE /slots/:id`: gives a slot back; `released` is false when the caller held nothing (its lease had expired). */
+export const SlotRelease = z.object({ released: z.boolean() })
+export type SlotRelease = z.infer<typeof SlotRelease>
 
 export const ErrorBody = z.object({ error: z.string() })
 export type ErrorBody = z.infer<typeof ErrorBody>

@@ -9,4 +9,6 @@ export const LOCKS = {
   capacity: 7_093_002,
   /** session-level: held by the one running server */
   singleton: 7_093_003,
+  /** transaction-level: serializes the test-slot semaphore */
+  slots: 7_093_004,
 } as const

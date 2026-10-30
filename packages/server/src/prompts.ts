@@ -164,7 +164,16 @@ interface Target {
   pane: string | null
   state: string
   claudeSessionId: string | null
-  spawn: { key: string; repo: string; role: string; account: string | null; tier: Tier; effort: Effort } | null
+  spawn: {
+    key: string
+    repo: string
+    space: string
+    new_space: boolean
+    role: string
+    account: string | null
+    tier: Tier
+    effort: Effort
+  } | null
   ended: boolean
   /** the session shows life after `since`: a hook event, or herdr showing its agent */
   alive(since: Date): Promise<boolean>
@@ -174,7 +183,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
   const session = await getSession(sql, id, now)
   if (!session) return undefined
   const [spawn] = session.spawn
-    ? await sql`SELECT key, repo, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
+    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
     : []
   const [life] = await sql`
     SELECT kind FROM factory.events
@@ -380,9 +389,16 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
   if (!spawn?.account || !claudeSessionId) {
     throw new Error('cannot resume: the session has no spawn, account or Claude session id')
   }
-  const { session: pane } = await deps.runner.start({
+  // A resume goes back into the spawn's space; it never asks for a second one, whatever the first did.
+  const {
+    session: pane,
+    tab,
+    workspace,
+  } = await deps.runner.start({
     key: spawn.key,
     repo: spawn.repo,
+    space: spawn.space,
+    role: spawn.role,
     prompt: prompt.text,
     account: spawn.account,
     tier: spawn.tier,
@@ -391,8 +407,8 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
   })
   // The new pane in one transaction, after the call: a crash between the two rows would leave the spawn pointing at a dead pane.
   await deps.sql.begin(async (tx) => {
-    await tx`UPDATE factory.sessions SET pane = ${pane}, pane_misses = 0 WHERE id = ${prompt.session}`
-    await tx`UPDATE factory.spawns SET session = ${pane} WHERE key = ${spawn.key}`
+    await tx`UPDATE factory.sessions SET pane = ${pane}, tab = ${tab}, pane_misses = 0 WHERE id = ${prompt.session}`
+    await tx`UPDATE factory.spawns SET session = ${pane}, tab = ${tab}, workspace = ${workspace} WHERE key = ${spawn.key}`
   })
   return 'typed'
 }

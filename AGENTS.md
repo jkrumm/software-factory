@@ -32,6 +32,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   starts a failed spawn over. Admission is decided again at every claim except a reclaim (an expired lease: its agent may
   already run, so it finishes on its account), and only due rows are selected
   (`docs/design.md` §3, "The tick").
+- **One herdr space per repo (FL6), keyed by path.** A spawn has a `space` (a path, default its `repo`, resolved like the repo and
+  inside the same roots; `POST /spawns` takes `space` and `new_space`). The Runner finds the space by path, never by directory
+  name: the label (the directory's name, `rd`'s convention) only narrows the candidates, and a space counts when one of its panes is
+  in the path or below it (a worktree). So two repos named `app` have two spaces, a second spawn in a repo is a new tab in its
+  space, and a fan worker's worktree passes its main checkout as `space` and lands there. A second space for a path that has one
+  only with `new_space: true` (a retry of that key goes back into its space). The result names the pane, the tab and the space
+  (`spawns.session|tab|workspace`; `Spawn.pane` is `session`), and the pane's environment carries `FACTORY_ROLE`.
 - **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
   pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
   prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
@@ -54,9 +61,11 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens, with one exception: the send-back
   (below). The hook has no token and the Runner
   keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
-  `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`)
-  and `POST /sessions/:id/stop-check`, which a session in a pane runs without a token, and nothing else; bound under
-  umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
+  `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`),
+  `POST /sessions/:id/stop-check`, `PUT|DELETE /slots/:id` (`factory slot run`), `POST /spawns` (a pane starts work, below), and
+  three reads a spawner needs to follow it, `GET /spawns/:key`, `GET /sessions/:id` and `GET /queue[?project=]` (`factory spawn get`,
+  `session get`, `queue get` use the socket when `FACTORY_TOKEN` is not set), which a session in a pane runs without a token, and
+  nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
   identity; a same-user pane can already drive any pane through herdr, so this adds no capability, and it is a known and accepted
   cross-session path); an event of
   kind `herdr_restarted` or `pane_gone`, or filed under `_herdr`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
@@ -94,9 +103,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     answers `sendBack` when the session has live child sessions (sessions of spawns whose `parent` is it; `parent` comes
     from `POST /spawns`, `factory spawn create` defaults it to `FACTORY_SESSION`), no open wait, is not `walled`, and the
     hook says `stop_hook_active` is false; once per turn (`effects` key `sendback:<session>:<turn>`, recorded when the answer is given: an answer the hook
-    cannot wait for, 300 ms, spends that turn's send-back). The hook then exits 2 with the one line on stderr. A server that is down, slow or odd means exit 0. Children `rd` starts carry no parent
-    until `rd` is a client (Wave 5). `factory spawn create` needs the token and a pane has none, so until Wave 5 decides how a pane
-    authenticates (there is deliberately no socket route to create a spawn), the send-back sees only spawns created with a token.
+    cannot wait for, 300 ms, spends that turn's send-back). The hook then exits 2 with the one line on stderr. A server that is down, slow or odd means exit 0. A pane has no token and
+    starts work through the socket (below), so the children of a session in a pane carry its `FACTORY_SESSION` as `parent`:
+    the send-back sees them whoever started the pane.
   - *Rotation*: role `mother` or `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
   - *Blocked*: `blocked` for 2 minutes is a line in `factory status`; if the session has a live parent, also a note to it,
     `blocked:<event key>`.
@@ -132,7 +141,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   gets its row when the tick claims it (`starting` until its first event; the pane is added when the Runner returns it; a
   spawn that fails for good without a pane or event takes its row with it), an `rd` name when its first event arrives. `session_started` binds
   Claude's session id, transcript path and cwd (the join key with `usage`); an older start delivered late does not
-  overwrite a newer binding.
+  overwrite a newer binding. The hook also reports what the pane knows of itself: `FACTORY_ROLE` (the role; a spawn's own
+  role wins), `HERDR_PANE_ID` and `HERDR_TAB_ID` (kept if the Runner already knows them), so `session get` answers `pane` and
+  `tab` for an `rd` session too and the one-wave-per-repo rule counts it.
 - **The witness** (`witness.ts`) asks herdr (`agent list`, Wave 1 process timeout) once a minute: records each session's
   agent status, the worktree's last change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that
   is working), and herdr's server (pid + start time from the process table, herdr has no API for it): a change is the
@@ -142,6 +153,22 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   secrets, `core.fsmonitor` or hooks (the agent controls `.git/config`), four probes at a time. `GET /sessions` answers
   with the newest 200. A herdr that
   does not answer records nothing.
+- **Panes are clients (SF11).** `POST /spawns` on the socket takes the HTTP route's body, validation (400), role check (422) and
+  `FACTORY_REPO_ROOTS` check for `repo` and `space` (422, nothing stored), and is idempotent by key (a second create answers the
+  stored spawn, 200). The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
+  uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
+  socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
+  repo roots still bound where it can start, and a same-user pane can already start Claude Code through herdr).
+  The contract `rd` reads: `Spawn` (`status` `queued` with a `hold` is held, `starting` claimed, `waiting` for capacity; `pane`, `tab`,
+  `workspace`, `space`, `repo`), `Session` (`pane`, `tab`, `role`), `QueueView` (`effective`), all in `packages/contract`.
+- **Test slots (FL7)** (`slots.ts`, table `slots`): `factory slot run [--name <label>] -- <cmd>` asks `PUT /slots/:id` on the socket
+  until it is granted (once a second), renews the lease every 10 s while the command runs (30 s lease; a holder that stops renewing
+  loses it at the next call of anyone), and gives it back with `DELETE` on exit or `SIGTERM`/`SIGHUP`/`SIGINT`. `FACTORY_SLOTS` slots
+  (default 2), granted to callers in the order they first asked (a waiter that stops polling for 15 s leaves the line), all behind
+  one advisory lock. The exit code, stdout and stderr are the command's own (killed by a signal: 128 plus it; can't start: 127).
+  **Fails open:** no answer from the server, or no slot within `FACTORY_SLOT_WAIT_MS` (client side, default 600000), runs the
+  command anyway with one stderr line. `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
+  is installed, and bare otherwise (CI).
 - **Quota is a stored fact, read from the picker.** `ClaudeAccountSource` (`quota.ts`) runs `claude-account usage --json`
   (`FACTORY_CLAUDE_ACCOUNT_BIN`, default `~/.local/bin/claude-account`, the Wave 1 process timeout) and parses it with zod: one
   row per account of the registry (`dotfiles/config/claude-accounts.json`), so accounts are never listed here and a fourth
@@ -158,8 +185,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   fail-safe otherwise: it knows no holds, roles or per-sample loads, so drain by waiting for the queue to empty first.
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
-  has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count once they
-  carry a role, which they do not yet; a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
+  has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count by the role their pane reports (`FACTORY_ROLE`, recorded at `session_started`) and by the
+  directory they started in, which belongs to the repo when it is the repo or inside it (a worktree); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
   agent may run). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
   auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
@@ -208,12 +235,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness
   (`witness.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
-  (`status.ts`), `migrations/`.
+  (`status.ts`), the test slots (`slots.ts`), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, and the role table's schema
   and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
 - `config/roles.json` — the role table (FL4).
-- `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|requeue`, `session
-  list|get|wait|note`, `queue get|set`, `quota get|refresh`, `role list|get`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+- `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
+  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

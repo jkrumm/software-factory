@@ -5,7 +5,7 @@ import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
-import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
+import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import { deliverPrompts } from './prompts.ts'
 import type { QuotaPoller } from './quota.ts'
 import { evaluateRules } from './rules.ts'
@@ -50,6 +50,10 @@ export interface TickResult {
 export interface Claim {
   key: string
   repo: string
+  /** the path whose herdr space the tab goes into */
+  space: string
+  newSpace: boolean
+  role: string
   prompt: string
   account: string
   /** the role table's tier and effort for the spawn's role, as stored when it was queued */
@@ -63,6 +67,8 @@ export interface Claim {
 interface DueRow {
   key: string
   repo: string
+  space: string
+  new_space: boolean
   prompt: string
   role: string
   tier: Tier
@@ -97,7 +103,8 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at FROM factory.spawns
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at
+      FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
          OR (status = 'starting' AND claimed_at <= ${staleBefore})
@@ -156,6 +163,9 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       claims.push({
         key: row.key,
         repo: row.repo,
+        space: row.space,
+        newSpace: row.new_space,
+        role: row.role,
         prompt: row.prompt,
         account: decision.account,
         tier: row.tier,
@@ -171,14 +181,21 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 }
 
 /** Phase 3: record the outcome in a transaction of its own. Only a row still `starting` is touched. */
-async function recordStarted(sql: SQL, key: string, session: string, at: Date): Promise<boolean> {
+async function recordStarted(
+  sql: SQL,
+  key: string,
+  started: { session: string; tab: string; workspace: string },
+  at: Date,
+): Promise<boolean> {
+  const { session, tab, workspace } = started
   return sql.begin(async (tx) => {
     const rows = await tx`
-      UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL, assigned_at = ${at}
+      UPDATE factory.spawns SET status = 'started', session = ${session}, tab = ${tab}, workspace = ${workspace},
+        claimed_at = NULL, error = NULL, assigned_at = ${at}
       WHERE key = ${key} AND status = 'starting'
       RETURNING key`
     // The spawn is a session from here on: `starting` until its first hook event says otherwise.
-    if (rows.length > 0) await openSession(tx, { id: key, spawnKey: key, pane: session, at })
+    if (rows.length > 0) await openSession(tx, { id: key, spawnKey: key, pane: session, tab, at })
     return rows.length > 0
   })
 }
@@ -213,20 +230,23 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
 
 /** Phase 2 and 3 for one claim. Nothing the Runner does can leave this function throwing; only recording can. */
 async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'failed' | 'retrying' | 'lost'> {
-  let session: string
+  let started: StartResult
   try {
-    ;({ session } = await deps.runner.start({
+    started = await deps.runner.start({
       key: claim.key,
       repo: claim.repo,
+      space: claim.space,
+      newSpace: claim.newSpace,
+      role: claim.role,
       prompt: claim.prompt,
       account: claim.account,
       tier: claim.tier,
       effort: claim.effort,
-    }))
+    })
   } catch (error) {
     return recordFailure(deps, claim, error)
   }
-  return (await recordStarted(deps.sql, claim.key, session, deps.clock.now())) ? 'started' : 'lost'
+  return (await recordStarted(deps.sql, claim.key, started, deps.clock.now())) ? 'started' : 'lost'
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { Effort, Session, SessionState, Tier, WaitOn } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { ACCOUNT_NAME } from '@software-factory/contract/spool'
+import { ACCOUNT_NAME, ROLE_NAME } from '@software-factory/contract/spool'
 import type { EVENT_KINDS, EventInput } from './schemas.ts'
 
 export type EventKind = (typeof EVENT_KINDS)[number]
@@ -37,7 +37,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
   await tx`INSERT INTO factory.sessions (id, created_at) VALUES (${event.session}, ${event.at}) ON CONFLICT (id) DO NOTHING`
   // A session of a spawn is the spawn's: its pane is known from the start.
   await tx`
-    UPDATE factory.sessions s SET spawn_key = p.key, pane = COALESCE(s.pane, p.session)
+    UPDATE factory.sessions s SET spawn_key = p.key, pane = COALESCE(s.pane, p.session), tab = COALESCE(s.tab, p.tab)
     FROM factory.spawns p
     WHERE s.id = ${event.session} AND p.key = s.id AND s.spawn_key IS NULL`
   if (event.kind === 'session_started') {
@@ -48,10 +48,15 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
     // The account keys readings and shows in status: a name from the registry's alphabet, or none.
     const account = text('account')
     const accountName = account && ACCOUNT_NAME.test(account) ? account : null
+    // What only the pane knows: its role (`FACTORY_ROLE`, the one-wave-per-repo rule counts it) and where herdr put it.
+    const role = text('role')
+    const roleName = role && ROLE_NAME.test(role) ? role : null
     await tx`
       UPDATE factory.sessions
       SET claude_session_id = ${text('claudeSessionId')}, transcript_path = ${text('transcriptPath')},
-          cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account), bound_at = ${event.at}
+          cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account),
+          role = COALESCE(${roleName}, role), pane = COALESCE(pane, ${text('pane')}), tab = COALESCE(tab, ${text('tab')}),
+          bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
   return { duplicate: false }
@@ -63,12 +68,13 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
  */
 export async function openSession(
   tx: SQL,
-  input: { id: string; spawnKey: string; pane: string | null; at: Date },
+  input: { id: string; spawnKey: string; pane: string | null; tab?: string | null; at: Date },
 ): Promise<void> {
   await tx`
-    INSERT INTO factory.sessions (id, spawn_key, pane, created_at)
-    VALUES (${input.id}, ${input.spawnKey}, ${input.pane}, ${input.at})
-    ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = COALESCE(EXCLUDED.pane, factory.sessions.pane)`
+    INSERT INTO factory.sessions (id, spawn_key, pane, tab, created_at)
+    VALUES (${input.id}, ${input.spawnKey}, ${input.pane}, ${input.tab ?? null}, ${input.at})
+    ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = COALESCE(EXCLUDED.pane, factory.sessions.pane),
+      tab = COALESCE(EXCLUDED.tab, factory.sessions.tab)`
 }
 
 /** A spawn that gave up never became a session: its row, if it never got a pane or an event, goes. True if it went. */
@@ -228,7 +234,10 @@ interface SessionRow {
   herdr_seen_at: Date | null
   worktree_changed_at: Date | null
   spawn_account: string | null
+  /** the role of the spawn; `role` is the one the pane reported */
+  spawn_role: string | null
   role: string | null
+  tab: string | null
   repo: string | null
   tier: Tier | null
   effort: Effort | null
@@ -259,12 +268,13 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
     lastEventAt: (facts[facts.length - 1]?.at ?? row.created_at).toISOString(),
     spawn: row.spawn_key,
     pane: row.pane,
+    tab: row.tab,
     claudeSessionId: row.claude_session_id,
     transcriptPath: row.transcript_path,
     cwd: row.cwd,
     herdrStatus: row.herdr_status,
     herdrSeenAt: row.herdr_seen_at?.toISOString() ?? null,
-    role: row.role,
+    role: row.spawn_role ?? row.role,
     account: row.spawn_account ?? row.account,
     parent: row.parent,
     since: derived.since?.toISOString() ?? null,
@@ -300,7 +310,7 @@ const NOT_ENDED = (sql: SQL) => sql`
 
 export async function getSession(sql: SQL, id: string, now: Date): Promise<Session | undefined> {
   const [row]: SessionRow[] = await sql`
-    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
     FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key WHERE s.id = ${id}`
   if (!row) return undefined
   return view(row, groupFacts(await factRows(sql, [id])).get(id) ?? [], now)
@@ -313,11 +323,11 @@ export async function listSessions(sql: SQL, now: Date, options: { all?: boolean
   // A session that ended is dead whatever else is known, so it is left out before the limit, not after it.
   const rows: SessionRow[] = options.all
     ? await sql`
-        SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+        SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
         FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
         ORDER BY s.created_at DESC, s.id LIMIT ${LIST_LIMIT}`
     : await sql`
-        SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+        SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
         FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
         WHERE ${NOT_ENDED(sql)}
         ORDER BY s.created_at DESC, s.id LIMIT ${LIST_LIMIT}`
@@ -344,8 +354,8 @@ export interface LiveSession {
  */
 export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> {
   const rows: SessionRow[] = await sql`
-    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
-    FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
     WHERE ${NOT_ENDED(sql)}`
   const facts = groupFacts(
     await factRows(
@@ -355,7 +365,10 @@ export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> 
   )
   return rows.flatMap((row) => {
     const state = view(row, facts.get(row.id) ?? [], now)?.state
-    return state && state !== 'dead' && row.repo && row.role ? [{ id: row.id, repo: row.repo, role: row.role }] : []
+    // A session no spawn describes (`rd`'s) is where its hook said it started, with the role its pane reported.
+    const repo = row.repo ?? row.cwd
+    const role = row.spawn_role ?? row.role
+    return state && state !== 'dead' && repo && role ? [{ id: row.id, repo, role }] : []
   })
 }
 
@@ -399,7 +412,7 @@ async function derive(sql: SQL, rows: readonly SessionRow[], now: Date): Promise
 /** The sessions of the spawns `parent` started, not ended: the Stop hook's question, answered without reading the rest. */
 export async function loadChildren(sql: SQL, parent: string, now: Date): Promise<Loaded[]> {
   const rows: SessionRow[] = await sql`
-    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
     FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
     WHERE p.parent = ${parent} AND ${NOT_ENDED(sql)}`
   return derive(sql, rows, now)
@@ -415,7 +428,7 @@ export const RULES_HORIZON_MS = 7 * 24 * 3_600_000
 export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
   const since = new Date(now.getTime() - RULES_HORIZON_MS)
   const rows: SessionRow[] = await sql`
-    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
     FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
     WHERE ${NOT_ENDED(sql)}
       AND (s.created_at > ${since} OR EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id AND e.at > ${since}))`

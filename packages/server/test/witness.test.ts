@@ -277,6 +277,7 @@ describe('the herdr adapter', () => {
     const { session } = await runner.start({
       key: 'spawn-1',
       repo: '/work/repo',
+      role: 'worker',
       prompt: 'go',
       account: 'a',
       tier: 'sonnet',

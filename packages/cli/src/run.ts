@@ -33,8 +33,12 @@ commands:
   version         the CLI's version
   health          the server's /health
   spawn list      the spawn queue, newest first
-  spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>]
-                  queue a spawn (the parent defaults to $FACTORY_SESSION: the send-back rule counts a session's workers)
+  spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]
+                  queue a spawn (idempotent by key; the parent defaults to $FACTORY_SESSION: the send-back rule counts a
+                  session's workers). The tab goes into the herdr space of --space (default: the repo; a fan worker's
+                  worktree names its main checkout); --new-space asks for a space of its own. Uses the token when
+                  FACTORY_TOKEN is set and the socket otherwise
+  spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   status          one screen: what needs a look, sessions by state (walled, blocked, stuck first), the queue with its
@@ -42,7 +46,7 @@ commands:
   session list [--all]
                   the sessions, newest first, with their derived state (--all adds the dead)
   session get <id>
-                  one session: state, turn, wait, pane, Claude session id, herdr's last word
+                  one session: state, turn, wait, pane, tab, Claude session id, herdr's last word (token or socket)
   session wait --on workers|deploy|owner | --done [--session <id>]
                   declare what this session is waiting on, or that the wait is over (default: $FACTORY_SESSION)
   session note <session> <text> [--id <id>]
@@ -51,9 +55,15 @@ commands:
                   starts with a dash
   queue get [--project <path>]
                   the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
+                  (token or socket)
   queue set run|pace|drain [--project <path>]
                   set it: drain starts nothing new (queued spawns stay queued), pace allows one session per project and
                   spends only toward the weekly pace; the most restrictive scope that applies wins
+  slot run [--name <label>] -- <cmd> [args…]
+                  run <cmd> in one of the host's test slots (FACTORY_SLOTS on the server, default 2): waits for a free one,
+                  renews the lease while the command runs, gives it back when it ends. The exit code, stdout and stderr are
+                  the command's own. Fails open: no server, or no slot within FACTORY_SLOT_WAIT_MS (default 600000), runs the
+                  command anyway with one line on stderr. Goes by the socket, needs no token
   quota get       the newest reading of every account (percent of the 5-hour window and the week, resets, fresh or not)
   quota refresh   read the account picker now and store the readings
   role list       the role table: role, tier, effort (reads the tracked file, no server and no token)
@@ -66,14 +76,17 @@ commands:
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note: the note's idempotency key
---repo, --prompt, --role, --parent  spawn create
+--repo, --prompt, --role, --parent, --space, --new-space  spawn create
+--name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
-FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note and role)
+FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
+                 spawn create|get, session get and queue get fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
-FACTORY_SOCKET   the server's unix socket for session wait and note (default ~/.local/share/factory/hook.sock)
+FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
+FACTORY_SLOT_WAIT_MS  slot run: longest wait for a slot before running without one (default 600000)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
 `
@@ -94,15 +107,16 @@ const notContract = (path: string, detail: string) =>
 const cell = (value: unknown) => (value === null || value === undefined ? '-' : String(value))
 
 interface CallOptions<S extends z.ZodType> {
-  method?: 'GET' | 'POST' | 'PUT'
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   /** sent as JSON with a POST or PUT; `{}` when absent */
   body?: unknown
   auth: boolean
   /**
    * Through the server's unix socket instead of its port: how a session in a pane reaches it, with no token (the socket's
-   * file mode is the credential). Only `POST /sessions/:id/wait` and `POST /events` are served there.
+   * file mode is the credential). `'fallback'` goes by the socket only when there is no `FACTORY_TOKEN`. The socket serves
+   * a fixed set of routes (AGENTS.md lists them).
    */
-  socket?: boolean
+  socket?: boolean | 'fallback'
   /** the schema every answer in `accept` must satisfy */
   schema: S
   /** statuses that carry the schema's body besides 2xx */
@@ -113,16 +127,17 @@ interface CallOptions<S extends z.ZodType> {
  * Calls the server and returns the body parsed by the contract's schema. Every failure is a `FactoryError` with agw's
  * kind: a body that does not parse is `contract_mismatch` (exit 9), whatever the status was.
  */
-async function call<S extends z.ZodType>(
+export async function call<S extends z.ZodType>(
   io: Io,
   path: string,
   options: CallOptions<S>,
 ): Promise<{ status: number; body: z.output<S> }> {
-  const socket = options.socket ? io.env.FACTORY_SOCKET || (io.env.HOME ? defaultHookSocket(io.env.HOME) : '') : ''
-  if (options.socket && !socket) throw usage('no socket: set FACTORY_SOCKET or HOME')
-  const base = options.socket ? 'http://localhost' : (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
-  const token = options.socket ? undefined : io.env.FACTORY_TOKEN
-  if (options.auth && !token) {
+  const viaSocket = options.socket === true || (options.socket === 'fallback' && !io.env.FACTORY_TOKEN)
+  const socket = viaSocket ? io.env.FACTORY_SOCKET || (io.env.HOME ? defaultHookSocket(io.env.HOME) : '') : ''
+  if (viaSocket && !socket) throw usage('no socket: set FACTORY_SOCKET or HOME')
+  const base = viaSocket ? 'http://localhost' : (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
+  const token = viaSocket ? undefined : io.env.FACTORY_TOKEN
+  if (options.auth && !viaSocket && !token) {
     throw new FactoryError('auth', 'no FACTORY_TOKEN set', {
       hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
     })
@@ -138,7 +153,7 @@ async function call<S extends z.ZodType>(
       },
       body: options.method && options.method !== 'GET' ? JSON.stringify(options.body ?? {}) : undefined,
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      ...(options.socket ? { unix: socket } : {}),
+      ...(viaSocket ? { unix: socket } : {}),
     })
     text = await response.text()
   } catch (error) {
@@ -250,6 +265,9 @@ interface Flags {
   prompt?: string
   role?: string
   parent?: string
+  space?: string
+  'new-space'?: boolean
+  name?: string
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -277,12 +295,16 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   if (words[0] === 'spawn' && words[1] === 'create') {
     const name = words[2]
     if (!name || words.length > 3 || !flags.repo || !flags.prompt) {
-      throw usage('usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>]')
+      throw usage(
+        'usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]',
+      )
     }
     const parent = flags.parent ?? io.env.FACTORY_SESSION
+    // With a token it is the HTTP route; a pane has none, and goes by the socket (the same body, the same checks).
     const { body } = await call(io, '/spawns', {
       method: 'POST',
       auth: true,
+      socket: 'fallback',
       schema: Spawn,
       body: {
         key: name,
@@ -290,7 +312,20 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         prompt: flags.prompt,
         ...(flags.role ? { role: flags.role } : {}),
         ...(parent ? { parent } : {}),
+        ...(flags.space ? { space: resolve(flags.space) } : {}),
+        ...(flags['new-space'] ? { new_space: true } : {}),
       },
+    })
+    return print(body, spawnLine(body))
+  }
+
+  if (words[0] === 'spawn' && words[1] === 'get') {
+    const target = words[2]
+    if (!target || words.length > 3) throw usage('usage: spawn get <key>')
+    const { body } = await call(io, `/spawns/${encodeURIComponent(target)}`, {
+      auth: true,
+      socket: 'fallback',
+      schema: Spawn,
     })
     return print(body, spawnLine(body))
   }
@@ -335,7 +370,11 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   if (words[0] === 'session' && words[1] === 'get') {
     const target = words[2]
     if (!target || words.length > 3) throw usage('usage: session get <id>')
-    const { body } = await call(io, `/sessions/${encodeURIComponent(target)}`, { auth: true, schema: Session })
+    const { body } = await call(io, `/sessions/${encodeURIComponent(target)}`, {
+      auth: true,
+      socket: 'fallback',
+      schema: Session,
+    })
     return print(body, sessionLine(body))
   }
 
@@ -358,7 +397,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
 
   if (key === 'queue get') {
     const query = flags.project === undefined ? '' : `?project=${encodeURIComponent(resolve(flags.project))}`
-    const { body } = await call(io, `/queue${query}`, { auth: true, schema: QueueView })
+    const { body } = await call(io, `/queue${query}`, { auth: true, socket: 'fallback', schema: QueueView })
     return print(body, queueLine(body))
   }
 
@@ -428,6 +467,12 @@ export async function run(argv: string[], io: Io): Promise<number> {
       io.out(HELP)
       return EXIT.ok
     }
+    // The command's own exit code is this process's: it does not go through `execute`, which only prints.
+    if (parsed.positionals[0] === 'slot') {
+      if (parsed.positionals[1] !== 'run') throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
+      const { slotRun } = await import('./slot.ts')
+      return await slotRun({ name: parsed.values.name, command: parsed.positionals.slice(2) }, io)
+    }
     await execute(parsed.positionals, format, parsed.values, io)
     return EXIT.ok
   } catch (error) {
@@ -452,5 +497,8 @@ const OPTIONS = {
   prompt: { type: 'string' },
   role: { type: 'string' },
   parent: { type: 'string' },
+  space: { type: 'string' },
+  'new-space': { type: 'boolean' },
+  name: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

@@ -115,3 +115,6 @@ export const defaultHookSocket = (home: string): string => `${home}/.local/share
 
 /** What an account is called in the registry and in the API: a short token, never free text. The hook and the server both check it. */
 export const ACCOUNT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+/** A role is a word: it ends up in a file name, a CLI argument and a column. */
+export const ROLE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/

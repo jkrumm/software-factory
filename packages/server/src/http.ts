@@ -9,6 +9,8 @@ import {
   type RoleTable,
   Session,
   SessionList,
+  Slot,
+  SlotRelease,
   Spawn,
   SpawnList,
   Status,
@@ -28,6 +30,8 @@ import {
   NoteInput,
   QueueInput,
   QuotaInput,
+  SlotId,
+  SlotInput,
   SpawnInput,
   StopCheckInput,
   WaitInput,
@@ -36,6 +40,7 @@ import { buildStatus } from './status.ts'
 import { declareWait, getSession, listSessions, recordEvent } from './sessions.ts'
 import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
+import { releaseSlot, touchSlot } from './slots.ts'
 import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
@@ -209,6 +214,59 @@ const resolveProject = (project: string, repoRoots: readonly string[]): Promise<
     throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
   })
 
+/**
+ * `POST /spawns`, on the port with the token and on the socket without it: the same body, the same validation and the same
+ * repo-roots check, so a pane that can reach the socket asks for no more than a holder of the token.
+ */
+const spawnHandler =
+  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[]) =>
+  async (req: Request): Promise<Response> => {
+    const input = await parseBody(req, SpawnInput)
+    // A replay of a known key answers with the row it made, whatever the role table says now.
+    const known = await getSpawn(sql, input.key)
+    if (known) return respond(Spawn, known)
+    const entry = roles.get(input.role)
+    if (!entry) throw new Refusal(`unknown role ${input.role} (${[...roles.keys()].join(', ')})`, 422)
+    // The policy decides before anything is stored; the row keeps the resolved path.
+    const repo = await resolveProject(input.repo, repoRoots)
+    const space = input.space === undefined ? repo : await resolveProject(input.space, repoRoots)
+    const { spawn, created } = await createSpawn(
+      sql,
+      { ...input, repo, space, newSpace: input.new_space, tier: entry.tier, effort: entry.effort },
+      clock.now(),
+    )
+    return respond(Spawn, spawn, created ? 201 : 200)
+  }
+
+/** `GET /spawns/:key`. */
+const spawnGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/spawns/:key'>) => {
+  const spawn = await getSpawn(sql, req.params.key)
+  return spawn ? respond(Spawn, spawn) : json({ error: 'unknown spawn' }, 404)
+}
+
+/** `GET /sessions/:id`. */
+const sessionGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/sessions/:id'>) => {
+  const session = await getSession(sql, req.params.id, clock.now())
+  return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
+}
+
+/** `GET /queue[?project=<path>]`. */
+const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
+  const project = new URL(req.url).searchParams.get('project')
+  return respond(QueueView, await getQueue(sql, project === null ? null : await resolveProject(project, repoRoots)))
+}
+
+/** `PUT /slots/:id` asks for a test slot or renews the one held; `DELETE` gives it back. */
+const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
+  PUT: async (req: Bun.BunRequest<'/slots/:id'>) => {
+    const id = parseParam(SlotId, req.params.id)
+    const { name } = await parseBody(req, SlotInput)
+    return respond(Slot, await touchSlot(sql, { id, name, slots }, clock.now()))
+  },
+  DELETE: async (req: Bun.BunRequest<'/slots/:id'>) =>
+    respond(SlotRelease, { released: await releaseSlot(sql, parseParam(SlotId, req.params.id)) }),
+})
+
 /** The route table for `Bun.serve`. */
 export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
@@ -237,38 +295,17 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       }),
     },
     '/sessions/:id': {
-      GET: route(async (req: Bun.BunRequest<'/sessions/:id'>) => {
-        const session = await getSession(sql, req.params.id, clock.now())
-        return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
-      }),
+      GET: route(sessionGetHandler(sql, clock)),
     },
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now()))) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
-      POST: route(async (req: Request) => {
-        const input = await parseBody(req, SpawnInput)
-        // A replay of a known key answers with the row it made, whatever the role table says now.
-        const known = await getSpawn(sql, input.key)
-        if (known) return respond(Spawn, known)
-        const entry = roles.get(input.role)
-        if (!entry) throw new Refusal(`unknown role ${input.role} (${[...roles.keys()].join(', ')})`, 422)
-        // The policy decides before anything is stored; the row keeps the resolved path.
-        const repo = await resolveProject(input.repo, repoRoots)
-        const { spawn, created } = await createSpawn(
-          sql,
-          { ...input, repo, tier: entry.tier, effort: entry.effort },
-          clock.now(),
-        )
-        return respond(Spawn, spawn, created ? 201 : 200)
-      }),
+      POST: route(spawnHandler(sql, clock, roles, repoRoots)),
     },
     '/spawns/:key': {
-      GET: route(async (req: Bun.BunRequest<'/spawns/:key'>) => {
-        const spawn = await getSpawn(sql, req.params.key)
-        return spawn ? respond(Spawn, spawn) : json({ error: 'unknown spawn' }, 404)
-      }),
+      GET: route(spawnGetHandler(sql)),
     },
     '/spawns/:key/requeue': {
       POST: route(async (req: Bun.BunRequest<'/spawns/:key/requeue'>) => {
@@ -304,13 +341,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       }),
     },
     '/queue': {
-      GET: route(async (req: Request) => {
-        const project = new URL(req.url).searchParams.get('project')
-        return respond(
-          QueueView,
-          await getQueue(sql, project === null ? null : await resolveProject(project, repoRoots)),
-        )
-      }),
+      GET: route(queueGetHandler(sql, repoRoots)),
       PUT: route(async (req: Request) => {
         const { state, project } = await parseBody(req, QueueInput)
         const scope = project === undefined ? null : await resolveProject(project, repoRoots)
@@ -347,30 +378,41 @@ export function serve(deps: AppDeps & { port: number }) {
 }
 
 /**
- * The sessions' way in: a unix socket in the owner's directory, with `POST /events`, `POST /sessions/:id/wait`,
- * `POST /sessions/:id/note` and `POST /sessions/:id/stop-check` and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600 is
- * what only the owner's processes can pass.
+ * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
+ * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` (a pane starting work: the same body, validation and repo-roots
+ * check as the port) and three reads a spawner needs to follow what it started (`GET /spawns/:key`, `GET /sessions/:id`,
+ * `GET /queue`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * is what only the owner's processes can pass.
  */
-export function serveHooks(deps: { sql: SQL; clock: Clock; token: string; socketPath: string }) {
+export function serveHooks(deps: {
+  sql: SQL
+  clock: Clock
+  token: string
+  socketPath: string
+  repoRoots: readonly string[]
+  roles: RoleTable
+  slots: number
+}) {
   const open = { open: true }
-  const post = guarded(
-    deps.token,
-    async (req: Request) => {
-      const { duplicate } = await recordEvent(deps.sql, await parseBody(req, EventInput))
-      return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
-    },
-    open,
-  )
-  const wait = guarded(deps.token, waitHandler(deps.sql, deps.clock), open)
-  const note = guarded(deps.token, noteHandler(deps.sql, deps.clock), open)
-  const check = guarded(deps.token, stopCheckHandler(deps.sql, deps.clock), open)
+  const viaSocket = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(deps.token, handler, open)
+  const slot = slotHandlers(deps.sql, deps.clock, deps.slots)
   return Bun.serve({
     unix: deps.socketPath,
     routes: {
-      '/events': { POST: post },
-      '/sessions/:id/wait': { POST: wait },
-      '/sessions/:id/note': { POST: note },
-      '/sessions/:id/stop-check': { POST: check },
+      '/events': {
+        POST: viaSocket(async (req: Request) => {
+          const { duplicate } = await recordEvent(deps.sql, await parseBody(req, EventInput))
+          return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
+        }),
+      },
+      '/sessions/:id': { GET: viaSocket(sessionGetHandler(deps.sql, deps.clock)) },
+      '/sessions/:id/wait': { POST: viaSocket(waitHandler(deps.sql, deps.clock)) },
+      '/sessions/:id/note': { POST: viaSocket(noteHandler(deps.sql, deps.clock)) },
+      '/sessions/:id/stop-check': { POST: viaSocket(stopCheckHandler(deps.sql, deps.clock)) },
+      '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
+      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
+      '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql)) },
+      '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,

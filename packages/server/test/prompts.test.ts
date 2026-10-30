@@ -470,6 +470,7 @@ describe('the herdr adapter types into the agent', () => {
     const { session } = await r.start({
       key: 'k1',
       repo: '/work/repo',
+      role: 'worker',
       prompt: 'first',
       account: 'a',
       tier: 'sonnet',

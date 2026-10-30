@@ -9,6 +9,7 @@ let runner: HerdrRunner
 const input: StartInput = {
   key: 'spawn-1',
   repo: '/work/repo',
+  role: 'worker',
   prompt: 'do it',
   account: 'a',
   tier: 'sonnet',
@@ -94,8 +95,14 @@ describe('herdr adapter: a start', () => {
       'CLAUDE_ACCOUNT_PICKED=b',
       'USAGE_LANE=wave',
       'FACTORY_SESSION=on-b',
+      'FACTORY_ROLE=worker',
     ])
-    expect(a?.env).toEqual(['CLAUDE_ACCOUNT_PICKED=a', 'USAGE_LANE=wave', 'FACTORY_SESSION=on-a'])
+    expect(a?.env).toEqual([
+      'CLAUDE_ACCOUNT_PICKED=a',
+      'USAGE_LANE=wave',
+      'FACTORY_SESSION=on-a',
+      'FACTORY_ROLE=worker',
+    ])
   })
 
   test("the role's tier and effort are what the agent starts with", async () => {

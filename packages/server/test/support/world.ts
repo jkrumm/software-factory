@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
-import type { Runner, StartInput } from '../../src/runner.ts'
+import type { Runner, StartInput, StartResult } from '../../src/runner.ts'
 import { type EventKind, openSession, recordEvent } from '../../src/sessions.ts'
 import type { FakeClock } from './clock.ts'
 
@@ -19,11 +19,11 @@ export class FakeRunner implements Runner {
     return this.answer
   }
 
-  async start(input: StartInput): Promise<{ session: string }> {
+  async start(input: StartInput): Promise<StartResult> {
     if (this.failure) throw this.failure
     this.started.push(input)
     await this.onStart?.(input)
-    return { session: 'w9:p9' }
+    return { session: 'w9:p9', tab: 'w9:t9', workspace: 'w9' }
   }
 }
 

@@ -249,6 +249,32 @@ describe('one active wave per repo', () => {
     expect(await row('wave-2')).toMatchObject({ hold: null })
   })
 
+  test('a wave that `rd` started counts: its pane reports FACTORY_ROLE and the directory it started in', async () => {
+    const started = (session: string, cwd: string, role?: string) =>
+      app.send('POST', '/events', {
+        key: `${session}:session_started:1`,
+        session,
+        kind: 'session_started',
+        at: clock.now().toISOString(),
+        payload: { claudeSessionId: `c-${session}`, cwd, ...(role ? { role } : {}) },
+      })
+    await started('rd-wave', TEST_REPO, 'wave')
+    const held = await spawn('wave-1', { role: 'wave' })
+    expect(await held.json()).toMatchObject({ status: 'queued', hold: 'wave', account: null })
+    // A worktree of the repo is the repo.
+    await endSession('rd-wave')
+    await started('rd-wave-2', join(TEST_REPO, '.claude', 'worktrees', 'w'), 'wave')
+    clock.advance(HOLD_RECHECK_MS)
+    expect(await runTick()).toMatchObject({ started: [], skipped: 1 })
+
+    // No role reported, or another repo: not a wave.
+    await endSession('rd-wave-2')
+    await started('rd-plain', TEST_REPO)
+    await started('rd-elsewhere', OTHER_REPO, 'wave')
+    clock.advance(HOLD_RECHECK_MS)
+    expect(await runTick()).toMatchObject({ started: ['wave-1'] })
+  })
+
   test('only waves are limited: workers, leads and a wave in another repo run alongside', async () => {
     await spawn('wave-1', { role: 'wave' })
     await spawn('fan-1', { role: 'worker' })
