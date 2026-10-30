@@ -1,6 +1,3 @@
-}
-tick {
-  started: [ "factory-gate-v-w4" ],
   failed: [],
   retrying: [],
   errors: [],
@@ -59,3 +56,16 @@ tick {
   errors: [],
 }
 listening on http://<loopback>:7793/ (version dd9b001e20236c583e313a78a8a850da2a24d5fd)
+tick {
+  started: [ "software-facto-f1-w6-wake-clears" ],
+  failed: [],
+  retrying: [],
+  errors: [],
+}
+listening on http://<loopback>:7793/ (version dd9b001e20236c583e313a78a8a850da2a24d5fd)
+tick {
+  started: [ "fgd-g3-working" ],
+  failed: [],
+  retrying: [],
+  errors: [],
+}

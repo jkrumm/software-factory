@@ -4,7 +4,7 @@
 
 | Gameday (`docs/design.md` §13) | Verdict |
 |-|-|
-| The server is killed mid-spawn and while sessions work | **Pass.** Four `kill -9` of the live server (three moments, the first one twice): each time the LaunchAgent had it healthy again in under a second, the session kept working, the spawn was reconciled onto its own tab and agent, and there was one tab, one agent and one first prompt per key. One cost: a kill inside a start leaves the spawn `starting` for 4 minutes (the claim lease) before it is reconciled |
+| The server is killed mid-spawn and while sessions work | **Pass.** Five `kill -9` of the live server (three moments, two of them more than once): each time the LaunchAgent had it healthy again in under a second, the session kept working, the spawn was reconciled onto its own tab and agent, and there was one tab, one agent and one first prompt per key. One cost: a kill inside a start leaves the spawn `starting` for 4 minutes (the claim lease) before it is reconciled |
 | The database restored from last night's dump | **Fail, in part.** Running panes are found again and no second tab, agent or first prompt appears for them; no identifier outside the database comes from a database sequence, so there is nothing to move past. But the restored server does two things twice (it starts a spawn that already ran and finished, and it types a wake note that was already delivered), and it cannot recover what lived only in the database or in a rotated spool file. No fix was made: each needs a decision (below). Pinned as three expected failures in `packages/server/test/restore.test.ts` |
 
 ## 1. The server killed (live, `scripts/gameday/`)
@@ -25,6 +25,7 @@ and by working directory (a release) in `kill-server.sh`. Nothing else. The rest
 | `fgd-g2-claimed` | the same | `herdr agent start` running, tab `w71:t2` | 865 ms | 20:23:55, **4 min 3 s**, `attempts=2`, same pane `w71:p2` | 10 of 10 |
 | `fgd-g2-prompt` | agent up, first prompt being submitted | `herdr agent prompt` running; herdr said `idle` the instant after | 922 ms | 20:31:26, **4 min 8 s**, `attempts=2`, pane `w71:p3` | 10 of 10 |
 | `fgd-g2-working` | a turn in progress | no child; herdr `working` | 732 ms | not needed: the spawn was already `started` (`attempts=1`) | 10 of 10 |
+| `fgd-g3-working` | a turn in progress, run with the hardened scripts | no child; herdr `working` | 829 ms | 20:48:09, **4 min 0 s** after the kill: the session's first hook had already made it `working`, but the server had not yet recorded the Runner's result, so the row was still `starting`; `attempts=2`, same pane `w72:p1` | 9 of 10 by the script, 10 of 10 counted by hand, see "Third working run" |
 
 Times are in `kills.txt` (the kill and the restart) and each run's `timeline.txt` (the spawn and session as `factory spawn get` /
 `session get` showed them every 3 s, changes only).
@@ -34,7 +35,7 @@ Times are in `kills.txt` (the kill and the restart) and each run's `timeline.txt
 Counted after the turn ended, from three sources that do not share a failure: herdr's listing, the factory's own rows, and
 Claude Code's transcript.
 
-| Check | Expected | All four runs |
+| Check | Expected | Every run |
 |-|-|-|
 | Tabs in herdr labelled with the key | 1 | 1 |
 | Agents in that tab's pane | 1 | 1 |
@@ -52,12 +53,25 @@ Claude Code's transcript.
   budget 180 s + 60 s) the next tick reclaims the row, the Runner finds the tab by label and the agent by pane, sees a fresh idle
   agent, types the prompt once, and the row becomes `started` on the same pane with `attempts=2`. No second tab, no second agent.
 - **Prompt** (`herdr agent prompt` in flight). The prompt reached the agent: `turn_started:1` is stamped 20:27:17.645, 129 ms *after*
-  the kill and before the server was back, so the hook spooled it and the new server replayed it (the spool path, exercised live).
+  the kill and before the server was healthy again (20:27:18.487), so the hook's own post had no live server to land on (it is
+  stored once either way: the spool replay or a post to the new server; which of the two cannot be told from the row).
   The row stayed `starting` until the lease (20:31:21 reclaimed, 20:31:26 `started`), while the session had already finished its turn
   (idle since 20:28:13). The reclaim found an agent that had taken its prompt (`done`/`working`) and typed nothing: one user message
   in the transcript, no second turn.
 - **Working.** The spawn was `started`, the session `working`; the restart touched neither. `turn_ended:1` 20:33:30.5 arrived through the
   new server, the commit is on the remote.
+
+### Third working run (`fgd-g3-working`), after the review
+
+Made with the scripts as hardened after review (the kill pattern names the key, a trap disarms the watcher, the exit status reports
+failed checks, kill logs show no child arguments, the user name is scrubbed). It landed in a third state the first two did not: the
+session had sent its first hook (so `session get` says `working` and `when-working.sh` fires) while the spawn row was still
+`starting`, because the Runner had not returned yet. Reconciliation was the same as for `claimed`: the claim lease (4 min 0 s), then
+the Runner found the tab and an agent that had taken its prompt and recorded `started` on pane `w72:p1`, with no second prompt.
+
+The script reports one failure there, `user messages carrying the prompt` 0, and it is the script's: scrubbing the user name also
+rewrote the transcript path that `collect.sh` then tried to open. Fixed (the path is read from the unscrubbed answer); counted by hand
+on the real transcript afterwards: **1**. The run's `result.txt` is left as the script wrote it.
 
 ### First attempt (`fgd-g1-claimed`), kept
 
@@ -84,10 +98,12 @@ rows: 0). The prompt now uses `perl -e 'sleep 50'`, which is not blocked, and `r
   typed `workers done: fgd-g1-claimed idle, fgd-g2-claimed idle` between two runs, when no spawn of the next run existed yet. That is the
   rule's documented behaviour ("a spawn that has no session yet is not finished" only counts spawns that exist).
 - Raw: `kills.txt`, `server-out-tail.txt` (the server's log across the restarts: one `listening` line per restart, `errors: []` in every
-  tick), `server-err-kills.txt` (the shell's `Killed: 9` for each of the four pids), and per run `events.txt`, `spawn-row.txt`,
+  tick), `server-err-kills.txt` (the shell's `Killed: 9` for each killed pid), and per run `events.txt`, `spawn-row.txt`,
   `spawn.json`, `session.json`, `herdr-tabs.json`, `herdr-agents.json`, `pane-tail.txt`, `prompts.txt`, `kill.out`.
-- Scratch repo, bare remote and the four tabs removed with `teardown.sh`. The four spawn rows stay in `factory.spawns` for good
-  (keys `fgd-g1-claimed`, `fgd-g2-claimed`, `fgd-g2-prompt`, `fgd-g2-working`).
+- Scratch repo, bare remote and the five tabs removed with `teardown.sh`. The five spawn rows stay in `factory.spawns` for good
+  (keys `fgd-g1-claimed`, `fgd-g2-claimed`, `fgd-g2-prompt`, `fgd-g2-working`, `fgd-g3-working`). The `g1` and `g2` runs
+  used the scripts before the review fixes (the watcher pattern did not name the key; nothing else on the host started an agent in
+  those minutes, which `kills.txt`'s child lines show).
 
 ## 2. The database restored from an earlier dump (a test, `packages/server/test/restore.test.ts`)
 
