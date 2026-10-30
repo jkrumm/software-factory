@@ -268,6 +268,25 @@ describe('one active wave per repo', () => {
     expect(await row('w2')).toMatchObject({ hold: 'wave' })
   })
 
+  test('a session dropped earlier in the same pass no longer holds the repo', async () => {
+    const hourAgo = new Date(clock.now().getTime() - 3_600_000)
+    await spawn('x', { role: 'wave' })
+    clock.advance(1000)
+    // f: a wave whose claim is stale and whose retry budget is spent. Its session row is empty, so it goes with it.
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, status, account, attempts, claimed_at, first_claimed_at, created_at)
+      VALUES ('f', ${TEST_REPO}, 'p', 'wave', 'starting', 'a', 3, ${hourAgo}, ${hourAgo}, ${clock.now()})`
+    await db.sql`INSERT INTO factory.sessions (id, spawn_key, created_at) VALUES ('f', 'f', ${hourAgo})`
+    clock.advance(1000)
+    await db.sql`UPDATE factory.spawns SET status = 'queued' WHERE key = 'x'`
+    await spawn('y', { role: 'wave' })
+    await db.sql`UPDATE factory.spawns SET hold = NULL, resume_at = NULL WHERE key = 'y'`
+
+    // x comes first and finds f alive; f then fails and is dropped; y must not be held by it.
+    expect(await runTick()).toMatchObject({ failed: ['f'], started: ['y'] })
+    expect(await row('x')).toMatchObject({ hold: 'wave' })
+  })
+
   test('a session that died for any reason frees the repo, a pane that is gone included', async () => {
     await spawn('w1', { role: 'wave' })
     await runTick()

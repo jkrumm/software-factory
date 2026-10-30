@@ -103,6 +103,10 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       FOR UPDATE SKIP LOCKED`
 
     const live: { sessions?: LiveSession[] } = {}
+    // A session row that goes away is no longer alive for the rows after it in this pass.
+    const forget = (id: string) => {
+      if (live.sessions) live.sessions = live.sessions.filter((s) => s.id !== id)
+    }
     const claims: Claim[] = []
     const failed: { key: string; reason: string }[] = []
     let skipped = 0
@@ -113,6 +117,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         const reason = `gave up: the ${minutes(budgetMs)} retry budget is spent after ${row.attempts} attempts${row.error ? `: ${row.error}` : ''}`
         await tx`UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason} WHERE key = ${row.key}`
         await dropEmptySession(tx, row.key)
+        forget(row.key)
         failed.push({ key: row.key, reason })
         continue
       }
@@ -133,6 +138,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
               claimed_at = NULL, resume_at = ${resumeAt}, first_claimed_at = NULL
           WHERE key = ${row.key}`
         await dropEmptySession(tx, row.key)
+        forget(row.key)
         skipped++
         continue
       }

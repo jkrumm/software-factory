@@ -48,10 +48,17 @@ describe('standing: admission on one reading', () => {
   test.each([
     ['disabled', { enabled: false }],
     ['auth failed', { authOk: false }],
-    ['no 5-hour sample', { fiveHourUsed: null }],
-    ['no weekly sample', { weeklyUsed: null }],
+    ['no sample at all', { fiveHourUsed: null, weeklyUsed: null }],
+    ['no sample time', { sampledAt: null }],
   ])('%s is closed with no time to name', (_name, extra) => {
     expect(standing(reading('a', extra), NOW)).toEqual({ open: false, until: null })
+  })
+
+  // The picker weighs a window it has no number for as unused; so does admission.
+  test('a window without a number counts as unused when the other has one', () => {
+    expect(standing(reading('a', { fiveHourUsed: null, weeklyUsed: 50 }), NOW)).toEqual({ open: true })
+    expect(standing(reading('a', { weeklyUsed: null, fiveHourUsed: 50 }), NOW)).toEqual({ open: true })
+    expect(standing(reading('a', { weeklyUsed: null, fiveHourUsed: 90 }), NOW)).toMatchObject({ open: false })
   })
 
   test('a wall whose reset is already past is a stale reading: closed, no time to name', () => {

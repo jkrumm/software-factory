@@ -191,6 +191,24 @@ describe('the poller', () => {
     expect(source.reads).toBe(3)
   })
 
+  test('readings older than a week are deleted, the newest of each account is kept', async () => {
+    const resets = new Date(clock.now().getTime() + 3_600_000)
+    const poller = new QuotaPoller({ sql: db.sql, source, clock })
+    source.readings = [
+      { account: 'a', ...usage(1, 1, resets) },
+      { account: 'gone', ...usage(2, 2, resets) },
+    ]
+    await poller.poll()
+    clock.advance(8 * 24 * 3_600_000)
+    source.readings = [{ account: 'a', ...usage(3, 3, resets) }]
+    await poller.poll()
+    // a's first row is old and not its newest; gone's only row is old but is the newest of its account.
+    expect(await readingsOf()).toEqual([
+      { account: 'gone', five_hour_used: 2, weekly_used: 2 },
+      { account: 'a', five_hour_used: 3, weekly_used: 3 },
+    ])
+  })
+
   test('overlapping polls share one read, so an older sample never lands after a newer one', async () => {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
