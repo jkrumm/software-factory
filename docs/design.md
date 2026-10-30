@@ -150,7 +150,7 @@ that applies wins.
 |-|-|
 | `run` | admission decides |
 | `pace` | lower concurrency; spends only toward weekly pace |
-| `drain` | no new spawn. A running wave finishes its current wave; the chain stops at the boundary, enforced in `rd wave`'s gate. Nothing is interrupted |
+| `drain` | no new spawn. A running wave finishes its current wave; the chain stops at the boundary: its successor's spawn is held (`queued: drain`) and starts by itself when the drain lifts. Nothing is interrupted |
 
 ### Capacity and admission
 
