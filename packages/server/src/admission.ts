@@ -29,8 +29,13 @@ export interface Candidate {
 
 const inside = (a: string, b: string): boolean => a === b || a.startsWith(b.endsWith('/') ? b : `${b}/`)
 
-/** Whether two start directories are one repo: the same, or one a worktree or folder of the other, whichever way round. */
-const inRepo = (a: string, b: string): boolean => inside(a, b) || inside(b, a)
+/**
+ * Whether a session started in `at` belongs to `repo`: it started there or below it, or `repo` is a Claude Code worktree
+ * of the directory it started in (`<at>/.claude/worktrees/…`). A session in a parent folder (the home directory, a workspace
+ * root) is not in every repo below it.
+ */
+const inRepo = (at: string, repo: string): boolean =>
+  inside(at, repo) || inside(repo, `${at.replace(/\/$/, '')}/.claude/worktrees`)
 
 async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] }): Promise<LiveSession[]> {
   if (!live) return liveSessions(tx, now)

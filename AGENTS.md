@@ -191,7 +191,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count by the role their pane reports (`FACTORY_ROLE`, recorded at `session_started`) and by the
-  directory they started in; two directories are one repo when one is the other or inside it, either way round (a worktree); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
+  directory they started in; a session belongs to the repo when it started there or below it, or when the repo is a `.claude/worktrees/…` worktree of the directory it started in (a session in a parent folder is in no repo); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
   agent may run). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
   auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with

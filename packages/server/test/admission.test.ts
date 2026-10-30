@@ -284,6 +284,18 @@ describe('one active wave per repo', () => {
     expect(await held.json()).toMatchObject({ status: 'queued', hold: 'wave' })
   })
 
+  test('a session in a parent folder is not in every repo below it', async () => {
+    await app.send('POST', '/events', {
+      key: 'rd-home:session_started:1',
+      session: 'rd-home',
+      kind: 'session_started',
+      at: clock.now().toISOString(),
+      payload: { claudeSessionId: 'c-home', cwd: TEST_ROOT, role: 'wave' },
+    })
+    await spawn('wave-1', { role: 'wave' })
+    expect(await runTick()).toMatchObject({ started: ['wave-1'] })
+  })
+
   test('only waves are limited: workers, leads and a wave in another repo run alongside', async () => {
     await spawn('wave-1', { role: 'wave' })
     await spawn('fan-1', { role: 'worker' })
