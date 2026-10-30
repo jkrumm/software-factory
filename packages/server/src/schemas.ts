@@ -2,6 +2,10 @@ import { z } from 'zod'
 
 export const EVENT_KINDS = ['session_started', 'turn_started', 'turn_ended', 'limit_stop', 'session_ended'] as const
 
+/** Both sit well inside the server's 64 KiB body cap. */
+export const MAX_PROMPT_CHARS = 32_000
+export const MAX_PAYLOAD_CHARS = 16_000
+
 const timestamp = z.iso.datetime({ offset: true }).transform((s) => new Date(s))
 const nonEmpty = z.string().min(1).max(256)
 
@@ -13,7 +17,13 @@ export const EventInput = z.object({
   session: nonEmpty,
   kind: z.enum(EVENT_KINDS),
   at: timestamp,
-  payload: z.record(z.string(), z.unknown()).optional(),
+  payload: z
+    .record(z.string(), z.unknown())
+    .refine(
+      (p) => JSON.stringify(p).length <= MAX_PAYLOAD_CHARS,
+      `payload is larger than ${MAX_PAYLOAD_CHARS} characters`,
+    )
+    .optional(),
 })
 export type EventInput = z.infer<typeof EventInput>
 
@@ -28,7 +38,7 @@ const RepoPath = z
 export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
-  prompt: z.string().min(1),
+  prompt: z.string().min(1).max(MAX_PROMPT_CHARS),
 })
 export type SpawnInput = z.infer<typeof SpawnInput>
 
