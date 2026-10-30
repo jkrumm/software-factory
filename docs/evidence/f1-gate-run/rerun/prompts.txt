@@ -1,0 +1,29 @@
+-[ RECORD 1 ]+--------------------------------------------------
+id           | resume:factory-gate-w-w2:2026-10-30T19:35:11.000Z
+session      | factory-gate-w-w2
+source       | resume
+via          | type
+text         | continue
+status       | delivered
+created_at   | 2026-10-30 19:40:12.984+00
+claimed_at   | 2026-10-30 19:40:13.074+00
+sent_at      | 2026-10-30 19:40:13.445+00
+sent_count   | 1
+failures     | 0
+delivered_at | 2026-10-30 19:40:17.992+00
+error        | 
+-[ RECORD 2 ]+--------------------------------------------------
+id           | resume:factory-gate-v-w2:2026-10-30T19:41:06.000Z
+session      | factory-gate-v-w2
+source       | resume
+via          | type
+text         | continue
+status       | delivered
+created_at   | 2026-10-30 19:46:08.076+00
+claimed_at   | 2026-10-30 19:48:18.184+00
+sent_at      | 2026-10-30 19:48:18.549+00
+sent_count   | 1
+failures     | 0
+delivered_at | 2026-10-30 19:48:23.154+00
+error        | 
+

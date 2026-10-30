@@ -1,0 +1,4 @@
+2026-10-30T19:34:10Z when-commits: factory-gate-w has 4 commits starting 'feat: ' (wanted 4)
+2026-10-30T19:34:11Z wall: factory-gate-w-w2 on iu, real reading before: {"fiveHourUsed":7,"weeklyUsed":53,"fiveHourResetsAt":"2026-10-30T23:00:00.000Z","exhaustedUntil":null}
+{"account":"iu","fiveHourUsed":100,"fiveHourResetsAt":"2026-10-30T19:35:11.000Z","exhaustedUntil":"2026-10-30T19:35:11.000Z"}
+2026-10-30T19:34:12Z wall: hook stop-failure rate_limit for factory-gate-w-w2 at 2026-10-30T19:34:11Z; TEST ROW on iu, reset 2026-10-30T19:35:11Z (+1 min), five-hour use 100 for the row
