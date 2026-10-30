@@ -44,7 +44,7 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
 }
 
 /**
- * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), one live `wave`
+ * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), one unfinished `wave`
  * session per repo, `pace` (one live session per project), and then an account with room, which under `pace` is
  * also one whose weekly use is at or below the elapsed share of its week. Never spills: with every account closed
  * the answer is to wait for the first opening. Reads inside the caller's transaction; calls nothing outside the database.
@@ -63,7 +63,9 @@ export async function admit(
 
   const sessions = state === 'pace' || candidate.role === WAVE_ROLE ? await readLive(tx, now, live) : []
   const others = sessions.filter((s) => s.id !== candidate.key && inRepo(s.repo, candidate.repo))
-  if (candidate.role === WAVE_ROLE && others.some((s) => s.role === WAVE_ROLE)) return { kind: 'hold', reason: 'wave' }
+  // A chain wave leaves its tab open after it spawned its successor, so a wave whose turn has ended does not hold the repo.
+  if (candidate.role === WAVE_ROLE && others.some((s) => s.role === WAVE_ROLE && !s.finished))
+    return { kind: 'hold', reason: 'wave' }
   if (state === 'pace' && others.length > 0) return { kind: 'hold', reason: 'pace' }
 
   const readings = await latestReadings(tx)
