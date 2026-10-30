@@ -160,6 +160,21 @@ async function endAnsweredWaits(tx: SQL, delivered: readonly DeliveredRow[], now
 }
 
 /**
+ * `sent` prompts that a turn has proven become `delivered`, and a delivered wake ends its wait in the same transaction.
+ * `session` narrows it to one session: the Stop hook settles its own session's wake before it decides.
+ */
+export async function settleDelivered(sql: SQL, now: Date, session?: string): Promise<void> {
+  await sql.begin(async (tx) => {
+    const delivered: DeliveredRow[] = await tx`
+      UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
+      WHERE p.status = 'sent' AND (${session ?? null}::text IS NULL OR p.session = ${session ?? null}) AND EXISTS (
+        SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)
+      RETURNING p.id, p.session, p.source, p.claimed_at`
+    await endAnsweredWaits(tx, delivered, now)
+  })
+}
+
+/**
  * The bookkeeping that needs no port: a `typing` claim that outlived its tick counts as sent; a `sent` prompt is
  * `delivered` once the session started a turn after the claim; one with no turn after a minute is typed once more, and
  * after the retry it is `failed` (a line in status, nothing more).
@@ -169,14 +184,7 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   await sql`
     UPDATE factory.prompts SET status = 'sent', sent_at = ${now}, sent_count = sent_count + 1
     WHERE status = 'typing' AND claimed_at <= ${leaseEnd}`
-  await sql.begin(async (tx) => {
-    const delivered: DeliveredRow[] = await tx`
-      UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
-      WHERE p.status = 'sent' AND EXISTS (
-        SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)
-      RETURNING p.id, p.session, p.source, p.claimed_at`
-    await endAnsweredWaits(tx, delivered, now)
-  })
+  await settleDelivered(sql, now)
   // The way back to `pending` or on to `failed` asks again in its own WHERE: a turn that started since the statement
   // above is a delivery, not a reason to type the text twice. (What starts inside this very statement is the window
   // `deliverPrompts` closes once more right before a retry is typed.)
@@ -343,9 +351,8 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       result.failed.push(prompt.id)
       continue
     }
-    if (prompt.via === 'type' && !(target.pane && READY_STATES.has(target.state))) continue
-
-    // A retry is typed only if nothing proves the first typing since the settle above looked.
+    // A retry is typed only if nothing proves the first typing since the settle above looked. Checked before the session is
+    // ready: the turn it proves may still be running, and the answered wait should not stay open until it ends.
     if (prompt.sent_count > 0 && prompt.claimed_at && (await provedSince(sql, prompt.session, prompt.claimed_at))) {
       await sql.begin(async (tx) => {
         const delivered: DeliveredRow[] = await tx`
@@ -355,6 +362,8 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       })
       continue
     }
+    if (prompt.via === 'type' && !(target.pane && READY_STATES.has(target.state))) continue
+
     // A resume starts an agent, so it is admitted like a spawn claim: held under `drain`, `pace` and a full account, and
     // only on the account the conversation lives in.
     let reserved: { previous: Date | null } | undefined
