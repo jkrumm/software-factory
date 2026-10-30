@@ -162,6 +162,9 @@ that applies wins.
   rotates at 94 % (below), one point earlier, so its successor can still be spawned elsewhere before the wall.
 - **One active wave per repo,** across repos as many as capacity allows.
 - **Never spill.** With every account walled the queue waits for the first reset.
+- **A spawn holds its account** while queued or starting, and once started until a reading taken after its start
+  shows it. A burst starts only as many spawns as there are open accounts; there is no per-spawn cost estimate. A
+  spawn a rule holds back (`drain`, `pace`, one wave per repo, no capacity) stays queued with a hold reason.
 
 ### Rules that act
 
