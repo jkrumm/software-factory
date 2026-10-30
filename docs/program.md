@@ -33,7 +33,7 @@ code itself.
 |-|-|-|-|-|
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 running (`dotfiles-w1`); Wave 2 pending |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Wave 1 running (`argo-w1`) |
-| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | next |
+| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Step 1 done (`docs/design.md`); step 2 running |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | pending |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
@@ -81,6 +81,15 @@ only queues; prompt suggestions read as owner drafts by the old babysitter. Clau
 `docs/research/2026-10-30-claude-code-unattended.md` (`autoContinueAtUsageLimit`, the
 `quota_auto_resume_*` and `StopFailure rate_limit` hooks, Notification matchers). Gate: an overnight
 multi-wave run across two repos with an injected limit wall and one `drain` needs no owner "continue".
+
+Two more failure modes, seen in this program's first rotation (2026-10-30):
+- **Account-aware rotation.** A long session stays on the account it started on while the picker moves on. The
+  program lead started on `me2` at 90 % of its week; a weekly wall there would strand it for two days, and only
+  a human noticed. Today's rule is manual: check `claude-account usage` between tracks, rotate at 94 % (the picker
+  skips an account at 95 %). F1 makes this a fleet rule: a long-lived session on an account nearing its weekly
+  limit rotates before the wall, not after it.
+- **Folder trust on a new repo path.** `rd wave` failed for this repo until `claude-pretrust.sh` ran. The spawn
+  path must pre-trust every path it starts in, new repos as well as worktrees.
 
 ### A1: shared database, Argo on the mini, Kuma door, usage v2
 - **Argo today** (investigation 2026-10-30): Bun, Elysia, Drizzle, Postgres 18 on the VPS (schema `argo`),

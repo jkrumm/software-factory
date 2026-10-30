@@ -6,7 +6,7 @@ own a piece of work from root cause to production evidence, follows them through
 learns. CLI `factory`. Status: being planned and built; `docs/program.md` is the current state.
 
 **Start here:** `docs/decisions.md` (what was decided and why) → `docs/program.md` (tracks, who runs them) →
-`docs/design.md` (the design, once F0 writes it) → `docs/research/`.
+`docs/design.md` (the design) → `docs/research/`.
 
 ## Rules
 
