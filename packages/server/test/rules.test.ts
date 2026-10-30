@@ -417,6 +417,99 @@ describe('wake', () => {
     expect(await notes()).toHaveLength(1)
   })
 
+  describe('the wake ends the wait it answers', () => {
+    const cleared = () =>
+      db.sql`SELECT key, at FROM factory.events WHERE session = 'lead' AND kind = 'wait_cleared' ORDER BY id` as Promise<
+        { key: string; at: Date }[]
+      >
+    const lead = () => getSession(db.sql, 'lead', clock.now())
+    const ask = () => stopCheck(db.sql, 'lead', { stopHookActive: false }, clock.now())
+
+    /** The wake is recorded and typed; the lead has not answered yet. */
+    async function wakeTyped() {
+      await waitingLead()
+      await w.emit('w1', 'turn_ended', w.at(5))
+      await w.emit('w2', 'turn_ended', w.at(5))
+      await evaluate()
+      await deliver()
+      expect(runner.typed).toEqual([{ pane: 'w1:lead', text: 'workers done: w1 idle, w2 idle' }])
+    }
+
+    test('delivered by a turn: the lead is not waiting once the turn ends, and a Stop with live children is sent back', async () => {
+      await wakeTyped()
+      // Recorded and typed, not yet proven: still waiting, nothing cleared.
+      expect(await lead()).toMatchObject({ state: 'waiting', wait: 'workers' })
+      expect(await cleared()).toEqual([])
+
+      clock.advance(1_000)
+      const turnStart = clock.now()
+      await w.emit('lead', 'turn_started', turnStart)
+      clock.advance(1_000)
+      await deliver()
+      expect(await notes()).toMatchObject([{ status: 'delivered' }])
+      expect((await cleared()).map((c) => c.at.getTime())).toEqual([turnStart.getTime()])
+      // The woken turn is open: working, and its end leaves the lead idle, not waiting again.
+      expect(await lead()).toMatchObject({ state: 'working', wait: null })
+      await w.emit('lead', 'turn_ended', clock.now())
+      expect(await lead()).toMatchObject({ state: 'idle', wait: null })
+      expect(await ask()).toMatchObject({ sendBack: true })
+
+      // A second pass over the same delivery records nothing more, and the rule does not wake it again.
+      await deliver()
+      expect(await cleared()).toHaveLength(1)
+      await replayIsSilent()
+    })
+
+    test('a wait the woken turn declares after the wake stays open', async () => {
+      await wakeTyped()
+      clock.advance(1_000)
+      await w.emit('lead', 'turn_started', clock.now())
+      clock.advance(1_000)
+      await w.emit('lead', 'wait_declared', clock.now(), { on: 'workers' })
+      await w.emit('lead', 'turn_ended', new Date(clock.now().getTime() + 1))
+      clock.advance(1_000)
+      await deliver()
+      expect(await notes()).toMatchObject([{ status: 'delivered' }])
+      expect(await cleared()).toEqual([])
+      expect(await lead()).toMatchObject({ state: 'waiting', wait: 'workers' })
+      expect(await ask()).toEqual({ sendBack: false, message: null })
+    })
+
+    test('a wait the lead already ended with --done is not cleared twice', async () => {
+      await wakeTyped()
+      clock.advance(1_000)
+      await w.emit('lead', 'turn_started', clock.now())
+      clock.advance(1_000)
+      await w.emit('lead', 'wait_cleared', clock.now())
+      clock.advance(1_000)
+      await deliver()
+      expect(await cleared()).toHaveLength(1)
+    })
+
+    test('an undelivered wake clears nothing: the lead stays waiting, as it is', async () => {
+      await wakeTyped()
+      expect(await cleared()).toEqual([])
+      // No turn within a minute: typed once more, then failed.
+      clock.advance(minutes(2))
+      await deliver()
+      clock.advance(minutes(2))
+      await deliver()
+      expect(await notes()).toMatchObject([{ status: 'failed' }])
+      expect(await cleared()).toEqual([])
+      expect(await lead()).toMatchObject({ state: 'waiting', wait: 'workers' })
+    })
+
+    test('a retry whose first typing was proven in between delivers and clears too', async () => {
+      await wakeTyped()
+      clock.advance(minutes(2))
+      // The turn the first typing started shows up only now, after the settle ran: the retry path proves it.
+      await w.emit('lead', 'turn_started', new Date(clock.now().getTime() - minutes(1)))
+      await deliver()
+      expect(await notes()).toMatchObject([{ status: 'delivered' }])
+      expect(await cleared()).toHaveLength(1)
+    })
+  })
+
   test('says nothing to a parent that is not waiting on workers, or has no child session', async () => {
     await waitingLead()
     await w.emit('w1', 'turn_ended', w.at(5))

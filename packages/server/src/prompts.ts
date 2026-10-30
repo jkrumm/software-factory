@@ -4,7 +4,7 @@ import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
-import { getSession, HOOK_KINDS } from './sessions.ts'
+import { clearAnsweredWait, getSession, HOOK_KINDS } from './sessions.ts'
 
 /** A typed prompt is proven by the next `turn_started`; none within this long and it is typed once more. */
 export const CONFIRM_MS = 60_000
@@ -126,6 +126,39 @@ export async function listOpenPrompts(sql: SQL, now: Date): Promise<{ prompts: P
   return { prompts: rows.slice(0, STATUS_PROMPTS).map(toPrompt), more: Math.max(0, (counted?.n ?? 0) - STATUS_PROMPTS) }
 }
 
+/** The columns of a prompt that has just become `delivered`. */
+interface DeliveredRow {
+  id: string
+  session: string
+  source: string
+  claimed_at: Date | null
+}
+
+/**
+ * A delivered wake ends the wait it answers, in the transaction that records the delivery. At delivery, not at creation:
+ * a wake that never arrives (failed, expired) leaves the session `waiting`, which is true, and the wake rule asks again;
+ * cleared at creation it would read `idle` with its workers done and nobody told. Until the turn proves it the session
+ * stays `waiting` with the wake pending, and `idle`/`waiting` are both states a note is typed into.
+ */
+async function endAnsweredWaits(tx: SQL, delivered: readonly DeliveredRow[], now: Date): Promise<void> {
+  for (const row of delivered) {
+    if (row.source !== 'wake') continue
+    // id = `wake:<session>:<key of the wait_declared it answers>`
+    const waitKey = row.id.slice(`wake:${row.session}:`.length)
+    const [turn] = row.claimed_at
+      ? await tx`
+          SELECT min(at) AS at FROM factory.events
+          WHERE session = ${row.session} AND kind = 'turn_started' AND at >= ${row.claimed_at}`
+      : []
+    await clearAnsweredWait(tx, {
+      session: row.session,
+      promptId: row.id,
+      waitKey,
+      provedAt: (turn?.at as Date | null) ?? now,
+    })
+  }
+}
+
 /**
  * The bookkeeping that needs no port: a `typing` claim that outlived its tick counts as sent; a `sent` prompt is
  * `delivered` once the session started a turn after the claim; one with no turn after a minute is typed once more, and
@@ -136,10 +169,14 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   await sql`
     UPDATE factory.prompts SET status = 'sent', sent_at = ${now}, sent_count = sent_count + 1
     WHERE status = 'typing' AND claimed_at <= ${leaseEnd}`
-  await sql`
-    UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
-    WHERE p.status = 'sent' AND EXISTS (
-      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
+  await sql.begin(async (tx) => {
+    const delivered: DeliveredRow[] = await tx`
+      UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
+      WHERE p.status = 'sent' AND EXISTS (
+        SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)
+      RETURNING p.id, p.session, p.source, p.claimed_at`
+    await endAnsweredWaits(tx, delivered, now)
+  })
   // The way back to `pending` or on to `failed` asks again in its own WHERE: a turn that started since the statement
   // above is a delivery, not a reason to type the text twice. (What starts inside this very statement is the window
   // `deliverPrompts` closes once more right before a retry is typed.)
@@ -310,7 +347,12 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
 
     // A retry is typed only if nothing proves the first typing since the settle above looked.
     if (prompt.sent_count > 0 && prompt.claimed_at && (await provedSince(sql, prompt.session, prompt.claimed_at))) {
-      await sql`UPDATE factory.prompts SET status = 'delivered', delivered_at = ${clock.now()}, error = NULL WHERE id = ${prompt.id} AND status = 'pending'`
+      await sql.begin(async (tx) => {
+        const delivered: DeliveredRow[] = await tx`
+          UPDATE factory.prompts SET status = 'delivered', delivered_at = ${clock.now()}, error = NULL
+          WHERE id = ${prompt.id} AND status = 'pending' RETURNING id, session, source, claimed_at`
+        await endAnsweredWaits(tx, delivered, clock.now())
+      })
       continue
     }
     // A resume starts an agent, so it is admitted like a spawn claim: held under `drain`, `pace` and a full account, and

@@ -160,7 +160,7 @@ const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
  * - `blocked`: a prompt_blocked with no turn_started or turn_ended after it (answering the prompt does not start a turn).
  * - `working`: the latest turn_started has no turn_ended after it; `stuck` when herdr agrees and neither the worktree
  *   nor the turn has moved for 45 minutes.
- * - `waiting`: a declared wait is open and no turn is.
+ * - `waiting`: a declared wait is open and no turn is. `--done` ends a wait, and so does a delivered wake (`clearAnsweredWait`).
  * - `idle`: everything else.
  */
 export function deriveState(input: DeriveInput): Derived | undefined {
@@ -478,4 +478,27 @@ export async function declareWait(
     payload: 'on' in wait ? { on: wait.on } : undefined,
   })
   return true
+}
+
+/**
+ * A delivered wake ends the wait it answers: `wait_cleared` under the key `<session>:wait_cleared:<prompt id>`, so a replay
+ * records nothing. Only while that wait is still the session's latest wait event: a `wait_declared` after it (the woken turn
+ * waits again) or a `--done` already there stays as it is. The event is dated at the turn that proved the delivery, so
+ * a wait the woken turn declares sorts after the clear whenever this runs.
+ */
+export async function clearAnsweredWait(
+  tx: SQL,
+  input: { session: string; promptId: string; waitKey: string; provedAt: Date },
+): Promise<boolean> {
+  const [last] = await tx`
+    SELECT key, kind FROM factory.events
+    WHERE session = ${input.session} AND kind IN ('wait_declared', 'wait_cleared') ORDER BY at DESC, id DESC LIMIT 1`
+  if (last?.kind !== 'wait_declared' || last.key !== input.waitKey) return false
+  const { duplicate } = await recordIn(tx, {
+    key: `${input.session}:wait_cleared:${input.promptId}`,
+    session: input.session,
+    kind: 'wait_cleared',
+    at: input.provedAt,
+  })
+  return !duplicate
 }
