@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { migrate, MIGRATIONS_DIR } from '../src/db.ts'
+import { SQL } from 'bun'
+import { acquireSingleton, migrate, MIGRATIONS_DIR, SINGLETON_LOCK } from '../src/db.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 
 let db: TestDb
@@ -59,5 +60,38 @@ describe('migrate', () => {
 
   test('the shipped migrations directory exists and is not empty', async () => {
     expect(await Bun.file(join(MIGRATIONS_DIR, '001_init.sql')).exists()).toBe(true)
+  })
+})
+
+describe('one process', () => {
+  test('a second holder of the lock is told so, and gets it once the first lets go', async () => {
+    const other = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
+    try {
+      const first = await acquireSingleton(db.sql)
+      expect(first).toBeDefined()
+      expect(await acquireSingleton(other)).toBeUndefined()
+      await first?.release()
+      const second = await acquireSingleton(other)
+      expect(second).toBeDefined()
+      expect(await acquireSingleton(db.sql)).toBeUndefined()
+      await second?.release()
+    } finally {
+      await other.close()
+    }
+  })
+
+  test('a holder whose connection dies frees the lock', async () => {
+    const dying = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
+    expect(await acquireSingleton(dying)).toBeDefined()
+    await db.sql`
+      SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND objid = ${SINGLETON_LOCK} AND granted`
+    let next = await acquireSingleton(db.sql)
+    for (let i = 0; i < 50 && !next; i++) {
+      await Bun.sleep(20)
+      next = await acquireSingleton(db.sql)
+    }
+    expect(next).toBeDefined()
+    await next?.release()
+    await dying.close().catch(() => {})
   })
 })
