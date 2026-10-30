@@ -233,14 +233,13 @@ export function pickEligible(readings: readonly Reading[], loads: Loads, options
 
 /**
  * When a spawn without capacity may look again: the earliest time any fresh account opens, by its own reading. None
- * when no reading names one (a disabled account, a stale window): a new reading wakes the spawn.
+ * when no reading names one (a disabled account, a stale window), and none while a fresh account is open by its standing
+ * and only its load keeps it from being picked: that load clears with a sample, and a new reading wakes the spawn. Naming
+ * a far reset of another account then would promise a start days away that a minute-old reading beats.
  */
 export function nextOpening(readings: readonly Reading[], options: PickOptions): Date | undefined {
-  return readings
-    .filter((r) => isFresh(r, options.now))
-    .flatMap((r) => {
-      const s = standing(r, options.now, options.pace)
-      return !s.open && s.until ? [s.until] : []
-    })
-    .sort((a, b) => a.getTime() - b.getTime())[0]
+  const fresh = readings.filter((r) => isFresh(r, options.now))
+  const standings = fresh.map((r) => standing(r, options.now, options.pace))
+  if (standings.some((s) => s.open)) return undefined
+  return standings.flatMap((s) => (!s.open && s.until ? [s.until] : [])).sort((a, b) => a.getTime() - b.getTime())[0]
 }
