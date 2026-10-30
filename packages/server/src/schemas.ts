@@ -1,6 +1,7 @@
+import { EVENT_KINDS, WaitOn } from '@software-factory/contract'
 import { z } from 'zod'
 
-export const EVENT_KINDS = ['session_started', 'turn_started', 'turn_ended', 'limit_stop', 'session_ended'] as const
+export { EVENT_KINDS }
 
 /** Both sit well inside the server's 64 KiB body cap. */
 export const MAX_PROMPT_CHARS = 32_000
@@ -52,3 +53,7 @@ export const CapacityInput = z.object({
   resetsAt: timestamp,
 })
 export type CapacityInput = z.infer<typeof CapacityInput>
+
+/** `factory session wait --on …` declares a wait, `--done` closes it. */
+export const WaitInput = z.union([z.strictObject({ on: WaitOn }), z.strictObject({ done: z.literal(true) })])
+export type WaitInput = z.infer<typeof WaitInput>

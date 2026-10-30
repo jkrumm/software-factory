@@ -46,6 +46,38 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   shell access as the mini user by design. The API is loopback only and the tailnet plus the owner's GitHub
   user is the perimeter (`docs/design.md` §1). `FACTORY_REF=<branch>` runs whatever is on that origin branch with the
   server's secrets, the same boundary; `make deploy` without it deploys `master`.
+- **Hooks: spool first, then post.** `factory hook <event>` (session-start, user-prompt-submit, stop, stop-failure,
+  notification, session-end) does nothing without `FACTORY_SESSION` (set at spawn: the Runner puts the spawn key in the
+  pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local/share/factory/spool/<session>.jsonl`
+  (`FACTORY_SPOOL_DIR`, one `O_APPEND` write), posts it to the server's unix socket (`FACTORY_SOCKET`, default
+  `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens. The hook has no token and the Runner
+  keeps secrets out of the panes, so the socket (mode 0600, in a 0700 directory) is its credential; the socket serves
+  `POST /events` and nothing else. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout and stderr stay empty for every
+  event**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the session's context (tested per event).
+- **The key is session, event name, turn number** (`<session>:turn_ended:3`), counted from the spool, written into the
+  line, so a replay carries it. A kind that repeats inside a turn gets `:2`, `:3`. Event time is strictly increasing per
+  session. `SpoolReplayer` (`spool.ts`) reads the directory at the start of every tick and stores whole lines past its
+  in-memory offset (a restart re-reads: the unique key makes it harmless). A quiet, fully read file over 64 KiB is
+  rotated: its sums (`turns`, current-turn counts) go to `<file>.base` first, so numbering never starts over, then the
+  file is retired. Spool files of dead sessions are kept (a reused `rd` name must not reuse keys).
+- **Derived state** (`sessions.ts`, first match wins): `dead` (last of session_started / session_ended / pane_gone is not
+  a start), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no
+  later turn_started; a turn that ends after `quota_resume fired` ends it too), `blocked` (prompt_blocked with no later
+  turn_started or turn_ended), `working` (open turn; `stuck` when herdr says working within 5 minutes and neither the
+  worktree nor the turn moved for 45 minutes), `waiting` (an open `factory session wait --on workers|deploy|owner`, no
+  open turn), `idle`. Events are ordered by event time, then arrival. Only `limit_stop` from `StopFailure rate_limit`
+  is a wall; other stop failures are ignored.
+- **`factory.sessions` is what the factory follows; `usage` owns the session entity.** Row id = `FACTORY_SESSION`; a spawn
+  gets its row when the Runner returns its pane, an `rd` name when its first event arrives. `session_started` binds
+  Claude's session id, transcript path and cwd (the join key with `usage`); an older start delivered late does not
+  overwrite a newer binding.
+- **The witness** (`witness.ts`) asks herdr (`agent list`, Wave 1 process timeout) once a minute: records each session's
+  agent status, the worktree's last change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that
+  is working), and herdr's server (pid + start time from the process table, herdr has no API for it): a change is the
+  event `herdr_restarted` (filed under the pseudo-session `_herdr`). A session with a known pane that no agent matches in
+  two passes in a row gets `pane_gone` (= `dead`); the pass in which herdr restarted counts nobody as missing. A herdr that
+  does not answer records nothing.
 - **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
   if its connection loses it; a second copy exits 1. Every
   advisory key lives in `src/locks.ts` and they must stay distinct.
@@ -68,11 +100,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 ## Layout
 
 - `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr
-  adapter (`runner.ts`), derived session state (`sessions.ts`), the queue and capacity (`spawns.ts`, `capacity.ts`),
+  adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness (`witness.ts`), the queue and capacity (`spawns.ts`, `capacity.ts`),
   `migrations/`.
-- `packages/contract` — the zod schemas of every response, imported by the server and the CLI.
-- `packages/cli` — the `factory` binary (`bin/factory.ts`). v0: `version`, `health`, `spawn list`, `spawn requeue`. Exit
-  codes are agw's table, copied in `src/exit.ts`.
+- `packages/contract` — the zod schemas of every response, imported by the server and the CLI; `spool.ts` is the zod-free
+  half the hook uses (event kinds, the spool line, key and time counting).
+- `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `spawn list|requeue`, `session
+  list|get|wait`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

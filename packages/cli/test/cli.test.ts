@@ -17,6 +17,23 @@ const SPAWNS = [
   },
 ]
 
+const SESSION = {
+  id: 'sess-1',
+  state: 'working',
+  wait: null,
+  turn: 3,
+  lastEventAt: '2026-10-30T12:00:00.000Z',
+  spawn: 'sess-1',
+  pane: 'w1:p1',
+  claudeSessionId: 'c-1',
+  transcriptPath: '/t/c-1.jsonl',
+  cwd: '/w',
+  herdrStatus: 'working',
+  herdrSeenAt: '2026-10-30T12:00:00.000Z',
+}
+const DEAD = { ...SESSION, id: 'old', state: 'dead', pane: null }
+const sessionCalls: { id: string; body: unknown }[] = []
+
 let fake: ReturnType<typeof Bun.serve>
 let status = 200
 let odd = ''
@@ -26,8 +43,9 @@ beforeAll(() => {
   fake = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
-    fetch: (req) => {
-      const path = new URL(req.url).pathname
+    fetch: async (req) => {
+      const url = new URL(req.url)
+      const path = url.pathname
       if (odd === 'null') return Response.json(null)
       if (odd === 'proxy-503') return new Response('upstream down', { status: 503 })
       if (odd === 'old-health' && path === '/health') return Response.json({ status: 'ok', version: 'abc123' })
@@ -61,6 +79,19 @@ beforeAll(() => {
           session: null,
           error: null,
         })
+      }
+      if (path.startsWith('/sessions')) {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        if (odd === 'drift') return Response.json({ sessions: [{ id: 1 }], id: 1 })
+        const [, , id, sub] = path.split('/')
+        if (!id) return Response.json({ sessions: url.searchParams.get('all') ? [SESSION, DEAD] : [SESSION] })
+        if (id === 'nope') return Response.json({ error: 'unknown session' }, { status: 404 })
+        if (sub === 'wait') {
+          sessionCalls.push({ id, body: await req.json() })
+          return Response.json({ ...SESSION, id })
+        }
+        return Response.json({ ...SESSION, id })
       }
       if (path === '/spawns') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
@@ -224,6 +255,58 @@ describe('usage errors', () => {
       const r = await factory(args)
       expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
       expect(r.stdout).toContain('usage: factory')
+    }
+  })
+})
+
+describe('factory session', () => {
+  test('list prints the sessions with their derived state; --all asks for the dead too', async () => {
+    const r = await factory(['session', 'list'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout).sessions.map((s: { id: string }) => s.id)).toEqual(['sess-1'])
+    expect(JSON.parse((await factory(['session', 'list', '--all'])).stdout).sessions).toHaveLength(2)
+    expect((await factory(['session', 'list', '--format', 'plain'])).stdout).toBe(
+      'sess-1\tworking\t-\t3\tw1:p1\tc-1\t2026-10-30T12:00:00.000Z\n',
+    )
+  })
+
+  test('get prints one session; an unknown one is 4', async () => {
+    expect(JSON.parse((await factory(['session', 'get', 'sess-1'])).stdout)).toMatchObject({ id: 'sess-1', turn: 3 })
+    expect((await factory(['session', 'get', 'nope'])).code).toBe(EXIT.not_found)
+    expect((await factory(['session', 'get'])).code).toBe(EXIT.usage)
+  })
+
+  test('wait --on declares a wait for $FACTORY_SESSION, --done ends it', async () => {
+    sessionCalls.length = 0
+    expect((await factory(['session', 'wait', '--on', 'workers'], { FACTORY_SESSION: 'mine' })).code).toBe(EXIT.ok)
+    expect((await factory(['session', 'wait', '--done', '--session', 'other'])).code).toBe(EXIT.ok)
+    expect(sessionCalls).toEqual([
+      { id: 'mine', body: { on: 'workers' } },
+      { id: 'other', body: { done: true } },
+    ])
+  })
+
+  test.each([
+    [['session', 'wait']],
+    [['session', 'wait', '--on', 'friday']],
+    [['session', 'wait', '--on', 'deploy', '--done']],
+  ])('%p is a usage error and sends nothing', async (args) => {
+    sessionCalls.length = 0
+    const r = await factory(args, { FACTORY_SESSION: 'mine' })
+    expect(r).toMatchObject({ code: EXIT.usage, stdout: '' })
+    expect(sessionCalls).toEqual([])
+  })
+
+  test('wait without a session to name is a usage error', async () => {
+    expect((await factory(['session', 'wait', '--on', 'owner'], { FACTORY_SESSION: '' })).code).toBe(EXIT.usage)
+  })
+
+  test('a body that drifted from the contract is exit 9', async () => {
+    odd = 'drift'
+    try {
+      expect((await factory(['session', 'list'])).code).toBe(EXIT.contract_mismatch)
+    } finally {
+      odd = ''
     }
   })
 })

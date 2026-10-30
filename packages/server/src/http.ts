@@ -1,11 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { CapacityAck, EventAck, Health, Session, Spawn, SpawnList } from '@software-factory/contract'
+import { CapacityAck, EventAck, Health, Session, SessionList, Spawn, SpawnList } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import { recordReading } from './capacity.ts'
 import type { Clock } from './clock.ts'
-import { AccountName, CapacityInput, EventInput, SpawnInput } from './schemas.ts'
-import { getSession, recordEvent } from './sessions.ts'
+import { AccountName, CapacityInput, EventInput, SpawnInput, WaitInput } from './schemas.ts'
+import { declareWait, getSession, listSessions, recordEvent } from './sessions.ts'
 import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
@@ -156,9 +156,24 @@ export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDe
         return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
       }),
     },
+    '/sessions': {
+      GET: route(async (req: Request) => {
+        const all = new URL(req.url).searchParams.get('all') === '1'
+        return respond(SessionList, { sessions: await listSessions(sql, clock.now(), { all }) })
+      }),
+    },
     '/sessions/:id': {
       GET: route(async (req: Bun.BunRequest<'/sessions/:id'>) => {
-        const session = await getSession(sql, req.params.id)
+        const session = await getSession(sql, req.params.id, clock.now())
+        return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
+      }),
+    },
+    '/sessions/:id/wait': {
+      POST: route(async (req: Bun.BunRequest<'/sessions/:id/wait'>) => {
+        const wait = await parseBody(req, WaitInput)
+        const now = clock.now()
+        if (!(await declareWait(sql, req.params.id, wait, now))) return json({ error: 'unknown session' }, 404)
+        const session = await getSession(sql, req.params.id, now)
         return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
       }),
     },
@@ -221,6 +236,27 @@ export function serve(deps: AppDeps & { port: number }) {
       if (methods.length === 0) return json({ error: 'not found' }, 404)
       return json({ error: 'method not allowed' }, 405, { allow: methods.join(', ') })
     },
+    error: failure,
+  })
+}
+
+/**
+ * The hooks' way in: a unix socket in the owner's directory, `POST /events` and nothing else. A hook has no token (the
+ * runner keeps secrets out of the panes), and the socket's mode 0600 is what only the owner's processes can pass.
+ */
+export function serveHooks(deps: { sql: SQL; token: string; socketPath: string }) {
+  const post = guarded(
+    deps.token,
+    async (req: Request) => {
+      const { duplicate } = await recordEvent(deps.sql, await parseBody(req, EventInput))
+      return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
+    },
+    { open: true },
+  )
+  return Bun.serve({
+    unix: deps.socketPath,
+    routes: { '/events': { POST: post } },
+    fetch: () => json({ error: 'not found' }, 404),
     error: failure,
   })
 }

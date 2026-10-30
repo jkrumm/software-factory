@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util'
-import { ErrorBody, Health, Spawn, SpawnList } from '@software-factory/contract'
+import { ErrorBody, Health, Session, SessionList, Spawn, SpawnList, WaitOn } from '@software-factory/contract'
 import type { z } from 'zod'
 import pkg from '../package.json' with { type: 'json' }
 import { EXIT, FactoryError, kindForStatus, usage } from './exit.ts'
@@ -16,7 +16,19 @@ commands:
   spawn list      the spawn queue, newest first
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
+  session list [--all]
+                  the sessions, newest first, with their derived state (--all adds the dead)
+  session get <id>
+                  one session: state, turn, wait, pane, Claude session id, herdr's last word
+  session wait --on workers|deploy|owner | --done [--session <id>]
+                  declare what this session is waiting on, or that the wait is over (default: $FACTORY_SESSION)
+  hook <event>    the Claude Code hook entry (session-start, user-prompt-submit, stop, stop-failure, notification,
+                  session-end); reads the hook JSON on stdin, spools it, tells the server, always exits 0
 
+--all            list: include dead sessions
+--on <what>      session wait: workers, deploy or owner
+--done           session wait: the wait is over
+--session <id>   session wait: the session (default $FACTORY_SESSION)
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
@@ -42,6 +54,8 @@ const cell = (value: unknown) => (value === null || value === undefined ? '-' : 
 
 interface CallOptions<S extends z.ZodType> {
   method?: 'GET' | 'POST'
+  /** sent as JSON with a POST; `{}` when absent */
+  body?: unknown
   auth: boolean
   /** the schema every answer in `accept` must satisfy */
   schema: S
@@ -74,7 +88,7 @@ async function call<S extends z.ZodType>(
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(options.method === 'POST' ? { 'content-type': 'application/json' } : {}),
       },
-      body: options.method === 'POST' ? '{}' : undefined,
+      body: options.method === 'POST' ? JSON.stringify(options.body ?? {}) : undefined,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
     text = await response.text()
@@ -108,7 +122,17 @@ async function call<S extends z.ZodType>(
 
 const spawnLine = (s: Spawn) => [s.key, s.status, s.account, s.resumeAt, s.attempts, s.session].map(cell).join('\t')
 
-async function execute(words: string[], format: Format, io: Io): Promise<void> {
+const sessionLine = (s: Session) =>
+  [s.id, s.state, s.wait, s.turn, s.pane, s.claudeSessionId, s.lastEventAt].map(cell).join('\t')
+
+interface Flags {
+  all?: boolean
+  on?: string
+  done?: boolean
+  session?: string
+}
+
+async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
   const print = (json: unknown, plain: string) => io.out(`${format === 'json' ? JSON.stringify(json) : plain}\n`)
   const key = words.join(' ')
 
@@ -141,6 +165,42 @@ async function execute(words: string[], format: Format, io: Io): Promise<void> {
     return print(body, spawnLine(body))
   }
 
+  if (words[0] === 'hook') {
+    const { hookMain } = await import('./hook.ts')
+    await hookMain(words.slice(1), io.env)
+    return
+  }
+
+  if (key === 'session list') {
+    const { body } = await call(io, `/sessions${flags.all ? '?all=1' : ''}`, { auth: true, schema: SessionList })
+    const lines = body.sessions.map(sessionLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (words[0] === 'session' && words[1] === 'get') {
+    const target = words[2]
+    if (!target || words.length > 3) throw usage('usage: session get <id>')
+    const { body } = await call(io, `/sessions/${encodeURIComponent(target)}`, { auth: true, schema: Session })
+    return print(body, sessionLine(body))
+  }
+
+  if (key === 'session wait') {
+    const target = flags.session ?? io.env.FACTORY_SESSION
+    if (!target) throw usage('no session: set FACTORY_SESSION or pass --session <id>')
+    if (Boolean(flags.done) === (flags.on !== undefined))
+      throw usage('usage: session wait --on workers|deploy|owner | --done')
+    const on = flags.on === undefined ? undefined : WaitOn.safeParse(flags.on)
+    if (on && !on.success) throw usage(`--on must be workers, deploy or owner, got: ${flags.on}`)
+    const { body } = await call(io, `/sessions/${encodeURIComponent(target)}/wait`, {
+      method: 'POST',
+      auth: true,
+      schema: Session,
+      body: on?.success ? { on: on.data } : { done: true },
+    })
+    return print(body, sessionLine(body))
+  }
+
   throw usage(words.length ? `unknown command: ${key}` : 'no command', `${BIN} --help lists the commands`)
 }
 
@@ -163,7 +223,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       io.out(HELP)
       return EXIT.ok
     }
-    await execute(parsed.positionals, format, io)
+    await execute(parsed.positionals, format, parsed.values, io)
     return EXIT.ok
   } catch (error) {
     if (error instanceof FactoryError) {
@@ -177,5 +237,9 @@ export async function run(argv: string[], io: Io): Promise<number> {
 
 const OPTIONS = {
   format: { type: 'string' },
+  all: { type: 'boolean' },
+  on: { type: 'string' },
+  done: { type: 'boolean' },
+  session: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

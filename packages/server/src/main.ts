@@ -1,11 +1,15 @@
+import { chmodSync, mkdirSync, rmSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
-import { serve } from './http.ts'
+import { serve, serveHooks } from './http.ts'
 import { DEFAULT_START_BUDGET_MS, HerdrRunner } from './runner.ts'
+import { SpoolReplayer } from './spool.ts'
 import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
+import { gitProbe, HerdrCli, startWitness } from './witness.ts'
 
 /** Longest a shutdown may take: one in-flight start is bounded by the start budget; the plist ExitTimeOut is longer. */
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
@@ -58,7 +62,21 @@ const server = serve({
   monitor,
   repoRoots: config.repoRoots,
 })
-const ticker = startTicker({ sql, runner, clock, retryBudgetMs: config.retryBudgetMs }, TICK_INTERVAL_MS, monitor)
+
+// The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
+// crashed run is ours to remove: the database lock above is held, so no other copy is listening on it.
+mkdirSync(dirname(config.hookSocket), { recursive: true, mode: 0o700 })
+rmSync(config.hookSocket, { force: true })
+const hooks = serveHooks({ sql, token: config.token, socketPath: config.hookSocket })
+chmodSync(config.hookSocket, 0o600)
+
+const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
+const ticker = startTicker(
+  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool },
+  TICK_INTERVAL_MS,
+  monitor,
+)
+const witnessLoop = startWitness({ sql, herdr: new HerdrCli({ bin: config.herdrBin }), clock, probe: gitProbe })
 console.log(`listening on ${server.url} (version ${config.version})`)
 
 let stopping = false
@@ -73,7 +91,9 @@ async function shutdown(signal: string): Promise<void> {
   try {
     // Stop taking requests, let the tick in flight record its result, only then release the lock and close the pool.
     await server.stop()
+    await hooks.stop()
     await ticker.stop()
+    await witnessLoop.stop()
     await singleton?.release()
     await sql.close()
     process.exit(0)

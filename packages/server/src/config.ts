@@ -1,3 +1,5 @@
+import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
+
 export interface Config {
   databaseUrl: string
   herdrBin: string
@@ -11,6 +13,10 @@ export interface Config {
   retryBudgetMs: number
   /** the directories a spawn's repo must be inside (`FACTORY_REPO_ROOTS`) */
   repoRoots: string[]
+  /** where the hooks append their events (`FACTORY_SPOOL_DIR`) */
+  spoolDir: string
+  /** the unix socket the hooks post to (`FACTORY_SOCKET`) */
+  hookSocket: string
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -44,6 +50,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     accountsFile: env.FACTORY_ACCOUNTS_FILE || `${required('HOME')}/${DOTFILES}/config/claude-accounts.json`,
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
+    spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
+    hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
   }
 }
 
