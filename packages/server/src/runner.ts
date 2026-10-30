@@ -32,6 +32,13 @@ export class RunnerError extends Error {
   }
 }
 
+/** The start ran out of its time budget: not a herdr answer, so never swallowed as an unreadable state. */
+class BudgetSpent extends RunnerError {
+  constructor() {
+    super('the start budget is spent', false)
+  }
+}
+
 /** Stands in for an exit code when the process had to be killed: a transient failure like any other non-zero exit. */
 export const EXIT_TIMEOUT = -1
 
@@ -89,7 +96,9 @@ const WorkspaceList = z.object({ result: z.object({ workspaces: z.array(Workspac
 const PaneList = z.object({ result: z.object({ panes: z.array(Pane) }) })
 const AgentList = z.object({ result: z.object({ agents: z.array(Agent) }) })
 const AgentInfo = z.object({ result: z.object({ agent: Agent }) })
-const Created = z.object({ result: z.object({ root_pane: z.object({ pane_id: z.string(), tab_id: z.string() }) }) })
+const Created = z.object({
+  result: z.object({ root_pane: z.object({ pane_id: z.string(), tab_id: z.string(), workspace_id: z.string() }) }),
+})
 
 const Registry = z.object({ accounts: z.record(z.string(), z.object({ dir: z.string().nullable() })) })
 
@@ -106,9 +115,18 @@ export function agentName(key: string): string {
   return `${base.slice(0, 25).replace(/-+$/, '')}-${hash}`
 }
 
-/** What a snapshot of an agent shows that a prompt was already handed to it: it is no longer a fresh, idle agent. */
-const promptWasDelivered = (agent: Agent): boolean =>
-  agent.agent_status !== 'idle' || agent.completion_seq !== undefined
+/**
+ * What a snapshot says about the prompt. A fresh agent is `idle` and has never finished a turn: `send`. One that is
+ * working, or has finished a turn, already took its prompt (an earlier call of this start, a reclaimed claim): typing
+ * it again would run the work twice. Anything else (`blocked` on a dialog, still starting, unknown) is neither, and
+ * is an error for the tick to retry rather than a delivery that never happened.
+ */
+function promptState(agent: Agent): 'send' | 'delivered' | 'not_ready' {
+  if (agent.agent_status === 'working' || agent.agent_status === 'done' || agent.completion_seq !== undefined) {
+    return 'delivered'
+  }
+  return agent.agent_status === 'idle' ? 'send' : 'not_ready'
+}
 
 const changed = (a: Agent, b: Agent): boolean =>
   a.agent_status !== b.agent_status ||
@@ -141,10 +159,16 @@ export class HerdrRunner implements Runner {
     const env = await this.paneEnv(input.account)
 
     let tab = await this.findTab(input.key, budget)
+    let agent = tab ? await this.findAgent(tab.pane, budget) : undefined
+    if (tab && !agent) {
+      // A tab with no agent has nothing running to keep, and its environment (the account) was fixed when it was made:
+      // a retry may be on another account, so it is made again.
+      await this.closeTab(tab.tab, budget)
+      tab = undefined
+    }
     if (!tab) tab = await this.serialized(() => this.createTab(input, env, budget))
     const pane = tab.pane
 
-    let agent = await this.findAgent(pane, budget)
     if (agent && !agent.interactive_ready) {
       // A start that failed or was cut off leaves a half-launched agent that nothing can prompt: begin again.
       await this.closeTab(tab.tab, budget)
@@ -232,12 +256,12 @@ export class HerdrRunner implements Runner {
       ['workspace', 'create', '--cwd', input.repo, '--label', label, '--no-focus', ...envArgs],
       budget,
     )
-    const { tab_id: tab, pane_id: pane } = created.result.root_pane
+    const { tab_id: tab, pane_id: pane, workspace_id: spaceId } = created.result.root_pane
     try {
       await this.herdr(z.object({}).loose(), ['tab', 'rename', tab, input.key], budget)
     } catch (error) {
       // The space is ours and holds only this tab: take it away again, or the next try would add a second tab to it.
-      await this.herdr(z.object({}).loose(), ['workspace', 'close', tab.split(':')[0] ?? tab], budget).catch(() => {})
+      await this.herdr(z.object({}).loose(), ['workspace', 'close', spaceId], budget).catch(() => {})
       throw error
     }
     return { tab, pane }
@@ -298,9 +322,11 @@ export class HerdrRunner implements Runner {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const before = await this.snapshot(pane, budget)
       if (!before) throw new RunnerError(`${pane}'s state is unreadable; nothing was sent`, false)
-      // A fresh agent is idle and has never finished a turn. Anything else already got its prompt (an earlier call
-      // of this start, or a reclaimed claim): typing it again would run the work twice.
-      if (promptWasDelivered(before)) return
+      const state = promptState(before)
+      if (state === 'delivered') return
+      if (state === 'not_ready') {
+        throw new RunnerError(`${pane} is ${before.agent_status}, not ready for a prompt; nothing was sent`, false)
+      }
 
       const sent = await this.exec([this.options.bin, 'agent', 'prompt', pane, prompt], budget)
       const failure = herdrFailure(sent)
@@ -346,7 +372,7 @@ export class HerdrRunner implements Runner {
     try {
       return (await this.herdr(AgentInfo, ['agent', 'get', pane], budget)).result.agent
     } catch (error) {
-      if (error instanceof RunnerError && error.message.includes('budget')) throw error
+      if (error instanceof BudgetSpent) throw error
       return undefined
     }
   }
@@ -415,7 +441,7 @@ class Budget {
   /** `wantMs`, cut to what is left; an empty budget is an error rather than a zero-length call. */
   limit(wantMs: number): number {
     const left = this.end - this.clock.now().getTime()
-    if (left <= 0) throw new RunnerError('the start budget is spent', false)
+    if (left <= 0) throw new BudgetSpent()
     return Math.min(wantMs, left)
   }
 }

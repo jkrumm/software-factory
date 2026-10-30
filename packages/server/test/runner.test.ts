@@ -221,6 +221,31 @@ describe('herdr adapter: failures are transient errors for the tick to retry', (
   })
 })
 
+describe('herdr adapter: a retry', () => {
+  test('on another account makes a tab without an agent again, so the pane has that account', async () => {
+    await herdr.plan('agent start:exit1')
+    await failure(runner, { ...input, account: 'a' })
+    expect((await herdr.state()).panes[0]?.env).toContain('CLAUDE_ACCOUNT_PICKED=a')
+
+    await runner.start({ ...input, account: 'b' })
+    const state = await herdr.state()
+    expect(state.tabs.map((t) => t.label)).toEqual(['spawn-1'])
+    expect(state.panes).toHaveLength(1)
+    expect(state.panes[0]?.env).toContain('CLAUDE_ACCOUNT_PICKED=b')
+    expect(state.agents).toHaveLength(1)
+  })
+
+  test('never prompts an agent that is blocked, and does not call it started', async () => {
+    await runner.start(input)
+    const path = herdr.bin.replace(/herdr$/, 'state.json')
+    const state = JSON.parse(await Bun.file(path).text())
+    state.agents[0].agent_status = 'blocked'
+    await Bun.write(path, JSON.stringify(state))
+    expect((await failure()).message).toContain('blocked, not ready for a prompt')
+    expect((await herdr.state()).prompts).toHaveLength(1)
+  })
+})
+
 describe('herdr adapter: prompt delivery', () => {
   test('a prompt the agent ignores is sent once more after the window, and only once more', async () => {
     await herdr.plan('agent prompt:drop')

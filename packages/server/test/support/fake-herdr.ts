@@ -95,10 +95,10 @@ const agentInfo = (a: State['agents'][number]) => {
 }
 const findAgent = (target: string) => state.agents.find((a) => a.name === target || a.pane_id === target)
 
-function createPane(workspaceId: string, tabId: string): { pane_id: string; tab_id: string } {
+function createPane(workspaceId: string, tabId: string): { pane_id: string; tab_id: string; workspace_id: string } {
   const pane_id = `${workspaceId}:p${++state.seq}`
   state.panes.push({ pane_id, tab_id: tabId, cwd: opt('--cwd') ?? '', env: opts('--env') })
-  return { pane_id, tab_id: tabId }
+  return { pane_id, tab_id: tabId, workspace_id: workspaceId }
 }
 
 switch (command) {

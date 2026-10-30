@@ -34,20 +34,50 @@ export interface Singleton {
   release(): Promise<void>
 }
 
+export interface SingletonOptions {
+  /** called once if the lock is gone (the connection dropped or the database restarted): the server must stop */
+  onLost?: (reason: string) => void
+  /** how often the connection is checked */
+  checkMs?: number
+}
+
 /**
  * Takes the session-level advisory lock that makes this the only server on the database. The lock belongs to a
  * connection, so one is reserved and kept for the life of the process; the database drops the lock when it closes.
- * Returns `undefined` when another copy holds it.
+ * A watchdog checks that this connection still holds it, because a dropped connection frees the lock without a sound
+ * and a second copy could then start beside a server that keeps ticking. Returns `undefined` when another copy holds it.
  */
-export async function acquireSingleton(sql: SQL): Promise<Singleton | undefined> {
+export async function acquireSingleton(sql: SQL, options: SingletonOptions = {}): Promise<Singleton | undefined> {
   const connection = await sql.reserve()
   const [row] = await connection`SELECT pg_try_advisory_lock(${LOCKS.singleton}) AS locked`
   if (!row?.locked) {
     connection.release()
     return undefined
   }
+
+  let lost = false
+  const lose = (reason: string) => {
+    if (lost) return
+    lost = true
+    options.onLost?.(reason)
+  }
+  const watchdog = setInterval(async () => {
+    try {
+      const [held] = await connection`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_locks
+          WHERE locktype = 'advisory' AND objid = ${LOCKS.singleton} AND pid = pg_backend_pid() AND granted
+        ) AS held`
+      if (!held?.held) lose('the database no longer lists the lock as held by this server')
+    } catch (error) {
+      lose(`the lock connection failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }, options.checkMs ?? 10_000)
+  watchdog.unref()
+
   return {
     release: async () => {
+      clearInterval(watchdog)
       await connection`SELECT pg_advisory_unlock(${LOCKS.singleton})`
       connection.release()
     },

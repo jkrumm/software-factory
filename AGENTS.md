@@ -36,7 +36,15 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
   (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh`, `agent start`, prompt proven by a state change, one
   re-send); a tab without a ready agent is never `started`. A prompt cannot start with `-` (herdr reads it as an option).
-- **One process.** A session-level Postgres advisory lock is taken before anything else; a second copy exits 1. Every
+- **A failed spawn leaves its tab.** The tab is named after the key and `factory spawn requeue` finds it again (an agent
+  already running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A tab with
+  no agent is closed and made again on every try, so a retry on another account gets that account's environment.
+- **Trust boundary.** The token is shell access as the mini user by design: it can start Claude Code with
+  `--dangerously-skip-permissions` in any `repo` path. The API is loopback only and the tailnet plus the owner's GitHub
+  user is the perimeter (`docs/design.md` §1). `FACTORY_REF=<branch>` runs whatever is on that origin branch with the
+  server's secrets, the same boundary; `make deploy` without it deploys `master`.
+- **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
+  if its connection loses it; a second copy exits 1. Every
   advisory key lives in `src/locks.ts` and they must stay distinct.
 - **`/health` is the ticker's pulse:** the last successful tick and the last tick error; no success within three
   intervals (or a pass past its lease) is 503, which fails `make verify` and the deploy health check.
