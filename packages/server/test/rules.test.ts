@@ -521,6 +521,28 @@ describe('wake', () => {
       expect(runner.typed).toHaveLength(1)
     })
 
+    test('a Stop while the wake waits to be typed again, its first typing proven, sees the wait ended', async () => {
+      await wakeTyped()
+      clock.advance(minutes(2))
+      await w.emit('lead', 'turn_started', new Date(clock.now().getTime() - minutes(1)))
+      await db.sql`UPDATE factory.prompts SET status = 'pending', next_at = ${clock.now()} WHERE source = 'wake'`
+      await w.emit('lead', 'turn_ended', clock.now())
+      expect(await ask()).toMatchObject({ sendBack: true })
+      expect(await notes()).toMatchObject([{ status: 'delivered' }])
+    })
+
+    test('a proving turn in the very millisecond of the wait is cleared after it, not before', async () => {
+      await wakeTyped()
+      const [wait] = await db.sql`SELECT at FROM factory.events WHERE session = 'lead' AND kind = 'wait_declared'`
+      // The turn the wake started is dated at the wait's own time.
+      await db.sql`UPDATE factory.events SET at = ${wait.at} WHERE session = 'lead' AND kind = 'turn_started' AND at > ${wait.at}`
+      await w.emit('lead', 'turn_started', wait.at)
+      await db.sql`UPDATE factory.prompts SET claimed_at = ${wait.at} WHERE source = 'wake'`
+      await deliver()
+      expect(await lead()).toMatchObject({ wait: null })
+      expect(await cleared()).toHaveLength(1)
+    })
+
     test('a retry whose first typing was proven in between delivers and clears too', async () => {
       await wakeTyped()
       clock.advance(minutes(2))

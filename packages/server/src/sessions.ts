@@ -491,14 +491,16 @@ export async function clearAnsweredWait(
   input: { session: string; promptId: string; waitKey: string; provedAt: Date },
 ): Promise<boolean> {
   const [last] = await tx`
-    SELECT key, kind FROM factory.events
+    SELECT key, kind, at FROM factory.events
     WHERE session = ${input.session} AND kind IN ('wait_declared', 'wait_cleared') ORDER BY at DESC, id DESC LIMIT 1`
   if (last?.kind !== 'wait_declared' || last.key !== input.waitKey) return false
+  // Never before the wait it ends (the same millisecond sorts by arrival, and the clear arrives later).
+  const at = new Date(Math.max(input.provedAt.getTime() - 1, (last.at as Date).getTime()))
   const { duplicate } = await recordIn(tx, {
     key: `${input.session}:wait_cleared:${input.promptId}`,
     session: input.session,
     kind: 'wait_cleared',
-    at: new Date(input.provedAt.getTime() - 1),
+    at,
   })
   return !duplicate
 }
