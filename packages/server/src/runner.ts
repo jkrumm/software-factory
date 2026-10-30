@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
+import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, type ProcessResult, runProcess } from './exec.ts'
 
 export interface StartInput {
   key: string
@@ -39,11 +40,6 @@ class BudgetSpent extends RunnerError {
   }
 }
 
-/** Stands in for an exit code when the process had to be killed: a transient failure like any other non-zero exit. */
-export const EXIT_TIMEOUT = -1
-
-/** Longest one `herdr` invocation may run before it is killed. */
-export const DEFAULT_PROCESS_TIMEOUT_MS = 10_000
 /** Longest one `start` may take, all steps together: the tick's lease is this plus a minute. */
 export const DEFAULT_START_BUDGET_MS = 180_000
 /** How long a sent prompt may leave the agent's state unchanged before it is sent once more (rd's rule). */
@@ -133,11 +129,6 @@ const changed = (a: Agent, b: Agent): boolean =>
   a.state_change_seq !== b.state_change_seq ||
   a.completion_seq !== b.completion_seq
 
-interface ProcessResult {
-  exitCode: number
-  stdout: string
-}
-
 /**
  * Starts Claude Code in a herdr tab named after the spawn key and hands it the prompt, in the steps `rd wave` takes:
  * the account's `CLAUDE_CONFIG_DIR` through `--env` at creation, the folder pre-trusted, `agent start` with
@@ -156,7 +147,7 @@ export class HerdrRunner implements Runner {
 
   async start(input: StartInput): Promise<StartResult> {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
-    const env = await this.paneEnv(input.account)
+    const env = await this.paneEnv(input.account, input.key)
 
     const space = await this.findSpace(input.repo, budget)
     let tab = space ? await this.findTab(space, input.key, budget) : undefined
@@ -194,7 +185,7 @@ export class HerdrRunner implements Runner {
   // --- steps -----------------------------------------------------------------------------------------------------
 
   /** The environment the pane's shell gets at creation, so the agent started in it runs on the spawn's account. */
-  private async paneEnv(account: string): Promise<string[]> {
+  private async paneEnv(account: string, key: string): Promise<string[]> {
     let raw: string
     try {
       raw = await Bun.file(this.options.accountsFile).text()
@@ -211,7 +202,12 @@ export class HerdrRunner implements Runner {
     if (!entry) throw new RunnerError(`account ${account} is not in the registry ${this.options.accountsFile}`, true)
 
     const home = this.options.home ?? process.env.HOME ?? ''
-    const env = [`CLAUDE_ACCOUNT_PICKED=${account}`, `USAGE_LANE=${this.options.usageLane ?? 'wave'}`]
+    // FACTORY_SESSION switches the hooks on: they report this session's events under the spawn key.
+    const env = [
+      `CLAUDE_ACCOUNT_PICKED=${account}`,
+      `USAGE_LANE=${this.options.usageLane ?? 'wave'}`,
+      `FACTORY_SESSION=${key}`,
+    ]
     // dir null is the default account: CLAUDE_CONFIG_DIR stays unset.
     if (entry.dir !== null) env.unshift(`CLAUDE_CONFIG_DIR=${entry.dir.replace(/^~(?=\/|$)/, home)}`)
     return env
@@ -416,27 +412,11 @@ export class HerdrRunner implements Runner {
 
   private async exec(cmd: string[], budget: Budget, timeoutMs?: number): Promise<ProcessResult> {
     const limit = budget.limit(timeoutMs ?? this.options.processTimeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
-    let proc: Bun.Subprocess<'ignore', 'pipe', 'ignore'>
     try {
-      proc = Bun.spawn(cmd, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', env: childEnv() })
-    } catch (cause) {
-      throw new RunnerError(`cannot execute ${cmd[0]}: ${String(cause)}`, true)
-    }
-
-    // The deadline also covers a child that is gone but whose stdout a grandchild keeps open.
-    let timer: Timer | undefined
-    const deadline = new Promise<'timeout'>((resolve) => {
-      timer = setTimeout(() => resolve('timeout'), limit)
-    })
-    const finished = Promise.all([proc.stdout.text(), proc.exited]).then(([stdout, exitCode]) => ({ stdout, exitCode }))
-    finished.catch(() => {})
-    try {
-      const outcome = await Promise.race([finished, deadline])
-      if (outcome !== 'timeout') return outcome
-      proc.kill('SIGKILL')
-      return { exitCode: EXIT_TIMEOUT, stdout: '' }
-    } finally {
-      clearTimeout(timer)
+      return await runProcess(cmd, limit)
+    } catch (error) {
+      if (error instanceof CannotExecute) throw new RunnerError(error.message, true)
+      throw error
     }
   }
 }
@@ -458,15 +438,6 @@ class Budget {
     if (left <= 0) throw new BudgetSpent()
     return Math.min(wantMs, left)
   }
-}
-
-/** What the factory is given to run on is not for herdr, which would pass it on to every agent pane it starts. */
-const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL']
-
-function childEnv(): Record<string, string | undefined> {
-  const env = { ...process.env }
-  for (const name of SECRET_ENV) delete env[name]
-  return env
 }
 
 function parseJson(text: string): unknown {

@@ -55,8 +55,13 @@ describe('herdr adapter: a start', () => {
     await runner.start({ ...input, key: 'on-b', account: 'b' })
     await runner.start({ ...input, key: 'on-a', account: 'a' })
     const [b, a] = (await herdr.state()).panes
-    expect(b?.env).toEqual(['CLAUDE_CONFIG_DIR=/home/me/.claude-b', 'CLAUDE_ACCOUNT_PICKED=b', 'USAGE_LANE=wave'])
-    expect(a?.env).toEqual(['CLAUDE_ACCOUNT_PICKED=a', 'USAGE_LANE=wave'])
+    expect(b?.env).toEqual([
+      'CLAUDE_CONFIG_DIR=/home/me/.claude-b',
+      'CLAUDE_ACCOUNT_PICKED=b',
+      'USAGE_LANE=wave',
+      'FACTORY_SESSION=on-b',
+    ])
+    expect(a?.env).toEqual(['CLAUDE_ACCOUNT_PICKED=a', 'USAGE_LANE=wave', 'FACTORY_SESSION=on-a'])
   })
 
   test('the model and effort are passed on when set', async () => {
