@@ -340,6 +340,91 @@ describe('blocked', () => {
   })
 })
 
+describe('wake', () => {
+  const notes = async () => (await prompts()).filter((p) => p.source === 'wake')
+
+  /** A lead waiting on its workers; `w1` and `w2` are its children, both working. */
+  async function waitingLead() {
+    await w.spawned('lead', { role: 'lead' })
+    await w.emit('lead', 'turn_started', w.at(30))
+    await w.spawned('w1', { parent: 'lead' })
+    await w.spawned('w2', { parent: 'lead' })
+    await w.emit('w1', 'turn_started', w.at(20))
+    await w.emit('w2', 'turn_started', w.at(20))
+    await w.emit('lead', 'wait_declared', w.at(10), { on: 'workers' })
+    await w.emit('lead', 'turn_ended', w.at(9))
+  }
+
+  test('one note when the last worker finishes, none while one works, none twice for the same wait', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    expect((await evaluate()).created).toEqual([])
+
+    await w.emit('w2', 'session_ended', w.at(1))
+    const { created } = await evaluate()
+    expect(created).toHaveLength(1)
+    expect(created[0]).toStartWith('wake:lead:lead:wait_declared:')
+    expect(await notes()).toMatchObject([{ session: 'lead', via: 'type', text: 'workers done: w1 idle, w2 dead' }])
+    await replayIsSilent()
+  })
+
+  test('a second wait after the wake wakes again', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    await w.emit('w2', 'turn_ended', w.at(5))
+    await evaluate()
+    expect(await notes()).toHaveLength(1)
+
+    await w.emit('lead', 'turn_started', w.at(3))
+    await w.emit('lead', 'wait_cleared', w.at(2))
+    await w.emit('lead', 'wait_declared', w.at(1), { on: 'workers' })
+    await w.emit('lead', 'turn_ended', clock.now())
+    expect((await evaluate()).created).toHaveLength(1)
+    expect(await notes()).toHaveLength(2)
+  })
+
+  test('a worker that is blocked, walled or has not finished a turn is not done', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    await w.emit('w2', 'prompt_blocked', w.at(5))
+    await evaluate()
+    await w.emit('w2', 'limit_stop', w.at(4), { error: 'rate_limit' })
+    await evaluate()
+    expect(await notes()).toEqual([])
+  })
+
+  test('a spawn that has no session yet is not finished; a failed one does not hold the wake', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    await w.emit('w2', 'turn_ended', w.at(5))
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, hold, parent, created_at)
+      VALUES ('held', '/work/repo', 'work', 'worker', 'sonnet', 'high', 'queued', 'drain', 'lead', ${clock.now()})`
+    await evaluate()
+    expect(await notes()).toEqual([])
+
+    await db.sql`UPDATE factory.spawns SET status = 'failed', hold = NULL, error = 'gave up' WHERE key = 'held'`
+    await evaluate()
+    expect(await notes()).toHaveLength(1)
+  })
+
+  test('says nothing to a parent that is not waiting on workers, or has no child session', async () => {
+    await waitingLead()
+    await w.emit('w1', 'turn_ended', w.at(5))
+    await w.emit('w2', 'turn_ended', w.at(5))
+    await w.emit('lead', 'turn_started', w.at(1))
+    await evaluate()
+    expect(await notes()).toEqual([])
+
+    await w.spawned('solo')
+    await w.emit('solo', 'turn_started', w.at(5))
+    await w.emit('solo', 'wait_declared', w.at(3), { on: 'workers' })
+    await w.emit('solo', 'turn_ended', w.at(2))
+    await evaluate()
+    expect(await notes()).toEqual([])
+  })
+})
+
 describe('herdr restart', () => {
   let herdr: FakeHerdr
   beforeAll(async () => {

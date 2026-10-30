@@ -7,9 +7,11 @@ import {
   HERDR_SESSION,
   HOOK_KINDS,
   getSession,
+  isFinished,
   type Loaded,
   loadChildren,
   loadSessions,
+  loadWorkers,
 } from './sessions.ts'
 
 /** The rules that act (`docs/design.md` §3). Each one reads facts and records effects under a deterministic key. */
@@ -150,6 +152,35 @@ function blockedParents(sessions: readonly Loaded[], now: Date): Candidate[] {
   })
 }
 
+/**
+ * Wake: `wake:<session>:<wait event key>`, one note per declared wait. A session that is `waiting` on its workers, has
+ * at least one child session and no child unfinished is told which are done. Unfinished is a child that is not `dead` and
+ * not `idle` after a turn of its life (the `finished` of `liveSessions`), or a spawn of the session's that has not become
+ * a session yet (queued, held, waiting for capacity, starting). A spawn that failed will not become one: status shows it.
+ */
+async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<Candidate[]> {
+  const waiting = sessions.flatMap(({ view, facts }) => {
+    const declared = facts.findLast((f) => f.kind === 'wait_declared')
+    return view.state === 'waiting' && view.wait === 'workers' && declared ? [{ id: view.id, event: declared.key }] : []
+  })
+  if (waiting.length === 0) return []
+  const ids = waiting.map((w) => w.id)
+  const workers = await loadWorkers(sql, ids, now)
+  const unstarted: { parent: string }[] = await sql`
+    SELECT DISTINCT p.parent FROM factory.spawns p
+    WHERE p.parent IN ${sql(ids)}
+      AND (p.status IN ('queued', 'waiting', 'starting')
+        OR (p.status = 'started' AND NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.spawn_key = p.key)))`
+  const pending = new Set(unstarted.map((u) => u.parent))
+  return waiting.flatMap(({ id, event }) => {
+    const children = workers.filter((c) => c.view.parent === id)
+    const finished = (c: Loaded) => c.view.state === 'dead' || isFinished(c.view.state, c.facts)
+    if (children.length === 0 || pending.has(id) || !children.every(finished)) return []
+    const done = children.map((c) => `${c.view.id} ${c.view.state}`).sort()
+    return [{ id: `wake:${id}:${event}`, session: id, source: 'wake', text: `workers done: ${done.join(', ')}` }]
+  })
+}
+
 /** Whether a turn was open at `at`: the latest turn event of this life up to then is a start. */
 const openTurnAt = (facts: readonly Fact[], at: Date): boolean => {
   const turns = thisLife(facts).filter((f) => f.at <= at && (f.kind === 'turn_started' || f.kind === 'turn_ended'))
@@ -199,7 +230,7 @@ export interface RulesResult {
 }
 
 /**
- * Evaluates the rules that type into sessions (watchdog, rotation, blocked, restart) over the facts as they are now and
+ * Evaluates the rules that type into sessions (watchdog, rotation, blocked, wake, restart) over the facts as they are now and
  * records each effect under its key. Idempotent: the same facts record nothing the second time.
  */
 export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
@@ -209,6 +240,7 @@ export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
     ...(await resumeWatchdog(sql, sessions, now)),
     ...rotation(sessions, readings, now),
     ...blockedParents(sessions, now),
+    ...(await wake(sql, sessions, now)),
     ...(await restarts(sql, sessions, now)),
   ]
   const created: string[] = []
