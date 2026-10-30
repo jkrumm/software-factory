@@ -11,7 +11,8 @@ import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
 
 const config = loadConfig(process.env)
-const sql = new SQL(config.databaseUrl)
+// The factory role may hold 10 connections: the pool (one of them kept for the one-process lock) leaves room for a psql.
+const sql = new SQL({ url: config.databaseUrl, max: 8 })
 
 // One process: a second copy finds the lock taken and leaves before it touches anything.
 const singleton = await acquireSingleton(sql)

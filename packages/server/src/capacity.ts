@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { LOCKS } from './locks.ts'
 import type { CapacityInput } from './schemas.ts'
 
 export const WEEKLY_LIMIT = 95
@@ -8,9 +9,7 @@ export const FIVE_HOUR_LIMIT = 85
 export const SPAWN_COST = { weekly: 1, fiveHour: 5 } as const
 
 /** Serializes everything that assigns an account or changes what it sees, so each step sees the ones before it. */
-const CAPACITY_LOCK = 7_093_002
-
-export const lockCapacity = (tx: SQL) => tx`SELECT pg_advisory_xact_lock(${CAPACITY_LOCK})`
+export const lockCapacity = (tx: SQL) => tx`SELECT pg_advisory_xact_lock(${LOCKS.capacity})`
 
 /** One reading per row; `id` orders them, so "the same reading" is an id, not a clock comparison. */
 export interface Reading {

@@ -1,12 +1,10 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SQL } from 'bun'
+import { LOCKS } from './locks.ts'
 
 export const SCHEMA = 'factory'
 export const MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations')
-
-/** Arbitrary constant naming the migration lock; every instance of this repo uses the same one. */
-const MIGRATION_LOCK = 7_093_001
 
 /**
  * Applies every `migrations/*.sql` not yet recorded, in filename order, inside the `factory` schema.
@@ -15,7 +13,7 @@ const MIGRATION_LOCK = 7_093_001
 export async function migrate(sql: SQL, dir: string = MIGRATIONS_DIR): Promise<string[]> {
   const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort()
   return sql.begin(async (tx) => {
-    await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK})`
+    await tx`SELECT pg_advisory_xact_lock(${LOCKS.migration})`
     // CREATE SCHEMA IF NOT EXISTS still demands CREATE on the database, which the schema's owner role does not have.
     const [schema] = await tx`SELECT 1 FROM pg_namespace WHERE nspname = ${SCHEMA}`
     if (!schema) await tx.unsafe(`CREATE SCHEMA ${SCHEMA}`)
@@ -32,9 +30,6 @@ export async function migrate(sql: SQL, dir: string = MIGRATIONS_DIR): Promise<s
   })
 }
 
-/** Names the one-process lock; distinct from the migration lock. */
-export const SINGLETON_LOCK = 7_093_002
-
 export interface Singleton {
   release(): Promise<void>
 }
@@ -46,14 +41,14 @@ export interface Singleton {
  */
 export async function acquireSingleton(sql: SQL): Promise<Singleton | undefined> {
   const connection = await sql.reserve()
-  const [row] = await connection`SELECT pg_try_advisory_lock(${SINGLETON_LOCK}) AS locked`
+  const [row] = await connection`SELECT pg_try_advisory_lock(${LOCKS.singleton}) AS locked`
   if (!row?.locked) {
     connection.release()
     return undefined
   }
   return {
     release: async () => {
-      await connection`SELECT pg_advisory_unlock(${SINGLETON_LOCK})`
+      await connection`SELECT pg_advisory_unlock(${LOCKS.singleton})`
       connection.release()
     },
   }
