@@ -33,7 +33,7 @@ code itself.
 |-|-|-|-|-|
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Wave 1 running (`dotfiles-w1`); Wave 2 pending |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Wave 1 running (`argo-w1`) |
-| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Step 1 done (`docs/design.md`); step 2 running |
+| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1 and 2 done; spike running (`spike/plain`, `spike/effect`) |
 | F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | pending |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
@@ -58,13 +58,14 @@ there: drop `config/settings.template.json` leftovers the Wave 1 close-out lists
 1. **`docs/design.md`:** the factory's design from TDD v2.4 (`dotfiles/docs/factory/tdd/03`–`10`) plus
    `docs/decisions.md`. Keep what carries over, rewrite what changed, drop the rest. Data model for the fleet
    (sessions, events, queue, accounts) and the Issue machine (TDD §6's tables). Verdict first, short.
-2. **Effect skill** (`.claude/skills/effect/`): `/research` what Effect itself publishes for agents (the
-   `AGENTS.md`, `LLMS.md` and `ai-docs/` the package ships, the Effect language service, any official skill or
-   docs MCP) and build the skill from it: v4 import paths and renames (`Context.Service`, `catch`), `Effect.fn`,
-   `Schema.TaggedError`, `Layer` wiring, `Schedule`, `@effect/sql-pg`, testing with `@effect/vitest` and
-   `TestClock`, and the replay-determinism rule. Pin `effect@4.1.0` exactly; tell the agent to read
-   `node_modules/effect` before guessing an API.
-3. **Spike, rule written first:** one slice built twice by Sonnet workers in `rd fan` worktrees, plain
+2. **Effect skill** (`.claude/skills/effect/SKILL.md`), done: built from the package's `AGENTS.md` and `ai-docs/`
+   (`LLMS.md` is not in the package, and Effect publishes no skill or official docs MCP), every snippet compiled
+   and run on the pin, including `@effect/sql-pg` on Bun against a private Postgres. `@effect/tsgo` puts Effect's
+   diagnostics into `tsc`. The pin is `effect@4.0.6`, not 4.1.0: 4.1.0 and 4.0.7 are inside the machine's 3-day
+   release-age cooldown until 2026-11-01 and a third-party exclude is not ours to add. If Effect wins, the skeleton
+   moves to 4.1.0 once it clears, with the skill's pins and rename table rechecked.
+3. **Spike, rule written first** (`docs/spikes/2026-10-30-effect/spec.md` fixes how each number is taken): one
+   slice built twice by Sonnet workers in `rd fan` worktrees, plain
    TypeScript + zod vs Effect 4.1 with the skill. Slice: a hook event in → session state → a queued spawn with
    a resume-at → a herdr adapter with retries, Postgres-backed, tested. Both get `/code-review` on Max.
    **Effect wins** if its slice has no more review findings than the plain one, no v3-API mistake survives to
