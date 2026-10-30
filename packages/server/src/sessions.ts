@@ -67,11 +67,13 @@ export async function openSession(
     ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = COALESCE(EXCLUDED.pane, factory.sessions.pane)`
 }
 
-/** A spawn that gave up never became a session: its row, if it never got a pane or an event, goes. */
-export async function dropEmptySession(tx: SQL, id: string): Promise<void> {
-  await tx`
+/** A spawn that gave up never became a session: its row, if it never got a pane or an event, goes. True if it went. */
+export async function dropEmptySession(tx: SQL, id: string): Promise<boolean> {
+  const rows = await tx`
     DELETE FROM factory.sessions s
-    WHERE s.id = ${id} AND s.pane IS NULL AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id)`
+    WHERE s.id = ${id} AND s.pane IS NULL AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id)
+    RETURNING s.id`
+  return rows.length > 0
 }
 
 // --- derived state -----------------------------------------------------------------------------------------------

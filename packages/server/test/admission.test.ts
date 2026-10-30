@@ -287,6 +287,42 @@ describe('one active wave per repo', () => {
     expect(await row('x')).toMatchObject({ hold: 'wave' })
   })
 
+  test('a session that survives its spawn failing still holds the repo for the rows after it', async () => {
+    const hourAgo = new Date(clock.now().getTime() - 3_600_000)
+    await spawn('x', { role: 'wave' })
+    clock.advance(1000)
+    // f: the same stale wave, but its agent has spoken, so its session is alive and stays.
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, status, account, attempts, claimed_at, first_claimed_at, created_at)
+      VALUES ('f', ${TEST_REPO}, 'p', 'wave', 'starting', 'a', 3, ${hourAgo}, ${hourAgo}, ${clock.now()})`
+    await db.sql`INSERT INTO factory.sessions (id, spawn_key, created_at) VALUES ('f', 'f', ${hourAgo})`
+    await db.sql`INSERT INTO factory.events (key, session, kind, at) VALUES ('f:start', 'f', 'session_started', ${hourAgo})`
+    clock.advance(1000)
+    await spawn('y', { role: 'wave' })
+    await db.sql`UPDATE factory.spawns SET hold = NULL, resume_at = NULL WHERE key IN ('x', 'y')`
+
+    expect(await runTick()).toMatchObject({ failed: ['f'], started: [] })
+    expect(await row('y')).toMatchObject({ status: 'queued', hold: 'wave' })
+  })
+
+  test('held spawns are looked at after the ones that are not, so they cannot crowd a batch', async () => {
+    await setQueue('drain', TEST_REPO)
+    for (let i = 0; i < 3; i++) await spawn(`held-${i}`)
+    clock.advance(1000)
+    await spawn('free', { repo: OTHER_REPO })
+    clock.advance(HOLD_RECHECK_MS)
+    // A batch of one: the held spawns are older, yet the free one is reached first.
+    const runner = new HerdrRunner({
+      bin: herdr.bin,
+      clock,
+      pretrustBin: herdr.pretrustBin,
+      accountsFile: herdr.accountsFile,
+      home: '/home/me',
+      deliverWaitMs: 3_000,
+    })
+    expect(await tick({ sql: db.sql, clock, runner, batch: 1 })).toMatchObject({ started: ['free'] })
+  })
+
   test('a session that died for any reason frees the repo, a pane that is gone included', async () => {
     await spawn('w1', { role: 'wave' })
     await runTick()
