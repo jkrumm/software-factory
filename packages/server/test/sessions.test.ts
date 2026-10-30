@@ -50,6 +50,19 @@ describe('GET /sessions', () => {
     expect(live.sessions[1]).toMatchObject({ claudeSessionId: 'c-a', transcriptPath: '/t/a.jsonl', turn: 1 })
   })
 
+  test('the limit counts live sessions: newer dead ones do not push a live one out of the list', async () => {
+    await emit('live-old', 'session_started', '2026-10-30T08:00:00Z')
+    await db.sql`
+      INSERT INTO factory.sessions (id, created_at)
+      SELECT 'gone-' || n, '2026-10-30T09:00:00Z'::timestamptz + n * interval '1 second' FROM generate_series(1, 205) n`
+    await db.sql`
+      INSERT INTO factory.events (key, session, kind, at)
+      SELECT 'end-' || n, 'gone-' || n, 'session_ended', '2026-10-30T09:30:00Z' FROM generate_series(1, 205) n`
+    const live = (await (await app.get('/sessions')).json()) as { sessions: { id: string }[] }
+    expect(live.sessions.map((s) => s.id)).toEqual(['live-old'])
+    expect(((await (await app.get('/sessions?all=1')).json()) as { sessions: unknown[] }).sessions).toHaveLength(200)
+  })
+
   test('needs the token', async () => {
     expect((await app.bare('/sessions')).status).toBe(401)
   })

@@ -69,8 +69,12 @@ mkdirSync(dirname(config.hookSocket), { recursive: true, mode: 0o700 })
 rmSync(config.hookSocket, { force: true })
 // Bound under a restrictive umask, so the socket is never there with wider permissions, not even for a moment.
 const umask = process.umask(0o177)
-const hooks = serveHooks({ sql, clock, token: config.token, socketPath: config.hookSocket })
-process.umask(umask)
+let hooks: ReturnType<typeof serveHooks>
+try {
+  hooks = serveHooks({ sql, clock, token: config.token, socketPath: config.hookSocket })
+} finally {
+  process.umask(umask)
+}
 chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
