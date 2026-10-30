@@ -1,0 +1,22 @@
+{
+  "name": "factory-spike-effect",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "effect-tsgo patch",
+    "start": "bun src/main.ts",
+    "check": "tsc --noEmit && vitest run"
+  },
+  "dependencies": {
+    "effect": "4.0.6",
+    "@effect/sql-pg": "4.0.6",
+    "@effect/platform-bun": "4.0.6"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.6",
+    "@effect/tsgo": "0.59.0",
+    "@types/bun": "1.4.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
