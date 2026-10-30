@@ -38,7 +38,11 @@ const RepoPath = z
 export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
-  prompt: z.string().min(1).max(MAX_PROMPT_CHARS),
+  prompt: z
+    .string()
+    .min(1)
+    .max(MAX_PROMPT_CHARS)
+    .refine((p) => !p.startsWith('-'), "a prompt cannot start with '-': herdr would read it as an option"),
 })
 export type SpawnInput = z.infer<typeof SpawnInput>
 
@@ -48,6 +52,3 @@ export const CapacityInput = z.object({
   resetsAt: timestamp,
 })
 export type CapacityInput = z.infer<typeof CapacityInput>
-
-/** stdout of `HERDR_BIN tab create` */
-export const HerdrTabOutput = z.object({ pane: nonEmpty })
