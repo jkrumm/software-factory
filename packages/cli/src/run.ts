@@ -227,7 +227,10 @@ export function statusScreen(s: Status): string {
       ),
     ),
     ...section('ACCOUNTS', s.accounts.map(quotaLine)),
-    ...section('NOTES', s.notes.map(promptLine)),
+    ...section('NOTES', [
+      ...s.notes.map(promptLine),
+      ...(s.notesMore > 0 ? [`... ${s.notesMore} more not shown`] : []),
+    ]),
   ].join('\n')
 }
 

@@ -170,6 +170,8 @@ export const Status = z.object({
   accounts: z.array(Quota),
   /** prompts not yet delivered, and those that failed in the last day */
   notes: z.array(Prompt),
+  /** prompts beyond the ones listed */
+  notesMore: z.number().int(),
 })
 export type Status = z.infer<typeof Status>
 

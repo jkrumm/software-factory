@@ -1,4 +1,5 @@
 import { EVENT_KINDS, QueueState, RoleName, WaitOn } from '@software-factory/contract'
+import { ACCOUNT_NAME } from '@software-factory/contract/spool'
 import { z } from 'zod'
 
 export { EVENT_KINDS }
@@ -11,7 +12,7 @@ const timestamp = z.iso.datetime({ offset: true }).transform((s) => new Date(s))
 const nonEmpty = z.string().min(1).max(256)
 
 /** An account name is a path segment in the API and a key in the queue: a short token, never free text. */
-export const AccountName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, 'not a valid account name')
+export const AccountName = z.string().regex(ACCOUNT_NAME, 'not a valid account name')
 
 /** What only the witness may say about herdr: a hook (or anything on the open socket) cannot report a restart or a gone pane. */
 const WITNESS_KINDS: readonly string[] = ['herdr_restarted', 'pane_gone']

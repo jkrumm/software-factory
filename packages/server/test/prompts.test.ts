@@ -4,15 +4,19 @@ import {
   deliverPrompts,
   FAILURE_RETRY_MS,
   listOpenPrompts,
+  STATUS_PROMPTS,
   MAX_FAILURES,
   PENDING_TTL_MS,
   recordPrompt,
   TYPING_LEASE_MS,
 } from '../src/prompts.ts'
+import { recordReading } from '../src/capacity.ts'
+import { setQueue } from '../src/queue.ts'
 import { HerdrRunner, UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
+import { usage } from './support/quota.ts'
 import { FakeRunner, world } from './support/world.ts'
 
 let db: TestDb
@@ -114,7 +118,9 @@ describe('prompt delivery', () => {
     expect(runner.typed).toHaveLength(2)
     await deliver()
     expect(runner.typed).toHaveLength(2)
-    expect((await listOpenPrompts(db.sql, clock.now())).map((p) => [p.id, p.status])).toEqual([['n1', 'failed']])
+    expect((await listOpenPrompts(db.sql, clock.now())).prompts.map((p) => [p.id, p.status])).toEqual([
+      ['n1', 'failed'],
+    ])
   })
 
   test('a late turn_started that proves the first typing stops the retry', async () => {
@@ -250,9 +256,9 @@ describe('prompt delivery: guards', () => {
     clock.advance(CONFIRM_MS + 1_000)
     await deliver()
     expect((await row('old')).status).toBe('failed')
-    expect((await listOpenPrompts(db.sql, clock.now())).map((p) => p.id)).toEqual(['old'])
+    expect((await listOpenPrompts(db.sql, clock.now())).prompts.map((p) => p.id)).toEqual(['old'])
     clock.advance(25 * 3_600_000)
-    expect(await listOpenPrompts(db.sql, clock.now())).toEqual([])
+    expect(await listOpenPrompts(db.sql, clock.now())).toEqual({ prompts: [], more: 0 })
   })
 
   test('an error that may have typed the text is waited out by a turn, not typed again at once', async () => {
@@ -298,6 +304,99 @@ describe('prompt delivery: guards', () => {
     clock.advance(PENDING_TTL_MS.note)
     await deliver()
     expect((await row('n1')).status).toBe('failed')
+  })
+})
+
+describe('prompt delivery: one at a time, and resumes are admitted', () => {
+  test('a later prompt waits across passes while an earlier one is sent and unproven', async () => {
+    await working()
+    await endTurn()
+    await note('a')
+    await deliver()
+    await note('b')
+    clock.advance(5_000)
+    // The session is still idle as far as the hooks know (the first turn has not started): b must not be typed yet.
+    expect((await deliver()).sent).toEqual([])
+    expect(runner.typed.map((t) => t.text)).toHaveLength(1)
+    await startTurn()
+    await endTurn()
+    expect((await deliver()).sent).toEqual(['b'])
+  })
+
+  test('a retry is not typed when a turn showed up that the settle did not see', async () => {
+    await working()
+    await endTurn()
+    await note('n1')
+    await deliver()
+    // A retry row as the settle leaves it, and a turn that started after its claim.
+    await db.sql`UPDATE factory.prompts SET status = 'pending', next_at = ${clock.now()} WHERE id = 'n1'`
+    clock.advance(1_000)
+    await startTurn()
+    await endTurn()
+    await deliver()
+    expect(await row('n1')).toMatchObject({ status: 'delivered', sent_count: 1 })
+    expect(runner.typed).toHaveLength(1)
+  })
+
+  const resume = async () => {
+    await w.spawned('s', { account: 'a' })
+    await w.emit('s', 'turn_started', w.at(10))
+    await recordPrompt(
+      db.sql,
+      { id: 'restart:x:s', session: 's', source: 'restart', via: 'resume', text: 'cut off' },
+      clock.now(),
+    )
+  }
+  const open = (account: string) =>
+    recordReading(db.sql, { account, ...usage(10, 10, new Date(clock.now().getTime() + 3_600_000)) }, clock.now())
+
+  test('a herdr-restart resume under drain starts nothing, and starts once the queue runs again', async () => {
+    await resume()
+    await open('a')
+    await setQueue(db.sql, null, 'drain', clock.now())
+    expect((await deliver()).sent).toEqual([])
+    expect(runner.started).toEqual([])
+    expect(await row('restart:x:s')).toMatchObject({ status: 'pending', error: 'held: drain' })
+
+    await setQueue(db.sql, null, 'run', clock.now())
+    expect((await deliver()).sent).toEqual(['restart:x:s'])
+    expect(runner.started).toHaveLength(1)
+    expect(runner.started[0]).toMatchObject({ key: 's', account: 'a', resume: 'claude-s' })
+  })
+
+  test('is held without room on its account, even if another account has some', async () => {
+    await resume()
+    await recordReading(
+      db.sql,
+      { account: 'a', ...usage(10, 100, new Date(clock.now().getTime() + 3_600_000)) },
+      clock.now(),
+    )
+    await open('b')
+    expect((await deliver()).sent).toEqual([])
+    expect(runner.started).toEqual([])
+    expect((await row('restart:x:s')).error).toContain('held')
+    expect((await row('restart:x:s')).status).toBe('pending')
+  })
+
+  test('a resume uses up the capacity it was admitted on: the spawn counts as assigned from now', async () => {
+    await resume()
+    await open('a')
+    await deliver()
+    const [spawn] = await db.sql`SELECT assigned_at FROM factory.spawns WHERE key = 's'`
+    expect(new Date(spawn.assigned_at).getTime()).toBe(clock.now().getTime())
+  })
+})
+
+describe('the open prompts in status', () => {
+  test('failed ones come first, and what does not fit is counted', async () => {
+    await w.spawned('s')
+    await w.emit('s', 'turn_started', w.at(5))
+    for (let i = 0; i < STATUS_PROMPTS + 2; i++) await note(`p-${String(i).padStart(3, '0')}`, 'x')
+    await recordPrompt(db.sql, { id: 'bad', session: 's', source: 'restart', text: 'x', failed: 'no' }, clock.now())
+    const { prompts: shown, more } = await listOpenPrompts(db.sql, clock.now())
+    expect(shown).toHaveLength(STATUS_PROMPTS)
+    expect(shown[0]?.id).toBe('bad')
+    expect(more).toBe(3)
   })
 })
 

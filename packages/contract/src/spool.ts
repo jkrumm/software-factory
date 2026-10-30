@@ -112,3 +112,6 @@ export function spoolFileName(session: string): string {
 export const defaultSpoolDir = (home: string): string => `${home}/.local/share/factory/spool`
 /** Where the server listens for hooks: a unix socket in the owner's directory, so the file's mode is the credential. */
 export const defaultHookSocket = (home: string): string => `${home}/.local/share/factory/hook.sock`
+
+/** What an account is called in the registry and in the API: a short token, never free text. The hook and the server both check it. */
+export const ACCOUNT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/

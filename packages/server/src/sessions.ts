@@ -1,5 +1,6 @@
 import type { Effort, Session, SessionState, Tier, WaitOn } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { ACCOUNT_NAME } from '@software-factory/contract/spool'
 import type { EVENT_KINDS, EventInput } from './schemas.ts'
 
 export type EventKind = (typeof EVENT_KINDS)[number]
@@ -44,10 +45,13 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
       const value = event.payload?.[name]
       return typeof value === 'string' && value ? value : null
     }
+    // The account keys readings and shows in status: a name from the registry's alphabet, or none.
+    const account = text('account')
+    const accountName = account && ACCOUNT_NAME.test(account) ? account : null
     await tx`
       UPDATE factory.sessions
       SET claude_session_id = ${text('claudeSessionId')}, transcript_path = ${text('transcriptPath')},
-          cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${text('account')}, account), bound_at = ${event.at}
+          cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account), bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
   return { duplicate: false }

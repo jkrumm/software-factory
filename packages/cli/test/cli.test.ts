@@ -76,6 +76,7 @@ const STATUS = {
   queue: { effective: 'pace', spawns: [{ ...SPAWNS[1], hold: 'pace' }] },
   accounts: [QUOTA],
   notes: [PROMPT],
+  notesMore: 4,
 }
 
 let fake: ReturnType<typeof Bun.serve>
@@ -491,6 +492,7 @@ describe('factory status', () => {
     expect(lines).toContain('  a\twaiting\thold pace\t-\tat 2026-10-30T14:00:00.000Z')
     expect(lines.some((l) => l.startsWith('  me\t23\t45'))).toBe(true)
     expect(lines.some((l) => l.startsWith('  n1\tsess-1\tpending'))).toBe(true)
+    expect(lines).toContain('  ... 4 more not shown')
     expect(lines.length).toBeLessThan(24)
   })
 
