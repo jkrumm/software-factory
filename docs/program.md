@@ -33,8 +33,8 @@ code itself.
 |-|-|-|-|-|
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Done 2026-10-30, reviewed. Two items open, see the track note |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
-| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1–3 done: plain TypeScript won the spike. Step 4, the skeleton: `rd fan` worker `software-factory-skeleton` on branch `skeleton`, all ten spike findings in its brief |
-| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0, `shared` (A1 Wave 1) | Plan `docs/waves/f1.md` (six waves, each a `rd fan` worker); Wave 1 waits for the skeleton merge and `shared` |
+| F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Done 2026-10-30, reviewed: skeleton merged (PR #1), `make check` green, 164 tests. Not deployed: waits for `shared` (F1 Wave 1) |
+| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0, `shared` (A1 Wave 1) | Plan `docs/waves/f1.md` (six waves, each a `rd fan` worker); Wave 1 waits for `shared` |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | Plan in argo (six waves); Wave 1 running (`argo-w1`) |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
 | F2 | Issue machine: inbox, leads in worktrees, evidence, hold, `project.yaml` v0 | software-factory | F1 | pending |
@@ -73,6 +73,10 @@ routes (no caller; `aiComplete` stays), `startChatTurn` in the dashboard's telem
    the `factory` schema migrations, the CLI contract (SF4), release-directory deploy like agw.
 
 ### F1: fleet layer
+From the skeleton's review (PR #1), carried into Wave 1: the herdr adapter follows the spike spec (`--name`, exit 3),
+not herdr 0.9.3 (`--label`, no exit 3), and drops the prompt, so a `started` spawn has no agent yet; three claims fail a
+spawn during a few minutes of herdr restart; `/health` does not see a dead ticker; the CLI casts response bodies. The
+worker's assumption `SPAWN_COST` in `capacity.ts` (1 point weekly, 5 five-hour per unread spawn) is unmeasured.
 Evidence (wave-maturity investigation, 2026-10-30): quota stalls ~9 times with no automatic resume
 (`rd` dies with "paused", `claude-account exhausted` has no caller); turns ended with workers running 6×;
 prompts blocking under skip-permissions 4× (folder trust on new worktree paths, dangerous rm); load flakes
