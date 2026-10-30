@@ -258,6 +258,33 @@ describe('an account takes one spawn per sample', () => {
   })
 })
 
+describe('a spawn started again counts against its account again', () => {
+  test('a requeued spawn is assigned when it is claimed, not when it first was', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s1')
+    await db.sql`UPDATE factory.spawns SET status = 'failed', attempts = 4, error = 'gave up' WHERE key = 's1'`
+
+    // A sample is taken after s1's first assignment; s1 is requeued and claimed after it.
+    clock.advance(60_000)
+    await reading('a', 10, 10, inHours(2))
+    await app.send('POST', '/spawns/s1/requeue', {})
+    expect(await runTick()).toMatchObject({ started: ['s1'] })
+
+    // The sample does not show s1 yet, so the account takes no second spawn.
+    expect(await (await spawn('s2')).json()).toMatchObject({ status: 'waiting', account: null })
+  })
+
+  test('a start that failed and is retried is assigned again too', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s1')
+    await db.sql`UPDATE factory.spawns SET status = 'queued', attempts = 1, resume_at = ${clock.now()} WHERE key = 's1'`
+    clock.advance(60_000)
+    await reading('a', 10, 10, inHours(2))
+    expect(await runTick()).toMatchObject({ started: ['s1'] })
+    expect(await (await spawn('s2')).json()).toMatchObject({ status: 'waiting' })
+  })
+})
+
 describe('validation', () => {
   test('bad spawn and quota bodies are 400', async () => {
     expect((await app.send('POST', '/spawns', { key: 'x' })).status).toBe(400)

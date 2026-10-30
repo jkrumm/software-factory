@@ -105,7 +105,7 @@ export async function requeueSpawn(
   const [row]: SpawnRow[] = await sql`
     UPDATE factory.spawns
     SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
-        hold = NULL
+        hold = NULL, assigned_at = NULL
     WHERE key = ${key} AND status = 'failed'
     RETURNING key, status, role, tier, effort, hold, account, resume_at, attempts, session, error`
   if (row) return { spawn: toView(row) }
