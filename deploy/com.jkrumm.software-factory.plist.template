@@ -36,9 +36,9 @@
   <!-- A fail-closed launch (exit 78) retries at this pace, not in a tight loop. -->
   <key>ThrottleInterval</key>
   <integer>30</integer>
-  <!-- SIGTERM shutdown waits for the start in flight (at most about 75 s) and has its own 90 s backstop. -->
+  <!-- SIGTERM shutdown waits for the start in flight (its 180 s budget) and has its own 210 s backstop. -->
   <key>ExitTimeOut</key>
-  <integer>120</integer>
+  <integer>240</integer>
 
   <key>StandardOutPath</key>
   <string>__HOME__/Library/Logs/software-factory.out.log</string>

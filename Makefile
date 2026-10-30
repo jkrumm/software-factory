@@ -5,8 +5,8 @@ help:
 	@echo "make check   install, format, lint, shellcheck, tsc, tests (the merge gate)"
 	@echo "make test    the tests only"
 	@echo "make fmt     apply formatting"
-	@echo "make deploy  deploy origin/master on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
-	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master, and the factory CLI against it"
+	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
+	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF), and the factory CLI against it"
 
 # Tests start a private Postgres cluster (initdb) in a temp dir: PG_BIN_DIR points at the binaries when they are not on PATH.
 check:
