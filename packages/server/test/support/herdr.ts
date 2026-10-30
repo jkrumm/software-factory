@@ -1,74 +1,84 @@
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-/** An exit code, or: `garbage` creates the tab, then prints a banner and exits 0; `hang` never returns. */
-export type Step = number | 'garbage' | 'hang'
+const FAKE = join(import.meta.dir, 'fake-herdr.ts')
+
+export interface FakeState {
+  workspaces: { workspace_id: string; label: string }[]
+  tabs: { tab_id: string; workspace_id: string; label: string }[]
+  panes: { pane_id: string; tab_id: string; cwd: string; env: string[] }[]
+  agents: { name: string; pane_id: string; agent_status: string; interactive_ready: boolean; argv: string[] }[]
+  prompts: { pane: string; text: string }[]
+  calls: string[]
+}
 
 export interface FakeHerdr {
   /** value for `HERDR_BIN` */
   bin: string
-  /** outcomes for the next calls, in order; once used up the script behaves like herdr */
-  plan(...steps: Step[]): Promise<void>
-  /** the `--name` of every call so far */
+  /** a `claude-pretrust.sh` stand-in: logs its arguments, exits `pretrustExit` */
+  pretrustBin: string
+  /** an account registry with `a` (the default account) and `b` (a config directory) */
+  accountsFile: string
+  /** faults for the next calls, `"<command>:<fault>"` (`tab list:hang`, `agent prompt:drop`, `agent start:busy`, ...), each used once */
+  plan(...faults: string[]): Promise<void>
+  state(): Promise<FakeState>
+  /** every herdr call so far, as its arguments */
   calls(): Promise<string[]>
-  /** tab names that exist */
-  panes(): Promise<string[]>
-  /** forgets calls, tabs and the plan */
+  pretrustCalls(): Promise<string[]>
+  setPretrustExit(code: number): Promise<void>
+  /** forgets everything */
   reset(): Promise<void>
   cleanup(): Promise<void>
 }
 
-const script = (dir: string) => `#!/bin/sh
-dir='${dir}'
-[ "$1 $2" = "tab create" ] || exit 64
-name=''
-while [ $# -gt 0 ]; do
-  [ "$1" = "--name" ] && name="$2"
-  shift
-done
-echo "$name" >> "$dir/calls"
-code=0
-if [ -s "$dir/plan" ]; then
-  code=$(head -n 1 "$dir/plan")
-  tail -n +2 "$dir/plan" > "$dir/plan.tmp"
-  mv "$dir/plan.tmp" "$dir/plan"
-fi
-[ "$code" = hang ] && exec sleep 60
-if [ "$code" = garbage ]; then
-  touch "$dir/panes/$name"
-  echo 'herdr 0.9 (banner, not json)'
-  exit 0
-fi
-[ "$code" = 0 ] || exit "$code"
-if [ -e "$dir/panes/$name" ]; then
-  printf '{"pane":"pane-%s"}\\n' "$name"
-  exit 3
-fi
-touch "$dir/panes/$name"
-printf '{"pane":"pane-%s"}\\n' "$name"
-`
+const EMPTY = {
+  seq: 100,
+  workspaces: [],
+  tabs: [],
+  panes: [],
+  agents: [],
+  prompts: [],
+  calls: [],
+  plan: [],
+}
 
-/** A stand-in for the herdr binary: records calls, keeps tab names, and fails on demand. */
+/** A stand-in for the herdr binary (see fake-herdr.ts): keeps tabs, panes and agents, and fails on demand. */
 export async function createFakeHerdr(): Promise<FakeHerdr> {
   const dir = await mkdtemp('/tmp/factory-herdr-')
-  await mkdir(join(dir, 'panes'))
-  await writeFile(join(dir, 'calls'), '')
-  await writeFile(join(dir, 'plan'), '')
   const bin = join(dir, 'herdr')
-  await writeFile(bin, script(dir))
+  await writeFile(bin, `#!/bin/sh\nFAKE_HERDR_DIR='${dir}' exec bun '${FAKE}' "$@"\n`)
   await chmod(bin, 0o755)
+  const pretrustBin = join(dir, 'pretrust.sh')
+  await writeFile(
+    pretrustBin,
+    `#!/bin/sh\necho "$@" >> '${dir}/pretrust-calls'\nexit "$(cat '${dir}/pretrust-exit')"\n`,
+  )
+  await chmod(pretrustBin, 0o755)
+  const accountsFile = join(dir, 'accounts.json')
+  await writeFile(accountsFile, JSON.stringify({ accounts: { a: { dir: null }, b: { dir: '~/.claude-b' } } }))
+
+  const read = async (): Promise<FakeState & { plan: string[] }> =>
+    JSON.parse(await readFile(join(dir, 'state.json'), 'utf8'))
+  const reset = async () => {
+    await writeFile(join(dir, 'state.json'), JSON.stringify(EMPTY))
+    await writeFile(join(dir, 'pretrust-calls'), '')
+    await writeFile(join(dir, 'pretrust-exit'), '0')
+  }
+  await reset()
 
   return {
     bin,
-    plan: (...steps) => writeFile(join(dir, 'plan'), steps.map((s) => `${s}\n`).join('')),
-    calls: async () => (await readFile(join(dir, 'calls'), 'utf8')).split('\n').filter(Boolean),
-    panes: () => readdir(join(dir, 'panes')),
-    reset: async () => {
-      await rm(join(dir, 'panes'), { recursive: true, force: true })
-      await mkdir(join(dir, 'panes'))
-      await writeFile(join(dir, 'calls'), '')
-      await writeFile(join(dir, 'plan'), '')
+    pretrustBin,
+    accountsFile,
+    plan: async (...faults) => {
+      const state = await read()
+      await writeFile(join(dir, 'state.json'), JSON.stringify({ ...state, plan: faults }))
     },
+    state: read,
+    calls: async () => (await read()).calls,
+    pretrustCalls: async () => (await readFile(join(dir, 'pretrust-calls'), 'utf8')).split('\n').filter(Boolean),
+    setPretrustExit: (code) => writeFile(join(dir, 'pretrust-exit'), String(code)),
+    reset,
     cleanup: () => rm(dir, { recursive: true, force: true }),
   }
 }
