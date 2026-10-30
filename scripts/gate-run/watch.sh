@@ -7,7 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 pattern=${1:?pattern} bound=${2:-520}
 end=$((SECONDS + bound))
 while ((SECONDS < end)); do
-  line=$(fx session list --format json | jq -r '[.sessions[] | select(.id | startswith("factory-gate-")) | "\(.id)=\(.state)"] | join(" ")')
+  line=$(fx session list --format json | jq -r --argjson names "$(printf '%s\n' "${CHAINS[@]}" | jq -R . | jq -sc .)" \
+    '[.sessions[] | select((.id | sub("-w[0-9]+$"; "")) as $c | $names | index($c)) | "\(.id)=\(.state)"] | join(" ")')
   echo "$(date -u +%T) $line"
   grep -Eq "$pattern" <<<"$line" && exit 0
   sleep 30

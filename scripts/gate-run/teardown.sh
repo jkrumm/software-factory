@@ -6,9 +6,17 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-pending=$(fx spawn list --format json | jq -r --argjson names "$(printf '%s\n' "${CHAINS[@]}" | jq -R . | jq -sc .)" \
-  '.spawns[] | select(.status != "started" and .status != "failed" and ((.key | sub("-w[0-9]+$"; "")) as $c | $names | index($c))) | .key')
-[[ -z $pending ]] || { echo "teardown: spawns not started yet: $pending" >&2; exit 1; }
+# Every spawn key a chain can have, asked one by one (the list is capped at 200 rows).
+for name in "${CHAINS[@]}"; do
+  for n in 1 2 3 4 5; do
+    status=$(fx spawn get "$name-w$n" --format json 2>/dev/null | jq -r '.status // empty' || true)
+    case $status in queued | waiting | starting)
+      echo "teardown: spawn $name-w$n is $status; it would start in a removed repo" >&2
+      exit 1
+      ;;
+    esac
+  done
+done
 
 for name in "${CHAINS[@]}"; do
   repo=${SOURCE_ROOT:?}/$name remote=${REMOTES:?}/$name.git
@@ -19,7 +27,8 @@ for name in "${CHAINS[@]}"; do
   for n in 1 2 3 4 5; do
     rd close "$name-w$n" 2>&1 | head -1 | scrub | sed "s/^/teardown: $name-w$n: /" || true
   done
-  if rd agents 2>&1 | grep -q " $name "; then
+  agents=$(rd agents 2>&1) || { echo "teardown: rd agents failed, removed nothing" >&2; exit 1; }
+  if grep -Eq "(^|[[:space:]])$name([[:space:]]|$)|$name-w[0-9]" <<<"$agents"; then
     echo "teardown: $name still has an agent (not clean, pushed or finished); closed nothing more, removed nothing" >&2
     continue
   fi
