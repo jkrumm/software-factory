@@ -1,0 +1,3 @@
+[test]
+# Every test file may start a private Postgres cluster in beforeAll; initdb alone takes seconds on a loaded runner.
+timeout = 30000
