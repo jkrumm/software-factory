@@ -26,7 +26,20 @@ beforeEach(async () => {
   await herdr.reset()
 })
 
-const runTick = () => tick({ sql: db.sql, clock, runner: new HerdrRunner({ bin: herdr.bin, clock }) })
+const runTick = () =>
+  tick({
+    sql: db.sql,
+    clock,
+    runner: new HerdrRunner({
+      bin: herdr.bin,
+      clock,
+      pretrustBin: herdr.pretrustBin,
+      accountsFile: herdr.accountsFile,
+      home: '/home/me',
+      deliverWaitMs: 3_000,
+    }),
+  })
+const tabs = async () => (await herdr.state()).tabs.map((t) => t.label)
 const inHours = (h: number) => new Date(clock.now().getTime() + h * 3_600_000).toISOString()
 const reading = (account: string, weeklyUsed: number, fiveHourUsed: number, resetsAt: string) =>
   app.send('PUT', `/capacity/${account}`, { weeklyUsed, fiveHourUsed, resetsAt })
@@ -39,15 +52,21 @@ describe('a spawn with capacity', () => {
     const res = await spawn('s1')
     expect(res.status).toBe(201)
     expect(await res.json()).toMatchObject({ key: 's1', status: 'queued', account: 'a', resumeAt: null, attempts: 0 })
-    expect(await herdr.panes()).toEqual([])
+    expect(await tabs()).toEqual([])
 
     expect(await runTick()).toMatchObject({ started: ['s1'], failed: [], errors: [] })
-    expect(await status('s1')).toMatchObject({ status: 'started', account: 'a', attempts: 1, session: 'pane-s1' })
-    expect(await herdr.panes()).toEqual(['s1'])
+    expect(await status('s1')).toMatchObject({
+      status: 'started',
+      account: 'a',
+      attempts: 1,
+      session: expect.stringMatching(/:p\d+$/),
+    })
+    expect(await tabs()).toEqual(['s1'])
 
     // Nothing left to do.
+    const calls = (await herdr.calls()).length
     expect(await runTick()).toMatchObject({ started: [] })
-    expect(await herdr.calls()).toEqual(['s1'])
+    expect((await herdr.calls()).length).toBe(calls)
   })
 
   test('takes the least-used eligible account', async () => {
@@ -62,7 +81,7 @@ describe('a spawn with capacity', () => {
     await runTick()
     const again = await spawn('s1')
     expect(again.status).toBe(200)
-    expect(await again.json()).toMatchObject({ key: 's1', status: 'started', session: 'pane-s1' })
+    expect(await again.json()).toMatchObject({ key: 's1', status: 'started', session: expect.stringMatching(/:p\d+$/) })
   })
 })
 
@@ -173,7 +192,7 @@ describe('assignments count against the account', () => {
     expect(queued[0]).toMatchObject({ account: 'a' })
 
     expect(await runTick()).toMatchObject({ started: [queued[0] && (queued[0] as { key: string }).key] })
-    expect(await herdr.calls()).toHaveLength(1)
+    expect((await herdr.state()).agents).toHaveLength(1)
 
     // The next reading shows the real use; assignments made before it no longer count.
     await reading('a', 94, 10, inHours(2))
@@ -256,5 +275,56 @@ describe('GET /spawns', () => {
     const body = (await (await app.get('/spawns')).json()) as { spawns: { key: string; error: null }[] }
     expect(body.spawns.map((s) => s.key)).toEqual(['second', 'first'])
     expect(body.spawns[0]).toMatchObject({ status: 'queued', error: null })
+  })
+})
+
+describe('requeue', () => {
+  const fail = (key: string) =>
+    db.sql`UPDATE factory.spawns SET status = 'failed', attempts = 4, error = 'gave up', first_claimed_at = ${clock.now()} WHERE key = ${key}`
+  const requeue = (key: string) => app.send('POST', `/spawns/${key}/requeue`, {})
+
+  test('puts a failed spawn back in the queue with a fresh budget, and the next tick starts it', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s1')
+    await fail('s1')
+
+    const res = await requeue('s1')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ key: 's1', status: 'queued', attempts: 0, error: null, resumeAt: null })
+    const [row] = await db.sql`SELECT first_claimed_at, claimed_at FROM factory.spawns WHERE key = 's1'`
+    expect(row).toEqual({ first_claimed_at: null, claimed_at: null })
+
+    expect(await runTick()).toMatchObject({ started: ['s1'] })
+  })
+
+  test('a spawn that is not failed is a conflict and stays as it is', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s1')
+    const res = await requeue('s1')
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'spawn is queued; only a failed spawn can be re-queued' })
+    expect(await status('s1')).toMatchObject({ status: 'queued' })
+  })
+
+  test('an unknown key is a 404', async () => {
+    expect((await requeue('nope')).status).toBe(404)
+  })
+
+  test('it needs the token', async () => {
+    const res = await app.bare('/spawns/s1/requeue', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('the prompt', () => {
+  test("cannot start with '-': herdr would read it as an option", async () => {
+    const res = await app.send('POST', '/spawns', { key: 'dash', repo: '/work/repo', prompt: '-rf everything' })
+    expect(res.status).toBe(400)
+    expect(
+      await app.send('POST', '/spawns', { key: 'dash', repo: '/work/repo', prompt: 'a - b' }).then((r) => r.status),
+    ).not.toBe(400)
   })
 })

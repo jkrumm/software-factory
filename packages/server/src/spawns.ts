@@ -1,18 +1,9 @@
+import type { Spawn, SpawnStatus } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
 import type { SpawnInput } from './schemas.ts'
 
-export type SpawnStatus = 'queued' | 'waiting' | 'starting' | 'started' | 'failed'
-
-export interface SpawnView {
-  key: string
-  status: SpawnStatus
-  account: string | null
-  resumeAt: string | null
-  attempts: number
-  session: string | null
-  error: string | null
-}
+export type SpawnView = Spawn
 
 interface SpawnRow {
   key: string
@@ -76,4 +67,22 @@ export async function createSpawn(
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     return { spawn: toView(row), created: true }
   })
+}
+
+/**
+ * Puts a `failed` spawn back in the queue with a fresh retry budget: the next tick picks an account and starts it.
+ * Anything else is left alone (`not_failed`), so a double click or a replay changes nothing.
+ */
+export async function requeueSpawn(
+  sql: SQL,
+  key: string,
+): Promise<{ spawn: SpawnView } | { problem: 'unknown' | 'not_failed'; status?: SpawnStatus }> {
+  const [row]: SpawnRow[] = await sql`
+    UPDATE factory.spawns
+    SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL
+    WHERE key = ${key} AND status = 'failed'
+    RETURNING key, status, account, resume_at, attempts, session, error`
+  if (row) return { spawn: toView(row) }
+  const current = await getSpawn(sql, key)
+  return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }
 }
