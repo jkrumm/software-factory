@@ -1,0 +1,35 @@
+claude --dangerously-skip-permissions --model sonnet --effort high
+
+<host> factory-gameday  master
+❯ claude --dangerously-skip-permissions --model sonnet --effort high
+ ▐▛███▛█   Claude Code v2.1.314
+▝▜██████▀  Sonnet 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   ~/SourceRoot/factory-gameday
+
+
+❯ Scratch gameday, key fgd-g2-claimed, marker PROMPTMARK-fgd-g2-claimed. Do exactly this and nothing else: 1) run "perl
+  -e 'sleep 50'" in bash (the harness blocks a plain sleep); 2) write the file out/fgd-g2-claimed.txt with the single
+  line PROMPTMARK-fgd-g2-claimed; 3) git add it, commit with the message 'chore: gameday fgd-g2-claimed' and run 'git
+  push origin master'; 4) end your turn.
+
+⏺ Bash(perl -e 'sleep 50')
+  ⎿  (No output)
+  ⎿  (timeout 1m 30s)
+
+⏺ Bash(mkdir -p out && echo 'PROMPTMARK-fgd-g2-claimed' > out/fgd-g2-claimed.txt && git add out/fgd-g2-claimed.txt &&
+      git commit -m 'chore: gameday fgd-g2-claimed' &&…)
+  ⎿  [master 9efa18f] chore: gameday fgd-g2-claimed
+      1 file changed, 1 insertion(+)
+      create mode 100644 out/fgd-g2-claimed.txt
+     … +2 lines (ctrl+o to expand)
+
+⏺ Done: out/fgd-g2-claimed.txt is committed as 9efa18f and pushed to origin master.
+
+✻ Crunched for 55s · done 9:24 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  MAX IU · Sonnet 5.5 · high | 30k/600k 5% | Σ16k | ⚡83% | 4min | iu 10/54 ↺155m · me 17/54 · me2 0/100 · ∑62%
+  factory-gameday | ✓ master
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 2 agents

@@ -1,0 +1,5 @@
+2026-10-30T20:32:23.973Z run fgd-g2-working: release dd9b001e2023, server pid 98500, base commit 441714b
+2026-10-30T20:32:23.988Z run fgd-g2-working: spawn create (role worker, repo factory-gameday), watcher working armed
+{"key":"fgd-g2-working","status":"queued","account":"me","role":"worker","tier":"sonnet","effort":"high"}
+2026-10-30T20:32:35.128Z run fgd-g2-working: spawn: started attempts=1 pane=w71:p4 hold=- | session: working turn=1
+2026-10-30T20:33:31.976Z run fgd-g2-working: spawn: started attempts=1 pane=w71:p4 hold=- | session: idle turn=1

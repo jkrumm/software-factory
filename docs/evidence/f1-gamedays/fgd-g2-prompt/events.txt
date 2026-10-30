@@ -1,0 +1,4 @@
+session_started|fgd-g2-prompt:session_started:0|20:27:14.164
+turn_started|fgd-g2-prompt:turn_started:1|20:27:17.645
+turn_ended|fgd-g2-prompt:turn_ended:1|20:28:13.624
+prompt_idle|fgd-g2-prompt:prompt_idle:1|20:29:13.681
