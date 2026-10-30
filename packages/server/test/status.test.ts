@@ -159,7 +159,13 @@ describe('the routes', () => {
     expect((await app.send('POST', '/sessions/nobody/note', { id: 'n2', text: 'x' })).status).toBe(404)
     expect((await app.send('POST', '/sessions/s/note', { id: 'n3', text: '-flag' })).status).toBe(400)
     // A rule's key is not a note's to take: it would keep the rule from firing and type its own text.
-    for (const reserved of ['resume:s:2026', 'rotate:s:w', 'blocked:s:1', 'wake:s:w:wait_declared:1', 'restart:100@x:s']) {
+    for (const reserved of [
+      'resume:s:2026',
+      'rotate:s:w',
+      'blocked:s:1',
+      'wake:s:w:wait_declared:1',
+      'restart:100@x:s',
+    ]) {
       expect((await app.send('POST', '/sessions/s/note', { id: reserved, text: 'x' })).status).toBe(400)
     }
     expect((await app.send('POST', '/sessions/s/note', { id: 'n3', text: '' })).status).toBe(400)
