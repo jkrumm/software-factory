@@ -212,12 +212,18 @@ describe('an account takes one spawn per sample', () => {
     expect((await herdr.state()).agents).toHaveLength(1)
   })
 
-  test('the next sample, taken after the assignment, frees the account again', async () => {
+  test('a queued spawn holds its account against any sample; a started one until a sample taken after its start', async () => {
     await reading('a', 10, 10, inHours(2))
     expect(await (await spawn('first')).json()).toMatchObject({ status: 'queued', account: 'a' })
     expect(await (await spawn('second')).json()).toMatchObject({ status: 'waiting', account: null })
 
-    // A reading that repeats the old sample does not show the spawn: the account stays taken.
+    // No agent runs for the queued spawn yet, so a newer sample cannot show it.
+    clock.advance(60_000)
+    await reading('a', 10, 10, inHours(2))
+    expect(await (await spawn('third')).json()).toMatchObject({ status: 'waiting' })
+
+    // It starts. A sample whose picker data is older than the start does not show it.
+    expect(await runTick()).toMatchObject({ started: ['first'] })
     clock.advance(60_000)
     await app.send('PUT', '/quota/accounts/a', {
       weeklyUsed: 10,
@@ -226,11 +232,11 @@ describe('an account takes one spawn per sample', () => {
       weeklyResetsAt: inHours(2),
       ageS: 120,
     })
-    expect(await (await spawn('third')).json()).toMatchObject({ status: 'waiting' })
+    expect(await (await spawn('fourth')).json()).toMatchObject({ status: 'waiting' })
 
-    // A sample taken after the assignment does: its numbers include what the first spawn used.
+    // One taken after the start does: its numbers include what the first spawn used.
     await reading('a', 14, 12, inHours(2))
-    expect(await (await spawn('fourth')).json()).toMatchObject({ status: 'queued', account: 'a' })
+    expect(await (await spawn('fifth')).json()).toMatchObject({ status: 'queued', account: 'a' })
   })
 
   test('equally free accounts take one spawn each, the rest wait', async () => {

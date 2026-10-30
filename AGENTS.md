@@ -111,9 +111,10 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
   `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
   pace the moment the elapsed share reaches the use); none if no reading names a time, a new reading wakes it.
-  **The spawn cost is not a number:** an account takes one new spawn per sample. A spawn assigned (`assigned_at`, set again at every claim that is not a reclaim) at or after
-  an account's latest `sampled_at` is not in its numbers yet, so that account is not offered again until a sample taken after
-  the assignment exists (the poll shows it within about a minute). A burst starts as many spawns as there are open accounts
+  **The spawn cost is not a number:** an account takes one new spawn per sample. A queued or starting spawn holds its account (no agent runs yet, no sample
+  can show it); a started one holds it until a sample is taken after the moment it started (`assigned_at`, moved to the start;
+  `sampled_at` is stamped before the picker is asked). Then the account is offered again (the poll shows it within about a
+  minute). A burst starts as many spawns as there are open accounts
   and the rest wait for the next sample.
 - **Queue state `run|pace|drain`** (`queue.ts`, table `queue_states`): per scope, global (`project` null) or a project (the
   repo path, resolved like a spawn's); `initiative` is a nullable column for F4, not read yet. No row is `run`. The most
