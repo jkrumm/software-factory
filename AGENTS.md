@@ -29,7 +29,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Never call a port inside a transaction.** The tick claims a row and commits, calls the `Runner` (every call has a
   process timeout), records the result in a new transaction. A failing start is retried until a time budget from the
   first claim (30 min, `FACTORY_RETRY_BUDGET_MS`), then `failed` with a logged reason; `factory spawn requeue <key>`
-  starts a failed spawn over. Admission is decided again at start, and only due rows are selected
+  starts a failed spawn over. Admission is decided again at every claim except a reclaim (an expired lease: its agent may
+  already run, so it finishes on its account), and only due rows are selected
   (`docs/design.md` §3, "The tick").
 - **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
   pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
@@ -104,7 +105,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count once they
-  carry a role, which they do not yet; a `failed` spawn whose agent still runs is a live session, its tab is kept). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
+  carry a role, which they do not yet; a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
+  agent may run). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
   auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
   `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
@@ -122,7 +124,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   model id) and effort (`low|medium|high|xhigh|max`). `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
   of a known key answers with its row) and
   stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
-  at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one). `factory role list|get <role>` reads the file
+  at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one), so an edit needs a deploy or restart, and a
+  spawn keeps the tier and effort it was queued with. `factory role list|get <role>` reads the file
   itself, with no server and no token: `rd --role` depends on `role get <role> --format json` printing exactly
   `{"role","tier","effort"}` (exit 0; unknown role is exit 4). Values change only on measured data.
 - **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server

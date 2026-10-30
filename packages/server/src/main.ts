@@ -27,7 +27,10 @@ for (const file of [config.pretrustBin, config.accountsFile, config.claudeAccoun
   }
 }
 
-const roles = await loadRoleTable(config.rolesFile)
+const roles = await loadRoleTable(config.rolesFile).catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})
 
 // The factory role may hold 10 connections: the pool (one of them kept for the one-process lock) leaves room for a psql.
 const sql = new SQL({ url: config.databaseUrl, max: 8 })

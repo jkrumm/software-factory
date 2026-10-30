@@ -68,7 +68,7 @@ export const QuotaInput = z.object({
 export type QuotaInput = z.output<typeof QuotaInput>
 
 /** `PUT /queue`: the state of the global scope, or of one project. */
-export const QueueInput = z.object({
+export const QueueInput = z.strictObject({
   state: QueueState,
   project: RepoPath.optional(),
 })

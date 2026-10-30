@@ -103,6 +103,11 @@ describe('queue state', () => {
     expect(await getQueue(OTHER_REPO)).toMatchObject({ state: 'run', effective: 'pace' })
   })
 
+  test('a misspelled scope is a 400, not the global scope', async () => {
+    expect((await app.send('PUT', '/queue', { state: 'drain', projct: TEST_REPO })).status).toBe(400)
+    expect(await getQueue()).toMatchObject({ scopes: [] })
+  })
+
   test('a project outside the allowed roots is 422 and a state that does not exist is 400', async () => {
     expect((await setQueue('drain', '/etc')).status).toBe(422)
     expect((await app.get('/queue?project=%2Fetc')).status).toBe(422)
@@ -303,6 +308,14 @@ describe('one active wave per repo', () => {
 
     expect(await runTick()).toMatchObject({ failed: ['f'], started: [] })
     expect(await row('y')).toMatchObject({ status: 'queued', hold: 'wave' })
+  })
+
+  // Its agent may be running (the tab is kept), so the repo's wave slot stays taken until the spawn fails for good.
+  test('a start that failed and will be retried still holds its repo', async () => {
+    await spawn('w1', { role: 'wave' })
+    await herdr.plan('workspace list:exit1')
+    expect(await runTick()).toMatchObject({ retrying: ['w1'] })
+    expect(await (await spawn('w2', { role: 'wave' })).json()).toMatchObject({ status: 'queued', hold: 'wave' })
   })
 
   test('held spawns are looked at after the ones that are not, so they cannot crowd a batch', async () => {

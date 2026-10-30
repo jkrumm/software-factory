@@ -83,7 +83,7 @@ const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
  * Phase 1: in one short transaction, take the spawns that are due and mark them `starting`. The pane is named after
  * the key, so a claim that dies before its result is recorded is found again by name, not started twice.
  * Due means `resume_at` has passed (a queued spawn has none), or a claim whose lease ran out. Waiting spawns sort
- * after queued ones and held ones after both, and a spawn that cannot start leaves the due set (a held one for 30 s), so
+ * after queued ones and held ones last of all, and a spawn that cannot start leaves the due set (a held one for 30 s), so
  * it does not hold up the rest.
  * Admission (queue state, one wave per repo, capacity) is decided again here: a stored account is only a hint.
  */
@@ -99,7 +99,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
          OR (status = 'starting' AND claimed_at <= ${staleBefore})
-      ORDER BY (status = 'waiting'), (hold IS NOT NULL), created_at, key
+      ORDER BY (hold IS NOT NULL), (status = 'waiting'), created_at, key
       LIMIT ${deps.batch ?? DEFAULT_BATCH}
       FOR UPDATE SKIP LOCKED`
 
