@@ -99,11 +99,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   age of the picker's own sample is not judged, only stored. A window the picker has no number for counts as unused (as the
   picker weighs it); both without, or no sample time, is no sample and the account is closed. Rows older than a week are
   deleted, the newest of each account kept. `capacity_readings` (the previous release's table) is still fed for one release so a
-  rollback finds live readings; drop it, and this sentence, in the release after.
+  rollback finds live readings; drop it, and this sentence, in the release after. A rollback to the Wave 2 release is not
+  fail-safe otherwise: it knows no holds, roles or per-sample loads, so drain by waiting for the queue to empty first.
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count once they
-  carry a role, which they do not yet). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
+  carry a role, which they do not yet; a `failed` spawn whose agent still runs is a live session, its tab is kept). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
   auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
   `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
