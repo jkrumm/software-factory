@@ -95,7 +95,7 @@ const ticker = startTicker(
   monitor,
 )
 const witnessLoop = startWitness({ sql, herdr: new HerdrCli({ bin: config.herdrBin }), clock, probe: gitProbe })
-console.log(`listening on ${server.url} (version ${config.version})`)
+console.log(`listening on ${server.url.href} (version ${config.version})`)
 
 let stopping = false
 async function shutdown(signal: string): Promise<void> {

@@ -198,6 +198,7 @@ describe('the poller', () => {
     // The source breaks: the first try throws, the next pass inside the minute does not try again.
     clock.advance(POLL_EVERY_MS)
     source.failure = new QuotaError('picker down')
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
     await expect(poller.pollIfDue()).rejects.toThrow('picker down')
     await poller.pollIfDue()
     expect(source.reads).toBe(3)

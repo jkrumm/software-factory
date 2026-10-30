@@ -108,8 +108,8 @@ describe('the hooks socket', () => {
     socket = join(dir, 'h.sock')
     hooks = serveHooks({ sql: db.sql, clock, token: TEST_TOKEN, socketPath: socket })
   })
-  afterAll(() => {
-    hooks.stop(true)
+  afterAll(async () => {
+    await hooks.stop(true)
     rmSync(dir, { recursive: true, force: true })
   })
   const post = (path: string, body: unknown, method = 'POST') =>

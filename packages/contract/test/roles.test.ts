@@ -49,6 +49,7 @@ describe('parseRoleTable', () => {
   })
 
   test('loadRoleTable names the file it could not use', async () => {
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
     await expect(loadRoleTable('/nonexistent/roles.json')).rejects.toThrow('/nonexistent/roles.json')
   })
 })

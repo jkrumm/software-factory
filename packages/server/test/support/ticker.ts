@@ -10,7 +10,7 @@ const idle: Runner = { start: () => Promise.reject(new Error('no spawn is expect
 export function startTick(sql: SQL, clock: Clock, monitor: TickMonitor) {
   const ticker = startTicker({ sql, clock, runner: idle }, 3_600_000, monitor)
   return {
-    stop: ticker.stop,
+    stop: () => ticker.stop(),
     /** the first pass has been reported */
     settled: async () => {
       for (let i = 0; i < 200 && monitor.snapshot().tick.lastSuccessAt === null; i++) await Bun.sleep(10)

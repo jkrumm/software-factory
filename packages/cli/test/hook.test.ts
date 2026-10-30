@@ -24,8 +24,8 @@ beforeAll(() => {
     },
   })
 })
-afterAll(() => {
-  server.stop(true)
+afterAll(async () => {
+  await server.stop(true)
   rmSync(dir, { recursive: true, force: true })
 })
 beforeEach(() => {
@@ -39,7 +39,7 @@ const lines = (session: string) => {
   const file = join(spoolDir(), spoolFileName(session))
   return existsSync(file) ? parseSpool(readFileSync(file, 'utf8')) : []
 }
-let clockMs = Date.parse('2026-10-30T12:00:00.000Z')
+const clockMs = Date.parse('2026-10-30T12:00:00.000Z')
 const env = (extra: Record<string, string> = {}) => ({
   HOME: dir,
   FACTORY_SESSION: 's',
