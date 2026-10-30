@@ -53,15 +53,25 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
   return { duplicate: false }
 }
 
-/** The row of a session the factory started, made as soon as the Runner has its pane. */
+/**
+ * The row of a session the factory is starting: made when the tick claims the spawn (state `starting` until the first
+ * hook event), and given its pane when the Runner has one.
+ */
 export async function openSession(
   tx: SQL,
-  input: { id: string; spawnKey: string; pane: string; at: Date },
+  input: { id: string; spawnKey: string; pane: string | null; at: Date },
 ): Promise<void> {
   await tx`
     INSERT INTO factory.sessions (id, spawn_key, pane, created_at)
     VALUES (${input.id}, ${input.spawnKey}, ${input.pane}, ${input.at})
-    ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = EXCLUDED.pane`
+    ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = COALESCE(EXCLUDED.pane, factory.sessions.pane)`
+}
+
+/** A spawn that gave up never became a session: its row, if it never got a pane or an event, goes. */
+export async function dropEmptySession(tx: SQL, id: string): Promise<void> {
+  await tx`
+    DELETE FROM factory.sessions s
+    WHERE s.id = ${id} AND s.pane IS NULL AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id)`
 }
 
 // --- derived state -----------------------------------------------------------------------------------------------

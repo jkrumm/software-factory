@@ -4,7 +4,7 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
-import { openSession } from './sessions.ts'
+import { dropEmptySession, openSession } from './sessions.ts'
 import type { SpoolReplayer } from './spool.ts'
 
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
@@ -101,6 +101,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       if (row.first_claimed_at && now.getTime() - row.first_claimed_at.getTime() >= budgetMs) {
         const reason = `gave up: the ${minutes(budgetMs)} retry budget is spent after ${row.attempts} attempts${row.error ? `: ${row.error}` : ''}`
         await tx`UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason} WHERE key = ${row.key}`
+        await dropEmptySession(tx, row.key)
         failed.push({ key: row.key, reason })
         continue
       }
@@ -117,6 +118,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
           SET status = 'waiting', account = NULL, reading_id = NULL, claimed_at = NULL, resume_at = ${resumeAt},
               first_claimed_at = NULL
           WHERE key = ${row.key}`
+        await dropEmptySession(tx, row.key)
         skipped++
         continue
       }
@@ -125,6 +127,8 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         SET status = 'starting', account = ${picked.account}, reading_id = COALESCE(${picked.id}, reading_id), claimed_at = ${now},
             resume_at = NULL, attempts = attempts + 1, first_claimed_at = COALESCE(first_claimed_at, ${now})
         WHERE key = ${row.key}`
+      // From the claim on it is a session that is starting; the hooks' first event ends that.
+      await openSession(tx, { id: row.key, spawnKey: row.key, pane: null, at: now })
       claims.push({
         key: row.key,
         repo: row.repo,
@@ -163,11 +167,15 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
     const reason = permanent
       ? message
       : `gave up: the ${minutes(budgetMs)} retry budget is spent after ${claim.attempts} attempts: ${message}`
-    const rows = await deps.sql`
-      UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason}
-      WHERE key = ${claim.key} AND status = 'starting'
-      RETURNING key`
-    if (rows.length > 0) logFailed(claim.key, reason)
+    const failed = await deps.sql.begin(async (tx) => {
+      const rows = await tx`
+        UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason}
+        WHERE key = ${claim.key} AND status = 'starting'
+        RETURNING key`
+      if (rows.length > 0) await dropEmptySession(tx, claim.key)
+      return rows.length > 0
+    })
+    if (failed) logFailed(claim.key, reason)
     return 'failed'
   }
   const retryAt = new Date(now.getTime() + retryDelayMs(claim.attempts))

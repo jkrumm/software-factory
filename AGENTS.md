@@ -51,7 +51,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local/share/factory/spool/<session>.jsonl`
   (`FACTORY_SPOOL_DIR`, one `O_APPEND` write), posts it to the server's unix socket (`FACTORY_SOCKET`, default
   `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens. The hook has no token and the Runner
-  keeps secrets out of the panes, so the socket (mode 0600, in a 0700 directory) is its credential; the socket serves
+  keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
   `POST /events` and nothing else. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout and stderr stay empty for every
   event**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the session's context (tested per event).
@@ -69,7 +69,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   open turn), `idle`. Events are ordered by event time, then arrival. Only `limit_stop` from `StopFailure rate_limit`
   is a wall; other stop failures are ignored.
 - **`factory.sessions` is what the factory follows; `usage` owns the session entity.** Row id = `FACTORY_SESSION`; a spawn
-  gets its row when the Runner returns its pane, an `rd` name when its first event arrives. `session_started` binds
+  gets its row when the tick claims it (`starting` until its first event; the pane is added when the Runner returns it; a
+  spawn that fails for good without a pane or event takes its row with it), an `rd` name when its first event arrives. `session_started` binds
   Claude's session id, transcript path and cwd (the join key with `usage`); an older start delivered late does not
   overwrite a newer binding.
 - **The witness** (`witness.ts`) asks herdr (`agent list`, Wave 1 process timeout) once a minute: records each session's
