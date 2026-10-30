@@ -15,7 +15,7 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 fail() { echo "verify: FAIL: $*" >&2; exit 1; }
 ok() { echo "verify: ok: $*"; }
 
-for tool in git curl jq factory; do
+for tool in git curl jq factory secrets-run; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool not found on PATH"
 done
 
@@ -33,9 +33,16 @@ remote=$(git -C "$REPO_DIR" ls-remote origin refs/heads/master | awk '{print $1}
 [[ "$version" == "$deployed" ]] || fail "the running server reports ${version:0:12}, deployed is ${deployed:0:12}"
 ok "deployed sha is origin/master (${deployed:0:12})"
 
-# 3. the installed CLI reaches it
-FACTORY_URL="http://127.0.0.1:$PORT" factory health >/dev/null || fail "factory health failed"
-FACTORY_URL="http://127.0.0.1:$PORT" factory spawn list >/dev/null || fail "factory spawn list failed"
+# 3. the API refuses a caller without the token
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/spawns")
+[[ "$code" == "401" ]] || fail "GET /spawns without a token answered $code, expected 401"
+ok "GET /spawns without a token is 401"
+
+# 4. the installed CLI reaches it with the token, which secrets-run resolves from the deployed release's .env.tpl
+export FACTORY_URL="http://127.0.0.1:$PORT"
+factory health >/dev/null || fail "factory health failed"
+secrets-run run --env-file="$ROOT/current/.env.tpl" -- factory spawn list >/dev/null || fail "factory spawn list failed"
 ok "factory health and factory spawn list"
+
 
 echo "verify: all checks passed"
