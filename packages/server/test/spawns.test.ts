@@ -261,7 +261,7 @@ describe('an account takes one spawn per sample', () => {
     expect(await (await spawn('s2')).json()).toMatchObject({ status: 'waiting', account: null, resumeAt: null })
 
     // The tick looks at it again only when a reading wakes it; one taken before the starts does not show them.
-    expect(await runTick()).toMatchObject({ started: ['s0', 's1'] })
+    expect((await runTick()).started.toSorted()).toEqual(['s0', 's1'])
     clock.advance(60_000)
     for (const account of ['a', 'b']) {
       await app.send('PUT', `/quota/accounts/${account}`, {
