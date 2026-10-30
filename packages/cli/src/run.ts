@@ -16,6 +16,7 @@ commands:
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
+FACTORY_TOKEN    the bearer token the server requires (not needed for version and health)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
 `
@@ -49,12 +50,21 @@ const notContract = (path: string) =>
 const cell = (value: unknown) => (value === null || value === undefined ? '-' : String(value))
 
 /** Calls the server and returns the parsed body; every failure is a `FactoryError` with agw's kind. */
-async function call(io: Io, path: string): Promise<unknown> {
+async function call(io: Io, path: string, options: { auth: boolean }): Promise<unknown> {
   const base = (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
+  const token = io.env.FACTORY_TOKEN
+  if (options.auth && !token) {
+    throw new FactoryError('auth', 'no FACTORY_TOKEN set', {
+      hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+    })
+  }
   let response: Response
   let text: string
   try {
-    response = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) })
+    response = await fetch(`${base}${path}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
     text = await response.text()
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
@@ -84,7 +94,7 @@ async function execute(words: string[], format: Format, io: Io): Promise<void> {
   if (key === 'version') return print({ version: pkg.version }, pkg.version)
 
   if (key === 'health') {
-    const body = await call(io, '/health')
+    const body = await call(io, '/health', { auth: false })
     if (!isRecord(body)) throw notContract('/health')
     print(body, `${cell(body.status)}\t${cell(body.version)}`)
     if (body.status !== 'ok') throw new FactoryError('general', `server is not ok: ${cell(body.status)}`)
@@ -92,7 +102,7 @@ async function execute(words: string[], format: Format, io: Io): Promise<void> {
   }
 
   if (key === 'spawn list') {
-    const answer = await call(io, '/spawns')
+    const answer = await call(io, '/spawns', { auth: true })
     if (!isRecord(answer) || !Array.isArray(answer.spawns)) throw notContract('/spawns')
     const spawns = answer.spawns as SpawnRow[]
     const lines = spawns.map((s) =>
