@@ -6,6 +6,8 @@ import { migrate } from '../../src/db.ts'
 
 export interface TestDb {
   sql: SQL
+  /** the unix socket, for a second client */
+  path: string
   /** empties every table between tests */
   reset(): Promise<void>
   stop(): Promise<void>
@@ -78,6 +80,7 @@ export async function startTestDb(options: { migrate?: boolean } = {}): Promise<
 
   return {
     sql,
+    path: join(root, `.s.PGSQL.${port}`),
     reset: async () => {
       await sql`TRUNCATE factory.events, factory.capacity_readings, factory.spawns RESTART IDENTITY`
     },

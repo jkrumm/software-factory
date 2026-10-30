@@ -29,3 +29,30 @@ export async function migrate(sql: SQL, dir: string = MIGRATIONS_DIR): Promise<s
     return applied
   })
 }
+
+/** Names the one-process lock; distinct from the migration lock. */
+export const SINGLETON_LOCK = 7_093_002
+
+export interface Singleton {
+  release(): Promise<void>
+}
+
+/**
+ * Takes the session-level advisory lock that makes this the only server on the database. The lock belongs to a
+ * connection, so one is reserved and kept for the life of the process; the database drops the lock when it closes.
+ * Returns `undefined` when another copy holds it.
+ */
+export async function acquireSingleton(sql: SQL): Promise<Singleton | undefined> {
+  const connection = await sql.reserve()
+  const [row] = await connection`SELECT pg_try_advisory_lock(${SINGLETON_LOCK}) AS locked`
+  if (!row?.locked) {
+    connection.release()
+    return undefined
+  }
+  return {
+    release: async () => {
+      await connection`SELECT pg_advisory_unlock(${SINGLETON_LOCK})`
+      connection.release()
+    },
+  }
+}
