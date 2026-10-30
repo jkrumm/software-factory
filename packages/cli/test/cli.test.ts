@@ -5,7 +5,7 @@ import { EXIT } from '../src/exit.ts'
 
 const BIN = join(import.meta.dir, '..', 'bin', 'factory.ts')
 
-const ROLE = { role: 'worker', tier: 'sonnet', effort: 'high', hold: null } as const
+const ROLE = { role: 'worker', tier: 'sonnet', effort: 'high', hold: null, parent: null } as const
 const SPAWNS = [
   { key: 'b', status: 'started', account: 'a', resumeAt: null, attempts: 1, session: 'pane-b', error: null, ...ROLE },
   {
@@ -33,6 +33,10 @@ const SESSION = {
   cwd: '/w',
   herdrStatus: 'working',
   herdrSeenAt: '2026-10-30T12:00:00.000Z',
+  role: null,
+  account: null,
+  parent: null,
+  since: '2026-10-30T11:59:00.000Z',
 }
 const QUOTA = {
   account: 'me',
@@ -50,6 +54,29 @@ const QUOTA = {
 const queueCalls: { method: string; project: string | null; state?: string }[] = []
 const DEAD = { ...SESSION, id: 'old', state: 'dead', pane: null }
 const sessionCalls: { id: string; body: unknown }[] = []
+const noteCalls: { id: string; body: { id: string; text: string } }[] = []
+const spawnCalls: unknown[] = []
+const PROMPT = {
+  id: 'n1',
+  session: 'sess-1',
+  source: 'note',
+  via: 'type',
+  text: 'look at x',
+  status: 'pending',
+  createdAt: '2026-10-30T12:00:00.000Z',
+  sentCount: 0,
+  sentAt: null,
+  deliveredAt: null,
+  error: null,
+}
+const STATUS = {
+  now: '2026-10-30T12:05:00.000Z',
+  attention: ['blocked sess-2 for 3 min: Dangerous rm'],
+  sessions: [{ ...SESSION, id: 'sess-2', state: 'blocked', role: 'wave', account: 'me' }, SESSION],
+  queue: { effective: 'pace', spawns: [{ ...SPAWNS[1], hold: 'pace' }] },
+  accounts: [QUOTA],
+  notes: [PROMPT],
+}
 
 let fake: ReturnType<typeof Bun.serve>
 let sock: ReturnType<typeof Bun.serve>
@@ -66,7 +93,13 @@ beforeAll(() => {
     unix: SOCKET(),
     fetch: async (req) => {
       const [, , id, sub] = new URL(req.url).pathname.split('/')
-      if (sub !== 'wait' || req.method !== 'POST' || !id) return Response.json({ error: 'not found' }, { status: 404 })
+      if (req.method !== 'POST' || !id) return Response.json({ error: 'not found' }, { status: 404 })
+      if (sub === 'note') {
+        const body = (await req.json()) as { id: string; text: string }
+        noteCalls.push({ id, body })
+        return Response.json({ ...PROMPT, id: body.id, session: id, text: body.text }, { status: 201 })
+      }
+      if (sub !== 'wait') return Response.json({ error: 'not found' }, { status: 404 })
       sessionCalls.push({ id, body: await req.json() })
       return Response.json({ ...SESSION, id })
     },
@@ -145,9 +178,19 @@ beforeAll(() => {
         if (id === 'nope') return Response.json({ error: 'unknown session' }, { status: 404 })
         return Response.json({ ...SESSION, id })
       }
+      if (path === '/status') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        return Response.json(STATUS)
+      }
       if (path === '/spawns') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
           return Response.json({ error: 'unauthorized' }, { status: 401 })
+        if (req.method === 'POST') {
+          const body = (await req.json()) as { key: string }
+          spawnCalls.push(body)
+          return Response.json({ ...SPAWNS[1], ...body, status: 'queued', resumeAt: null }, { status: 201 })
+        }
         return Response.json({ spawns: SPAWNS })
       }
       return Response.json({ error: 'not found' }, { status: 404 })
@@ -380,6 +423,108 @@ describe('factory session', () => {
     } finally {
       odd = ''
     }
+  })
+})
+
+describe('factory session note', () => {
+  const pane = { FACTORY_TOKEN: '', FACTORY_URL: 'http://127.0.0.1:1', FACTORY_SOCKET: '' }
+  const note = (args: string[], env: Record<string, string> = {}) =>
+    factory(['session', 'note', ...args], { ...pane, FACTORY_SOCKET: SOCKET(), ...env })
+
+  test('sends the text through the socket with no token, under an id of its own', async () => {
+    noteCalls.length = 0
+    const r = await note(['sess-1', 'look', 'at the test'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout)).toMatchObject({ session: 'sess-1', status: 'pending', text: 'look at the test' })
+    expect(noteCalls).toHaveLength(1)
+    expect(noteCalls[0]?.body.id).toMatch(/^note:[0-9a-f-]{36}$/)
+    await note(['sess-1', 'again'])
+    expect(noteCalls[1]?.body.id).not.toBe(noteCalls[0]?.body.id)
+  })
+
+  test('--id makes a repeated call one note, and a text that starts with a dash goes after --', async () => {
+    noteCalls.length = 0
+    await note(['--id', 'resume:x:1', 'sess-1', 'continue'])
+    await note(['--id', 'resume:x:1', 'sess-1', 'continue'])
+    expect(noteCalls.map((c) => c.body.id)).toEqual(['resume:x:1', 'resume:x:1'])
+    expect((await note(['--', 'sess-1', '-x'])).code).toBe(EXIT.ok)
+    expect(noteCalls[2]?.body.text).toBe('-x')
+  })
+
+  test('plain is one tab-separated line', async () => {
+    const r = await factory(['--format', 'plain', 'session', 'note', '--id', 'n9', 'sess-1', 'hi'], {
+      ...pane,
+      FACTORY_SOCKET: SOCKET(),
+    })
+    expect(r.stdout).toBe('n9\tsess-1\tpending\t0\t-\t-\t-\n')
+  })
+
+  test('without a session or text it is a usage error and sends nothing', async () => {
+    noteCalls.length = 0
+    expect((await note([])).code).toBe(EXIT.usage)
+    expect((await note(['sess-1'])).code).toBe(EXIT.usage)
+    expect(noteCalls).toEqual([])
+    expect((await note(['sess-1', 'x'], { FACTORY_SOCKET: '/tmp/nobody-listens.sock' })).code).toBe(EXIT.network)
+  })
+})
+
+describe('factory status', () => {
+  test('json is the contract body', async () => {
+    const r = await factory(['status'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout)).toMatchObject({ attention: ['blocked sess-2 for 3 min: Dangerous rm'] })
+  })
+
+  test('plain is one screen: attention, sessions by state, the queue with its holds, accounts, notes', async () => {
+    const r = await factory(['--format', 'plain', 'status'])
+    expect(r.code).toBe(EXIT.ok)
+    const lines = r.stdout.trimEnd().split('\n')
+    expect(lines.filter((l) => !l.startsWith(' '))).toEqual([
+      'ATTENTION',
+      'SESSIONS',
+      'QUEUE (pace)',
+      'ACCOUNTS',
+      'NOTES',
+    ])
+    expect(lines[1]).toBe('  blocked sess-2 for 3 min: Dangerous rm')
+    expect(lines).toContain('  blocked\t2026-10-30T11:59:00.000Z\tsess-2\twave\tme\tturn 3')
+    expect(lines).toContain('  a\twaiting\thold pace\t-\tat 2026-10-30T14:00:00.000Z')
+    expect(lines.some((l) => l.startsWith('  me\t23\t45'))).toBe(true)
+    expect(lines.some((l) => l.startsWith('  n1\tsess-1\tpending'))).toBe(true)
+    expect(lines.length).toBeLessThan(24)
+  })
+
+  test('needs the token', async () => {
+    expect((await factory(['status'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
+  })
+})
+
+describe('factory spawn create', () => {
+  test('queues a spawn with the caller as its parent', async () => {
+    spawnCalls.length = 0
+    const r = await factory(['spawn', 'create', 'w1', '--repo', '/work/repo', '--prompt', 'do it', '--role', 'wave'], {
+      FACTORY_SESSION: 'boss',
+    })
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(spawnCalls).toEqual([{ key: 'w1', repo: '/work/repo', prompt: 'do it', role: 'wave', parent: 'boss' }])
+  })
+
+  test('--parent wins over the environment, and without either there is no parent', async () => {
+    spawnCalls.length = 0
+    await factory(['spawn', 'create', 'w1', '--repo', '/work/repo', '--prompt', 'x', '--parent', 'lead'], {
+      FACTORY_SESSION: 'boss',
+    })
+    await factory(['spawn', 'create', 'w2', '--repo', '/work/repo', '--prompt', 'x'], { FACTORY_SESSION: '' })
+    expect(spawnCalls).toEqual([
+      { key: 'w1', repo: '/work/repo', prompt: 'x', parent: 'lead' },
+      { key: 'w2', repo: '/work/repo', prompt: 'x' },
+    ])
+  })
+
+  test('a key, a repo and a prompt are required', async () => {
+    expect((await factory(['spawn', 'create', 'w1', '--repo', '/r'])).code).toBe(EXIT.usage)
+    expect((await factory(['spawn', 'create', '--repo', '/r', '--prompt', 'x'])).code).toBe(EXIT.usage)
+    expect((await factory(['spawn', 'create', 'w1', '--prompt', 'x'])).code).toBe(EXIT.usage)
   })
 })
 

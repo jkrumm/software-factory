@@ -28,6 +28,8 @@ export const Spawn = z.object({
   attempts: z.number().int(),
   session: z.string().nullable(),
   error: z.string().nullable(),
+  /** the session that asked for it, when one did */
+  parent: z.string().nullable(),
 })
 export type Spawn = z.infer<typeof Spawn>
 
@@ -59,6 +61,14 @@ export const Session = z.object({
   /** what herdr last said about the agent, and when */
   herdrStatus: z.string().nullable(),
   herdrSeenAt: z.string().nullable(),
+  /** the role of its spawn; null for an `rd` session */
+  role: z.string().nullable(),
+  /** the account it runs on: its spawn's, else what the hook reported */
+  account: z.string().nullable(),
+  /** the session that started it */
+  parent: z.string().nullable(),
+  /** since when it is in this state (the event that put it there); null while `starting` */
+  since: z.string().nullable(),
 })
 export type Session = z.infer<typeof Session>
 
@@ -120,6 +130,48 @@ export const Health = z.object({
   }),
 })
 export type Health = z.infer<typeof Health>
+
+export const PromptStatus = z.enum(['pending', 'typing', 'sent', 'delivered', 'failed'])
+export type PromptStatus = z.infer<typeof PromptStatus>
+
+/** Text typed (or to be typed) into a session: `id` is its idempotency key. */
+export const Prompt = z.object({
+  id: z.string(),
+  session: z.string(),
+  /** what asked for it: `note` for `factory session note`, else the rule */
+  source: z.string(),
+  via: z.enum(['type', 'resume']),
+  text: z.string(),
+  status: PromptStatus,
+  createdAt: z.string(),
+  /** times it was typed: a second one is the retry */
+  sentCount: z.number().int(),
+  sentAt: z.string().nullable(),
+  deliveredAt: z.string().nullable(),
+  error: z.string().nullable(),
+})
+export type Prompt = z.infer<typeof Prompt>
+
+/** `POST /sessions/:id/stop-check`, asked by the `Stop` hook over the socket. */
+export const StopCheck = z.object({
+  /** exit 2 with `message`: the session has workers it neither waits for nor collected */
+  sendBack: z.boolean(),
+  message: z.string().nullable(),
+})
+export type StopCheck = z.infer<typeof StopCheck>
+
+/** `GET /status`: one screen. Sessions are ordered walled, blocked, stuck first; dead ones are left out. */
+export const Status = z.object({
+  now: z.string(),
+  /** what needs a decision or a look, one line each */
+  attention: z.array(z.string()),
+  sessions: z.array(Session),
+  queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
+  accounts: z.array(Quota),
+  /** prompts not yet delivered, and those that failed in the last day */
+  notes: z.array(Prompt),
+})
+export type Status = z.infer<typeof Status>
 
 export const ErrorBody = z.object({ error: z.string() })
 export type ErrorBody = z.infer<typeof ErrorBody>

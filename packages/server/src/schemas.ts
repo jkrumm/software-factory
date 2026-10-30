@@ -43,6 +43,8 @@ export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
   role: RoleName.default(DEFAULT_ROLE),
+  /** the `FACTORY_SESSION` of the caller: the session this one is a worker of */
+  parent: z.string().min(1).max(256).optional(),
   prompt: z
     .string()
     .min(1)
@@ -77,3 +79,17 @@ export type QueueInput = z.infer<typeof QueueInput>
 /** `factory session wait --on …` declares a wait, `--done` closes it. */
 export const WaitInput = z.union([z.strictObject({ on: WaitOn }), z.strictObject({ done: z.literal(true) })])
 export type WaitInput = z.infer<typeof WaitInput>
+
+/** `factory session note`: `id` makes a repeated call one prompt; a caller that wants every call to count leaves it out. */
+export const NoteInput = z.object({
+  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/, 'not a valid prompt id'),
+  text: z
+    .string()
+    .min(1)
+    .max(MAX_PROMPT_CHARS)
+    .refine((p) => !p.startsWith('-'), "a note cannot start with '-': herdr would read it as an option"),
+})
+export type NoteInput = z.infer<typeof NoteInput>
+
+/** What the `Stop` hook tells the server about the stop it is asking on behalf of. */
+export const StopCheckInput = z.object({ stopHookActive: z.boolean().default(false) })

@@ -35,7 +35,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
   pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
   prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
-  (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh`, `agent start --model <tier> --effort <effort>` from the
+  (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh` before every `agent start` (a test pins that a path never seen before is trusted first), `agent start --model <tier> --effort <effort>` from the
   spawn's role, prompt proven by a state change, one re-send); a tab without a ready agent is never `started`. A prompt cannot start with `-` (herdr reads it as an option).
 - **A failed spawn leaves its tab.** The tab is named after the key and `factory spawn requeue` finds it again (an agent
   already running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A tab with
@@ -51,12 +51,47 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   notification, session-end) does nothing without `FACTORY_SESSION` (set at spawn: the Runner puts the spawn key in the
   pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local/share/factory/spool/<session>.jsonl`
   (`FACTORY_SPOOL_DIR`, one `O_APPEND` write), posts it to the server's unix socket (`FACTORY_SOCKET`, default
-  `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens. The hook has no token and the Runner
+  `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens, with one exception: the send-back
+  (below). The hook has no token and the Runner
   keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
-  `POST /events` and `POST /sessions/:id/wait` (`factory session wait`, which
-  a session in a pane runs without a token) and nothing else; bound under umask 0177. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
-  the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout and stderr stay empty for every
-  event**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the session's context (tested per event).
+  `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`)
+  and `POST /sessions/:id/stop-check`, which a session in a pane runs without a token, and nothing else; bound under
+  umask 0177. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
+  stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
+  session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account`, which is how
+  the factory knows the account of a session no spawn describes (`rd`'s); a spawn's own account wins.
+- **Prompt delivery** (`prompts.ts`) is the one way anything types into a session. `factory session note <session> <text>`
+  (`POST /sessions/:id/note`, socket or token; `--id` makes a repeated call one note) and every rule below record a row in
+  `factory.prompts` under its id first (`ON CONFLICT DO NOTHING`: the same id is one prompt). The tick types it through
+  `Runner.type` (herdr `agent prompt`; `busy` while herdr says `working`) once the derived state is `idle`, `waiting` or
+  `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
+  before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
+  No turn within a minute: typed once more (`MAX_SENDS` 2), then `failed` with the reason, which stays in `factory status` for
+  a day. A Runner error is retried every 30 s, five times. A claim left `typing` by a crashed tick counts as sent after 3 min
+  (never typed blindly twice). A note cannot start with `-` (herdr reads it as an option).
+- **Rules that act** (`rules.ts`, run at the start of every tick after the spool replay and the quota poll; each records its
+  effect under a key, so a replay records nothing):
+  - *Resume watchdog* (FL2): a `walled` session whose account has a reading naming the wall's end (`exhausted_until`, else the
+    reset of each window at 95 % or more, the later; else the 5-hour reset), with 5 minutes passed since the later of that
+    reset and the last wall event: a `continue` prompt, `resume:<session>:<reset_at>`. Needs the session's account.
+  - *Send-back* (FL5): `Stop` makes the hook ask `POST /sessions/:id/stop-check` (300 ms) after posting the event. The server
+    answers `sendBack` when the session has live child sessions (sessions of spawns whose `parent` is it; `parent` comes
+    from `POST /spawns`, `factory spawn create` defaults it to `FACTORY_SESSION`), no open wait, is not `walled`, and the
+    hook says `stop_hook_active` is false; once per turn (`effects` key `sendback:<session>:<turn>`). The hook then exits 2
+    with the one line on stderr. A server that is down, slow or odd means exit 0. Children `rd` starts carry no parent
+    until `rd` is a client (Wave 5).
+  - *Rotation*: role `mother` or `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
+  - *Blocked*: `blocked` for 2 minutes is a line in `factory status`; if the session has a live parent, also a note to it,
+    `blocked:<event key>`.
+  - *herdr restart*: a `herdr_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
+    at that time, has had no hook event since and that herdr has not shown since is resumed by id (`Runner.start` with
+    `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
+    `restart:<new server identity>:<session>`. A session that is not a factory spawn (or never reported its Claude session
+    id) gets a `failed` prompt with the reason: that is its line in status.
+- **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
+  and spawns), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
+  the accounts' readings, prompts not delivered. `--format plain` prints it as one screen.
 - **The key is session, event name, turn number** (`<session>:turn_ended:3`), counted from the spool, written into the
   line, so a replay carries it. Counting and appending happen under a per-session lock (`<file>.lock`, a `mkdir`; the
   server's rotation takes it too); a hook that cannot get it in 200 ms writes a key with a random suffix instead. A kind that repeats inside a turn gets `:2`, `:3`. Event time is strictly increasing per
@@ -153,12 +188,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr
   adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness
   (`witness.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
-  picker's readings (`quota.ts`), `migrations/`.
+  picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
+  (`status.ts`), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, and the role table's schema
   and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
 - `config/roles.json` — the role table (FL4).
-- `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `spawn list|requeue`, `session
-  list|get|wait`, `queue get|set`, `quota get|refresh`, `role list|get`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+- `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|requeue`, `session
+  list|get|wait|note`, `queue get|set`, `quota get|refresh`, `role list|get`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

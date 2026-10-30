@@ -27,6 +27,7 @@ import { getSession, recordEvent } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { SpoolReplayer } from '../src/spool.ts'
 import { type Runner, type StartInput } from '../src/runner.ts'
+import { noType } from './support/runner.ts'
 import { tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -135,7 +136,7 @@ describe('spool replay', () => {
 
   test('the tick replays the spool before it claims anything', async () => {
     hookAppend('s', 'session_started', '2026-10-30T10:00:00.000Z')
-    const runner: Runner = { start: async (_input: StartInput) => ({ session: 'p' }) }
+    const runner: Runner = { ...noType, start: async (_input: StartInput) => ({ session: 'p' }) }
     const result = await tick({ sql: db.sql, runner, clock, spool: replayer() })
     expect(result.replayed).toBe(1)
     expect(await count()).toBe(1)
@@ -233,7 +234,7 @@ describe('session_started binds', () => {
       clock.now(),
     )
     await createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'p', ...WORKER }, clock.now())
-    const runner: Runner = { start: async () => ({ session: pane }) }
+    const runner: Runner = { ...noType, start: async () => ({ session: pane }) }
     await tick({ sql: db.sql, runner, clock })
   }
 

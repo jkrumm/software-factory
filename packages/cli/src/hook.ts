@@ -48,6 +48,7 @@ function pick(entries: Record<string, unknown>): Record<string, unknown> | undef
 export function toEvent(
   event: string,
   input: Input,
+  env: Record<string, string | undefined> = {},
 ): { kind: EventKind; payload?: Record<string, unknown> } | undefined {
   switch (event) {
     case 'session-start':
@@ -59,6 +60,8 @@ export function toEvent(
           transcriptPath: text(input.transcript_path, 1024),
           cwd: text(input.cwd, 1024),
           model: text(input.model, 128),
+          // The account the picker chose: how the factory knows it for a session no spawn row describes (`rd`'s).
+          account: text(env.CLAUDE_ACCOUNT_PICKED, 64),
         }),
       }
     case 'user-prompt-submit':
@@ -116,10 +119,40 @@ function append(file: string, line: SpoolLine): void {
   appendFileSync(file, `${JSON.stringify(line)}\n`, { mode: 0o600 })
 }
 
-/** Never throws a failure into the session: the caller turns every outcome into exit 0. */
-export async function runHook(event: string, io: HookIo): Promise<void> {
+/** The server's answer to a stop is asked within this long, like any post. */
+export const STOP_CHECK_TIMEOUT_MS = 300
+
+/**
+ * Whether the server wants this stop turned back (FL5): the line to print, or nothing. Any failure, a slow answer or a
+ * body that is not the expected one is nothing: a session is never held by a server that cannot say why.
+ */
+async function askStopCheck(socket: string, session: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(`http://localhost/sessions/${encodeURIComponent(session)}/stop-check`, {
+      unix: socket,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ stopHookActive: false }),
+      signal: AbortSignal.timeout(STOP_CHECK_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      await response.body?.cancel()
+      return undefined
+    }
+    const answer = (await response.json()) as { sendBack?: unknown; message?: unknown }
+    return answer.sendBack === true && typeof answer.message === 'string' && answer.message ? answer.message : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Never throws a failure into the session. The result is the one line the hook prints on stderr when a `Stop` is sent
+ * back (exit 2), else nothing: every other outcome is a silent exit 0.
+ */
+export async function runHook(event: string, io: HookIo): Promise<string | undefined> {
   const session = io.env.FACTORY_SESSION
-  if (!session) return
+  if (!session) return undefined
 
   let input: Input = {}
   try {
@@ -128,13 +161,13 @@ export async function runHook(event: string, io: HookIo): Promise<void> {
   } catch {
     // an empty or broken payload still says that the event happened
   }
-  const mapped = toEvent(event, input)
-  if (!mapped) return
+  const mapped = toEvent(event, input, io.env)
+  if (!mapped) return undefined
 
   const home = io.env.HOME
   const dir = io.env.FACTORY_SPOOL_DIR || (home ? defaultSpoolDir(home) : '')
   // No place to spool is no place to lose an event to a stray relative path.
-  if (!dir) return
+  if (!dir) return undefined
   const file = join(dir, spoolFileName(session))
   // Counting the spool and appending are one step: two overlapping hooks of a session must not write the same key.
   mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -157,7 +190,7 @@ export async function runHook(event: string, io: HookIo): Promise<void> {
   }
 
   const socket = io.env.FACTORY_SOCKET || (home ? defaultHookSocket(home) : '')
-  if (!socket) return
+  if (!socket) return undefined
   try {
     const response = await fetch('http://localhost/events', {
       unix: socket,
@@ -169,18 +202,30 @@ export async function runHook(event: string, io: HookIo): Promise<void> {
     await response.body?.cancel()
   } catch {
     // the server is down or slow: the spool has the event and the server reads it on its next pass
+    return undefined
   }
+  // A stop that is already a send-back (`stop_hook_active`) is let through: that is the loop guard.
+  if (event === 'stop' && input.stop_hook_active !== true) return askStopCheck(socket, session)
+  return undefined
 }
 
-/** The `factory hook` entry point: the exit code is always 0. */
+/**
+ * The `factory hook` entry point: exit 0 for every event and every failure, except a `Stop` the server sends back: exit 2
+ * with its one line on stderr (Claude Code feeds that line to the session and lets it go on).
+ */
 export async function hookMain(
   argv: string[],
   env: Record<string, string | undefined>,
   stdin: () => Promise<string> = () => (process.stdin.isTTY ? Promise.resolve('') : Bun.stdin.text()),
+  err: (text: string) => void = (text) => void process.stderr.write(text),
 ): Promise<number> {
   if (!env.FACTORY_SESSION) return 0
   try {
-    await runHook(argv[0] ?? '', { env, stdin, now: Date.now })
+    const sendBack = await runHook(argv[0] ?? '', { env, stdin, now: Date.now })
+    if (sendBack) {
+      err(`${sendBack}\n`)
+      return 2
+    }
   } catch {
     // a hook that cannot record anything still lets the session go on
   }

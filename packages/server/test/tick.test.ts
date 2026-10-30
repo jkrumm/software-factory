@@ -8,6 +8,7 @@ import { claimDue, DEFAULT_LEASE_MS, retryDelayMs, startTicker, tick } from '../
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
+import { noType } from './support/runner.ts'
 import { FakeQuotaSource, usage, WORKER } from './support/quota.ts'
 
 let db: TestDb
@@ -71,6 +72,7 @@ function gatedRunner() {
   const waiting = new Map<string, () => void>()
   const entered: string[] = []
   const runner: Runner = {
+    ...noType,
     async start(input) {
       entered.push(input.key)
       await new Promise<void>((resolve) => waiting.set(input.key, resolve))
@@ -93,6 +95,7 @@ describe('the session of a spawn', () => {
     await addSpawn('s1')
     let during: unknown
     const runner: Runner = {
+      ...noType,
       start: async () => {
         during = await sessionState('s1')
         return { session: 'w1:p1' }
@@ -108,6 +111,7 @@ describe('the session of a spawn', () => {
     await addSpawn('retry')
     await addSpawn('bad')
     const runner: Runner = {
+      ...noType,
       start: (input) =>
         Promise.reject(input.key === 'bad' ? new RunnerError('refused', true) : new RunnerError('later', false)),
     }
@@ -128,6 +132,7 @@ describe('failures', () => {
     await addSpawn('good')
     const real = herdrRunner()
     const runner: Runner = {
+      ...noType,
       start: (input) =>
         input.key === 'bad' ? Promise.reject(new RunnerError('herdr refused bad', true)) : real.start(input),
     }
@@ -197,6 +202,7 @@ describe('failures', () => {
     await addSpawn('boom')
     let calls = 0
     const runner: Runner = {
+      ...noType,
       async start() {
         calls++
         throw new Error('disk on fire')
@@ -227,6 +233,7 @@ describe('failures', () => {
     await addSpawn('late')
     await db.sql`UPDATE factory.spawns SET first_claimed_at = ${new Date(clock.now().getTime() - DEFAULT_RETRY_BUDGET_MS + 1000)}, attempts = 5 WHERE key = 'late'`
     const runner: Runner = {
+      ...noType,
       async start() {
         clock.advance(2000)
         throw new Error('still down')
@@ -283,6 +290,7 @@ describe('the Runner is never called inside a transaction (finding 1)', () => {
     await addSpawn('s1')
     let seen: unknown
     const runner: Runner = {
+      ...noType,
       async start(input) {
         // NOWAIT fails at once if a transaction still holds the row; this is another connection.
         const [row] = await db.sql`
@@ -369,6 +377,7 @@ describe('replay and crashes (finding 3)', () => {
   test('a result that finds its row no longer starting changes nothing', async () => {
     await addSpawn('s1')
     const runner: Runner = {
+      ...noType,
       async start(input) {
         // The record's UPDATE will find nothing to do: the row is no longer `starting`.
         await db.sql`UPDATE factory.spawns SET status = 'failed' WHERE key = ${input.key}`
@@ -398,6 +407,7 @@ describe('concurrent ticks', () => {
     const starts: string[] = []
     const { runner: gated, release, until } = gatedRunner()
     const runner: Runner = {
+      ...noType,
       start(input) {
         starts.push(input.key)
         return gated.start(input)
@@ -453,6 +463,7 @@ describe('the ticker', () => {
   test('after stop no new pass starts', async () => {
     const calls: StartInput[] = []
     const runner: Runner = {
+      ...noType,
       async start(input) {
         calls.push(input)
         return { session: 'x' }
