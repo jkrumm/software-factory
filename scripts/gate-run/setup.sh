@@ -9,7 +9,7 @@ for spec in "${CHAIN_SPECS[@]}"; do
   name=${spec%%:*} variant=${spec##*:}
   repo=$SOURCE_ROOT/$name
   remote=$REMOTES/$name.git
-  [[ ! -e $repo && ! -e $remote ]] || { echo "setup: $repo or $remote exists; run teardown.sh first" >&2; exit 1; }
+  [[ ! -e $repo && ! -e $remote ]] || { echo "setup: $repo or $remote exists; run teardown.sh first (only if it is a gate-run repo)" >&2; exit 1; }
 
   git init --quiet --bare --initial-branch=master "$remote"
   git init --quiet --initial-branch=master "$repo"
@@ -20,5 +20,6 @@ for spec in "${CHAIN_SPECS[@]}"; do
   git -C "$repo" add -A
   git -C "$repo" commit --quiet -m "chore: scratch repo for the factory gate run"
   git -C "$repo" push --quiet -u origin master
+  : >"$repo/.git/factory-gate-run" && : >"$remote/factory-gate-run"
   echo "setup: $repo (remote $remote)" | scrub
 done
