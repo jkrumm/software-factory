@@ -366,20 +366,8 @@ export interface Loaded {
   herdrSeenAt: Date | null
 }
 
-/** Sessions with an event this recent are the ones a rule looks at: a wall can outlast a weekend, not a month. */
-export const RULES_HORIZON_MS = 7 * 24 * 3_600_000
-
-/**
- * Every session that is not ended and had an event within the horizon, derived (dead ones by a gone pane included: a
- * herdr restart makes those, and they are what the restart rule resumes).
- */
-export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
-  const since = new Date(now.getTime() - RULES_HORIZON_MS)
-  const rows: SessionRow[] = await sql`
-    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
-    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
-    WHERE ${NOT_ENDED(sql)}
-      AND (s.created_at > ${since} OR EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id AND e.at > ${since}))`
+/** Derives a set of session rows with their events: the shared tail of the loaders below. */
+async function derive(sql: SQL, rows: readonly SessionRow[], now: Date): Promise<Loaded[]> {
   const facts = groupFacts(
     await factRows(
       sql,
@@ -402,6 +390,32 @@ export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
         ]
       : []
   })
+}
+
+/** The sessions of the spawns `parent` started, not ended: the Stop hook's question, answered without reading the rest. */
+export async function loadChildren(sql: SQL, parent: string, now: Date): Promise<Loaded[]> {
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE p.parent = ${parent} AND ${NOT_ENDED(sql)}`
+  return derive(sql, rows, now)
+}
+
+/** Sessions with an event this recent are the ones a rule looks at: a wall can outlast a weekend, not a month. */
+export const RULES_HORIZON_MS = 7 * 24 * 3_600_000
+
+/**
+ * Every session that is not ended and had an event within the horizon, derived (dead ones by a gone pane included: a
+ * herdr restart makes those, and they are what the restart rule resumes).
+ */
+export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
+  const since = new Date(now.getTime() - RULES_HORIZON_MS)
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE ${NOT_ENDED(sql)}
+      AND (s.created_at > ${since} OR EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.id AND e.at > ${since}))`
+  return derive(sql, rows, now)
 }
 
 /**

@@ -2,7 +2,15 @@ import type { StopCheck } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { type NewPrompt, recordPrompt } from './prompts.ts'
-import { type EventKind, type Fact, HERDR_SESSION, getSession, type Loaded, loadSessions } from './sessions.ts'
+import {
+  type EventKind,
+  type Fact,
+  HERDR_SESSION,
+  getSession,
+  type Loaded,
+  loadChildren,
+  loadSessions,
+} from './sessions.ts'
 
 /** The rules that act (`docs/design.md` §3). Each one reads facts and records effects under a deterministic key. */
 
@@ -108,13 +116,14 @@ function blockedParents(sessions: readonly Loaded[], now: Date): Candidate[] {
     if (now.getTime() - Date.parse(view.since) < BLOCKED_AFTER_MS) return []
     const event = facts.findLast((f) => f.kind === 'prompt_blocked')
     if (!event?.key) return []
-    const what = event.detail ? `: ${event.detail}` : ''
     return [
       {
         id: `blocked:${event.key}`,
         session: parent,
         source: 'blocked',
-        text: `${view.id} has waited on a confirmation since ${view.since}${what}. Look at its pane and answer it.`,
+        // What the worker's prompt says is agent-produced text and stays out of a note that is typed into another agent;
+        // `factory status` shows it to the owner.
+        text: `${view.id} has waited on a confirmation since ${view.since}. Look at its pane and answer it.`,
       },
     ]
   })
@@ -211,7 +220,7 @@ export async function stopCheck(
   const session = await getSession(sql, id, now)
   if (!session || session.state === 'walled' || session.state === 'dead' || session.wait !== null) return letThrough
 
-  const children = (await loadSessions(sql, now)).filter((c) => c.view.parent === id && c.view.state !== 'dead')
+  const children = (await loadChildren(sql, id, now)).filter((c) => c.view.state !== 'dead')
   if (children.length === 0) return letThrough
 
   const rows = await sql`

@@ -444,9 +444,9 @@ describe('factory session note', () => {
 
   test('--id makes a repeated call one note, and a text that starts with a dash goes after --', async () => {
     noteCalls.length = 0
-    await note(['--id', 'resume:x:1', 'sess-1', 'continue'])
-    await note(['--id', 'resume:x:1', 'sess-1', 'continue'])
-    expect(noteCalls.map((c) => c.body.id)).toEqual(['resume:x:1', 'resume:x:1'])
+    await note(['--id', 'proof:x:1', 'sess-1', 'continue'])
+    await note(['--id', 'proof:x:1', 'sess-1', 'continue'])
+    expect(noteCalls.map((c) => c.body.id)).toEqual(['proof:x:1', 'proof:x:1'])
     expect((await note(['--', 'sess-1', '-x'])).code).toBe(EXIT.ok)
     expect(noteCalls[2]?.body.text).toBe('-x')
   })

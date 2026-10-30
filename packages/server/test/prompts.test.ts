@@ -5,10 +5,11 @@ import {
   FAILURE_RETRY_MS,
   listOpenPrompts,
   MAX_FAILURES,
+  PENDING_TTL_MS,
   recordPrompt,
   TYPING_LEASE_MS,
 } from '../src/prompts.ts'
-import { HerdrRunner } from '../src/runner.ts'
+import { HerdrRunner, UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -201,6 +202,79 @@ describe('prompt delivery', () => {
   })
 })
 
+describe('prompt delivery: guards', () => {
+  test('prompts held for a working session do not use up the batch of a ready one', async () => {
+    await w.spawned('busy')
+    await w.emit('busy', 'turn_started', w.at(5))
+    await w.spawned('ready')
+    await w.emit('ready', 'turn_started', w.at(5))
+    await w.emit('ready', 'turn_ended', w.at(4))
+    for (let i = 0; i < 12; i++) await note(`held-${i}`, 'x', 'busy')
+    await note('mine', 'for the ready one', 'ready')
+    expect((await deliver()).sent).toEqual(['mine'])
+  })
+
+  test('a failure shows in status for a day from when it failed, not from when it was recorded', async () => {
+    await working()
+    await endTurn()
+    await recordPrompt(db.sql, { id: 'old', session: 's', source: 'note', text: 'x' }, w.at(25 * 60))
+    await deliver()
+    clock.advance(CONFIRM_MS + 1_000)
+    await deliver()
+    clock.advance(CONFIRM_MS + 1_000)
+    await deliver()
+    expect((await row('old')).status).toBe('failed')
+    expect((await listOpenPrompts(db.sql, clock.now())).map((p) => p.id)).toEqual(['old'])
+    clock.advance(25 * 3_600_000)
+    expect(await listOpenPrompts(db.sql, clock.now())).toEqual([])
+  })
+
+  test('an error that may have typed the text is waited out by a turn, not typed again at once', async () => {
+    await working()
+    await endTurn()
+    await note('n1')
+    runner.failure = new UncertainTyping('herdr agent prompt for w1:s: timed out')
+    await deliver()
+    expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 1, failures: 0 })
+    runner.failure = undefined
+    clock.advance(FAILURE_RETRY_MS)
+    await deliver()
+    expect(runner.typed).toEqual([])
+    await startTurn()
+    await deliver()
+    expect((await row('n1')).status).toBe('delivered')
+  })
+
+  test('a resume is not made once the session has shown life since the prompt was recorded', async () => {
+    await w.spawned('s')
+    await w.emit('s', 'turn_started', w.at(10))
+    await recordPrompt(
+      db.sql,
+      { id: 'r1', session: 's', source: 'restart', via: 'resume', text: 'cut off' },
+      clock.now(),
+    )
+    clock.advance(10_000)
+    await w.emit('s', 'turn_ended', clock.now())
+    expect((await deliver()).failed).toEqual(['r1'])
+    expect((await row('r1')).error).toContain('came back')
+    expect(runner.started).toEqual([])
+  })
+
+  test("a prompt nobody could take expires: a rule's after six hours, a note's after a day", async () => {
+    await w.spawned('s')
+    await w.emit('s', 'turn_started', w.at(5))
+    await note('n1')
+    await recordPrompt(db.sql, { id: 'resume:s:1', session: 's', source: 'resume', text: 'continue' }, clock.now())
+    clock.advance(PENDING_TTL_MS.rule + 1_000)
+    await deliver()
+    expect((await row('resume:s:1')).error).toContain('expired')
+    expect((await row('n1')).status).toBe('pending')
+    clock.advance(PENDING_TTL_MS.note)
+    await deliver()
+    expect((await row('n1')).status).toBe('failed')
+  })
+})
+
 describe('the herdr adapter types into the agent', () => {
   let herdr: FakeHerdr
   beforeAll(async () => {
@@ -236,6 +310,17 @@ describe('the herdr adapter types into the agent', () => {
     await herdr.setAgentStatus(pane, 'idle')
     expect(await r.type({ pane, text: 'second' })).toBe('typed')
     expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first', 'second'])
+  })
+
+  test('a prompt call that dies without an answer is uncertain; an error body from herdr is a refusal', async () => {
+    const { r, pane } = await start()
+    await herdr.setAgentStatus(pane, 'idle')
+    await herdr.plan('agent prompt:exit1')
+    expect(await r.type({ pane, text: 'second' }).catch((e: unknown) => e)).toBeInstanceOf(UncertainTyping)
+    await herdr.plan('agent prompt:error')
+    const refused = await r.type({ pane, text: 'second' }).catch((e: unknown) => e)
+    expect(refused).toBeInstanceOf(Error)
+    expect(refused).not.toBeInstanceOf(UncertainTyping)
   })
 
   test('an agent herdr cannot read is an error and nothing is sent', async () => {

@@ -226,7 +226,8 @@ describe('blocked', () => {
     const [prompt] = await prompts()
     expect(prompt).toMatchObject({ session: 'boss', source: 'blocked', via: 'type' })
     expect(prompt?.text).toContain('child')
-    expect(prompt?.text).toContain('Dangerous rm of /tmp/x')
+    // What the worker's prompt says is its own text: it stays out of a note typed into another agent.
+    expect(prompt?.text).not.toContain('Dangerous rm')
     await replayIsSilent()
   })
 

@@ -80,9 +80,18 @@ export type QueueInput = z.infer<typeof QueueInput>
 export const WaitInput = z.union([z.strictObject({ on: WaitOn }), z.strictObject({ done: z.literal(true) })])
 export type WaitInput = z.infer<typeof WaitInput>
 
+const RULE_PREFIXES = /^(resume|rotate|blocked|restart):/
+
 /** `factory session note`: `id` makes a repeated call one prompt; a caller that wants every call to count leaves it out. */
 export const NoteInput = z.object({
-  id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/, 'not a valid prompt id'),
+  id: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/, 'not a valid prompt id')
+    // A rule's prompt is keyed `<rule>:...`: a note under such an id would take its place and keep the rule from firing.
+    .refine(
+      (id) => !RULE_PREFIXES.test(id),
+      'ids starting with a rule name (resume, rotate, blocked, restart) are reserved',
+    ),
   text: z
     .string()
     .min(1)

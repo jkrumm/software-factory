@@ -68,8 +68,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
   before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
   No turn within a minute: typed once more (`MAX_SENDS` 2), then `failed` with the reason, which stays in `factory status` for
-  a day. A Runner error is retried every 30 s, five times. A claim left `typing` by a crashed tick counts as sent after 3 min
-  (never typed blindly twice). A note cannot start with `-` (herdr reads it as an option).
+  a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
+  (`UncertainTyping`: herdr timed out or died after the call) counts as sent and waits for the turn, never typed blindly twice,
+  as does a claim left `typing` by a crashed tick (after the start budget plus a minute). A `pending` prompt expires after 6 h
+  (a rule's) or 24 h (a note). A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
+  prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (herdr reads it as an
+  option) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `restart:`), which would take the rule's place.
+  The blocked note names the worker but not its prompt text: that is agent-produced and stays in `factory status`.
 - **Rules that act** (`rules.ts`, run at the start of every tick after the spool replay and the quota poll; each records its
   effect under a key, so a replay records nothing):
   - *Resume watchdog* (FL2): a `walled` session whose account has a reading naming the wall's end (`exhausted_until`, else the
