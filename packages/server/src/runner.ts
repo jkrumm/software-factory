@@ -44,6 +44,17 @@ export class RunnerError extends Error {
   }
 }
 
+/**
+ * The text may have been typed although the call failed (herdr timed out or died after submitting it): nothing is known to
+ * have arrived and nothing is known not to have. The caller waits for a turn to show it, it does not type again.
+ */
+export class UncertainTyping extends RunnerError {
+  constructor(message: string) {
+    super(message, false)
+    this.name = 'UncertainTyping'
+  }
+}
+
 /** The start ran out of its time budget: not a herdr answer, so never swallowed as an unreadable state. */
 class BudgetSpent extends RunnerError {
   constructor() {
@@ -190,7 +201,11 @@ export class HerdrRunner implements Runner {
     if (agent.agent_status === 'working') return 'busy'
     const sent = await this.exec([this.options.bin, 'agent', 'prompt', input.pane, input.text], budget)
     const failure = herdrFailure(sent)
-    if (failure) throw new RunnerError(`herdr agent prompt for ${input.pane}: ${failure.text}`, false)
+    if (failure) {
+      // An error body is herdr refusing: nothing was typed. A timeout or a bad exit says nothing about whether it was.
+      const message = `herdr agent prompt for ${input.pane}: ${failure.text}`
+      throw failure.code ? new RunnerError(message, false) : new UncertainTyping(message)
+    }
     return 'typed'
   }
 
