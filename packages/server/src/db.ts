@@ -16,7 +16,9 @@ export async function migrate(sql: SQL, dir: string = MIGRATIONS_DIR): Promise<s
   const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort()
   return sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK})`
-    await tx.unsafe(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`)
+    // CREATE SCHEMA IF NOT EXISTS still demands CREATE on the database, which the schema's owner role does not have.
+    const [schema] = await tx`SELECT 1 FROM pg_namespace WHERE nspname = ${SCHEMA}`
+    if (!schema) await tx.unsafe(`CREATE SCHEMA ${SCHEMA}`)
     await tx.unsafe(`CREATE TABLE IF NOT EXISTS ${SCHEMA}.schema_migrations (name text PRIMARY KEY)`)
     const applied: string[] = []
     for (const name of files) {

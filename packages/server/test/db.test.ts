@@ -95,3 +95,34 @@ describe('one process', () => {
     await dying.close().catch(() => {})
   })
 })
+
+describe('migrate as the schema owner', () => {
+  // The shared database: the `factory` role owns its schema and holds no CREATE on the database.
+  test('a role that owns the schema but cannot create schemas migrates', async () => {
+    await db.sql.unsafe('CREATE DATABASE shared_like')
+    const admin = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'shared_like', max: 1 })
+    try {
+      await admin.unsafe(`
+        CREATE ROLE schema_owner LOGIN;
+        REVOKE ALL ON DATABASE shared_like FROM PUBLIC;
+        GRANT CONNECT ON DATABASE shared_like TO schema_owner;
+        REVOKE ALL ON SCHEMA public FROM PUBLIC;
+        CREATE SCHEMA factory AUTHORIZATION schema_owner;`)
+      const owner = new SQL({
+        adapter: 'postgres',
+        path: db.path,
+        username: 'schema_owner',
+        database: 'shared_like',
+        max: 2,
+      })
+      try {
+        expect((await migrate(owner)).length).toBeGreaterThan(0)
+        expect(await migrate(owner)).toEqual([])
+      } finally {
+        await owner.close()
+      }
+    } finally {
+      await admin.close()
+    }
+  })
+})
