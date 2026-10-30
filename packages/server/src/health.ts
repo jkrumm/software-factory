@@ -7,10 +7,10 @@ export const STALE_INTERVALS = 3
 /**
  * What the ticker tells `/health`: when a pass last succeeded and what last went wrong. A pass that runs a start can
  * legitimately outlast three intervals, so while one is in flight only `passLimitMs` counts; between passes the age
- * of the last success does. Before the first success the server's own start time stands in for it.
+ * of the last success does. A server that has not yet had a successful pass is unhealthy once no pass is running, so a
+ * deploy whose ticker is broken never counts as up.
  */
 export class TickMonitor {
-  private readonly startedAt: Date
   private lastSuccess: Date | null = null
   private lastError: { at: Date; message: string } | null = null
   private passStartedAt: Date | null = null
@@ -19,9 +19,7 @@ export class TickMonitor {
     private readonly clock: Clock,
     private readonly intervalMs: number,
     private readonly passLimitMs: number,
-  ) {
-    this.startedAt = clock.now()
-  }
+  ) {}
 
   passStarted(): void {
     this.passStartedAt = this.clock.now()
@@ -60,8 +58,9 @@ export class TickMonitor {
         ? `a tick pass has run for ${Math.round(running / 1000)}s (limit ${Math.round(this.passLimitMs / 1000)}s)`
         : null
     }
+    if (!this.lastSuccess) return 'no tick has succeeded yet'
     const limit = STALE_INTERVALS * this.intervalMs
-    const age = now - (this.lastSuccess ?? this.startedAt).getTime()
+    const age = now - this.lastSuccess.getTime()
     if (age <= limit) return null
     return `no successful tick for ${Math.round(age / 1000)}s (limit ${Math.round(limit / 1000)}s)`
   }

@@ -51,7 +51,7 @@ describe('routing (finding 8)', () => {
       status: 'ok',
       version: 'test',
       reason: null,
-      tick: { lastSuccessAt: null, lastError: null },
+      tick: { lastSuccessAt: '2026-10-30T12:00:00.000Z', lastError: null },
     })
   })
 })
