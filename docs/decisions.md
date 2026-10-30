@@ -85,6 +85,8 @@ Hermes is behind iris, not Slack; cards and push go to iris, not Argo web push; 
   MacBook studio app talks to agw through a tailnet door; CDN upload and presigned links stay in `imgcli`.
 - **warden, agent-gateway, research-gateway, audio-gateway:** archived and deleted from disk after their final
   backups are checked (warden done 2026-10-30).
+- **No Biome (owner, 2026-10-30):** oxlint and oxfmt in software-factory, agent-workflows and every new TypeScript
+  repo; `bun test` and `tsc` stay, Vite+ is not adopted. Track T in `docs/program.md`.
 - **weatherorb's alert issues** stay as they are for now.
 - **TDD v2.4 and the rest of `dotfiles/docs/factory/`** are archived in `dotfiles/docs/archive/factory-v2.4/`
   (2026-10-30); the evidence the factory still uses (golden set, intervention KPIs) is in `docs/evidence/` here.

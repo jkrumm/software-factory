@@ -44,6 +44,7 @@ code itself.
 | F3 | Intake and self-heal (Kuma, GitHub, TickTick, Beszel, HyperDX), dedup with the golden set | software-factory | F2 | pending |
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
 | D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | Done 2026-10-30, reviewed: archived to `dotfiles/docs/archive/factory-v2.4/`, evidence in `docs/evidence/`. `agent-workflows/docs/factory-input.md` repointed too |
+| T | oxlint and oxfmt replace Biome (owner, 2026-10-30) | software-factory, agent-workflows | a boundary per repo: `f1-w3-capacity` landed; `agent-workflows-w2` closed and `research-self-improve` idle | pending, run by the program lead as one `rd fan` worker per repo |
 | L | Later, owner-timed: finances on the mini behind Touch ID; calendar and mail via email-gateway | finances (MacBook), argo, email-gateway | A1 | not started |
 
 ## Track notes (the findings each track inherits)
@@ -111,6 +112,19 @@ Two more failure modes, seen in this program's first rotation (2026-10-30):
 - Order inside the track: research the price catalog; schema v2 in the shared database; usage-tracker writes
   it directly; backfill history from the VPS table once; agw outbox retargeted; Argo native on the mini
   reading it; the Kuma door with its registry; VPS Argo stopped; ADR-009's VPS role retired.
+
+### T: oxlint and oxfmt
+Owner decision 2026-10-30: no Biome. Remove `biome.json`, `@biomejs/biome` and every Biome call. software-factory:
+`Makefile`, `package.json`, `AGENTS.md`; gets agw's type-aware step (`oxlint -c .oxlintrc.json --type-aware packages`).
+agent-workflows: `Makefile` (the comment, `check`, format), `package.json`, `AGENTS.md`, `docs/concept.md`,
+`agents/check/AGENTS.md`, Biome-named comments and suppressions (`rg -il biome packages`); keep its oxlint step and
+extend `.oxlintrc.json` to the rules Biome enforced. Start from argo's `.oxlintrc.json` and `.oxfmtrc.json`, with
+oxfmt's options set to each repo's current Biome formatting so the diff stays small. The formatting change is its own
+commit, separate from the tool swap. Pins clear the 3-day release-age cooldown, never an exclude. Left alone:
+`docs/spikes/**`, `docs/evidence/**`, `docs/waves/archive/**`; `agent-workflows/docs/spikes/s3-stack` keeps its
+`biome.json`. Vite+ is not part of this: `bun test` and `tsc` stay. Gate: `make check` green in both, `rg -il biome`
+only on the excluded paths, agw's `make verify` after its deploy. **Rule for new work:** F1 onward and every new
+TypeScript repo use oxlint and oxfmt.
 
 ### I1: image-gateway
 `agw image` already does generate, edit and cutout; `icon` and the studio app's calls are what keep the VPS

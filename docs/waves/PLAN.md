@@ -29,6 +29,11 @@ Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves
   `rd merge`.
 - [x] Author F1's plan in this repo from `docs/design.md` §3 and start it once the skeleton is on master and `shared` exists.
 - [x] Start track D once R0 is closed.
+- [ ] Track T (owner decision 2026-10-30): oxlint and oxfmt replace Biome in software-factory and agent-workflows. One
+  `rd fan` worker per repo, each at a boundary with no other worker active in that repo: software-factory after
+  `f1-w3-capacity` lands; agent-workflows after `agent-workflows-w2` closes its wave and the `research-self-improve`
+  worktree has no working agent. Formatting in its own commit. Gate: `make check` green in both, `rg -il biome` only on
+  the excluded paths, agw `make deploy` + `make verify`.
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
 **Left behind:** stopped: `me`'s 5-hour window hit 100 % (reset 12:40), so this rotation could not spawn its successor.
