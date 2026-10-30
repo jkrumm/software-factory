@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jkrumm.software-factory</string>
+
+  <!-- Never a Homebrew binary directly (macOS BTM disallows it): the wrapper script is the indirection. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__RELEASE_DIR__/scripts/launch.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__RELEASE_DIR__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>PORT</key>
+    <string>7793</string>
+    <key>HERDR_BIN</key>
+    <string>herdr</string>
+    <key>FACTORY_VERSION</key>
+    <string>__SHA__</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <!-- A fail-closed launch (exit 78) retries at this pace, not in a tight loop. -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <!-- SIGTERM shutdown waits for the start in flight (at most about 75 s) and has its own 90 s backstop. -->
+  <key>ExitTimeOut</key>
+  <integer>120</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/software-factory.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/software-factory.err.log</string>
+</dict>
+</plist>
