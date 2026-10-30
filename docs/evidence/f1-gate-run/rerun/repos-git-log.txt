@@ -1,0 +1,70 @@
+## factory-gate-w
+2026-10-30T20:43:00+01:00 docs: close out wave 4
+2026-10-30T20:43:00+01:00 feat: sum
+2026-10-30T20:41:03+01:00 docs: close out wave 3
+2026-10-30T20:41:03+01:00 feat: sign
+2026-10-30T20:34:42+01:00 docs: close out wave 2
+2026-10-30T20:34:33+01:00 docs: function table
+2026-10-30T20:34:27+01:00 feat: percentile
+2026-10-30T20:34:27+01:00 feat: stddev
+2026-10-30T20:34:27+01:00 feat: variance
+2026-10-30T20:34:16+01:00 feat: median
+2026-10-30T20:34:16+01:00 feat: mean
+2026-10-30T20:34:08+01:00 feat: remap
+2026-10-30T20:34:03+01:00 feat: inverseLerp
+2026-10-30T20:33:59+01:00 feat: lerp
+2026-10-30T20:32:42+01:00 docs: close out wave 1
+2026-10-30T20:32:32+01:00 feat: clamp
+2026-10-30T20:30:18+01:00 chore: scratch repo for the factory gate run
+ 0 fail
+ 85 expect() calls
+Ran 69 tests across 1 file. [5.00ms]
+## factory-gate-x
+2026-10-30T20:34:57+01:00 docs: close out wave 4
+2026-10-30T20:34:57+01:00 feat: add titleCase
+2026-10-30T20:33:44+01:00 docs: close out wave 3
+2026-10-30T20:33:36+01:00 feat: add wordCount
+2026-10-30T20:32:09+01:00 docs: close out wave 2
+2026-10-30T20:32:09+01:00 feat: add truncate
+2026-10-30T20:31:00+01:00 docs: close out wave 1
+2026-10-30T20:30:59+01:00 feat: add slugify
+2026-10-30T20:30:18+01:00 chore: scratch repo for the factory gate run
+ 0 fail
+ 15 expect() calls
+Ran 15 tests across 1 file. [8.00ms]
+## factory-gate-y
+2026-10-30T20:47:27+01:00 docs: close out wave 4
+2026-10-30T20:47:27+01:00 feat: add titleCase
+2026-10-30T20:46:27+01:00 docs: close out wave 3
+2026-10-30T20:46:27+01:00 feat: add wordCount
+2026-10-30T20:34:26+01:00 docs: close out wave 2
+2026-10-30T20:34:26+01:00 feat: add truncate
+2026-10-30T20:33:26+01:00 docs: close out wave 1
+2026-10-30T20:33:26+01:00 feat: add slugify
+2026-10-30T20:32:59+01:00 chore: scratch repo for the factory gate run
+ 0 fail
+ 15 expect() calls
+Ran 13 tests across 1 file. [5.00ms]
+## factory-gate-v
+2026-10-30T20:50:11+01:00 docs: close out wave 4
+2026-10-30T20:50:11+01:00 docs: add sum to function table
+2026-10-30T20:50:11+01:00 feat: sum
+2026-10-30T20:49:09+01:00 docs: close out wave 3
+2026-10-30T20:49:09+01:00 docs: add sign to function table
+2026-10-30T20:49:09+01:00 feat: sign
+2026-10-30T20:48:02+01:00 docs: close out wave 2
+2026-10-30T20:47:53+01:00 docs: function table
+2026-10-30T20:47:53+01:00 feat: percentile
+2026-10-30T20:46:52+01:00 feat: stddev
+2026-10-30T20:45:36+01:00 feat: variance
+2026-10-30T20:43:04+01:00 feat: median
+2026-10-30T20:42:03+01:00 feat: mean
+2026-10-30T20:41:02+01:00 feat: remap
+2026-10-30T20:40:02+01:00 feat: inverseLerp
+2026-10-30T20:38:58+01:00 feat: lerp
+2026-10-30T20:36:57+01:00 docs: close out wave 1
+2026-10-30T20:36:57+01:00 feat: clamp
+2026-10-30T20:36:25+01:00 chore: scratch repo for the factory gate run
+ 0 fail
+ 87 expect() calls
+Ran 70 tests across 1 file. [5.00ms]

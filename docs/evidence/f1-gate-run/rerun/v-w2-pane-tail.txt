@@ -1,0 +1,60 @@
+⏺ Floating-point summation order differs, so my test was wrong rather than the function. I'll use toBeCloseTo and re-run
+  with the exit status checked this time.
+
+  Ran 1 shell command
+
+⏺ Update(src/num.test.ts)
+  ⎿  Added 1 line, removed 1 line
+      158      expect(variance([-1, 1])).toBe(1);
+      159    });
+      160    test("order does not matter", () => {
+      161 -    expect(variance([9, 2, 5])).toBe(variance([2, 5, 9]));
+      161 +    expect(variance([9, 2, 5])).toBeCloseTo(variance([2, 5, 9]), 10);
+      162    });
+      163    test("large values", () => {
+      164      expect(variance([1e6, 3e6])).toBe(1e12);
+  ⎿  Loaded ../dotfiles/rules/typescript.md
+  ⎿  Loaded ../dotfiles/rules/agent-limits.md
+
+  Ran 3 shell commands
+
+⏺ The diff contains only my own stddev changes. I'm committing step 7 and moving to step 8, percentile.
+
+  Ran 2 shell commands
+
+⏺ Step 10: gate, plan update, push, spawn.
+
+  Pushed to master, ran 2 shell commands
+
+⏺ Wave 2 is done and pushed. Wave 3 is queued, so the factory will start it when its hold lifts.
+
+  - Functions: all eight are in src/num.ts: lerp, inverseLerp, remap, mean, median, variance, stddev, percentile. There
+    is one feat: commit per function. The soak printed soak ok before each commit.
+  - Gate: make check passes, 60 tests.
+  - Review: none, scratch repo, as AGENTS.md says.
+  - README table: step 9 asks for ten functions, but only nine exist at this point: clamp plus these eight. sign and sum
+    come in Waves 3 and 4. I documented the nine and noted in Left behind that those two have to be added to the table.
+  - Variance test: the first variance run failed because my "order does not matter" test used exact equality on floats.
+    I switched it to toBeCloseTo. The soak had also run after that failed check, because the pipe hid the exit status. I
+    re-ran make check and the soak once the test was fixed, and the remaining steps checked the status before the soak.
+
+✻ Cooked for 10m 31s · done 8:48 PM
+
+❯ continue
+
+  Ran 1 shell command
+
+⏺ Nothing is left for me to do in Wave 2. Wave 3 is queued as factory-gate-v-w3, held with hold: wave and resumeAt
+  2026-10-30T19:48:39Z. The factory starts it when that hold lifts. The tree is clean and pushed at 81b3233.
+
+  I'm not running Wave 3 by hand. Once the factory starts factory-gate-v-w3, a second agent would be editing the same
+  checkout and they'd race. To start it earlier, release the hold with the factory CLI or tell me to.
+
+✻ Churned for 11s · done 8:48 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  MAX ME · Sonnet 5.5 · high | 50k/600k 8% | Σ89k | ⚡96% | 10min | iu 8/53 · me 11/54 ↺111m · me2 0/100 · ∑61%
+  factory-gate-v | ✓ master
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

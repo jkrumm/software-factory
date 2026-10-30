@@ -1,0 +1,4 @@
+2026-10-30T19:40:04Z when-commits: factory-gate-v has 3 commits starting 'feat: ' (wanted 3)
+2026-10-30T19:40:05Z wall: factory-gate-v-w2 on me, real reading before: {"fiveHourUsed":8,"weeklyUsed":53,"fiveHourResetsAt":"2026-10-30T21:40:00.000Z","exhaustedUntil":null}
+{"account":"me","fiveHourUsed":100,"fiveHourResetsAt":"2026-10-30T19:41:06.000Z","exhaustedUntil":"2026-10-30T19:41:06.000Z"}
+2026-10-30T19:40:07Z wall: hook stop-failure rate_limit for factory-gate-v-w2 at 2026-10-30T19:40:06Z; TEST ROW on me, reset 2026-10-30T19:41:06Z (+1 min), five-hour use 100 for the row
