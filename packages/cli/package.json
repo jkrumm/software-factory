@@ -1,0 +1,9 @@
+{
+  "name": "@software-factory/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "factory": "./bin/factory.ts"
+  }
+}
