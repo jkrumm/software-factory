@@ -349,7 +349,7 @@ export interface LiveSession {
   id: string
   repo: string
   role: string
-  /** it has worked and its turn has ended with nothing pending: a chain wave after it spawned its successor */
+  /** idle after a turn that ended in its current life: a chain wave after it spawned its successor */
   finished: boolean
 }
 
@@ -369,14 +369,16 @@ export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> 
     ),
   )
   return rows.flatMap((row) => {
-    const derived = view(row, facts.get(row.id) ?? [], now)
-    const state = derived?.state
+    const list = facts.get(row.id) ?? []
+    const state = view(row, list, now)?.state
+    // Finished: idle with a turn ended in this life (a resumed session has not worked yet, whatever it did before).
+    const finished =
+      state === 'idle' &&
+      list.slice(list.findLastIndex((f) => f.kind === 'session_started') + 1).some((f) => f.kind === 'turn_ended')
     // A session no spawn describes (`rd`'s) is where its hook said it started, with the role its pane reported.
     const repo = row.repo ?? row.cwd
     const role = row.spawn_role ?? row.role
-    return state && state !== 'dead' && repo && role
-      ? [{ id: row.id, repo, role, finished: state === 'idle' && (derived?.turn ?? 0) > 0 }]
-      : []
+    return state && state !== 'dead' && repo && role ? [{ id: row.id, repo, role, finished }] : []
   })
 }
 

@@ -272,6 +272,31 @@ describe('one active wave per repo', () => {
     expect(await runTick()).toMatchObject({ started: ['wave-2'] })
   })
 
+  test('a wave resumed after it finished is not finished until its first turn ends', async () => {
+    const event = (kind: string, n: number) =>
+      app.send('POST', '/events', {
+        key: `wave-1:${kind}:${n}`,
+        session: 'wave-1',
+        kind,
+        at: new Date(clock.now().getTime() + n).toISOString(),
+        ...(kind === 'session_started' ? { payload: { claudeSessionId: 'c-wave-1', cwd: TEST_REPO } } : {}),
+      })
+    await spawn('wave-1', { role: 'wave' })
+    expect(await runTick()).toMatchObject({ started: ['wave-1'] })
+    await event('session_started', 1)
+    await event('turn_started', 2)
+    await event('turn_ended', 3)
+    // A herdr restart resumed it: a new life, idle, with no turn yet.
+    await event('session_started', 4)
+
+    const next = await spawn('wave-2', { role: 'wave' })
+    expect(await next.json()).toMatchObject({ status: 'queued', hold: 'wave' })
+    await event('turn_started', 5)
+    await event('turn_ended', 6)
+    clock.advance(HOLD_RECHECK_MS)
+    expect(await runTick()).toMatchObject({ started: ['wave-2'] })
+  })
+
   test('a wave that `rd` started counts: its pane reports FACTORY_ROLE and the directory it started in', async () => {
     const started = (session: string, cwd: string, role?: string) =>
       app.send('POST', '/events', {
