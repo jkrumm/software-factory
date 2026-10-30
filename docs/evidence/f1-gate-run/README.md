@@ -100,7 +100,8 @@ Nothing in `packages/**`; no code change in this PR beyond the gate scripts (`wh
    for one new spawn per sample (this worker's own session had just started on iu, other waves were running), and the printed
    time is the first moment *any* account opens by its own reading (`me2`, a week away), which is misleading for a hold that ends
    with the next poll. `w-w1` shows 3 attempts in `spawns.json`, probably the same wait. Not fixed here; for the owner.
-2. **My timing, not the factory's.** The `x` drain (above), and the first `w` template being too fast to put a wall mid-turn.
+2. **Template wording.** Plan `d` (and `c`) said "all ten exported functions" for a table that had nine at that point; the wave noticed, documented nine and left a note for Wave 3/4 (`v-w2-pane-tail.txt`). The templates now say nine.
+3. **My timing, not the factory's.** The `x` drain (above), and the first `w` template being too fast to put a wall mid-turn.
    Both are why there are four chains.
 
 ### What the operator did (outside the gate panes)

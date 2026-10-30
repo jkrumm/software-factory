@@ -9,9 +9,15 @@ queues=""
 for name in "${CHAINS[@]}"; do
   queues+=" ${name#factory-gate-}=$(fx queue get --project "$SOURCE_ROOT/$name" --format json | jq -r .effective)"
 done
-spawns=$(fx spawn list --format json | jq -r --argjson names "$(printf '%s\n' "${CHAINS[@]}" | jq -R . | jq -sc .)" '[.spawns[] | select((.key | sub("-w[0-9]+$"; "")) as $c | $names | index($c)) | "\(.key)=\(.status)\(if .hold then "(" + .hold + ")" else "" end)"] | join(" ")')
+# One get per possible key: the list is capped at the newest 200 rows.
+spawns=""
+for name in "${CHAINS[@]}"; do
+  for n in 1 2 3 4 5; do
+    spawns+=$(fx spawn get "$name-w$n" --format json 2>/dev/null | jq -r '" \(.key)=\(.status)\(if .hold then "(" + .hold + ")" else "" end)"' 2>/dev/null || true)
+  done
+done
 line=$(jq -r --arg queues "$queues" --arg spawns "$spawns" --argjson names "$(printf '%s\n' "${CHAINS[@]}" | jq -R . | jq -sc .)" '
-  "sessions: " + ([.sessions[] | select(.id | startswith("factory-gate-")) | select(.id | sub("-w[0-9]+$"; "") | IN($names[])) | "\(.id)=\(.state)(\(.account // "-"),t\(.turn))"] | join(" "))
+  "sessions: " + ([.sessions[] | select(.id | sub("-w[0-9]+$"; "") | IN($names[])) | "\(.id)=\(.state)(\(.account // "-"),t\(.turn))"] | join(" "))
   + " | spawns: " + $spawns
   + " | notes pending: \((.notes | length) + .notesMore)"
   + " | queue:\($queues) global=\(.queue.effective)"
