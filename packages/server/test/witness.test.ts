@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { agentName, HerdrRunner } from '../src/runner.ts'
 import { getSession, recordEvent } from '../src/sessions.ts'
@@ -181,6 +181,38 @@ describe('the witness', () => {
     expect(await db.sql`SELECT 1 FROM factory.events WHERE kind = 'herdr_restarted'`).toHaveLength(0)
   })
 
+  test('a pane reported gone that comes back is alive again; going again is a second event', async () => {
+    await emit('s', 'session_started', minutes(30), { claudeSessionId: 'c-1' })
+    view.list = [agent({ claudeSessionId: 'c-1' })]
+    await pass()
+    view.list = []
+    await pass()
+    await pass()
+    expect(await state('s')).toBe('dead')
+
+    clock.advance(60_000)
+    view.list = [agent({ claudeSessionId: 'c-1', status: 'idle' })]
+    await pass()
+    expect(await state('s')).toBe('idle')
+
+    clock.advance(60_000)
+    view.list = []
+    await pass()
+    await pass()
+    expect(await state('s')).toBe('dead')
+    expect(await db.sql`SELECT key FROM factory.events WHERE kind = 'pane_gone' ORDER BY id`).toHaveLength(2)
+  })
+
+  test('a herdr that cannot be identified counts nobody as missing', async () => {
+    await emit('s', 'session_started', minutes(30), { claudeSessionId: 'c-1' })
+    view.list = [agent({ claudeSessionId: 'c-1' })]
+    await pass()
+    view.list = []
+    view.server = undefined
+    for (let i = 0; i < 4; i++) await pass()
+    expect(await state('s')).toBe('idle')
+  })
+
   test('stuck: working, herdr working, and a worktree that has not moved for 45 minutes', async () => {
     await emit('s', 'session_started', minutes(120), { claudeSessionId: 'c-1', cwd: '/work/tree' })
     await emit('s', 'turn_started', minutes(100))
@@ -260,6 +292,46 @@ describe('the herdr adapter', () => {
 })
 
 describe('the worktree probe', () => {
+  test('a cwd inside the worktree still finds the changed files, and git gets no server secrets', async () => {
+    const dir = await mkdtemp('/tmp/factory-git-')
+    try {
+      const git = (...args: string[]) =>
+        Bun.spawn(['git', '-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
+          stdout: 'ignore',
+          stderr: 'ignore',
+        }).exited
+      await git('init', '-q')
+      await mkdir(join(dir, 'deep/er'), { recursive: true })
+      await writeFile(join(dir, 'deep/er/a.txt'), 'a')
+      await git('add', '.')
+      await git('commit', '-q', '-m', 'one', '--date=2020-01-01T00:00:00Z')
+      const old = new Date('2020-01-01T00:00:00Z')
+      await utimes(join(dir, 'deep/er/a.txt'), old, old)
+      await writeFile(join(dir, 'deep/er/a.txt'), 'changed now')
+      const changed = await gitProbe(join(dir, 'deep/er'))
+      expect(changed && Date.now() - changed.getTime() < 60_000).toBe(true)
+
+      // The child's environment, as git sees it.
+      const spy = join(dir, 'spy-git')
+      await writeFile(spy, `#!/bin/sh\nenv > '${dir}/git-env'\nexec git "$@"\n`)
+      await chmod(spy, 0o755)
+      process.env.FACTORY_TOKEN = 'secret-token-for-the-test'
+      process.env.DATABASE_URL = 'postgres://secret'
+      try {
+        await gitProbe(dir, spy)
+      } finally {
+        delete process.env.FACTORY_TOKEN
+        delete process.env.DATABASE_URL
+      }
+      const seen = await readFile(join(dir, 'git-env'), 'utf8')
+      expect(seen).toContain('GIT_OPTIONAL_LOCKS=0')
+      expect(seen).not.toContain('FACTORY_TOKEN')
+      expect(seen).not.toContain('DATABASE_URL')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   test('the newest of the last commit and the files git lists as changed', async () => {
     const dir = await mkdtemp('/tmp/factory-git-')
     try {

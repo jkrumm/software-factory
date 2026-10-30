@@ -67,7 +67,10 @@ const server = serve({
 // crashed run is ours to remove: the database lock above is held, so no other copy is listening on it.
 mkdirSync(dirname(config.hookSocket), { recursive: true, mode: 0o700 })
 rmSync(config.hookSocket, { force: true })
-const hooks = serveHooks({ sql, token: config.token, socketPath: config.hookSocket })
+// Bound under a restrictive umask, so the socket is never there with wider permissions, not even for a moment.
+const umask = process.umask(0o177)
+const hooks = serveHooks({ sql, clock, token: config.token, socketPath: config.hookSocket })
+process.umask(umask)
 chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })

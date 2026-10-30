@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXIT } from '../src/exit.ts'
 
@@ -35,11 +36,25 @@ const DEAD = { ...SESSION, id: 'old', state: 'dead', pane: null }
 const sessionCalls: { id: string; body: unknown }[] = []
 
 let fake: ReturnType<typeof Bun.serve>
+let sock: ReturnType<typeof Bun.serve>
+let sockDir: string
+const SOCKET = () => join(sockDir, 's.sock')
 let status = 200
 let odd = ''
 const TOKEN = 'cli-test-token-0123456789'
 
 beforeAll(() => {
+  // The server's unix socket: what a session in a pane reaches, with no token.
+  sockDir = mkdtempSync('/tmp/factory-cli-')
+  sock = Bun.serve({
+    unix: SOCKET(),
+    fetch: async (req) => {
+      const [, , id, sub] = new URL(req.url).pathname.split('/')
+      if (sub !== 'wait' || req.method !== 'POST' || !id) return Response.json({ error: 'not found' }, { status: 404 })
+      sessionCalls.push({ id, body: await req.json() })
+      return Response.json({ ...SESSION, id })
+    },
+  })
   fake = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -84,13 +99,9 @@ beforeAll(() => {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
           return Response.json({ error: 'unauthorized' }, { status: 401 })
         if (odd === 'drift') return Response.json({ sessions: [{ id: 1 }], id: 1 })
-        const [, , id, sub] = path.split('/')
+        const [, , id] = path.split('/')
         if (!id) return Response.json({ sessions: url.searchParams.get('all') ? [SESSION, DEAD] : [SESSION] })
         if (id === 'nope') return Response.json({ error: 'unknown session' }, { status: 404 })
-        if (sub === 'wait') {
-          sessionCalls.push({ id, body: await req.json() })
-          return Response.json({ ...SESSION, id })
-        }
         return Response.json({ ...SESSION, id })
       }
       if (path === '/spawns') {
@@ -102,7 +113,11 @@ beforeAll(() => {
     },
   })
 })
-afterAll(() => fake.stop(true))
+afterAll(() => {
+  fake.stop(true)
+  sock.stop(true)
+  rmSync(sockDir, { recursive: true, force: true })
+})
 
 /** The binary as a caller runs it: a process, its stdout, its stderr, its exit code. */
 async function factory(args: string[], env: Record<string, string> = {}) {
@@ -276,10 +291,15 @@ describe('factory session', () => {
     expect((await factory(['session', 'get'])).code).toBe(EXIT.usage)
   })
 
-  test('wait --on declares a wait for $FACTORY_SESSION, --done ends it', async () => {
+  // A session in a pane has FACTORY_SESSION and the socket, and no token.
+  const pane = () => ({ FACTORY_TOKEN: '', FACTORY_URL: 'http://127.0.0.1:1', FACTORY_SOCKET: SOCKET() })
+
+  test('wait --on declares a wait for $FACTORY_SESSION, --done ends it: through the socket, without a token', async () => {
     sessionCalls.length = 0
-    expect((await factory(['session', 'wait', '--on', 'workers'], { FACTORY_SESSION: 'mine' })).code).toBe(EXIT.ok)
-    expect((await factory(['session', 'wait', '--done', '--session', 'other'])).code).toBe(EXIT.ok)
+    expect((await factory(['session', 'wait', '--on', 'workers'], { ...pane(), FACTORY_SESSION: 'mine' })).code).toBe(
+      EXIT.ok,
+    )
+    expect((await factory(['session', 'wait', '--done', '--session', 'other'], pane())).code).toBe(EXIT.ok)
     expect(sessionCalls).toEqual([
       { id: 'mine', body: { on: 'workers' } },
       { id: 'other', body: { done: true } },
@@ -292,13 +312,22 @@ describe('factory session', () => {
     [['session', 'wait', '--on', 'deploy', '--done']],
   ])('%p is a usage error and sends nothing', async (args) => {
     sessionCalls.length = 0
-    const r = await factory(args, { FACTORY_SESSION: 'mine' })
+    const r = await factory(args, { ...pane(), FACTORY_SESSION: 'mine' })
     expect(r).toMatchObject({ code: EXIT.usage, stdout: '' })
     expect(sessionCalls).toEqual([])
   })
 
   test('wait without a session to name is a usage error', async () => {
-    expect((await factory(['session', 'wait', '--on', 'owner'], { FACTORY_SESSION: '' })).code).toBe(EXIT.usage)
+    expect((await factory(['session', 'wait', '--on', 'owner'], { ...pane(), FACTORY_SESSION: '' })).code).toBe(
+      EXIT.usage,
+    )
+    // And a socket nobody listens on is a network error.
+    const r = await factory(['session', 'wait', '--on', 'owner'], {
+      ...pane(),
+      FACTORY_SESSION: 's',
+      FACTORY_SOCKET: '/tmp/nobody-listens.sock',
+    })
+    expect(r.code).toBe(EXIT.network)
   })
 
   test('a body that drifted from the contract is exit 9', async () => {

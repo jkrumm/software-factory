@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseSpool, spoolFileName } from '@software-factory/contract/spool'
 import { hookMain, runHook, toEvent } from '../src/hook.ts'
@@ -292,6 +292,33 @@ describe('the binary', () => {
     }
     const garbage = await run(['hook', event], 'not json', env())
     expect(garbage).toMatchObject({ code: 0, stdout: '', stderr: '' })
+  })
+
+  test('hooks of one session that overlap never write the same key', async () => {
+    const runs = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => run(['hook', i % 2 ? 'stop' : 'user-prompt-submit'], '{}', env())),
+    )
+    expect(runs.map((r) => r.code)).toEqual(Array<number>(8).fill(0))
+    const written = lines('s')
+    expect(written).toHaveLength(8)
+    expect(new Set(written.map((l) => l.key)).size).toBe(8)
+    expect(
+      written
+        .filter((l) => l.kind === 'turn_started')
+        .map((l) => l.key)
+        .sort(),
+    ).toEqual(['s:turn_started:1', 's:turn_started:2', 's:turn_started:3', 's:turn_started:4'])
+    expect(existsSync(`${join(spoolDir(), spoolFileName('s'))}.lock`)).toBe(false)
+  })
+
+  test('a lock that stays held does not hold the hook: it waits its budget, then writes a key that cannot collide', async () => {
+    const file = join(spoolDir(), spoolFileName('s'))
+    mkdirSync(`${file}.lock`, { recursive: true })
+    const started = performance.now()
+    await fire('user-prompt-submit', {})
+    expect(performance.now() - started).toBeLessThan(900)
+    const [line] = lines('s')
+    expect(line?.key).toMatch(/^s:turn_started:1:[a-z0-9]+$/)
   })
 
   test('cold start to exit stays well inside the 1.5 s SessionEnd budget', async () => {

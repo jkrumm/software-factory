@@ -105,14 +105,28 @@ export interface Derived {
   turn: number
 }
 
+/** What only a live session produces. */
+const HOOK_KINDS: readonly EventKind[] = [
+  'session_started',
+  'turn_started',
+  'turn_ended',
+  'limit_stop',
+  'quota_resume',
+  'prompt_blocked',
+  'prompt_idle',
+]
+
 const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
   facts.findLastIndex((f) => kinds.includes(f.kind))
 
 /**
  * State is a pure function of the ordered events and, for `stuck`, of what the witness saw; it is never stored.
- * First match wins:
+ * First match wins. Turns, walls and prompts count from the latest `session_started` on: a resumed session starts
+ * clean, whatever the one before it left open.
  *
- * - `dead`: the last of session_started / session_ended / pane_gone is not a start (a resume starts again).
+ * - `dead`: the last of session_started / session_ended / pane_gone is not a start (a resume starts again). A
+ *   `pane_gone` is withdrawn by anything that proves the session is there: a later hook event, or herdr showing the
+ *   agent again after it.
  * - `starting`: nothing yet proves the session is up (no session_started, no turn).
  * - `walled`: a limit_stop or quota_resume with no turn_started after it. A `quota_resume` that says `fired` means
  *   Claude carried on by itself, so the turn that ends after it also ends the wall.
@@ -123,10 +137,8 @@ const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
  * - `idle`: everything else.
  */
 export function deriveState(input: DeriveInput): Derived | undefined {
-  const { facts, now } = input
+  const { facts, now, herdr } = input
   const turn = facts.filter((f) => f.kind === 'turn_started').length
-  const iStart = lastIndex(facts, 'turn_started')
-  const iEnd = lastIndex(facts, 'turn_ended')
 
   const iWait = lastIndex(facts, 'wait_declared', 'wait_cleared')
   const open = iWait >= 0 && facts[iWait]?.kind === 'wait_declared'
@@ -135,19 +147,31 @@ export function deriveState(input: DeriveInput): Derived | undefined {
   if (facts.length === 0) return input.known ? { state: 'starting', wait: null, turn } : undefined
 
   const iLife = lastIndex(facts, 'session_started', 'session_ended', 'pane_gone')
-  if (iLife >= 0 && facts[iLife]?.kind !== 'session_started') return { state: 'dead', wait: null, turn }
-  if (iLife < 0 && iStart < 0 && iEnd < 0) return { state: 'starting', wait: null, turn }
+  const life = facts[iLife]
+  if (life && life.kind !== 'session_started') {
+    const proven =
+      life.kind === 'pane_gone' &&
+      (facts.slice(iLife + 1).some((f) => HOOK_KINDS.includes(f.kind)) ||
+        (herdr?.status != null && herdr.seenAt != null && herdr.seenAt > life.at))
+    if (!proven) return { state: 'dead', wait: null, turn }
+  }
 
-  const iWall = lastIndex(facts, 'limit_stop', 'quota_resume')
-  const wall = facts[iWall]
+  // This life only: from the last session_started on.
+  const from = lastIndex(facts, 'session_started') + 1
+  const here = facts.slice(from)
+  const iStart = lastIndex(here, 'turn_started')
+  const iEnd = lastIndex(here, 'turn_ended')
+  if (from === 0 && iStart < 0 && iEnd < 0) return { state: 'starting', wait: null, turn }
+
+  const iWall = lastIndex(here, 'limit_stop', 'quota_resume')
+  const wall = here[iWall]
   const carriedOn = wall?.kind === 'quota_resume' && wall.detail === 'fired' && iEnd > iWall
   if (iWall > iStart && !carriedOn) return { state: 'walled', wait, turn }
 
-  if (lastIndex(facts, 'prompt_blocked') > Math.max(iStart, iEnd)) return { state: 'blocked', wait, turn }
+  if (lastIndex(here, 'prompt_blocked') > Math.max(iStart, iEnd)) return { state: 'blocked', wait, turn }
 
   if (iStart > iEnd) {
-    const { herdr } = input
-    const startedAt = facts[iStart]?.at.getTime() ?? 0
+    const startedAt = here[iStart]?.at.getTime() ?? 0
     const quietSince = Math.max(startedAt, herdr?.worktreeChangedAt?.getTime() ?? 0)
     const herdrAgrees =
       herdr?.status === 'working' && herdr.seenAt !== null && now.getTime() - herdr.seenAt.getTime() <= HERDR_FRESH_MS
@@ -208,14 +232,11 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
 }
 
 /** Event time first, insertion order second: a replay delivers late. */
-function factRows(sql: SQL, id?: string): Promise<FactRow[]> {
-  return id === undefined
-    ? sql`
-        SELECT session, kind, at, COALESCE(payload->>'on', payload->>'state') AS detail
-        FROM factory.events WHERE session <> ${HERDR_SESSION} ORDER BY session, at, id`
-    : sql`
-        SELECT session, kind, at, COALESCE(payload->>'on', payload->>'state') AS detail
-        FROM factory.events WHERE session = ${id} ORDER BY at, id`
+function factRows(sql: SQL, ids: readonly string[]): Promise<FactRow[]> {
+  if (ids.length === 0) return Promise.resolve([])
+  return sql`
+    SELECT session, kind, at, COALESCE(payload->>'on', payload->>'state') AS detail
+    FROM factory.events WHERE session IN ${sql(ids)} ORDER BY session, at, id`
 }
 
 function groupFacts(rows: readonly FactRow[]): Map<string, Fact[]> {
@@ -231,13 +252,20 @@ function groupFacts(rows: readonly FactRow[]): Map<string, Fact[]> {
 export async function getSession(sql: SQL, id: string, now: Date): Promise<Session | undefined> {
   const [row]: SessionRow[] = await sql`SELECT * FROM factory.sessions WHERE id = ${id}`
   if (!row) return undefined
-  return view(row, groupFacts(await factRows(sql, id)).get(id) ?? [], now)
+  return view(row, groupFacts(await factRows(sql, [id])).get(id) ?? [], now)
 }
 
-/** Newest first. Dead sessions are history: left out unless `all`. */
+/** The most sessions one list answers with: the newest. Dead sessions are history, left out unless `all`. */
+export const LIST_LIMIT = 200
+
 export async function listSessions(sql: SQL, now: Date, options: { all?: boolean } = {}): Promise<Session[]> {
-  const rows: SessionRow[] = await sql`SELECT * FROM factory.sessions ORDER BY created_at DESC, id`
-  const facts = groupFacts(await factRows(sql))
+  const rows: SessionRow[] = await sql`SELECT * FROM factory.sessions ORDER BY created_at DESC, id LIMIT ${LIST_LIMIT}`
+  const facts = groupFacts(
+    await factRows(
+      sql,
+      rows.map((r) => r.id),
+    ),
+  )
   const sessions = rows.flatMap((row) => view(row, facts.get(row.id) ?? [], now) ?? [])
   return options.all ? sessions : sessions.filter((s) => s.state !== 'dead')
 }
