@@ -5,5 +5,9 @@
   "type": "module",
   "bin": {
     "factory": "./bin/factory.ts"
+  },
+  "dependencies": {
+    "@software-factory/contract": "workspace:*",
+    "zod": "4.6.7"
   }
 }

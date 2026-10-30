@@ -29,11 +29,37 @@ beforeAll(() => {
     fetch: (req) => {
       const path = new URL(req.url).pathname
       if (odd === 'null') return Response.json(null)
+      if (odd === 'old-health' && path === '/health') return Response.json({ status: 'ok', version: 'abc123' })
       if (odd === 'empty' && path === '/spawns') return Response.json({ spawns: [] })
+      if (odd === 'drift' && (path === '/spawns' || path.endsWith('/requeue')))
+        return Response.json({ spawns: [{ key: 1 }], key: 1 })
       if (path === '/health') {
-        return status === 200
-          ? Response.json({ status: 'ok', version: 'abc123' })
-          : Response.json({ error: 'database down' }, { status })
+        const health = (state: 'ok' | 'unhealthy') => ({
+          status: state,
+          version: 'abc123',
+          reason: state === 'ok' ? null : 'no successful tick for 20s (limit 15s)',
+          tick: { lastSuccessAt: '2026-10-30T12:00:00.000Z', lastError: null },
+        })
+        if (status === 200) return Response.json(health('ok'))
+        if (status === 503) return Response.json(health('unhealthy'), { status })
+        return Response.json({ error: 'database down' }, { status })
+      }
+      if (path.startsWith('/spawns/') && path.endsWith('/requeue') && req.method === 'POST') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        const key = decodeURIComponent(path.split('/')[2] ?? '')
+        if (key === 'running')
+          return Response.json({ error: 'spawn is started; only a failed spawn can be re-queued' }, { status: 409 })
+        if (key === 'unknown') return Response.json({ error: 'unknown spawn' }, { status: 404 })
+        return Response.json({
+          key,
+          status: 'queued',
+          account: 'a',
+          resumeAt: null,
+          attempts: 0,
+          session: null,
+          error: null,
+        })
       }
       if (path === '/spawns') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
@@ -76,7 +102,7 @@ describe('factory health', () => {
   test('prints the server answer', async () => {
     const r = await factory(['health'])
     expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
-    expect(JSON.parse(r.stdout)).toEqual({ status: 'ok', version: 'abc123' })
+    expect(JSON.parse(r.stdout)).toMatchObject({ status: 'ok', version: 'abc123', reason: null })
   })
 
   test('plain', async () => {
@@ -91,12 +117,29 @@ describe('factory health', () => {
   })
 
   test('a 5xx is general', async () => {
-    status = 503
+    status = 500
     try {
       const r = await factory(['health'])
       expect(r.code).toBe(EXIT.general)
       expect(JSON.parse(r.stderr)).toMatchObject({
-        error: { kind: 'general', message: 'database down', details: { status: 503 } },
+        error: { kind: 'general', message: 'database down', details: { status: 500 } },
+      })
+    } finally {
+      status = 200
+    }
+  })
+
+  test('an unhealthy server (503 with the health body) is general, and says why; the body is still printed', async () => {
+    status = 503
+    try {
+      const r = await factory(['health'])
+      expect(r.code).toBe(EXIT.general)
+      expect(JSON.parse(r.stdout)).toMatchObject({
+        status: 'unhealthy',
+        reason: 'no successful tick for 20s (limit 15s)',
+      })
+      expect(JSON.parse(r.stderr)).toMatchObject({
+        error: { kind: 'general', message: 'server is not ok: unhealthy (no successful tick for 20s (limit 15s))' },
       })
     } finally {
       status = 200
@@ -122,6 +165,32 @@ describe('factory spawn list', () => {
   test('plain is one tab-separated line per spawn', async () => {
     const r = await factory(['spawn', 'list', '--format', 'plain'])
     expect(r.stdout).toBe('b\tstarted\ta\t-\t1\tpane-b\na\twaiting\t-\t2026-10-30T14:00:00.000Z\t0\t-\n')
+  })
+})
+
+describe('factory spawn requeue', () => {
+  test('prints the re-queued spawn', async () => {
+    const r = await factory(['spawn', 'requeue', 'flaky'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout)).toMatchObject({ key: 'flaky', status: 'queued', attempts: 0 })
+    expect((await factory(['spawn', 'requeue', 'flaky', '--format', 'plain'])).stdout).toBe(
+      'flaky\tqueued\ta\t-\t0\t-\n',
+    )
+  })
+
+  test('a spawn that is not failed is conflict (5), an unknown one not_found (4)', async () => {
+    const conflict = await factory(['spawn', 'requeue', 'running'])
+    expect(conflict).toMatchObject({ code: EXIT.conflict, stdout: '' })
+    expect(JSON.parse(conflict.stderr)).toMatchObject({
+      error: { kind: 'conflict', message: expect.stringContaining('only a failed spawn') },
+    })
+    expect((await factory(['spawn', 'requeue', 'unknown'])).code).toBe(EXIT.not_found)
+  })
+
+  test('needs a key, and the token', async () => {
+    expect((await factory(['spawn', 'requeue'])).code).toBe(EXIT.usage)
+    expect((await factory(['spawn', 'requeue', 'a', 'b'])).code).toBe(EXIT.usage)
+    expect((await factory(['spawn', 'requeue', 'x'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
   })
 })
 
@@ -172,6 +241,31 @@ describe('answers that are not the contract', () => {
       const r = await factory(['health'])
       expect(r).toMatchObject({ code: EXIT.contract_mismatch, stdout: '' })
       expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'contract_mismatch' } })
+    } finally {
+      odd = ''
+    }
+  })
+
+  test.each([
+    ['spawn', 'list'],
+    ['spawn', 'requeue', 'flaky'],
+  ])('a body that drifted from the contract on %p is exit 9', async (...args) => {
+    odd = 'drift'
+    try {
+      const r = await factory(args.flat() as string[])
+      expect(r).toMatchObject({ code: EXIT.contract_mismatch, stdout: '' })
+      expect(JSON.parse(r.stderr)).toMatchObject({
+        error: { kind: 'contract_mismatch', hint: 'the server and the CLI are from different releases' },
+      })
+    } finally {
+      odd = ''
+    }
+  })
+
+  test('a health body from an older release (no tick record) is exit 9', async () => {
+    odd = 'old-health'
+    try {
+      expect((await factory(['health'])).code).toBe(EXIT.contract_mismatch)
     } finally {
       odd = ''
     }

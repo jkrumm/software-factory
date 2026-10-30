@@ -16,11 +16,23 @@
       "bin": {
         "factory": "./bin/factory.ts",
       },
+      "dependencies": {
+        "@software-factory/contract": "workspace:*",
+        "zod": "4.6.7",
+      },
+    },
+    "packages/contract": {
+      "name": "@software-factory/contract",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "4.6.7",
+      },
     },
     "packages/server": {
       "name": "@software-factory/server",
       "version": "0.0.0",
       "dependencies": {
+        "@software-factory/contract": "workspace:*",
         "zod": "4.6.7",
       },
     },
@@ -49,6 +61,8 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.6.3", "", { "os": "win32", "cpu": "x64" }, "sha512-GhtOPphBWlnCepqpNk/w5eGN5oGRCzL20EbAkL1XCIpyboeVC9R642noyT43l8LSenGS4qz9IL8sKPfwY37V/Q=="],
 
     "@software-factory/cli": ["@software-factory/cli@workspace:packages/cli"],
+
+    "@software-factory/contract": ["@software-factory/contract@workspace:packages/contract"],
 
     "@software-factory/server": ["@software-factory/server@workspace:packages/server"],
 
