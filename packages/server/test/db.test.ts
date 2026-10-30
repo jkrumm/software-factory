@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SQL } from 'bun'
-import { acquireSingleton, migrate, MIGRATIONS_DIR, SINGLETON_LOCK } from '../src/db.ts'
+import { acquireSingleton, migrate, MIGRATIONS_DIR } from '../src/db.ts'
+import { LOCKS } from '../src/locks.ts'
+import { lockCapacity } from '../src/capacity.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 
 let db: TestDb
@@ -64,6 +66,25 @@ describe('migrate', () => {
 })
 
 describe('one process', () => {
+  test('the lock keys are all different', () => {
+    const keys = Object.values(LOCKS)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  test('holding the one-process lock does not block the transaction locks the tick takes', async () => {
+    const held = await acquireSingleton(db.sql)
+    try {
+      const taken = db.sql.begin(async (tx) => {
+        await lockCapacity(tx)
+        return 'locked'
+      })
+      expect(await Promise.race([taken, Bun.sleep(3000).then(() => 'blocked')])).toBe('locked')
+      await migrate(db.sql, dir)
+    } finally {
+      await held?.release()
+    }
+  })
+
   test('a second holder of the lock is told so, and gets it once the first lets go', async () => {
     const other = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
     try {
@@ -84,7 +105,7 @@ describe('one process', () => {
     const dying = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
     expect(await acquireSingleton(dying)).toBeDefined()
     await db.sql`
-      SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND objid = ${SINGLETON_LOCK} AND granted`
+      SELECT pg_terminate_backend(pid) FROM pg_locks WHERE locktype = 'advisory' AND objid = ${LOCKS.singleton} AND granted`
     let next = await acquireSingleton(db.sql)
     for (let i = 0; i < 50 && !next; i++) {
       await Bun.sleep(20)
