@@ -12,6 +12,7 @@ import {
 } from '../src/prompts.ts'
 import { recordReading } from '../src/capacity.ts'
 import { setQueue } from '../src/queue.ts'
+import { createSpawn } from '../src/spawns.ts'
 import { HerdrRunner, UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
@@ -338,6 +339,26 @@ describe('prompt delivery: one at a time, and resumes are admitted', () => {
     expect(runner.typed).toHaveLength(1)
   })
 
+  test('a busy agent leaves no claim behind: a later, unrelated turn does not make an untyped retry delivered', async () => {
+    await working()
+    await endTurn()
+    await note('n1')
+    await deliver()
+    clock.advance(CONFIRM_MS + 1_000)
+    runner.answer = 'busy'
+    await deliver()
+    expect(await db.sql`SELECT status, claimed_at FROM factory.prompts WHERE id = 'n1'`).toEqual([
+      { status: 'pending', claimed_at: null },
+    ])
+    // The session runs a turn of its own meanwhile; it proves nothing about the note.
+    runner.answer = 'typed'
+    await startTurn()
+    await endTurn()
+    await deliver()
+    expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 2 })
+    expect(runner.typed).toHaveLength(2)
+  })
+
   const resume = async () => {
     await w.spawned('s', { account: 'a' })
     await w.emit('s', 'turn_started', w.at(10))
@@ -376,6 +397,35 @@ describe('prompt delivery: one at a time, and resumes are admitted', () => {
     expect(runner.started).toEqual([])
     expect((await row('restart:x:s')).error).toContain('held')
     expect((await row('restart:x:s')).status).toBe('pending')
+  })
+
+  test('the reservation is made where the capacity is checked: a spawn claim during the start sees the account taken', async () => {
+    await resume()
+    await open('a')
+    let other: string | undefined
+    runner.onStart = async () => {
+      const { spawn } = await createSpawn(
+        db.sql,
+        { key: 'other', repo: '/work/other', prompt: 'p', role: 'worker', tier: 'sonnet', effort: 'high' },
+        clock.now(),
+      )
+      other = spawn.status
+    }
+    await deliver()
+    expect(runner.started).toHaveLength(1)
+    // Only account `a` has room, and the resume holds it: the new spawn waits.
+    expect(other).toBe('waiting')
+  })
+
+  test('a start that fails gives the account back', async () => {
+    await resume()
+    await open('a')
+    const [{ assigned_at: before }] = await db.sql`SELECT assigned_at FROM factory.spawns WHERE key = 's'`
+    runner.failure = new Error('herdr agent start: exited 1')
+    await deliver()
+    const [{ assigned_at: after }] = await db.sql`SELECT assigned_at FROM factory.spawns WHERE key = 's'`
+    expect(new Date(after).getTime()).toBe(new Date(before).getTime())
+    expect(await row('restart:x:s')).toMatchObject({ status: 'pending', failures: 1 })
   })
 
   test('a resume uses up the capacity it was admitted on: the spawn counts as assigned from now', async () => {

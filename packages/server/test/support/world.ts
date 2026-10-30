@@ -10,6 +10,8 @@ export class FakeRunner implements Runner {
   started: StartInput[] = []
   answer: 'typed' | 'busy' = 'typed'
   failure?: Error
+  /** runs inside `start`, after it has begun: what else the factory does while an agent is being started */
+  onStart?: (input: StartInput) => Promise<void>
 
   async type(input: { pane: string; text: string }): Promise<'typed' | 'busy'> {
     if (this.failure) throw this.failure
@@ -20,6 +22,7 @@ export class FakeRunner implements Runner {
   async start(input: StartInput): Promise<{ session: string }> {
     if (this.failure) throw this.failure
     this.started.push(input)
+    await this.onStart?.(input)
     return { session: 'w9:p9' }
   }
 }

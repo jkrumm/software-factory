@@ -77,7 +77,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `Runner.type` types only into an agent herdr calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
   (a rule's) or 24 h (a note). A rule whose prompt failed or expired asks again after 30 min while its condition holds
   (the same row starts over; a delivered prompt, a note, or a prompt recorded as undeliverable never does). One prompt is
-  typed per session per pass. A later prompt for a session waits while an earlier one is `typing` or `sent` and unproven. A retry is not typed if a turn has shown up since its claim. A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
+  typed per session per pass. A later prompt for a session waits while an earlier one is `typing` or `sent` and unproven. A retry is not typed if a turn has shown up since its claim; a `busy` answer clears the claim, so a later turn proves nothing. A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
   prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (herdr reads it as an
   option) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `restart:`), which would take the rule's place.
   The blocked note names the worker but not its prompt text: that is agent-produced and stays in `factory status`.
@@ -105,7 +105,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
     `restart:<new server identity>:<session>`. A resume starts an agent, so it is admitted like a spawn claim (held under
     `drain`, `pace` or a full account, only on the account the conversation lives in; the hold shows in the prompt's error) and
-    counts as a new assignment on that account. A restart prompt never re-arms. A session that is not a factory spawn (or never reported its Claude session
+    reserves that account in the same locked transaction that admits it (given back if the start fails), so a spawn claim in between
+    sees it taken. A restart prompt never re-arms. A session that is not a factory spawn (or never reported its Claude session
     id) gets a `failed` prompt with the reason: that is its line in status.
 - **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
   and spawns), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
