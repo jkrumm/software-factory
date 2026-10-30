@@ -125,14 +125,17 @@ dead panes.
 
 | State | Read from |
 |-|-|
-| `starting` | spawn recorded, no `session_started` |
+| `starting` | spawn recorded, no hook has spoken |
 | `working` | latest `turn_started` has no `turn_ended` after it |
-| `idle` | latest event is `turn_ended`, no open wait |
+| `idle` | latest event is `turn_ended`, or `session_started` with no turn yet; no open wait |
 | `waiting` | a declared wait is open (`factory session wait --on workers\|deploy\|owner`) |
-| `walled` | a `limit_stop` or `quota_resume` with no later `turn_started` |
-| `blocked` | `prompt_blocked` with no later `turn_started` |
+| `walled` | a `limit_stop` or `quota_resume` with no later `turn_started`; a turn that ends after `quota_resume` fired stays `walled` |
+| `blocked` | `prompt_blocked` with no later `turn_started` or `turn_ended` |
 | `stuck` | `working`, herdr agrees, no commit or file change in the worktree for 45 minutes |
 | `dead` | `session_ended`, or the pane is gone |
+
+State reads from the latest `session_started`, so a resumed session starts clean. Hooks carry no token: they post
+to a unix socket (mode 0600) that serves only events and waits, and fall back to the spool.
 
 ### The queue (FL1, FL3)
 

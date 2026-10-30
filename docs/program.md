@@ -34,7 +34,7 @@ code itself.
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Done 2026-10-30, reviewed. Two items open, see the track note |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
 | F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Done 2026-10-30, reviewed: skeleton merged (PR #1), `make check` green, 164 tests. Not deployed: waits for `shared` (F1 Wave 1) |
-| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0, `shared` (A1 Wave 1) | Plan `docs/waves/f1.md` (six waves, each a `rd fan` worker); Wave 1 done and reviewed: the server is live on the mini (PR #2). Wave 2 running |
+| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0, `shared` (A1 Wave 1) | Plan `docs/waves/f1.md` (six waves, each a `rd fan` worker); Waves 1–2 done and reviewed: the server is live on the mini, hook events flow from every `rd` session. Wave 3 running |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | Plan in argo (six waves); Wave 1 done and reviewed (`shared` via `make db-shared` in vps); Wave 2 running (`argo-w2`) |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
 | F2 | Issue machine: inbox, leads in worktrees, evidence, hold, `project.yaml` v0 | software-factory | F1 | pending |
@@ -50,8 +50,8 @@ code itself.
 
 ### R0, R1
 Plans: `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md`. R0 Wave 2 carries both close-outs' leftovers.
-Known non-green in dotfiles, predating the wave: `architecture-check` (the `com.iu.*` agents on the mini) and
-`drift-check` (collie pin, tailscale daemon). Open after R0: the Hermes API to loopback (`hermes-agent/.env.tpl` `API_SERVER_HOST` and `iris/.env.local.tpl`
+dotfiles `make check` is green again since F1 Wave 2 mapped the new agents (2026-10-30); `drift-check` (collie pin,
+tailscale daemon) is still red and outside `make check`. Open after R0: the Hermes API to loopback (`hermes-agent/.env.tpl` `API_SERVER_HOST` and `iris/.env.local.tpl`
 `HERMES_HOST` together, then `verify.sh`, the `hermes-validate` probe, restarts, a memo routed to Hermes) waits until
 no iris agent is `working`; the Kuma push monitor `Hermes Watchdog - Push` has no pinger and is the owner's to pause
 in the UI. Full list of kept sweep hits: `dotfiles/docs/waves/archive/2026-10-clean-setup-PLAN.md`. Dead Argo code for A1 to delete while it moves: the `/ai/v1/*` HTTP
