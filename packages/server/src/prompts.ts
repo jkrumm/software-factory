@@ -224,19 +224,28 @@ async function provedSince(sql: SQL, session: string, since: Date): Promise<bool
  * Why a resume may not start now, or nothing if it may: admission's answer for the spawn (its own session and assignment
  * do not count against it) and, because the conversation is in one account's config, only that account will do.
  */
-async function resumeHold(
+async function admitResume(
   sql: SQL,
   spawn: { key: string; repo: string; role: string; account: string | null },
   now: Date,
-): Promise<string | undefined> {
-  const decision = await sql.begin(async (tx) => {
+): Promise<{ held: string } | { previous: Date | null }> {
+  return sql.begin(async (tx) => {
     await lockCapacity(tx)
-    return admit(tx, { key: spawn.key, repo: spawn.repo, role: spawn.role, prefer: spawn.account }, now)
+    const decision = await admit(tx, { key: spawn.key, repo: spawn.repo, role: spawn.role, prefer: spawn.account }, now)
+    if (decision.kind === 'hold') return { held: decision.reason }
+    if (decision.kind === 'wait') return { held: 'no account has room' }
+    if (decision.account !== spawn.account) return { held: `${spawn.account ?? 'its account'} has no room` }
+    // The reservation is written where the capacity was checked, as a spawn claim does: a claim that comes between this
+    // admission and the start sees the account taken.
+    const [row] = await tx`SELECT assigned_at FROM factory.spawns WHERE key = ${spawn.key}`
+    await tx`UPDATE factory.spawns SET assigned_at = ${now} WHERE key = ${spawn.key}`
+    return { previous: (row?.assigned_at as Date | null | undefined) ?? null }
   })
-  if (decision.kind === 'hold') return decision.reason
-  if (decision.kind === 'wait') return 'no account has room'
-  return decision.account === spawn.account ? undefined : `${spawn.account ?? 'its account'} has no room`
 }
+
+/** A resume that did not start gives the account back: the assignment goes back to what it was. */
+const releaseResume = (sql: SQL, key: string, previous: Date | null) =>
+  sql`UPDATE factory.spawns SET assigned_at = ${previous} WHERE key = ${key}`
 
 /** One line per prompt that gives up for good, so the reason is in the log whatever else is read. */
 const logGaveUp = (id: string, reason: string) => console.error('prompt failed', { id, reason })
@@ -296,19 +305,27 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     // A resume starts an agent, so it is admitted like a spawn claim: held under `drain`, `pace` and a full account, and
     // only on the account the conversation lives in.
+    let reserved: { previous: Date | null } | undefined
     if (prompt.via === 'resume' && target.spawn) {
-      const held = await resumeHold(sql, target.spawn, clock.now())
-      if (held) {
-        await sql`UPDATE factory.prompts SET error = ${`held: ${held}`} WHERE id = ${prompt.id} AND status = 'pending'`
+      const admitted = await admitResume(sql, target.spawn, clock.now())
+      if ('held' in admitted) {
+        await sql`UPDATE factory.prompts SET error = ${`held: ${admitted.held}`} WHERE id = ${prompt.id} AND status = 'pending'`
         continue
       }
+      reserved = admitted
+    }
+    const release = async () => {
+      if (reserved && target.spawn) await releaseResume(sql, target.spawn.key, reserved.previous)
     }
 
     const claimedAt = clock.now()
     const claimed = await sql`
       UPDATE factory.prompts SET status = 'typing', claimed_at = ${claimedAt}
       WHERE id = ${prompt.id} AND status = 'pending' RETURNING id`
-    if (claimed.length === 0) continue
+    if (claimed.length === 0) {
+      await release()
+      continue
+    }
     attempts++
     typedTo.add(prompt.session)
 
@@ -316,6 +333,7 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     try {
       outcome = await attempt(deps, prompt, target)
     } catch (error) {
+      await release()
       const message = error instanceof Error ? error.message : String(error)
       if (error instanceof UncertainTyping) {
         // The text may have reached the agent: it is not typed blindly again. The next turn_started proves it, or the
@@ -340,7 +358,8 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       continue
     }
     if (outcome === 'busy') {
-      await sql`UPDATE factory.prompts SET status = 'pending' WHERE id = ${prompt.id} AND status = 'typing'`
+      // Nothing was typed: the claim goes too, or a later turn of the session would look like the proof of a typing that never was.
+      await sql`UPDATE factory.prompts SET status = 'pending', claimed_at = NULL WHERE id = ${prompt.id} AND status = 'typing'`
       continue
     }
     await sql`
@@ -373,7 +392,7 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
   // The new pane in one transaction, after the call: a crash between the two rows would leave the spawn pointing at a dead pane.
   await deps.sql.begin(async (tx) => {
     await tx`UPDATE factory.sessions SET pane = ${pane}, pane_misses = 0 WHERE id = ${prompt.session}`
-    await tx`UPDATE factory.spawns SET session = ${pane}, assigned_at = ${deps.clock.now()} WHERE key = ${spawn.key}`
+    await tx`UPDATE factory.spawns SET session = ${pane} WHERE key = ${spawn.key}`
   })
   return 'typed'
 }
