@@ -135,6 +135,17 @@ function failure(error: unknown): Response {
   return json({ error: 'internal error' }, 500)
 }
 
+/** `POST /sessions/:id/wait`: declares or closes a wait, answers with the session. */
+const waitHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/sessions/:id/wait'>): Promise<Response> => {
+    const wait = await parseBody(req, WaitInput)
+    const now = clock.now()
+    if (!(await declareWait(sql, req.params.id, wait, now))) return json({ error: 'unknown session' }, 404)
+    const session = await getSession(sql, req.params.id, now)
+    return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
+  }
+
 /** The route table for `Bun.serve`. */
 export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
@@ -168,15 +179,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDe
         return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
       }),
     },
-    '/sessions/:id/wait': {
-      POST: route(async (req: Bun.BunRequest<'/sessions/:id/wait'>) => {
-        const wait = await parseBody(req, WaitInput)
-        const now = clock.now()
-        if (!(await declareWait(sql, req.params.id, wait, now))) return json({ error: 'unknown session' }, 404)
-        const session = await getSession(sql, req.params.id, now)
-        return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
-      }),
-    },
+    '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
@@ -241,21 +244,24 @@ export function serve(deps: AppDeps & { port: number }) {
 }
 
 /**
- * The hooks' way in: a unix socket in the owner's directory, `POST /events` and nothing else. A hook has no token (the
- * runner keeps secrets out of the panes), and the socket's mode 0600 is what only the owner's processes can pass.
+ * The sessions' way in: a unix socket in the owner's directory, with `POST /events` and `POST /sessions/:id/wait` and
+ * nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600 is
+ * what only the owner's processes can pass.
  */
-export function serveHooks(deps: { sql: SQL; token: string; socketPath: string }) {
+export function serveHooks(deps: { sql: SQL; clock: Clock; token: string; socketPath: string }) {
+  const open = { open: true }
   const post = guarded(
     deps.token,
     async (req: Request) => {
       const { duplicate } = await recordEvent(deps.sql, await parseBody(req, EventInput))
       return respond(EventAck, { duplicate }, duplicate ? 200 : 201)
     },
-    { open: true },
+    open,
   )
+  const wait = guarded(deps.token, waitHandler(deps.sql, deps.clock), open)
   return Bun.serve({
     unix: deps.socketPath,
-    routes: { '/events': { POST: post } },
+    routes: { '/events': { POST: post }, '/sessions/:id/wait': { POST: wait } },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,
   })

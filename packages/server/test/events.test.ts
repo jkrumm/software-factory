@@ -131,6 +131,34 @@ describe('derived session state', () => {
     expect(derive(facts(['session_started', 0], ['session_ended', 5], ['session_started', 5]))).toBe('idle')
   })
 
+  test('a pane_gone is withdrawn by a later hook event, or by herdr showing the agent again', () => {
+    const gone = facts(['session_started', 0], ['turn_started', 1], ['pane_gone', 5])
+    expect(derive([...gone, ...facts(['turn_ended', 6])])).toBe('idle')
+    const back = (seenAt: number | null, status: string | null = 'idle'): Witnessed => ({
+      status,
+      seenAt: seenAt === null ? null : T(seenAt),
+      worktreeChangedAt: null,
+    })
+    expect(derive(gone, { herdr: back(6) })).toBe('working')
+    expect(derive(gone, { herdr: back(4) })).toBe('dead')
+    expect(derive(gone, { herdr: back(null) })).toBe('dead')
+    expect(derive(gone, { herdr: back(6, null) })).toBe('dead')
+    // session_ended is final until a start, whatever herdr shows.
+    expect(derive(facts(['session_started', 0], ['session_ended', 5]), { herdr: back(6) })).toBe('dead')
+  })
+
+  test('a resumed session starts clean: what the life before it left open does not count', () => {
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['pane_gone', 5], ['session_started', 6]))).toBe(
+      'idle',
+    )
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['limit_stop', 2], ['session_started', 6]))).toBe(
+      'idle',
+    )
+    expect(
+      derive(facts(['session_started', 0], ['turn_started', 1], ['prompt_blocked', 2], ['session_started', 6])),
+    ).toBe('idle')
+  })
+
   test('late and out of order delivery: the answer follows event time, not arrival', async () => {
     await emit('s', 'session_started', '2026-10-30T10:00:00Z')
     await emit('s', 'turn_started', '2026-10-30T10:01:00Z')

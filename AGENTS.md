@@ -52,17 +52,20 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   (`FACTORY_SPOOL_DIR`, one `O_APPEND` write), posts it to the server's unix socket (`FACTORY_SOCKET`, default
   `~/.local/share/factory/hook.sock`, 300 ms timeout) and exits 0 whatever happens. The hook has no token and the Runner
   keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
-  `POST /events` and nothing else. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  `POST /events` and `POST /sessions/:id/wait` (`factory session wait`, which
+  a session in a pane runs without a token) and nothing else; bound under umask 0177. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout and stderr stay empty for every
   event**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the session's context (tested per event).
 - **The key is session, event name, turn number** (`<session>:turn_ended:3`), counted from the spool, written into the
-  line, so a replay carries it. A kind that repeats inside a turn gets `:2`, `:3`. Event time is strictly increasing per
+  line, so a replay carries it. Counting and appending happen under a per-session lock (`<file>.lock`, a `mkdir`; the
+  server's rotation takes it too); a hook that cannot get it in 200 ms writes a key with a random suffix instead. A kind that repeats inside a turn gets `:2`, `:3`. Event time is strictly increasing per
   session. `SpoolReplayer` (`spool.ts`) reads the directory at the start of every tick and stores whole lines past its
   in-memory offset (a restart re-reads: the unique key makes it harmless). A quiet, fully read file over 64 KiB is
   rotated: its sums (`turns`, current-turn counts) go to `<file>.base` first, so numbering never starts over, then the
   file is retired. Spool files of dead sessions are kept (a reused `rd` name must not reuse keys).
-- **Derived state** (`sessions.ts`, first match wins): `dead` (last of session_started / session_ended / pane_gone is not
-  a start), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no
+- **Derived state** (`sessions.ts`, first match wins; turns, walls and prompts count from the latest `session_started`):
+  `dead` (last of session_started / session_ended / pane_gone is not a start; a `pane_gone` is withdrawn by a later hook
+  event or by herdr showing the agent again), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no
   later turn_started; a turn that ends after `quota_resume fired` ends it too), `blocked` (prompt_blocked with no later
   turn_started or turn_ended), `working` (open turn; `stuck` when herdr says working within 5 minutes and neither the
   worktree nor the turn moved for 45 minutes), `waiting` (an open `factory session wait --on workers|deploy|owner`, no
@@ -77,7 +80,10 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   agent status, the worktree's last change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that
   is working), and herdr's server (pid + start time from the process table, herdr has no API for it): a change is the
   event `herdr_restarted` (filed under the pseudo-session `_herdr`). A session with a known pane that no agent matches in
-  two passes in a row gets `pane_gone` (= `dead`); the pass in which herdr restarted counts nobody as missing. A herdr that
+  two passes in a row gets `pane_gone` (= `dead`, key per disappearance); a pass in which herdr restarted or could not be
+  identified counts nobody as missing, and an agent that returns revives the session. Git runs without the server's
+  secrets, `core.fsmonitor` or hooks (the agent controls `.git/config`), four probes at a time. `GET /sessions` answers
+  with the newest 200. A herdr that
   does not answer records nothing.
 - **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
   if its connection loses it; a second copy exits 1. Every

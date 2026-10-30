@@ -15,6 +15,7 @@ import {
   spoolFileName,
   summarize,
 } from '@software-factory/contract/spool'
+import { tryLock } from '@software-factory/contract/spool-lock'
 
 export const HOOK_EVENTS = [
   'session-start',
@@ -25,6 +26,9 @@ export const HOOK_EVENTS = [
   'session-end',
 ] as const
 export type HookEvent = (typeof HOOK_EVENTS)[number]
+
+/** How long a hook waits for another hook of its session before it writes a key that cannot collide. */
+export const LOCK_BUDGET_MS = 200
 
 /** The post to the server may take this long and no longer. */
 export const POST_TIMEOUT_MS = 300
@@ -107,9 +111,8 @@ function readSummary(file: string) {
   return summarize(parseSummary(base), lines)
 }
 
-/** Appends one line with a single O_APPEND write, so concurrent hooks of one session never interleave. */
-function append(dir: string, file: string, line: SpoolLine): void {
-  mkdirSync(dir, { recursive: true, mode: 0o700 })
+/** Appends one line with a single O_APPEND write. */
+function append(file: string, line: SpoolLine): void {
   appendFileSync(file, `${JSON.stringify(line)}\n`, { mode: 0o600 })
 }
 
@@ -133,15 +136,25 @@ export async function runHook(event: string, io: HookIo): Promise<void> {
   // No place to spool is no place to lose an event to a stray relative path.
   if (!dir) return
   const file = join(dir, spoolFileName(session))
-  const summary = readSummary(file)
-  const line: SpoolLine = {
-    key: nextKey(summary, session, mapped.kind),
-    session,
-    kind: mapped.kind,
-    at: nextAt(summary, io.now()),
-    ...(mapped.payload ? { payload: mapped.payload } : {}),
+  // Counting the spool and appending are one step: two overlapping hooks of a session must not write the same key.
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  const release = await tryLock(file, LOCK_BUDGET_MS)
+  let line: SpoolLine
+  try {
+    const summary = readSummary(file)
+    // Without the lock the count may be stale: a random suffix keeps the key unique, and the line is still counted later.
+    const key = nextKey(summary, session, mapped.kind) + (release ? '' : `:${Math.random().toString(36).slice(2, 8)}`)
+    line = {
+      key,
+      session,
+      kind: mapped.kind,
+      at: nextAt(summary, io.now()),
+      ...(mapped.payload ? { payload: mapped.payload } : {}),
+    }
+    append(file, line)
+  } finally {
+    release?.()
   }
-  append(dir, file, line)
 
   const socket = io.env.FACTORY_SOCKET || (home ? defaultHookSocket(home) : '')
   if (!socket) return

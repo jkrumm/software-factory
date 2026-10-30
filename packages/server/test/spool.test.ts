@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
+  rmdirSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -182,6 +184,34 @@ describe('rotation', () => {
     age(fileOf('s'))
     expect((await r.replay()).rotated).toEqual([spoolFileName('s')])
     expect(hookAppend('s', 'prompt_idle', '2026-10-30T11:01:00.000Z').key).toBe('s:prompt_idle:40:2')
+  })
+
+  test("not while a hook holds the session's lock; rotates once it lets go", async () => {
+    big('s', 40)
+    const r = replayer({ rotateBytes: 1000, quietMs: 1000 })
+    age(fileOf('s'))
+    mkdirSync(`${fileOf('s')}.lock`)
+    expect((await r.replay()).rotated).toEqual([])
+    expect(existsSync(fileOf('s'))).toBe(true)
+    rmdirSync(`${fileOf('s')}.lock`)
+    expect((await r.replay()).rotated).toEqual([spoolFileName('s')])
+    expect(existsSync(`${fileOf('s')}.lock`)).toBe(false)
+  })
+
+  test('a line a hook wrote without the lock is stored like any other', async () => {
+    big('s', 40)
+    const r = replayer({ rotateBytes: 1000, quietMs: 1000 })
+    age(fileOf('s'))
+    await r.replay()
+    // Appended after the file was fully read and before it is rotated again.
+    big('s', 1)
+    appendFileSync(
+      fileOf('s'),
+      `${JSON.stringify({ key: 's:stray:abc', session: 's', kind: 'prompt_idle', at: '2026-10-30T11:30:00.000Z' })}\n`,
+    )
+    age(fileOf('s'))
+    expect((await r.replay()).lines).toBe(2)
+    expect(await count()).toBe(42)
   })
 
   test('not while the session is writing, and not before the lines are acknowledged', async () => {

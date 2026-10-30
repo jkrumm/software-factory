@@ -3,11 +3,12 @@ import { join } from 'node:path'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
-import { DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, runProcess } from './exec.ts'
+import { childEnv, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, runProcess } from './exec.ts'
 import { agentName } from './runner.ts'
 import { HERDR_SESSION, recordEvent } from './sessions.ts'
 
 export const WITNESS_INTERVAL_MS = 60_000
+const PROBE_CONCURRENCY = 4
 /** Consecutive passes with no herdr agent for a session before its pane counts as gone. */
 export const MISSES_FOR_GONE = 2
 
@@ -89,8 +90,13 @@ export class HerdrCli implements HerdrView {
   }
 }
 
-/** `git log` and `git status` are read without taking a lock the agent's own git could wait on. */
+/**
+ * `git log` and `git status` are read without taking a lock the agent's own git could wait on, with the server's
+ * secrets out of git's environment and with no repository setting that runs a program (`core.fsmonitor`, hooks): the
+ * agent controls the worktree's `.git/config`.
+ */
 const GIT_ENV = { GIT_OPTIONAL_LOCKS: '0' }
+const GIT_SAFE = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
 const MAX_STATTED_FILES = 300
 const GIT_TIMEOUT_MS = 8_000
 
@@ -98,18 +104,19 @@ const GIT_TIMEOUT_MS = 8_000
  * The newest of: the last commit, and the modification time of every file git lists as changed or new. Undefined when
  * the directory is not a worktree or git does not answer in time.
  */
-export const gitProbe: WorktreeProbe = async (cwd) => {
-  const env = { ...process.env, ...GIT_ENV }
-  const head = await runProcess(['git', '-C', cwd, 'log', '-1', '--format=%ct'], GIT_TIMEOUT_MS, env).catch(
-    () => undefined,
-  )
+export const gitProbe = async (cwd: string, gitBin = 'git'): Promise<Date | undefined> => {
+  const env = childEnv(GIT_ENV)
+  const git = (...args: string[]) =>
+    runProcess([gitBin, '-C', cwd, ...GIT_SAFE, ...args], GIT_TIMEOUT_MS, env).catch(() => undefined)
+  const head = await git('log', '-1', '--format=%ct')
   if (!head || head.exitCode !== 0) return undefined
   let newest = Number(head.stdout.trim()) * 1000 || 0
-  const status = await runProcess(
-    ['git', '-C', cwd, 'status', '--porcelain=v1', '-z', '--no-renames'],
-    GIT_TIMEOUT_MS,
-    env,
-  ).catch(() => undefined)
+  // `status` lists paths from the repository root, wherever in the worktree the agent stands.
+  const [top, status] = await Promise.all([
+    git('rev-parse', '--show-toplevel'),
+    git('status', '--porcelain=v1', '-z', '--no-renames'),
+  ])
+  const root = top?.exitCode === 0 ? top.stdout.trim() : cwd
   if (status?.exitCode === 0) {
     const paths = status.stdout
       .split('\0')
@@ -118,7 +125,7 @@ export const gitProbe: WorktreeProbe = async (cwd) => {
       .slice(0, MAX_STATTED_FILES)
     const times = await Promise.all(
       paths.map((p) =>
-        stat(join(cwd, p)).then(
+        stat(join(root, p)).then(
           (s) => s.mtimeMs,
           () => 0,
         ),
@@ -148,8 +155,10 @@ interface Row {
   claude_session_id: string | null
   cwd: string | null
   pane_misses: number
-  /** the last of session_started / session_ended / pane_gone */
+  herdr_seen_at: Date | null
+  /** the last of session_started / session_ended / pane_gone, and when */
   life: string | null
+  life_at: Date | null
 }
 
 function match(row: Row, agents: readonly AgentSeen[]): AgentSeen | undefined {
@@ -194,17 +203,19 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
   }
 
   const rows: Row[] = await sql`
-    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, l.kind AS life
+    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, s.herdr_seen_at, l.kind AS life, l.at AS life_at
     FROM factory.sessions s
     LEFT JOIN LATERAL (
-      SELECT kind FROM factory.events
+      SELECT kind, at FROM factory.events
       WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
       ORDER BY at DESC, id DESC LIMIT 1) l ON true`
 
   const gone: string[] = []
-  const probes: Promise<void>[] = []
+  const probes: (() => Promise<void>)[] = []
   for (const row of rows) {
-    if (row.life === 'session_ended' || row.life === 'pane_gone') continue
+    // An ended session is history. One whose pane was reported gone is still looked for: an agent that comes back
+    // (herdr was slow, a pane was renamed) takes the session out of `dead` again.
+    if (row.life === 'session_ended') continue
     const agent = match(row, agents)
     if (agent) {
       await sql`
@@ -213,22 +224,26 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
         WHERE id = ${row.id}`
       const dir = row.cwd ?? agent.cwd
       if (agent.status === 'working' && dir) {
-        probes.push(
-          deps.probe(dir).then(async (changed) => {
-            if (changed) await sql`UPDATE factory.sessions SET worktree_changed_at = ${changed} WHERE id = ${row.id}`
-          }),
-        )
+        probes.push(async () => {
+          const changed = await deps.probe(dir)
+          if (changed) await sql`UPDATE factory.sessions SET worktree_changed_at = ${changed} WHERE id = ${row.id}`
+        })
       }
       continue
     }
-    if (!row.pane || restarted) continue
+    // Nothing to conclude from a herdr that could not be identified, or one that has just restarted.
+    const reported = row.life === 'pane_gone' && !(row.herdr_seen_at && row.life_at && row.herdr_seen_at > row.life_at)
+    if (!row.pane || restarted || !server || reported) continue
     const misses = row.pane_misses + 1
     await sql`UPDATE factory.sessions SET pane_misses = ${misses}, herdr_status = NULL WHERE id = ${row.id}`
     if (misses < MISSES_FOR_GONE) continue
-    const [{ starts }] = await sql`
-      SELECT count(*)::int AS starts FROM factory.events WHERE session = ${row.id} AND kind = 'session_started'`
+    // One key per disappearance: a pane that came back and went again is a second event, not a replay of the first.
+    const [{ starts, gones }] = await sql`
+      SELECT count(*) FILTER (WHERE kind = 'session_started')::int AS starts,
+             count(*) FILTER (WHERE kind = 'pane_gone')::int AS gones
+      FROM factory.events WHERE session = ${row.id}`
     await recordEvent(sql, {
-      key: `${row.id}:pane_gone:${starts}`,
+      key: `${row.id}:pane_gone:${starts}:${gones + 1}`,
       session: row.id,
       kind: 'pane_gone',
       at: now,
@@ -236,7 +251,12 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
     })
     gone.push(row.id)
   }
-  await Promise.all(probes)
+  // A few at a time: each probe is two git processes and a stat per changed file.
+  await Promise.all(
+    Array.from({ length: Math.min(PROBE_CONCURRENCY, probes.length) }, async () => {
+      for (let probe = probes.shift(); probe; probe = probes.shift()) await probe()
+    }),
+  )
   return { seen: agents.length, restarted, gone }
 }
 

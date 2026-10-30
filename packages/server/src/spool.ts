@@ -1,6 +1,7 @@
 import { readdir, rename, stat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseSpool, parseSummary, summarize } from '@software-factory/contract/spool'
+import { tryLock } from '@software-factory/contract/spool-lock'
 import type { SQL } from 'bun'
 import { EventInput } from './schemas.ts'
 import { recordIn } from './sessions.ts'
@@ -8,6 +9,8 @@ import { recordIn } from './sessions.ts'
 /** An acknowledged spool larger than this is rotated once its session has been quiet for `QUIET_MS`. */
 export const ROTATE_BYTES = 64 * 1024
 export const QUIET_MS = 60_000
+/** How long a rotation waits for a hook that holds a session's lock. */
+const LOCK_WAIT_MS = 500
 
 export interface ReplayResult {
   /** lines read, whether they were new to the database or not */
@@ -84,20 +87,28 @@ export class SpoolReplayer {
     if (info.size < rotateBytes || this.acked.get(file) !== info.size) return
     if (this.options.now().getTime() - info.mtimeMs < quietMs) return
 
-    const base = parseSummary(
-      await Bun.file(`${path}.base`)
-        .text()
-        .catch(() => ''),
-    )
-    const next = summarize(base, parseSpool(await Bun.file(path).text()))
-    // The sums first, then the move: a hook between the two reads the new sums and the old file, which only skips ahead.
-    await Bun.write(`${path}.base.tmp`, JSON.stringify(next))
-    await rename(`${path}.base.tmp`, `${path}.base`)
-    const retired = `${path}.retired`
-    await rename(path, retired)
-    // A hook that had the file open when it moved may still have appended: store that, then let the file go.
-    await this.ingest(file, retired, info.size, result)
-    await unlink(retired)
+    // Under the hooks' lock: no hook counts or appends between the sums and the move. Busy means try again next pass.
+    const release = await tryLock(path, LOCK_WAIT_MS)
+    if (!release) return
+    try {
+      const base = parseSummary(
+        await Bun.file(`${path}.base`)
+          .text()
+          .catch(() => ''),
+      )
+      const whole = await Bun.file(path).text()
+      // Every line in the file is summed; one written since the acknowledgement (by a hook that went without the lock)
+      // is stored right below, before the file goes.
+      const next = summarize(base, parseSpool(whole))
+      await Bun.write(`${path}.base.tmp`, JSON.stringify(next))
+      await rename(`${path}.base.tmp`, `${path}.base`)
+      const retired = `${path}.retired`
+      await rename(path, retired)
+      await this.ingest(file, retired, info.size, result)
+      await unlink(retired)
+    } finally {
+      release()
+    }
     this.acked.delete(file)
     result.rotated.push(file)
   }

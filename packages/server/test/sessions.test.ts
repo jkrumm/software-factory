@@ -93,7 +93,7 @@ describe('the hooks socket', () => {
   beforeAll(() => {
     dir = mkdtempSync('/tmp/factory-sock-')
     socket = join(dir, 'h.sock')
-    hooks = serveHooks({ sql: db.sql, token: TEST_TOKEN, socketPath: socket })
+    hooks = serveHooks({ sql: db.sql, clock, token: TEST_TOKEN, socketPath: socket })
   })
   afterAll(() => {
     hooks.stop(true)
@@ -116,6 +116,15 @@ describe('the hooks socket', () => {
       (await post('/events', { key: 'h1', session: 's', kind: 'turn_started', at: '2026-10-30T10:00:00Z' })).status,
     ).toBe(200)
     expect(await view('s')).toMatchObject({ state: 'working', turn: 1 })
+  })
+
+  test('a session declares its wait through the socket too, with no token', async () => {
+    await emit('w', 'session_started', '2026-10-30T10:00:00Z')
+    const res = await post('/sessions/w/wait', { on: 'deploy' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: 'w', wait: 'deploy', state: 'waiting' })
+    expect((await post('/sessions/nope/wait', { on: 'deploy' })).status).toBe(404)
+    expect((await post('/sessions/w/wait', { on: 'friday' })).status).toBe(400)
   })
 
   test('is only the events route: nothing else of the API, and a bad body is a 400', async () => {

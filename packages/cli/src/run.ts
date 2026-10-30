@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import { ErrorBody, Health, Session, SessionList, Spawn, SpawnList, WaitOn } from '@software-factory/contract'
 import type { z } from 'zod'
+import { defaultHookSocket } from '@software-factory/contract/spool'
 import pkg from '../package.json' with { type: 'json' }
 import { EXIT, FactoryError, kindForStatus, usage } from './exit.ts'
 
@@ -32,7 +33,8 @@ commands:
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
-FACTORY_TOKEN    the bearer token the server requires (not needed for version and health)
+FACTORY_TOKEN    the bearer token the server requires (not needed for version, health and session wait)
+FACTORY_SOCKET   the server's unix socket for session wait (default ~/.local/share/factory/hook.sock)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
 `
@@ -57,6 +59,11 @@ interface CallOptions<S extends z.ZodType> {
   /** sent as JSON with a POST; `{}` when absent */
   body?: unknown
   auth: boolean
+  /**
+   * Through the server's unix socket instead of its port: how a session in a pane reaches it, with no token (the socket's
+   * file mode is the credential). Only `POST /sessions/:id/wait` and `POST /events` are served there.
+   */
+  socket?: boolean
   /** the schema every answer in `accept` must satisfy */
   schema: S
   /** statuses that carry the schema's body besides 2xx */
@@ -72,8 +79,10 @@ async function call<S extends z.ZodType>(
   path: string,
   options: CallOptions<S>,
 ): Promise<{ status: number; body: z.output<S> }> {
-  const base = (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
-  const token = io.env.FACTORY_TOKEN
+  const socket = options.socket ? io.env.FACTORY_SOCKET || (io.env.HOME ? defaultHookSocket(io.env.HOME) : '') : ''
+  if (options.socket && !socket) throw usage('no socket: set FACTORY_SOCKET or HOME')
+  const base = options.socket ? 'http://localhost' : (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
+  const token = options.socket ? undefined : io.env.FACTORY_TOKEN
   if (options.auth && !token) {
     throw new FactoryError('auth', 'no FACTORY_TOKEN set', {
       hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
@@ -90,6 +99,7 @@ async function call<S extends z.ZodType>(
       },
       body: options.method === 'POST' ? JSON.stringify(options.body ?? {}) : undefined,
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      ...(options.socket ? { unix: socket } : {}),
     })
     text = await response.text()
   } catch (error) {
@@ -165,12 +175,6 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, spawnLine(body))
   }
 
-  if (words[0] === 'hook') {
-    const { hookMain } = await import('./hook.ts')
-    await hookMain(words.slice(1), io.env)
-    return
-  }
-
   if (key === 'session list') {
     const { body } = await call(io, `/sessions${flags.all ? '?all=1' : ''}`, { auth: true, schema: SessionList })
     const lines = body.sessions.map(sessionLine)
@@ -194,7 +198,8 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     if (on && !on.success) throw usage(`--on must be workers, deploy or owner, got: ${flags.on}`)
     const { body } = await call(io, `/sessions/${encodeURIComponent(target)}/wait`, {
       method: 'POST',
-      auth: true,
+      auth: false,
+      socket: true,
       schema: Session,
       body: on?.success ? { on: on.data } : { done: true },
     })
