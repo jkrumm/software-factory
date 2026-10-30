@@ -230,6 +230,11 @@ const spawnHandler =
     // The policy decides before anything is stored; the row keeps the resolved path.
     const repo = await resolveProject(input.repo, repoRoots)
     const space = input.space === undefined ? repo : await resolveProject(input.space, repoRoots)
+    // The space is found again by the directory of its panes, which is the repo: a space that does not contain it would
+    // make a second space on the next start.
+    if (space !== repo && !repo.startsWith(space.endsWith('/') ? space : `${space}/`)) {
+      throw new Refusal(`space ${space} must contain the repo ${repo}`, 422)
+    }
     const { spawn, created } = await createSpawn(
       sql,
       { ...input, repo, space, newSpace: input.new_space, tier: entry.tier, effort: entry.effort },

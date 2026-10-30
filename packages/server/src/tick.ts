@@ -53,6 +53,8 @@ export interface Claim {
   /** the path whose herdr space the tab goes into */
   space: string
   newSpace: boolean
+  /** the space an earlier try used, if one got far enough to make it */
+  workspace: string | null
   role: string
   prompt: string
   account: string
@@ -69,6 +71,7 @@ interface DueRow {
   repo: string
   space: string
   new_space: boolean
+  workspace: string | null
   prompt: string
   role: string
   tier: Tier
@@ -103,7 +106,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
@@ -165,6 +168,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         repo: row.repo,
         space: row.space,
         newSpace: row.new_space,
+        workspace: row.workspace,
         role: row.role,
         prompt: row.prompt,
         account: decision.account,
@@ -205,6 +209,8 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
   const now = deps.clock.now()
   const budgetMs = deps.retryBudgetMs ?? DEFAULT_RETRY_BUDGET_MS
   const permanent = error instanceof RunnerError && error.permanent
+  // The space a failed try made or found is kept for the next one, so it goes back into it.
+  const workspace = error instanceof RunnerError ? (error.workspace ?? null) : null
   const spent = now.getTime() - claim.firstClaimedAt.getTime() >= budgetMs
   if (permanent || spent) {
     const reason = permanent
@@ -212,7 +218,7 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
       : `gave up: the ${minutes(budgetMs)} retry budget is spent after ${claim.attempts} attempts: ${message}`
     const failed = await deps.sql.begin(async (tx) => {
       const rows = await tx`
-        UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason}
+        UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason}, workspace = COALESCE(${workspace}, workspace)
         WHERE key = ${claim.key} AND status = 'starting'
         RETURNING key`
       if (rows.length > 0) await dropEmptySession(tx, claim.key)
@@ -223,7 +229,8 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
   }
   const retryAt = new Date(now.getTime() + retryDelayMs(claim.attempts))
   await deps.sql`
-    UPDATE factory.spawns SET status = 'queued', claimed_at = NULL, resume_at = ${retryAt}, error = ${message}
+    UPDATE factory.spawns SET status = 'queued', claimed_at = NULL, resume_at = ${retryAt}, error = ${message},
+      workspace = COALESCE(${workspace}, workspace)
     WHERE key = ${claim.key} AND status = 'starting'`
   return 'retrying'
 }
@@ -237,6 +244,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       repo: claim.repo,
       space: claim.space,
       newSpace: claim.newSpace,
+      workspace: claim.workspace,
       role: claim.role,
       prompt: claim.prompt,
       account: claim.account,

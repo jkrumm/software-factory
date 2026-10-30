@@ -174,6 +174,15 @@ describe('factory slot run, against the real socket', () => {
     await until(async () => (await listSlots(db.sql)).length === 0)
   })
 
+  test('a SIGINT sent to the wrapper alone reaches the command and gives the slot back', async () => {
+    const proc = slotRun(['--', 'sleep', '30'])
+    await until(async () => (await held()) === 1)
+    proc.kill('SIGINT')
+    const out = await finish(proc)
+    expect(out.code).toBe(130)
+    await until(async () => (await listSlots(db.sql)).length === 0)
+  })
+
   test('fail open: with no server it runs the command with one line on stderr', async () => {
     const out = await finish(slotRun(['--', 'echo', 'ran'], { FACTORY_SOCKET: join(dir, 'nobody.sock') }))
     expect(out.stdout).toBe('ran\n')

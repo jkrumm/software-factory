@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { HerdrRunner, type StartInput } from '../src/runner.ts'
+import { HerdrRunner, RunnerError, type StartInput } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 
@@ -109,6 +109,33 @@ describe('one herdr space per repo, keyed by path', () => {
     const own = await start('a', '/work/app', { newSpace: true })
     expect((await herdr.state()).workspaces).toHaveLength(1)
     expect((await start('b', '/work/app')).workspace).toBe(own.workspace)
+  })
+
+  test('a failed try reports its space, and a retry given it goes back there instead of making another', async () => {
+    await start('a', '/work/app')
+    await herdr.plan('agent start:notready')
+    const first = (await start('b', '/work/app', { newSpace: true }).catch((e: unknown) => e)) as RunnerError
+    expect(first).toBeInstanceOf(RunnerError)
+    expect(first.workspace).toBeDefined()
+    // The second try finds the agent that never got ready and closes its tab; the third starts clean.
+    const second = (await start('b', '/work/app', { newSpace: true, workspace: first.workspace }).catch(
+      (e: unknown) => e,
+    )) as RunnerError
+    expect(second.workspace).toBe(first.workspace as string)
+    const third = await start('b', '/work/app', { newSpace: true, workspace: second.workspace })
+    expect(third.workspace).toBe(first.workspace as string)
+    expect((await herdr.state()).workspaces).toHaveLength(2)
+  })
+
+  test("a resume goes back into the spawn's own space, not a sibling space of the same path", async () => {
+    const one = await start('a', '/work/app', { newSpace: true })
+    const two = await start('b', '/work/app', { newSpace: true })
+    expect(two.workspace).not.toBe(one.workspace)
+    // The tab of `a` is gone; a resume of `a` is told its recorded space.
+    await Bun.spawn([herdr.bin, 'tab', 'close', one.tab]).exited
+    const again = await start('a', '/work/app', { newSpace: true, workspace: one.workspace })
+    expect(again.workspace).toBe(one.workspace)
+    expect((await herdr.state()).workspaces.length).toBeLessThanOrEqual(2)
   })
 
   test('the pane gets the spawn role in FACTORY_ROLE, with the session and the account', async () => {

@@ -38,7 +38,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   in the path or below it (a worktree). So two repos named `app` have two spaces, a second spawn in a repo is a new tab in its
   space, and a fan worker's worktree passes its main checkout as `space` and lands there. A second space for a path that has one
   only with `new_space: true` (a retry of that key goes back into its space). The result names the pane, the tab and the space
-  (`spawns.session|tab|workspace`; `Spawn.pane` is `session`), and the pane's environment carries `FACTORY_ROLE`.
+  (`spawns.session|tab|workspace`; `Spawn.pane` is `session`), and the pane's environment carries `FACTORY_ROLE`. `space` must be the
+  repo or a directory containing it (422 otherwise: the space is found again by its panes, which sit in the repo). A try that fails
+  reports the space it made or found (`RunnerError.workspace`), the tick records it, and a retry or a herdr-restart resume passes
+  it back as `StartInput.workspace`: that space is used while herdr still has it, so a `new_space` spawn never makes a second one
+  for itself and a resume never lands in a sibling space of the same path. The previous release ignores `space`, `new_space` and
+  the recorded space (it starts in the repo's space): drain the queue before rolling back.
 - **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
   pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
   prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
@@ -164,7 +169,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Test slots (FL7)** (`slots.ts`, table `slots`): `factory slot run [--name <label>] -- <cmd>` asks `PUT /slots/:id` on the socket
   until it is granted (once a second), renews the lease every 10 s while the command runs (30 s lease; a holder that stops renewing
   loses it at the next call of anyone), and gives it back with `DELETE` on exit or `SIGTERM`/`SIGHUP`/`SIGINT`. `FACTORY_SLOTS` slots
-  (default 2), granted to callers in the order they first asked (a waiter that stops polling for 15 s leaves the line), all behind
+  (default 2; a signal sent to the wrapper is passed on to the command, and a renewal answered "wait" says once that the lease lapsed), granted to callers in the order they first asked (a waiter that stops polling for 15 s leaves the line), all behind
   one advisory lock. The exit code, stdout and stderr are the command's own (killed by a signal: 128 plus it; can't start: 127).
   **Fails open:** no answer from the server, or no slot within `FACTORY_SLOT_WAIT_MS` (client side, default 600000), runs the
   command anyway with one stderr line. `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
@@ -186,7 +191,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count by the role their pane reports (`FACTORY_ROLE`, recorded at `session_started`) and by the
-  directory they started in, which belongs to the repo when it is the repo or inside it (a worktree); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
+  directory they started in; two directories are one repo when one is the other or inside it, either way round (a worktree); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
   agent may run). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
   auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
   weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
