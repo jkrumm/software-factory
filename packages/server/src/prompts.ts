@@ -160,15 +160,14 @@ async function endAnsweredWaits(tx: SQL, delivered: readonly DeliveredRow[], now
 }
 
 /**
- * `sent` prompts, and retries waiting to be typed again (`pending` with a claim from an earlier typing), that a turn has proven become `delivered`, and a delivered wake ends its wait in the same transaction.
+ * `sent` prompts that a turn has proven become `delivered`, and a delivered wake ends its wait in the same transaction.
  * `session` narrows it to one session: the Stop hook settles its own session's wake before it decides.
  */
 export async function settleDelivered(sql: SQL, now: Date, session?: string): Promise<void> {
   await sql.begin(async (tx) => {
     const delivered: DeliveredRow[] = await tx`
       UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
-      WHERE (p.status = 'sent' OR (p.status = 'pending' AND p.sent_count > 0 AND p.claimed_at IS NOT NULL))
-        AND (${session ?? null}::text IS NULL OR p.session = ${session ?? null}) AND EXISTS (
+      WHERE p.status = 'sent' AND (${session ?? null}::text IS NULL OR p.session = ${session ?? null}) AND EXISTS (
         SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)
       RETURNING p.id, p.session, p.source, p.claimed_at`
     await endAnsweredWaits(tx, delivered, now)
