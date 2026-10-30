@@ -31,6 +31,11 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   and only due rows are selected (`docs/design.md` §3, "The tick").
 - **One schema, `factory`,** in the shared database; migrations are advisory-locked and qualify every name.
   `DATABASE_URL` comes from the environment (`.env.tpl` refs through `secrets-run`), never from a tracked file.
+  Migrations are additive for one release (expand, then contract): a rollback starts the previous release on the
+  migrated schema.
+- **The API is authenticated.** Every route but `GET /health` needs `Authorization: Bearer <FACTORY_TOKEN>`; a body
+  needs `application/json` (415), at most 64 KiB (413), and the Host must be loopback (421). The CLI reads the token
+  from `FACTORY_TOKEN`; run it under `secrets-run run --env-file=.env.tpl -- factory ...`.
 - Direct-to-master, conventional commits, no AI attribution. Update this file in the same commit as the
   code it describes.
 
