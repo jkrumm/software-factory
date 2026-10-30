@@ -187,7 +187,9 @@ export interface DeliverResult {
 const logGaveUp = (id: string, reason: string) => console.error('prompt failed', { id, reason })
 
 async function giveUp(sql: SQL, id: string, reason: string, now: Date): Promise<void> {
-  await sql`UPDATE factory.prompts SET status = 'failed', failed_at = ${now}, error = ${reason} WHERE id = ${id}`
+  await sql`
+    UPDATE factory.prompts SET status = 'failed', failed_at = ${now}, error = ${reason}
+    WHERE id = ${id} AND status = 'pending'`
   logGaveUp(id, reason)
 }
 

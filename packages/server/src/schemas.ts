@@ -13,19 +13,27 @@ const nonEmpty = z.string().min(1).max(256)
 /** An account name is a path segment in the API and a key in the queue: a short token, never free text. */
 export const AccountName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, 'not a valid account name')
 
-export const EventInput = z.object({
-  key: nonEmpty,
-  session: nonEmpty,
-  kind: z.enum(EVENT_KINDS),
-  at: timestamp,
-  payload: z
-    .record(z.string(), z.unknown())
-    .refine(
-      (p) => JSON.stringify(p).length <= MAX_PAYLOAD_CHARS,
-      `payload is larger than ${MAX_PAYLOAD_CHARS} characters`,
-    )
-    .optional(),
-})
+/** What only the witness may say about herdr: a hook (or anything on the open socket) cannot report a restart or a gone pane. */
+const WITNESS_KINDS: readonly string[] = ['herdr_restarted', 'pane_gone']
+
+export const EventInput = z
+  .object({
+    key: nonEmpty,
+    session: nonEmpty,
+    kind: z.enum(EVENT_KINDS),
+    at: timestamp,
+    payload: z
+      .record(z.string(), z.unknown())
+      .refine(
+        (p) => JSON.stringify(p).length <= MAX_PAYLOAD_CHARS,
+        `payload is larger than ${MAX_PAYLOAD_CHARS} characters`,
+      )
+      .optional(),
+  })
+  .refine((e) => !WITNESS_KINDS.includes(e.kind) && e.session !== '_herdr', {
+    message: "herdr_restarted and pane_gone are the witness's to record, not a hook's",
+    path: ['kind'],
+  })
 export type EventInput = z.infer<typeof EventInput>
 
 /** The key becomes a herdr tab name on a command line: a token that cannot read as a flag. */

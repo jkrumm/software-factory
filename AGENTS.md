@@ -56,7 +56,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
   `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`)
   and `POST /sessions/:id/stop-check`, which a session in a pane runs without a token, and nothing else; bound under
-  umask 0177. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  umask 0177. Any session on it can note any other (the socket is the trust boundary, no caller identity); an event of
+  kind `herdr_restarted` or `pane_gone`, or filed under `_herdr`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
   stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
   session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account`, which is how
@@ -69,8 +70,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
   No turn within a minute: typed once more (`MAX_SENDS` 2), then `failed` with the reason, which stays in `factory status` for
   a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
-  (`UncertainTyping`: herdr timed out or died after the call) counts as sent and waits for the turn, never typed blindly twice,
-  as does a claim left `typing` by a crashed tick (after the start budget plus a minute). A `pending` prompt expires after 6 h
+  (`UncertainTyping`: herdr timed out or died after the call) counts as sent and waits for a turn; the one retry after a
+  minute without one is the only second typing, as for a claim left `typing` by a crashed tick (after the start budget plus a minute).
+  `Runner.type` types only into an agent herdr calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
   (a rule's) or 24 h (a note). A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
   prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (herdr reads it as an
   option) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `restart:`), which would take the rule's place.
@@ -83,8 +85,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   - *Send-back* (FL5): `Stop` makes the hook ask `POST /sessions/:id/stop-check` (300 ms) after posting the event. The server
     answers `sendBack` when the session has live child sessions (sessions of spawns whose `parent` is it; `parent` comes
     from `POST /spawns`, `factory spawn create` defaults it to `FACTORY_SESSION`), no open wait, is not `walled`, and the
-    hook says `stop_hook_active` is false; once per turn (`effects` key `sendback:<session>:<turn>`). The hook then exits 2
-    with the one line on stderr. A server that is down, slow or odd means exit 0. Children `rd` starts carry no parent
+    hook says `stop_hook_active` is false; once per turn (`effects` key `sendback:<session>:<turn>`, recorded when the answer is given: an answer the hook
+    cannot wait for, 300 ms, spends that turn's send-back). The hook then exits 2 with the one line on stderr. A server that is down, slow or odd means exit 0. Children `rd` starts carry no parent
     until `rd` is a client (Wave 5).
   - *Rotation*: role `mother` or `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
   - *Blocked*: `blocked` for 2 minutes is a line in `factory status`; if the session has a live parent, also a note to it,

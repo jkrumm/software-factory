@@ -27,8 +27,8 @@ export interface StartResult {
 export interface Runner {
   start(input: StartInput): Promise<StartResult>
   /**
-   * Submits `text` to the agent in `pane`. `busy` when the agent is working: a prompt typed into a busy session only
-   * queues in Claude Code, so nothing was sent. An error means nothing is known to have arrived.
+   * Submits `text` to the agent in `pane`. `busy` unless the agent is idle or done: a prompt typed into a working session only
+   * queues in Claude Code and one typed into a blocked session answers its dialog, so nothing was sent. An error means nothing is known to have arrived.
    */
   type(input: { pane: string; text: string }): Promise<'typed' | 'busy'>
 }
@@ -198,7 +198,8 @@ export class HerdrRunner implements Runner {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     const agent = await this.snapshot(input.pane, budget)
     if (!agent) throw new RunnerError(`${input.pane}'s state is unreadable; nothing was typed`, false)
-    if (agent.agent_status === 'working') return 'busy'
+    // Only an agent at its prompt takes text: a working one queues it, a blocked one reads it as the answer to its dialog.
+    if (agent.agent_status !== 'idle' && agent.agent_status !== 'done') return 'busy'
     const sent = await this.exec([this.options.bin, 'agent', 'prompt', input.pane, input.text], budget)
     const failure = herdrFailure(sent)
     if (failure) {
