@@ -34,7 +34,7 @@ code itself.
 | R0 | Clean setup: no retired wiring, no headless `claude -p` | dotfiles, hermes-agent, vps, brain | — | Done 2026-10-30, reviewed. Two items open, see the track note |
 | R1 | Hermes leaves Argo | argo, vps, homelab, dotfiles-private, hermes-agent | — | Done 2026-10-30, reviewed; Hermes loopback bind moved to R0 Wave 2 |
 | F0 | Design doc, Effect skill, Effect spike, repo skeleton | software-factory | — | Steps 1–3 done: plain TypeScript won the spike. Step 4, the skeleton: `rd fan` worker `software-factory-skeleton` on branch `skeleton`, all ten spike findings in its brief |
-| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0 | pending |
+| F1 | Fleet layer (decisions FL1–FL8); `rd` becomes a client | software-factory, dotfiles | F0, `shared` (A1 Wave 1) | Plan `docs/waves/f1.md` (six waves, each a `rd fan` worker); Wave 1 waits for the skeleton merge and `shared` |
 | A1 | Shared database, Argo on the mini, Kuma door, usage v2 schema and price sync | argo, usage-tracker, agent-workflows (outbox), vps, dotfiles, homelab | R1 | Plan in argo (six waves); Wave 1 running (`argo-w1`) |
 | U | Claude Code cost program on usage v2 | usage-tracker, argo, dotfiles | A1 | pending |
 | F2 | Issue machine: inbox, leads in worktrees, evidence, hold, `project.yaml` v0 | software-factory | F1 | pending |
