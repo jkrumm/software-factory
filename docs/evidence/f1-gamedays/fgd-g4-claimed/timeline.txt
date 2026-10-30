@@ -1,0 +1,11 @@
+2026-10-30T21:00:45.547Z run fgd-g4-claimed: release dd9b001e2023, server pid 35179, base commit 78c4f20
+2026-10-30T21:00:45.569Z run fgd-g4-claimed: spawn create (role worker, repo factory-gameday), watcher claimed armed
+{"key":"fgd-g4-claimed","status":"waiting","account":null,"role":"worker","tier":"sonnet","effort":"high"}
+2026-10-30T21:02:17.670Z kill: -9 server pid 35179 at moment 'claimed' for fgd-g4-claimed; children at the kill: herdr agent start;herdr agent start
+2026-10-30T21:02:17.735Z kill: herdr agent for fgd-g4-claimed right after: {"agent_status":"unknown","interactive_ready":null,"state_change_seq":0,"completion_seq":null}
+2026-10-30T21:02:19.174Z kill: server back as pid 94562, healthy 1421 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-10-30T21:02:21.052Z run fgd-g4-claimed: spawn: starting attempts=1 pane=- hold=- | session: starting turn=0
+2026-10-30T21:02:28.620Z run fgd-g4-claimed: spawn: starting attempts=1 pane=- hold=- | session: idle turn=0
+2026-10-30T21:06:19.726Z run fgd-g4-claimed: spawn: starting attempts=2 pane=- hold=- | session: idle turn=0
+2026-10-30T21:06:23.692Z run fgd-g4-claimed: spawn: started attempts=2 pane=w77:p1 hold=- | session: working turn=1
+2026-10-30T21:07:25.916Z run fgd-g4-claimed: spawn: started attempts=2 pane=w77:p1 hold=- | session: idle turn=1
