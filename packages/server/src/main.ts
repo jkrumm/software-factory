@@ -16,7 +16,7 @@ await migrate(sql)
 const clock = systemClock
 const runner = new HerdrRunner({ bin: config.herdrBin, clock })
 // Bind first: a port that is taken must fail the boot before the ticker claims anything.
-const server = serve({ sql, clock, port: config.port, version: config.version })
+const server = serve({ sql, clock, port: config.port, version: config.version, token: config.token })
 const ticker = startTicker({ sql, runner, clock })
 console.log(`listening on ${server.url} (version ${config.version})`)
 

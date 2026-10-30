@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import { recordReading } from './capacity.ts'
@@ -11,17 +12,76 @@ export interface AppDeps {
   clock: Clock
   /** what `/health` reports: the release sha in production */
   version: string
+  /** the bearer token every route except `GET /health` requires */
+  token: string
 }
+
+/** Largest request body the server reads. */
+export const MAX_BODY_BYTES = 64 * 1024
 
 const json = (body: unknown, status = 200, headers?: Record<string, string>): Response =>
   Response.json(body, { status, headers })
 
 class BadRequest extends Error {}
 
+/** A refusal with its own status, decided before any handler runs. */
+class Refusal extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly headers?: Record<string, string>,
+  ) {
+    super(message)
+  }
+}
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+/** DNS rebinding sends the victim's browser to a loopback address under an attacker's name: only loopback names pass. */
+function assertLoopbackHost(req: Request): void {
+  const host = req.headers.get('host')?.toLowerCase()
+  const name = host?.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host?.split(':')[0]
+  if (!name || !LOOPBACK_HOSTS.has(name)) throw new Refusal('host is not loopback', 421)
+}
+
+const digest = (value: string) => createHash('sha256').update(value).digest()
+
+function assertBearer(req: Request, token: string): void {
+  const match = /^Bearer (.+)$/i.exec(req.headers.get('authorization') ?? '')
+  // Equal-length digests keep the comparison constant-time whatever the caller sent.
+  if (!match?.[1] || !timingSafeEqual(digest(match[1]), digest(token))) {
+    throw new Refusal('missing or wrong bearer token', 401, { 'www-authenticate': 'Bearer' })
+  }
+}
+
+/** A cross-origin form or `fetch` can send `text/plain` without a preflight; JSON it cannot. */
+function assertJsonContentType(req: Request): void {
+  if (req.method === 'GET' || req.method === 'HEAD') return
+  const type = req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
+  if (type !== 'application/json') throw new Refusal('content-type must be application/json', 415)
+}
+
+/** The body as text, never more than the cap: `Content-Length` is checked first, and the stream is counted for the rest. */
+async function readBody(req: Request): Promise<string> {
+  const declared = Number(req.headers.get('content-length'))
+  if (declared > MAX_BODY_BYTES) throw new Refusal(`body is larger than ${MAX_BODY_BYTES} bytes`, 413)
+  const chunks: Uint8Array[] = []
+  let size = 0
+  if (req.body) {
+    for await (const chunk of req.body) {
+      size += chunk.byteLength
+      if (size > MAX_BODY_BYTES) throw new Refusal(`body is larger than ${MAX_BODY_BYTES} bytes`, 413)
+      chunks.push(chunk)
+    }
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 async function parseBody<S extends z.ZodType>(req: Request, schema: S): Promise<z.output<S>> {
+  const text = await readBody(req)
   let body: unknown
   try {
-    body = await req.json()
+    body = JSON.parse(text)
   } catch {
     throw new BadRequest('body is not valid JSON')
   }
@@ -36,9 +96,20 @@ function parseParam<S extends z.ZodType>(schema: S, value: string): z.output<S> 
   return parsed.data
 }
 
-function guarded<R extends Request>(handler: (req: R) => Promise<Response>): (req: R) => Promise<Response> {
+/**
+ * Every route goes through here: a loopback Host, then (unless `open`) the bearer token, then a JSON content type for
+ * anything that sends a body. The handler runs only after all three.
+ */
+function guarded<R extends Request>(
+  token: string,
+  handler: (req: R) => Promise<Response>,
+  options: { open?: boolean } = {},
+): (req: R) => Promise<Response> {
   return async (req) => {
     try {
+      assertLoopbackHost(req)
+      if (!options.open) assertBearer(req, token)
+      assertJsonContentType(req)
       return await handler(req)
     } catch (error) {
       return failure(error)
@@ -47,47 +118,53 @@ function guarded<R extends Request>(handler: (req: R) => Promise<Response>): (re
 }
 
 function failure(error: unknown): Response {
+  if (error instanceof Refusal) return json({ error: error.message }, error.status, error.headers)
   if (error instanceof BadRequest) return json({ error: error.message }, 400)
   console.error(error)
   return json({ error: 'internal error' }, 500)
 }
 
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version }: AppDeps) {
+export function routes({ sql, clock, version, token }: AppDeps) {
+  const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   return {
     '/health': {
-      GET: guarded(async () => {
-        await sql`SELECT 1`
-        return json({ status: 'ok', version })
-      }),
+      GET: guarded(
+        token,
+        async () => {
+          await sql`SELECT 1`
+          return json({ status: 'ok', version })
+        },
+        { open: true },
+      ),
     },
     '/events': {
-      POST: guarded(async (req: Request) => {
+      POST: route(async (req: Request) => {
         const { duplicate } = await recordEvent(sql, await parseBody(req, EventInput))
         return json({ duplicate }, duplicate ? 200 : 201)
       }),
     },
     '/sessions/:id': {
-      GET: guarded(async (req: Bun.BunRequest<'/sessions/:id'>) => {
+      GET: route(async (req: Bun.BunRequest<'/sessions/:id'>) => {
         const session = await getSession(sql, req.params.id)
         return session ? json(session) : json({ error: 'unknown session' }, 404)
       }),
     },
     '/spawns': {
-      GET: guarded(async () => json({ spawns: await listSpawns(sql) })),
-      POST: guarded(async (req: Request) => {
+      GET: route(async () => json({ spawns: await listSpawns(sql) })),
+      POST: route(async (req: Request) => {
         const { spawn, created } = await createSpawn(sql, await parseBody(req, SpawnInput), clock.now())
         return json(spawn, created ? 201 : 200)
       }),
     },
     '/spawns/:key': {
-      GET: guarded(async (req: Bun.BunRequest<'/spawns/:key'>) => {
+      GET: route(async (req: Bun.BunRequest<'/spawns/:key'>) => {
         const spawn = await getSpawn(sql, req.params.key)
         return spawn ? json(spawn) : json({ error: 'unknown spawn' }, 404)
       }),
     },
     '/capacity/:account': {
-      PUT: guarded(async (req: Bun.BunRequest<'/capacity/:account'>) => {
+      PUT: route(async (req: Bun.BunRequest<'/capacity/:account'>) => {
         const account = parseParam(AccountName, req.params.account)
         const reading = await parseBody(req, CapacityInput)
         await recordReading(sql, account, reading, clock.now())
