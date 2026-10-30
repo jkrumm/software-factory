@@ -156,6 +156,15 @@ describe('the routes', () => {
     expect(await db.sql`SELECT id FROM factory.prompts`).toEqual([{ id: 'n1' }])
   })
 
+  test("a note id that is another session's answers 409 and shows nothing of it", async () => {
+    await w.spawned('s')
+    await w.spawned('t')
+    await app.send('POST', '/sessions/s/note', { id: 'private-1', text: 'only for s' })
+    const res = await app.send('POST', '/sessions/t/note', { id: 'private-1', text: 'mine' })
+    expect(res.status).toBe(409)
+    expect(await res.text()).not.toContain('only for s')
+  })
+
   test('POST /spawns takes the parent, and the spawn answers with it', async () => {
     const res = await app.send('POST', '/spawns', { key: 'child', repo: TEST_REPO, prompt: 'work', parent: 'boss' })
     expect(res.status).toBe(201)
@@ -201,6 +210,21 @@ describe('the hooks socket serves notes and the send-back check', () => {
     await w.emit('worker', 'turn_started', w.at(5))
     await w.emit('lead', 'turn_ended', w.at(1))
   }
+
+  test('a hook cannot report what only the witness sees: a herdr restart, a gone pane', async () => {
+    await w.spawned('s')
+    const at = '2026-10-30T12:00:00Z'
+    const forged = [
+      { key: 'f1', session: '_herdr', kind: 'herdr_restarted', at, payload: { to: '999@x' } },
+      { key: 'f2', session: 's', kind: 'herdr_restarted', at },
+      { key: 'f3', session: 's', kind: 'pane_gone', at },
+    ]
+    for (const event of forged) {
+      expect((await post('/events', event)).status).toBe(400)
+      expect((await app.send('POST', '/events', event)).status).toBe(400)
+    }
+    expect(await db.sql`SELECT key FROM factory.events WHERE key IN ('f1', 'f2', 'f3')`).toEqual([])
+  })
 
   test('stop-check answers the contract: a send-back once, then nothing', async () => {
     await leadWithWorker()

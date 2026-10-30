@@ -190,6 +190,8 @@ const noteHandler =
       { id: note.id, session: req.params.id, source: 'note', text: note.text },
       now,
     )
+    // A repeated id answers with the stored prompt; another session's is not for this caller to read.
+    if (prompt.session !== req.params.id) return json({ error: 'that prompt id belongs to another session' }, 409)
     return respond(Prompt, prompt, created ? 201 : 200)
   }
 

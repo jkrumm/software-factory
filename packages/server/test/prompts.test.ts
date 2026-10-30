@@ -312,6 +312,17 @@ describe('the herdr adapter types into the agent', () => {
     expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first', 'second'])
   })
 
+  test('types nothing into an agent that is blocked on a dialog, or whose state herdr does not know', async () => {
+    const { r, pane } = await start()
+    for (const status of ['blocked', 'unknown', 'working']) {
+      await herdr.setAgentStatus(pane, status)
+      expect(await r.type({ pane, text: 'second' })).toBe('busy')
+    }
+    await herdr.setAgentStatus(pane, 'done')
+    expect(await r.type({ pane, text: 'second' })).toBe('typed')
+    expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first', 'second'])
+  })
+
   test('a prompt call that dies without an answer is uncertain; an error body from herdr is a refusal', async () => {
     const { r, pane } = await start()
     await herdr.setAgentStatus(pane, 'idle')
