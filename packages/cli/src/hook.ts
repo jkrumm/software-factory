@@ -4,6 +4,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  ACCOUNT_NAME,
   defaultHookSocket,
   defaultSpoolDir,
   type EventKind,
@@ -61,7 +62,7 @@ export function toEvent(
           cwd: text(input.cwd, 1024),
           model: text(input.model, 128),
           // The account the picker chose: how the factory knows it for a session no spawn row describes (`rd`'s).
-          account: text(env.CLAUDE_ACCOUNT_PICKED, 64),
+          account: ACCOUNT_NAME.test(env.CLAUDE_ACCOUNT_PICKED ?? '') ? env.CLAUDE_ACCOUNT_PICKED : undefined,
         }),
       }
     case 'user-prompt-submit':
@@ -165,6 +166,15 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
   if (!mapped) return undefined
 
   const home = io.env.HOME
+  const socket = io.env.FACTORY_SOCKET || (home ? defaultHookSocket(home) : '')
+  // A stop is asked about before it is recorded: a stop that is sent back is not an end, the turn goes on, and an
+  // event that said it ended would show the session idle while it works. `stop_hook_active` is the loop guard: that
+  // stop is let through, and recorded. A server that cannot answer lets the stop through too.
+  if (event === 'stop' && input.stop_hook_active !== true && socket) {
+    const sendBack = await askStopCheck(socket, session)
+    if (sendBack) return sendBack
+  }
+
   const dir = io.env.FACTORY_SPOOL_DIR || (home ? defaultSpoolDir(home) : '')
   // No place to spool is no place to lose an event to a stray relative path.
   if (!dir) return undefined
@@ -189,7 +199,6 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
     release?.()
   }
 
-  const socket = io.env.FACTORY_SOCKET || (home ? defaultHookSocket(home) : '')
   if (!socket) return undefined
   try {
     const response = await fetch('http://localhost/events', {
@@ -202,10 +211,7 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
     await response.body?.cancel()
   } catch {
     // the server is down or slow: the spool has the event and the server reads it on its next pass
-    return undefined
   }
-  // A stop that is already a send-back (`stop_hook_active`) is let through: that is the loop guard.
-  if (event === 'stop' && input.stop_hook_active !== true) return askStopCheck(socket, session)
   return undefined
 }
 

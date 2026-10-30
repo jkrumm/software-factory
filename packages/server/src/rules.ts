@@ -213,7 +213,7 @@ export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
   ]
   const created: string[] = []
   for (const candidate of candidates) {
-    const { created: isNew } = await recordPrompt(sql, candidate, now, { rearm: true })
+    const { created: isNew } = await recordPrompt(sql, candidate, now, { rearm: candidate.source !== 'restart' })
     if (isNew) created.push(candidate.id)
   }
   return { created }

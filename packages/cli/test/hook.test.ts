@@ -350,6 +350,14 @@ describe('the account of a session', () => {
     expect(lines('s')[0]?.payload).toMatchObject({ claudeSessionId: 'c-1', account: 'iu' })
     expect(toEvent('session-start', { source: 'startup' }, {})?.payload).toEqual({ source: 'startup' })
   })
+
+  test("a name outside the registry's alphabet is not reported at all", () => {
+    for (const odd of ['has space', 'x'.repeat(65), '-lead', "a'; drop", '../x', '']) {
+      expect(toEvent('session-start', { source: 'startup' }, { CLAUDE_ACCOUNT_PICKED: odd })?.payload).toEqual({
+        source: 'startup',
+      })
+    }
+  })
 })
 
 describe('send-back (FL5)', () => {
@@ -368,7 +376,14 @@ describe('send-back (FL5)', () => {
     stopAnswer = { sendBack: true, message: line }
     expect(await stop({ stop_hook_active: false })).toEqual({ code: 2, err: [`${line}\n`] })
     expect(stopChecks).toEqual(['/sessions/s/stop-check'])
-    // The event was spooled and posted first.
+    // A stop that is sent back is no end: nothing is spooled or posted, so the turn stays open.
+    expect(lines('s')).toEqual([])
+    expect(received).toEqual([])
+  })
+
+  test('a stop that is let through is recorded after the question', async () => {
+    expect(await stop({ stop_hook_active: false })).toEqual({ code: 0, err: [] })
+    expect(stopChecks).toEqual(['/sessions/s/stop-check'])
     expect(lines('s').map((l) => l.kind)).toEqual(['turn_ended'])
     expect(received).toHaveLength(1)
   })

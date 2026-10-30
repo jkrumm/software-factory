@@ -1,5 +1,7 @@
 import type { Effort, Prompt, PromptStatus, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { admit } from './admission.ts'
+import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
 import { getSession, HOOK_KINDS } from './sessions.ts'
@@ -105,14 +107,23 @@ export async function recordPrompt(
   return { prompt: toPrompt(existing), created: false }
 }
 
-/** What owner and program lead look at: prompts still on their way, and those that gave up in the last day. */
-export async function listOpenPrompts(sql: SQL, now: Date): Promise<Prompt[]> {
+/** Most prompts `factory status` lists; the rest are counted. */
+export const STATUS_PROMPTS = 100
+
+/** What owner and program lead look at: prompts still on their way, and those that gave up in the last day; failed first. */
+export async function listOpenPrompts(sql: SQL, now: Date): Promise<{ prompts: Prompt[]; more: number }> {
   const since = new Date(now.getTime() - FAILED_SHOWN_MS)
   const rows: PromptRow[] = await sql`
     SELECT * FROM factory.prompts
     WHERE status IN ('pending', 'typing', 'sent') OR (status = 'failed' AND failed_at > ${since})
-    ORDER BY (status = 'failed'), created_at, id LIMIT 100`
-  return rows.map(toPrompt)
+    ORDER BY (status <> 'failed'), created_at, id LIMIT ${STATUS_PROMPTS + 1}`
+  const [counted] =
+    rows.length > STATUS_PROMPTS
+      ? await sql`
+        SELECT count(*)::int AS n FROM factory.prompts
+        WHERE status IN ('pending', 'typing', 'sent') OR (status = 'failed' AND failed_at > ${since})`
+      : [{ n: rows.length }]
+  return { prompts: rows.slice(0, STATUS_PROMPTS).map(toPrompt), more: Math.max(0, (counted?.n ?? 0) - STATUS_PROMPTS) }
 }
 
 /**
@@ -125,31 +136,22 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   await sql`
     UPDATE factory.prompts SET status = 'sent', sent_at = ${now}, sent_count = sent_count + 1
     WHERE status = 'typing' AND claimed_at <= ${leaseEnd}`
-  // One statement, so a turn_started that lands meanwhile cannot be missed between "proven" and "unconfirmed": a sent
-  // prompt with a turn after its claim is delivered, whatever else is true of it.
+  await sql`
+    UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
+    WHERE p.status = 'sent' AND EXISTS (
+      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
+  // The way back to `pending` or on to `failed` asks again in its own WHERE: a turn that started since the statement
+  // above is a delivery, not a reason to type the text twice. (What starts inside this very statement is the window
+  // `deliverPrompts` closes once more right before a retry is typed.)
   const stale = new Date(now.getTime() - CONFIRM_MS)
   await sql`
     UPDATE factory.prompts p
-    SET status = s.next, next_at = ${now},
-        delivered_at = CASE WHEN s.next = 'delivered' THEN ${now}::timestamptz END,
-        failed_at = CASE WHEN s.next = 'failed' THEN ${now}::timestamptz END,
-        error = CASE s.next
-                  WHEN 'delivered' THEN NULL
-                  WHEN 'pending' THEN 'no turn started within a minute of typing it: typed again'
-                  ELSE 'no turn started within a minute of the retry: not delivered' END
-    FROM (
-      SELECT q.id,
-             CASE WHEN EXISTS (
-                    SELECT 1 FROM factory.events e
-                    WHERE e.session = q.session AND e.kind = 'turn_started' AND e.at >= q.claimed_at) THEN 'delivered'
-                  WHEN q.sent_count < ${MAX_SENDS} THEN 'pending'
-                  ELSE 'failed' END AS next
-      FROM factory.prompts q
-      WHERE q.status = 'sent'
-        AND (q.sent_at <= ${stale} OR EXISTS (
-               SELECT 1 FROM factory.events e
-               WHERE e.session = q.session AND e.kind = 'turn_started' AND e.at >= q.claimed_at))) s
-    WHERE p.id = s.id AND p.status = 'sent'`
+    SET status = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
+        failed_at = CASE WHEN p.sent_count < ${MAX_SENDS} THEN NULL ELSE ${now}::timestamptz END,
+        error = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'no turn started within a minute of typing it: typed again'
+                     ELSE 'no turn started within a minute of the retry: not delivered' END
+    WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND NOT EXISTS (
+      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
   await sql`
     UPDATE factory.prompts
     SET status = 'failed', failed_at = ${now}, error = 'expired: the session never took it'
@@ -162,7 +164,7 @@ interface Target {
   pane: string | null
   state: string
   claudeSessionId: string | null
-  spawn: { key: string; repo: string; account: string | null; tier: Tier; effort: Effort } | null
+  spawn: { key: string; repo: string; role: string; account: string | null; tier: Tier; effort: Effort } | null
   ended: boolean
   /** the session shows life after `since`: a hook event, or herdr showing its agent */
   alive(since: Date): Promise<boolean>
@@ -172,7 +174,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
   const session = await getSession(sql, id, now)
   if (!session) return undefined
   const [spawn] = session.spawn
-    ? await sql`SELECT key, repo, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
+    ? await sql`SELECT key, repo, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
     : []
   const [life] = await sql`
     SELECT kind FROM factory.events
@@ -211,6 +213,31 @@ export interface DeliverResult {
   failed: string[]
 }
 
+/** Whether a turn_started followed `since`: the proof that a typed prompt arrived. */
+async function provedSince(sql: SQL, session: string, since: Date): Promise<boolean> {
+  const [row] = await sql`
+    SELECT EXISTS (SELECT 1 FROM factory.events WHERE session = ${session} AND kind = 'turn_started' AND at >= ${since}) AS proved`
+  return row?.proved === true
+}
+
+/**
+ * Why a resume may not start now, or nothing if it may: admission's answer for the spawn (its own session and assignment
+ * do not count against it) and, because the conversation is in one account's config, only that account will do.
+ */
+async function resumeHold(
+  sql: SQL,
+  spawn: { key: string; repo: string; role: string; account: string | null },
+  now: Date,
+): Promise<string | undefined> {
+  const decision = await sql.begin(async (tx) => {
+    await lockCapacity(tx)
+    return admit(tx, { key: spawn.key, repo: spawn.repo, role: spawn.role, prefer: spawn.account }, now)
+  })
+  if (decision.kind === 'hold') return decision.reason
+  if (decision.kind === 'wait') return 'no account has room'
+  return decision.account === spawn.account ? undefined : `${spawn.account ?? 'its account'} has no room`
+}
+
 /** One line per prompt that gives up for good, so the reason is in the log whatever else is read. */
 const logGaveUp = (id: string, reason: string) => console.error('prompt failed', { id, reason })
 
@@ -235,11 +262,14 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
   // Every due prompt is looked at, but only those that reach the Runner count against the batch: ten notes held for one
   // working session must not keep a ready session's prompt waiting.
   const due: PromptRow[] = await sql`
-    SELECT * FROM factory.prompts WHERE status = 'pending' AND next_at <= ${clock.now()}
-    ORDER BY created_at, id LIMIT 500`
+    SELECT * FROM factory.prompts p WHERE p.status = 'pending' AND p.next_at <= ${clock.now()}
+      AND NOT EXISTS (
+        SELECT 1 FROM factory.prompts o WHERE o.session = p.session AND o.id <> p.id AND o.status IN ('typing', 'sent'))
+    ORDER BY p.created_at, p.id LIMIT 500`
   let attempts = 0
   // A second prompt typed while the first is still waiting for its turn would only queue, and the same turn would then
-  // "prove" both: one per session per pass.
+  // "prove" both: a session takes one at a time, which the query keeps across passes (an earlier one still `typing` or
+  // `sent` holds the later ones back) and this set keeps within one.
   const typedTo = new Set<string>()
   for (const prompt of due) {
     if (attempts >= DELIVER_BATCH) break
@@ -258,6 +288,21 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       continue
     }
     if (prompt.via === 'type' && !(target.pane && READY_STATES.has(target.state))) continue
+
+    // A retry is typed only if nothing proves the first typing since the settle above looked.
+    if (prompt.sent_count > 0 && prompt.claimed_at && (await provedSince(sql, prompt.session, prompt.claimed_at))) {
+      await sql`UPDATE factory.prompts SET status = 'delivered', delivered_at = ${clock.now()}, error = NULL WHERE id = ${prompt.id} AND status = 'pending'`
+      continue
+    }
+    // A resume starts an agent, so it is admitted like a spawn claim: held under `drain`, `pace` and a full account, and
+    // only on the account the conversation lives in.
+    if (prompt.via === 'resume' && target.spawn) {
+      const held = await resumeHold(sql, target.spawn, clock.now())
+      if (held) {
+        await sql`UPDATE factory.prompts SET error = ${`held: ${held}`} WHERE id = ${prompt.id} AND status = 'pending'`
+        continue
+      }
+    }
 
     const claimedAt = clock.now()
     const claimed = await sql`
@@ -328,7 +373,7 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
   // The new pane in one transaction, after the call: a crash between the two rows would leave the spawn pointing at a dead pane.
   await deps.sql.begin(async (tx) => {
     await tx`UPDATE factory.sessions SET pane = ${pane}, pane_misses = 0 WHERE id = ${prompt.session}`
-    await tx`UPDATE factory.spawns SET session = ${pane} WHERE key = ${spawn.key}`
+    await tx`UPDATE factory.spawns SET session = ${pane}, assigned_at = ${deps.clock.now()} WHERE key = ${spawn.key}`
   })
   return 'typed'
 }

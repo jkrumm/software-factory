@@ -56,11 +56,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
   `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`)
   and `POST /sessions/:id/stop-check`, which a session in a pane runs without a token, and nothing else; bound under
-  umask 0177. Any session on it can note any other (the socket is the trust boundary, no caller identity); an event of
+  umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
+  identity; a same-user pane can already drive any pane through herdr, so this adds no capability, and it is a known and accepted
+  cross-session path); an event of
   kind `herdr_restarted` or `pane_gone`, or filed under `_herdr`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
   stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
-  session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account`, which is how
+  session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account` (only if it is a name in the registry's alphabet, checked in the hook and again by the server), which is how
   the factory knows the account of a session no spawn describes (`rd`'s); a spawn's own account wins.
 - **Prompt delivery** (`prompts.ts`) is the one way anything types into a session. `factory session note <session> <text>`
   (`POST /sessions/:id/note`, socket or token; `--id` makes a repeated call one note) and every rule below record a row in
@@ -75,7 +77,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `Runner.type` types only into an agent herdr calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
   (a rule's) or 24 h (a note). A rule whose prompt failed or expired asks again after 30 min while its condition holds
   (the same row starts over; a delivered prompt, a note, or a prompt recorded as undeliverable never does). One prompt is
-  typed per session per pass. A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
+  typed per session per pass. A later prompt for a session waits while an earlier one is `typing` or `sent` and unproven. A retry is not typed if a turn has shown up since its claim. A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
   prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (herdr reads it as an
   option) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `restart:`), which would take the rule's place.
   The blocked note names the worker but not its prompt text: that is agent-produced and stays in `factory status`.
@@ -86,7 +88,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     reset), with 5 minutes passed since the later of that reset and the last wall event and no more than 6 hours (a wall
     older than that is history, so a deploy wakes nobody): a `continue` prompt, `resume:<session>:<reset_at>`. Needs the
     session's account.
-  - *Send-back* (FL5): `Stop` makes the hook ask `POST /sessions/:id/stop-check` (300 ms) after posting the event. The server
+  - *Send-back* (FL5): on `Stop` the hook asks `POST /sessions/:id/stop-check` (300 ms) before it records anything: a stop that is
+    sent back is no end, so it writes no `turn_ended` and the turn stays open (the session stays `working`, nothing is typed into
+    it); a stop that is let through is spooled and posted as usual. The server
     answers `sendBack` when the session has live child sessions (sessions of spawns whose `parent` is it; `parent` comes
     from `POST /spawns`, `factory spawn create` defaults it to `FACTORY_SESSION`), no open wait, is not `walled`, and the
     hook says `stop_hook_active` is false; once per turn (`effects` key `sendback:<session>:<turn>`, recorded when the answer is given: an answer the hook
@@ -99,11 +103,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   - *herdr restart*: a `herdr_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
     at that time, has had no hook event since and that herdr has not shown since is resumed by id (`Runner.start` with
     `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
-    `restart:<new server identity>:<session>`. A session that is not a factory spawn (or never reported its Claude session
+    `restart:<new server identity>:<session>`. A resume starts an agent, so it is admitted like a spawn claim (held under
+    `drain`, `pace` or a full account, only on the account the conversation lives in; the hold shows in the prompt's error) and
+    counts as a new assignment on that account. A restart prompt never re-arms. A session that is not a factory spawn (or never reported its Claude session
     id) gets a `failed` prompt with the reason: that is its line in status.
 - **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
   and spawns), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
-  the accounts' readings, prompts not delivered. `--format plain` prints it as one screen.
+  the accounts' readings, prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
 - **The key is session, event name, turn number** (`<session>:turn_ended:3`), counted from the spool, written into the
   line, so a replay carries it. Counting and appending happen under a per-session lock (`<file>.lock`, a `mkdir`; the
   server's rotation takes it too); a hook that cannot get it in 200 ms writes a key with a random suffix instead. A kind that repeats inside a turn gets `:2`, `:3`. Event time is strictly increasing per

@@ -385,6 +385,14 @@ describe('herdr restart', () => {
     const [prompt] = await prompts()
     expect(prompt).toMatchObject({ via: 'resume', source: 'restart', text: RESTART_NOTE, status: 'pending' })
 
+    // The resume is admitted like a spawn: its account has room.
+    await reading(
+      10,
+      10,
+      new Date(clock.now().getTime() + minutes(60)),
+      new Date(clock.now().getTime() + 3 * 86_400_000),
+      'b',
+    )
     const real = new HerdrRunner({
       bin: herdr.bin,
       clock,
@@ -469,6 +477,12 @@ describe('herdr restart', () => {
     expect((await deliver()).sent).toEqual([])
     expect(runner.started).toEqual([])
     await replayIsSilent()
+
+    // Half an hour later the rule still names the session, and the reason it was given up on stands.
+    clock.advance(REARM_AFTER_MS + 1_000)
+    expect((await evaluate()).created).toEqual([])
+    expect((await prompts())[0]).toMatchObject({ status: 'failed' })
+    expect((await prompts())[0]?.error).toContain('was not started by the factory')
   })
 })
 

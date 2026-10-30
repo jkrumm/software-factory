@@ -105,8 +105,18 @@ describe('factory status', () => {
     expect(s.accounts).toHaveLength(1)
     expect(s.accounts[0]).toMatchObject({ account: 'a', weeklyUsed: 40, fiveHourUsed: 100, fresh: true })
     expect(s.notes.map((n) => [n.id, n.status])).toEqual([
-      ['n-pending', 'pending'],
       ['n-failed', 'failed'],
+      ['n-pending', 'pending'],
+    ])
+  })
+
+  test('an account name from a hook is kept only if it is a name', async () => {
+    await w.emit('good', 'session_started', w.at(5), { account: 'iu' })
+    await w.emit('bad', 'session_started', w.at(5), { account: "x'; drop table" })
+    const rows = await db.sql`SELECT id, account FROM factory.sessions ORDER BY id`
+    expect(rows).toEqual([
+      { id: 'bad', account: null },
+      { id: 'good', account: 'iu' },
     ])
   })
 
@@ -134,6 +144,7 @@ describe('the routes', () => {
     const res = await app.get('/status')
     expect(res.status).toBe(200)
     expect(((await res.json()) as Status).sessions.map((x) => x.id)).toEqual(['s'])
+    expect(((await (await app.get('/status')).json()) as Status).notesMore).toBe(0)
   })
 
   test('POST /sessions/:id/note records the text under its id: 201, then 200 for the same id; unknown sessions 404; bad text 400', async () => {
@@ -203,12 +214,12 @@ describe('the hooks socket serves notes and the send-back check', () => {
     expect((await post('/sessions/s/note', { id: 'n1', text: 'hello' })).status).toBe(200)
   })
 
-  async function leadWithWorker() {
+  async function leadWithWorker(endTurn = true) {
     await w.spawned('lead', { role: 'lead' })
     await w.emit('lead', 'turn_started', w.at(10))
     await w.spawned('worker', { parent: 'lead' })
     await w.emit('worker', 'turn_started', w.at(5))
-    await w.emit('lead', 'turn_ended', w.at(1))
+    if (endTurn) await w.emit('lead', 'turn_ended', w.at(1))
   }
 
   test('a hook cannot report what only the witness sees: a herdr restart, a gone pane', async () => {
@@ -238,8 +249,9 @@ describe('the hooks socket serves notes and the send-back check', () => {
   })
 
   test('the real hook binary exits 2 with the one line on stderr, once; with the server down it exits 0', async () => {
-    await leadWithWorker()
+    await leadWithWorker(false)
     await db.sql`UPDATE factory.sessions SET claude_session_id = 'c-lead' WHERE id = 'lead'`
+    const state = async () => ((await (await app.get('/sessions/lead')).json()) as { state: string }).state
     const hook = async (env: Record<string, string>, input: object) => {
       const proc = Bun.spawn(['bun', join(import.meta.dir, '../../cli/bin/factory.ts'), 'hook', 'stop'], {
         env: { ...process.env, FACTORY_SESSION: 'lead', FACTORY_SPOOL_DIR: join(dir, 'spool'), HOME: dir, ...env },
@@ -256,8 +268,11 @@ describe('the hooks socket serves notes and the send-back check', () => {
       stderr: '1 worker still running: wait for it (`factory session wait --on workers`) or collect it\n',
       code: 2,
     })
+    // The send-back is no end: the session is still working, so nothing is typed into it.
+    expect(await state()).toBe('working')
     // The turn is answered: the same turn's second stop, the loop guard and a dead server all let the session end.
     expect(await hook({ FACTORY_SOCKET: socket }, { stop_hook_active: false })).toMatchObject({ code: 0, stderr: '' })
+    expect(await state()).toBe('idle')
     expect(await hook({ FACTORY_SOCKET: socket }, { stop_hook_active: true })).toMatchObject({ code: 0, stderr: '' })
     expect(await hook({ FACTORY_SOCKET: join(dir, 'nothing.sock') }, { stop_hook_active: false })).toEqual({
       stdout: '',

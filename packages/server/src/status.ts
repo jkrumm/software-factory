@@ -53,7 +53,7 @@ export async function buildStatus(sql: SQL, now: Date): Promise<Status> {
       Date.parse(a.view.since ?? a.view.lastEventAt) - Date.parse(b.view.since ?? b.view.lastEventAt) ||
       a.view.id.localeCompare(b.view.id),
   )
-  const notes = await listOpenPrompts(sql, now)
+  const { prompts: notes, more: notesMore } = await listOpenPrompts(sql, now)
   // What is still waiting to run comes first, then what gave up.
   const spawns = (await listSpawns(sql))
     .filter((s) => s.status !== 'started')
@@ -65,5 +65,6 @@ export async function buildStatus(sql: SQL, now: Date): Promise<Status> {
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
     accounts: (await latestReadings(sql)).map((r) => toQuota(r, now)),
     notes,
+    notesMore,
   }
 }
