@@ -175,6 +175,7 @@ that applies wins.
 | **Rotation** | a long-lived session's account reaches 94 % of its week | one note: write the handoff and rotate; the next rotation lands on another account | `rotate:<session>:<week>` |
 | **Folder trust** | any spawn | pre-trust the path before starting the agent, for new repos as well as worktrees | none, idempotent |
 | **Blocked** | `blocked` for 2 minutes | a line in `factory status`, and to the session's parent if it has one | event id |
+| **Wake** | a session `waiting` on its workers, with child sessions, none unfinished (`dead`, or `idle` after a turn; a spawn without a session yet is unfinished) | one note listing the children and their states | `wake:<session>:<wait event id>` |
 | **herdr restart** | the server PID changed | each affected session resumes by id, with a note that a turn was cut off | `restart:<pid>:<session>` |
 
 The send-back counts only child sessions the factory knows. A background shell inside a session is invisible to
