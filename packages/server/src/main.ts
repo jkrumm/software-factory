@@ -11,6 +11,15 @@ import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
 
 const config = loadConfig(process.env)
+
+// The runner depends on two files of the dotfiles checkout: a server that cannot start anything must not call itself up.
+for (const file of [config.pretrustBin, config.accountsFile]) {
+  if (!(await Bun.file(file).exists())) {
+    console.error(`${file} does not exist; exiting`)
+    process.exit(1)
+  }
+}
+
 // The factory role may hold 10 connections: the pool (one of them kept for the one-process lock) leaves room for a psql.
 const sql = new SQL({ url: config.databaseUrl, max: 8 })
 
@@ -28,13 +37,6 @@ if (!singleton) {
   process.exit(1)
 }
 
-// The runner depends on two files of the dotfiles checkout: a server that cannot start anything must not call itself up.
-for (const file of [config.pretrustBin, config.accountsFile]) {
-  if (!(await Bun.file(file).exists())) {
-    console.error(`${file} does not exist; exiting`)
-    process.exit(1)
-  }
-}
 await migrate(sql)
 
 const clock = systemClock

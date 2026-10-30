@@ -158,7 +158,8 @@ export class HerdrRunner implements Runner {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     const env = await this.paneEnv(input.account)
 
-    let tab = await this.findTab(input.key, budget)
+    const space = await this.findSpace(input.repo, budget)
+    let tab = space ? await this.findTab(space, input.key, budget) : undefined
     let agent = tab ? await this.findAgent(tab.pane, budget) : undefined
     if (tab && !agent) {
       // A tab with no agent has nothing running to keep, and its environment (the account) was fixed when it was made:
@@ -169,8 +170,9 @@ export class HerdrRunner implements Runner {
     if (!tab) tab = await this.serialized(() => this.createTab(input, env, budget))
     const pane = tab.pane
 
-    if (agent && !agent.interactive_ready) {
-      // A start that failed or was cut off leaves a half-launched agent that nothing can prompt: begin again.
+    // An agent that already took its prompt is running, whatever else herdr says about it; only one that never became
+    // ready is a failed launch to begin again.
+    if (agent && !agent.interactive_ready && promptState(agent) !== 'delivered') {
       await this.closeTab(tab.tab, budget)
       throw new RunnerError(`the agent in ${pane} never became ready; its tab was closed`, false)
     }
@@ -215,8 +217,20 @@ export class HerdrRunner implements Runner {
     return env
   }
 
-  private async findTab(key: string, budget: Budget): Promise<{ tab: string; pane: string } | undefined> {
-    const { tabs } = (await this.herdr(TabList, ['tab', 'list'], budget)).result
+  /** The space labelled with the repo's name (rd's convention), if there is one. */
+  private async findSpace(repo: string, budget: Budget): Promise<string | undefined> {
+    const label = basename(repo)
+    const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
+    return workspaces.find((w) => w.label === label)?.workspace_id
+  }
+
+  /** The spawn's tab, looked for in its repo's space only: a tab of that name anywhere else is not ours. */
+  private async findTab(
+    space: string,
+    key: string,
+    budget: Budget,
+  ): Promise<{ tab: string; pane: string } | undefined> {
+    const { tabs } = (await this.herdr(TabList, ['tab', 'list', '--workspace', space], budget)).result
     const tab = tabs.find((t) => t.label === key)
     if (!tab) return undefined
     const { panes } = (await this.herdr(PaneList, ['pane', 'list'], budget)).result
@@ -229,8 +243,8 @@ export class HerdrRunner implements Runner {
   private async createTab(input: StartInput, env: string[], budget: Budget): Promise<{ tab: string; pane: string }> {
     const envArgs = env.flatMap((pair) => ['--env', pair])
     const label = basename(input.repo)
-    const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
-    const workspace = workspaces.find((w) => w.label === label)
+    // Looked up again inside the lock: the space may have been made by a start that ran just before this one.
+    const workspace = await this.findSpace(input.repo, budget)
     if (workspace) {
       const created = await this.herdr(
         Created,
@@ -238,7 +252,7 @@ export class HerdrRunner implements Runner {
           'tab',
           'create',
           '--workspace',
-          workspace.workspace_id,
+          workspace,
           '--cwd',
           input.repo,
           '--label',
@@ -404,7 +418,7 @@ export class HerdrRunner implements Runner {
     const limit = budget.limit(timeoutMs ?? this.options.processTimeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
     let proc: Bun.Subprocess<'ignore', 'pipe', 'ignore'>
     try {
-      proc = Bun.spawn(cmd, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+      proc = Bun.spawn(cmd, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', env: childEnv() })
     } catch (cause) {
       throw new RunnerError(`cannot execute ${cmd[0]}: ${String(cause)}`, true)
     }
@@ -444,6 +458,15 @@ class Budget {
     if (left <= 0) throw new BudgetSpent()
     return Math.min(wantMs, left)
   }
+}
+
+/** What the factory is given to run on is not for herdr, which would pass it on to every agent pane it starts. */
+const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL']
+
+function childEnv(): Record<string, string | undefined> {
+  const env = { ...process.env }
+  for (const name of SECRET_ENV) delete env[name]
+  return env
 }
 
 function parseJson(text: string): unknown {

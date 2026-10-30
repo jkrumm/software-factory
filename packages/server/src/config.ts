@@ -1,5 +1,3 @@
-import { DEFAULT_RETRY_BUDGET_MS } from './tick.ts'
-
 export interface Config {
   databaseUrl: string
   herdrBin: string
@@ -15,6 +13,12 @@ export interface Config {
 
 const DOTFILES = 'SourceRoot/dotfiles'
 
+/**
+ * How long a spawn stays retryable, counted from its first claim: a herdr that restarts for a few minutes fails
+ * nothing. Only a start that failed counts; time spent waiting for capacity does not (the clock resets there).
+ */
+export const DEFAULT_RETRY_BUDGET_MS = 30 * 60_000
+
 /** Reads the environment once, at boot, and refuses to start on anything unusable. */
 export function loadConfig(env: Record<string, string | undefined>): Config {
   const required = (name: string): string => {
@@ -26,7 +30,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`PORT must be an integer from 1 to 65535, got: ${env.PORT}`)
   }
-  const home = required('HOME')
   const token = required('FACTORY_TOKEN')
   if (token.length < 16) throw new Error('FACTORY_TOKEN must be at least 16 characters')
   return {
@@ -35,8 +38,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     token,
     port,
     version: env.FACTORY_VERSION || 'dev',
-    pretrustBin: env.FACTORY_PRETRUST_BIN || `${home}/${DOTFILES}/scripts/claude-pretrust.sh`,
-    accountsFile: env.FACTORY_ACCOUNTS_FILE || `${home}/${DOTFILES}/config/claude-accounts.json`,
+    pretrustBin: env.FACTORY_PRETRUST_BIN || `${required('HOME')}/${DOTFILES}/scripts/claude-pretrust.sh`,
+    accountsFile: env.FACTORY_ACCOUNTS_FILE || `${required('HOME')}/${DOTFILES}/config/claude-accounts.json`,
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
   }
 }

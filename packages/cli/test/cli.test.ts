@@ -29,6 +29,7 @@ beforeAll(() => {
     fetch: (req) => {
       const path = new URL(req.url).pathname
       if (odd === 'null') return Response.json(null)
+      if (odd === 'proxy-503') return new Response('upstream down', { status: 503 })
       if (odd === 'old-health' && path === '/health') return Response.json({ status: 'ok', version: 'abc123' })
       if (odd === 'empty' && path === '/spawns') return Response.json({ spawns: [] })
       if (odd === 'drift' && (path === '/spawns' || path.endsWith('/requeue')))
@@ -143,6 +144,17 @@ describe('factory health', () => {
       })
     } finally {
       status = 200
+    }
+  })
+
+  test('a 503 that is not a health body is an outage (general), not a drifted contract', async () => {
+    odd = 'proxy-503'
+    try {
+      const r = await factory(['health'])
+      expect(r.code).toBe(EXIT.general)
+      expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'general', details: { status: 503 } } })
+    } finally {
+      odd = ''
     }
   })
 

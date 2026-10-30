@@ -10,6 +10,7 @@ SHA_FILE="$ROOT/data/deployed-sha"
 PORT=7793
 # Must be the ref `make deploy` was given (FACTORY_REF, default master).
 REF="${FACTORY_REF:-master}"
+[[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || { echo "FACTORY_REF is not a plain branch name: $REF" >&2; exit 1; }
 HEALTH_URL="http://127.0.0.1:$PORT/health"
 
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"

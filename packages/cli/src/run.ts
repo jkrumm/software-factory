@@ -91,7 +91,10 @@ async function call<S extends z.ZodType>(
     // Not JSON: the schema below, or the error message, deals with it.
   }
 
-  if (!response.ok && !options.also?.includes(response.status)) {
+  const parsed = options.schema.safeParse(json)
+  // A status the schema is expected to cover still falls back to the plain error when the body is not the schema's: a
+  // 503 from anything but this server is an outage, not a drifted contract.
+  if (!response.ok && !(options.also?.includes(response.status) && parsed.success)) {
     const message = ErrorBody.safeParse(json)
     throw new FactoryError(
       kindForStatus(response.status),
@@ -99,7 +102,6 @@ async function call<S extends z.ZodType>(
       { details: { status: response.status } },
     )
   }
-  const parsed = options.schema.safeParse(json)
   if (!parsed.success) throw notContract(path, parsed.error.issues[0]?.message ?? 'unparseable body')
   return { status: response.status, body: parsed.data }
 }

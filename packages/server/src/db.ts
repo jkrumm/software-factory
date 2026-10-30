@@ -34,6 +34,9 @@ export interface Singleton {
   release(): Promise<void>
 }
 
+/** A watchdog query that takes longer than this has found a stalled connection. */
+const WATCHDOG_TIMEOUT_MS = 5_000
+
 export interface SingletonOptions {
   /** called once if the lock is gone (the connection dropped or the database restarted): the server must stop */
   onLost?: (reason: string) => void
@@ -56,27 +59,42 @@ export async function acquireSingleton(sql: SQL, options: SingletonOptions = {})
   }
 
   let lost = false
+  let released = false
+  let checking = false
   const lose = (reason: string) => {
-    if (lost) return
+    if (lost || released) return
     lost = true
     options.onLost?.(reason)
   }
-  const watchdog = setInterval(async () => {
-    try {
-      const [held] = await connection`
-        SELECT EXISTS (
-          SELECT 1 FROM pg_locks
-          WHERE locktype = 'advisory' AND objid = ${LOCKS.singleton} AND pid = pg_backend_pid() AND granted
-        ) AS held`
-      if (!held?.held) lose('the database no longer lists the lock as held by this server')
-    } catch (error) {
-      lose(`the lock connection failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
+  const check = async () => {
+    // A check that has not come back means a stalled connection: that is a lost lock too, not a reason to wait.
+    const stalled = new Promise<'stalled'>((resolve) =>
+      setTimeout(() => resolve('stalled'), WATCHDOG_TIMEOUT_MS).unref(),
+    )
+    const query = connection`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_locks
+        WHERE locktype = 'advisory' AND objid = ${LOCKS.singleton} AND pid = pg_backend_pid() AND granted
+      ) AS held`
+    query.catch(() => {})
+    const outcome = await Promise.race([query, stalled])
+    if (outcome === 'stalled') return lose(`the lock connection did not answer within ${WATCHDOG_TIMEOUT_MS} ms`)
+    if (!outcome[0]?.held) lose('the database no longer lists the lock as held by this server')
+  }
+  const watchdog = setInterval(() => {
+    if (checking || released) return
+    checking = true
+    check()
+      .catch((error) => lose(`the lock connection failed: ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => {
+        checking = false
+      })
   }, options.checkMs ?? 10_000)
   watchdog.unref()
 
   return {
     release: async () => {
+      released = true
       clearInterval(watchdog)
       await connection`SELECT pg_advisory_unlock(${LOCKS.singleton})`
       connection.release()

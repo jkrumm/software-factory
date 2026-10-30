@@ -135,7 +135,7 @@ describe('herdr adapter: idempotence by looking, not by exit code', () => {
 
 describe('herdr adapter: failures are transient errors for the tick to retry', () => {
   test('a non-zero exit fails the start before anything is created', async () => {
-    await herdr.plan('tab list:exit1')
+    await herdr.plan('workspace list:exit1')
     expect(await failure()).toMatchObject({ permanent: false })
     expect((await herdr.state()).tabs).toHaveLength(0)
     await runner.start(input)
@@ -143,12 +143,12 @@ describe('herdr adapter: failures are transient errors for the tick to retry', (
   })
 
   test('stdout that is not herdr JSON fails the call', async () => {
-    await herdr.plan('tab list:garbage')
+    await herdr.plan('workspace list:garbage')
     expect((await failure()).message).toContain('unexpected')
   })
 
   test('a hung herdr is killed at the process timeout', async () => {
-    await herdr.plan('tab list:hang')
+    await herdr.plan('workspace list:hang')
     const started = Date.now()
     const error = await failure(makeRunner({ processTimeoutMs: 400 }))
     expect(Date.now() - started).toBeLessThan(5_000)
@@ -243,6 +243,52 @@ describe('herdr adapter: a retry', () => {
     await Bun.write(path, JSON.stringify(state))
     expect((await failure()).message).toContain('blocked, not ready for a prompt')
     expect((await herdr.state()).prompts).toHaveLength(1)
+  })
+})
+
+describe('herdr adapter: whose tab it is', () => {
+  const put = async (mutate: (state: Awaited<ReturnType<typeof herdr.state>>) => void) => {
+    const path = herdr.bin.replace(/herdr$/, 'state.json')
+    const state = JSON.parse(await Bun.file(path).text())
+    mutate(state)
+    await Bun.write(path, JSON.stringify(state))
+  }
+
+  test('a tab of the same name in another space is not adopted', async () => {
+    await runner.start({ ...input, key: 'shared-name', repo: '/work/other' })
+    await runner.start({ ...input, key: 'shared-name', repo: '/work/repo' })
+    const state = await herdr.state()
+    expect(state.workspaces.map((w) => w.label).sort()).toEqual(['other', 'repo'])
+    expect(state.agents).toHaveLength(2)
+    expect(state.prompts).toHaveLength(2)
+  })
+
+  test('an agent that took its prompt is left running even when herdr does not call it ready', async () => {
+    await runner.start(input)
+    await put((state) => {
+      state.agents[0]!.interactive_ready = false
+    })
+    await runner.start(input)
+    const state = await herdr.state()
+    expect(state.tabs).toHaveLength(1)
+    expect(state.prompts).toHaveLength(1)
+    expect(await count('tab close')).toBe(0)
+  })
+
+  test("herdr is not handed the factory's own secrets", async () => {
+    process.env.FACTORY_TOKEN = 'secret-token-for-the-test'
+    try {
+      const probe = `${herdr.bin}-env`
+      await Bun.write(
+        probe,
+        `#!/bin/sh\nprintenv FACTORY_TOKEN DATABASE_URL FACTORY_DB_PASSWORD > '${herdr.bin}.env'\nexit 1\n`,
+      )
+      await Bun.$`chmod +x ${probe}`
+      await failure(makeRunner({ bin: probe }))
+      expect(await Bun.file(`${herdr.bin}.env`).text()).toBe('')
+    } finally {
+      delete process.env.FACTORY_TOKEN
+    }
   })
 })
 
