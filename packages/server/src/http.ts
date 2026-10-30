@@ -1,10 +1,23 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { CapacityAck, EventAck, Health, Session, SessionList, Spawn, SpawnList } from '@software-factory/contract'
+import {
+  EventAck,
+  Health,
+  Quota,
+  QuotaList,
+  QueueView,
+  type RoleTable,
+  Session,
+  SessionList,
+  Spawn,
+  SpawnList,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
-import { recordReading } from './capacity.ts'
+import { isFresh, latestReadings, type Reading, recordReading } from './capacity.ts'
 import type { Clock } from './clock.ts'
-import { AccountName, CapacityInput, EventInput, SpawnInput, WaitInput } from './schemas.ts'
+import { QuotaError, type QuotaPoller } from './quota.ts'
+import { getQueue, setQueue } from './queue.ts'
+import { AccountName, EventInput, QueueInput, QuotaInput, SpawnInput, WaitInput } from './schemas.ts'
 import { declareWait, getSession, listSessions, recordEvent } from './sessions.ts'
 import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
@@ -21,6 +34,10 @@ export interface AppDeps {
   monitor: TickMonitor
   /** the directories a spawn's repo must be inside */
   repoRoots: readonly string[]
+  /** the role table: a spawn's role must be in it, and it gives the spawn's tier and effort */
+  roles: RoleTable
+  /** reads the account picker on demand (`POST /quota/refresh`) */
+  quota: QuotaPoller
 }
 
 /** Largest request body the server reads. */
@@ -146,8 +163,28 @@ const waitHandler =
     return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
   }
 
+const quotaView = (r: Reading, now: Date): Quota => ({
+  account: r.account,
+  enabled: r.enabled,
+  authOk: r.authOk,
+  fiveHourUsed: r.fiveHourUsed,
+  weeklyUsed: r.weeklyUsed,
+  fiveHourResetsAt: r.fiveHourResetsAt?.toISOString() ?? null,
+  weeklyResetsAt: r.weeklyResetsAt?.toISOString() ?? null,
+  exhaustedUntil: r.exhaustedUntil?.toISOString() ?? null,
+  sampledAt: r.sampledAt?.toISOString() ?? null,
+  readAt: r.readAt.toISOString(),
+  fresh: isFresh(r, now),
+})
+
+/** The project of a queue request, as a spawn's repo is: a real directory inside the allowed roots. */
+const resolveProject = (project: string, repoRoots: readonly string[]): Promise<string> =>
+  resolveRepo(project, repoRoots).catch((error) => {
+    throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
+  })
+
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDeps) {
+export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   return {
     '/health': {
@@ -184,11 +221,15 @@ export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDe
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
       POST: route(async (req: Request) => {
         const input = await parseBody(req, SpawnInput)
+        const entry = roles.get(input.role)
+        if (!entry) throw new Refusal(`unknown role ${input.role} (${[...roles.keys()].join(', ')})`, 422)
         // The policy decides before anything is stored; the row keeps the resolved path.
-        const repo = await resolveRepo(input.repo, repoRoots).catch((error) => {
-          throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
-        })
-        const { spawn, created } = await createSpawn(sql, { ...input, repo }, clock.now())
+        const repo = await resolveProject(input.repo, repoRoots)
+        const { spawn, created } = await createSpawn(
+          sql,
+          { ...input, repo, tier: entry.tier, effort: entry.effort },
+          clock.now(),
+        )
         return respond(Spawn, spawn, created ? 201 : 200)
       }),
     },
@@ -206,12 +247,43 @@ export function routes({ sql, clock, version, token, monitor, repoRoots }: AppDe
         return json({ error: `spawn is ${result.status}; only a failed spawn can be re-queued` }, 409)
       }),
     },
-    '/capacity/:account': {
-      PUT: route(async (req: Bun.BunRequest<'/capacity/:account'>) => {
+    '/quota': {
+      GET: route(async () => {
+        const now = clock.now()
+        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => quotaView(r, now)) })
+      }),
+    },
+    '/quota/refresh': {
+      POST: route(async () => {
+        await quota.poll().catch((error) => {
+          throw error instanceof QuotaError ? new Refusal(error.message, 502) : error
+        })
+        const now = clock.now()
+        return respond(QuotaList, { quota: (await latestReadings(sql)).map((r) => quotaView(r, now)) })
+      }),
+    },
+    // A reading by hand, for tests and operators; the next poll of the picker supersedes it.
+    '/quota/accounts/:account': {
+      PUT: route(async (req: Bun.BunRequest<'/quota/accounts/:account'>) => {
         const account = parseParam(AccountName, req.params.account)
-        const reading = await parseBody(req, CapacityInput)
-        await recordReading(sql, account, reading, clock.now())
-        return respond(CapacityAck, { account, ...reading, resetsAt: reading.resetsAt.toISOString() })
+        const now = clock.now()
+        await recordReading(sql, { account, ...(await parseBody(req, QuotaInput)) }, now)
+        const stored = (await latestReadings(sql)).find((r) => r.account === account)
+        return stored ? respond(Quota, quotaView(stored, now)) : json({ error: 'reading not stored' }, 500)
+      }),
+    },
+    '/queue': {
+      GET: route(async (req: Request) => {
+        const project = new URL(req.url).searchParams.get('project')
+        return respond(
+          QueueView,
+          await getQueue(sql, project === null ? null : await resolveProject(project, repoRoots)),
+        )
+      }),
+      PUT: route(async (req: Request) => {
+        const { state, project } = await parseBody(req, QueueInput)
+        const scope = project === undefined ? null : await resolveProject(project, repoRoots)
+        return respond(QueueView, await setQueue(sql, scope, state, clock.now()))
       }),
     },
   } as const

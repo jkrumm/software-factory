@@ -1,17 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { recordReading } from '../src/capacity.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from '../src/config.ts'
 import { HerdrRunner, RunnerError, type Runner, type StartInput } from '../src/runner.ts'
+import { QuotaPoller } from '../src/quota.ts'
 import { getSession } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { claimDue, DEFAULT_LEASE_MS, retryDelayMs, startTicker, tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
+import { FakeQuotaSource, usage, WORKER } from './support/quota.ts'
 
 let db: TestDb
 let herdr: FakeHerdr
 let clock: FakeClock
+let source: FakeQuotaSource
+let quota: QuotaPoller
+
+/** Six accounts at 1 %, so a test with several spawns does not meet the one-spawn-per-account-and-sample rule. */
+const ACCOUNTS = ['a', 'b', 'c', 'd', 'e', 'f']
 
 beforeAll(async () => {
   db = await startTestDb()
@@ -25,15 +31,18 @@ beforeEach(async () => {
   await db.reset()
   await herdr.reset()
   clock = new FakeClock()
-  await recordReading(
-    db.sql,
-    'a',
-    { weeklyUsed: 1, fiveHourUsed: 1, resetsAt: new Date(clock.now().getTime() + 3_600_000) },
-    clock.now(),
-  )
+  // The tick polls the picker like the server does: a reading is renewed every minute of the clock.
+  source = new FakeQuotaSource()
+  source.readings = ACCOUNTS.map((account) => ({
+    account,
+    ...usage(1, 1, new Date(clock.now().getTime() + 1_000 * 3_600_000)),
+  }))
+  quota = new QuotaPoller({ sql: db.sql, clock, source })
+  await quota.poll()
 })
 
-const addSpawn = (key: string) => createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'do it' }, clock.now())
+const addSpawn = (key: string) =>
+  createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'do it', ...WORKER }, clock.now())
 const spawnRow = async (key: string) => {
   const [row] = await db.sql`
     SELECT status, attempts, session, error, resume_at, claimed_at FROM factory.spawns WHERE key = ${key}`
@@ -46,7 +55,7 @@ const spawnRow = async (key: string) => {
     claimed_at: Date | null
   }
 }
-const deps = (runner: Runner, extra: { batch?: number } = {}) => ({ sql: db.sql, runner, clock, ...extra })
+const deps = (runner: Runner, extra: { batch?: number } = {}) => ({ sql: db.sql, runner, clock, quota, ...extra })
 const herdrRunner = () =>
   new HerdrRunner({
     bin: herdr.bin,
@@ -239,7 +248,7 @@ describe('failures', () => {
     await tick(deps(herdrRunner()))
     expect((await spawnRow('patient')).status).toBe('queued')
     // every account is walled
-    await db.sql`DELETE FROM factory.capacity_readings`
+    await db.sql`DELETE FROM factory.quota_readings`
     await db.sql`UPDATE factory.spawns SET resume_at = NULL WHERE key = 'patient'`
     expect(await tick(deps(herdrRunner()))).toMatchObject({ skipped: 1 })
     expect((await db.sql`SELECT first_claimed_at FROM factory.spawns WHERE key = 'patient'`)[0]).toMatchObject({
@@ -310,7 +319,14 @@ describe('replay and crashes (finding 3)', () => {
     // The first tick dies between the Runner call and its record: claim, start the agent, record nothing.
     const { claims } = await claimDue(deps(herdrRunner()))
     expect(claims.map((c) => c.key)).toEqual(['s1'])
-    const { session } = await herdrRunner().start({ key: 's1', repo: '/work/repo', prompt: 'do it', account: 'a' })
+    const { session } = await herdrRunner().start({
+      key: 's1',
+      repo: '/work/repo',
+      prompt: 'do it',
+      account: 'a',
+      tier: 'sonnet',
+      effort: 'high',
+    })
     expect(await spawnRow('s1')).toMatchObject({ status: 'starting', attempts: 1, session: null })
 
     // Inside the lease the claim is respected.
@@ -368,7 +384,7 @@ describe('reclaiming a claim', () => {
   test('keeps its account when that account has no reading any more', async () => {
     await addSpawn('s1')
     await claimDue(deps(herdrRunner()))
-    await db.sql`DELETE FROM factory.capacity_readings`
+    await db.sql`DELETE FROM factory.quota_readings`
     clock.advance(DEFAULT_LEASE_MS)
     const { claims, skipped } = await claimDue(deps(herdrRunner()))
     expect(skipped).toBe(0)

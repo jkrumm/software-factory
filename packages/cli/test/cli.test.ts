@@ -5,9 +5,11 @@ import { EXIT } from '../src/exit.ts'
 
 const BIN = join(import.meta.dir, '..', 'bin', 'factory.ts')
 
+const ROLE = { role: 'worker', tier: 'sonnet', effort: 'high', hold: null } as const
 const SPAWNS = [
-  { key: 'b', status: 'started', account: 'a', resumeAt: null, attempts: 1, session: 'pane-b', error: null },
+  { key: 'b', status: 'started', account: 'a', resumeAt: null, attempts: 1, session: 'pane-b', error: null, ...ROLE },
   {
+    ...ROLE,
     key: 'a',
     status: 'waiting',
     account: null,
@@ -32,6 +34,20 @@ const SESSION = {
   herdrStatus: 'working',
   herdrSeenAt: '2026-10-30T12:00:00.000Z',
 }
+const QUOTA = {
+  account: 'me',
+  enabled: true,
+  authOk: true,
+  fiveHourUsed: 23,
+  weeklyUsed: 45,
+  fiveHourResetsAt: '2026-10-30T16:40:00.000Z',
+  weeklyResetsAt: '2026-11-05T06:00:00.000Z',
+  exhaustedUntil: null,
+  sampledAt: '2026-10-30T14:00:00.000Z',
+  readAt: '2026-10-30T14:01:00.000Z',
+  fresh: true,
+}
+const queueCalls: { method: string; project: string | null; state?: string }[] = []
 const DEAD = { ...SESSION, id: 'old', state: 'dead', pane: null }
 const sessionCalls: { id: string; body: unknown }[] = []
 
@@ -93,7 +109,32 @@ beforeAll(() => {
           attempts: 0,
           session: null,
           error: null,
+          ...ROLE,
         })
+      }
+      if (path === '/queue') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        const body = req.method === 'PUT' ? ((await req.json()) as { state: string; project?: string }) : undefined
+        queueCalls.push({
+          method: req.method,
+          project: body?.project ?? url.searchParams.get('project'),
+          state: body?.state,
+        })
+        const project = body ? (body.project ?? null) : url.searchParams.get('project')
+        const state = body?.state ?? 'pace'
+        return Response.json({
+          scope: { project },
+          state,
+          effective: state === 'run' ? 'run' : 'drain',
+          setAt: '2026-10-30T12:00:00.000Z',
+          scopes: [{ project: null, state: 'drain', setAt: '2026-10-30T11:00:00.000Z' }],
+        })
+      }
+      if (path === '/quota' || path === '/quota/refresh') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        return Response.json({ quota: [QUOTA], refreshed: path.endsWith('refresh') && req.method === 'POST' })
       }
       if (path.startsWith('/sessions')) {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
@@ -222,7 +263,9 @@ describe('factory spawn list', () => {
 
   test('plain is one tab-separated line per spawn', async () => {
     const r = await factory(['spawn', 'list', '--format', 'plain'])
-    expect(r.stdout).toBe('b\tstarted\ta\t-\t1\tpane-b\na\twaiting\t-\t2026-10-30T14:00:00.000Z\t0\t-\n')
+    expect(r.stdout).toBe(
+      'b\tstarted\ta\t-\t1\tpane-b\tworker\t-\na\twaiting\t-\t2026-10-30T14:00:00.000Z\t0\t-\tworker\t-\n',
+    )
   })
 })
 
@@ -232,7 +275,7 @@ describe('factory spawn requeue', () => {
     expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
     expect(JSON.parse(r.stdout)).toMatchObject({ key: 'flaky', status: 'queued', attempts: 0 })
     expect((await factory(['spawn', 'requeue', 'flaky', '--format', 'plain'])).stdout).toBe(
-      'flaky\tqueued\ta\t-\t0\t-\n',
+      'flaky\tqueued\ta\t-\t0\t-\tworker\t-\n',
     )
   })
 
@@ -422,5 +465,119 @@ describe('the token', () => {
   test('health and version do not need one', async () => {
     expect((await factory(['health'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.ok)
     expect((await factory(['version'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.ok)
+  })
+})
+
+describe('factory role', () => {
+  // This is the interface rd reads: exactly these three fields, no server, no token.
+  test('get prints {role, tier, effort} and needs neither server nor token', async () => {
+    const r = await factory(['role', 'get', 'worker', '--format', 'json'], {
+      FACTORY_URL: 'http://127.0.0.1:1',
+      FACTORY_TOKEN: '',
+    })
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(r.stdout).toBe('{"role":"worker","tier":"sonnet","effort":"high"}\n')
+  })
+
+  test('plain is tier and effort on one tab-separated line with the role', async () => {
+    const r = await factory(['role', 'get', 'lead', '--format', 'plain'])
+    expect(r.stdout).toBe('lead\topus\thigh\n')
+  })
+
+  test('list prints every role of the table', async () => {
+    const r = await factory(['role', 'list'])
+    expect(r.code).toBe(EXIT.ok)
+    const { roles } = JSON.parse(r.stdout) as { roles: { role: string; tier: string; effort: string }[] }
+    expect(roles.map((x) => x.role)).toEqual([
+      'mother',
+      'lead',
+      'wave',
+      'worker',
+      'mechanical',
+      'implementer',
+      'verifier',
+      'Explore',
+    ])
+  })
+
+  test('an unknown role is not_found (4) with the roles named', async () => {
+    const r = await factory(['role', 'get', 'nobody'])
+    expect(r).toMatchObject({ code: EXIT.not_found, stdout: '' })
+    expect(r.stderr).toContain('unknown role nobody')
+  })
+
+  test('FACTORY_ROLES_FILE points at another table; an unusable one is a failure', async () => {
+    const dir = mkdtempSync('/tmp/factory-roles-')
+    try {
+      const good = join(dir, 'roles.json')
+      await Bun.write(good, JSON.stringify({ roles: { solo: { tier: 'haiku', effort: 'max' } } }))
+      const r = await factory(['role', 'get', 'solo'], { FACTORY_ROLES_FILE: good })
+      expect(JSON.parse(r.stdout)).toEqual({ role: 'solo', tier: 'haiku', effort: 'max' })
+
+      const bad = join(dir, 'bad.json')
+      await Bun.write(bad, JSON.stringify({ roles: { solo: { tier: 'gpt-9000', effort: 'max' } } }))
+      expect(await factory(['role', 'get', 'solo'], { FACTORY_ROLES_FILE: bad })).toMatchObject({ code: EXIT.general })
+      expect(await factory(['role', 'get', 'solo'], { FACTORY_ROLES_FILE: join(dir, 'missing.json') })).toMatchObject({
+        code: EXIT.general,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('a usage mistake is exit 2', async () => {
+    expect((await factory(['role', 'get'])).code).toBe(EXIT.usage)
+    expect((await factory(['role'])).code).toBe(EXIT.usage)
+  })
+})
+
+describe('factory queue', () => {
+  test('get without a project asks for the global scope', async () => {
+    queueCalls.length = 0
+    const r = await factory(['queue', 'get'])
+    expect(r.code).toBe(EXIT.ok)
+    expect(JSON.parse(r.stdout)).toMatchObject({ scope: { project: null }, state: 'pace', effective: 'drain' })
+    expect(queueCalls).toEqual([{ method: 'GET', project: null, state: undefined }])
+  })
+
+  test('get --project sends the absolute path', async () => {
+    queueCalls.length = 0
+    await factory(['queue', 'get', '--project', '/work/repo', '--format', 'plain'])
+    expect(queueCalls).toEqual([{ method: 'GET', project: '/work/repo', state: undefined }])
+  })
+
+  test('set sends the state, and the project when given; a relative path is made absolute', async () => {
+    queueCalls.length = 0
+    const r = await factory(['queue', 'set', 'drain', '--project', '/work/repo', '--format', 'plain'])
+    expect(r.stdout).toBe('/work/repo\tdrain\tdrain\t2026-10-30T12:00:00.000Z\n')
+    await factory(['queue', 'set', 'run'])
+    expect(queueCalls).toEqual([
+      { method: 'PUT', project: '/work/repo', state: 'drain' },
+      { method: 'PUT', project: null, state: 'run' },
+    ])
+  })
+
+  test('a state that is not run, pace or drain is exit 2 and sends nothing', async () => {
+    queueCalls.length = 0
+    expect((await factory(['queue', 'set', 'pause'])).code).toBe(EXIT.usage)
+    expect((await factory(['queue', 'set'])).code).toBe(EXIT.usage)
+    expect(queueCalls).toEqual([])
+  })
+
+  test('it needs the token', async () => {
+    expect((await factory(['queue', 'get'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
+  })
+})
+
+describe('factory quota', () => {
+  test('get prints the readings', async () => {
+    const r = await factory(['quota', 'get', '--format', 'plain'])
+    expect(r.stdout).toBe('me\t23\t45\t2026-10-30T16:40:00.000Z\t2026-11-05T06:00:00.000Z\tfresh\tauth ok\n')
+  })
+
+  test('refresh asks the server to read the picker now', async () => {
+    const r = await factory(['quota', 'refresh'])
+    expect(r.code).toBe(EXIT.ok)
+    expect(JSON.parse(r.stdout).quota).toHaveLength(1)
   })
 })

@@ -82,7 +82,7 @@ export async function startTestDb(options: { migrate?: boolean } = {}): Promise<
     sql,
     path: join(root, `.s.PGSQL.${port}`),
     reset: async () => {
-      await sql`TRUNCATE factory.events, factory.capacity_readings, factory.spawns, factory.sessions, factory.witness RESTART IDENTITY`
+      await sql`TRUNCATE factory.events, factory.capacity_readings, factory.quota_readings, factory.queue_states, factory.spawns, factory.sessions, factory.witness RESTART IDENTITY`
     },
     stop: async () => {
       await sql.close()

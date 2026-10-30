@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { loadConfig } from '../src/config.ts'
 import { MAX_BODY_BYTES } from '../src/http.ts'
 import { MAX_PAYLOAD_CHARS, MAX_PROMPT_CHARS } from '../src/schemas.ts'
@@ -23,7 +24,9 @@ describe('routing (finding 8)', () => {
   test.each([
     ['GET', '/events', 'POST'],
     ['DELETE', '/spawns/x', 'GET'],
-    ['GET', '/capacity/a', 'PUT'],
+    ['GET', '/quota/accounts/a', 'PUT'],
+    ['GET', '/quota/refresh', 'POST'],
+    ['POST', '/queue', 'GET, PUT'],
     ['PUT', '/spawns', 'GET, POST'],
     ['POST', '/health', 'GET'],
   ])('%s %s is 405 and names what is allowed', async (method, path, allow) => {
@@ -38,7 +41,7 @@ describe('routing (finding 8)', () => {
   })
 
   test('a malformed percent-escape in a path never reaches a 500', async () => {
-    for (const path of ['/sessions/%E0%A4%A', '/spawns/%', '/capacity/%zz']) {
+    for (const path of ['/sessions/%E0%A4%A', '/spawns/%', '/quota/accounts/%zz']) {
       const res = await app.get(path)
       expect(res.status).toBeLessThan(500)
     }
@@ -74,6 +77,8 @@ describe('config (finding 5)', () => {
       version: 'abc',
       pretrustBin: '/home/me/SourceRoot/dotfiles/scripts/claude-pretrust.sh',
       accountsFile: '/home/me/SourceRoot/dotfiles/config/claude-accounts.json',
+      claudeAccountBin: '/home/me/.local/bin/claude-account',
+      rolesFile: DEFAULT_ROLES_FILE,
       retryBudgetMs: 30 * 60_000,
       repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
       spoolDir: '/home/me/.local/share/factory/spool',
@@ -114,7 +119,11 @@ const ROUTES: [string, string][] = [
   ['POST', '/spawns'],
   ['GET', '/sessions/x'],
   ['POST', '/events'],
-  ['PUT', '/capacity/a'],
+  ['PUT', '/quota/accounts/a'],
+  ['GET', '/quota'],
+  ['POST', '/quota/refresh'],
+  ['GET', '/queue'],
+  ['PUT', '/queue'],
 ]
 const SPAWN = JSON.stringify({ key: 'k', repo: TEST_REPO, prompt: 'p' })
 const json = { 'content-type': 'application/json' }
@@ -166,8 +175,8 @@ describe('content type', () => {
   })
 
   test('a PUT is held to it too', async () => {
-    const body = JSON.stringify({ weeklyUsed: 1, fiveHourUsed: 1, resetsAt: '2030-01-01T00:00:00Z' })
-    const res = await app.bare('/capacity/a', {
+    const body = JSON.stringify({ weeklyUsed: 1, fiveHourUsed: 1 })
+    const res = await app.bare('/quota/accounts/a', {
       method: 'PUT',
       headers: { ...bearer(TEST_TOKEN), 'content-type': 'text/plain' },
       body,

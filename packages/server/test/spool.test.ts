@@ -30,6 +30,7 @@ import { type Runner, type StartInput } from '../src/runner.ts'
 import { tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
+import { usage, WORKER } from './support/quota.ts'
 
 let db: TestDb
 let dir: string
@@ -228,11 +229,10 @@ describe('session_started binds', () => {
   const spawnStarted = async (key: string, pane: string) => {
     await recordReading(
       db.sql,
-      'a',
-      { weeklyUsed: 1, fiveHourUsed: 1, resetsAt: new Date(clock.now().getTime() + 3_600_000) },
+      { account: 'a', ...usage(1, 1, new Date(clock.now().getTime() + 3_600_000)) },
       clock.now(),
     )
-    await createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'p' }, clock.now())
+    await createSpawn(db.sql, { key, repo: '/work/repo', prompt: 'p', ...WORKER }, clock.now())
     const runner: Runner = { start: async () => ({ session: pane }) }
     await tick({ sql: db.sql, runner, clock })
   }

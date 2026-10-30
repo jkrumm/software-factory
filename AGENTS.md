@@ -29,13 +29,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Never call a port inside a transaction.** The tick claims a row and commits, calls the `Runner` (every call has a
   process timeout), records the result in a new transaction. A failing start is retried until a time budget from the
   first claim (30 min, `FACTORY_RETRY_BUDGET_MS`), then `failed` with a logged reason; `factory spawn requeue <key>`
-  starts a failed spawn over. Capacity is checked again at start, and only due rows are selected
+  starts a failed spawn over. Admission is decided again at start, and only due rows are selected
   (`docs/design.md` §3, "The tick").
 - **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
   pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
   prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
-  (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh`, `agent start`, prompt proven by a state change, one
-  re-send); a tab without a ready agent is never `started`. A prompt cannot start with `-` (herdr reads it as an option).
+  (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh`, `agent start --model <tier> --effort <effort>` from the
+  spawn's role, prompt proven by a state change, one re-send); a tab without a ready agent is never `started`. A prompt cannot start with `-` (herdr reads it as an option).
 - **A failed spawn leaves its tab.** The tab is named after the key and `factory spawn requeue` finds it again (an agent
   already running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A tab with
   no agent is closed and made again on every try, so a retry on another account gets that account's environment.
@@ -87,6 +87,38 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   secrets, `core.fsmonitor` or hooks (the agent controls `.git/config`), four probes at a time. `GET /sessions` answers
   with the newest 200. A herdr that
   does not answer records nothing.
+- **Quota is a stored fact, read from the picker.** `ClaudeAccountSource` (`quota.ts`) runs `claude-account usage --json`
+  (`FACTORY_CLAUDE_ACCOUNT_BIN`, default `~/.local/bin/claude-account`, the Wave 1 process timeout) and parses it with zod: one
+  row per account of the registry (`dotfiles/config/claude-accounts.json`), so accounts are never listed here and a fourth
+  appears when the picker lists it. The tick polls at most once a minute (a failed attempt counts; the error goes into the
+  tick's `errors`, never crashes it); `factory quota refresh` / `POST /quota/refresh` polls now, `factory quota get` /
+  `GET /quota` shows the newest row per account. `quota_readings` keeps every row: percent of the 5-hour window and the week
+  (null = no sample), both resets, `enabled`, `auth_ok`, `exhausted_until`, `read_at`, and `sampled_at` (read time minus the
+  sample's age). `PUT /quota/accounts/:account` stores a reading by hand (tests, operators); the next poll supersedes it.
+  A reading not renewed for 10 minutes is stale and admits nothing (a stopped poller, an account that left the registry).
+- **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
+  1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
+  has the same repo: hold `wave` (fan workers and other roles are never limited; sessions `rd` starts count once they
+  carry a role, which they do not yet). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
+  auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
+  weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
+  `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
+  pace the moment the elapsed share reaches the use); none if no reading names a time, a new reading wakes it.
+  **The spawn cost is not a number:** an account takes one new spawn per sample. A spawn assigned (`assigned_at`) at or after
+  an account's latest `sampled_at` is not in its numbers yet, so that account is not offered again until a sample taken after
+  the assignment exists (the poll shows it within about a minute). A burst starts as many spawns as there are open accounts
+  and the rest wait for the next sample.
+- **Queue state `run|pace|drain`** (`queue.ts`, table `queue_states`): per scope, global (`project` null) or a project (the
+  repo path, resolved like a spawn's); `initiative` is a nullable column for F4, not read yet. No row is `run`. The most
+  restrictive scope that applies wins. `drain` starts nothing and never interrupts; `pace` as above. A spawn held by a rule
+  stays `queued` with `hold` set (`drain|pace|wave`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
+  `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
+- **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
+  model id) and effort (`low|medium|high|xhigh|max`). `POST /spawns` takes `role` (default `worker`; unknown = 422) and
+  stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
+  at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one). `factory role list|get <role>` reads the file
+  itself, with no server and no token: `rd --role` depends on `role get <role> --format json` printing exactly
+  `{"role","tier","effort"}` (exit 0; unknown role is exit 4). Values change only on measured data.
 - **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
   if its connection loses it; a second copy exits 1. Every
   advisory key lives in `src/locks.ts` and they must stay distinct.
@@ -109,12 +141,14 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 ## Layout
 
 - `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr
-  adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness (`witness.ts`), the queue and capacity (`spawns.ts`, `capacity.ts`),
-  `migrations/`.
-- `packages/contract` — the zod schemas of every response, imported by the server and the CLI; `spool.ts` is the zod-free
-  half the hook uses (event kinds, the spool line, key and time counting).
+  adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness
+  (`witness.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
+  picker's readings (`quota.ts`), `migrations/`.
+- `packages/contract` — the zod schemas of every response, imported by the server and the CLI, and the role table's schema
+  and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
+- `config/roles.json` — the role table (FL4).
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `spawn list|requeue`, `session
-  list|get|wait`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+  list|get|wait`, `queue get|set`, `quota get|refresh`, `role list|get`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

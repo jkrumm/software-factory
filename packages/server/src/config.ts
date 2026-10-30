@@ -1,3 +1,4 @@
+import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -10,6 +11,10 @@ export interface Config {
   pretrustBin: string
   /** the account registry */
   accountsFile: string
+  /** the account picker, `claude-account`: its `usage --json` is the quota source */
+  claudeAccountBin: string
+  /** the role table (`FACTORY_ROLES_FILE`): tier and effort per role */
+  rolesFile: string
   retryBudgetMs: number
   /** the directories a spawn's repo must be inside (`FACTORY_REPO_ROOTS`) */
   repoRoots: string[]
@@ -48,6 +53,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     version: env.FACTORY_VERSION || 'dev',
     pretrustBin: env.FACTORY_PRETRUST_BIN || `${required('HOME')}/${DOTFILES}/scripts/claude-pretrust.sh`,
     accountsFile: env.FACTORY_ACCOUNTS_FILE || `${required('HOME')}/${DOTFILES}/config/claude-accounts.json`,
+    claudeAccountBin: env.FACTORY_CLAUDE_ACCOUNT_BIN || `${required('HOME')}/.local/bin/claude-account`,
+    rolesFile: env.FACTORY_ROLES_FILE || DEFAULT_ROLES_FILE,
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),

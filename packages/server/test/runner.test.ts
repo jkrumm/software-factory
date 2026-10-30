@@ -1,12 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { agentName, HerdrRunner, RunnerError } from '../src/runner.ts'
+import { agentName, HerdrRunner, RunnerError, type StartInput } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 
 let herdr: FakeHerdr
 let clock: FakeClock
 let runner: HerdrRunner
-const input = { key: 'spawn-1', repo: '/work/repo', prompt: 'do it', account: 'a' }
+const input: StartInput = {
+  key: 'spawn-1',
+  repo: '/work/repo',
+  prompt: 'do it',
+  account: 'a',
+  tier: 'sonnet',
+  effort: 'high',
+}
 
 beforeAll(async () => {
   herdr = await createFakeHerdr()
@@ -46,7 +53,14 @@ describe('herdr adapter: a start', () => {
     expect(session).toBe(state.panes[0]?.pane_id as string)
     expect(state.agents).toHaveLength(1)
     expect(state.agents[0]).toMatchObject({ pane_id: session, agent_status: 'working', interactive_ready: true })
-    expect(state.agents[0]?.argv).toEqual(['claude', '--dangerously-skip-permissions', '--model', 'sonnet'])
+    expect(state.agents[0]?.argv).toEqual([
+      'claude',
+      '--dangerously-skip-permissions',
+      '--model',
+      'sonnet',
+      '--effort',
+      'high',
+    ])
     expect(state.prompts).toEqual([{ pane: session, text: 'do it' }])
     expect(await herdr.pretrustCalls()).toEqual(['/work/repo'])
   })
@@ -64,15 +78,15 @@ describe('herdr adapter: a start', () => {
     expect(a?.env).toEqual(['CLAUDE_ACCOUNT_PICKED=a', 'USAGE_LANE=wave', 'FACTORY_SESSION=on-a'])
   })
 
-  test('the model and effort are passed on when set', async () => {
-    await makeRunner({ model: 'opus', effort: 'high' }).start(input)
+  test("the role's tier and effort are what the agent starts with", async () => {
+    await runner.start({ ...input, tier: 'opus', effort: 'max' })
     expect((await herdr.state()).agents[0]?.argv).toEqual([
       'claude',
       '--dangerously-skip-permissions',
       '--model',
       'opus',
       '--effort',
-      'high',
+      'max',
     ])
   })
 

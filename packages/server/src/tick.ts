@@ -1,10 +1,13 @@
+import type { Effort, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
+import { admit, type Decision, HOLD_RECHECK_MS } from './admission.ts'
+import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
-import { dropEmptySession, openSession } from './sessions.ts'
+import type { QuotaPoller } from './quota.ts'
+import { dropEmptySession, type LiveSession, openSession } from './sessions.ts'
 import type { SpoolReplayer } from './spool.ts'
 
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
@@ -25,6 +28,8 @@ export interface TickDeps {
   retryBudgetMs?: number
   /** the hooks' spool, read at the start of every pass */
   spool?: SpoolReplayer
+  /** the account picker's readings, polled once a minute at the start of a pass */
+  quota?: QuotaPoller
 }
 
 export interface TickResult {
@@ -32,7 +37,7 @@ export interface TickResult {
   failed: string[]
   /** start failed, will be claimed again after a delay */
   retrying: string[]
-  /** due, but no account had capacity: back to waiting */
+  /** due, but not started: no account had capacity (back to waiting) or a rule holds it (queued, rechecked later) */
   skipped: number
   /** the result could not be recorded; the claim stays and is reclaimed when its lease runs out */
   errors: string[]
@@ -45,6 +50,9 @@ export interface Claim {
   repo: string
   prompt: string
   account: string
+  /** the role table's tier and effort for the spawn's role, as stored when it was queued */
+  tier: Tier
+  effort: Effort
   attempts: number
   /** when this spawn's retry budget started */
   firstClaimedAt: Date
@@ -54,6 +62,9 @@ interface DueRow {
   key: string
   repo: string
   prompt: string
+  role: string
+  tier: Tier
+  effort: Effort
   status: 'queued' | 'waiting' | 'starting'
   account: string | null
   attempts: number
@@ -73,7 +84,7 @@ const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
  * the key, so a claim that dies before its result is recorded is found again by name, not started twice.
  * Due means `resume_at` has passed (a queued spawn has none), or a claim whose lease ran out. Waiting spawns sort
  * after queued ones, and a spawn that cannot start leaves the due set, so it never holds up the rest.
- * Capacity is checked again here against the latest readings: a stored account is only a hint.
+ * Admission (queue state, one wave per repo, capacity) is decided again here: a stored account is only a hint.
  */
 export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; failed: string[]; skipped: number }> {
   const { sql, clock } = deps
@@ -83,7 +94,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, prompt, status, account, attempts, error, first_claimed_at FROM factory.spawns
+      SELECT key, repo, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
          OR (status = 'starting' AND claimed_at <= ${staleBefore})
@@ -91,7 +102,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       LIMIT ${deps.batch ?? DEFAULT_BATCH}
       FOR UPDATE SKIP LOCKED`
 
-    const readings = await latestReadings(tx)
+    const live: { sessions?: LiveSession[] } = {}
     const claims: Claim[] = []
     const failed: { key: string; reason: string }[] = []
     let skipped = 0
@@ -107,16 +118,18 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       }
 
       // A reclaimed claim may already have its pane; finish it on the account it has instead of asking again.
-      const picked =
+      const decision: Decision =
         row.status === 'starting' && row.account
-          ? (readings.find((r) => r.account === row.account) ?? { account: row.account, id: null })
-          : pickEligible(readings, await currentLoads(tx, readings, row.key), row.account)
-      if (!picked) {
-        const resumeAt = nextReset(readings, now) ?? null
+          ? { kind: 'start', account: row.account }
+          : await admit(tx, { key: row.key, repo: row.repo, role: row.role, prefer: row.account }, now, live)
+      if (decision.kind !== 'start') {
+        // Waiting is not failing: the retry clock starts over when the spawn is claimed again.
+        const status = decision.kind === 'wait' ? 'waiting' : 'queued'
+        const resumeAt = decision.kind === 'wait' ? decision.resumeAt : new Date(now.getTime() + HOLD_RECHECK_MS)
         await tx`
           UPDATE factory.spawns
-          SET status = 'waiting', account = NULL, reading_id = NULL, claimed_at = NULL, resume_at = ${resumeAt},
-              first_claimed_at = NULL
+          SET status = ${status}, account = NULL, assigned_at = NULL, hold = ${decision.kind === 'hold' ? decision.reason : null},
+              claimed_at = NULL, resume_at = ${resumeAt}, first_claimed_at = NULL
           WHERE key = ${row.key}`
         await dropEmptySession(tx, row.key)
         skipped++
@@ -124,16 +137,20 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       }
       await tx`
         UPDATE factory.spawns
-        SET status = 'starting', account = ${picked.account}, reading_id = COALESCE(${picked.id}, reading_id), claimed_at = ${now},
-            resume_at = NULL, attempts = attempts + 1, first_claimed_at = COALESCE(first_claimed_at, ${now})
+        SET status = 'starting', account = ${decision.account}, assigned_at = COALESCE(assigned_at, ${now}), hold = NULL,
+            claimed_at = ${now}, resume_at = NULL, attempts = attempts + 1,
+            first_claimed_at = COALESCE(first_claimed_at, ${now})
         WHERE key = ${row.key}`
       // From the claim on it is a session that is starting; the hooks' first event ends that.
       await openSession(tx, { id: row.key, spawnKey: row.key, pane: null, at: now })
+      live.sessions?.push({ id: row.key, repo: row.repo, role: row.role })
       claims.push({
         key: row.key,
         repo: row.repo,
         prompt: row.prompt,
-        account: picked.account,
+        account: decision.account,
+        tier: row.tier,
+        effort: row.effort,
         attempts: row.attempts + 1,
         firstClaimedAt: row.first_claimed_at ?? now,
       })
@@ -194,6 +211,8 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       repo: claim.repo,
       prompt: claim.prompt,
       account: claim.account,
+      tier: claim.tier,
+      effort: claim.effort,
     }))
   } catch (error) {
     return recordFailure(deps, claim, error)
@@ -214,9 +233,17 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   } catch (error) {
     replayError = `spool replay: ${error instanceof Error ? error.message : String(error)}`
   }
+  // Then the quota, so a spawn is admitted on a reading at most a minute old.
+  let quotaError: string | undefined
+  try {
+    await deps.quota?.pollIfDue()
+  } catch (error) {
+    quotaError = `quota poll: ${error instanceof Error ? error.message : String(error)}`
+  }
   const { claims, failed, skipped } = await claimDue(deps)
   const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [], replayed }
   if (replayError) result.errors.push(replayError)
+  if (quotaError) result.errors.push(quotaError)
 
   await Promise.all(
     claims.map(async (claim) => {

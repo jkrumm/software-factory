@@ -1,5 +1,21 @@
+import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { ErrorBody, Health, Session, SessionList, Spawn, SpawnList, WaitOn } from '@software-factory/contract'
+import {
+  DEFAULT_ROLES_FILE,
+  ErrorBody,
+  Health,
+  loadRoleTable,
+  type Quota,
+  QueueState,
+  QueueView,
+  QuotaList,
+  type RoleEntry,
+  Session,
+  SessionList,
+  Spawn,
+  SpawnList,
+  WaitOn,
+} from '@software-factory/contract'
 import type { z } from 'zod'
 import { defaultHookSocket } from '@software-factory/contract/spool'
 import pkg from '../package.json' with { type: 'json' }
@@ -23,6 +39,15 @@ commands:
                   one session: state, turn, wait, pane, Claude session id, herdr's last word
   session wait --on workers|deploy|owner | --done [--session <id>]
                   declare what this session is waiting on, or that the wait is over (default: $FACTORY_SESSION)
+  queue get [--project <path>]
+                  the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
+  queue set run|pace|drain [--project <path>]
+                  set it: drain starts nothing new (queued spawns stay queued), pace allows one session per project and
+                  spends only toward the weekly pace; the most restrictive scope that applies wins
+  quota get       the newest reading of every account (percent of the 5-hour window and the week, resets, fresh or not)
+  quota refresh   read the account picker now and store the readings
+  role list       the role table: role, tier, effort (reads the tracked file, no server and no token)
+  role get <role> one role: {"role", "tier", "effort"}
   hook <event>    the Claude Code hook entry (session-start, user-prompt-submit, stop, stop-failure, notification,
                   session-end); reads the hook JSON on stdin, spools it, tells the server, always exits 0
 
@@ -30,10 +55,12 @@ commands:
 --on <what>      session wait: workers, deploy or owner
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
+--project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
-FACTORY_TOKEN    the bearer token the server requires (not needed for version, health and session wait)
+FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait and role)
+FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for session wait (default ~/.local/share/factory/hook.sock)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
@@ -55,8 +82,8 @@ const notContract = (path: string, detail: string) =>
 const cell = (value: unknown) => (value === null || value === undefined ? '-' : String(value))
 
 interface CallOptions<S extends z.ZodType> {
-  method?: 'GET' | 'POST'
-  /** sent as JSON with a POST; `{}` when absent */
+  method?: 'GET' | 'POST' | 'PUT'
+  /** sent as JSON with a POST or PUT; `{}` when absent */
   body?: unknown
   auth: boolean
   /**
@@ -95,9 +122,9 @@ async function call<S extends z.ZodType>(
       method: options.method ?? 'GET',
       headers: {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...(options.method === 'POST' ? { 'content-type': 'application/json' } : {}),
+        ...(options.method && options.method !== 'GET' ? { 'content-type': 'application/json' } : {}),
       },
-      body: options.method === 'POST' ? JSON.stringify(options.body ?? {}) : undefined,
+      body: options.method && options.method !== 'GET' ? JSON.stringify(options.body ?? {}) : undefined,
       signal: AbortSignal.timeout(TIMEOUT_MS),
       ...(options.socket ? { unix: socket } : {}),
     })
@@ -130,7 +157,25 @@ async function call<S extends z.ZodType>(
   return { status: response.status, body: parsed.data }
 }
 
-const spawnLine = (s: Spawn) => [s.key, s.status, s.account, s.resumeAt, s.attempts, s.session].map(cell).join('\t')
+const spawnLine = (s: Spawn) =>
+  [s.key, s.status, s.account, s.resumeAt, s.attempts, s.session, s.role, s.hold].map(cell).join('\t')
+
+const queueLine = (q: QueueView) => [q.scope.project ?? 'global', q.state, q.effective, q.setAt].map(cell).join('\t')
+
+const quotaLine = (q: Quota) =>
+  [
+    q.account,
+    q.fiveHourUsed,
+    q.weeklyUsed,
+    q.fiveHourResetsAt,
+    q.weeklyResetsAt,
+    q.fresh ? 'fresh' : 'stale',
+    q.authOk ? 'auth ok' : 'auth failed',
+  ]
+    .map(cell)
+    .join('\t')
+
+const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
 const sessionLine = (s: Session) =>
   [s.id, s.state, s.wait, s.turn, s.pane, s.claudeSessionId, s.lastEventAt].map(cell).join('\t')
@@ -140,6 +185,7 @@ interface Flags {
   on?: string
   done?: boolean
   session?: string
+  project?: string
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -206,6 +252,56 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, sessionLine(body))
   }
 
+  if (key === 'queue get') {
+    const query = flags.project === undefined ? '' : `?project=${encodeURIComponent(resolve(flags.project))}`
+    const { body } = await call(io, `/queue${query}`, { auth: true, schema: QueueView })
+    return print(body, queueLine(body))
+  }
+
+  if (words[0] === 'queue' && words[1] === 'set') {
+    const state = QueueState.safeParse(words[2])
+    if (!state.success || words.length > 3) throw usage('usage: queue set run|pace|drain [--project <path>]')
+    const { body } = await call(io, '/queue', {
+      method: 'PUT',
+      auth: true,
+      schema: QueueView,
+      body: { state: state.data, ...(flags.project === undefined ? {} : { project: resolve(flags.project) }) },
+    })
+    return print(body, queueLine(body))
+  }
+
+  if (key === 'quota get' || key === 'quota refresh') {
+    const refresh = key === 'quota refresh'
+    const { body } = await call(io, refresh ? '/quota/refresh' : '/quota', {
+      method: refresh ? 'POST' : 'GET',
+      auth: true,
+      schema: QuotaList,
+    })
+    const lines = body.quota.map(quotaLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (words[0] === 'role') {
+    const table = await loadRoleTable(io.env.FACTORY_ROLES_FILE || DEFAULT_ROLES_FILE).catch((error) => {
+      throw new FactoryError('general', error instanceof Error ? error.message : String(error))
+    })
+    if (key === 'role list') {
+      const roles = [...table.values()]
+      return print({ roles }, roles.map(roleLine).join('\n'))
+    }
+    if (words[1] === 'get' && words.length === 3) {
+      const entry = table.get(words[2] ?? '')
+      if (!entry) {
+        throw new FactoryError('not_found', `unknown role ${words[2]}`, {
+          hint: `one of ${[...table.keys()].join(', ')}`,
+        })
+      }
+      return print(entry, roleLine(entry))
+    }
+    throw usage('usage: role list | role get <role>')
+  }
+
   throw usage(words.length ? `unknown command: ${key}` : 'no command', `${BIN} --help lists the commands`)
 }
 
@@ -246,5 +342,6 @@ const OPTIONS = {
   on: { type: 'string' },
   done: { type: 'boolean' },
   session: { type: 'string' },
+  project: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

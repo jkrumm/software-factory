@@ -42,7 +42,12 @@ const runTick = () =>
 const tabs = async () => (await herdr.state()).tabs.map((t) => t.label)
 const inHours = (h: number) => new Date(clock.now().getTime() + h * 3_600_000).toISOString()
 const reading = (account: string, weeklyUsed: number, fiveHourUsed: number, resetsAt: string) =>
-  app.send('PUT', `/capacity/${account}`, { weeklyUsed, fiveHourUsed, resetsAt })
+  app.send('PUT', `/quota/accounts/${account}`, {
+    weeklyUsed,
+    fiveHourUsed,
+    fiveHourResetsAt: resetsAt,
+    weeklyResetsAt: resetsAt,
+  })
 const spawn = (key: string) => app.send('POST', '/spawns', { key, repo: TEST_REPO, prompt: 'do it' })
 const status = async (key: string) => (await app.get(`/spawns/${key}`)).json() as Promise<Record<string, unknown>>
 
@@ -123,14 +128,18 @@ describe('a spawn without capacity', () => {
   // finding 2: resume_at passing is not capacity
   test('when resume_at passes with the readings still over the limit it keeps waiting, then starts on a fresh reading', async () => {
     const resetA = inHours(5)
+    const resetB = inHours(2)
     await reading('a', 96, 0, resetA)
-    await reading('b', 10, 90, inHours(2))
+    await reading('b', 10, 90, resetB)
     await spawn('s1')
 
     clock.advance(2 * 3_600_000 - 1)
     expect(await runTick()).toMatchObject({ started: [], skipped: 0 })
 
     clock.advance(1)
+    // The poller has renewed both readings meanwhile; the numbers are the old ones.
+    await reading('a', 96, 0, resetA)
+    await reading('b', 10, 90, resetB)
     expect(await runTick()).toMatchObject({ started: [], skipped: 1 })
     expect(await herdr.calls()).toEqual([])
     // Back to waiting, due at the next reset still ahead.
@@ -181,9 +190,9 @@ describe('capacity is checked again when the spawn starts', () => {
   })
 })
 
-describe('assignments count against the account', () => {
+describe('an account takes one spawn per sample', () => {
   // finding 10: ten spawns, a at 94 %, b at 95 %
-  test('spawns beyond what the reading leaves room for wait instead of piling onto one account', async () => {
+  test('spawns beyond what the readings leave room for wait instead of piling onto one account', async () => {
     await reading('a', 94, 10, inHours(2))
     await reading('b', 95, 10, inHours(2))
     const results = await Promise.all(Array.from({ length: 10 }, (_, i) => spawn(`s${i}`).then((r) => r.json())))
@@ -193,34 +202,66 @@ describe('assignments count against the account', () => {
 
     expect(await runTick()).toMatchObject({ started: [queued[0] && (queued[0] as { key: string }).key] })
     expect((await herdr.state()).agents).toHaveLength(1)
-
-    // The next reading shows the real use; assignments made before it no longer count.
-    await reading('a', 94, 10, inHours(2))
-    expect(await (await spawn('late')).json()).toMatchObject({ status: 'queued', account: 'a' })
   })
 
-  test('spawns spread over accounts that are equally free', async () => {
+  test('the next sample, taken after the assignment, frees the account again', async () => {
+    await reading('a', 10, 10, inHours(2))
+    expect(await (await spawn('first')).json()).toMatchObject({ status: 'queued', account: 'a' })
+    expect(await (await spawn('second')).json()).toMatchObject({ status: 'waiting', account: null })
+
+    // A reading that repeats the old sample does not show the spawn: the account stays taken.
+    clock.advance(60_000)
+    await app.send('PUT', '/quota/accounts/a', {
+      weeklyUsed: 10,
+      fiveHourUsed: 10,
+      fiveHourResetsAt: inHours(2),
+      weeklyResetsAt: inHours(2),
+      ageS: 120,
+    })
+    expect(await (await spawn('third')).json()).toMatchObject({ status: 'waiting' })
+
+    // A sample taken after the assignment does: its numbers include what the first spawn used.
+    await reading('a', 14, 12, inHours(2))
+    expect(await (await spawn('fourth')).json()).toMatchObject({ status: 'queued', account: 'a' })
+  })
+
+  test('equally free accounts take one spawn each, the rest wait', async () => {
     await reading('a', 10, 10, inHours(2))
     await reading('b', 10, 10, inHours(2))
-    const accounts: string[] = []
-    for (let i = 0; i < 6; i++) accounts.push(((await (await spawn(`s${i}`)).json()) as { account: string }).account)
-    expect(accounts.filter((a) => a === 'a')).toHaveLength(3)
-    expect(accounts.filter((a) => a === 'b')).toHaveLength(3)
+    const results: { status: string; account: string | null }[] = []
+    for (let i = 0; i < 4; i++) results.push((await (await spawn(`s${i}`)).json()) as (typeof results)[number])
+    expect(results.map((r) => [r.status, r.account])).toEqual([
+      ['queued', 'a'],
+      ['queued', 'b'],
+      ['waiting', null],
+      ['waiting', null],
+    ])
   })
 
-  test('the five-hour window limits how many spawns one reading can take', async () => {
-    await reading('a', 0, 70, inHours(2))
-    const statuses: string[] = []
-    for (let i = 0; i < 5; i++) statuses.push(((await (await spawn(`s${i}`)).json()) as { status: string }).status)
-    // 70 + 5 per spawn stays under 85 for three spawns.
-    expect(statuses).toEqual(['queued', 'queued', 'queued', 'waiting', 'waiting'])
+  test('a new sample wakes the waiting spawns that now have an account, and only those', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('first')
+    await spawn('second')
+    await runTick()
+    clock.advance(60_000)
+    // Still taken: nothing is woken, so the waiting spawn keeps its resume_at.
+    await app.send('PUT', '/quota/accounts/a', {
+      weeklyUsed: 10,
+      fiveHourUsed: 10,
+      fiveHourResetsAt: inHours(2),
+      weeklyResetsAt: inHours(2),
+      ageS: 300,
+    })
+    expect(await status('second')).toMatchObject({ status: 'waiting', resumeAt: null })
+    await reading('a', 12, 11, inHours(2))
+    expect(await runTick()).toMatchObject({ started: ['second'] })
   })
 })
 
 describe('validation', () => {
-  test('bad spawn and capacity bodies are 400', async () => {
+  test('bad spawn and quota bodies are 400', async () => {
     expect((await app.send('POST', '/spawns', { key: 'x' })).status).toBe(400)
-    expect((await app.send('PUT', '/capacity/a', { weeklyUsed: 'lots' })).status).toBe(400)
+    expect((await app.send('PUT', '/quota/accounts/a', { weeklyUsed: 'lots' })).status).toBe(400)
     expect((await app.get('/spawns/unknown')).status).toBe(404)
   })
 
@@ -228,9 +269,9 @@ describe('validation', () => {
   test.each(['%20', 'a%20b', '-lead', 'x'.repeat(65), 'caf%C3%A9', '%E0%A4%A'])(
     'account name %p is a 400',
     async (name) => {
-      const res = await app.send('PUT', `/capacity/${name}`, { weeklyUsed: 1, fiveHourUsed: 1, resetsAt: inHours(1) })
+      const res = await app.send('PUT', `/quota/accounts/${name}`, { weeklyUsed: 1, fiveHourUsed: 1 })
       expect(res.status).toBe(400)
-      const [{ count }] = await db.sql`SELECT count(*)::int AS count FROM factory.capacity_readings`
+      const [{ count }] = await db.sql`SELECT count(*)::int AS count FROM factory.quota_readings`
       expect(count).toBe(0)
     },
   )
@@ -269,6 +310,7 @@ describe('a new reading and a new spawn do not race', () => {
 describe('GET /spawns', () => {
   test('lists the newest first with their status and error', async () => {
     await reading('a', 1, 1, inHours(1))
+    await reading('b', 1, 1, inHours(1))
     await spawn('first')
     clock.advance(1000)
     await spawn('second')
