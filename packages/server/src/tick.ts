@@ -162,7 +162,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         WHERE key = ${row.key}`
       // From the claim on it is a session that is starting; the hooks' first event ends that.
       await openSession(tx, { id: row.key, spawnKey: row.key, pane: null, at: now })
-      live.sessions?.push({ id: row.key, repo: row.repo, role: row.role })
+      live.sessions?.push({ id: row.key, repo: row.repo, role: row.role, finished: false })
       claims.push({
         key: row.key,
         repo: row.repo,

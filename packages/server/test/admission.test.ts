@@ -249,6 +249,29 @@ describe('one active wave per repo', () => {
     expect(await row('wave-2')).toMatchObject({ hold: null })
   })
 
+  test('a chain wave whose turn has ended does not hold the repo for its successor; one mid-turn does', async () => {
+    const event = (session: string, kind: string, n: number) =>
+      app.send('POST', '/events', {
+        key: `${session}:${kind}:${n}`,
+        session,
+        kind,
+        at: new Date(clock.now().getTime() + n).toISOString(),
+        ...(kind === 'session_started' ? { payload: { claudeSessionId: `c-${session}`, cwd: TEST_REPO } } : {}),
+      })
+    await spawn('wave-1', { role: 'wave' })
+    expect(await runTick()).toMatchObject({ started: ['wave-1'] })
+    await event('wave-1', 'session_started', 1)
+    await event('wave-1', 'turn_started', 2)
+
+    const next = await spawn('wave-2', { role: 'wave' })
+    expect(await next.json()).toMatchObject({ status: 'queued', hold: 'wave' })
+
+    // The predecessor spawned its successor and ended its turn; its tab stays open.
+    await event('wave-1', 'turn_ended', 3)
+    clock.advance(HOLD_RECHECK_MS)
+    expect(await runTick()).toMatchObject({ started: ['wave-2'] })
+  })
+
   test('a wave that `rd` started counts: its pane reports FACTORY_ROLE and the directory it started in', async () => {
     const started = (session: string, cwd: string, role?: string) =>
       app.send('POST', '/events', {
