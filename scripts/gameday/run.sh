@@ -9,6 +9,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 moment=${1:?claimed|prompt|working} run=${2:-$(date -u +%m%d%H%M)}
+# No hyphen: a key is fgd-<run>-<moment>, so no run's key can be the prefix of another's; short: herdr's agent name is the key.
+[[ $run =~ ^[a-z0-9]{1,8}$ ]] || { echo "run: the run id must be 1-8 characters of [a-z0-9]" >&2; exit 2; }
 key=fgd-$run-$moment
 repo=$SOURCE_ROOT/$REPO_NAME remote=$REMOTES/$REPO_NAME.git
 out=$EVIDENCE/$key
@@ -34,7 +36,9 @@ watcher_pid=$!
 trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
 log "run $key: spawn create (role worker, repo $REPO_NAME), watcher $moment armed"
 fx spawn create "$key" --repo "$repo" --prompt "$prompt" --role worker --format json | jq -c '{key,status,account,role,tier,effort}' | scrub | tee -a "$TIMELINE"
-if ! wait "$watcher_pid"; then
+if wait "$watcher_pid"; then watcher_ok=1; else watcher_ok=0; fi
+trap - EXIT # the pid is reaped and may be reused
+if ((!watcher_ok)); then
   log "run $key: the kill did not land ($(tr '\n' ' ' <"$out/kill.out" | scrub))"
   exit 1
 fi

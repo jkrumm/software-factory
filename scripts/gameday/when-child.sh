@@ -11,8 +11,11 @@ pattern=${1:?pattern} bound=${2:?seconds}
 [[ ${3:-} == -- && -n ${4:-} ]] || { echo "usage: when-child.sh <pattern> <seconds> -- <command…>" >&2; exit 2; }
 shift 3
 pid=$(server_pid) || { echo "when-child: no server process" >&2; exit 1; }
+export GAMEDAY_EXPECT_PID=$pid
 end=$((SECONDS + bound))
 while ((SECONDS < end)); do
+  # The run that armed this watcher is gone (even by SIGKILL): disarm.
+  kill -0 "$PPID" 2>/dev/null || { echo "when-child: the run that armed this is gone" >&2; exit 1; }
   if pgrep -P "$pid" -f "$pattern" >/dev/null 2>&1; then
     cmd=$1
     shift

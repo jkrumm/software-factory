@@ -151,7 +151,7 @@ interface World {
   /** the dump was taken with these in it */
   atDump: { wakeRows: number; spawns: string[] }
   /** the restored database before the new server touched anything */
-  loaded: { spawns: string[]; wakeRows: number }
+  loaded: { spawns: string[]; wakeRows: number; cStatus: string | undefined }
   /** the client of `b` asks again after the restart, as one that never got an answer would */
   retriedB: { created: boolean }
 }
@@ -222,6 +222,7 @@ async function build(): Promise<World> {
   const restoredSql = await restore(dumpFile, 'restored')
   const loadedRows = await restoredSql`SELECT key FROM factory.spawns ORDER BY key`
   const [{ n: loadedWake }] = await restoredSql`SELECT count(*)::int AS n FROM factory.prompts WHERE id LIKE 'wake:%'`
+  const [cRow] = await restoredSql`SELECT status FROM factory.spawns WHERE key = 'c'`
   const restored = new Server(restoredSql)
   await restored.boot()
   const retriedB = await restored.spawn('b')
@@ -231,7 +232,11 @@ async function build(): Promise<World> {
     after: await view(),
     restored,
     atDump,
-    loaded: { spawns: loadedRows.map((r: { key: string }) => r.key), wakeRows: loadedWake as number },
+    loaded: {
+      spawns: loadedRows.map((r: { key: string }) => r.key),
+      wakeRows: loadedWake as number,
+      cStatus: cRow?.status,
+    },
     retriedB: { created: retriedB.created },
   }
 }
@@ -324,8 +329,8 @@ describe('the database restored from an earlier dump', () => {
       (r: { kind: string }) => r.kind,
     )
     expect(kinds).toEqual(['session_started', 'turn_started', 'turn_ended', 'session_ended'])
-    const [row] = await world.restored.sql`SELECT status FROM factory.spawns WHERE key = 'c'`
-    expect(row?.status).toBe('started')
+    // The dump has it queued: that is the stale row the restored server acts on.
+    expect(world.loaded.cStatus).toBe('queued')
   })
 
   test.failing('a spawn that ran and finished after the dump is not started again from its stale queued row', () => {

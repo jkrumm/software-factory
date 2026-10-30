@@ -5,9 +5,9 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-repo=${SOURCE_ROOT:?}/$REPO_NAME remote=${REMOTES:?}/$REPO_NAME.git
+repo=$(realpath "${SOURCE_ROOT:?}")/$REPO_NAME remote=${REMOTES:?}/$REPO_NAME.git
 # Only the spawns that ran in this scratch repo, whatever their key.
-keys=$(db "SELECT key FROM factory.spawns WHERE repo = '$repo'")
+keys=$(db "SELECT key FROM factory.spawns WHERE repo = '${repo//\'/\'\'}'")
 while IFS='|' read -r key; do
   [[ -n $key ]] || continue
   status=$(db "SELECT status FROM factory.spawns WHERE key = '$key'")
