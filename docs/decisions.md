@@ -49,7 +49,7 @@ Hermes is behind iris, not Slack; cards and push go to iris, not Argo web push; 
 
 | # | Decision |
 |-|-|
-| FL1 | **Queue states `run`, `pace`, `drain`,** globally, per project, per initiative. `drain` never interrupts: running waves finish their current wave and the chain stops at the boundary, enforced in `rd wave`'s gate. `pace` lowers concurrency and spends only toward weekly pace |
+| FL1 | **Queue states `run`, `pace`, `drain`,** globally, per project, per initiative. `drain` never interrupts: running waves finish their current wave and the chain stops at the boundary, enforced by the factory: the successor's spawn is held (`queued: drain`) and starts by itself when the drain lifts (program lead, 2026-10-30, after F1's gate run: `rd wave`'s gate refused instead, and nothing restarted the chain). `pace` lowers concurrency and spends only toward weekly pace |
 | FL2 | **Resume watchdog.** Claude Code's auto-continue after a limit reset is unreliable in practice (the owner types "continue" often). The hooks record a limit stop (`StopFailure rate_limit`, `Notification quota_auto_resume_*`); after that account's reset, a session with no new turn within about 5 minutes gets one delivery-checked "continue" |
 | FL3 | **A spawn without capacity is queued with a resume-at,** never dropped (`rd` dies with "paused" today and nothing retries) |
 | FL4 | **One role table** (mother, lead, worker, mechanical, and the subagent types) for model and effort, read by `rd --role` and by agent frontmatter (`effort`). Values move only on measured data (track U) |
