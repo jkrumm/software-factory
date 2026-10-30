@@ -39,6 +39,8 @@ export class SpoolReplayer {
   async replay(): Promise<ReplayResult> {
     const result: ReplayResult = { lines: 0, rejected: 0, rotated: [] }
     const files = await readdir(this.options.dir).catch(() => [] as string[])
+    // A rotation that died between moving the file and storing its tail leaves `.retired`: store it, then let it go.
+    for (const left of files.filter((f) => f.endsWith('.jsonl.retired'))) await this.recover(left, result)
     for (const file of files.filter((f) => f.endsWith('.jsonl')).sort()) {
       try {
         await this.replayFile(file, result)
@@ -48,6 +50,18 @@ export class SpoolReplayer {
       }
     }
     return result
+  }
+
+  private async recover(left: string, result: ReplayResult): Promise<void> {
+    try {
+      await this.ingest(left, join(this.options.dir, left), 0, result)
+      await unlink(join(this.options.dir, left))
+    } catch (error) {
+      console.error('spool recovery failed', {
+        file: left,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   private async replayFile(file: string, result: ReplayResult): Promise<void> {
@@ -90,6 +104,7 @@ export class SpoolReplayer {
     // Under the hooks' lock: no hook counts or appends between the sums and the move. Busy means try again next pass.
     const release = await tryLock(path, LOCK_WAIT_MS)
     if (!release) return
+    const retired = `${path}.retired`
     try {
       const base = parseSummary(
         await Bun.file(`${path}.base`)
@@ -98,17 +113,24 @@ export class SpoolReplayer {
       )
       const whole = await Bun.file(path).text()
       // Every line in the file is summed; one written since the acknowledgement (by a hook that went without the lock)
-      // is stored right below, before the file goes.
-      const next = summarize(base, parseSpool(whole))
+      // is stored below, before the file goes.
+      let next = summarize(base, parseSpool(whole))
       await Bun.write(`${path}.base.tmp`, JSON.stringify(next))
       await rename(`${path}.base.tmp`, `${path}.base`)
-      const retired = `${path}.retired`
       await rename(path, retired)
-      await this.ingest(file, retired, info.size, result)
-      await unlink(retired)
+      // A hook that had the file open when it moved may still have appended: its line is counted too.
+      const after = await Bun.file(retired).text()
+      if (after.length > whole.length) {
+        next = summarize(next, parseSpool(after.slice(whole.length)))
+        await Bun.write(`${path}.base.tmp`, JSON.stringify(next))
+        await rename(`${path}.base.tmp`, `${path}.base`)
+      }
     } finally {
       release()
     }
+    // Out of the lock: the hooks are writing the new file while the database takes the old one's tail.
+    await this.ingest(file, retired, info.size, result)
+    await unlink(retired)
     this.acked.delete(file)
     result.rotated.push(file)
   }

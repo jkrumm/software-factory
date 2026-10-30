@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { childEnv, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, runProcess } from './exec.ts'
 import { agentName } from './runner.ts'
-import { HERDR_SESSION, recordEvent } from './sessions.ts'
+import { HERDR_SESSION, paneGoneWithdrawn, recordEvent } from './sessions.ts'
 
 export const WITNESS_INTERVAL_MS = 60_000
 const PROBE_CONCURRENCY = 4
@@ -159,6 +159,7 @@ interface Row {
   /** the last of session_started / session_ended / pane_gone, and when */
   life: string | null
   life_at: Date | null
+  hook_after: boolean
 }
 
 function match(row: Row, agents: readonly AgentSeen[]): AgentSeen | undefined {
@@ -203,7 +204,12 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
   }
 
   const rows: Row[] = await sql`
-    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, s.herdr_seen_at, l.kind AS life, l.at AS life_at
+    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, s.herdr_seen_at, l.kind AS life, l.at AS life_at,
+           EXISTS (
+             SELECT 1 FROM factory.events h
+             WHERE h.session = s.id AND h.at > l.at
+               AND h.kind IN ('session_started', 'turn_started', 'turn_ended', 'limit_stop', 'quota_resume', 'prompt_blocked', 'prompt_idle')
+           ) AS hook_after
     FROM factory.sessions s
     LEFT JOIN LATERAL (
       SELECT kind, at FROM factory.events
@@ -232,8 +238,11 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
       continue
     }
     // Nothing to conclude from a herdr that could not be identified, or one that has just restarted.
-    const reported = row.life === 'pane_gone' && !(row.herdr_seen_at && row.life_at && row.herdr_seen_at > row.life_at)
-    if (!row.pane || restarted || !server || reported) continue
+    const stillGone =
+      row.life === 'pane_gone' &&
+      row.life_at !== null &&
+      !paneGoneWithdrawn({ goneAt: row.life_at, hookAfter: row.hook_after, herdrSeenAt: row.herdr_seen_at })
+    if (!row.pane || restarted || !server || stillGone) continue
     const misses = row.pane_misses + 1
     await sql`UPDATE factory.sessions SET pane_misses = ${misses}, herdr_status = NULL WHERE id = ${row.id}`
     if (misses < MISSES_FOR_GONE) continue

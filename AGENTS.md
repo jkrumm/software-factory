@@ -62,7 +62,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   session. `SpoolReplayer` (`spool.ts`) reads the directory at the start of every tick and stores whole lines past its
   in-memory offset (a restart re-reads: the unique key makes it harmless). A quiet, fully read file over 64 KiB is
   rotated: its sums (`turns`, current-turn counts) go to `<file>.base` first, so numbering never starts over, then the
-  file is retired. Spool files of dead sessions are kept (a reused `rd` name must not reuse keys).
+  file is retired. Spool files of dead sessions are kept (a reused `rd` name must not reuse keys). A rotation that died after moving the
+  file leaves `<file>.retired`; the next pass stores it and removes it. The lock holds a token, so a holder taken for
+  dead cannot release its successor's lock.
 - **Derived state** (`sessions.ts`, first match wins; turns, walls and prompts count from the latest `session_started`):
   `dead` (last of session_started / session_ended / pane_gone is not a start; a `pane_gone` is withdrawn by a later hook
   event or by herdr showing the agent again), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no

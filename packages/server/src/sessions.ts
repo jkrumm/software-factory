@@ -116,12 +116,20 @@ const HOOK_KINDS: readonly EventKind[] = [
   'prompt_idle',
 ]
 
+/**
+ * A `pane_gone` is withdrawn by anything that proves the session is there: a hook event after it, or herdr showing the
+ * agent again after it. The witness uses the same rule to decide whether a pane is still reported gone.
+ */
+export function paneGoneWithdrawn(input: { goneAt: Date; hookAfter: boolean; herdrSeenAt: Date | null }): boolean {
+  return input.hookAfter || (input.herdrSeenAt !== null && input.herdrSeenAt > input.goneAt)
+}
+
 const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
   facts.findLastIndex((f) => kinds.includes(f.kind))
 
 /**
  * State is a pure function of the ordered events and, for `stuck`, of what the witness saw; it is never stored.
- * First match wins. Turns, walls and prompts count from the latest `session_started` on: a resumed session starts
+ * First match wins. `turn` counts every turn started, the state reads from the latest `session_started` on: a resumed session starts
  * clean, whatever the one before it left open.
  *
  * - `dead`: the last of session_started / session_ended / pane_gone is not a start (a resume starts again). A
@@ -151,8 +159,11 @@ export function deriveState(input: DeriveInput): Derived | undefined {
   if (life && life.kind !== 'session_started') {
     const proven =
       life.kind === 'pane_gone' &&
-      (facts.slice(iLife + 1).some((f) => HOOK_KINDS.includes(f.kind)) ||
-        (herdr?.status != null && herdr.seenAt != null && herdr.seenAt > life.at))
+      paneGoneWithdrawn({
+        goneAt: life.at,
+        hookAfter: facts.slice(iLife + 1).some((f) => HOOK_KINDS.includes(f.kind)),
+        herdrSeenAt: herdr?.status != null ? (herdr.seenAt ?? null) : null,
+      })
     if (!proven) return { state: 'dead', wait: null, turn }
   }
 
@@ -259,7 +270,18 @@ export async function getSession(sql: SQL, id: string, now: Date): Promise<Sessi
 export const LIST_LIMIT = 200
 
 export async function listSessions(sql: SQL, now: Date, options: { all?: boolean } = {}): Promise<Session[]> {
-  const rows: SessionRow[] = await sql`SELECT * FROM factory.sessions ORDER BY created_at DESC, id LIMIT ${LIST_LIMIT}`
+  // A session that ended is dead whatever else is known, so it is left out before the limit, not after it.
+  const rows: SessionRow[] = options.all
+    ? await sql`SELECT * FROM factory.sessions ORDER BY created_at DESC, id LIMIT ${LIST_LIMIT}`
+    : await sql`
+        SELECT s.* FROM factory.sessions s
+        WHERE NOT EXISTS (
+          SELECT 1 FROM (
+            SELECT kind FROM factory.events
+            WHERE session = s.id AND kind IN ('session_started', 'session_ended', 'pane_gone')
+            ORDER BY at DESC, id DESC LIMIT 1) l
+          WHERE l.kind = 'session_ended')
+        ORDER BY s.created_at DESC, s.id LIMIT ${LIST_LIMIT}`
   const facts = groupFacts(
     await factRows(
       sql,

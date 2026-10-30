@@ -203,6 +203,26 @@ describe('the witness', () => {
     expect(await db.sql`SELECT key FROM factory.events WHERE kind = 'pane_gone' ORDER BY id`).toHaveLength(2)
   })
 
+  test('a session a hook revived after pane_gone is watched again: a real disappearance is a second pane_gone', async () => {
+    await emit('s', 'session_started', minutes(30), { claudeSessionId: 'c-1' })
+    view.list = [agent({ claudeSessionId: 'c-1' })]
+    await pass()
+    view.list = []
+    await pass()
+    await pass()
+    expect(await state('s')).toBe('dead')
+
+    clock.advance(60_000)
+    await emit('s', 'turn_started', new Date(clock.now().getTime()))
+    expect(await state('s')).toBe('working')
+    // herdr never matches it again, and the pane really is gone.
+    clock.advance(60_000)
+    await pass()
+    await pass()
+    expect(await db.sql`SELECT 1 FROM factory.events WHERE kind = 'pane_gone'`).toHaveLength(2)
+    expect(await state('s')).toBe('dead')
+  })
+
   test('a herdr that cannot be identified counts nobody as missing', async () => {
     await emit('s', 'session_started', minutes(30), { claudeSessionId: 'c-1' })
     view.list = [agent({ claudeSessionId: 'c-1' })]
