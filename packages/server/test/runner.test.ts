@@ -65,6 +65,26 @@ describe('herdr adapter: a start', () => {
     expect(await herdr.pretrustCalls()).toEqual(['/work/repo'])
   })
 
+  test('a repo path never seen before is trusted before the agent starts, and a failing trust starts nothing', async () => {
+    await runner.start({ ...input, key: 'first', repo: '/work/brand-new-repo' })
+    await runner.start({ ...input, key: 'second', repo: '/work/another-new-repo' })
+    // The trust call saw no `agent start` yet for the first repo, and exactly one for the second.
+    expect(await herdr.pretrustOrder()).toEqual(['0 /work/brand-new-repo', '1 /work/another-new-repo'])
+
+    await herdr.reset()
+    await herdr.setPretrustExit(1)
+    const error = await failure(runner, { ...input, key: 'untrusted', repo: '/work/untrusted-repo' })
+    expect(error.message).toContain('/work/untrusted-repo')
+    expect(await count('agent start')).toBe(0)
+  })
+
+  test('a session resumed by id is trusted first, too, and starts `claude --resume <id>`', async () => {
+    await runner.start({ ...input, resume: 'claude-session-1', prompt: 'carry on' })
+    expect(await herdr.pretrustOrder()).toEqual(['0 /work/repo'])
+    const [agent] = (await herdr.state()).agents
+    expect(agent?.argv.slice(-2)).toEqual(['--resume', 'claude-session-1'])
+  })
+
   test("the account's config directory reaches the pane through --env, the default account sets none", async () => {
     await runner.start({ ...input, key: 'on-b', account: 'b' })
     await runner.start({ ...input, key: 'on-a', account: 'a' })
