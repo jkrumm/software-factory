@@ -1,0 +1,10 @@
+PASS	tabs labelled fgd-g4-claimed in herdr	expected 1	got 1
+PASS	agents in that tab's pane	expected 1	got 1
+PASS	spawn status	expected started	got started
+PASS	spawn pane is the tab's pane	expected w77:p1	got w77:p1
+PASS	session_started events	expected 1	got 1
+PASS	turn_started events (one per prompt submitted)	expected 1	got 1
+PASS	user messages carrying the prompt in Claude Code's transcript	expected 1	got 1
+PASS	prompt rows (the first prompt is the Runner's, not a row)	expected 0	got 0
+PASS	commits for the key on the scratch remote	expected 1	got 1
+PASS	session state	expected idle	got idle

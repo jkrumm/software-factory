@@ -1,0 +1,7 @@
+2026-10-30T20:27:07.828Z run fgd-g2-prompt: release dd9b001e2023, server pid 36677, base commit 441714b
+2026-10-30T20:27:07.847Z run fgd-g2-prompt: spawn create (role worker, repo factory-gameday), watcher prompt armed
+{"key":"fgd-g2-prompt","status":"queued","account":"iu","role":"worker","tier":"sonnet","effort":"high"}
+2026-10-30T20:27:19.161Z run fgd-g2-prompt: spawn: starting attempts=1 pane=- hold=- | session: working turn=1
+2026-10-30T20:28:16.820Z run fgd-g2-prompt: spawn: starting attempts=1 pane=- hold=- | session: idle turn=1
+2026-10-30T20:31:21.555Z run fgd-g2-prompt: spawn: starting attempts=2 pane=- hold=- | session: idle turn=1
+2026-10-30T20:31:26.896Z run fgd-g2-prompt: spawn: started attempts=2 pane=w71:p3 hold=- | session: idle turn=1

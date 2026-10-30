@@ -1,0 +1,12 @@
+2026-10-30T20:13:25.833Z kill: -9 server pid 80818 at moment 'claimed' for fgd-g1-claimed; children at the kill: herdr agent start
+2026-10-30T20:13:25.873Z kill: herdr agent for fgd-g1-claimed right after: {"agent_status":"unknown","interactive_ready":null,"state_change_seq":0,"completion_seq":null}
+2026-10-30T20:13:26.724Z kill: server back as pid 68179, healthy 878 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-10-30T20:19:51.967Z kill: -9 server pid 68179 at moment 'claimed' for fgd-g2-claimed; children at the kill: herdr agent start
+2026-10-30T20:19:51.988Z kill: herdr agent for fgd-g2-claimed right after: {"agent_status":"unknown","interactive_ready":null,"state_change_seq":0,"completion_seq":null}
+2026-10-30T20:19:52.837Z kill: server back as pid 36677, healthy 865 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-10-30T20:27:17.516Z kill: -9 server pid 36677 at moment 'prompt' for fgd-g2-prompt; children at the kill: herdr agent prompt
+2026-10-30T20:27:17.537Z kill: herdr agent for fgd-g2-prompt right after: {"agent_status":"idle","interactive_ready":true,"state_change_seq":15478,"completion_seq":null}
+2026-10-30T20:27:18.487Z kill: server back as pid 98500, healthy 922 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-10-30T20:32:33.841Z kill: -9 server pid 98500 at moment 'working' for fgd-g2-working; children at the kill: none
+2026-10-30T20:32:33.864Z kill: herdr agent for fgd-g2-working right after: {"agent_status":"working","interactive_ready":true,"state_change_seq":15495,"completion_seq":null}
+2026-10-30T20:32:34.578Z kill: server back as pid 41371, healthy 732 ms after the kill (the LaunchAgent restarted it, KeepAlive)

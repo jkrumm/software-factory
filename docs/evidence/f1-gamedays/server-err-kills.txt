@@ -1,0 +1,6 @@
+~/.local/bin/secrets-run: line 609: 80818 Killed: 9               perl -e '
+~/.local/bin/secrets-run: line 609: 68179 Killed: 9               perl -e '
+~/.local/bin/secrets-run: line 609: 36677 Killed: 9               perl -e '
+~/.local/bin/secrets-run: line 609: 98500 Killed: 9               perl -e '
+~/.local/bin/secrets-run: line 609: 41371 Killed: 9               perl -e '
+~/.local/bin/secrets-run: line 609: 35179 Killed: 9               perl -e '
