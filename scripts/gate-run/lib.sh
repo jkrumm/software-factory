@@ -8,7 +8,7 @@ ROOT=$(cd "$GATE_DIR/../.." && pwd)
 SOURCE_ROOT=${GATE_SOURCE_ROOT:-$HOME/SourceRoot}
 REMOTES=${GATE_REMOTES:-$HOME/.local/share/factory/gate-remotes}
 EVIDENCE=${GATE_EVIDENCE:-$ROOT/docs/evidence/f1-gate-run}
-# "name:variant" per chain (variant a = text module, b = number module, c = number module with a long Wave 2); a rerun needs fresh names because the
+# "name:variant" per chain (variant a = text module, b = number module, c = number module with a long Wave 2, d = the same with a soak of a minute per step); a rerun needs fresh names because the
 # factory keeps a spawn row per agent name for good.
 read -ra CHAIN_SPECS <<<"${GATE_CHAINS:-factory-gate-a:a factory-gate-b:b}"
 CHAINS=("${CHAIN_SPECS[@]%%:*}")
