@@ -20,6 +20,7 @@ const SPAWNS = [
 let fake: ReturnType<typeof Bun.serve>
 let status = 200
 let odd = ''
+const TOKEN = 'cli-test-token-0123456789'
 
 beforeAll(() => {
   fake = Bun.serve({
@@ -34,7 +35,11 @@ beforeAll(() => {
           ? Response.json({ status: 'ok', version: 'abc123' })
           : Response.json({ error: 'database down' }, { status })
       }
-      if (path === '/spawns') return Response.json({ spawns: SPAWNS })
+      if (path === '/spawns') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        return Response.json({ spawns: SPAWNS })
+      }
       return Response.json({ error: 'not found' }, { status: 404 })
     },
   })
@@ -44,7 +49,7 @@ afterAll(() => fake.stop(true))
 /** The binary as a caller runs it: a process, its stdout, its stderr, its exit code. */
 async function factory(args: string[], env: Record<string, string> = {}) {
   const proc = Bun.spawn(['bun', BIN, ...args], {
-    env: { ...process.env, FACTORY_URL: String(fake.url), ...env },
+    env: { ...process.env, FACTORY_URL: String(fake.url), FACTORY_TOKEN: TOKEN, ...env },
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -180,5 +185,24 @@ describe('answers that are not the contract', () => {
     } finally {
       odd = ''
     }
+  })
+})
+
+describe('the token', () => {
+  test('spawn list without FACTORY_TOKEN is auth (3) and never contacts the server', async () => {
+    const r = await factory(['spawn', 'list'], { FACTORY_TOKEN: '', FACTORY_URL: 'http://127.0.0.1:1' })
+    expect(r).toMatchObject({ code: EXIT.auth, stdout: '' })
+    expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'auth', message: 'no FACTORY_TOKEN set' } })
+  })
+
+  test('a token the server refuses is auth (3)', async () => {
+    const r = await factory(['spawn', 'list'], { FACTORY_TOKEN: 'another-token-0123456789' })
+    expect(r.code).toBe(EXIT.auth)
+    expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'auth', details: { status: 401 } } })
+  })
+
+  test('health and version do not need one', async () => {
+    expect((await factory(['health'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.ok)
+    expect((await factory(['version'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.ok)
   })
 })
