@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { recordReading } from '../src/capacity.ts'
-import { deliverPrompts } from '../src/prompts.ts'
+import { deliverPrompts, REARM_AFTER_MS } from '../src/prompts.ts'
 import { HerdrRunner } from '../src/runner.ts'
 import {
   BLOCKED_AFTER_MS,
@@ -8,6 +8,7 @@ import {
   RESTART_NOTE,
   RESTART_SETTLE_MS,
   RESUME_GRACE_MS,
+  RESUME_WINDOW_MS,
   stopCheck,
 } from '../src/rules.ts'
 import { getSession, HERDR_SESSION, recordEvent } from '../src/sessions.ts'
@@ -145,6 +146,49 @@ describe('resume watchdog (FL2)', () => {
     expect((await evaluate()).created).toEqual([`resume:rd:${reset.toISOString()}`])
   })
 
+  test('a wall whose reset is long past records and types nothing: a deploy does not wake sessions walled days ago', async () => {
+    await w.spawned('old', { account: 'a', startedMinutesAgo: 4 * 24 * 60 })
+    await w.emit('old', 'turn_started', w.at(3 * 24 * 60 + 60))
+    await w.emit('old', 'limit_stop', w.at(3 * 24 * 60))
+    // The reading is still there, and its reset (two days and a bit ago) is past.
+    await db.sql`
+      INSERT INTO factory.quota_readings (account, read_at, sampled_at, enabled, auth_ok, five_hour_used, weekly_used, five_hour_resets_at, weekly_resets_at)
+      VALUES ('a', ${w.at(3 * 24 * 60 - 1)}, ${w.at(3 * 24 * 60 - 1)}, true, true, 100, 50, ${w.at(2 * 24 * 60)}, ${w.at(-2 * 24 * 60)})`
+    expect((await evaluate()).created).toEqual([])
+    const result = await tick({ sql: db.sql, runner, clock })
+    expect(result.errors).toEqual([])
+    expect(runner.typed).toEqual([])
+    expect(await prompts()).toEqual([])
+  })
+
+  test('acts until the reset is six hours past, and not after', async () => {
+    const reset = await walled(1)
+    clock.advance(RESUME_WINDOW_MS - minutes(1) - 1_000)
+    expect((await evaluate()).created).toEqual([`resume:s:${reset.toISOString()}`])
+    await db.reset()
+    const second = await walled(1)
+    clock.advance(RESUME_WINDOW_MS + minutes(1) + 1_000)
+    expect(second).toBeDefined()
+    expect((await evaluate()).created).toEqual([])
+  })
+
+  test('takes the first reading after the wall that names its end, not the first reading', async () => {
+    await w.spawned('s', { account: 'a' })
+    await w.emit('s', 'turn_started', w.at(30))
+    await w.emit('s', 'limit_stop', w.at(20))
+    // The picker's first word after the wall has no reset in it; a later one does.
+    await recordReading(
+      db.sql,
+      { account: 'a', ...usage(null, null, new Date(), { fiveHourResetsAt: null, weeklyResetsAt: null }) },
+      clock.now(),
+    )
+    clock.advance(minutes(1))
+    const reset = new Date(clock.now().getTime() + minutes(5))
+    await reading(50, 100, reset, new Date(clock.now().getTime() + 5 * 86_400_000))
+    clock.advance(minutes(11))
+    expect((await evaluate()).created).toEqual([`resume:s:${reset.toISOString()}`])
+  })
+
   test('the reset is the weekly one when the week is what is full', async () => {
     await w.spawned('s', { account: 'a' })
     await w.emit('s', 'turn_started', w.at(30))
@@ -201,6 +245,48 @@ describe('rotation', () => {
     expect((await deliver()).sent).toEqual([])
     await w.emit('lead-1', 'turn_ended', clock.now())
     expect((await deliver()).sent).toHaveLength(1)
+  })
+})
+
+describe('a rule that gave up is asked again while its condition holds', () => {
+  const failed = (id: string) =>
+    db.sql`UPDATE factory.prompts SET status = 'failed', failed_at = ${clock.now()}, error = 'gave up' WHERE id = ${id}`
+
+  test('after half an hour a failed rotation note starts over, once; a delivered one never does', async () => {
+    await w.spawned('lead-1', { role: 'lead', account: 'a' })
+    await w.emit('lead-1', 'turn_started', w.at(5))
+    const resets = new Date(clock.now().getTime() + 3 * 86_400_000)
+    await reading(95, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    const [id] = (await evaluate()).created
+    expect(id).toBe(`rotate:lead-1:${resets.toISOString()}`)
+
+    await failed(id as string)
+    clock.advance(REARM_AFTER_MS - 1_000)
+    await reading(95, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    expect((await evaluate()).created).toEqual([])
+    clock.advance(2_000)
+    await reading(95, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    expect((await evaluate()).created).toEqual([id as string])
+    expect((await prompts())[0]).toMatchObject({ status: 'pending', error: null })
+    await replayIsSilent()
+
+    await db.sql`UPDATE factory.prompts SET status = 'delivered' WHERE id = ${id}`
+    clock.advance(REARM_AFTER_MS * 3)
+    await reading(95, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    expect((await evaluate()).created).toEqual([])
+  })
+
+  test('stops once the condition does not hold, and never revives a prompt that could not be delivered at all', async () => {
+    await w.spawned('lead-1', { role: 'lead', account: 'a' })
+    await w.emit('lead-1', 'turn_started', w.at(5))
+    const resets = new Date(clock.now().getTime() + 3 * 86_400_000)
+    await reading(95, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    const [id] = (await evaluate()).created
+    await failed(id as string)
+    clock.advance(REARM_AFTER_MS + 1_000)
+    await reading(60, 10, new Date(clock.now().getTime() + minutes(60)), resets)
+    expect((await evaluate()).created).toEqual([])
+    expect((await prompts())[0]?.status).toBe('failed')
   })
 })
 
@@ -324,6 +410,7 @@ describe('herdr restart', () => {
     expect(state.panes[0]?.env).toContain('CLAUDE_CONFIG_DIR=/home/me/.claude-b')
     expect(state.prompts.map((p) => p.text)).toEqual([RESTART_NOTE])
     expect((await db.sql`SELECT pane FROM factory.sessions WHERE id = 's'`)[0]?.pane).toBe(state.panes[0]?.pane_id)
+    expect((await db.sql`SELECT session FROM factory.spawns WHERE key = 's'`)[0]?.session).toBe(state.panes[0]?.pane_id)
 
     // The resumed session reports in, and its first turn proves the note.
     clock.advance(5_000)

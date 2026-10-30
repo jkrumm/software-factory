@@ -203,6 +203,32 @@ describe('prompt delivery', () => {
 })
 
 describe('prompt delivery: guards', () => {
+  test('a sent prompt that is both overdue and proven by a turn is delivered, not typed again', async () => {
+    await working()
+    await endTurn()
+    await note('n1')
+    await deliver()
+    clock.advance(CONFIRM_MS + 5_000)
+    await startTurn()
+    await deliver()
+    expect(await row('n1')).toMatchObject({ status: 'delivered', sent_count: 1, error: null })
+    expect(runner.typed).toHaveLength(1)
+  })
+
+  test('only one prompt is typed to a session in a pass: the second waits for the first to show a turn', async () => {
+    await working()
+    await endTurn()
+    await note('a')
+    await note('b')
+    expect((await deliver()).sent).toEqual(['a'])
+    expect((await row('b')).status).toBe('pending')
+    clock.advance(1_000)
+    await startTurn()
+    await endTurn()
+    expect((await deliver()).sent).toEqual(['b'])
+    expect(runner.typed.map((t) => t.text)).toHaveLength(2)
+  })
+
   test('prompts held for a working session do not use up the batch of a ready one', async () => {
     await w.spawned('busy')
     await w.emit('busy', 'turn_started', w.at(5))

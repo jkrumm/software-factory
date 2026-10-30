@@ -3,9 +3,9 @@ import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { type NewPrompt, recordPrompt } from './prompts.ts'
 import {
-  type EventKind,
   type Fact,
   HERDR_SESSION,
+  HOOK_KINDS,
   getSession,
   type Loaded,
   loadChildren,
@@ -16,6 +16,8 @@ import {
 
 /** FL2: a walled session whose account's reset has passed, and that has not started a turn for this long, gets a nudge. */
 export const RESUME_GRACE_MS = 5 * 60_000
+/** ... and only while the reset is this recent: after it a wall is history (a deploy must not wake sessions walled days ago). */
+export const RESUME_WINDOW_MS = 6 * 3_600_000
 /** A window at this use or more is the one that walled the session. */
 const WALL_USE = 95
 /** Rotation: a long-lived session's account at this share of its week. One point below admission's 95 %. */
@@ -50,16 +52,16 @@ function wallOf(facts: readonly Fact[]): { start: Date; last: Date } | undefined
   return first && last ? { start: first.at, last: last.at } : undefined
 }
 
-/**
- * The time the wall that stopped a session lifts, from the first reading of its account at or after the wall: the
- * picker's `exhausted_until`, else the reset of every window that is full (the later), else the 5-hour window's. Undefined
- * when no reading names a time that is still ahead of the wall.
- */
-export async function wallReset(sql: SQL, account: string, wallStart: Date): Promise<Date | undefined> {
-  const [r] = await sql`
-    SELECT five_hour_used, weekly_used, five_hour_resets_at, weekly_resets_at, exhausted_until
-    FROM factory.quota_readings WHERE account = ${account} AND read_at >= ${wallStart} ORDER BY id LIMIT 1`
-  if (!r) return undefined
+interface ResetFields {
+  five_hour_used: number | null
+  weekly_used: number | null
+  five_hour_resets_at: Date | null
+  weekly_resets_at: Date | null
+  exhausted_until: Date | null
+}
+
+/** The wall's end as one reading names it: the picker's `exhausted_until`, else the reset of every full window (the later), else the 5-hour window's. */
+function resetOf(r: ResetFields, wallStart: Date): Date | undefined {
   const after = (d: Date | null): Date[] => (d && d > wallStart ? [d] : [])
   const full: Date[] = [
     ...(Number(r.five_hour_used ?? 0) >= WALL_USE ? after(r.five_hour_resets_at) : []),
@@ -68,6 +70,24 @@ export async function wallReset(sql: SQL, account: string, wallStart: Date): Pro
   const candidates = [...after(r.exhausted_until), ...full]
   const picked = candidates.length ? candidates : after(r.five_hour_resets_at)
   return picked.length ? new Date(Math.max(...picked.map((d) => d.getTime()))) : undefined
+}
+
+/** How many readings after a wall are looked through for one that names its end. */
+const WALL_READINGS = 100
+
+/**
+ * The time the wall that stopped a session lifts, from the first reading of its account at or after the wall that names
+ * one (`resetOf`): a reading without a usable reset is skipped, not the end of the search. Undefined when none does.
+ */
+export async function wallReset(sql: SQL, account: string, wallStart: Date): Promise<Date | undefined> {
+  const readings: ResetFields[] = await sql`
+    SELECT five_hour_used, weekly_used, five_hour_resets_at, weekly_resets_at, exhausted_until
+    FROM factory.quota_readings WHERE account = ${account} AND read_at >= ${wallStart} ORDER BY id LIMIT ${WALL_READINGS}`
+  for (const reading of readings) {
+    const reset = resetOf(reading, wallStart)
+    if (reset) return reset
+  }
+  return undefined
 }
 
 type Candidate = NewPrompt
@@ -80,7 +100,8 @@ async function resumeWatchdog(sql: SQL, sessions: readonly Loaded[], now: Date):
     const wall = wallOf(facts)
     if (!wall) continue
     const reset = await wallReset(sql, view.account, wall.start)
-    if (!reset) continue
+    // A wall whose end is long past is not this rule's to nudge: whatever stopped the session since, a "continue" now is stale.
+    if (!reset || now.getTime() - reset.getTime() > RESUME_WINDOW_MS) continue
     const quietSince = Math.max(reset.getTime(), wall.last.getTime())
     if (now.getTime() < quietSince + RESUME_GRACE_MS) continue
     out.push({ id: `resume:${view.id}:${iso(reset)}`, session: view.id, source: 'resume', text: 'continue' })
@@ -135,9 +156,6 @@ const openTurnAt = (facts: readonly Fact[], at: Date): boolean => {
   return turns[turns.length - 1]?.kind === 'turn_started'
 }
 
-/** What only a live session produces: if one is later than the restart, the session went on. */
-const HOOKS: readonly EventKind[] = ['session_started', 'turn_started', 'turn_ended', 'limit_stop', 'quota_resume']
-
 /**
  * herdr restart: `restart:<server>:<session>`, where the server is the new one's identity (pid and start time). A session
  * that had a turn open when herdr restarted, has said nothing since and that herdr has not shown again is cut off: it is
@@ -156,7 +174,7 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
     if (!server) continue
     for (const { view, facts, herdrSeenAt, repo } of sessions) {
       if (!openTurnAt(facts, event.at)) continue
-      if (facts.some((f) => f.at > event.at && HOOKS.includes(f.kind))) continue
+      if (facts.some((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))) continue
       if (herdrSeenAt && herdrSeenAt > event.at) continue
       const base = { id: `restart:${server}:${view.id}`, session: view.id, source: 'restart', via: 'resume' as const }
       const reason =
@@ -195,7 +213,7 @@ export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
   ]
   const created: string[] = []
   for (const candidate of candidates) {
-    const { created: isNew } = await recordPrompt(sql, candidate, now)
+    const { created: isNew } = await recordPrompt(sql, candidate, now, { rearm: true })
     if (isNew) created.push(candidate.id)
   }
   return { created }
