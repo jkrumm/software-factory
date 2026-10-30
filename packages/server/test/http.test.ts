@@ -76,6 +76,8 @@ describe('config (finding 5)', () => {
       accountsFile: '/home/me/SourceRoot/dotfiles/config/claude-accounts.json',
       retryBudgetMs: 30 * 60_000,
       repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
+      spoolDir: '/home/me/.local/share/factory/spool',
+      hookSocket: '/home/me/.local/share/factory/hook.sock',
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)

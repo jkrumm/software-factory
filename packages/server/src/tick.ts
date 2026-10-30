@@ -4,6 +4,8 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
+import { openSession } from './sessions.ts'
+import type { SpoolReplayer } from './spool.ts'
 
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
 export const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
@@ -21,6 +23,8 @@ export interface TickDeps {
   leaseMs?: number
   batch?: number
   retryBudgetMs?: number
+  /** the hooks' spool, read at the start of every pass */
+  spool?: SpoolReplayer
 }
 
 export interface TickResult {
@@ -32,6 +36,8 @@ export interface TickResult {
   skipped: number
   /** the result could not be recorded; the claim stays and is reclaimed when its lease runs out */
   errors: string[]
+  /** spool lines read this pass */
+  replayed: number
 }
 
 export interface Claim {
@@ -135,12 +141,16 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 }
 
 /** Phase 3: record the outcome in a transaction of its own. Only a row still `starting` is touched. */
-async function recordStarted(sql: SQL, key: string, session: string): Promise<boolean> {
-  const rows = await sql`
-    UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL
-    WHERE key = ${key} AND status = 'starting'
-    RETURNING key`
-  return rows.length > 0
+async function recordStarted(sql: SQL, key: string, session: string, at: Date): Promise<boolean> {
+  return sql.begin(async (tx) => {
+    const rows = await tx`
+      UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL
+      WHERE key = ${key} AND status = 'starting'
+      RETURNING key`
+    // The spawn is a session from here on: `starting` until its first hook event says otherwise.
+    if (rows.length > 0) await openSession(tx, { id: key, spawnKey: key, pane: session, at })
+    return rows.length > 0
+  })
 }
 
 async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Promise<'failed' | 'retrying'> {
@@ -180,7 +190,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
   } catch (error) {
     return recordFailure(deps, claim, error)
   }
-  return (await recordStarted(deps.sql, claim.key, session)) ? 'started' : 'lost'
+  return (await recordStarted(deps.sql, claim.key, session, deps.clock.now())) ? 'started' : 'lost'
 }
 
 /**
@@ -188,8 +198,17 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
  * it), record each result separately. Safe to run concurrently with itself: a claimed row is not due to anyone else.
  */
 export async function tick(deps: TickDeps): Promise<TickResult> {
+  // Facts first: what the hooks spooled while nobody was listening is in the database before anything is decided.
+  let replayed = 0
+  let replayError: string | undefined
+  try {
+    replayed = (await deps.spool?.replay())?.lines ?? 0
+  } catch (error) {
+    replayError = `spool replay: ${error instanceof Error ? error.message : String(error)}`
+  }
   const { claims, failed, skipped } = await claimDue(deps)
-  const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [] }
+  const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [], replayed }
+  if (replayError) result.errors.push(replayError)
 
   await Promise.all(
     claims.map(async (claim) => {

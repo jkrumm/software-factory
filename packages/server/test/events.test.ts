@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { deriveState, type EventKind } from '../src/sessions.ts'
+import { type DeriveInput, deriveState, type EventKind, type Fact, type Witnessed } from '../src/sessions.ts'
 import { startApp, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -37,56 +37,101 @@ describe('duplicate event key', () => {
 
     const [{ count }] = await db.sql`SELECT count(*)::int AS count FROM factory.events`
     expect(count).toBe(1)
-    expect(await stateOf('s1')).toBe('starting')
+    expect(await stateOf('s1')).toBe('idle')
   })
 })
 
+const T = (minute: number) => new Date(Date.UTC(2026, 9, 30, 10, minute))
+const NOW = T(300)
+const facts = (...entries: [EventKind, number, string?][]): Fact[] =>
+  entries.map(([kind, minute, detail]) => ({ kind, at: T(minute), detail }))
+const derive = (f: Fact[], extra: Partial<DeriveInput> = {}) =>
+  deriveState({ facts: f, known: true, now: NOW, ...extra })?.state
+
 describe('derived session state', () => {
-  test('starting: session_started and nothing after it', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    expect(await stateOf('s')).toBe('starting')
+  test('starting: the factory has the session, no hook has spoken', () => {
+    expect(derive([])).toBe('starting')
+    expect(deriveState({ facts: [], known: false, now: NOW })).toBeUndefined()
   })
 
-  test('working: latest turn_started has no turn_ended after it', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
-    expect(await stateOf('s')).toBe('working')
+  test('working: latest turn_started has no turn_ended after it', () => {
+    expect(derive(facts(['session_started', 0], ['turn_started', 1]))).toBe('working')
   })
 
-  test('idle: the turn ended', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
-    await emit('s', 'turn_ended', '2026-10-30T10:02:00Z')
-    expect(await stateOf('s')).toBe('idle')
+  test('idle: the turn ended, and a started session with no turn yet is idle too', () => {
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['turn_ended', 2]))).toBe('idle')
+    expect(derive(facts(['session_started', 0]))).toBe('idle')
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['turn_ended', 2], ['prompt_idle', 3]))).toBe(
+      'idle',
+    )
   })
 
-  test('walled: limit_stop with no later turn_started, and working again after one', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
-    await emit('s', 'limit_stop', '2026-10-30T10:02:00Z')
-    expect(await stateOf('s')).toBe('walled')
-    await emit('s', 'turn_started', '2026-10-30T10:03:00Z')
-    expect(await stateOf('s')).toBe('working')
+  test('waiting: a declared wait is open once the turn is over, and --done closes it', () => {
+    const declared = facts(['session_started', 0], ['turn_started', 1], ['wait_declared', 2, 'workers'])
+    expect(derive(declared)).toBe('working')
+    const ended = [...declared, ...facts(['turn_ended', 3])]
+    expect(deriveState({ facts: ended, known: true, now: NOW })).toMatchObject({ state: 'waiting', wait: 'workers' })
+    expect(derive([...ended, ...facts(['wait_cleared', 4])])).toBe('idle')
+    // A prompt that wakes it makes it work again; the wait stays declared until it says it is over.
+    const woken = [...ended, ...facts(['turn_started', 5])]
+    expect(derive(woken)).toBe('working')
+    expect(derive([...woken, ...facts(['turn_ended', 6])])).toBe('waiting')
   })
 
-  // finding 6
-  test('walled stays walled when a turn_ended is stamped after the limit_stop', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
-    await emit('s', 'limit_stop', '2026-10-30T10:02:00Z')
-    await emit('s', 'turn_ended', '2026-10-30T10:03:00Z')
-    expect(await stateOf('s')).toBe('walled')
-    expect(deriveState(['turn_started', 'limit_stop', 'turn_ended'])).toBe('walled')
-    expect(deriveState(['limit_stop', 'turn_started', 'turn_ended'])).toBe('idle')
+  test('walled: limit_stop or quota_resume with no later turn_started', () => {
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['limit_stop', 2]))).toBe('walled')
+    expect(derive(facts(['turn_started', 1], ['limit_stop', 2], ['quota_resume', 3, 'stale']))).toBe('walled')
+    expect(derive(facts(['turn_started', 1], ['limit_stop', 2], ['quota_resume', 3, 'disabled']))).toBe('walled')
+    expect(derive(facts(['turn_started', 1], ['limit_stop', 2], ['turn_started', 3]))).toBe('working')
   })
 
-  test('dead: session_ended', async () => {
-    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
-    await emit('s', 'session_ended', '2026-10-30T10:05:00Z')
-    expect(await stateOf('s')).toBe('dead')
+  test('walled: a turn that ends after quota_resume fired was Claude carrying on by itself', () => {
+    const fired = facts(['turn_started', 1], ['limit_stop', 2], ['quota_resume', 3, 'fired'])
+    expect(derive(fired)).toBe('walled')
+    expect(derive([...fired, ...facts(['turn_ended', 4])])).toBe('idle')
   })
 
-  test('a late-delivered event changes the answer: order is by `at`, then insertion', async () => {
+  test('blocked: prompt_blocked with no later turn_started or turn_ended', () => {
+    const blocked = facts(['session_started', 0], ['turn_started', 1], ['prompt_blocked', 2])
+    expect(derive(blocked)).toBe('blocked')
+    expect(derive([...blocked, ...facts(['turn_started', 3])])).toBe('working')
+    expect(derive([...blocked, ...facts(['turn_ended', 3])])).toBe('idle')
+  })
+
+  describe('stuck: working, herdr agrees, nothing moved for 45 minutes', () => {
+    const working = facts(['session_started', 0], ['turn_started', 10])
+    const herdr = (over: Partial<Witnessed> = {}): Witnessed => ({
+      status: 'working',
+      seenAt: new Date(NOW.getTime() - 60_000),
+      worktreeChangedAt: null,
+      ...over,
+    })
+
+    test('stuck', () => {
+      expect(derive(working, { herdr: herdr() })).toBe('stuck')
+    })
+
+    test('not while the turn is young, or the worktree moved lately', () => {
+      expect(derive(working, { herdr: herdr(), now: T(10 + 44) })).toBe('working')
+      expect(derive(working, { herdr: herdr({ worktreeChangedAt: T(300 - 5) }) })).toBe('working')
+    })
+
+    test('not when herdr says anything but working, or has not been heard from', () => {
+      expect(derive(working, { herdr: herdr({ status: 'idle' }) })).toBe('working')
+      expect(derive(working, { herdr: herdr({ seenAt: T(300 - 30) }) })).toBe('working')
+      expect(derive(working, { herdr: herdr({ seenAt: null }) })).toBe('working')
+      expect(derive(working)).toBe('working')
+    })
+  })
+
+  test('dead: session_ended, or the pane is gone, until the session starts again', () => {
+    expect(derive(facts(['session_started', 0], ['session_ended', 5]))).toBe('dead')
+    expect(derive(facts(['session_started', 0], ['turn_started', 1], ['pane_gone', 5]))).toBe('dead')
+    // /clear and --resume end a session and start it again at once.
+    expect(derive(facts(['session_started', 0], ['session_ended', 5], ['session_started', 5]))).toBe('idle')
+  })
+
+  test('late and out of order delivery: the answer follows event time, not arrival', async () => {
     await emit('s', 'session_started', '2026-10-30T10:00:00Z')
     await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
     await emit('s', 'limit_stop', '2026-10-30T10:03:00Z')
@@ -99,6 +144,22 @@ describe('derived session state', () => {
     // And a turn_ended stamped between them arrives last: it cannot undo the later turn_started.
     await emit('s', 'turn_ended', '2026-10-30T10:02:00Z')
     expect(await stateOf('s')).toBe('working')
+  })
+
+  test('a session_ended delivered before the events it follows still ends the session', async () => {
+    await emit('s', 'session_ended', '2026-10-30T10:05:00Z')
+    await emit('s', 'turn_ended', '2026-10-30T10:04:00Z')
+    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
+    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
+    expect(await stateOf('s')).toBe('dead')
+  })
+
+  test('walled stays walled when a turn_ended is stamped after the limit_stop', async () => {
+    await emit('s', 'session_started', '2026-10-30T10:00:00Z')
+    await emit('s', 'turn_started', '2026-10-30T10:01:00Z')
+    await emit('s', 'limit_stop', '2026-10-30T10:02:00Z')
+    await emit('s', 'turn_ended', '2026-10-30T10:03:00Z')
+    expect(await stateOf('s')).toBe('walled')
   })
 
   test('events with equal `at` fall back to insertion order', async () => {
@@ -115,10 +176,6 @@ describe('derived session state', () => {
     const view = (await (await app.get('/sessions/s')).json()) as { id: string; lastEventAt: string }
     expect(view).toMatchObject({ id: 's', lastEventAt: '2026-10-30T10:09:00.000Z' })
     expect((await app.get('/sessions/nope')).status).toBe(404)
-  })
-
-  test('deriveState is empty for no events', () => {
-    expect(deriveState([])).toBeUndefined()
   })
 })
 
