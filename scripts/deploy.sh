@@ -256,7 +256,10 @@ main() {
 
   # --- one deploy at a time
   mkdir -p "$DATA_DIR" "$RELEASES" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
-  if ! mkdir "$LOCK" 2>/dev/null; then
+  # The re-executed copy is the same process (exec keeps the pid), so it inherits the lock instead of taking it.
+  if [[ -n "${FACTORY_DEPLOY_REEXEC:-}" && "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]]; then
+    :
+  elif ! mkdir "$LOCK" 2>/dev/null; then
     local holder
     holder=$(cat "$LOCK/pid" 2>/dev/null)
     if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then die "another deploy is running (pid $holder)"; fi
@@ -283,7 +286,7 @@ main() {
 
   # Continue with the release's own copy of this script, once.
   if [[ -z "${FACTORY_DEPLOY_REEXEC:-}" && "$SELF" != "$release/scripts/deploy.sh" ]]; then
-    trap - EXIT; rm -rf "$LOCK"
+    trap - EXIT
     FACTORY_DEPLOY_REEXEC=1 FACTORY_DEPLOY_SHA="$sha" exec /bin/bash "$release/scripts/deploy.sh"
   fi
 

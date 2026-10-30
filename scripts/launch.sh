@@ -19,16 +19,17 @@ TPL="$DIR/.env.tpl"
 command -v bun >/dev/null 2>&1 || { echo "software-factory: bun not on PATH" >&2; exit 78; }
 
 # A hung secrets-run must not hang the launch; `timeout` is a Homebrew coreutils binary, so it is optional.
+# macOS /bin/bash is 3.2: under `set -u` an empty array must be expanded as ${limit[@]+"${limit[@]}"}.
 limit=()
 if command -v timeout >/dev/null 2>&1; then limit=(timeout 20); elif command -v gtimeout >/dev/null 2>&1; then limit=(gtimeout 20); fi
 
 # Every ref must resolve BEFORE the hand-off: an unresolved ref would otherwise reach the process as nothing at all.
-rendered=$("${limit[@]}" "$SECRETS_RUN" export --env-file="$TPL" 2>/dev/null | grep -c '^export ')
+rendered=$(${limit[@]+"${limit[@]}"} "$SECRETS_RUN" export --env-file="$TPL" 2>/dev/null | grep -c '^export ')
 want=$(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=' "$TPL" | sort -u | wc -l | tr -d ' ')
 if [[ -z "$rendered" || "$rendered" -lt "$want" ]]; then
   echo "software-factory: only ${rendered:-0}/$want refs of .env.tpl resolved; refusing to start." >&2
   grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$TPL" | while IFS='=' read -r key ref; do
-    "${limit[@]}" "$SECRETS_RUN" read "$ref" >/dev/null 2>&1 || echo "  unresolved: $key ($ref)" >&2
+    ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" >/dev/null 2>&1 || echo "  unresolved: $key ($ref)" >&2
   done
   exit 78
 fi
