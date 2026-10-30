@@ -39,8 +39,11 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **A failed spawn leaves its tab.** The tab is named after the key and `factory spawn requeue` finds it again (an agent
   already running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A tab with
   no agent is closed and made again on every try, so a retry on another account gets that account's environment.
-- **Trust boundary.** The token is shell access as the mini user by design: it can start Claude Code with
-  `--dangerously-skip-permissions` in any `repo` path. The API is loopback only and the tailnet plus the owner's GitHub
+- **Trust boundary.** The token can start Claude Code with `--dangerously-skip-permissions`, so a spawn's `repo` must be
+  inside an allow-listed root: `FACTORY_REPO_ROOTS` (colon-separated, default `$HOME/SourceRoot:$HOME/IuRoot`). The path
+  is resolved with `realpath` and must be strictly inside a resolved root, so neither `..` nor a symlink leaves it;
+  otherwise `POST /spawns` answers 422 and stores nothing (the row keeps the resolved path). Within the roots the token is
+  shell access as the mini user by design. The API is loopback only and the tailnet plus the owner's GitHub
   user is the perimeter (`docs/design.md` §1). `FACTORY_REF=<branch>` runs whatever is on that origin branch with the
   server's secrets, the same boundary; `make deploy` without it deploys `master`.
 - **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server

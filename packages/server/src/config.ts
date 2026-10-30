@@ -9,6 +9,8 @@ export interface Config {
   /** the account registry */
   accountsFile: string
   retryBudgetMs: number
+  /** the directories a spawn's repo must be inside (`FACTORY_REPO_ROOTS`) */
+  repoRoots: string[]
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -41,6 +43,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     pretrustBin: env.FACTORY_PRETRUST_BIN || `${required('HOME')}/${DOTFILES}/scripts/claude-pretrust.sh`,
     accountsFile: env.FACTORY_ACCOUNTS_FILE || `${required('HOME')}/${DOTFILES}/config/claude-accounts.json`,
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
+    repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
   }
 }
 
@@ -50,4 +53,16 @@ function retryBudgetMs(value: string | undefined): number {
   if (!Number.isInteger(ms) || ms < 1000)
     throw new Error(`FACTORY_RETRY_BUDGET_MS must be whole milliseconds, got: ${value}`)
   return ms
+}
+
+/** Colon-separated absolute paths; the default is the two workspaces under the home directory. */
+function repoRoots(value: string | undefined, home: string | undefined): string[] {
+  const raw = value || (home ? `${home}/SourceRoot:${home}/IuRoot` : '')
+  if (!raw) throw new Error('FACTORY_REPO_ROOTS is not set and HOME is not set to default it from')
+  const roots = raw.split(':').filter(Boolean)
+  const relative = roots.find((root) => !root.startsWith('/'))
+  if (relative !== undefined || roots.length === 0) {
+    throw new Error(`FACTORY_REPO_ROOTS must be colon-separated absolute paths, got: ${raw}`)
+  }
+  return roots
 }

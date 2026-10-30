@@ -49,7 +49,15 @@ const runner = new HerdrRunner({
 // A pass that runs a start may outlast several intervals; one past its lease is wedged.
 const monitor = new TickMonitor(clock, TICK_INTERVAL_MS, DEFAULT_LEASE_MS)
 // Bind first: a port that is taken must fail the boot before the ticker claims anything.
-const server = serve({ sql, clock, port: config.port, version: config.version, token: config.token, monitor })
+const server = serve({
+  sql,
+  clock,
+  port: config.port,
+  version: config.version,
+  token: config.token,
+  monitor,
+  repoRoots: config.repoRoots,
+})
 const ticker = startTicker({ sql, runner, clock, retryBudgetMs: config.retryBudgetMs }, TICK_INTERVAL_MS, monitor)
 console.log(`listening on ${server.url} (version ${config.version})`)
 
