@@ -344,6 +344,11 @@ export async function listSessions(sql: SQL, now: Date, options: { all?: boolean
   return options.all ? sessions : sessions.filter((s) => s.state !== 'dead')
 }
 
+/** Finished: idle with a turn ended in this life (a resumed session has not worked yet, whatever it did before). */
+export const isFinished = (state: SessionState | undefined, facts: readonly Fact[]): boolean =>
+  state === 'idle' &&
+  facts.slice(facts.findLastIndex((f) => f.kind === 'session_started') + 1).some((f) => f.kind === 'turn_ended')
+
 /** A session the factory started, that is not dead: what the one-wave-per-repo and pace rules count. */
 export interface LiveSession {
   id: string
@@ -371,10 +376,7 @@ export async function liveSessions(sql: SQL, now: Date): Promise<LiveSession[]> 
   return rows.flatMap((row) => {
     const list = facts.get(row.id) ?? []
     const state = view(row, list, now)?.state
-    // Finished: idle with a turn ended in this life (a resumed session has not worked yet, whatever it did before).
-    const finished =
-      state === 'idle' &&
-      list.slice(list.findLastIndex((f) => f.kind === 'session_started') + 1).some((f) => f.kind === 'turn_ended')
+    const finished = isFinished(state, list)
     // A session no spawn describes (`rd`'s) is where its hook said it started, with the role its pane reported.
     const repo = row.repo ?? row.cwd
     const role = row.spawn_role ?? row.role
@@ -425,6 +427,16 @@ export async function loadChildren(sql: SQL, parent: string, now: Date): Promise
     SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
     FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
     WHERE p.parent = ${parent} AND ${NOT_ENDED(sql)}`
+  return derive(sql, rows, now)
+}
+
+/** The sessions of the spawns any of `parents` started, ended ones included: the wake rule reads who is done, dead or not. */
+export async function loadWorkers(sql: SQL, parents: readonly string[], now: Date): Promise<Loaded[]> {
+  if (parents.length === 0) return []
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE p.parent IN ${sql(parents)}`
   return derive(sql, rows, now)
 }
 
