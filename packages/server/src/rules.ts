@@ -1,7 +1,7 @@
 import type { StopCheck } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
-import { type NewPrompt, recordPrompt } from './prompts.ts'
+import { type NewPrompt, recordPrompt, settleDelivered } from './prompts.ts'
 import {
   type Fact,
   HERDR_SESSION,
@@ -268,6 +268,8 @@ export async function stopCheck(
 ): Promise<StopCheck> {
   const letThrough: StopCheck = { sendBack: false, message: null }
   if (input.stopHookActive) return letThrough
+  // A woken turn can end before the tick settles its wake: settle this session's first, so a delivered wake has ended its wait.
+  await settleDelivered(sql, now, id)
   const session = await getSession(sql, id, now)
   if (!session || session.state === 'walled' || session.state === 'dead' || session.wait !== null) return letThrough
 

@@ -447,7 +447,7 @@ describe('wake', () => {
       clock.advance(1_000)
       await deliver()
       expect(await notes()).toMatchObject([{ status: 'delivered' }])
-      expect((await cleared()).map((c) => c.at.getTime())).toEqual([turnStart.getTime()])
+      expect((await cleared()).map((c) => c.at.getTime())).toEqual([turnStart.getTime() - 1])
       // The woken turn is open: working, and its end leaves the lead idle, not waiting again.
       expect(await lead()).toMatchObject({ state: 'working', wait: null })
       await w.emit('lead', 'turn_ended', clock.now())
@@ -497,6 +497,28 @@ describe('wake', () => {
       expect(await notes()).toMatchObject([{ status: 'failed' }])
       expect(await cleared()).toEqual([])
       expect(await lead()).toMatchObject({ state: 'waiting', wait: 'workers' })
+    })
+
+    test('a Stop right after the proving turn, before any settle, already sees the wait ended', async () => {
+      await wakeTyped()
+      clock.advance(1_000)
+      await w.emit('lead', 'turn_started', clock.now())
+      clock.advance(1_000)
+      await w.emit('lead', 'turn_ended', clock.now())
+      expect(await ask()).toMatchObject({ sendBack: true })
+      expect(await cleared()).toHaveLength(1)
+    })
+
+    test('proof that arrives after the prompt went back to pending clears the wait without the session being ready', async () => {
+      await wakeTyped()
+      clock.advance(minutes(2))
+      await w.emit('lead', 'turn_started', new Date(clock.now().getTime() - minutes(1)))
+      // Settle sees the turn only through the stale path: make the prompt `pending` as if it had been checked a moment earlier.
+      await db.sql`UPDATE factory.prompts SET status = 'pending', next_at = ${clock.now()} WHERE source = 'wake'`
+      await deliver()
+      expect(await notes()).toMatchObject([{ status: 'delivered' }])
+      expect(await cleared()).toHaveLength(1)
+      expect(runner.typed).toHaveLength(1)
     })
 
     test('a retry whose first typing was proven in between delivers and clears too', async () => {
