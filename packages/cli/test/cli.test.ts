@@ -19,6 +19,7 @@ const SPAWNS = [
 
 let fake: ReturnType<typeof Bun.serve>
 let status = 200
+let odd = ''
 
 beforeAll(() => {
   fake = Bun.serve({
@@ -26,6 +27,8 @@ beforeAll(() => {
     hostname: '127.0.0.1',
     fetch: (req) => {
       const path = new URL(req.url).pathname
+      if (odd === 'null') return Response.json(null)
+      if (odd === 'empty' && path === '/spawns') return Response.json({ spawns: [] })
       if (path === '/health') {
         return status === 200
           ? Response.json({ status: 'ok', version: 'abc123' })
@@ -154,5 +157,28 @@ describe('the exit-code table', () => {
       contract_mismatch: 9,
       pending: 10,
     })
+  })
+})
+
+describe('answers that are not the contract', () => {
+  test('a non-object /health body is contract_mismatch (9)', async () => {
+    odd = 'null'
+    try {
+      const r = await factory(['health'])
+      expect(r).toMatchObject({ code: EXIT.contract_mismatch, stdout: '' })
+      expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'contract_mismatch' } })
+    } finally {
+      odd = ''
+    }
+  })
+
+  test('an empty queue prints nothing in plain', async () => {
+    odd = 'empty'
+    try {
+      expect(await factory(['spawn', 'list', '--format', 'plain'])).toMatchObject({ stdout: '', code: EXIT.ok })
+      expect(JSON.parse((await factory(['spawn', 'list'])).stdout)).toEqual({ spawns: [] })
+    } finally {
+      odd = ''
+    }
   })
 })

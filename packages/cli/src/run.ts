@@ -38,6 +38,14 @@ interface SpawnRow {
   error: string | null
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const notContract = (path: string) =>
+  new FactoryError('contract_mismatch', `${path} did not answer the shape this CLI expects`, {
+    hint: 'the server and the CLI are from different releases',
+  })
+
 const cell = (value: unknown) => (value === null || value === undefined ? '-' : String(value))
 
 /** Calls the server and returns the parsed body; every failure is a `FactoryError` with agw's kind. */
@@ -76,17 +84,21 @@ async function execute(words: string[], format: Format, io: Io): Promise<void> {
   if (key === 'version') return print({ version: pkg.version }, pkg.version)
 
   if (key === 'health') {
-    const body = (await call(io, '/health')) as { status?: unknown; version?: unknown }
+    const body = await call(io, '/health')
+    if (!isRecord(body)) throw notContract('/health')
     print(body, `${cell(body.status)}\t${cell(body.version)}`)
     if (body.status !== 'ok') throw new FactoryError('general', `server is not ok: ${cell(body.status)}`)
     return
   }
 
   if (key === 'spawn list') {
-    const { spawns } = (await call(io, '/spawns')) as { spawns: SpawnRow[] }
+    const answer = await call(io, '/spawns')
+    if (!isRecord(answer) || !Array.isArray(answer.spawns)) throw notContract('/spawns')
+    const spawns = answer.spawns as SpawnRow[]
     const lines = spawns.map((s) =>
       [s.key, s.status, s.account, s.resumeAt, s.attempts, s.session].map(cell).join('\t'),
     )
+    if (format === 'plain' && !lines.length) return
     return print({ spawns }, lines.join('\n'))
   }
 
