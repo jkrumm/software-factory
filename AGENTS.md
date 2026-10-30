@@ -164,7 +164,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 
 ## Validate
 
-`make check` — install (frozen), Biome format and lint, shellcheck, `tsc --noEmit`, `bun test`. The tests start a
+`make check` — install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, `bun test`. The tests start a
 private Postgres cluster with `initdb` in a temp dir (on PATH, or `PG_BIN_DIR`, or `/usr/lib/postgresql/<major>/bin`
 as on GitHub's runners); nothing touches a real database. `make test` runs the tests, `make fmt` formats.
 `make deploy` and `make verify` act on the mini only; `DRY_RUN=1 make deploy` prints the plan. `FACTORY_REF=<branch>` on

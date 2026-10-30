@@ -12,10 +12,10 @@ help:
 check:
 	@echo "==> install (bun install --frozen-lockfile)"
 	@bun install --frozen-lockfile
-	@echo "==> format (biome format)"
-	@bunx --no-install biome format .
-	@echo "==> lint (biome lint)"
-	@bunx --no-install biome lint .
+	@echo "==> format (oxfmt --check)"
+	@bunx --no-install oxfmt --check .
+	@echo "==> lint (oxlint --type-aware)"
+	@bunx --no-install oxlint -c .oxlintrc.json --type-aware packages
 	@echo "==> shellcheck"
 	@shellcheck scripts/*.sh
 	@echo "==> typecheck (tsc --noEmit)"
@@ -28,7 +28,7 @@ test:
 	@bun test
 
 fmt:
-	@bunx --no-install biome format --write .
+	@bunx --no-install oxfmt --write .
 
 # A release (~/.software-factory/releases/<sha>, live via `current`) is what runs, never this checkout; scripts/deploy.sh owns the steps.
 deploy:
