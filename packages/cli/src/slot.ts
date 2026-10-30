@@ -94,11 +94,14 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     let renewing: Promise<void> = Promise.resolve()
     let ended = false
     let warned = false
+    let renewalPending = false
     const renew = holding
       ? setInterval(() => {
-          if (ended || warned) return
+          if (ended || warned || renewalPending) return
+          renewalPending = true
           renewing = renewing.then(async () => {
             const answer = await ask().catch(() => undefined)
+            renewalPending = false
             if (ended || warned || !answer || answer.body.granted) return
             warned = true
             io.err('factory: the test slot lease lapsed while the command ran; it runs on without a slot\n')
