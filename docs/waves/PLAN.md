@@ -5,7 +5,7 @@ strategy in `docs/decisions.md`, nothing older.
 **Gate:** per track, the gate its own plan names; for each rotation, `docs/program.md` updated, committed and
 pushed, and the handoff written.
 
-## Wave 1 — Program lead, rotation 1            <!-- status: active -->
+## Wave 1 — Program lead, rotation 1            <!-- status: done -->
 Opus/high. Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md` first. This wave spawns other repos'
 waves in orchestrated mode; it spawns its own next rotation in chain mode.
 
