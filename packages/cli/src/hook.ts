@@ -12,6 +12,7 @@ import {
   nextKey,
   parseSpool,
   parseSummary,
+  ROLE_NAME,
   type SpoolLine,
   spoolFileName,
   summarize,
@@ -63,6 +64,11 @@ export function toEvent(
           model: text(input.model, 128),
           // The account the picker chose: how the factory knows it for a session no spawn row describes (`rd`'s).
           account: ACCOUNT_NAME.test(env.CLAUDE_ACCOUNT_PICKED ?? '') ? env.CLAUDE_ACCOUNT_PICKED : undefined,
+          // What the pane says about itself: the role the starter gave it (the Runner and `rd` set FACTORY_ROLE), and the
+          // pane and tab herdr put it in, so a session no spawn describes can still be found and closed by id.
+          role: ROLE_NAME.test(env.FACTORY_ROLE ?? '') ? env.FACTORY_ROLE : undefined,
+          pane: text(env.HERDR_PANE_ID, 64),
+          tab: text(env.HERDR_TAB_ID, 64),
         }),
       }
     case 'user-prompt-submit':

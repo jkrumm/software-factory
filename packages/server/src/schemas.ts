@@ -52,6 +52,10 @@ export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
   role: RoleName.default(DEFAULT_ROLE),
+  /** the path whose herdr space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
+  space: RepoPath.optional(),
+  /** a space of its own even if the path already has one: for a separate plan or worktree */
+  new_space: z.boolean().default(false),
   /** the `FACTORY_SESSION` of the caller: the session this one is a worker of */
   parent: z.string().min(1).max(256).optional(),
   prompt: z
@@ -108,6 +112,12 @@ export const NoteInput = z.object({
     .refine((p) => !p.startsWith('-'), "a note cannot start with '-': herdr would read it as an option"),
 })
 export type NoteInput = z.infer<typeof NoteInput>
+
+/** `PUT /slots/:id`: the id is the caller's own (a fresh one per run); the name says what for. */
+export const SlotInput = z.object({ name: z.string().min(1).max(128).default('run') })
+
+/** The id of a slot request: a token the caller makes up. */
+export const SlotId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/, 'not a valid slot id')
 
 /** What the `Stop` hook tells the server about the stop it is asking on behalf of. */
 export const StopCheckInput = z.object({ stopHookActive: z.boolean().default(false) })

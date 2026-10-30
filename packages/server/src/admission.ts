@@ -27,6 +27,10 @@ export interface Candidate {
   prefer?: string | null
 }
 
+/** Whether a session started in `at` belongs to `repo`: it started there or in a worktree or folder below it. */
+const inRepo = (at: string, repo: string): boolean =>
+  at === repo || at.startsWith(repo.endsWith('/') ? repo : `${repo}/`)
+
 async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] }): Promise<LiveSession[]> {
   if (!live) return liveSessions(tx, now)
   live.sessions ??= await liveSessions(tx, now)
@@ -52,7 +56,7 @@ export async function admit(
   if (state === 'drain') return { kind: 'hold', reason: 'drain' }
 
   const sessions = state === 'pace' || candidate.role === WAVE_ROLE ? await readLive(tx, now, live) : []
-  const others = sessions.filter((s) => s.id !== candidate.key && s.repo === candidate.repo)
+  const others = sessions.filter((s) => s.id !== candidate.key && inRepo(s.repo, candidate.repo))
   if (candidate.role === WAVE_ROLE && others.some((s) => s.role === WAVE_ROLE)) return { kind: 'hold', reason: 'wave' }
   if (state === 'pace' && others.length > 0) return { kind: 'hold', reason: 'pace' }
 

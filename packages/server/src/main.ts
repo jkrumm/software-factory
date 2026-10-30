@@ -82,7 +82,15 @@ rmSync(config.hookSocket, { force: true })
 const umask = process.umask(0o177)
 let hooks: ReturnType<typeof serveHooks>
 try {
-  hooks = serveHooks({ sql, clock, token: config.token, socketPath: config.hookSocket })
+  hooks = serveHooks({
+    sql,
+    clock,
+    token: config.token,
+    socketPath: config.hookSocket,
+    repoRoots: config.repoRoots,
+    roles,
+    slots: config.slots,
+  })
 } finally {
   process.umask(umask)
 }

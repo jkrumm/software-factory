@@ -5,9 +5,32 @@ import { EXIT } from '../src/exit.ts'
 
 const BIN = join(import.meta.dir, '..', 'bin', 'factory.ts')
 
-const ROLE = { role: 'worker', tier: 'sonnet', effort: 'high', hold: null, parent: null } as const
+const ROLE = {
+  role: 'worker',
+  tier: 'sonnet',
+  effort: 'high',
+  hold: null,
+  parent: null,
+  repo: '/work/repo',
+  space: '/work/repo',
+  pane: null,
+  tab: null,
+  workspace: null,
+} as const
 const SPAWNS = [
-  { key: 'b', status: 'started', account: 'a', resumeAt: null, attempts: 1, session: 'pane-b', error: null, ...ROLE },
+  {
+    ...ROLE,
+    key: 'b',
+    status: 'started',
+    account: 'a',
+    resumeAt: null,
+    attempts: 1,
+    session: 'pane-b',
+    pane: 'pane-b',
+    tab: 'w1:t2',
+    workspace: 'w1',
+    error: null,
+  },
   {
     ...ROLE,
     key: 'a',
@@ -28,6 +51,7 @@ const SESSION = {
   lastEventAt: '2026-10-30T12:00:00.000Z',
   spawn: 'sess-1',
   pane: 'w1:p1',
+  tab: 'w1:t1',
   claudeSessionId: 'c-1',
   transcriptPath: '/t/c-1.jsonl',
   cwd: '/w',
@@ -56,6 +80,7 @@ const DEAD = { ...SESSION, id: 'old', state: 'dead', pane: null }
 const sessionCalls: { id: string; body: unknown }[] = []
 const noteCalls: { id: string; body: { id: string; text: string } }[] = []
 const spawnCalls: unknown[] = []
+const socketSpawnCalls: unknown[] = []
 const PROMPT = {
   id: 'n1',
   session: 'sess-1',
@@ -93,7 +118,25 @@ beforeAll(() => {
   sock = Bun.serve({
     unix: SOCKET(),
     fetch: async (req) => {
-      const [, , id, sub] = new URL(req.url).pathname.split('/')
+      const path = new URL(req.url).pathname
+      const [, , id, sub] = path.split('/')
+      // What a pane reaches without a token: starting work and following it.
+      if (path === '/spawns' && req.method === 'POST') {
+        const body = (await req.json()) as { key: string }
+        socketSpawnCalls.push(body)
+        return Response.json({ ...SPAWNS[1], ...body, status: 'queued', resumeAt: null }, { status: 201 })
+      }
+      if (path.startsWith('/spawns/') && req.method === 'GET') return Response.json({ ...SPAWNS[0], key: id })
+      if (path.startsWith('/sessions/') && !sub && req.method === 'GET') return Response.json({ ...SESSION, id })
+      if (path === '/queue' && req.method === 'GET') {
+        return Response.json({
+          scope: { project: new URL(req.url).searchParams.get('project') },
+          state: 'run',
+          effective: 'drain',
+          setAt: null,
+          scopes: [],
+        })
+      }
       if (req.method !== 'POST' || !id) return Response.json({ error: 'not found' }, { status: 404 })
       if (sub === 'note') {
         const body = (await req.json()) as { id: string; text: string }
@@ -184,6 +227,11 @@ beforeAll(() => {
           return Response.json({ error: 'unauthorized' }, { status: 401 })
         return Response.json(STATUS)
       }
+      if (path.startsWith('/spawns/') && req.method === 'GET') {
+        if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
+          return Response.json({ error: 'unauthorized' }, { status: 401 })
+        return Response.json({ ...SPAWNS[0], key: decodeURIComponent(path.split('/')[2] ?? '') })
+      }
       if (path === '/spawns') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
           return Response.json({ error: 'unauthorized' }, { status: 401 })
@@ -207,7 +255,14 @@ afterAll(async () => {
 /** The binary as a caller runs it: a process, its stdout, its stderr, its exit code. */
 async function factory(args: string[], env: Record<string, string> = {}) {
   const proc = Bun.spawn(['bun', BIN, ...args], {
-    env: { ...process.env, FACTORY_URL: String(fake.url), FACTORY_TOKEN: TOKEN, ...env },
+    // A test never reaches a real server's socket: the default one is a path nobody listens on.
+    env: {
+      ...process.env,
+      FACTORY_URL: String(fake.url),
+      FACTORY_TOKEN: TOKEN,
+      FACTORY_SOCKET: join(sockDir, 'nobody.sock'),
+      ...env,
+    },
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -523,10 +578,64 @@ describe('factory spawn create', () => {
     ])
   })
 
+  test('--space and --new-space travel in the body (new_space, as the server names it)', async () => {
+    spawnCalls.length = 0
+    await factory(
+      ['spawn', 'create', 'f1', '--repo', '/work/repo/wt', '--prompt', 'x', '--space', '/work/repo', '--new-space'],
+      { FACTORY_SESSION: '' },
+    )
+    expect(spawnCalls).toEqual([
+      { key: 'f1', repo: '/work/repo/wt', prompt: 'x', space: '/work/repo', new_space: true },
+    ])
+  })
+
+  test('without a token it goes by the socket, with the caller as parent; with one, by the port', async () => {
+    spawnCalls.length = 0
+    socketSpawnCalls.length = 0
+    const env = { FACTORY_SOCKET: SOCKET(), FACTORY_SESSION: 'pane-1' }
+    const pane = await factory(['spawn', 'create', 'w9', '--repo', '/work/repo', '--prompt', 'x'], {
+      ...env,
+      FACTORY_TOKEN: '',
+    })
+    expect(pane).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(pane.stdout)).toMatchObject({ key: 'w9' })
+    expect(socketSpawnCalls).toEqual([{ key: 'w9', repo: '/work/repo', prompt: 'x', parent: 'pane-1' }])
+    expect(spawnCalls).toEqual([])
+
+    await factory(['spawn', 'create', 'w8', '--repo', '/work/repo', '--prompt', 'x'], env)
+    expect(spawnCalls).toHaveLength(1)
+    expect(socketSpawnCalls).toHaveLength(1)
+  })
+
   test('a key, a repo and a prompt are required', async () => {
     expect((await factory(['spawn', 'create', 'w1', '--repo', '/r'])).code).toBe(EXIT.usage)
     expect((await factory(['spawn', 'create', '--repo', '/r', '--prompt', 'x'])).code).toBe(EXIT.usage)
     expect((await factory(['spawn', 'create', 'w1', '--prompt', 'x'])).code).toBe(EXIT.usage)
+  })
+})
+
+describe('the reads rd makes, from a pane and from the owner', () => {
+  const pane = { FACTORY_TOKEN: '', FACTORY_SOCKET: '' }
+
+  test('spawn get, session get and queue get answer with the token on the port and without it on the socket', async () => {
+    for (const env of [{}, { ...pane, FACTORY_SOCKET: SOCKET() }]) {
+      const spawn = await factory(['spawn', 'get', 'b'], env)
+      expect(spawn).toMatchObject({ code: EXIT.ok, stderr: '' })
+      expect(JSON.parse(spawn.stdout)).toMatchObject({ key: 'b', pane: 'pane-b', tab: 'w1:t2', workspace: 'w1' })
+      const session = await factory(['session', 'get', 's1'], env)
+      expect(JSON.parse(session.stdout)).toMatchObject({ id: 's1', pane: 'w1:p1', tab: 'w1:t1' })
+      const queue = await factory(['queue', 'get', '--project', '/work/repo'], env)
+      expect(JSON.parse(queue.stdout)).toMatchObject({ scope: { project: '/work/repo' }, effective: 'drain' })
+    }
+  })
+
+  test('a token-less caller with no socket gets a network error, not a token error', async () => {
+    const r = await factory(['spawn', 'get', 'b'], { ...pane, FACTORY_SOCKET: '/nonexistent/s.sock' })
+    expect(r.code).toBe(EXIT.network)
+  })
+
+  test('spawn get needs exactly a key', async () => {
+    expect((await factory(['spawn', 'get'])).code).toBe(EXIT.usage)
   })
 })
 
@@ -721,8 +830,9 @@ describe('factory queue', () => {
     expect(queueCalls).toEqual([])
   })
 
-  test('it needs the token', async () => {
-    expect((await factory(['queue', 'get'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
+  test('queue set needs the token; queue get without one goes by the socket (nobody there: a network error)', async () => {
+    expect((await factory(['queue', 'set', 'drain'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
+    expect((await factory(['queue', 'get'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.network)
   })
 })
 

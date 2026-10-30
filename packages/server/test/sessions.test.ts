@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { serveHooks } from '../src/http.ts'
-import { startApp, TEST_TOKEN, type TestApp } from './support/app.ts'
+import { startApp, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 
@@ -106,7 +106,15 @@ describe('the hooks socket', () => {
   beforeAll(() => {
     dir = mkdtempSync('/tmp/factory-sock-')
     socket = join(dir, 'h.sock')
-    hooks = serveHooks({ sql: db.sql, clock, token: TEST_TOKEN, socketPath: socket })
+    hooks = serveHooks({
+      sql: db.sql,
+      clock,
+      token: TEST_TOKEN,
+      socketPath: socket,
+      repoRoots: [TEST_ROOT],
+      roles: TEST_ROLES,
+      slots: 2,
+    })
   })
   afterAll(async () => {
     await hooks.stop(true)
@@ -140,9 +148,12 @@ describe('the hooks socket', () => {
     expect((await post('/sessions/w/wait', { on: 'friday' })).status).toBe(400)
   })
 
-  test('is only the events route: nothing else of the API, and a bad body is a 400', async () => {
-    expect((await post('/spawns', { key: 'x' })).status).toBe(404)
+  test('serves the pane routes and nothing else of the API, and a bad body is a 400', async () => {
+    // A spawn is created here like on the port, so its body is validated: `key` alone is not one.
+    expect((await post('/spawns', { key: 'x' })).status).toBe(400)
     expect((await post('/sessions', {}, 'GET')).status).toBe(404)
+    expect((await post('/status', {}, 'GET')).status).toBe(404)
+    expect((await post('/spawns', {}, 'GET')).status).toBe(404)
     expect((await post('/events', { nope: true })).status).toBe(400)
   })
 

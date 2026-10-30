@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { Effort, Tier } from '@software-factory/contract'
 import { z } from 'zod'
@@ -8,6 +9,12 @@ import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, type ProcessRe
 export interface StartInput {
   key: string
   repo: string
+  /** the path whose herdr space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
+  space?: string
+  /** a space of its own, even if the path already has one */
+  newSpace?: boolean
+  /** goes into the pane as `FACTORY_ROLE`, so the session reports it at its start */
+  role: string
   prompt: string
   /** a key of the account registry: where `CLAUDE_CONFIG_DIR` comes from */
   account: string
@@ -21,6 +28,9 @@ export interface StartInput {
 export interface StartResult {
   /** the pane the agent runs in */
   session: string
+  tab: string
+  /** the herdr space (workspace) the tab is in */
+  workspace: string
 }
 
 /** Starts one agent session and types into running ones. `start` must be idempotent per `key`. */
@@ -93,7 +103,12 @@ const HerdrError = z.object({ error: z.object({ code: z.string(), message: z.str
 
 const Tab = z.object({ tab_id: z.string(), workspace_id: z.string(), label: z.string() })
 const Workspace = z.object({ workspace_id: z.string(), label: z.string() })
-const Pane = z.object({ pane_id: z.string(), tab_id: z.string() })
+const Pane = z.object({
+  pane_id: z.string(),
+  tab_id: z.string(),
+  workspace_id: z.string().optional(),
+  cwd: z.string().optional(),
+})
 const Agent = z.object({
   agent: z.string().optional(),
   agent_status: z.string(),
@@ -165,18 +180,23 @@ export class HerdrRunner implements Runner {
 
   async start(input: StartInput): Promise<StartResult> {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
-    const env = await this.paneEnv(input.account, input.key)
+    const env = await this.paneEnv(input)
+    const space = input.space ?? input.repo
 
-    const space = await this.findSpace(input.repo, budget)
-    let tab = space ? await this.findTab(space, input.key, budget) : undefined
+    let tab: { tab: string; pane: string; workspace: string } | undefined
+    for (const workspace of await this.findSpaces(space, budget)) {
+      tab = await this.findTab(workspace, input.key, budget)
+      if (tab) break
+    }
     let agent = tab ? await this.findAgent(tab.pane, budget) : undefined
+    const home = tab?.workspace
     if (tab && !agent) {
       // A tab with no agent has nothing running to keep, and its environment (the account) was fixed when it was made:
       // a retry may be on another account, so it is made again.
       await this.closeTab(tab.tab, budget)
       tab = undefined
     }
-    if (!tab) tab = await this.serialized(() => this.createTab(input, env, budget))
+    if (!tab) tab = await this.serialized(() => this.createTab(input, space, home, env, budget))
     const pane = tab.pane
 
     // An agent that already took its prompt is running, whatever else herdr says about it; only one that never became
@@ -191,7 +211,7 @@ export class HerdrRunner implements Runner {
     }
 
     await this.deliver(pane, input.prompt, budget)
-    return { session: pane }
+    return { session: pane, tab: tab.tab, workspace: tab.workspace }
   }
 
   async type(input: { pane: string; text: string }): Promise<'typed' | 'busy'> {
@@ -219,7 +239,7 @@ export class HerdrRunner implements Runner {
   // --- steps -----------------------------------------------------------------------------------------------------
 
   /** The environment the pane's shell gets at creation, so the agent started in it runs on the spawn's account. */
-  private async paneEnv(account: string, key: string): Promise<string[]> {
+  private async paneEnv({ account, key, role }: StartInput): Promise<string[]> {
     let raw: string
     try {
       raw = await Bun.file(this.options.accountsFile).text()
@@ -241,63 +261,78 @@ export class HerdrRunner implements Runner {
       `CLAUDE_ACCOUNT_PICKED=${account}`,
       `USAGE_LANE=${this.options.usageLane ?? 'wave'}`,
       `FACTORY_SESSION=${key}`,
+      `FACTORY_ROLE=${role}`,
     ]
     // dir null is the default account: CLAUDE_CONFIG_DIR stays unset.
     if (entry.dir !== null) env.unshift(`CLAUDE_CONFIG_DIR=${entry.dir.replace(/^~(?=\/|$)/, home)}`)
     return env
   }
 
-  /** The space labelled with the repo's name (rd's convention), if there is one. */
-  private async findSpace(repo: string, budget: Budget): Promise<string | undefined> {
-    const label = basename(repo)
+  /**
+   * The spaces of `space`, a path, in herdr's order. A space is found by its path, never by its name: the label (the
+   * directory's name, rd's convention) only narrows the candidates, and one counts when one of its panes is in the path
+   * or below it (a worktree). Two repos with the same directory name therefore have two spaces.
+   */
+  private async findSpaces(space: string, budget: Budget): Promise<string[]> {
+    const label = basename(space)
     const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
-    return workspaces.find((w) => w.label === label)?.workspace_id
+    const named = workspaces.filter((w) => w.label === label)
+    if (named.length === 0) return []
+    const { panes } = (await this.herdr(PaneList, ['pane', 'list'], budget)).result
+    const root = real(space)
+    return named
+      .filter((w) => panes.some((p) => p.workspace_id === w.workspace_id && p.cwd !== undefined && within(root, p.cwd)))
+      .map((w) => w.workspace_id)
   }
 
-  /** The spawn's tab, looked for in its repo's space only: a tab of that name anywhere else is not ours. */
+  /** The spawn's tab in one space, looked for by its label: a tab of that name anywhere else is not ours. */
   private async findTab(
-    space: string,
+    workspace: string,
     key: string,
     budget: Budget,
-  ): Promise<{ tab: string; pane: string } | undefined> {
-    const { tabs } = (await this.herdr(TabList, ['tab', 'list', '--workspace', space], budget)).result
+  ): Promise<{ tab: string; pane: string; workspace: string } | undefined> {
+    const { tabs } = (await this.herdr(TabList, ['tab', 'list', '--workspace', workspace], budget)).result
     const tab = tabs.find((t) => t.label === key)
     if (!tab) return undefined
     const { panes } = (await this.herdr(PaneList, ['pane', 'list'], budget)).result
     const pane = panes.find((p) => p.tab_id === tab.tab_id)
     if (!pane) throw new RunnerError(`tab ${tab.tab_id} (${key}) has no pane`, false)
-    return { tab: tab.tab_id, pane: pane.pane_id }
+    return { tab: tab.tab_id, pane: pane.pane_id, workspace: tab.workspace_id }
   }
 
-  /** The tab goes into the space labelled with the repo's name (rd's convention); the first spawn creates the space. */
-  private async createTab(input: StartInput, env: string[], budget: Budget): Promise<{ tab: string; pane: string }> {
+  /**
+   * The tab goes into the first existing space of the path; the first spawn there creates the space, and so does a spawn
+   * that asks for a space of its own. `home` is the space an earlier try of this start used: a retry of a new-space
+   * spawn goes back into it rather than making a third.
+   */
+  private async createTab(
+    input: StartInput,
+    space: string,
+    home: string | undefined,
+    env: string[],
+    budget: Budget,
+  ): Promise<{ tab: string; pane: string; workspace: string }> {
     const envArgs = env.flatMap((pair) => ['--env', pair])
-    const label = basename(input.repo)
     // Looked up again inside the lock: the space may have been made by a start that ran just before this one.
-    const workspace = await this.findSpace(input.repo, budget)
-    if (workspace) {
+    const existing = input.newSpace
+      ? home && (await this.workspaceExists(home, budget))
+        ? home
+        : undefined
+      : (await this.findSpaces(space, budget))[0]
+    if (existing) {
       const created = await this.herdr(
         Created,
-        [
-          'tab',
-          'create',
-          '--workspace',
-          workspace,
-          '--cwd',
-          input.repo,
-          '--label',
-          input.key,
-          '--no-focus',
-          ...envArgs,
-        ],
+        ['tab', 'create', '--workspace', existing, '--cwd', input.repo, '--label', input.key, '--no-focus', ...envArgs],
         budget,
       )
-      return { tab: created.result.root_pane.tab_id, pane: created.result.root_pane.pane_id }
+      const { tab_id: tab, pane_id: pane } = created.result.root_pane
+      return { tab, pane, workspace: existing }
     }
 
+    // The pane's directory is the repo, which is the space's path or below it (a worktree): that is how the space is found again.
     const created = await this.herdr(
       Created,
-      ['workspace', 'create', '--cwd', input.repo, '--label', label, '--no-focus', ...envArgs],
+      ['workspace', 'create', '--cwd', input.repo, '--label', basename(space), '--no-focus', ...envArgs],
       budget,
     )
     const { tab_id: tab, pane_id: pane, workspace_id: spaceId } = created.result.root_pane
@@ -308,7 +343,12 @@ export class HerdrRunner implements Runner {
       await this.herdr(z.object({}).loose(), ['workspace', 'close', spaceId], budget).catch(() => {})
       throw error
     }
-    return { tab, pane }
+    return { tab, pane, workspace: spaceId }
+  }
+
+  private async workspaceExists(workspace: string, budget: Budget): Promise<boolean> {
+    const { workspaces } = (await this.herdr(WorkspaceList, ['workspace', 'list'], budget)).result
+    return workspaces.some((w) => w.workspace_id === workspace)
   }
 
   private async findAgent(pane: string, budget: Budget): Promise<Agent | undefined> {
@@ -474,6 +514,21 @@ class Budget {
     if (left <= 0) throw new BudgetSpent()
     return Math.min(wantMs, left)
   }
+}
+
+/** `path` with links resolved, or as given when it cannot be (a directory that is gone). */
+function real(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+/** Whether `cwd` is `root` or inside it. */
+function within(root: string, cwd: string): boolean {
+  const at = real(cwd)
+  return at === root || at.startsWith(root.endsWith('/') ? root : `${root}/`)
 }
 
 function parseJson(text: string): unknown {

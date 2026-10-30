@@ -83,9 +83,17 @@ describe('config (finding 5)', () => {
       repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
       spoolDir: '/home/me/.local/share/factory/spool',
       hookSocket: '/home/me/.local/share/factory/hook.sock',
+      slots: 2,
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
+  })
+
+  test('FACTORY_SLOTS is the number of test slots, two by default', () => {
+    expect(loadConfig({ ...env, FACTORY_SLOTS: '4' }).slots).toBe(4)
+    for (const bad of ['0', '-1', '2.5', 'many', '65']) {
+      expect(() => loadConfig({ ...env, FACTORY_SLOTS: bad })).toThrow('FACTORY_SLOTS')
+    }
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {

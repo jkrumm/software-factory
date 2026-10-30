@@ -126,9 +126,11 @@ switch (command) {
     print({ type: 'ok' })
     break
   }
-  case 'tab list':
-    print({ tabs: state.tabs.map(tabInfo) })
+  case 'tab list': {
+    const only = opt('--workspace')
+    print({ tabs: state.tabs.filter((t) => !only || t.workspace_id === only).map(tabInfo) })
     break
+  }
   case 'tab create': {
     const workspace_id = opt('--workspace') as string
     if (!state.workspaces.some((w) => w.workspace_id === workspace_id))
@@ -162,7 +164,13 @@ switch (command) {
   }
   case 'pane list':
     print({
-      panes: state.panes.map((p) => ({ pane_id: p.pane_id, tab_id: p.tab_id, cwd: p.cwd, agent_status: 'unknown' })),
+      panes: state.panes.map((p) => ({
+        pane_id: p.pane_id,
+        tab_id: p.tab_id,
+        workspace_id: state.tabs.find((t) => t.tab_id === p.tab_id)?.workspace_id,
+        cwd: p.cwd,
+        agent_status: 'unknown',
+      })),
     })
     break
   case 'agent list':
