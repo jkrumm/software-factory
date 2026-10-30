@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wait (bounded, read-only) until a scratch repo has at least N commits whose subject starts with a prefix, then run a
-# command. Times an injection by how far a long wave is, not by the clock.
+# command (a script in this folder, as for when-working.sh). The prefix is literal. Times an injection by how far a long wave is, not by the clock.
 # Usage: when-commits.sh <repo-name> <prefix> <n> <seconds-to-wait> -- <command…>
 #   when-commits.sh factory-gate-w 'feat: ' 3 900 -- inject-wall.sh factory-gate-w-w2 1
 # shellcheck disable=SC1091
@@ -11,7 +11,7 @@ name=${1:?repo name} prefix=${2:?subject prefix} want=${3:?count} bound=${4:?sec
 shift 5
 end=$((SECONDS + bound))
 while ((SECONDS < end)); do
-  have=$(git -C "$SOURCE_ROOT/$name" log --format=%s 2>/dev/null | grep -c "^$prefix" || true)
+  have=$(git -C "$SOURCE_ROOT/$name" log --format=%s 2>/dev/null | awk -v p="$prefix" 'index($0, p) == 1' | wc -l | tr -d ' ')
   if ((have >= want)); then
     log "when-commits: $name has $have commits starting '$prefix' (wanted $want)"
     cmd=$1
