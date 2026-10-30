@@ -222,6 +222,31 @@ describe('validation', () => {
   })
 })
 
+describe('spawn keys and repos become command-line arguments', () => {
+  test.each([
+    ['a key that reads as a flag', { key: '--help', repo: '/r', prompt: 'p' }],
+    ['a key with a space', { key: 'a b', repo: '/r', prompt: 'p' }],
+    ['a relative repo', { key: 'k', repo: 'work/repo', prompt: 'p' }],
+    ['a repo that reads as a flag', { key: 'k', repo: '--cwd', prompt: 'p' }],
+  ])('%s is a 400', async (_name, body) => {
+    expect((await app.send('POST', '/spawns', body)).status).toBe(400)
+  })
+})
+
+describe('a new reading and a new spawn do not race', () => {
+  test('a spawn created while readings arrive is never left without a wake-up', async () => {
+    for (let i = 0; i < 20; i++) {
+      await db.reset()
+      const key = `r${i}`
+      await Promise.all([spawn(key), reading('a', 1, 1, inHours(2))])
+      const row = await status(key)
+      // Either the reading came first (queued on it) or the spawn waited and the reading woke it: never stuck.
+      if (row.status === 'waiting') expect(row.resumeAt).not.toBeNull()
+      else expect(row.status).toBe('queued')
+    }
+  })
+})
+
 describe('GET /spawns', () => {
   test('lists the newest first with their status and error', async () => {
     await reading('a', 1, 1, inHours(1))

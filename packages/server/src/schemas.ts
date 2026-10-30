@@ -17,9 +17,17 @@ export const EventInput = z.object({
 })
 export type EventInput = z.infer<typeof EventInput>
 
+/** The key becomes a herdr tab name on a command line: a token that cannot read as a flag. */
+const SpawnKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, 'not a valid spawn key')
+/** The repo becomes `--cwd`: an absolute path. */
+const RepoPath = z
+  .string()
+  .max(1024)
+  .regex(/^\/[^\0]*$/, 'not an absolute path')
+
 export const SpawnInput = z.object({
-  key: nonEmpty,
-  repo: nonEmpty,
+  key: SpawnKey,
+  repo: RepoPath,
   prompt: z.string().min(1),
 })
 export type SpawnInput = z.infer<typeof SpawnInput>

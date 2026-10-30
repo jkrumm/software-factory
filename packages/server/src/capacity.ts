@@ -7,6 +7,11 @@ export const FIVE_HOUR_LIMIT = 85
 /** What one spawn is assumed to cost its account, in percentage points, until a newer reading shows the real use. */
 export const SPAWN_COST = { weekly: 1, fiveHour: 5 } as const
 
+/** Serializes everything that assigns an account or changes what it sees, so each step sees the ones before it. */
+const CAPACITY_LOCK = 7_093_002
+
+export const lockCapacity = (tx: SQL) => tx`SELECT pg_advisory_xact_lock(${CAPACITY_LOCK})`
+
 /** One reading per row; `id` orders them, so "the same reading" is an id, not a clock comparison. */
 export interface Reading {
   id: number
@@ -25,6 +30,7 @@ export type Loads = ReadonlyMap<string, number>
  */
 export async function recordReading(sql: SQL, account: string, reading: CapacityInput, now: Date): Promise<void> {
   await sql.begin(async (tx) => {
+    await lockCapacity(tx)
     await tx`
       INSERT INTO factory.capacity_readings (account, weekly_used, five_hour_used, resets_at)
       VALUES (${account}, ${reading.weeklyUsed}, ${reading.fiveHourUsed}, ${reading.resetsAt})`

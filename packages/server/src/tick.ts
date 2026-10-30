@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { currentLoads, latestReadings, nextReset, pickEligible } from './capacity.ts'
+import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import {
   backoffMs,
@@ -10,7 +10,6 @@ import {
   type RetryPolicy,
   worstCaseMs,
 } from './runner.ts'
-import { lockCapacity } from './spawns.ts'
 
 /** Claims a spawn may take before it is `failed`: a claim that dies mid-flight counts like one that errors. */
 export const MAX_ATTEMPTS = 3
@@ -97,7 +96,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       // A reclaimed claim may already have its pane; finish it on the account it has instead of asking again.
       const picked =
         row.status === 'starting' && row.account
-          ? readings.find((r) => r.account === row.account)
+          ? (readings.find((r) => r.account === row.account) ?? { account: row.account, id: null })
           : pickEligible(readings, await currentLoads(tx, readings, row.key), row.account)
       if (!picked) {
         const resumeAt = nextReset(readings, now) ?? null
@@ -110,7 +109,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       }
       await tx`
         UPDATE factory.spawns
-        SET status = 'starting', account = ${picked.account}, reading_id = ${picked.id}, claimed_at = ${now},
+        SET status = 'starting', account = ${picked.account}, reading_id = COALESCE(${picked.id}, reading_id), claimed_at = ${now},
             resume_at = NULL, attempts = attempts + 1
         WHERE key = ${row.key}`
       claims.push({
@@ -126,10 +125,12 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 }
 
 /** Phase 3: record the outcome in a transaction of its own. Only a row still `starting` is touched. */
-async function recordStarted(sql: SQL, key: string, session: string): Promise<void> {
-  await sql`
+async function recordStarted(sql: SQL, key: string, session: string): Promise<boolean> {
+  const rows = await sql`
     UPDATE factory.spawns SET status = 'started', session = ${session}, claimed_at = NULL, error = NULL
-    WHERE key = ${key} AND status = 'starting'`
+    WHERE key = ${key} AND status = 'starting'
+    RETURNING key`
+  return rows.length > 0
 }
 
 async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Promise<'failed' | 'retrying'> {
@@ -149,15 +150,14 @@ async function recordFailure(deps: TickDeps, claim: Claim, error: unknown): Prom
 }
 
 /** Phase 2 and 3 for one claim. Nothing the Runner does can leave this function throwing; only recording can. */
-async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'failed' | 'retrying'> {
+async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'failed' | 'retrying' | 'lost'> {
   let session: string
   try {
     ;({ session } = await deps.runner.start({ key: claim.key, repo: claim.repo, prompt: claim.prompt }))
   } catch (error) {
     return recordFailure(deps, claim, error)
   }
-  await recordStarted(deps.sql, claim.key, session)
-  return 'started'
+  return (await recordStarted(deps.sql, claim.key, session)) ? 'started' : 'lost'
 }
 
 /**
@@ -174,7 +174,8 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
         const outcome = await execute(deps, claim)
         if (outcome === 'started') result.started.push(claim.key)
         else if (outcome === 'failed') result.failed.push(claim.key)
-        else result.retrying.push(claim.key)
+        else if (outcome === 'retrying') result.retrying.push(claim.key)
+        else result.errors.push(`${claim.key}: the claim was lost before the result was recorded`)
       } catch (error) {
         result.errors.push(`${claim.key}: ${error instanceof Error ? error.message : String(error)}`)
       }
