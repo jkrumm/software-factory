@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { recordReading } from '../src/capacity.ts'
+import { DEFAULT_RETRY_BUDGET_MS } from '../src/config.ts'
 import { HerdrRunner, RunnerError, type Runner, type StartInput } from '../src/runner.ts'
 import { createSpawn } from '../src/spawns.ts'
-import { claimDue, DEFAULT_LEASE_MS, DEFAULT_RETRY_BUDGET_MS, retryDelayMs, startTicker, tick } from '../src/tick.ts'
+import { claimDue, DEFAULT_LEASE_MS, retryDelayMs, startTicker, tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -93,7 +94,7 @@ describe('failures', () => {
 
   test('a failing start is retried with growing delays and stays retryable for the whole budget', async () => {
     await addSpawn('flaky')
-    await herdr.plan(...Array<string>(40).fill('tab list:exit1'))
+    await herdr.plan(...Array<string>(40).fill('workspace list:exit1'))
     const runner = herdrRunner()
     const failed = spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -133,7 +134,7 @@ describe('failures', () => {
 
   test('herdr back after a few minutes: the spawn starts and nothing failed', async () => {
     await addSpawn('restart')
-    await herdr.plan(...Array<string>(3).fill('tab list:exit1'))
+    await herdr.plan(...Array<string>(3).fill('workspace list:exit1'))
     const runner = herdrRunner()
     await tick(deps(runner))
     clock.advance(retryDelayMs(1))
@@ -196,7 +197,7 @@ describe('failures', () => {
 
   test('waiting for capacity does not use the budget', async () => {
     await addSpawn('patient')
-    await herdr.plan('tab list:exit1')
+    await herdr.plan('workspace list:exit1')
     await tick(deps(herdrRunner()))
     expect((await spawnRow('patient')).status).toBe('queued')
     // every account is walled
@@ -212,7 +213,7 @@ describe('failures', () => {
     await addSpawn('bad')
     clock.advance(1000)
     await addSpawn('good')
-    await herdr.plan('tab list:exit1')
+    await herdr.plan('workspace list:exit1')
     const runner = herdrRunner()
 
     expect(await tick(deps(runner, { batch: 1 }))).toMatchObject({ retrying: ['bad'], started: [] })

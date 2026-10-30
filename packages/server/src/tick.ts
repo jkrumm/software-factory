@@ -1,14 +1,10 @@
 import type { SQL } from 'bun'
 import { currentLoads, latestReadings, lockCapacity, nextReset, pickEligible } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError } from './runner.ts'
 
-/**
- * How long a spawn stays retryable, counted from its first claim: a herdr that restarts for a few minutes fails
- * nothing. Only a start that failed counts; time spent waiting for capacity does not (the clock resets there).
- */
-export const DEFAULT_RETRY_BUDGET_MS = 30 * 60_000
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
 export const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
 export const retryDelayMs = (attempt: number): number =>

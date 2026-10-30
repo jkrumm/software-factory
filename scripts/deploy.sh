@@ -23,6 +23,7 @@ LABEL="com.jkrumm.software-factory"
 PORT=7793
 # The branch to deploy: master, or another branch to prove a change live before it is merged (FACTORY_REF=<branch>).
 REF="${FACTORY_REF:-master}"
+[[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || { echo "FACTORY_REF is not a plain branch name: $REF" >&2; exit 1; }
 ROOT="${FACTORY_ROOT:-$HOME/.software-factory}"
 REPO_DIR="$ROOT/repo"
 RELEASES="$ROOT/releases"
