@@ -62,7 +62,7 @@ describe('factory status', () => {
       INSERT INTO factory.spawns (key, repo, prompt, status, hold, resume_at, created_at)
       VALUES ('held', '/work/repo', 'p', 'queued', 'wave', ${new Date(clock.now().getTime() + 30_000)}, ${clock.now()}),
              ('broken', '/work/repo', 'p', 'failed', NULL, NULL, ${clock.now()})`
-    await db.sql`UPDATE factory.spawns SET error = 'herdr agent start: exited 1' WHERE key = 'broken'`
+    await db.sql`UPDATE factory.spawns SET error = 'hc terminal.run: exited 1' WHERE key = 'broken'`
     await recordPrompt(db.sql, { id: 'n-pending', session: 'busy', source: 'note', text: 'look at x' }, clock.now())
     await recordPrompt(
       db.sql,
@@ -90,7 +90,7 @@ describe('factory status', () => {
       'walled walled for 30 min on a',
       'blocked stopped for 3 min: Dangerous rm of /tmp/x',
       'note n-failed to quiet failed: cannot be resumed',
-      'spawn broken failed: herdr agent start: exited 1',
+      'spawn broken failed: hc terminal.run: exited 1',
     ])
   })
 
@@ -236,12 +236,12 @@ describe('the hooks socket serves notes and the send-back check', () => {
     if (endTurn) await w.emit('lead', 'turn_ended', w.at(1))
   }
 
-  test('a hook cannot report what only the witness sees: a herdr restart, a gone pane', async () => {
+  test('a hook cannot report what only the witness sees: a runner restart, a gone pane', async () => {
     await w.spawned('s')
     const at = '2026-10-30T12:00:00Z'
     const forged = [
-      { key: 'f1', session: '_herdr', kind: 'herdr_restarted', at, payload: { to: '999@x' } },
-      { key: 'f2', session: 's', kind: 'herdr_restarted', at },
+      { key: 'f1', session: '_runner', kind: 'runner_restarted', at, payload: { to: '999@x' } },
+      { key: 'f2', session: 's', kind: 'runner_restarted', at },
       { key: 'f3', session: 's', kind: 'pane_gone', at },
     ]
     for (const event of forged) {

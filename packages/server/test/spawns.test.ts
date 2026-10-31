@@ -1,45 +1,45 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { HerdrRunner } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 
 let db: TestDb
-let herdr: FakeHerdr
+let hc: FakeHc
 let app: TestApp
 const clock = new FakeClock()
 
 beforeAll(async () => {
   db = await startTestDb()
-  herdr = await createFakeHerdr()
+  hc = await createFakeHc()
   app = startApp({ sql: db.sql, clock })
 })
 afterAll(async () => {
   await app.stop()
-  await herdr.cleanup()
+  await hc.cleanup()
   await db.stop()
 })
 beforeEach(async () => {
   await db.reset()
-  await herdr.reset()
+  await hc.reset()
 })
 
 const runTick = () =>
   tick({
     sql: db.sql,
     clock,
-    runner: new HerdrRunner({
-      bin: herdr.bin,
+    runner: new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     }),
   })
-const tabs = async () => (await herdr.state()).tabs.map((t) => t.label)
+const tabs = async () => (await hc.state()).terminals.map((t) => t.labels['factory.key'])
 const inHours = (h: number) => new Date(clock.now().getTime() + h * 3_600_000).toISOString()
 const reading = (account: string, weeklyUsed: number, fiveHourUsed: number, resetsAt: string) =>
   app.send('PUT', `/quota/accounts/${account}`, {
@@ -64,14 +64,14 @@ describe('a spawn with capacity', () => {
       status: 'started',
       account: 'a',
       attempts: 1,
-      session: expect.stringMatching(/:p\d+$/),
+      session: expect.stringMatching(/^t\d+$/),
     })
     expect(await tabs()).toEqual(['s1'])
 
     // Nothing left to do.
-    const calls = (await herdr.calls()).length
+    const calls = (await hc.calls()).length
     expect(await runTick()).toMatchObject({ started: [] })
-    expect((await herdr.calls()).length).toBe(calls)
+    expect((await hc.calls()).length).toBe(calls)
   })
 
   test('takes the least-used eligible account', async () => {
@@ -94,7 +94,7 @@ describe('a spawn with capacity', () => {
     await runTick()
     const again = await spawn('s1')
     expect(again.status).toBe(200)
-    expect(await again.json()).toMatchObject({ key: 's1', status: 'started', session: expect.stringMatching(/:p\d+$/) })
+    expect(await again.json()).toMatchObject({ key: 's1', status: 'started', session: expect.stringMatching(/^t\d+$/) })
   })
 })
 
@@ -125,7 +125,7 @@ describe('a spawn without capacity', () => {
 
     // Not due yet: the tick does not even look at it.
     expect(await runTick()).toMatchObject({ started: [], skipped: 0 })
-    expect(await herdr.calls()).toEqual([])
+    expect(await hc.calls()).toEqual([])
 
     // A new reading wakes it before resume_at.
     await reading('b', 10, 20, inHours(2))
@@ -149,7 +149,7 @@ describe('a spawn without capacity', () => {
     await reading('a', 96, 0, resetA)
     await reading('b', 10, 90, resetB)
     expect(await runTick()).toMatchObject({ started: [], skipped: 1 })
-    expect(await herdr.calls()).toEqual([])
+    expect(await hc.calls()).toEqual([])
     // Back to waiting, due at the next reset still ahead.
     expect(await status('s1')).toMatchObject({ status: 'waiting', account: null, resumeAt: resetA })
 
@@ -164,7 +164,7 @@ describe('a spawn without capacity', () => {
 
     clock.advance(24 * 3_600_000)
     expect(await runTick()).toMatchObject({ started: [], skipped: 0 })
-    expect(await herdr.calls()).toEqual([])
+    expect(await hc.calls()).toEqual([])
     expect(await status('s1')).toMatchObject({ status: 'waiting' })
   })
 
@@ -184,7 +184,7 @@ describe('capacity is checked again when the spawn starts', () => {
 
     await reading('a', 99, 10, inHours(2))
     expect(await runTick()).toMatchObject({ started: [], skipped: 1 })
-    expect(await herdr.calls()).toEqual([])
+    expect(await hc.calls()).toEqual([])
     expect(await status('s1')).toMatchObject({ status: 'waiting', account: null, resumeAt: inHours(2) })
   })
 
@@ -209,7 +209,7 @@ describe('an account takes one spawn per sample', () => {
     expect(queued[0]).toMatchObject({ account: 'a' })
 
     expect(await runTick()).toMatchObject({ started: [queued[0] && (queued[0] as { key: string }).key] })
-    expect((await herdr.state()).agents).toHaveLength(1)
+    expect((await hc.state()).terminals).toHaveLength(1)
   })
 
   test('a queued spawn holds its account against any sample; a started one until a sample taken after its start', async () => {
@@ -431,7 +431,7 @@ describe('requeue', () => {
 })
 
 describe('the prompt', () => {
-  test("cannot start with '-': herdr would read it as an option", async () => {
+  test("cannot start with '-': claude would read it as an option", async () => {
     const res = await app.send('POST', '/spawns', { key: 'dash', repo: TEST_REPO, prompt: '-rf everything' })
     expect(res.status).toBe(400)
     expect(

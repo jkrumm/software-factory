@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { recordReading } from '../src/capacity.ts'
 import { deliverPrompts, REARM_AFTER_MS } from '../src/prompts.ts'
-import { HerdrRunner } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
 import {
   BLOCKED_AFTER_MS,
   evaluateRules,
@@ -11,11 +11,11 @@ import {
   RESUME_WINDOW_MS,
   stopCheck,
 } from '../src/rules.ts'
-import { getSession, HERDR_SESSION, recordEvent } from '../src/sessions.ts'
+import { getSession, recordEvent, RUNNER_SESSION } from '../src/sessions.ts'
 import { tick } from '../src/tick.ts'
-import { type AgentSeen, type HerdrView, witness } from '../src/witness.ts'
+import { type AgentSeen, type RunnerView, witness } from '../src/witness.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { usage } from './support/quota.ts'
 import { FakeRunner, world } from './support/world.ts'
@@ -561,17 +561,17 @@ describe('wake', () => {
   })
 })
 
-describe('herdr restart', () => {
-  let herdr: FakeHerdr
+describe('runner restart', () => {
+  let hc: FakeHc
   beforeAll(async () => {
-    herdr = await createFakeHerdr()
+    hc = await createFakeHc()
   })
-  afterAll(() => herdr.cleanup())
-  beforeEach(() => herdr.reset())
+  afterAll(() => hc.cleanup())
+  beforeEach(() => hc.reset())
 
-  class FakeView implements HerdrView {
+  class FakeView implements RunnerView {
     list: AgentSeen[] = []
-    server: string | undefined = '100@Sun Oct 11 14:11:39 2026'
+    server: string | undefined = `100@${'a'.repeat(32)}`
     async agents() {
       return this.list
     }
@@ -579,17 +579,17 @@ describe('herdr restart', () => {
       return this.server
     }
   }
-  const pass = (view: FakeView) => witness({ sql: db.sql, herdr: view, clock, probe: async () => undefined })
-  const NEW_SERVER = '200@Fri Oct 30 12:03:00 2026'
+  const pass = (view: FakeView) => witness({ sql: db.sql, runner: view, clock, probe: async () => undefined })
+  const NEW_SERVER = `200@${'b'.repeat(32)}`
 
-  test('a session whose turn was cut off is resumed by id with a note, once: the fake herdr sees `claude --resume`', async () => {
+  test('a session whose turn was cut off is resumed by id with a note, once: the fake core sees `claude --resume`', async () => {
     await w.spawned('s', { account: 'b', repo: '/work/repo' })
     await w.emit('s', 'turn_started', w.at(10))
     const view = new FakeView()
-    view.list = [{ paneId: 'w1:s', claudeSessionId: 'claude-s', status: 'working' }]
+    view.list = [{ paneId: 't1', claudeSessionId: 'claude-s', status: 'working' }]
     await pass(view)
 
-    // herdr restarts: its agents are gone.
+    // the runner restarts: its agents are gone.
     clock.advance(minutes(1))
     view.server = NEW_SERVER
     view.list = []
@@ -614,18 +614,19 @@ describe('herdr restart', () => {
       new Date(clock.now().getTime() + 3 * 86_400_000),
       'b',
     )
-    const real = new HerdrRunner({
-      bin: herdr.bin,
+    const real = new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     })
     expect((await deliverPrompts({ sql: db.sql, runner: real, clock })).sent).toEqual([`restart:${NEW_SERVER}:s`])
-    const state = await herdr.state()
-    expect(state.agents).toHaveLength(1)
-    expect(state.agents[0]?.argv).toEqual([
+    const state = await hc.state()
+    expect(state.terminals).toHaveLength(1)
+    // The note is the resumed session's first prompt: the last argument of the program.
+    expect(state.terminals[0]?.argv).toEqual([
       'claude',
       '--dangerously-skip-permissions',
       '--model',
@@ -634,12 +635,17 @@ describe('herdr restart', () => {
       'high',
       '--resume',
       'claude-s',
+      RESTART_NOTE,
     ])
-    expect(state.panes[0]?.env).toContain('FACTORY_SESSION=s')
-    expect(state.panes[0]?.env).toContain('CLAUDE_CONFIG_DIR=/home/me/.claude-b')
-    expect(state.prompts.map((p) => p.text)).toEqual([RESTART_NOTE])
-    expect((await db.sql`SELECT pane FROM factory.sessions WHERE id = 's'`)[0]?.pane).toBe(state.panes[0]?.pane_id)
-    expect((await db.sql`SELECT session FROM factory.spawns WHERE key = 's'`)[0]?.session).toBe(state.panes[0]?.pane_id)
+    expect(state.runs[0]?.params.env).toMatchObject({
+      FACTORY_SESSION: 's',
+      CLAUDE_CONFIG_DIR: '/home/me/.claude-b',
+    })
+    expect(state.sent).toEqual([])
+    expect((await db.sql`SELECT pane FROM factory.sessions WHERE id = 's'`)[0]?.pane).toBe(state.terminals[0]?.address)
+    expect((await db.sql`SELECT session FROM factory.spawns WHERE key = 's'`)[0]?.session).toBe(
+      state.terminals[0]?.address,
+    )
 
     // The resumed session reports in, and its first turn proves the note.
     clock.advance(5_000)
@@ -649,19 +655,19 @@ describe('herdr restart', () => {
     expect((await prompts())[0]?.status).toBe('delivered')
     expect((await getSession(db.sql, 's', clock.now()))?.state).toBe('working')
     await replayIsSilent()
-    expect((await herdr.state()).agents).toHaveLength(1)
+    expect((await hc.state()).terminals).toHaveLength(1)
   })
 
   const restartEvent = (at: Date) =>
     recordEvent(db.sql, {
-      key: `herdr_restarted:${NEW_SERVER}`,
-      session: HERDR_SESSION,
-      kind: 'herdr_restarted',
+      key: `runner_restarted:${NEW_SERVER}`,
+      session: RUNNER_SESSION,
+      kind: 'runner_restarted',
       at,
       payload: { from: '100@x', to: NEW_SERVER },
     })
 
-  test('leaves alone a session that was idle, one herdr still shows, one that went on, and a restart too fresh or too old', async () => {
+  test('leaves alone a session that was idle, one the runner still shows, one that went on, and a restart too fresh or too old', async () => {
     await w.spawned('idle')
     await w.emit('idle', 'turn_started', w.at(20))
     await w.emit('idle', 'turn_ended', w.at(15))
@@ -670,7 +676,7 @@ describe('herdr restart', () => {
     await w.spawned('moved')
     await w.emit('moved', 'turn_started', w.at(20))
     await restartEvent(w.at(10))
-    await db.sql`UPDATE factory.sessions SET herdr_seen_at = ${w.at(5)} WHERE id = 'seen'`
+    await db.sql`UPDATE factory.sessions SET agent_seen_at = ${w.at(5)} WHERE id = 'seen'`
     await w.emit('moved', 'turn_ended', w.at(5))
     expect((await evaluate()).created).toEqual([])
 

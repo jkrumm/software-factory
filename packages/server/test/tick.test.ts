@@ -1,18 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { DEFAULT_RETRY_BUDGET_MS } from '../src/config.ts'
-import { HerdrRunner, RunnerError, type Runner, type StartInput } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
+import { RunnerError, type Runner, type StartInput } from '../src/runner.ts'
 import { QuotaPoller } from '../src/quota.ts'
 import { getSession } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { claimDue, DEFAULT_LEASE_MS, retryDelayMs, startTicker, tick } from '../src/tick.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { noType } from './support/runner.ts'
 import { FakeQuotaSource, usage, WORKER } from './support/quota.ts'
 
 let db: TestDb
-let herdr: FakeHerdr
+let hc: FakeHc
 let clock: FakeClock
 let source: FakeQuotaSource
 let quota: QuotaPoller
@@ -22,15 +23,15 @@ const ACCOUNTS = ['a', 'b', 'c', 'd', 'e', 'f']
 
 beforeAll(async () => {
   db = await startTestDb()
-  herdr = await createFakeHerdr()
+  hc = await createFakeHc()
 })
 afterAll(async () => {
-  await herdr.cleanup()
+  await hc.cleanup()
   await db.stop()
 })
 beforeEach(async () => {
   await db.reset()
-  await herdr.reset()
+  await hc.reset()
   clock = new FakeClock()
   // The tick polls the picker like the server does: a reading is renewed every minute of the clock.
   source = new FakeQuotaSource()
@@ -57,12 +58,12 @@ const spawnRow = async (key: string) => {
   }
 }
 const deps = (runner: Runner, extra: { batch?: number } = {}) => ({ sql: db.sql, runner, clock, quota, ...extra })
-const herdrRunner = () =>
-  new HerdrRunner({
-    bin: herdr.bin,
+const hcRunner = () =>
+  new HcRunner({
+    bin: hc.bin,
     clock,
-    pretrustBin: herdr.pretrustBin,
-    accountsFile: herdr.accountsFile,
+    pretrustBin: hc.pretrustBin,
+    accountsFile: hc.accountsFile,
     home: '/home/me',
     deliverWaitMs: 3_000,
   })
@@ -126,15 +127,44 @@ describe('the session of a spawn', () => {
   })
 })
 
+describe('the parent terminal', () => {
+  const startedWith = async (parentPane: string | null) => {
+    await db.sql`INSERT INTO factory.sessions (id, pane, created_at) VALUES ('lead', ${parentPane}, ${clock.now()})`
+    await createSpawn(
+      db.sql,
+      { key: 'kid', repo: '/work/repo', prompt: 'do it', parent: 'lead', ...WORKER },
+      clock.now(),
+    )
+    const seen: (string | undefined)[] = []
+    const runner: Runner = {
+      ...noType,
+      start: async (input) => {
+        seen.push(input.parentTerminal)
+        return { session: 't9', tab: 'tb-x', workspace: 'sp-x' }
+      },
+    }
+    await tick(deps(runner))
+    return seen
+  }
+
+  test('is the pane of the parent session, handed to the Runner', async () => {
+    expect(await startedWith('t7')).toEqual(['t7'])
+  })
+
+  test('is absent while the parent has no pane', async () => {
+    expect(await startedWith(null)).toEqual([undefined])
+  })
+})
+
 describe('failures', () => {
   test('a permanent refusal marks the spawn failed and does not stop the others', async () => {
     await addSpawn('bad')
     await addSpawn('good')
-    const real = herdrRunner()
+    const real = hcRunner()
     const runner: Runner = {
       ...noType,
       start: (input) =>
-        input.key === 'bad' ? Promise.reject(new RunnerError('herdr refused bad', true)) : real.start(input),
+        input.key === 'bad' ? Promise.reject(new RunnerError('the runner refused bad', true)) : real.start(input),
     }
 
     expect(await tick(deps(runner))).toMatchObject({ failed: ['bad'], started: ['good'], errors: [] })
@@ -146,8 +176,8 @@ describe('failures', () => {
 
   test('a failing start is retried with growing delays and stays retryable for the whole budget', async () => {
     await addSpawn('flaky')
-    await herdr.plan(...Array<string>(40).fill('workspace list:exit1'))
-    const runner = herdrRunner()
+    await hc.plan(...Array<string>(40).fill('terminal.list:exit1'))
+    const runner = hcRunner()
     const failed = spyOn(console, 'error').mockImplementation(() => {})
     try {
       const first = clock.now()
@@ -169,11 +199,11 @@ describe('failures', () => {
       expect(clock.now().getTime() - first.getTime()).toBeLessThan(DEFAULT_RETRY_BUDGET_MS)
       expect(failed).not.toHaveBeenCalled()
 
-      // The budget runs out: the next claim fails the spawn without calling herdr, and says why.
+      // The budget runs out: the next claim fails the spawn without calling the runner, and says why.
       clock.advance(DEFAULT_RETRY_BUDGET_MS)
-      const calls = (await herdr.calls()).length
+      const calls = (await hc.calls()).length
       expect(await tick(deps(runner))).toMatchObject({ failed: ['flaky'], retrying: [] })
-      expect((await herdr.calls()).length).toBe(calls)
+      expect((await hc.calls()).length).toBe(calls)
       const done = await spawnRow('flaky')
       expect(done.status).toBe('failed')
       expect(done.error).toContain('30 min retry budget is spent after 7 attempts')
@@ -184,10 +214,10 @@ describe('failures', () => {
     }
   })
 
-  test('herdr back after a few minutes: the spawn starts and nothing failed', async () => {
+  test('the runner back after a few minutes: the spawn starts and nothing failed', async () => {
     await addSpawn('restart')
-    await herdr.plan(...Array<string>(3).fill('workspace list:exit1'))
-    const runner = herdrRunner()
+    await hc.plan(...Array<string>(3).fill('terminal.list:exit1'))
+    const runner = hcRunner()
     await tick(deps(runner))
     clock.advance(retryDelayMs(1))
     await tick(deps(runner))
@@ -251,13 +281,13 @@ describe('failures', () => {
 
   test('waiting for capacity does not use the budget', async () => {
     await addSpawn('patient')
-    await herdr.plan('workspace list:exit1')
-    await tick(deps(herdrRunner()))
+    await hc.plan('terminal.list:exit1')
+    await tick(deps(hcRunner()))
     expect((await spawnRow('patient')).status).toBe('queued')
     // every account is walled
     await db.sql`DELETE FROM factory.quota_readings`
     await db.sql`UPDATE factory.spawns SET resume_at = NULL WHERE key = 'patient'`
-    expect(await tick(deps(herdrRunner()))).toMatchObject({ skipped: 1 })
+    expect(await tick(deps(hcRunner()))).toMatchObject({ skipped: 1 })
     expect((await db.sql`SELECT first_claimed_at FROM factory.spawns WHERE key = 'patient'`)[0]).toMatchObject({
       first_claimed_at: null,
     })
@@ -267,8 +297,8 @@ describe('failures', () => {
     await addSpawn('bad')
     clock.advance(1000)
     await addSpawn('good')
-    await herdr.plan('workspace list:exit1')
-    const runner = herdrRunner()
+    await hc.plan('terminal.list:exit1')
+    const runner = hcRunner()
 
     expect(await tick(deps(runner, { batch: 1 }))).toMatchObject({ retrying: ['bad'], started: [] })
     // 'bad' now sleeps until its retry time; the next pass reaches 'good'.
@@ -280,7 +310,7 @@ describe('failures', () => {
       INSERT INTO factory.spawns (key, repo, prompt, status, resume_at, created_at)
       VALUES ('old-waiting', '/r', 'p', 'waiting', ${clock.now()}, ${new Date(clock.now().getTime() - 1000)})`
     await addSpawn('queued')
-    const { claims } = await claimDue({ ...deps(herdrRunner()), batch: 1 })
+    const { claims } = await claimDue({ ...deps(hcRunner()), batch: 1 })
     expect(claims.map((c) => c.key)).toEqual(['queued'])
   })
 })
@@ -325,9 +355,9 @@ describe('replay and crashes (finding 3)', () => {
   test('a crash after the Runner call and before the record: the replay finds the running agent and starts nothing twice', async () => {
     await addSpawn('s1')
     // The first tick dies between the Runner call and its record: claim, start the agent, record nothing.
-    const { claims } = await claimDue(deps(herdrRunner()))
+    const { claims } = await claimDue(deps(hcRunner()))
     expect(claims.map((c) => c.key)).toEqual(['s1'])
-    const { session } = await herdrRunner().start({
+    const { session } = await hcRunner().start({
       key: 's1',
       repo: '/work/repo',
       role: 'worker',
@@ -339,26 +369,25 @@ describe('replay and crashes (finding 3)', () => {
     expect(await spawnRow('s1')).toMatchObject({ status: 'starting', attempts: 1, session: null })
 
     // Inside the lease the claim is respected.
-    const callsBefore = (await herdr.calls()).length
-    expect(await tick(deps(herdrRunner()))).toMatchObject({ started: [], skipped: 0 })
-    expect((await herdr.calls()).length).toBe(callsBefore)
+    const callsBefore = (await hc.calls()).length
+    expect(await tick(deps(hcRunner()))).toMatchObject({ started: [], skipped: 0 })
+    expect((await hc.calls()).length).toBe(callsBefore)
 
     clock.advance(DEFAULT_LEASE_MS)
-    expect(await tick(deps(herdrRunner()))).toMatchObject({ started: ['s1'], errors: [] })
-    const state = await herdr.state()
-    expect(state.tabs).toHaveLength(1)
-    expect(state.agents).toHaveLength(1)
-    expect(state.prompts).toHaveLength(1)
+    expect(await tick(deps(hcRunner()))).toMatchObject({ started: ['s1'], errors: [] })
+    const state = await hc.state()
+    expect(state.terminals).toHaveLength(1)
+    expect(state.sent).toHaveLength(0)
     expect(await spawnRow('s1')).toMatchObject({ status: 'started', attempts: 2, session })
   })
 
-  test('claims that keep dying run into the retry budget and the spawn fails without calling herdr', async () => {
+  test('claims that keep dying run into the retry budget and the spawn fails without calling the runner', async () => {
     await addSpawn('s1')
     const logged = spyOn(console, 'error').mockImplementation(() => {})
     try {
       let result: Awaited<ReturnType<typeof claimDue>> = { claims: [], failed: [], skipped: 0 }
       for (let n = 1; n <= 20 && result.failed.length === 0; n++) {
-        result = await claimDue(deps(herdrRunner()))
+        result = await claimDue(deps(hcRunner()))
         if (result.failed.length === 0) {
           expect(result.claims).toHaveLength(1)
           expect(await spawnRow('s1')).toMatchObject({ status: 'starting', attempts: n })
@@ -369,7 +398,7 @@ describe('replay and crashes (finding 3)', () => {
       const row = await spawnRow('s1')
       expect(row.status).toBe('failed')
       expect(row.error).toContain('30 min retry budget is spent')
-      expect(await herdr.calls()).toEqual([])
+      expect(await hc.calls()).toEqual([])
     } finally {
       logged.mockRestore()
     }
@@ -393,10 +422,10 @@ describe('replay and crashes (finding 3)', () => {
 describe('reclaiming a claim', () => {
   test('keeps its account when that account has no reading any more', async () => {
     await addSpawn('s1')
-    await claimDue(deps(herdrRunner()))
+    await claimDue(deps(hcRunner()))
     await db.sql`DELETE FROM factory.quota_readings`
     clock.advance(DEFAULT_LEASE_MS)
-    const { claims, skipped } = await claimDue(deps(herdrRunner()))
+    const { claims, skipped } = await claimDue(deps(hcRunner()))
     expect(skipped).toBe(0)
     expect(claims).toMatchObject([{ key: 's1', account: 'a', attempts: 2 }])
   })
@@ -429,15 +458,14 @@ describe('concurrent ticks', () => {
   test('two ticks racing over several spawns start each exactly once', async () => {
     const keys = Array.from({ length: 6 }, (_, i) => `s${i}`)
     for (const key of keys) await addSpawn(key)
-    const runner = herdrRunner()
+    const runner = hcRunner()
 
     const [a, b] = await Promise.all([tick(deps(runner)), tick(deps(runner))])
     expect([...a.started, ...b.started].sort()).toEqual(keys)
-    const state = await herdr.state()
-    expect(state.tabs.map((t) => t.label).sort()).toEqual(keys)
-    expect(state.workspaces).toHaveLength(1)
-    expect(state.agents).toHaveLength(keys.length)
-    expect(state.prompts).toHaveLength(keys.length)
+    const state = await hc.state()
+    expect(state.terminals.map((t) => t.labels['factory.key']).sort()).toEqual(keys)
+    expect(new Set(state.terminals.map((t) => t.labels['herdr.space'])).size).toBe(1)
+    expect(state.terminals).toHaveLength(keys.length)
   })
 })
 
@@ -480,7 +508,7 @@ describe('the ticker', () => {
   test('a pass that throws is logged and the ticker keeps going', async () => {
     const logged = spyOn(console, 'error').mockImplementation(() => {})
     try {
-      const broken = { sql: undefined, runner: herdrRunner(), clock } as unknown as Parameters<typeof startTicker>[0]
+      const broken = { sql: undefined, runner: hcRunner(), clock } as unknown as Parameters<typeof startTicker>[0]
       const ticker = startTicker(broken, 10)
       await Bun.sleep(60)
       await ticker.stop()

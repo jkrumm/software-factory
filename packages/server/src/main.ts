@@ -8,10 +8,13 @@ import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
-import { DEFAULT_START_BUDGET_MS, HerdrRunner } from './runner.ts'
+import { HcClient } from './hc.ts'
+import { HcEvents } from './hc-events.ts'
+import { HcRunner } from './hc-runner.ts'
+import { DEFAULT_START_BUDGET_MS } from './runner.ts'
 import { SpoolReplayer } from './spool.ts'
 import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
-import { gitProbe, HerdrCli, startWitness } from './witness.ts'
+import { gitProbe, startWitness } from './witness.ts'
 
 /** Longest a shutdown may take: one in-flight start is bounded by the start budget; the plist ExitTimeOut is longer. */
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
@@ -53,8 +56,9 @@ await migrate(sql)
 
 const clock = systemClock
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
-const runner = new HerdrRunner({
-  bin: config.herdrBin,
+const runner = new HcRunner({
+  bin: config.hcBin,
+  session: config.hcSession,
   clock,
   pretrustBin: config.pretrustBin,
   accountsFile: config.accountsFile,
@@ -102,7 +106,9 @@ const ticker = startTicker(
   TICK_INTERVAL_MS,
   monitor,
 )
-const witnessLoop = startWitness({ sql, herdr: new HerdrCli({ bin: config.herdrBin }), clock, probe: gitProbe })
+const events = new HcEvents({ client: new HcClient({ bin: config.hcBin, session: config.hcSession }) })
+events.start()
+const witnessLoop = startWitness({ sql, runner: events, clock, probe: gitProbe })
 console.log(`listening on ${server.url.href} (version ${config.version})`)
 
 let stopping = false
@@ -120,6 +126,7 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await witnessLoop.stop()
+    await events.stop()
     await singleton?.release()
     await sql.close()
     process.exit(0)

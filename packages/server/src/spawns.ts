@@ -67,7 +67,7 @@ export interface NewSpawn {
   effort: Effort
   /** the session that asked for it */
   parent?: string | null
-  /** the path whose herdr space the tab goes into; the repo when absent */
+  /** the path whose space the tab goes into; the repo when absent */
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean

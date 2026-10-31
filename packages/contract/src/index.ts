@@ -21,7 +21,7 @@ export const Spawn = z.object({
   /** `queued` with a `hold` is held; `starting` is claimed (the Runner is at work); `waiting` is waiting for capacity */
   status: SpawnStatus,
   repo: z.string(),
-  /** the path whose herdr space the tab goes into (the repo, unless the spawn named another) */
+  /** the path whose space the tab goes into (the repo, unless the spawn named another) */
   space: z.string(),
   role: RoleName,
   tier: Tier,
@@ -67,9 +67,15 @@ export const Session = z.object({
   claudeSessionId: z.string().nullable(),
   transcriptPath: z.string().nullable(),
   cwd: z.string().nullable(),
-  /** what herdr last said about the agent, and when */
-  herdrStatus: z.string().nullable(),
-  herdrSeenAt: z.string().nullable(),
+  /** what the runner last said about the agent, and when */
+  agentStatus: z.string().nullable(),
+  agentSeenAt: z.string().nullable(),
+  /**
+   * Deprecated aliases of the two above, the same values, for one release: argo and agw read these names until they follow
+   * (dotfiles Wave 4). They go in the release after that; the CLI parses the new names only.
+   */
+  herdrStatus: z.string().nullable().optional(),
+  herdrSeenAt: z.string().nullable().optional(),
   /** the role of its spawn, else the `FACTORY_ROLE` its pane reported */
   role: z.string().nullable(),
   /** the account it runs on: its spawn's, else what the hook reported */

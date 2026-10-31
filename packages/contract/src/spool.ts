@@ -15,6 +15,7 @@ export const EVENT_KINDS = [
   'wait_declared',
   'wait_cleared',
   'herdr_restarted',
+  'runner_restarted',
   'pane_gone',
 ] as const
 export type EventKind = (typeof EVENT_KINDS)[number]

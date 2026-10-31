@@ -29,7 +29,7 @@ commands:
   spawn list      the spawn queue, newest first
   spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]
                   queue a spawn (idempotent by key; the parent defaults to $FACTORY_SESSION: the send-back rule counts a
-                  session's workers). The tab goes into the herdr space of --space (default: the repo; a fan worker's
+                  session's workers). The tab goes into the space of --space (default: the repo; a fan worker's
                   worktree names its main checkout); --new-space asks for a space of its own. Uses the token when
                   FACTORY_TOKEN is set and the socket otherwise
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
@@ -40,7 +40,7 @@ commands:
   session list [--all]
                   the sessions, newest first, with their derived state (--all adds the dead)
   session get <id>
-                  one session: state, turn, wait, pane, tab, Claude session id, herdr's last word (token or socket)
+                  one session: state, turn, wait, pane, tab, Claude session id, the runner's last word (token or socket)
   session wait --on workers|deploy|owner | --done [--session <id>]
                   declare what this session is waiting on, or that the wait is over (default: $FACTORY_SESSION)
   session note <session> <text> [--id <id>]

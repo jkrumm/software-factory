@@ -10,7 +10,7 @@ import { clearAnsweredWait, getSession, HOOK_KINDS } from './sessions.ts'
 export const CONFIRM_MS = 60_000
 /** The first typing and one retry; after the second the prompt is `failed` and shows in status. */
 export const MAX_SENDS = 2
-/** A Runner call that failed (herdr down, the agent unreadable) is tried again after this, up to `MAX_FAILURES` times. */
+/** A Runner call that failed (the runner down, the agent unreadable) is tried again after this, up to `MAX_FAILURES` times. */
 export const FAILURE_RETRY_MS = 30_000
 export const MAX_FAILURES = 5
 /**
@@ -221,7 +221,7 @@ interface Target {
     effort: Effort
   } | null
   ended: boolean
-  /** the session shows life after `since`: a hook event, or herdr showing its agent */
+  /** the session shows life after `since`: a hook event, or the runner showing its agent */
   alive(since: Date): Promise<boolean>
 }
 
@@ -246,7 +246,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
                   SELECT 1 FROM factory.events
                   WHERE session = ${id} AND at > ${since}
                     AND kind IN ${sql(HOOK_KINDS)})
-                OR (SELECT herdr_seen_at > ${since} FROM factory.sessions WHERE id = ${id})) AS alive`
+                OR (SELECT agent_seen_at > ${since} FROM factory.sessions WHERE id = ${id})) AS alive`
       return row?.alive === true
     },
   }

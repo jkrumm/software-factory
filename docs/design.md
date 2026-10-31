@@ -1,7 +1,7 @@
 # Design
 
 **TLDR.** One Bun server on the mini owns long-lived state in Postgres: sessions, the queue, capacity, later
-Issues. Interactive Claude Code in herdr does all the thinking; `agw` workflows do every model call the
+Issues. Interactive Claude Code in herdr-core terminals does all the thinking; `agw` workflows do every model call the
 factory needs; plain code does the rest. Hooks report what sessions do as facts, the server derives state from
 those facts when read, and every effect carries a deterministic key, so a replay never spawns, types or posts
 twice. The fleet layer (§3) ships first and carries today's `/wave`. The Issue machine (§4) sits on top of it.
@@ -84,7 +84,7 @@ flowchart TB
 - **Every start reconciles.** Before any effect: replay the spool, then look at the world once (herdr, worktrees,
   GitHub) for each open session and Issue. Open deadlines move by the downtime. Missed job slots run once. There
   is no separate adopt mode.
-- **Dependencies point one way.** factory → agw, herdr, GitHub, the intake sources. agw never knows the factory.
+- **Dependencies point one way.** factory → agw, herdr-core, GitHub, the intake sources. agw never knows the factory.
   `rd` and the account picker stay in dotfiles and become clients or adapters (§3).
 
 ## 3. The fleet layer (F1)
@@ -116,10 +116,11 @@ config directory.
 timeout, and exits. `SessionEnd` has a 1.5-second budget, so the append is the part that must fit. The server
 replays the spool on start and on each tick. The key is session id plus event name plus turn number.
 
-herdr is the backstop for what hooks cannot show. A tool call in progress produces no hook event, so silence alone
-proves nothing; `stuck` needs herdr's agent status and the worktree's activity too. The witness loop reads herdr
-every minute, records its server PID (a change is a herdr restart, an event) and the account in effect, and reports
-dead panes.
+The runner (herdr-core) is the backstop for what hooks cannot show. A tool call in progress produces no hook event, so
+silence alone proves nothing; `stuck` needs the runner's agent status and the worktree's activity too. The witness follows
+the core's event stream (a status shows at once, a lost or finished terminal asks for a pass) and runs a pass every minute
+from that cache; it records the server identity (core pid and id; a change is a runner restart, an event) and the account
+in effect, and reports dead panes. (Before herdr-core this read classic herdr's `agent list` and its server process.)
 
 ### Derived session state
 
@@ -131,7 +132,7 @@ dead panes.
 | `waiting` | a declared wait is open (`factory session wait --on workers\|deploy\|owner`); `--done` or a delivered wake ends it |
 | `walled` | a `limit_stop` or `quota_resume` with no later `turn_started`; a turn that ends after `quota_resume` fired stays `walled` |
 | `blocked` | `prompt_blocked` with no later `turn_started` or `turn_ended` |
-| `stuck` | `working`, herdr agrees, no commit or file change in the worktree for 45 minutes |
+| `stuck` | `working`, the runner agrees, no commit or file change in the worktree for 45 minutes |
 | `dead` | `session_ended`, or the pane is gone |
 
 State reads from the latest `session_started`, so a resumed session starts clean. Hooks carry no token: they post
@@ -176,7 +177,7 @@ that applies wins.
 | **Folder trust** | any spawn | pre-trust the path before starting the agent, for new repos as well as worktrees | none, idempotent |
 | **Blocked** | `blocked` for 2 minutes | a line in `factory status`, and to the session's parent if it has one | event id |
 | **Wake** | a session `waiting` on its workers, with child sessions, none unfinished (`dead`, or `idle` after a turn; a spawn without a session yet is unfinished) | one note listing the children and their states; once a turn proves it, the wait it answers is cleared (unless a newer wait was declared) | `wake:<session>:<wait event id>` |
-| **herdr restart** | the server PID changed | each affected session resumes by id, with a note that a turn was cut off | `restart:<pid>:<session>` |
+| **runner restart** | the server identity (core pid or id) changed | each affected session resumes by id, with a note that a turn was cut off | `restart:<server>:<session>` |
 
 The send-back counts only child sessions the factory knows. A background shell inside a session is invisible to
 a hook; that gap stays until a measured failure says otherwise.
@@ -185,7 +186,7 @@ a hook; that gap stays until a measured failure says otherwise.
 
 - **Never call a port inside a transaction.** Claim the row and commit, call `Runner`, record the result in a new
   transaction. The key recorded at the claim is what makes a crash between the two safe.
-- **Every port call has a timeout.** A hung `herdr` must fail the call, not stall the tick.
+- **Every port call has a timeout.** A hung `hc` must fail the call, not stall the tick.
 - **Attempts are capped.** A spawn out of attempts is `failed` with a reason and leaves the batch, so it cannot starve
   the ones behind it. The tick loop itself survives any single failure and logs it.
 - **Eligibility is rechecked at start,** not only when the spawn is queued. A stored account is a hint.
@@ -195,7 +196,7 @@ under its id before typing, holds it while the session is `working` (a prompt ty
 queues in Claude Code), types it at the next `turn_ended`, and marks it delivered on the next `turn_started`. No
 `turn_started` within a minute: one retry, then a line in status. `rd say` becomes this.
 
-**One space per repo (FL6).** A herdr space is keyed by path, resolved before anything is created. A new space
+**One space per repo (FL6).** A space is keyed by path, resolved before anything is created: the Herdr app's document entry for the folder, else a stable id hashed from the path. A new space
 takes an explicit flag, for a separate plan or worktree.
 
 **Test slots (FL7).** `factory slot run -- <cmd>` wraps `make check` and test runs in a host-wide semaphore: a
@@ -587,8 +588,8 @@ owner "continue".
 | A second copy starts | the advisory lock makes it exit |
 | The factory is down when a hook fires | the event goes to the spool, replayed on start |
 | A hook fires in the owner's own session | it exits at once: no `FACTORY_SESSION` |
-| A herdr restart moves a session to another account | the witness records the account in effect |
+| A runner restart moves a session to another account | the witness records the account in effect |
 | A change edits its own checks | the review flags weakened tests; `make verify` and the probes run after the hold regardless |
 | A merge absorbs an Issue in work | that lead pushes its work to a branch and drops the Issue as merged; its notes go to the surviving lead |
-| Something else types into a `lead-*` pane | the factory alone owns them; `herdr-reap` skips them |
+| Something else types into a `lead-*` pane | the factory alone owns them; the reaper skips them |
 | A lead breaks a hook, the picker or `rd` | dotfiles and this repo carry a zero-token probe that runs each hook against a sample payload, so the break shows before the next lead starts |

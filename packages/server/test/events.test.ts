@@ -98,9 +98,9 @@ describe('derived session state', () => {
     expect(derive([...blocked, ...facts(['turn_ended', 3])])).toBe('idle')
   })
 
-  describe('stuck: working, herdr agrees, nothing moved for 45 minutes', () => {
+  describe('stuck: working, the runner agrees, nothing moved for 45 minutes', () => {
     const working = facts(['session_started', 0], ['turn_started', 10])
-    const herdr = (over: Partial<Witnessed> = {}): Witnessed => ({
+    const agentSays = (over: Partial<Witnessed> = {}): Witnessed => ({
       status: 'working',
       seenAt: new Date(NOW.getTime() - 60_000),
       worktreeChangedAt: null,
@@ -108,18 +108,18 @@ describe('derived session state', () => {
     })
 
     test('stuck', () => {
-      expect(derive(working, { herdr: herdr() })).toBe('stuck')
+      expect(derive(working, { agent: agentSays() })).toBe('stuck')
     })
 
     test('not while the turn is young, or the worktree moved lately', () => {
-      expect(derive(working, { herdr: herdr(), now: T(10 + 44) })).toBe('working')
-      expect(derive(working, { herdr: herdr({ worktreeChangedAt: T(300 - 5) }) })).toBe('working')
+      expect(derive(working, { agent: agentSays(), now: T(10 + 44) })).toBe('working')
+      expect(derive(working, { agent: agentSays({ worktreeChangedAt: T(300 - 5) }) })).toBe('working')
     })
 
-    test('not when herdr says anything but working, or has not been heard from', () => {
-      expect(derive(working, { herdr: herdr({ status: 'idle' }) })).toBe('working')
-      expect(derive(working, { herdr: herdr({ seenAt: T(300 - 30) }) })).toBe('working')
-      expect(derive(working, { herdr: herdr({ seenAt: null }) })).toBe('working')
+    test('not when the runner says anything but working, or has not been heard from', () => {
+      expect(derive(working, { agent: agentSays({ status: 'idle' }) })).toBe('working')
+      expect(derive(working, { agent: agentSays({ seenAt: T(300 - 30) }) })).toBe('working')
+      expect(derive(working, { agent: agentSays({ seenAt: null }) })).toBe('working')
       expect(derive(working)).toBe('working')
     })
   })
@@ -131,7 +131,7 @@ describe('derived session state', () => {
     expect(derive(facts(['session_started', 0], ['session_ended', 5], ['session_started', 5]))).toBe('idle')
   })
 
-  test('a pane_gone is withdrawn by a later hook event, or by herdr showing the agent again', () => {
+  test('a pane_gone is withdrawn by a later hook event, or by the runner showing the agent again', () => {
     const gone = facts(['session_started', 0], ['turn_started', 1], ['pane_gone', 5])
     expect(derive([...gone, ...facts(['turn_ended', 6])])).toBe('idle')
     const back = (seenAt: number | null, status: string | null = 'idle'): Witnessed => ({
@@ -139,12 +139,12 @@ describe('derived session state', () => {
       seenAt: seenAt === null ? null : T(seenAt),
       worktreeChangedAt: null,
     })
-    expect(derive(gone, { herdr: back(6) })).toBe('working')
-    expect(derive(gone, { herdr: back(4) })).toBe('dead')
-    expect(derive(gone, { herdr: back(null) })).toBe('dead')
-    expect(derive(gone, { herdr: back(6, null) })).toBe('dead')
-    // session_ended is final until a start, whatever herdr shows.
-    expect(derive(facts(['session_started', 0], ['session_ended', 5]), { herdr: back(6) })).toBe('dead')
+    expect(derive(gone, { agent: back(6) })).toBe('working')
+    expect(derive(gone, { agent: back(4) })).toBe('dead')
+    expect(derive(gone, { agent: back(null) })).toBe('dead')
+    expect(derive(gone, { agent: back(6, null) })).toBe('dead')
+    // session_ended is final until a start, whatever the runner shows.
+    expect(derive(facts(['session_started', 0], ['session_ended', 5]), { agent: back(6) })).toBe('dead')
   })
 
   test('a resumed session starts clean: what the life before it left open does not count', () => {

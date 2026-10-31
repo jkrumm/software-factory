@@ -14,8 +14,8 @@ const nonEmpty = z.string().min(1).max(256)
 /** An account name is a path segment in the API and a key in the queue: a short token, never free text. */
 export const AccountName = z.string().regex(ACCOUNT_NAME, 'not a valid account name')
 
-/** What only the witness may say about herdr: a hook (or anything on the open socket) cannot report a restart or a gone pane. */
-const WITNESS_KINDS: readonly string[] = ['herdr_restarted', 'pane_gone']
+/** What only the witness may say about the runner: a hook (or anything on the open socket) cannot report a restart or a gone pane. */
+const WITNESS_KINDS: readonly string[] = ['runner_restarted', 'herdr_restarted', 'pane_gone']
 
 export const EventInput = z
   .object({
@@ -31,13 +31,13 @@ export const EventInput = z
       )
       .optional(),
   })
-  .refine((e) => !WITNESS_KINDS.includes(e.kind) && e.session !== '_herdr', {
-    message: "herdr_restarted and pane_gone are the witness's to record, not a hook's",
+  .refine((e) => !WITNESS_KINDS.includes(e.kind) && e.session !== '_runner' && e.session !== '_herdr', {
+    message: "runner_restarted and pane_gone are the witness's to record, not a hook's",
     path: ['kind'],
   })
 export type EventInput = z.infer<typeof EventInput>
 
-/** The key becomes a herdr tab name on a command line: a token that cannot read as a flag. */
+/** The key becomes a terminal name and a label: a token that cannot read as a flag. */
 const SpawnKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, 'not a valid spawn key')
 /** The repo becomes `--cwd`: an absolute path. */
 const RepoPath = z
@@ -52,7 +52,7 @@ export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
   role: RoleName.default(DEFAULT_ROLE),
-  /** the path whose herdr space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
+  /** the path whose space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
   space: RepoPath.optional(),
   /** a space of its own even if the path already has one: for a separate plan or worktree */
   new_space: z.boolean().default(false),
@@ -62,7 +62,7 @@ export const SpawnInput = z.object({
     .string()
     .min(1)
     .max(MAX_PROMPT_CHARS)
-    .refine((p) => !p.startsWith('-'), "a prompt cannot start with '-': herdr would read it as an option"),
+    .refine((p) => !p.startsWith('-'), "a prompt cannot start with '-': claude would read it as an option"),
 })
 export type SpawnInput = z.infer<typeof SpawnInput>
 
@@ -109,7 +109,7 @@ export const NoteInput = z.object({
     .string()
     .min(1)
     .max(MAX_PROMPT_CHARS)
-    .refine((p) => !p.startsWith('-'), "a note cannot start with '-': herdr would read it as an option"),
+    .refine((p) => !p.startsWith('-'), "a note cannot start with '-': it could read as a flag"),
 })
 export type NoteInput = z.infer<typeof NoteInput>
 

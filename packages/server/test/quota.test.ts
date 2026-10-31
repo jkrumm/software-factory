@@ -2,12 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from '
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { QuotaList } from '@software-factory/contract'
-import { HerdrRunner } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
 import { ClaudeAccountSource, POLL_EVERY_MS, QuotaError, QuotaPoller } from '../src/quota.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { type FakeQuotaSource, usage } from './support/quota.ts'
 
@@ -49,7 +49,7 @@ const PICKER_OUTPUT = {
 }
 
 let db: TestDb
-let herdr: FakeHerdr
+let hc: FakeHc
 let app: TestApp
 const dir = mkdtempSync('/tmp/factory-picker-')
 let clock: FakeClock
@@ -57,17 +57,17 @@ let source: FakeQuotaSource
 
 beforeAll(async () => {
   db = await startTestDb()
-  herdr = await createFakeHerdr()
+  hc = await createFakeHc()
 })
 afterAll(async () => {
   await app?.stop()
-  await herdr.cleanup()
+  await hc.cleanup()
   await db.stop()
   rmSync(dir, { recursive: true, force: true })
 })
 beforeEach(async () => {
   await db.reset()
-  await herdr.reset()
+  await hc.reset()
   await app?.stop()
   clock = new FakeClock()
   app = startApp({ sql: db.sql, clock })
@@ -275,11 +275,11 @@ describe('the poller', () => {
 
   test('a tick whose poll fails reports it in its errors and still starts what has capacity', async () => {
     source.failure = new QuotaError('picker down')
-    const runner = new HerdrRunner({
-      bin: herdr.bin,
+    const runner = new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     })

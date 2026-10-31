@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { QueueView } from '@software-factory/contract'
 import { HOLD_RECHECK_MS } from '../src/admission.ts'
 import { WEEK_MS } from '../src/capacity.ts'
-import { HerdrRunner } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, TEST_ROOT, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { usage } from './support/quota.ts'
 
@@ -17,23 +17,23 @@ const OTHER_REPO = join(TEST_ROOT, 'other')
 mkdirSync(OTHER_REPO, { recursive: true })
 
 let db: TestDb
-let herdr: FakeHerdr
+let hc: FakeHc
 let app: TestApp
 const clock = new FakeClock()
 
 beforeAll(async () => {
   db = await startTestDb()
-  herdr = await createFakeHerdr()
+  hc = await createFakeHc()
   app = startApp({ sql: db.sql, clock })
 })
 afterAll(async () => {
   await app.stop()
-  await herdr.cleanup()
+  await hc.cleanup()
   await db.stop()
 })
 beforeEach(async () => {
   await db.reset()
-  await herdr.reset()
+  await hc.reset()
   // Six accounts with room: the one-spawn-per-account-and-sample rule is not what these tests are about.
   for (const account of ACCOUNTS) await reading(account, 10, 10)
 })
@@ -42,11 +42,11 @@ const runTick = () =>
   tick({
     sql: db.sql,
     clock,
-    runner: new HerdrRunner({
-      bin: herdr.bin,
+    runner: new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     }),
@@ -127,7 +127,7 @@ describe('drain', () => {
     clock.advance(HOLD_RECHECK_MS)
     expect(await runTick()).toMatchObject({ started: [], skipped: 1 })
     expect(await row('s1')).toMatchObject({ status: 'queued', hold: 'drain' })
-    expect(await herdr.calls()).toEqual([])
+    expect(await hc.calls()).toEqual([])
 
     await setQueue('run')
     expect(await runTick()).toMatchObject({ started: ['s1'] })
@@ -161,7 +161,7 @@ describe('drain', () => {
     clock.advance(HOLD_RECHECK_MS)
     await runTick()
     expect(await row('running')).toMatchObject({ status: 'started' })
-    expect((await herdr.state()).agents).toHaveLength(1)
+    expect((await hc.state()).terminals).toHaveLength(1)
   })
 })
 
@@ -286,7 +286,7 @@ describe('one active wave per repo', () => {
     await event('session_started', 1)
     await event('turn_started', 2)
     await event('turn_ended', 3)
-    // A herdr restart resumed it: a new life, idle, with no turn yet.
+    // A runner restart resumed it: a new life, idle, with no turn yet.
     await event('session_started', 4)
 
     const next = await spawn('wave-2', { role: 'wave' })
@@ -408,7 +408,7 @@ describe('one active wave per repo', () => {
   // Its agent may be running (the tab is kept), so the repo's wave slot stays taken until the spawn fails for good.
   test('a start that failed and will be retried still holds its repo', async () => {
     await spawn('w1', { role: 'wave' })
-    await herdr.plan('workspace list:exit1')
+    await hc.plan('terminal.list:exit1')
     expect(await runTick()).toMatchObject({ retrying: ['w1'] })
     expect(await (await spawn('w2', { role: 'wave' })).json()).toMatchObject({ status: 'queued', hold: 'wave' })
   })
@@ -420,11 +420,11 @@ describe('one active wave per repo', () => {
     await spawn('free', { repo: OTHER_REPO })
     clock.advance(HOLD_RECHECK_MS)
     // A batch of one: the held spawns are older, yet the free one is reached first.
-    const runner = new HerdrRunner({
-      bin: herdr.bin,
+    const runner = new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     })
@@ -460,7 +460,7 @@ describe('the role', () => {
     await spawn('boss', { role: 'lead' })
     await spawn('plain')
     await runTick()
-    const argvs = (await herdr.state()).agents.map((a) => a.argv.join(' '))
+    const argvs = (await hc.state()).terminals.map((t) => t.argv.slice(0, 6).join(' '))
     expect(argvs).toContain('claude --dangerously-skip-permissions --model opus --effort high')
     expect(argvs).toContain('claude --dangerously-skip-permissions --model sonnet --effort high')
   })

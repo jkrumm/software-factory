@@ -6,13 +6,13 @@ import type { EVENT_KINDS, EventInput } from './schemas.ts'
 export type EventKind = (typeof EVENT_KINDS)[number]
 export type { SessionState }
 
-/** The pseudo-session herdr's own events (a restart) are filed under: no real name starts with an underscore. */
-export const HERDR_SESSION = '_herdr'
+/** The pseudo-session the runner's own events (a restart) are filed under: no real name starts with an underscore. */
+export const RUNNER_SESSION = '_runner'
 
-/** A `working` session whose worktree has not changed for this long, while herdr also says `working`, is `stuck`. */
+/** A `working` session whose worktree has not changed for this long, while the runner also says `working`, is `stuck`. */
 export const STUCK_AFTER_MS = 45 * 60_000
-/** What herdr said counts as agreeing only while it is this fresh: the witness reads it every minute. */
-export const HERDR_FRESH_MS = 5 * 60_000
+/** What the runner said counts as agreeing only while it is this fresh: the witness reads it every minute. */
+export const AGENT_FRESH_MS = 5 * 60_000
 
 /**
  * Stores an event and everything it implies in one transaction: the session's row (created by the first event of a
@@ -32,7 +32,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
     ON CONFLICT (key) DO NOTHING
     RETURNING id`
   if (rows.length === 0) return { duplicate: true }
-  if (event.session === HERDR_SESSION) return { duplicate: false }
+  if (event.session === RUNNER_SESSION) return { duplicate: false }
 
   await tx`INSERT INTO factory.sessions (id, created_at) VALUES (${event.session}, ${event.at}) ON CONFLICT (id) DO NOTHING`
   // A session of a spawn is the spawn's: its pane is known from the start.
@@ -48,7 +48,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
     // The account keys readings and shows in status: a name from the registry's alphabet, or none.
     const account = text('account')
     const accountName = account && ACCOUNT_NAME.test(account) ? account : null
-    // What only the pane knows: its role (`FACTORY_ROLE`, the one-wave-per-repo rule counts it) and where herdr put it.
+    // What only the pane knows: its role (`FACTORY_ROLE`, the one-wave-per-repo rule counts it) and where the runner put it.
     const role = text('role')
     const roleName = role && ROLE_NAME.test(role) ? role : null
     // A spawn's pane is the Runner's. A name `rd` reuses in a new pane is the new pane (the bound_at guard keeps older starts out).
@@ -101,7 +101,7 @@ export interface Fact {
 }
 
 export interface Witnessed {
-  /** herdr's status for the agent: `working`, `idle`, `blocked`, ... */
+  /** the runner's status for the agent: `working`, `idle`, `blocked`, ... */
   status: string | null
   seenAt: Date | null
   worktreeChangedAt: Date | null
@@ -113,7 +113,7 @@ export interface DeriveInput {
   /** the factory has a row for the session */
   known: boolean
   now: Date
-  herdr?: Witnessed
+  agent?: Witnessed
 }
 
 export interface Derived {
@@ -136,11 +136,11 @@ export const HOOK_KINDS: readonly EventKind[] = [
 ]
 
 /**
- * A `pane_gone` is withdrawn by anything that proves the session is there: a hook event after it, or herdr showing the
+ * A `pane_gone` is withdrawn by anything that proves the session is there: a hook event after it, or the runner showing the
  * agent again after it. The witness uses the same rule to decide whether a pane is still reported gone.
  */
-export function paneGoneWithdrawn(input: { goneAt: Date; hookAfter: boolean; herdrSeenAt: Date | null }): boolean {
-  return input.hookAfter || (input.herdrSeenAt !== null && input.herdrSeenAt > input.goneAt)
+export function paneGoneWithdrawn(input: { goneAt: Date; hookAfter: boolean; agentSeenAt: Date | null }): boolean {
+  return input.hookAfter || (input.agentSeenAt !== null && input.agentSeenAt > input.goneAt)
 }
 
 const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
@@ -152,19 +152,19 @@ const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
  * clean, whatever the one before it left open.
  *
  * - `dead`: the last of session_started / session_ended / pane_gone is not a start (a resume starts again). A
- *   `pane_gone` is withdrawn by anything that proves the session is there: a later hook event, or herdr showing the
+ *   `pane_gone` is withdrawn by anything that proves the session is there: a later hook event, or the runner showing the
  *   agent again after it.
  * - `starting`: nothing yet proves the session is up (no session_started, no turn).
  * - `walled`: a limit_stop or quota_resume with no turn_started after it. A `quota_resume` that says `fired` means
  *   Claude carried on by itself, so the turn that ends after it also ends the wall.
  * - `blocked`: a prompt_blocked with no turn_started or turn_ended after it (answering the prompt does not start a turn).
- * - `working`: the latest turn_started has no turn_ended after it; `stuck` when herdr agrees and neither the worktree
+ * - `working`: the latest turn_started has no turn_ended after it; `stuck` when the runner agrees and neither the worktree
  *   nor the turn has moved for 45 minutes.
  * - `waiting`: a declared wait is open and no turn is. `--done` ends a wait, and so does a delivered wake (`clearAnsweredWait`).
  * - `idle`: everything else.
  */
 export function deriveState(input: DeriveInput): Derived | undefined {
-  const { facts, now, herdr } = input
+  const { facts, now, agent } = input
   const turn = facts.filter((f) => f.kind === 'turn_started').length
 
   const iWait = lastIndex(facts, 'wait_declared', 'wait_cleared')
@@ -181,7 +181,7 @@ export function deriveState(input: DeriveInput): Derived | undefined {
       paneGoneWithdrawn({
         goneAt: life.at,
         hookAfter: facts.slice(iLife + 1).some((f) => HOOK_KINDS.includes(f.kind)),
-        herdrSeenAt: herdr?.status != null ? (herdr.seenAt ?? null) : null,
+        agentSeenAt: agent?.status != null ? (agent.seenAt ?? null) : null,
       })
     if (!proven) return { state: 'dead', wait: null, turn, since: life.at }
   }
@@ -207,10 +207,10 @@ export function deriveState(input: DeriveInput): Derived | undefined {
 
   if (iStart > iEnd) {
     const startedAt = here[iStart]?.at.getTime() ?? 0
-    const quietSince = Math.max(startedAt, herdr?.worktreeChangedAt?.getTime() ?? 0)
-    const herdrAgrees =
-      herdr?.status === 'working' && herdr.seenAt !== null && now.getTime() - herdr.seenAt.getTime() <= HERDR_FRESH_MS
-    const stuck = herdrAgrees && now.getTime() - quietSince >= STUCK_AFTER_MS
+    const quietSince = Math.max(startedAt, agent?.worktreeChangedAt?.getTime() ?? 0)
+    const agentAgrees =
+      agent?.status === 'working' && agent.seenAt !== null && now.getTime() - agent.seenAt.getTime() <= AGENT_FRESH_MS
+    const stuck = agentAgrees && now.getTime() - quietSince >= STUCK_AFTER_MS
     return { state: stuck ? 'stuck' : 'working', wait, turn, since: here[iStart]?.at ?? null }
   }
   const settled = open ? facts[iWait] : (here[iEnd] ?? facts[lastIndex(facts, 'session_started')])
@@ -233,8 +233,8 @@ interface SessionRow {
   cwd: string | null
   account: string | null
   created_at: Date
-  herdr_status: string | null
-  herdr_seen_at: Date | null
+  agent_status: string | null
+  agent_seen_at: Date | null
   worktree_changed_at: Date | null
   spawn_account: string | null
   /** the role of the spawn; `role` is the one the pane reported */
@@ -260,7 +260,7 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
     facts,
     known: true,
     now,
-    herdr: { status: row.herdr_status, seenAt: row.herdr_seen_at, worktreeChangedAt: row.worktree_changed_at },
+    agent: { status: row.agent_status, seenAt: row.agent_seen_at, worktreeChangedAt: row.worktree_changed_at },
   })
   if (!derived) return undefined
   return {
@@ -275,8 +275,11 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
     claudeSessionId: row.claude_session_id,
     transcriptPath: row.transcript_path,
     cwd: row.cwd,
-    herdrStatus: row.herdr_status,
-    herdrSeenAt: row.herdr_seen_at?.toISOString() ?? null,
+    agentStatus: row.agent_status,
+    agentSeenAt: row.agent_seen_at?.toISOString() ?? null,
+    // Deprecated aliases for one release (argo and agw follow in dotfiles Wave 4).
+    herdrStatus: row.agent_status,
+    herdrSeenAt: row.agent_seen_at?.toISOString() ?? null,
     role: row.spawn_role ?? row.role,
     account: row.spawn_account ?? row.account,
     parent: row.parent,
@@ -392,7 +395,7 @@ export interface Loaded {
   repo: string | null
   tier: Tier | null
   effort: Effort | null
-  herdrSeenAt: Date | null
+  agentSeenAt: Date | null
 }
 
 /** Derives a set of session rows with their events: the shared tail of the loaders below. */
@@ -414,7 +417,7 @@ async function derive(sql: SQL, rows: readonly SessionRow[], now: Date): Promise
             repo: row.repo,
             tier: row.tier,
             effort: row.effort,
-            herdrSeenAt: row.herdr_seen_at,
+            agentSeenAt: row.agent_seen_at,
           },
         ]
       : []
@@ -445,7 +448,7 @@ export const RULES_HORIZON_MS = 7 * 24 * 3_600_000
 
 /**
  * Every session that is not ended and had an event within the horizon, derived (dead ones by a gone pane included: a
- * herdr restart makes those, and they are what the restart rule resumes).
+ * a runner restart makes those, and they are what the restart rule resumes).
  */
 export async function loadSessions(sql: SQL, now: Date): Promise<Loaded[]> {
   const since = new Date(now.getTime() - RULES_HORIZON_MS)

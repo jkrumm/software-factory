@@ -4,7 +4,7 @@ import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { type NewPrompt, recordPrompt, settleDelivered } from './prompts.ts'
 import {
   type Fact,
-  HERDR_SESSION,
+  RUNNER_SESSION,
   HOOK_KINDS,
   getSession,
   isFinished,
@@ -28,15 +28,15 @@ export const ROTATE_AT = 94
 export const ROTATING_ROLES: readonly string[] = ['mother', 'lead']
 /** A session that sits on a confirmation this long is reported, and its parent told. */
 export const BLOCKED_AFTER_MS = 2 * 60_000
-/** A herdr restart is acted on after the witness has had two passes at it and only while it is recent. */
+/** A runner restart is acted on after the witness has had two passes at it and only while it is recent. */
 export const RESTART_SETTLE_MS = 3 * 60_000
 export const RESTART_WINDOW_MS = 2 * 3_600_000
 
 const iso = (d: Date) => d.toISOString()
 
-/** The sentence a session is given when its turn was cut off by a herdr restart. */
+/** The sentence a session is given when its turn was cut off by a runner restart. */
 export const RESTART_NOTE =
-  'The herdr server restarted while a turn was running, so that turn was cut off. Check where you stopped and carry on.'
+  'The runner restarted while a turn was running, so that turn was cut off. Check where you stopped and carry on.'
 
 /** The current life of a session: its facts from the latest `session_started` on. */
 const thisLife = (facts: readonly Fact[]): readonly Fact[] => {
@@ -189,8 +189,8 @@ const openTurnAt = (facts: readonly Fact[], at: Date): boolean => {
 }
 
 /**
- * herdr restart: `restart:<server>:<session>`, where the server is the new one's identity (pid and start time). A session
- * that had a turn open when herdr restarted, has said nothing since and that herdr has not shown again is cut off: it is
+ * runner restart: `restart:<server>:<session>`, where the server is the new one's identity (core pid and id). A session
+ * that had a turn open when the runner restarted, has said nothing since and that the runner has not shown again is cut off: it is
  * resumed by id with a note. One that cannot be resumed (not started by the factory, no Claude session id) gets a failed
  * prompt, which is the line in status.
  */
@@ -199,15 +199,15 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
   const settled = new Date(now.getTime() - RESTART_SETTLE_MS)
   const events: { at: Date; payload: { to?: string } | null }[] = await sql`
     SELECT at, payload FROM factory.events
-    WHERE session = ${HERDR_SESSION} AND kind = 'herdr_restarted' AND at > ${since} AND at <= ${settled} ORDER BY at`
+    WHERE session = ${RUNNER_SESSION} AND kind = 'runner_restarted' AND at > ${since} AND at <= ${settled} ORDER BY at`
   const out: Candidate[] = []
   for (const event of events) {
     const server = event.payload?.to
     if (!server) continue
-    for (const { view, facts, herdrSeenAt, repo } of sessions) {
+    for (const { view, facts, agentSeenAt, repo } of sessions) {
       if (!openTurnAt(facts, event.at)) continue
       if (facts.some((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))) continue
-      if (herdrSeenAt && herdrSeenAt > event.at) continue
+      if (agentSeenAt && agentSeenAt > event.at) continue
       const base = { id: `restart:${server}:${view.id}`, session: view.id, source: 'restart', via: 'resume' as const }
       const reason =
         !view.spawn || !repo || !view.account
@@ -217,7 +217,7 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
             : undefined
       out.push(
         reason
-          ? { ...base, text: RESTART_NOTE, failed: `cut off by a herdr restart, cannot be resumed: it ${reason}` }
+          ? { ...base, text: RESTART_NOTE, failed: `cut off by a runner restart, cannot be resumed: it ${reason}` }
           : { ...base, text: RESTART_NOTE },
       )
     }

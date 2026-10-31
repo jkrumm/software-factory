@@ -13,9 +13,10 @@ import {
 import { recordReading } from '../src/capacity.ts'
 import { setQueue } from '../src/queue.ts'
 import { createSpawn } from '../src/spawns.ts'
-import { HerdrRunner, UncertainTyping } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
+import { UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { usage } from './support/quota.ts'
 import { FakeRunner, world } from './support/world.ts'
@@ -137,7 +138,7 @@ describe('prompt delivery', () => {
     expect(runner.typed).toHaveLength(1)
   })
 
-  test('a session that is busy in herdr leaves it pending, with nothing counted', async () => {
+  test('a session that is busy in the runner leaves it pending, with nothing counted', async () => {
     await working()
     await endTurn()
     await note('n1')
@@ -154,9 +155,9 @@ describe('prompt delivery', () => {
     await working()
     await endTurn()
     await note('n1')
-    runner.failure = new Error('herdr agent prompt: exited 1')
+    runner.failure = new Error('hc terminal.send: exited 1')
     await deliver()
-    expect(await row('n1')).toMatchObject({ status: 'pending', failures: 1, error: 'herdr agent prompt: exited 1' })
+    expect(await row('n1')).toMatchObject({ status: 'pending', failures: 1, error: 'hc terminal.send: exited 1' })
     await deliver()
     expect((await row('n1')).failures).toBe(1)
     for (let i = 1; i < MAX_FAILURES; i++) {
@@ -266,7 +267,7 @@ describe('prompt delivery: guards', () => {
     await working()
     await endTurn()
     await note('n1')
-    runner.failure = new UncertainTyping('herdr agent prompt for w1:s: timed out')
+    runner.failure = new UncertainTyping('hc terminal.send: timed out')
     await deliver()
     expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 1, failures: 0 })
     runner.failure = undefined
@@ -371,7 +372,7 @@ describe('prompt delivery: one at a time, and resumes are admitted', () => {
   const open = (account: string) =>
     recordReading(db.sql, { account, ...usage(10, 10, new Date(clock.now().getTime() + 3_600_000)) }, clock.now())
 
-  test('a herdr-restart resume under drain starts nothing, and starts once the queue runs again', async () => {
+  test('a runner-restart resume under drain starts nothing, and starts once the queue runs again', async () => {
     await resume()
     await open('a')
     await setQueue(db.sql, null, 'drain', clock.now())
@@ -421,7 +422,7 @@ describe('prompt delivery: one at a time, and resumes are admitted', () => {
     await resume()
     await open('a')
     const [{ assigned_at: before }] = await db.sql`SELECT assigned_at FROM factory.spawns WHERE key = 's'`
-    runner.failure = new Error('herdr agent start: exited 1')
+    runner.failure = new Error('hc terminal.run: exited 1')
     await deliver()
     const [{ assigned_at: after }] = await db.sql`SELECT assigned_at FROM factory.spawns WHERE key = 's'`
     expect(new Date(after).getTime()).toBe(new Date(before).getTime())
@@ -450,20 +451,20 @@ describe('the open prompts in status', () => {
   })
 })
 
-describe('the herdr adapter types into the agent', () => {
-  let herdr: FakeHerdr
+describe('the hc adapter types into the agent', () => {
+  let hc: FakeHc
   beforeAll(async () => {
-    herdr = await createFakeHerdr()
+    hc = await createFakeHc()
   })
-  afterAll(() => herdr.cleanup())
+  afterAll(() => hc.cleanup())
 
   const start = async () => {
-    await herdr.reset()
-    const r = new HerdrRunner({
-      bin: herdr.bin,
+    await hc.reset()
+    const r = new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     })
@@ -478,43 +479,47 @@ describe('the herdr adapter types into the agent', () => {
     })
     return { r, pane: session }
   }
+  const sent = async () => (await hc.state()).sent.map((p) => p.text)
+
   test('submits the text to an agent that is not working, and leaves a working one alone', async () => {
     const { r, pane } = await start()
     expect(await r.type({ pane, text: 'second' })).toBe('busy')
-    expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first'])
+    expect(await sent()).toEqual([])
 
-    await herdr.setAgentStatus(pane, 'idle')
+    await hc.setStatus(pane, 'idle')
     expect(await r.type({ pane, text: 'second' })).toBe('typed')
-    expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first', 'second'])
+    expect(await sent()).toEqual(['second'])
   })
 
-  test('types nothing into an agent that is blocked on a dialog, or whose state herdr does not know', async () => {
+  test('types nothing into an agent that is blocked on a dialog, or whose state the core does not know', async () => {
     const { r, pane } = await start()
-    for (const status of ['blocked', 'unknown', 'working']) {
-      await herdr.setAgentStatus(pane, status)
+    for (const status of ['blocked', 'error', 'working']) {
+      await hc.setStatus(pane, status)
       expect(await r.type({ pane, text: 'second' })).toBe('busy')
     }
-    await herdr.setAgentStatus(pane, 'done')
+    await hc.setStatus(pane, null)
+    expect(await r.type({ pane, text: 'second' })).toBe('busy')
+    await hc.setStatus(pane, 'done')
     expect(await r.type({ pane, text: 'second' })).toBe('typed')
-    expect((await herdr.state()).prompts.map((p) => p.text)).toEqual(['first', 'second'])
+    expect(await sent()).toEqual(['second'])
   })
 
-  test('a prompt call that dies without an answer is uncertain; an error body from herdr is a refusal', async () => {
+  test('a send that dies without an answer is uncertain; an error body from the core is a refusal', async () => {
     const { r, pane } = await start()
-    await herdr.setAgentStatus(pane, 'idle')
-    await herdr.plan('agent prompt:exit1')
+    await hc.setStatus(pane, 'idle')
+    await hc.plan('terminal.get:ok', 'terminal.send:exit1')
     expect(await r.type({ pane, text: 'second' }).catch((e: unknown) => e)).toBeInstanceOf(UncertainTyping)
-    await herdr.plan('agent prompt:error')
+    await hc.plan('terminal.get:ok', 'terminal.send:error')
     const refused = await r.type({ pane, text: 'second' }).catch((e: unknown) => e)
     expect(refused).toBeInstanceOf(Error)
     expect(refused).not.toBeInstanceOf(UncertainTyping)
   })
 
-  test('an agent herdr cannot read is an error and nothing is sent', async () => {
+  test('an agent the core cannot read is an error and nothing is sent', async () => {
     const { r, pane } = await start()
-    await herdr.plan('agent get:unreadable')
+    await hc.plan('terminal.get:exit1')
     const error = await r.type({ pane, text: 'second' }).catch((e: unknown) => e)
-    expect((error as Error).message).toContain('unreadable')
-    expect((await herdr.state()).prompts).toHaveLength(1)
+    expect((error as Error).message).toContain('without a reply')
+    expect(await sent()).toEqual([])
   })
 })

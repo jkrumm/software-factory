@@ -3,7 +3,10 @@ import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/s
 
 export interface Config {
   databaseUrl: string
-  herdrBin: string
+  /** herdr-core's `hc` (`HC_BIN`) */
+  hcBin: string
+  /** another core than the default one (`HC_SESSION`, tests) */
+  hcSession?: string
   token: string
   port: number
   version: string
@@ -29,7 +32,7 @@ export interface Config {
 const DOTFILES = 'SourceRoot/dotfiles'
 
 /**
- * How long a spawn stays retryable, counted from its first claim: a herdr that restarts for a few minutes fails
+ * How long a spawn stays retryable, counted from its first claim: a runner that restarts for a few minutes fails
  * nothing. Only a start that failed counts; time spent waiting for capacity does not (the clock resets there).
  */
 export const DEFAULT_RETRY_BUDGET_MS = 30 * 60_000
@@ -49,7 +52,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   if (token.length < 16) throw new Error('FACTORY_TOKEN must be at least 16 characters')
   return {
     databaseUrl: required('DATABASE_URL'),
-    herdrBin: required('HERDR_BIN'),
+    hcBin: required('HC_BIN'),
+    hcSession: env.HC_SESSION || undefined,
     token,
     port,
     version: env.FACTORY_VERSION || 'dev',

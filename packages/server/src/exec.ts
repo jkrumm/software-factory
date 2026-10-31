@@ -6,7 +6,7 @@ export interface ProcessResult {
 /** Stands in for an exit code when the process had to be killed: a transient failure like any other non-zero exit. */
 export const EXIT_TIMEOUT = -1
 
-/** Longest one `herdr` invocation may run before it is killed. */
+/** Longest one `hc` invocation may run before it is killed. */
 export const DEFAULT_PROCESS_TIMEOUT_MS = 10_000
 
 /** The command could not be started at all (no such binary): retrying will not help. */
@@ -20,7 +20,7 @@ export class CannotExecute extends Error {
   }
 }
 
-/** What the factory is given to run on is not for herdr, which would pass it on to every agent pane it starts. */
+/** What the factory is given to run on is not for `hc`, which would pass its environment on. */
 const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL']
 
 export function childEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
@@ -29,15 +29,24 @@ export function childEnv(extra: Record<string, string> = {}): Record<string, str
   return env
 }
 
-/** Runs a command and reads its stdout; past `timeoutMs` it is killed and the exit code is `EXIT_TIMEOUT`. */
+/**
+ * Runs a command and reads its stdout; past `timeoutMs` it is killed and the exit code is `EXIT_TIMEOUT`. `input`, if given,
+ * is written to its stdin, which is then closed.
+ */
 export async function runProcess(
   cmd: string[],
   timeoutMs: number,
   env: Record<string, string | undefined> = childEnv(),
+  input?: string,
 ): Promise<ProcessResult> {
-  let proc: Bun.Subprocess<'ignore', 'pipe', 'ignore'>
+  let proc: Bun.Subprocess<Bun.SpawnOptions.Writable, 'pipe', 'ignore'>
   try {
-    proc = Bun.spawn(cmd, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', env })
+    proc = Bun.spawn(cmd, {
+      stdin: input === undefined ? 'ignore' : Buffer.from(input),
+      stdout: 'pipe',
+      stderr: 'ignore',
+      env,
+    })
   } catch (cause) {
     throw new CannotExecute(cmd[0] ?? '', cause)
   }

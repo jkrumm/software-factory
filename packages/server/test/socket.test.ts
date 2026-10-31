@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Session, Spawn } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
-import { HerdrRunner } from '../src/runner.ts'
+import { HcRunner } from '../src/hc-runner.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { createFakeHerdr, type FakeHerdr } from './support/herdr.ts'
+import { createFakeHc, type FakeHc } from './support/hc.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { usage } from './support/quota.ts'
 
@@ -18,7 +18,7 @@ const WORKTREE = join(TEST_REPO, '.claude', 'worktrees', 'w1')
 mkdirSync(WORKTREE, { recursive: true })
 
 let db: TestDb
-let herdr: FakeHerdr
+let hc: FakeHc
 let app: TestApp
 let dir: string
 let socket: string
@@ -27,7 +27,7 @@ const clock = new FakeClock()
 
 beforeAll(async () => {
   db = await startTestDb()
-  herdr = await createFakeHerdr()
+  hc = await createFakeHc()
   app = startApp({ sql: db.sql, clock })
   dir = mkdtempSync('/tmp/factory-socket-')
   socket = join(dir, 'h.sock')
@@ -44,14 +44,14 @@ beforeAll(async () => {
 afterAll(async () => {
   await hooks.stop(true)
   await app.stop()
-  await herdr.cleanup()
+  await hc.cleanup()
   await db.stop()
   rmSync(dir, { recursive: true, force: true })
   rmSync(OUTSIDE, { recursive: true, force: true })
 })
 beforeEach(async () => {
   await db.reset()
-  await herdr.reset()
+  await hc.reset()
   for (const account of ACCOUNTS) {
     await app.send('PUT', `/quota/accounts/${account}`, usage(10, 10, new Date(clock.now().getTime() + 1e9)))
   }
@@ -68,11 +68,11 @@ const runTick = () =>
   tick({
     sql: db.sql,
     clock,
-    runner: new HerdrRunner({
-      bin: herdr.bin,
+    runner: new HcRunner({
+      bin: hc.bin,
       clock,
-      pretrustBin: herdr.pretrustBin,
-      accountsFile: herdr.accountsFile,
+      pretrustBin: hc.pretrustBin,
+      accountsFile: hc.accountsFile,
       home: '/home/me',
       deliverWaitMs: 3_000,
     }),
@@ -172,11 +172,11 @@ describe('a spawn started in a space shows its pane, tab and space', () => {
   test('spawn get and session get carry the ids the Runner made', async () => {
     await viaSocket('POST', '/spawns', { key: 'tabbed', repo: TEST_REPO, prompt: 'go' })
     expect(await runTick()).toMatchObject({ started: ['tabbed'] })
-    const state = await herdr.state()
+    const state = await hc.state()
     const ids = {
-      pane: state.panes[0]?.pane_id as string,
-      tab: state.tabs[0]?.tab_id as string,
-      workspace: state.workspaces[0]?.workspace_id as string,
+      pane: state.terminals[0]?.address as string,
+      tab: state.terminals[0]?.labels['herdr.tab'] as string,
+      workspace: state.terminals[0]?.labels['herdr.space'] as string,
     }
     const spawn = Spawn.parse(await (await viaSocket('GET', '/spawns/tabbed')).json())
     expect(spawn).toMatchObject({ status: 'started', ...ids, session: ids.pane })
@@ -193,7 +193,7 @@ describe('a spawn started in a space shows its pane, tab and space', () => {
     const fan = Spawn.parse(await (await viaSocket('GET', '/spawns/fan')).json())
     expect(fan.workspace).toBe(lead.workspace as string)
     expect(fan).toMatchObject({ repo: WORKTREE, space: TEST_REPO })
-    expect((await herdr.state()).workspaces).toHaveLength(1)
+    expect(new Set((await hc.state()).terminals.map((t) => t.labels['herdr.space'])).size).toBe(1)
 
     await viaSocket('POST', '/spawns', { key: 'apart', repo: TEST_REPO, prompt: 'go', new_space: true })
     await runTick()
@@ -254,13 +254,14 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json()).role).toBeNull()
   })
 
-  test('the hook binary reports FACTORY_ROLE, HERDR_PANE_ID and HERDR_TAB_ID at session-start', async () => {
+  test('the hook binary reports FACTORY_ROLE and HC_TERMINAL_ID (HERDR_PANE_ID for a classic pane) at session-start, and no tab for a terminal of the core', async () => {
     const spool = mkdtempSync('/tmp/factory-spool-')
     const proc = Bun.spawn(['bun', CLI, 'hook', 'session-start'], {
       env: {
         ...process.env,
         FACTORY_SESSION: 'rd-2',
         FACTORY_ROLE: 'lead',
+        HC_TERMINAL_ID: 't8',
         HERDR_PANE_ID: 'w8:p1',
         HERDR_TAB_ID: 'w8:t1',
         FACTORY_SOCKET: socket,
@@ -274,7 +275,29 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     expect(await proc.exited).toBe(0)
     rmSync(spool, { recursive: true, force: true })
     const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-2')).json())
-    expect(session).toMatchObject({ role: 'lead', pane: 'w8:p1', tab: 'w8:t1' })
+    expect(session).toMatchObject({ role: 'lead', pane: 't8', tab: null })
+  })
+
+  test('a session still in a classic pane reports that pane and its tab', async () => {
+    const spool = mkdtempSync('/tmp/factory-spool-')
+    const proc = Bun.spawn(['bun', CLI, 'hook', 'session-start'], {
+      env: {
+        ...process.env,
+        FACTORY_SESSION: 'rd-3',
+        HERDR_PANE_ID: 'w8:p2',
+        HERDR_TAB_ID: 'w8:t2',
+        FACTORY_SOCKET: socket,
+        FACTORY_SPOOL_DIR: spool,
+      },
+      stdin: new Blob([JSON.stringify({ session_id: 'c3', cwd: TEST_REPO })]),
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(await proc.stdout.text()).toBe('')
+    expect(await proc.exited).toBe(0)
+    rmSync(spool, { recursive: true, force: true })
+    const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-3')).json())
+    expect(session).toMatchObject({ pane: 'w8:p2', tab: 'w8:t2' })
   })
 })
 
@@ -308,7 +331,7 @@ describe('factory spawn create from a pane: no token, a parent from FACTORY_SESS
     await runTick()
     const got = await factory(['spawn', 'get', 'from-pane'], {})
     expect(JSON.parse(got.stdout)).toMatchObject({ status: 'started', parent: 'lead-7' })
-    expect(JSON.parse(got.stdout).tab).toMatch(/^w/)
+    expect(JSON.parse(got.stdout).tab).toMatch(/^tb-/)
   })
 
   test('a repo outside the roots is refused (exit 1 for 422) and nothing is stored', async () => {

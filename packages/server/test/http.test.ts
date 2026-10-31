@@ -62,7 +62,7 @@ describe('routing (finding 8)', () => {
 describe('config (finding 5)', () => {
   const env = {
     DATABASE_URL: 'postgres://x',
-    HERDR_BIN: 'herdr',
+    HC_BIN: '/usr/local/bin/hc',
     PORT: '7793',
     FACTORY_TOKEN: 'a-token-of-16-chars',
     HOME: '/home/me',
@@ -71,7 +71,7 @@ describe('config (finding 5)', () => {
   test('reads the environment', () => {
     expect(loadConfig({ ...env, FACTORY_VERSION: 'abc' })).toEqual({
       databaseUrl: 'postgres://x',
-      herdrBin: 'herdr',
+      hcBin: '/usr/local/bin/hc',
       token: 'a-token-of-16-chars',
       port: 7793,
       version: 'abc',
@@ -116,7 +116,7 @@ describe('config (finding 5)', () => {
     expect(() => loadConfig({ ...env, FACTORY_TOKEN: 'short' })).toThrow(/FACTORY_TOKEN/)
   })
 
-  test.each(['DATABASE_URL', 'HERDR_BIN', 'PORT', 'FACTORY_TOKEN'])('%s is required', (name) => {
+  test.each(['DATABASE_URL', 'HC_BIN', 'PORT', 'FACTORY_TOKEN'])('%s is required', (name) => {
     expect(() => loadConfig({ ...env, [name]: undefined })).toThrow(`${name} is not set`)
   })
 })

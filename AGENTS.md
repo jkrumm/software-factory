@@ -1,7 +1,7 @@
 # software-factory
 
 The lifecycle server for agent-built software: it takes in signals and requests, merges duplicates, queues
-work against the available Claude Code subscriptions, starts interactive Claude Code sessions in herdr that
+work against the available Claude Code subscriptions, starts interactive Claude Code sessions in herdr-core terminals that
 own a piece of work from root cause to production evidence, follows them through hooks, and closes and
 learns. CLI `factory`. Status: being planned and built; `docs/program.md` is the current state.
 
@@ -15,12 +15,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   file. Placeholders: `<your-domain>`, `<see-1password>`. Secrets resolve at runtime through `secrets-run`.
 - **The factory never calls a model.** Every judgment (classify, dedup, wording, learnings) is an `agw`
   workflow; the factory calls `agw` like any other client. No model SDK in this repo.
-- **Dependencies point one way:** factory → agw, herdr, GitHub, the intake sources. Nothing here is imported
+- **Dependencies point one way:** factory → agw, herdr-core, GitHub, the intake sources. Nothing here is imported
   by agent-workflows.
 - **Facts are stored, state is derived.** "Working", "stuck", "waiting" are computed from events when read.
 - **Every effect has a deterministic key** (pane names, prompt ids, comment markers), so a replayed tick
   never spawns, prompts or posts twice.
-- **Interactive Claude Code in herdr only.** Never headless `claude -p`.
+- **Interactive Claude Code in herdr-core only.** Never headless `claude -p`.
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes,
   never prompts.
 - Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day release-age
@@ -32,26 +32,45 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   starts a failed spawn over. Admission is decided again at every claim except a reclaim (an expired lease: its agent may
   already run, so it finishes on its account), and only due rows are selected
   (`docs/design.md` §3, "The tick").
-- **One herdr space per repo (FL6), keyed by path.** A spawn has a `space` (a path, default its `repo`, resolved like the repo and
-  inside the same roots; `POST /spawns` takes `space` and `new_space`). The Runner finds the space by path, never by directory
-  name: the label (the directory's name, `rd`'s convention) only narrows the candidates, and a space counts when one of its panes is
-  in the path or below it (a worktree). So two repos named `app` have two spaces, a second spawn in a repo is a new tab in its
-  space, and a fan worker's worktree passes its main checkout as `space` and lands there. A second space for a path that has one
-  only with `new_space: true` (a retry of that key goes back into its space). The result names the pane, the tab and the space
-  (`spawns.session|tab|workspace`; `Spawn.pane` is `session`), and the pane's environment carries `FACTORY_ROLE`. `space` must be the
-  repo or a directory containing it (422 otherwise: the space is found again by its panes, which sit in the repo). A try that fails
-  reports the space it made or found (`RunnerError.workspace`), the tick records it, and a retry or a herdr-restart resume passes
-  it back as `StartInput.workspace`: that space is used while herdr still has it, so a `new_space` spawn never makes a second one
-  for itself and a resume never lands in a sibling space of the same path. The previous release ignores `space`, `new_space` and
-  the recorded space (it starts in the repo's space): drain the queue before rolling back.
-- **The runner looks before it acts.** `HerdrRunner` (herdr 0.9.3) finds the tab by its label and the agent by its
-  pane, never by an exit code, and carries on where an earlier call stopped: no second tab, no second agent, no second
-  prompt (a prompt counts as delivered once the agent is not a fresh idle one). It does the steps of `rd wave`
-  (account's `CLAUDE_CONFIG_DIR` via `--env`, `claude-pretrust.sh` before every `agent start` (a test pins that a path never seen before is trusted first), `agent start --model <tier> --effort <effort>` from the
-  spawn's role, prompt proven by a state change, one re-send); a tab without a ready agent is never `started`. A prompt cannot start with `-` (herdr reads it as an option).
-- **A failed spawn leaves its tab.** The tab is named after the key and `factory spawn requeue` finds it again (an agent
-  already running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A tab with
-  no agent is closed and made again on every try, so a retry on another account gets that account's environment.
+- **One space per repo (FL6), keyed by path.** A spawn has a `space` (a path, default its `repo`, resolved like the repo and inside
+  the same roots, and containing the repo: 422 otherwise; `POST /spawns` takes `space` and `new_space`). The space is an id the
+  Runner puts in the label `herdr.space`: the entry of the Herdr app's document `herdr-app` whose `folder` is the resolved space
+  path (found by path, so two repos named `app` have two spaces and a worktree's `space` is its main checkout), else
+  `sp-<dir>-<12 hex of sha256 of the realpath>` (the full root is hashed, so `~/SourceRoot/x` and `~/IuRoot/x` differ). A second
+  spawn in a repo is a new tab in its space. `new_space: true` makes a second space for a path that already has one (the id also
+  hashes the key, so a retry makes the same); on a path with none it takes the first. The result names the terminal, the tab and
+  the space (`spawns.session|tab|workspace`; `Spawn.pane` is `session`). A try that fails reports its space
+  (`RunnerError.workspace`), the tick records it, and a retry or a runner-restart resume passes it back as `StartInput.workspace`:
+  it wins when it is an id the Runner made (`sp…`) or a live terminal is in it. The previous release ignores `space`, `new_space`
+  and the recorded space: drain the queue before rolling back.
+- **The runner looks before it acts.** `HcRunner` (`hc-runner.ts`, herdr-core 0.1.15 over `hc connect`; `HcClient` in `hc.ts` is one
+  short-lived process per JSON-RPC call: `hello`, the request, stdin closed, the reply read by id, each under the process timeout
+  and the start budget, `childEnv()` stripping the factory's secrets; `HC_BIN`, and `HC_SESSION` for tests, pick the binary and the
+  core). Every terminal carries `factory.key=<spawn key>`: a live one running claude is never started again, only proven; a
+  finished one that reported, had a status or a turn is started (its prompt ran; a second run would repeat the work), one that never
+  reported, or a live one that is no longer claude (the shell the core puts in a kept terminal after a `kill -9`), is
+  killed if needed, `terminal.rm`'d and the spawn started afresh (a retry may be on another account); an error is a transient
+  `RunnerError`. Finding, placing and running go one at a time per runner (two starts never both take an empty space's id).
+  **The prompt is the last argument of the program** (`claude --dangerously-skip-permissions --model <tier> --effort <effort>
+  [--resume <id>] <prompt>`; `claude --resume <id> "<prompt>"` takes the id as the option's value), `cwd` is always the repo, `keep: true`, the
+  name an hc-valid `agentName`; so nothing is typed at start. The agent is started when `terminal.get` shows it reported (`reported`,
+  a status or `turn >= 1`) inside the deliver window (30 s), else a transient error. `claude-pretrust.sh` runs before every
+  spawn (a test pins that a path never seen before is trusted first). A prompt cannot start with `-`. The account is in the `env` of
+  `terminal.run` (`accountEnv`): `CLAUDE_CONFIG_DIR` only for a non-default account, never empty, never inherited, plus
+  `CLAUDE_ACCOUNT_PICKED`, `USAGE_LANE`, `FACTORY_SESSION`, `FACTORY_ROLE`.
+  Placement is by labels, no window needed: a **tab** (any role, or a worker whose parent session has no known terminal) has
+  `no_parent`, `herdr.space`, `herdr.tab` (`tb-<12 hex of sha256 of the key>`) and `factory.tab_name`; its entry in the app's
+  document is named after the key once the app has one (compare-and-set on `version`, `app-doc.ts`; the witness retries on a label
+  or document event). A **worker** (`worker`/`mechanical`, not `new_space`) whose parent session has a terminal (`StartInput.parentTerminal`, the
+  parent's `pane`) is that terminal's hidden child: `parent`, `outlive_parent`, `no_notify` (the factory wakes parents itself), no
+  labels but the key; its result has no tab (null) and the space of its parent's `herdr.space` label (null if none); a parent
+  that is gone (`not_found`) makes that try a tab. The app's document is read for spaces: only a confirmed absence (`not_found`, never
+  written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
+  refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
+  `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely and unverified against the app.
+- **A failed spawn leaves its terminal.** It is labelled with the key and `factory spawn requeue` finds it again (an agent already
+  running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A finished terminal is
+  removed and made again on every try, so a retry on another account gets that account's environment.
 - **Trust boundary.** The token can start Claude Code with `--dangerously-skip-permissions`, so a spawn's `repo` must be
   inside an allow-listed root: `FACTORY_REPO_ROOTS` (colon-separated, default `$HOME/SourceRoot:$HOME/IuRoot`). The path
   is resolved with `realpath` and must be strictly inside a resolved root, so neither `..` nor a symlink leaves it;
@@ -71,9 +90,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   three reads a spawner needs to follow it, `GET /spawns/:key`, `GET /sessions/:id` and `GET /queue[?project=]` (`factory spawn get`,
   `session get`, `queue get` use the socket when `FACTORY_TOKEN` is not set), which a session in a pane runs without a token, and
   nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
-  identity; a same-user pane can already drive any pane through herdr, so this adds no capability, and it is a known and accepted
+  identity; a same-user pane can already drive any terminal through hc, so this adds no capability, and it is a known and accepted
   cross-session path); an event of
-  kind `herdr_restarted` or `pane_gone`, or filed under `_herdr`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  kind `runner_restarted` (or the old `herdr_restarted`) or `pane_gone`, or filed under `_runner` (or `_herdr`), is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
   stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
   session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account` (only if it is a name in the registry's alphabet, checked in the hook and again by the server), which is how
@@ -81,19 +100,19 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Prompt delivery** (`prompts.ts`) is the one way anything types into a session. `factory session note <session> <text>`
   (`POST /sessions/:id/note`, socket or token; `--id` makes a repeated call one note) and every rule below record a row in
   `factory.prompts` under its id first (`ON CONFLICT DO NOTHING`: the same id is one prompt). The tick types it through
-  `Runner.type` (herdr `agent prompt`; `busy` while herdr says `working`) once the derived state is `idle`, `waiting` or
+  `Runner.type` (`terminal.send`; `busy` while the runner says `working`) once the derived state is `idle`, `waiting` or
   `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
   before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
   No turn within a minute: typed once more (`MAX_SENDS` 2), then `failed` with the reason, which stays in `factory status` for
   a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
-  (`UncertainTyping`: herdr timed out or died after the call) counts as sent and waits for a turn; the one retry after a
+  (`UncertainTyping`: hc timed out or died after the call) counts as sent and waits for a turn; the one retry after a
   minute without one is the only second typing, as for a claim left `typing` by a crashed tick (after the start budget plus a minute).
-  `Runner.type` types only into an agent herdr calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
+  `Runner.type` types only into an agent the core calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
   (a rule's) or 24 h (a note). A rule whose prompt failed or expired asks again after 30 min while its condition holds
   (the same row starts over; a delivered prompt, a note, or a prompt recorded as undeliverable never does). One prompt is
   typed per session per pass. A later prompt for a session waits while an earlier one is `typing` or `sent` and unproven. A retry is not typed if a turn has shown up since its claim; a `busy` answer clears the claim, so a later turn proves nothing. A prompt resumes a session only while it has shown no life since the prompt was recorded. Only
-  prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (herdr reads it as an
-  option) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `wake:`, `restart:`), which would take the rule's place.
+  prompts that reach the Runner count against a tick's batch of 10. A note cannot start with `-` (it could read as a
+  flag) and cannot use a rule's id prefix (`resume:`, `rotate:`, `blocked:`, `wake:`, `restart:`), which would take the rule's place.
   The blocked note names the worker but not its prompt text: that is agent-produced and stays in `factory status`.
 - **Rules that act** (`rules.ts`, run at the start of every tick after the spool replay and the quota poll; each records its
   effect under a key, so a replay records nothing):
@@ -127,8 +146,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     after it (the woken turn waits again) or a `--done` already there is left alone. At delivery, not at creation: until a
     turn proves the note the session stays `waiting` (true: it has not woken), and a wake that fails or expires clears
     nothing, so the rule can ask again after 30 min.
-  - *herdr restart*: a `herdr_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
-    at that time, has had no hook event since and that herdr has not shown since is resumed by id (`Runner.start` with
+  - *runner restart*: a `runner_restarted` event at least 3 minutes and at most 2 hours old: each session that had a turn open
+    at that time, has had no hook event since and that the runner has not shown since is resumed by id (`Runner.start` with
     `resume`: `claude --resume <claude session id>` in a new tab on the spawn's account, the note as its first prompt),
     `restart:<new server identity>:<session>`. A resume starts an agent, so it is admitted like a spawn claim (held under
     `drain`, `pace` or a full account, only on the account the conversation lives in; the hold shows in the prompt's error) and
@@ -149,9 +168,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   dead cannot release its successor's lock.
 - **Derived state** (`sessions.ts`, first match wins; turns, walls and prompts count from the latest `session_started`):
   `dead` (last of session_started / session_ended / pane_gone is not a start; a `pane_gone` is withdrawn by a later hook
-  event or by herdr showing the agent again), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no
+  event or by the runner showing the agent again), `starting` (the factory has the row, nothing proves it is up), `walled` (limit_stop or quota_resume with no
   later turn_started; a turn that ends after `quota_resume fired` ends it too), `blocked` (prompt_blocked with no later
-  turn_started or turn_ended), `working` (open turn; `stuck` when herdr says working within 5 minutes and neither the
+  turn_started or turn_ended), `working` (open turn; `stuck` when the runner says working within 5 minutes and neither the
   worktree nor the turn moved for 45 minutes), `waiting` (an open `factory session wait --on workers|deploy|owner`, no
   open turn; the wait ends with `--done` or when a delivered wake answers it), `idle`. Events are ordered by event time, then arrival. Only `limit_stop` from `StopFailure rate_limit`
   is a wall; other stop failures are ignored.
@@ -160,23 +179,34 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   spawn that fails for good without a pane or event takes its row with it), an `rd` name when its first event arrives. `session_started` binds
   Claude's session id, transcript path and cwd (the join key with `usage`); an older start delivered late does not
   overwrite a newer binding. The hook also reports what the pane knows of itself: `FACTORY_ROLE` (the role; a spawn's own
-  role wins), `HERDR_PANE_ID` and `HERDR_TAB_ID` (kept if the Runner already knows them), so `session get` answers `pane` and
-  `tab` for an `rd` session too and the one-wave-per-repo rule counts it.
-- **The witness** (`witness.ts`) asks herdr (`agent list`, Wave 1 process timeout) once a minute: records each session's
-  agent status, the worktree's last change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that
-  is working), and herdr's server (pid + start time from the process table, herdr has no API for it): a change is the
-  event `herdr_restarted` (filed under the pseudo-session `_herdr`). A session with a known pane that no agent matches in
-  two passes in a row gets `pane_gone` (= `dead`, key per disappearance); a pass in which herdr restarted or could not be
-  identified counts nobody as missing, and an agent that returns revives the session. Git runs without the server's
-  secrets, `core.fsmonitor` or hooks (the agent controls `.git/config`), four probes at a time. `GET /sessions` answers
-  with the newest 200. A herdr that
-  does not answer records nothing.
+  role wins) and its terminal (`HC_TERMINAL_ID` as `pane`, with no tab; `HERDR_PANE_ID` and `HERDR_TAB_ID` while an `rd` session is
+  still in a classic pane), so `session get` answers `pane` for an `rd` session too (nothing in the factory reads `tab`).
+- **The witness** (`witness.ts`, `hc-events.ts`) follows herdr-core's event stream: one long-lived `hc connect` (`events.subscribe`)
+  keeps a map of every terminal (the snapshot, then `created`/`restarted`/`status`/`turn`/`foreground`/`labels`/`lost`/`finished`/
+  `removed`; `missed` replaces the map; a line that is not JSON is dropped and the map read again). The stream ending (a core
+  restart, a dead `hc`, 45 s without a heartbeat) reconnects with a wait that doubles to 30 s and reads `server.status`: a changed
+  `pid@core id` asks for a pass. While the stream is down `agents()` asks `terminal.list` directly, and a core that does not
+  answer records nothing. A pass runs every minute, on a debounced `lost`/`finished`/`removed`/`restarted` event of a known
+  session's terminal, and on a restart; a `status`/`turn` event stores the agent's status at once (`agent_status`, and
+  `herdr_status` too for one release: a rollback reads those). A pass records each session's agent status, the worktree's last
+  change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that is working), and the server
+  (`pid@core id` from `server.status`): a change is the event `runner_restarted` (pseudo-session `_runner`); a stored identity in the
+  old format (`pid@start time`) is replaced without one. A session is matched to a terminal by its `factory.key` label, Claude session
+  id, address, then name (a terminal carrying another session's key is never matched, by any of them, nor by a status event); a `terminal.list` never undoes a newer stream event; a record that does not parse fails the whole snapshot or list (the stream reconnects with its backoff), and a failed refresh after an unreadable line makes `agents()` ask the core directly; a finished terminal, or one the core put a shell into after the program died (no status, Claude not in the
+  foreground), is no agent. A session whose pane is a terminal of this core (`t7`) and that no agent matches in two passes in a row
+  gets `pane_gone` (= `dead`, key per disappearance); a pass in which the runner restarted or could not be identified counts nobody
+  as missing, and an agent that returns revives the session. Git runs without the server's secrets, `core.fsmonitor` or hooks (the
+  agent controls `.git/config`), four probes at a time. `GET /sessions` answers with the newest 200.
+  Migration 010 renamed the vocabulary (`herdr_restarted` → `runner_restarted`, `_herdr` → `_runner`, `herdr_status|seen_at` →
+  `agent_status|seen_at`, `herdrStatus` → `agentStatus` in the contract, which has no version constant): the old kind and columns
+  stay for one release so a rollback starts, and `Session` emits both `agentStatus|agentSeenAt` and the deprecated
+  `herdrStatus|herdrSeenAt` (argo and agw follow in dotfiles Wave 4); drop them, and this sentence, in the release after.
 - **Panes are clients (SF11).** `POST /spawns` on the socket takes the HTTP route's body, validation (400), role check (422) and
   `FACTORY_REPO_ROOTS` check for `repo` and `space` (422, nothing stored), and is idempotent by key (a second create answers the
   stored spawn, 200). The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
   uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
   socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
-  repo roots still bound where it can start, and a same-user pane can already start Claude Code through herdr).
+  repo roots still bound where it can start, and a same-user pane can already start Claude Code through hc).
   The contract `rd` reads: `Spawn` (`status` `queued` with a `hold` is held, `starting` claimed, `waiting` for capacity; `pane`, `tab`,
   `workspace`, `space`, `repo`), `Session` (`pane`, `tab`, `role`), `QueueView` (`effective`), all in `packages/contract`.
 - **Test slots (FL7)** (`slots.ts`, table `slots`): `factory slot run [--name <label>] -- <cmd>` asks `PUT /slots/:id` on the socket
@@ -251,9 +281,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 
 ## Layout
 
-- `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr
-  adapter (`runner.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the herdr witness
-  (`witness.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
+- `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr-core
+  adapter (`runner.ts`: the port; `hc-runner.ts`, `hc.ts`, `app-doc.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the witness
+  (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, and the role table's schema
@@ -270,6 +300,6 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 private Postgres cluster with `initdb` in a temp dir (on PATH, or `PG_BIN_DIR`, or `/usr/lib/postgresql/<major>/bin`
 as on GitHub's runners); nothing touches a real database. `make test` runs the tests, `make fmt` formats.
 `make deploy` and `make verify` act on the mini only; `DRY_RUN=1 make deploy` prints the plan. `FACTORY_REF=<branch>` on
-both proves a branch live before it is merged (default `master`). The herdr fake for the tests is
-`packages/server/test/support/fake-herdr.ts` (shapes taken from a live herdr 0.9.3). CI runs `make check` on
+both proves a branch live before it is merged (default `master`). The hc fake for the tests is
+`packages/server/test/support/fake-hc.ts` (shapes taken from a scratch core, hc 0.1.15); `HC_E2E=1 bun test packages/server/test/hc-e2e.test.ts` runs the runner and the witness against a scratch core. CI runs `make check` on
 `ubuntu-latest`.

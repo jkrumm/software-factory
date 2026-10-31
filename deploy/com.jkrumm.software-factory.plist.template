@@ -23,8 +23,9 @@
     <string>__HOME__</string>
     <key>PORT</key>
     <string>7793</string>
-    <key>HERDR_BIN</key>
-    <string>herdr</string>
+    <!-- herdr-core's hc: found by its absolute path; HOME above is how it finds the core's socket. -->
+    <key>HC_BIN</key>
+    <string>__HOME__/.local/bin/hc</string>
     <key>FACTORY_VERSION</key>
     <string>__SHA__</string>
   </dict>

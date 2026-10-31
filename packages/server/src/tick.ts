@@ -16,7 +16,7 @@ import type { SpoolReplayer } from './spool.ts'
 export const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
 export const retryDelayMs = (attempt: number): number =>
   Math.min(RETRY_DELAY.capMs, RETRY_DELAY.baseMs * 2 ** (attempt - 1))
-/** A claim older than this is a crashed tick's: the longest a `HerdrRunner.start` can run, plus a minute. */
+/** A claim older than this is a crashed tick's: the longest a `Runner.start` can run, plus a minute. */
 export const DEFAULT_LEASE_MS = DEFAULT_START_BUDGET_MS + 60_000
 /** Most spawns one tick claims; the rest wait for the next. */
 export const DEFAULT_BATCH = 20
@@ -50,11 +50,13 @@ export interface TickResult {
 export interface Claim {
   key: string
   repo: string
-  /** the path whose herdr space the tab goes into */
+  /** the path whose space the tab goes into */
   space: string
   newSpace: boolean
   /** the space an earlier try used, if one got far enough to make it */
   workspace: string | null
+  /** the terminal the parent session runs in (its `pane`), if the spawn has a parent that has one */
+  parentPane: string | null
   role: string
   prompt: string
   account: string
@@ -72,6 +74,7 @@ interface DueRow {
   space: string
   new_space: boolean
   workspace: string | null
+  parent_pane: string | null
   prompt: string
   role: string
   tier: Tier
@@ -106,7 +109,8 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at,
+        (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
@@ -169,6 +173,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         space: row.space,
         newSpace: row.new_space,
         workspace: row.workspace,
+        parentPane: row.parent_pane,
         role: row.role,
         prompt: row.prompt,
         account: decision.account,
@@ -188,7 +193,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
 async function recordStarted(
   sql: SQL,
   key: string,
-  started: { session: string; tab: string; workspace: string },
+  started: { session: string; tab: string | null; workspace: string | null },
   at: Date,
 ): Promise<boolean> {
   const { session, tab, workspace } = started
@@ -245,6 +250,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       space: claim.space,
       newSpace: claim.newSpace,
       workspace: claim.workspace,
+      parentTerminal: claim.parentPane ?? undefined,
       role: claim.role,
       prompt: claim.prompt,
       account: claim.account,

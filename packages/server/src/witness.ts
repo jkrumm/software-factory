@@ -1,94 +1,56 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SQL } from 'bun'
-import { z } from 'zod'
 import type { Clock } from './clock.ts'
-import { childEnv, DEFAULT_PROCESS_TIMEOUT_MS, EXIT_TIMEOUT, runProcess } from './exec.ts'
+import { childEnv, runProcess } from './exec.ts'
 import { agentName } from './runner.ts'
-import { HERDR_SESSION, paneGoneWithdrawn, recordEvent } from './sessions.ts'
+import { paneGoneWithdrawn, recordEvent, RUNNER_SESSION } from './sessions.ts'
 
 export const WITNESS_INTERVAL_MS = 60_000
+/** A change the runner announces is looked at after this long, so a burst (lost, restarted, a status) is one pass. */
+export const WITNESS_DEBOUNCE_MS = 2_000
 const PROBE_CONCURRENCY = 4
-/** Consecutive passes with no herdr agent for a session before its pane counts as gone. */
+/** Consecutive passes with no runner agent for a session before its pane counts as gone. */
 export const MISSES_FOR_GONE = 2
+/** A terminal of this core (`t7`, or `machine/t7`): the only panes the witness can see. */
+const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t\d+$/
+/** `pid@core id`, what `serverId()` answers; the format before it (`pid@start time`) is read as "not known yet". */
+const SERVER_ID = /^\d+@[0-9a-f]{32}$/
 
-/** What herdr says about one agent. */
+/** What the runner says about one agent. */
 export interface AgentSeen {
+  /** the terminal's address */
   paneId: string
-  /** the name the agent was started under: `rd`'s agent name, or the spawn key as herdr spells it */
+  /** the name the agent was started under: `rd`'s agent name, or the spawn key as the runner spells it */
   name?: string
-  status: string
+  /** the terminal's `factory.key` label: the spawn key, which is the session id */
+  factoryKey?: string
+  /** `working`, `idle`, `blocked`, ...; null while the agent has said nothing */
+  status: string | null
   claudeSessionId?: string
   cwd?: string
 }
 
-/** What the witness needs of herdr; the adapter below is the only place that knows how herdr answers. */
-export interface HerdrView {
-  /** throws when herdr does not answer: a pass with no answer records nothing */
+/** What the runner announces between two passes. */
+export type RunnerChange =
+  | { kind: 'status'; agent: AgentSeen }
+  /** a terminal was lost, finished, removed or restarted as a shell: the agent in it is gone */
+  | { kind: 'gone'; paneId: string; factoryKey?: string }
+  /** the core is not the one the stream was last connected to */
+  | { kind: 'restart' }
+
+/** What the witness needs of the runner; the adapter (`HcEvents`) is the only place that knows how it answers. */
+export interface RunnerView {
+  /** throws when the runner does not answer: a pass with no answer records nothing */
   agents(): Promise<AgentSeen[]>
-  /** who the herdr server is right now (process id and start time); undefined when it cannot be told */
+  /** who the runner's server is right now (process id and core id); undefined when it cannot be told */
   serverId(): Promise<string | undefined>
+  /** changes as they happen; returns the way to stop listening */
+  watch?(listener: (change: RunnerChange) => void): () => void
 }
 
 /** When the files or commits of a worktree last changed. */
 export type WorktreeProbe = (cwd: string) => Promise<Date | undefined>
-
-const AgentList = z.object({
-  result: z.object({
-    agents: z.array(
-      z.object({
-        agent: z.string().optional(),
-        agent_status: z.string(),
-        pane_id: z.string(),
-        name: z.string().optional(),
-        cwd: z.string().optional(),
-        agent_session: z.object({ value: z.string() }).partial().optional(),
-      }),
-    ),
-  }),
-})
-
-/** herdr through its CLI, every call under the Wave 1 process timeout. */
-export class HerdrCli implements HerdrView {
-  constructor(private readonly options: { bin: string; timeoutMs?: number; psBin?: string }) {}
-
-  async agents(): Promise<AgentSeen[]> {
-    const timeoutMs = this.options.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS
-    const result = await runProcess([this.options.bin, 'agent', 'list'], timeoutMs)
-    if (result.exitCode === EXIT_TIMEOUT) throw new Error(`herdr agent list timed out after ${timeoutMs} ms`)
-    let body: unknown
-    try {
-      body = JSON.parse(result.stdout)
-    } catch {
-      throw new Error(`herdr agent list exited ${result.exitCode} and printed something unexpected`)
-    }
-    const parsed = AgentList.safeParse(body)
-    if (!parsed.success) throw new Error(`herdr agent list: ${parsed.error.issues[0]?.message ?? 'unexpected shape'}`)
-    return parsed.data.result.agents
-      .filter((a) => a.agent === 'claude')
-      .map((a) => ({
-        paneId: a.pane_id,
-        name: a.name,
-        status: a.agent_status,
-        claudeSessionId: a.agent_session?.value,
-        cwd: a.cwd,
-      }))
-  }
-
-  /** herdr has no call that names its server's process: the process table does (`herdr server`, started by launchd). */
-  async serverId(): Promise<string | undefined> {
-    const timeoutMs = this.options.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS
-    const result = await runProcess([this.options.psBin ?? 'ps', '-axo', 'pid=,lstart=,command='], timeoutMs).catch(
-      () => undefined,
-    )
-    if (result?.exitCode !== 0) return undefined
-    const servers = result.stdout.split('\n').flatMap((line) => {
-      const match = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]{8}\s+\d{4})\s+(\S*herdr)\s+server$/.exec(line)
-      return match ? [`${match[1]}@${(match[2] ?? '').replace(/\s+/g, ' ')}`] : []
-    })
-    return servers.length ? servers.sort().join(',') : undefined
-  }
-}
 
 /**
  * `git log` and `git status` are read without taking a lock the agent's own git could wait on, with the server's
@@ -138,7 +100,7 @@ export const gitProbe = async (cwd: string, gitBin = 'git'): Promise<Date | unde
 
 export interface WitnessDeps {
   sql: SQL
-  herdr: HerdrView
+  runner: RunnerView
   clock: Clock
   probe: WorktreeProbe
 }
@@ -155,15 +117,19 @@ interface Row {
   claude_session_id: string | null
   cwd: string | null
   pane_misses: number
-  herdr_seen_at: Date | null
+  agent_seen_at: Date | null
   /** the last of session_started / session_ended / pane_gone, and when */
   life: string | null
   life_at: Date | null
   hook_after: boolean
 }
 
-function match(row: Row, agents: readonly AgentSeen[]): AgentSeen | undefined {
+function match(row: Row, all: readonly AgentSeen[]): AgentSeen | undefined {
+  // A terminal that carries another session's key is that session's, whatever its address, name or Claude session id say
+  // (addresses are reused after a core is wiped).
+  const agents = all.filter((a) => a.factoryKey === undefined || a.factoryKey === row.id)
   return (
+    agents.find((a) => a.factoryKey === row.id) ??
     (row.claude_session_id ? agents.find((a) => a.claudeSessionId === row.claude_session_id) : undefined) ??
     (row.pane ? agents.find((a) => a.paneId === row.pane) : undefined) ??
     agents.find((a) => a.name === row.id || a.name === agentName(row.id))
@@ -171,40 +137,41 @@ function match(row: Row, agents: readonly AgentSeen[]): AgentSeen | undefined {
 }
 
 /**
- * One pass: ask herdr what it runs, record it, and report what hooks cannot show.
+ * One pass: ask the runner what it runs, record it, and report what hooks cannot show.
  *
- * - herdr's server process changing is the event `herdr_restarted`.
- * - Each session's agent is found (by Claude session id, pane or name); its status and the worktree's last change are
- *   stored for `stuck`.
- * - A session no agent matches for two passes in a row, and whose pane was known, has a gone pane: `pane_gone`, which
- *   is `dead`. Not in the pass where herdr itself restarted, when its panes are still coming back.
+ * - The runner's server changing (core pid or id) is the event `runner_restarted`. A stored identity in the older format
+ *   (`pid@start time`, from before herdr-core) is replaced without an event: nothing is known to have restarted.
+ * - Each session's agent is found (by its `factory.key` label, Claude session id, terminal address or name); its status
+ *   and the worktree's last change are stored for `stuck`.
+ * - A session no agent matches for two passes in a row, and whose pane is a terminal of this core, has a gone pane:
+ *   `pane_gone`, which is `dead`. Not in the pass where the runner itself restarted, when its terminals are coming back.
  */
 export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
-  const { sql, herdr, clock } = deps
-  const agents = await herdr.agents()
-  const server = await herdr.serverId()
+  const { sql, runner, clock } = deps
+  const agents = await runner.agents()
+  const server = await runner.serverId()
   const now = clock.now()
 
   let restarted = false
   if (server) {
-    const [known] = await sql`SELECT value FROM factory.witness WHERE name = 'herdr_server'`
-    if (known && known.value !== server) {
+    const [known] = await sql`SELECT value FROM factory.witness WHERE name = 'runner_server'`
+    if (known && SERVER_ID.test(known.value) && known.value !== server) {
       restarted = true
       await recordEvent(sql, {
-        key: `herdr_restarted:${server}`,
-        session: HERDR_SESSION,
-        kind: 'herdr_restarted',
+        key: `runner_restarted:${server}`,
+        session: RUNNER_SESSION,
+        kind: 'runner_restarted',
         at: now,
         payload: { from: known.value, to: server },
       })
     }
     await sql`
-      INSERT INTO factory.witness (name, value, at) VALUES ('herdr_server', ${server}, ${now})
+      INSERT INTO factory.witness (name, value, at) VALUES ('runner_server', ${server}, ${now})
       ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value, at = EXCLUDED.at`
   }
 
   const rows: Row[] = await sql`
-    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, s.herdr_seen_at, l.kind AS life, l.at AS life_at,
+    SELECT s.id, s.pane, s.claude_session_id, s.cwd, s.pane_misses, s.agent_seen_at, l.kind AS life, l.at AS life_at,
            EXISTS (
              SELECT 1 FROM factory.events h
              WHERE h.session = s.id AND h.at > l.at
@@ -220,13 +187,14 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
   const probes: (() => Promise<void>)[] = []
   for (const row of rows) {
     // An ended session is history. One whose pane was reported gone is still looked for: an agent that comes back
-    // (herdr was slow, a pane was renamed) takes the session out of `dead` again.
+    // (the runner was slow, a pane was renamed) takes the session out of `dead` again.
     if (row.life === 'session_ended') continue
     const agent = match(row, agents)
     if (agent) {
       await sql`
         UPDATE factory.sessions
-        SET pane = ${agent.paneId}, herdr_status = ${agent.status}, herdr_seen_at = ${now}, pane_misses = 0
+        SET pane = ${agent.paneId}, agent_status = ${agent.status}, agent_seen_at = ${now},
+            herdr_status = ${agent.status}, herdr_seen_at = ${now}, pane_misses = 0
         WHERE id = ${row.id}`
       const dir = row.cwd ?? agent.cwd
       if (agent.status === 'working' && dir) {
@@ -237,14 +205,15 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
       }
       continue
     }
-    // Nothing to conclude from a herdr that could not be identified, or one that has just restarted.
+    // Nothing to conclude from a runner that could not be identified, or one that has just restarted, or from a pane
+    // that is not a terminal of this core (an `rd` session still in a classic pane): the witness cannot see it.
     const stillGone =
       row.life === 'pane_gone' &&
       row.life_at !== null &&
-      !paneGoneWithdrawn({ goneAt: row.life_at, hookAfter: row.hook_after, herdrSeenAt: row.herdr_seen_at })
-    if (!row.pane || restarted || !server || stillGone) continue
+      !paneGoneWithdrawn({ goneAt: row.life_at, hookAfter: row.hook_after, agentSeenAt: row.agent_seen_at })
+    if (!row.pane || !TERMINAL_ADDRESS.test(row.pane) || restarted || !server || stillGone) continue
     const misses = row.pane_misses + 1
-    await sql`UPDATE factory.sessions SET pane_misses = ${misses}, herdr_status = NULL WHERE id = ${row.id}`
+    await sql`UPDATE factory.sessions SET pane_misses = ${misses}, agent_status = NULL, herdr_status = NULL WHERE id = ${row.id}`
     if (misses < MISSES_FOR_GONE) continue
     // One key per disappearance: a pane that came back and went again is a second event, not a replay of the first.
     const [{ starts, gones }] = await sql`
@@ -269,12 +238,27 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
   return { seen: agents.length, restarted, gone }
 }
 
-/** Runs the witness now and then every interval; a pass that fails is logged and the next one tries again. */
-export function startWitness(deps: WitnessDeps, intervalMs: number = WITNESS_INTERVAL_MS): { stop(): Promise<void> } {
+/**
+ * Runs the witness now, then every interval, and in between when the runner announces something: an agent's status is
+ * stored at once (a cheap update, so `stuck` and `blocked` do not lag a minute), and a lost, finished or removed terminal
+ * of a known session, or a restarted core, asks for a pass after a short debounce. A pass that fails is logged and the
+ * next one tries again.
+ */
+export function startWitness(
+  deps: WitnessDeps,
+  intervalMs: number = WITNESS_INTERVAL_MS,
+  debounceMs: number = WITNESS_DEBOUNCE_MS,
+): { stop(): Promise<void> } {
   let inFlight: Promise<void> | undefined
+  let again = false
   let stopped = false
+  let debounce: Timer | undefined
   const pass = () => {
-    if (stopped || inFlight) return
+    if (stopped) return
+    if (inFlight) {
+      again = true
+      return
+    }
     inFlight = witness(deps)
       .then((result) => {
         if (result.restarted || result.gone.length) console.log('witness', result)
@@ -282,14 +266,51 @@ export function startWitness(deps: WitnessDeps, intervalMs: number = WITNESS_INT
       .catch((error) => console.error('witness failed', error instanceof Error ? error.message : String(error)))
       .finally(() => {
         inFlight = undefined
+        if (again) {
+          again = false
+          pass()
+        }
       })
   }
+  const soon = () => {
+    if (stopped || debounce) return
+    debounce = setTimeout(() => {
+      debounce = undefined
+      pass()
+    }, debounceMs)
+  }
+
+  const onChange = async (change: RunnerChange) => {
+    if (change.kind === 'restart') return soon()
+    if (change.kind === 'gone') {
+      const known = await deps.sql`
+        SELECT 1 FROM factory.sessions
+        WHERE ${change.factoryKey === undefined ? deps.sql`pane = ${change.paneId}` : deps.sql`id = ${change.factoryKey}`}
+        LIMIT 1`
+      if (known.length > 0) soon()
+      return
+    }
+    const { agent } = change
+    const now = deps.clock.now()
+    await deps.sql`
+      UPDATE factory.sessions
+      SET agent_status = ${agent.status}, agent_seen_at = ${now}, herdr_status = ${agent.status}, herdr_seen_at = ${now}
+      WHERE ${agent.factoryKey === undefined ? deps.sql`pane = ${agent.paneId}` : deps.sql`id = ${agent.factoryKey}`}`
+  }
+  const unwatch = deps.runner.watch?.((change) => {
+    onChange(change).catch((error) =>
+      console.error('witness change failed', error instanceof Error ? error.message : String(error)),
+    )
+  })
+
   pass()
   const timer = setInterval(pass, intervalMs)
   return {
     stop: async () => {
       stopped = true
       clearInterval(timer)
+      clearTimeout(debounce)
+      unwatch?.()
       await inFlight
     },
   }

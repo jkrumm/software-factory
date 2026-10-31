@@ -9,7 +9,7 @@ const withSeparator = (path: string): string => (path.endsWith(sep) ? path : `${
 /**
  * The real path of a spawn's repo, if it is a directory inside one of the allowed roots. Both sides go through
  * `realpath`, so neither `..` nor a symlink (in the path, or a root that is itself a link) leads out, and the
- * stored path is the one herdr will really use. A root that does not exist allows nothing. The root itself is not a
+ * stored path is the one the runner will really use. A root that does not exist allows nothing. The root itself is not a
  * repo: the path must be strictly inside it, and `/root-evil` is not inside `/root`.
  */
 export async function resolveRepo(repo: string, roots: readonly string[]): Promise<string> {
