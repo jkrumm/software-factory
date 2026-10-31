@@ -54,7 +54,7 @@ export async function acquireSingleton(sql: SQL, options: SingletonOptions = {})
   const connection = await sql.reserve()
   const [row] = await connection`SELECT pg_try_advisory_lock(${LOCKS.singleton}) AS locked`
   if (!row?.locked) {
-    connection.release()
+    await connection.release()
     return undefined
   }
 
@@ -97,7 +97,7 @@ export async function acquireSingleton(sql: SQL, options: SingletonOptions = {})
       released = true
       clearInterval(watchdog)
       await connection`SELECT pg_advisory_unlock(${LOCKS.singleton})`
-      connection.release()
+      await connection.release()
     },
   }
 }
