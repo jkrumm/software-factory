@@ -26,5 +26,6 @@ CREATE INDEX claims_issue ON factory.claims (issue_id);
 
 -- A spawn that works an Issue waits on the Issue's claim. Fleet spawns (waves, fan workers, `rd`) have none.
 ALTER TABLE factory.spawns ADD COLUMN issue_id integer REFERENCES factory.issues (id);
+CREATE INDEX spawns_issue ON factory.spawns (issue_id) WHERE issue_id IS NOT NULL;
 ALTER TABLE factory.spawns DROP CONSTRAINT spawns_hold_check;
 ALTER TABLE factory.spawns ADD CONSTRAINT spawns_hold_check CHECK (hold IN ('drain', 'pace', 'wave', 'claim'));

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { Project, ProjectList, ProjectSyncResult, type Project as ProjectView } from '@software-factory/contract'
 import { claimDue } from '../src/tick.ts'
@@ -9,7 +9,7 @@ import { makeTargetsOf, readMakefile } from '../src/projects/make.ts'
 import { parseManifest } from '../src/projects/manifest.ts'
 import { projectPass } from '../src/projects/pass.ts'
 import { ProjectSync } from '../src/projects/sync.ts'
-import { createSpawn } from '../src/spawns.ts'
+import { createSpawn, IssueClosed } from '../src/spawns.ts'
 import { startApp, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -154,6 +154,77 @@ describe('a valid manifest', () => {
     fixture.git(path, 'commit', '-q', '-m', 'drop it')
     await runSync()
     expect(await getProject('gone')).toMatchObject({ source: 'defaults', manifestSha: null })
+  })
+})
+
+describe('which commit is read', () => {
+  const syncProject = async (name: string) => {
+    await runSync()
+    return getProject(name)
+  }
+
+  test('main is the default branch when it exists, and a master beside it is not read', async () => {
+    const path = fixture.repo('both', {})
+    fixture.git(path, 'branch', '-m', 'main')
+    fixture.commit(path, { 'README.md': 'x' })
+    fixture.git(path, 'branch', 'master')
+    fixture.git(path, 'checkout', '-q', 'master')
+    fixture.commit(path, { 'project.yaml': MANIFEST.replace('alpha', 'both') })
+    fixture.git(path, 'checkout', '-q', 'main')
+    await fileIssue(path, 'b1')
+    expect(await syncProject('both')).toMatchObject({ source: 'defaults' })
+  })
+
+  test('origin/HEAD names the branch; a clone with no local branch of it reads the remote-tracking one', async () => {
+    const origin = fixture.repo('upstream', {
+      'project.yaml': MANIFEST.replace('alpha', 'cloned').replace('leads: 2', 'leads: 3'),
+    })
+    const clone = join(fixture.root, 'cloned')
+    fixture.git(fixture.root, 'clone', '-q', origin, clone)
+    fixture.git(clone, 'checkout', '-q', '--detach')
+    fixture.git(clone, 'branch', '-D', 'master')
+    expect((await syncProject('cloned')).manifest.leads).toBe(3)
+  })
+
+  test('a git that fails leaves the row as it was, and so does a file that is not a regular one', async () => {
+    const path = fixture.repo('failing', { 'project.yaml': MANIFEST.replace('alpha', 'failing') })
+    await runSync()
+    const failing = new ProjectSync({
+      sql: db.sql,
+      roots,
+      now: () => clock.now(),
+      run: async (cmd) => ({
+        exitCode: cmd.includes('ls-tree') ? 128 : 0,
+        stdout: cmd.includes('rev-parse') ? 'ok' : '',
+      }),
+    })
+    const result = await failing.syncNow()
+    expect(result.errors.join()).toContain('git ls-tree failed')
+    expect((await getProject('failing')).source).toBe('manifest')
+
+    fixture.git(path, 'rm', '-q', 'project.yaml')
+    fixture.commit(path, { 'real.yaml': MANIFEST.replace('alpha', 'failing') })
+    fixture.git(
+      path,
+      'update-index',
+      '--add',
+      '--cacheinfo',
+      `120000,${fixture.git(path, 'hash-object', '-w', '--stdin', '--path', 'x')},project.yaml`,
+    )
+    fixture.git(path, 'commit', '-q', '-m', 'link')
+    await runSync()
+    expect((await getProject('failing')).manifestError?.message).toContain('not a regular file')
+  })
+
+  test('a manifest larger than the limit is a broken one, and is not read into memory', async () => {
+    const path = fixture.repo('huge', {})
+    fixture.commit(path, { 'project.yaml': `apiVersion: factory/v2\nname: huge\n# ${'x'.repeat(70_000)}\n` })
+    await runSync()
+    expect(await getProject('huge')).toMatchObject({
+      source: 'defaults',
+      manifestError: { message: expect.stringContaining('larger than') },
+    })
+    expect(await upkeep()).toHaveLength(1)
   })
 })
 
@@ -304,6 +375,29 @@ describe('keys', () => {
       other.cleanup()
     }
   })
+
+  test('a second directory of a name with no manifest still shows, on the defaults of its directory', async () => {
+    const other = repoRoot('factory-projects-b-')
+    try {
+      const first = fixture.repo('twin', { 'project.yaml': MANIFEST.replace('alpha', 'twin') })
+      const second = other.repo('twin', {})
+      const both = new ProjectSync({ sql: db.sql, roots: [fixture.root, other.root], now: () => clock.now() })
+      await createIssue(
+        db.sql,
+        { source: 'request', sourceKey: 'twin', repo: second, title: 't', facts: {} },
+        { repoRoots: [fixture.root, other.root], now: clock.now() },
+      )
+      await both.syncNow()
+      const names =
+        ((await db.sql`SELECT name FROM factory.projects WHERE repo = ${second}`) as { name: string }[])[0]?.name ?? ''
+      expect(names).toMatch(/^twin~/)
+      const list = ProjectList.parse(await (await app.get('/projects')).json())
+      expect(list.projects.find((p) => p.name === names)?.manifest.name).toBe('twin')
+      expect(first).toBeTruthy()
+    } finally {
+      other.cleanup()
+    }
+  })
 })
 
 describe('when it syncs', () => {
@@ -346,7 +440,7 @@ describe('when it syncs', () => {
       sql: db.sql,
       roots: [fixture.root],
       now: () => clock.now(),
-      run: async (cmd) => ({ exitCode: cmd.includes('show') ? -1 : 1, stdout: '' }),
+      run: async () => ({ exitCode: -1, stdout: '' }),
     })
     const result = await hung.syncNow()
     expect(result.errors.join()).toContain('git did not answer')
@@ -395,6 +489,19 @@ describe('the make contract', () => {
     const sly = fixture.repo('sly', { Makefile: 'include ../bare/Makefile\ninclude /etc/hosts\ncheck:\n\t@true\n' })
     await Bun.write(join(bare, 'Makefile'), 'deploy:\n\t@true\n')
     expect(await makeTargetsOf(sly)).toMatchObject({ makefile: true, check: true, deploy: false })
+  })
+})
+
+describe('the make contract and links', () => {
+  test('a Makefile or an include that is a link out of the repo is not read', async () => {
+    const outside = fixture.repo('outside', { 'secret.mk': 'deploy:\n\t@true\n', Makefile: 'logs:\n\t@true\n' })
+    const path = fixture.repo('linked', { 'inc.txt': 'x' })
+    await Bun.write(join(path, 'Makefile'), 'check:\n\t@true\ninclude linked.mk\n')
+    symlinkSync(join(outside, 'secret.mk'), join(path, 'linked.mk'))
+    expect(await makeTargetsOf(path)).toMatchObject({ makefile: true, check: true, deploy: false })
+    const bare = fixture.repo('bare2', {})
+    symlinkSync(join(outside, 'Makefile'), join(bare, 'Makefile'))
+    expect(await makeTargetsOf(bare)).toMatchObject({ makefile: true, logs: false })
   })
 })
 
@@ -526,13 +633,79 @@ describe('claims', () => {
     expect((await lead('t2', worktree, i2)).hold).toBe('claim')
   })
 
-  test('an Issue whose repo has no project row yet is not held; the tick syncs one before it claims', async () => {
+  test('an Issue whose repo has no project row yet waits for it, and takes its claim once the tick has synced', async () => {
     const early = fixture.repo('early', {})
     const i1 = await fileIssue(early, 'one')
-    expect((await lead('e1', early, i1)).hold).toBeNull()
+    expect((await lead('e1', early, i1)).hold).toBe('claim')
     expect(await db.sql`SELECT 1 FROM factory.claims`).toHaveLength(0)
+    clock.advance(31_000)
     await projectPass(db.sql, sync)
     expect((await getProject('early')).source).toBe('defaults')
+    const { claims } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
+    expect(claims.map((c) => c.key)).toEqual(['e1'])
+    expect((await holdersOf('early')).holders).toEqual([i1])
+  })
+
+  test('an urgent holder does not use up an ordinary place', async () => {
+    const solo = fixture.repo('solo', {})
+    const i1 = await fileIssue(solo, 'one')
+    const i2 = await fileIssue(solo, 'two', true)
+    const i3 = await fileIssue(solo, 'three')
+    await runSync()
+    await lead('s1', solo, i1)
+    await lead('s2', solo, i2)
+    expect((await lead('s3', solo, i3)).hold).toBe('claim')
+    await db.sql`UPDATE factory.spawns SET status = 'started' WHERE key IN ('s1', 's2')`
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${i1}`
+    clock.advance(31_000)
+    await projectPass(db.sql, sync)
+    const { claims } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
+    expect(claims.map((c) => c.key)).toEqual(['s3'])
+    expect((await holdersOf('solo')).holders).toEqual([i2, i3])
+  })
+
+  test('a spawn of a closed Issue is refused, and one that waits when its Issue closes fails', async () => {
+    const solo = fixture.repo('solo', {})
+    const [i1, i2, i3] = [
+      await fileIssue(solo, 'one'),
+      await fileIssue(solo, 'two'),
+      await fileIssue(solo, 'three'),
+    ] as [number, number, number]
+    await runSync()
+    await lead('s1', solo, i1)
+    await lead('s2', solo, i2)
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped', closed_at = ${clock.now()} WHERE id IN (${i2}, ${i3})`
+    await expect(lead('s3', solo, i3)).rejects.toBeInstanceOf(IssueClosed)
+    expect(await db.sql`SELECT 1 FROM factory.spawns WHERE key = 's3'`).toHaveLength(0)
+
+    clock.advance(31_000)
+    await projectPass(db.sql, sync)
+    const { claims, failed } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
+    expect(failed).toEqual(['s2'])
+    expect(claims.map((c) => c.key)).toEqual(['s1'])
+    const [row] = await db.sql`SELECT status, error FROM factory.spawns WHERE key = 's2'`
+    expect(row).toMatchObject({ status: 'failed', error: expect.stringContaining('closed') })
+  })
+
+  test('the claim of an Issue whose every spawn failed is given back, and asked for again on a requeue', async () => {
+    const solo = fixture.repo('solo', {})
+    const [i1, i2] = [await fileIssue(solo, 'one'), await fileIssue(solo, 'two')] as [number, number]
+    await runSync()
+    await lead('s1', solo, i1)
+    await lead('s2', solo, i2)
+    await db.sql`UPDATE factory.spawns SET status = 'failed', error = 'gave up' WHERE key = 's1'`
+    clock.advance(31_000)
+    await projectPass(db.sql, sync)
+    expect((await holdersOf('solo')).holders).toEqual([])
+    const { claims } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
+    expect(claims.map((c) => c.key)).toEqual(['s2'])
+
+    // The failed one starts over behind it.
+    const requeued = await app.send('POST', '/spawns/s1/requeue', {})
+    expect(requeued.status).toBe(200)
+    clock.advance(31_000)
+    expect((await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })).claims).toEqual([])
+    expect((await holdersOf('solo')).queued).toEqual([i1])
   })
 
   test('factory status shows why a spawn is held', async () => {

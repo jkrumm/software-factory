@@ -1,4 +1,5 @@
 import { defaultManifest, type Project, type ProjectManifest, type MakeTargets } from '@software-factory/contract'
+import { basename } from 'node:path'
 import type { SQL } from 'bun'
 
 interface ProjectRow {
@@ -17,7 +18,8 @@ interface ProjectRow {
 }
 
 const toProject = (row: ProjectRow): Project => {
-  const manifest = row.manifest ?? defaultManifest(row.name)
+  // The key may carry a path hash; the manifest's name is always the directory's.
+  const manifest = row.manifest ?? defaultManifest(basename(row.repo))
   return {
     name: row.name,
     repo: row.repo,

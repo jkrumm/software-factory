@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { MakeTargets, ProjectManifest, ProjectSyncResult } from '@software-factory/contract'
+import {
+  MAX_MANIFEST_BYTES,
+  type MakeTargets,
+  type ProjectManifest,
+  type ProjectSyncResult,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { createIssue } from '../issues/lifecycle.ts'
@@ -29,6 +34,8 @@ interface Row {
   manifest_sha: string | null
   manifest_error_sha: string | null
 }
+
+type Manifested = string | null | { bad: string; sha: string }
 
 const isDirectory = (path: string) =>
   stat(path).then(
@@ -102,7 +109,8 @@ export class ProjectSync {
     if (full) this.lastFull = this.deps.now().getTime()
 
     const result: ProjectSyncResult = { synced: 0, broken: [], errors: [] }
-    const work = [...paths, ...[...scanned].filter((p) => !paths.has(p))]
+    // In the roots' order, so the repo of the first root keeps a name the others share; the repos only named come after.
+    const work = [...scanned, ...[...paths].filter((p) => !scanned.has(p))]
     // The reads run side by side; the rows are written one after the other, so two directories of one name get their keys in turn.
     for (let i = 0; i < work.length; i += CONCURRENCY) {
       const read = await Promise.all(
@@ -146,25 +154,50 @@ export class ProjectSync {
     return found
   }
 
-  /** The text of `project.yaml` on the repo's default branch, `null` when there is none (or no git checkout). */
-  private async manifestText(repo: string): Promise<string | null> {
+  /**
+   * `project.yaml` as committed on the repo's default branch: its text; `null` when the branch has no such file; `bad` when there is
+   * one that cannot be read as a manifest (not a regular file, larger than the limit), with the hash that keys its upkeep Issue.
+   * The branch is resolved first and only that branch is read: `origin/HEAD`'s (the local branch, else `origin/<it>`), else the first
+   * of `main` and `master` that exists. Anything git fails at throws, so the row keeps what it has: a failure is not a deletion.
+   */
+  private async manifestText(repo: string): Promise<string | null | { bad: string; sha: string }> {
     if (!(await exists(join(repo, '.git')))) return null
     const run = this.deps.run ?? runProcess
-    const git = (args: string[]) =>
-      run(['git', '-C', repo, ...args], GIT_TIMEOUT_MS, childEnv({ GIT_TERMINAL_PROMPT: '0' }))
-    const head = await git(['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'])
-    const fromRemote = head.exitCode === 0 ? head.stdout.trim().replace(/^origin\//, '') : ''
-    for (const branch of fromRemote ? [fromRemote] : ['main', 'master']) {
-      const shown = await git(['show', `refs/heads/${branch}:project.yaml`])
-      if (shown.exitCode === 0) return shown.stdout
-      // A git that hung says nothing about the file: the row keeps what it has.
-      if (shown.exitCode === EXIT_TIMEOUT) throw new Error('git did not answer in time')
+    const env = childEnv({ GIT_TERMINAL_PROMPT: '0' })
+    const git = async (args: string[], accept: number[] = [0]) => {
+      const done = await run(['git', '-C', repo, ...args], GIT_TIMEOUT_MS, env)
+      if (done.exitCode === EXIT_TIMEOUT) throw new Error('git did not answer in time')
+      if (!accept.includes(done.exitCode)) throw new Error(`git ${args[0]} failed (exit ${done.exitCode})`)
+      return done
     }
-    return null
+    const head = await git(['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'], [0, 1])
+    const named = head.exitCode === 0 ? head.stdout.trim().replace(/^origin\//, '') : ''
+    const refs = named
+      ? [`refs/heads/${named}`, `refs/remotes/origin/${named}`]
+      : ['refs/heads/main', 'refs/heads/master']
+    let ref: string | undefined
+    for (const candidate of refs) {
+      if ((await git(['rev-parse', '--verify', '-q', `${candidate}^{commit}`], [0, 1])).exitCode === 0) {
+        ref = candidate
+        break
+      }
+    }
+    if (!ref) return null
+
+    const listed = (await git(['ls-tree', '-l', ref, '--', 'project.yaml'])).stdout.trim()
+    if (!listed) return null
+    const [info] = listed.split('\t')
+    const [mode, , oid, size] = (info ?? '').split(/\s+/)
+    if (mode !== '100644' && mode !== '100755')
+      return { bad: 'project.yaml is not a regular file', sha: contentSha(listed) }
+    if (Number(size) > MAX_MANIFEST_BYTES) {
+      return { bad: `project.yaml is larger than ${MAX_MANIFEST_BYTES} bytes`, sha: contentSha(`blob:${oid}`) }
+    }
+    return (await git(['cat-file', 'blob', oid ?? ''])).stdout
   }
 
   /** What is on disk for one repo: the manifest text on its default branch and its Makefile's targets. */
-  private async read(repo: string): Promise<{ text: string | null; make: MakeTargets } | undefined> {
+  private async read(repo: string): Promise<{ text: Manifested; make: MakeTargets } | undefined> {
     if (!(await isDirectory(repo))) return undefined
     return { text: await this.manifestText(repo), make: await makeTargetsOf(repo) }
   }
@@ -172,7 +205,7 @@ export class ProjectSync {
   /** One repo's row from what was read. `skipEmpty`: a repo with no manifest and no row is no project, and gets none. */
   private async store(
     repo: string,
-    { text, make }: { text: string | null; make: MakeTargets },
+    { text, make }: { text: Manifested; make: MakeTargets },
     roots: readonly string[],
     skipEmpty: boolean,
   ): Promise<{ name: string; broken: boolean; issue: number | null } | undefined> {
@@ -191,6 +224,8 @@ export class ProjectSync {
     if (text === null) {
       manifest = null
       manifestSha = null
+    } else if (typeof text === 'object') {
+      error = { sha: text.sha, message: text.bad }
     } else {
       const sha = contentSha(text)
       const parsed = parseManifest(text)

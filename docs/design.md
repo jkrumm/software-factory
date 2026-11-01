@@ -845,14 +845,16 @@ ticktick: { list: WeatherOrb }
   most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
   `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
   says so in a manifest), done means the commit or the document.
-- **Sync** (`ProjectSync`). The manifest is read from the repo's **default branch** with `git show` (`origin/HEAD`, else `main`, else
-  `master`), not from the working tree: a feature branch checked out, or an edit not committed, is not what the factory runs on. A
+- **Sync** (`ProjectSync`). The manifest is read from the repo's **default branch** as committed, not from the working tree: a
+  feature branch checked out, or an edit not committed, is not what the factory runs on. The branch is resolved first and only it is
+  read: `origin/HEAD`'s (the local branch, else `origin/<it>`), else the first of `main` and `master` that exists. A file that is
+  not a regular one, or is larger than 64 KiB, is a broken manifest (its size is read from the tree before the blob). A
   full pass visits every git repo directly under a `FACTORY_REPO_ROOTS` root that has a manifest, every repo that has a row and every
   repo an Issue or spawn names (a worktree path counts as its repo: the first directory below the root), at most every ten minutes and
   on `factory project sync` / `POST /projects/sync`. Every other tick looks only for a named repo that has no row. A repo with no
-  manifest and nothing naming it is no project. All reading happens before any transaction; rows are written one after the other. A
-  `git` that times out leaves the row as it was (an error in the tick, not a deleted manifest); a manifest taken away puts the
-  project back on the defaults.
+  manifest and nothing naming it is no project. All reading happens before any transaction; rows are written one after the other. Any
+  `git` failure or timeout leaves the row as it was (an error in the tick, not a deleted manifest); only a branch that has no
+  `project.yaml` puts the project back on the defaults.
 - **Keys.** The key is the directory's name. Two directories of one name (under different roots): the one stored first keeps
   `<name>`, the other is `<name>~<first 8 hex of the sha-256 of its real path>`, and a stored repo keeps its key whatever is
   added later. A claim and a project lookup go by the repo's path (the row whose `repo` is the path or contains it).
@@ -866,13 +868,16 @@ ticktick: { list: WeatherOrb }
   server. A target-specific variable (`verify: FLAG=1`) or a pattern rule is not a target.
 - **Claims.** `claims` has a row per (key `repo:<project>`, Issue): `held_at` set once it holds, NULL while it queues. A spawn with an
   `issue_id` (`createSpawn`'s `issueId`; the HTTP `POST /spawns` takes none) goes through `tryClaim` in `admit`, after `pace` and before
-  capacity: a project admits `leads` holders plus one more for an urgent Issue (`issues.class = 'urgent'`) when no urgent Issue
-  holds yet; otherwise the spawn is held with `hold: "claim"`, no account reserved, and looked at again every 30 s like `pace`. A
-  place that frees goes to the oldest queued Issue (urgent ones first); only an Issue with a spawn still queued, waiting or starting
-  counts as queued, so a failed spawn holds nobody up. A project with no row yet takes no claim: the tick syncs the named repo
-  before it claims, and a claim is decided at every start. A spawn without an Issue (waves, fan workers, `rd`) takes none.
+  capacity: ordinary holders are at most `leads`, all holders at most `leads + 1`, the extra place being for an urgent Issue
+  (`issues.class = 'urgent'`), so an urgent holder never uses up an ordinary place. Otherwise the spawn is held with
+  `hold: "claim"`, no account reserved, and looked at again every 30 s like `pace`. A place that frees goes to the oldest queued
+  Issue by id (urgent ones first); only an Issue with a spawn still queued, waiting or starting counts as queued. A repo whose
+  project has no row yet is held the same way: the tick syncs a named repo before it claims. A spawn for a closed Issue is
+  refused (`IssueClosed`, nothing stored), and a queued one whose Issue closed fails. A spawn without an Issue (waves, fan
+  workers, `rd`) takes no claim. The session of a spawn is not bound to its Issue here (Wave 3 does it with the lead).
 - **Release.** `releaseClaim` is what finalize calls (Wave 4); until then `releaseClosed` in the tick's project pass gives back the
-  claims of closed Issues before the spawns are claimed, so the next Issue is promoted in the same pass.
+  claims of closed Issues, and the held claim of an Issue whose every spawn failed (no lead ever ran; `factory spawn requeue` asks
+  again), before the spawns are claimed, so the next Issue is promoted in the same pass.
 - **Read.** `GET /projects`, `GET /projects/:name` (token and socket), `POST /projects/sync` (token); `factory project list|show|sync`.
 
 ## 10. Jobs

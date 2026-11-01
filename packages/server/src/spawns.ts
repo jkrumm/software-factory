@@ -2,10 +2,14 @@ import type { Effort, HoldReason, Placement, Spawn, SpawnStatus, Tier } from '@s
 import type { SQL } from 'bun'
 import { admit, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
+import { issueIsClosed } from './projects/claims.ts'
 import { TERMINAL_ADDRESS } from './runner.ts'
 import { loadByIds } from './sessions.ts'
 
 export type SpawnView = Spawn
+
+/** A spawn for an Issue that is closed (or gone) has nothing to do: nothing is stored. */
+export class IssueClosed extends Error {}
 
 interface SpawnRow {
   key: string
@@ -125,6 +129,9 @@ export async function createSpawn(
     const existing = await getSpawn(tx, input.key, now)
     if (existing) return { spawn: existing, created: false }
 
+    if (input.issueId != null && (await issueIsClosed(tx, input.issueId))) {
+      throw new IssueClosed(`Issue ${input.issueId} is closed`)
+    }
     const decision = await admit(
       tx,
       { key: input.key, repo: input.repo, role: input.role, issueId: input.issueId },
