@@ -578,7 +578,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 
 | Event | Sent by | Key |
 |-|-|-|
-| `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload, a regression | the source's event id |
+| `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload while `watching`, a regression | the source's event id |
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` | `<issue>:<verb>:<call id>` |
 | session events | hooks, live or from the spool | as in §3 |

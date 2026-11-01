@@ -298,6 +298,20 @@ describe('golden paths: transitions and effects', () => {
     expect(await effects(id)).toEqual(['start_lead', 'note_lead'])
   })
 
+  test.each(['queued', 'working', 'waiting', 'closed'] as const)(
+    'a signal with regression set on a %s Issue is recorded as a signal: the door sets it on every down',
+    async (at) => {
+      const { id } = await file()
+      if (at !== 'queued') await step(id, 'admitted')
+      if (at === 'waiting') await step(id, 'block')
+      if (at === 'closed') await step(id, 'close')
+      await step(id, 'signal', { regression: true })
+      expect((await state(id)).state).toBe(at)
+      expect((await inbox(id)).at(-1)?.result).toBe('applied')
+      expect((await trail(id)).at(-1)).toBe('signal')
+    },
+  )
+
   test('a second ship of the same attempt gets a hold of its own', async () => {
     const id = await working()
     await step(id, 'ship')

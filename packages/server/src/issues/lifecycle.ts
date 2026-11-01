@@ -299,7 +299,9 @@ export type Handled = { issue: IssueRow; result: 'applied' | 'refused' | 'ignore
  * and the effects it asks for commit together, or none of it happens.
  */
 export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: Date): Promise<Handled> {
-  const kind = row.kind === 'signal' && row.payload?.regression === true ? 'regression' : row.kind
+  // Only a state that can regress reads the flag: elsewhere it is a signal like any other, which is the door's common case.
+  const regressed = row.kind === 'signal' && row.payload?.regression === true && TABLE.regression?.[issue.state]
+  const kind = regressed ? 'regression' : row.kind
   const found = TABLE[kind]?.[issue.state]
   const step = found?.only && found.only !== issue.reason ? undefined : found
   const refused = async (detail: string): Promise<Handled> => {
