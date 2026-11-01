@@ -1,0 +1,6 @@
+2026-10-30T20:19:47.602Z run fgd-g2-claimed: release dd9b001e2023, server pid 68179, base commit 441714b
+2026-10-30T20:19:47.616Z run fgd-g2-claimed: spawn create (role worker, repo factory-gameday), watcher claimed armed
+{"key":"fgd-g2-claimed","status":"queued","account":"iu","role":"worker","tier":"sonnet","effort":"high"}
+2026-10-30T20:19:53.635Z run fgd-g2-claimed: spawn: starting attempts=1 pane=- hold=- | session: idle turn=0
+2026-10-30T20:23:55.088Z run fgd-g2-claimed: spawn: started attempts=2 pane=w71:p2 hold=- | session: working turn=1
+2026-10-30T20:24:52.012Z run fgd-g2-claimed: spawn: started attempts=2 pane=w71:p2 hold=- | session: idle turn=1
