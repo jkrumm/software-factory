@@ -397,11 +397,15 @@ export async function createIssueIn(
   const known = await findIssue(tx, input.source, input.sourceKey)
   if (known) return { issue: known, created: false }
 
-  // First, and with no path in the answer: the roots' refusal below names the resolved path.
-  if (input.source === 'alert' && (await inIuRoot(input.repo, context.repoRoots))) {
+  const refuseAlert = async (path: string): Promise<void> => {
+    if (input.source !== 'alert' || !(await inIuRoot(path, context.repoRoots))) return
     throw new IssueRefused('an alert files no Issue in IuRoot')
   }
+  // First, and with no path in the answer: the roots' refusal names the resolved path. Then the stored path answers for
+  // itself: a link can be pointed elsewhere between the two looks.
+  await refuseAlert(input.repo)
   const repo = await resolveRepo(input.repo, context.repoRoots)
+  await refuseAlert(repo)
 
   const facts = JSON.stringify(input.facts)
   const rows: IssueRow[] = await tx`
