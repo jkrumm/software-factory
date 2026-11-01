@@ -218,6 +218,27 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     expect(session).toMatchObject({ role: 'wave', pane: 't3', tab: null, spawn: null })
   })
 
+  test('an rd session rebound to another pane drops the tab it had in the old one', async () => {
+    await event('session_started', { claudeSessionId: 'c1', pane: 't3' })
+    await db.sql`UPDATE factory.sessions SET tab = 'tb-old' WHERE id = 'rd-1'`
+    await event('session_started', { claudeSessionId: 'c1', pane: 't3' })
+    expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())).toMatchObject({
+      pane: 't3',
+      tab: 'tb-old',
+    })
+    await viaSocket('POST', '/events', {
+      key: 'rd:moved',
+      session: 'rd-1',
+      kind: 'session_started',
+      at: '2026-10-30T14:00:00.000Z',
+      payload: { claudeSessionId: 'c2', pane: 't4' },
+    })
+    expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())).toMatchObject({
+      pane: 't4',
+      tab: null,
+    })
+  })
+
   test('a name rd reuses in a new pane is the new pane; a spawn keeps the pane its Runner made', async () => {
     await event('session_started', { claudeSessionId: 'c1', pane: 't3' })
     await viaSocket('POST', '/events', {

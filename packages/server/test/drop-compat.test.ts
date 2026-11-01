@@ -24,6 +24,11 @@ test('migration 011 drops the herdr columns, the old capacity table and the old 
   const at = new Date('2026-10-30T12:00:00Z')
   await db.sql`INSERT INTO factory.sessions (id, created_at, agent_status, agent_seen_at, herdr_status, herdr_seen_at)
     VALUES ('s', ${at}, 'working', ${at}, 'working', ${at})`
+  // A rollback to the release before 010 wrote the old kind again, once with a key the new kind already has.
+  await db.sql`INSERT INTO factory.events (key, session, kind, at) VALUES
+    ('herdr_restarted:7@x', '_herdr', 'herdr_restarted', ${at}),
+    ('herdr_restarted:8@x', '_herdr', 'herdr_restarted', ${at}),
+    ('runner_restarted:8@x', '_runner', 'runner_restarted', ${at})`
   await db.sql`INSERT INTO factory.witness (name, value, at) VALUES ('herdr_server', '99@x', ${at}), ('runner_server', '99@x', ${at})`
 
   for (const name of names.filter((n) => n >= '011')) await copyFile(join(MIGRATIONS_DIR, name), join(dir, name))
@@ -41,6 +46,10 @@ test('migration 011 drops the herdr columns, the old capacity table and the old 
   ).toEqual([])
   expect(await db.sql`SELECT name FROM factory.witness`).toEqual([{ name: 'runner_server' }])
 
+  expect(await db.sql`SELECT key, session, kind FROM factory.events ORDER BY key`).toEqual([
+    { key: 'runner_restarted:7@x', session: '_runner', kind: 'runner_restarted' },
+    { key: 'runner_restarted:8@x', session: '_runner', kind: 'runner_restarted' },
+  ])
   await db.sql`INSERT INTO factory.events (key, session, kind, at) VALUES ('k2', '_runner', 'runner_restarted', ${at})`
   const old = async () => {
     await db.sql`INSERT INTO factory.events (key, session, kind, at) VALUES ('k', '_herdr', 'herdr_restarted', ${at})`

@@ -61,7 +61,8 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
           cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account),
           role = COALESCE(${roleName}, role),
           pane = CASE WHEN spawn_key IS NULL THEN COALESCE(${text('pane')}, pane) ELSE COALESCE(pane, ${text('pane')}) END,
-                    bound_at = ${event.at}
+          tab = CASE WHEN spawn_key IS NULL AND ${text('pane')}::text IS DISTINCT FROM pane AND ${text('pane')}::text IS NOT NULL THEN NULL ELSE tab END,
+          bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
   return { duplicate: false }
