@@ -320,10 +320,10 @@ describe('the witness and the legacy server identity', () => {
       agent({ paneId: 't2', status: 'idle' }),
     ]
     await pass()
-    const rows = await db.sql`SELECT id, pane, agent_status, herdr_status FROM factory.sessions ORDER BY id`
+    const rows = await db.sql`SELECT id, pane, agent_status FROM factory.sessions ORDER BY id`
     expect(rows).toEqual([
-      { id: 'spawn-a', pane: 't7', agent_status: 'working', herdr_status: 'working' },
-      { id: 'spawn-b', pane: 't2', agent_status: 'idle', herdr_status: 'idle' },
+      { id: 'spawn-a', pane: 't7', agent_status: 'working' },
+      { id: 'spawn-b', pane: 't2', agent_status: 'idle' },
     ])
   })
 
@@ -363,14 +363,13 @@ describe('the witness and the legacy server identity', () => {
     }
   })
 
-  test('the session carries the new names and, for one release, the old ones with the same values', async () => {
+  test('the session carries the agent status and the time it was seen', async () => {
     await emit('s', 'session_started', minutes(10), {})
     view.list = [agent({ factoryKey: 's', status: 'working' })]
     await pass()
     const session = await getSession(db.sql, 's', clock.now())
-    expect(session).toMatchObject({ agentStatus: 'working', herdrStatus: 'working' })
+    expect(session).toMatchObject({ agentStatus: 'working' })
     expect(session?.agentSeenAt).toBe(clock.now().toISOString())
-    expect(session?.herdrSeenAt).toBe(session?.agentSeenAt as string)
   })
 
   test('an agent that has said nothing yet has no status', async () => {
@@ -394,9 +393,9 @@ describe('the witness between passes', () => {
     expect(await check()).toBe(true)
   }
   const agentRow = async (id: string) =>
-    (await db.sql`SELECT agent_status, herdr_status, agent_seen_at FROM factory.sessions WHERE id = ${id}`)[0]
+    (await db.sql`SELECT agent_status, agent_seen_at FROM factory.sessions WHERE id = ${id}`)[0]
 
-  test('a status the runner announces is stored at once, in both columns, without a pass', async () => {
+  test('a status the runner announces is stored at once, without a pass', async () => {
     await emit('s', 'session_started', minutes(10), {})
     view.list = [agent({ factoryKey: 's', status: 'idle' })]
     const running = startWitness({ sql: db.sql, runner: view, clock, probe }, 3_600_000, 30)
@@ -405,7 +404,7 @@ describe('the witness between passes', () => {
       clock.advance(5_000)
       view.announce({ kind: 'status', agent: agent({ factoryKey: 's', status: 'blocked' }) })
       await settle(async () => (await agentRow('s'))?.agent_status === 'blocked')
-      expect(await agentRow('s')).toMatchObject({ herdr_status: 'blocked', agent_seen_at: clock.now() })
+      expect(await agentRow('s')).toMatchObject({ agent_status: 'blocked', agent_seen_at: clock.now() })
     } finally {
       await running.stop()
     }

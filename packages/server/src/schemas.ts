@@ -15,7 +15,7 @@ const nonEmpty = z.string().min(1).max(256)
 export const AccountName = z.string().regex(ACCOUNT_NAME, 'not a valid account name')
 
 /** What only the witness may say about the runner: a hook (or anything on the open socket) cannot report a restart or a gone pane. */
-const WITNESS_KINDS: readonly string[] = ['runner_restarted', 'herdr_restarted', 'pane_gone']
+const WITNESS_KINDS: readonly string[] = ['runner_restarted', 'pane_gone']
 
 export const EventInput = z
   .object({
@@ -31,7 +31,7 @@ export const EventInput = z
       )
       .optional(),
   })
-  .refine((e) => !WITNESS_KINDS.includes(e.kind) && e.session !== '_runner' && e.session !== '_herdr', {
+  .refine((e) => !WITNESS_KINDS.includes(e.kind) && e.session !== '_runner', {
     message: "runner_restarted and pane_gone are the witness's to record, not a hook's",
     path: ['kind'],
   })

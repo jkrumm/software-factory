@@ -65,12 +65,9 @@ export function toEvent(
           // The account the picker chose: how the factory knows it for a session no spawn row describes (`rd`'s).
           account: ACCOUNT_NAME.test(env.CLAUDE_ACCOUNT_PICKED ?? '') ? env.CLAUDE_ACCOUNT_PICKED : undefined,
           // What the terminal says about itself: the role the starter gave it (the Runner and `rd` set FACTORY_ROLE), and
-          // its address (`HC_TERMINAL_ID`), so a session no spawn describes can still be found and closed by id. A
-          // session still in a classic herdr pane (`rd`, until it moves to herdr-core) reports `HERDR_PANE_ID` and
-          // `HERDR_TAB_ID` instead; a terminal of the core has no tab in its environment.
+          // its address (`HC_TERMINAL_ID`), so a session no spawn describes can still be found and closed by id.
           role: ROLE_NAME.test(env.FACTORY_ROLE ?? '') ? env.FACTORY_ROLE : undefined,
-          pane: text(env.HC_TERMINAL_ID ?? env.HERDR_PANE_ID, 64),
-          tab: env.HC_TERMINAL_ID ? undefined : text(env.HERDR_TAB_ID, 64),
+          pane: text(env.HC_TERMINAL_ID, 64),
         }),
       }
     case 'user-prompt-submit':

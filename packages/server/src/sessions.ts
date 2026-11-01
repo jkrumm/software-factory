@@ -61,8 +61,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
           cwd = COALESCE(${text('cwd')}, cwd), account = COALESCE(${accountName}, account),
           role = COALESCE(${roleName}, role),
           pane = CASE WHEN spawn_key IS NULL THEN COALESCE(${text('pane')}, pane) ELSE COALESCE(pane, ${text('pane')}) END,
-          tab = CASE WHEN spawn_key IS NULL THEN COALESCE(${text('tab')}, tab) ELSE COALESCE(tab, ${text('tab')}) END,
-          bound_at = ${event.at}
+                    bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
   return { duplicate: false }
@@ -283,9 +282,6 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
     cwd: row.cwd,
     agentStatus: row.agent_status,
     agentSeenAt: row.agent_seen_at?.toISOString() ?? null,
-    // Deprecated aliases for one release (argo and agw follow in dotfiles Wave 4).
-    herdrStatus: row.agent_status,
-    herdrSeenAt: row.agent_seen_at?.toISOString() ?? null,
     role: row.spawn_role ?? row.role,
     account: row.spawn_account ?? row.account,
     parent: row.parent,

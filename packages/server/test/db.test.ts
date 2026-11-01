@@ -42,7 +42,7 @@ describe('migrate', () => {
       WHERE table_schema NOT IN ('pg_catalog', 'information_schema')`
     expect(new Set(rows.map((r: { schema: string }) => r.schema))).toEqual(new Set(['factory']))
     expect(rows.map((r: { name: string }) => r.name)).toEqual(
-      expect.arrayContaining(['events', 'capacity_readings', 'spawns', 'schema_migrations']),
+      expect.arrayContaining(['events', 'quota_readings', 'spawns', 'schema_migrations']),
     )
   })
 
