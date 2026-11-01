@@ -8,7 +8,7 @@ import {
   renameSync,
   rmSync,
   statSync,
-  writeSync,
+  writeFileSync,
 } from 'node:fs'
 import { dirname } from 'node:path'
 import { DoorSource } from '@software-factory/contract'
@@ -88,7 +88,8 @@ export function newToken(path: string, source: string, options: { rotate?: boole
   try {
     const fd = openSync(tmp, 'wx', 0o600)
     try {
-      writeSync(fd, `${JSON.stringify({ ...tokens, [name.data]: token }, null, 2)}\n`)
+      // writeFileSync on a descriptor writes all of it; a short write would put half a file in place of the tokens.
+      writeFileSync(fd, `${JSON.stringify({ ...tokens, [name.data]: token }, null, 2)}\n`)
     } finally {
       closeSync(fd)
     }
