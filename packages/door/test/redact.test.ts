@@ -18,6 +18,20 @@ describe('redactUrls', () => {
     expect(redactUrls('a@b in https://u:p@ss@host?x=1')).toBe('a@b in https://host?[redacted]')
   })
 
+  test('an apostrophe in the userinfo does not end the URL, a quote around it does', () => {
+    expect(redactUrls("https://user:sec'ret@host/p")).toBe('https://host/p')
+    expect(redactUrls("see 'https://h/x?a=b' now")).toBe("see 'https://h/x?[redacted]' now")
+  })
+
+  test('a path segment that looks like a secret goes, a name stays', () => {
+    expect(
+      redactUrls('post to https://hooks.slack.com/services/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3 failed'),
+    ).toBe('post to https://hooks.slack.com/services/T0123ABCD/B0123ABCD/[redacted] failed')
+    expect(redactUrls('https://example.com/api/v1/forecast-service/health')).toBe(
+      'https://example.com/api/v1/forecast-service/health',
+    )
+  })
+
   test('text with no URL is left alone, and the result is stable', () => {
     for (const text of ['no url here', 'user@host:22', 'ratio 1/2 ? # @', 'http:/not-a-url']) {
       expect(redactUrls(text)).toBe(text)
@@ -70,5 +84,22 @@ describe('what leaves a parser', () => {
     expect(leaks(parsed.alert)).toEqual([])
     expect(parsed.alert.monitor).toBe('calls https://api.example.com/v1?[redacted]')
     expect(parsed.alert.facts).toMatchObject({ link: 'https://hyperdx.example.com/search?q=level%3Aerror' })
+  })
+
+  test('the short fields of both sources are redacted too, and a link loses its fragment', async () => {
+    const base = (await fixture('kuma-down.json')) as { heartbeat: object; monitor: object }
+    const kuma = parseKuma({
+      ...base,
+      monitor: { ...base.monitor, hostname: 'https://u:s3cret@host?k=hunter2', type: 'http://x:s3cret@y' },
+    })
+    const hyper = parseHyperdx({
+      ...((await fixture('hyperdx-alert.json')) as object),
+      alertId: 'https://u:s3cret@h/p?k=hunter2',
+      link: 'https://hyperdx.example.com/search?q=x#frag-token',
+    })
+    if (kuma.kind !== 'alert' || hyper.kind !== 'alert') throw new Error('expected alerts')
+    expect(leaks(kuma.alert)).toEqual([])
+    expect(leaks(hyper.alert)).toEqual([])
+    expect(hyper.alert.facts).toMatchObject({ link: 'https://hyperdx.example.com/search?q=x' })
   })
 })
