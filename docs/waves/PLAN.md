@@ -96,7 +96,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
 
 - [x] Notes first: agw's mother (decisions 8–10 and "keep API spend low, iterate on Max first") and iris' mother (decision
   11). Sent by rotation 5 (prompt ids `night-2026-11-01-review`, `-pause`); check both were delivered.
-- [ ] C0 (`night-c0-cleanup.md`, `worker`), landed and deployed; PR #15 (deps) merged after a local `make check`; PR #12
+- [x] C0 (`night-c0-cleanup.md`, `worker`), landed and deployed; PR #15 (deps) merged after a local `make check`; PR #12
   rebased onto the herdr-core runner or closed with the reason (its gamedays feed F2 W6).
 - [ ] F2 Wave 1 (`night-f2-w1-issues.md`, `deep`) with D beside it (`night-d-hidden-waves.md`, `worker`; it overlaps W1
   only in route registration: land W1 first, D rebases).
