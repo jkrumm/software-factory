@@ -582,7 +582,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` | `<issue>:<verb>:<call id>` |
 | session events | hooks, live or from the spool | as in §3 |
-| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<at>`: `hold` counts the ships, as a regression and a second ship is a second hold of one attempt |
+| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified` | the check after the hold (W4), naming its `hold`: proof of an earlier hold is refused | the check's id |
 | `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park`, `reopen` | the owner or the orchestrator | the intent's id |
 | `settled`, `healed` | settle (F3) | the run's id |
