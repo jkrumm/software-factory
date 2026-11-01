@@ -124,7 +124,8 @@ const NAMED_TITLE = /^Alert for "(.+)" - /u
  * the numbers at its end. The value in the title (a count, a percentage) changes with every firing.
  */
 export const hyperdxMonitor = (title: string): string => {
-  const bare = clip(title, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
+  // Cut, not clipped: an ellipsis at the end would stop the trailing numbers from being peeled off.
+  const bare = title.slice(0, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
   const named = NAMED_TITLE.exec(bare)?.[1]?.trim()
   if (named) return clip(named, MAX_NAME_CHARS)
   return clip(stripTrailingNumbers(bare) || bare, MAX_NAME_CHARS)

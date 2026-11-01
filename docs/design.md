@@ -927,7 +927,7 @@ runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and th
   (422), and a route into IuRoot is refused when it is set, as an alert's Issue is when it is filed: one policy, in `createIssue`.
 - **`POST /intake`** (`issues/intake.ts`, socket only) files in one transaction, the route row locked so one monitor's alerts go in
   one at a time: (1) no route, no Issue, one `door_unrouted` row counts it (202: Kuma attaches every provider to every monitor, so this is
-  the common path); (2) routed, an Issue of this monitor not closed, the event is a `signal` inbox row on it, `regression: true` when
+  the common path); (2) routed, an Issue of this monitor not closed, the event is a `signal` inbox row (key `door:<source>:<monitor>:<event>`) on it, `regression: true` when
   down (200); (3) routed, none open, down: `createIssue` (`source: alert`, key `<source>:<monitor>:<event>`, the route's repo) (201);
   (4) routed, none open, up: only the route's counter (202). A replayed event is one effect: the Issue's key, the inbox key and the
   counters' last event (a counter keeps only its latest event, so an older retry counts again). The event that created an Issue, and one that was a
