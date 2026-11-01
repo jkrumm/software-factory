@@ -265,6 +265,10 @@ describe('isFinished', () => {
     expect(isFinished('idle', [f('turn_started', 1), f('turn_ended', 2)])).toBe(true)
     expect(isFinished('idle', [f('turn_started', 1)])).toBe(false)
   })
+  test('a resume inherits a startless implicit life too', () => {
+    expect(isFinished('idle', [f('turn_started', 1), f('turn_ended', 2), f('session_started', 3, 'resume')])).toBe(true)
+    expect(isFinished('idle', [f('turn_started', 1), f('session_started', 3, 'resume')])).toBe(false)
+  })
   test('a resume inherits the life before it, a clear does not, and only an idle session is finished', () => {
     const lives = (source: string) => [
       f('session_started', 1, 'startup'),

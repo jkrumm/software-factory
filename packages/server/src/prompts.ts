@@ -4,7 +4,7 @@ import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
-import { clearAnsweredWait, getSession, HOOK_KINDS } from './sessions.ts'
+import { clearAnsweredWait, getSession, HOOK_KINDS, RESUME_LEAD_MS } from './sessions.ts'
 
 /** A typed prompt is proven by the next `turn_started`; none within this long and it is typed once more. */
 export const CONFIRM_MS = 60_000
@@ -358,7 +358,8 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       target &&
       prompt.via === 'resume' &&
       prompt.source === 'restart' &&
-      (await target.resumedInPlace(prompt.created_at))
+      // The resume's event time is the hook's, which can be a little before the prompt was recorded.
+      (await target.resumedInPlace(new Date(prompt.created_at.getTime() - RESUME_LEAD_MS)))
     ) {
       await sql`UPDATE factory.prompts SET via = 'type', error = NULL WHERE id = ${prompt.id} AND status = 'pending'`
       prompt.via = 'type'

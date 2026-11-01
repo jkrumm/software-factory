@@ -4,6 +4,7 @@ import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { type NewPrompt, recordPrompt, settleDelivered } from './prompts.ts'
 import {
   type Fact,
+  RESUME_LEAD_MS,
   RUNNER_SESSION,
   HOOK_KINDS,
   getSession,
@@ -225,7 +226,12 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
       const lived = facts.filter((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))
       // Resumed in place: since the cut-off turn the session said only that it was resumed (and, idle, that it is idle). The
       // resume may have landed just before the witness noticed the restart.
-      const resumes = facts.filter((f, i) => i > open.index && f.kind === 'session_started' && f.source === 'resume')
+      // Only a resume of THIS restart counts: one from an earlier restart is history, and the agent it brought back is lost again.
+      const leadStart = event.at.getTime() - RESUME_LEAD_MS
+      const resumes = facts.filter(
+        (f, i) =>
+          i > open.index && f.kind === 'session_started' && f.source === 'resume' && f.at.getTime() >= leadStart,
+      )
       const resumedInPlace =
         resumes.length > 0 &&
         lived.every((f) => (f.kind === 'session_started' && f.source === 'resume') || f.kind === 'prompt_idle')
