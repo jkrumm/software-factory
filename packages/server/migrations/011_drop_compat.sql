@@ -5,7 +5,15 @@
 ALTER TABLE factory.sessions DROP COLUMN herdr_status;
 ALTER TABLE factory.sessions DROP COLUMN herdr_seen_at;
 
--- `herdr_restarted` was renamed by migration 010; no stored row has the old kind or the `_herdr` session any more.
+-- `herdr_restarted` was renamed by migration 010. A release from before it that ran since may have written the old kind
+-- again: convert such a row, and drop one whose new key already exists.
+UPDATE factory.events e
+SET kind = 'runner_restarted', session = '_runner', key = 'runner_restarted' || substr(e.key, length('herdr_restarted') + 1)
+WHERE e.kind = 'herdr_restarted'
+  AND NOT EXISTS (
+    SELECT 1 FROM factory.events x
+    WHERE x.key = 'runner_restarted' || substr(e.key, length('herdr_restarted') + 1));
+DELETE FROM factory.events WHERE kind = 'herdr_restarted';
 ALTER TABLE factory.events DROP CONSTRAINT events_kind_check;
 ALTER TABLE factory.events ADD CONSTRAINT events_kind_check CHECK (kind IN (
   'session_started', 'turn_started', 'turn_ended', 'limit_stop', 'quota_resume', 'prompt_blocked', 'prompt_idle',
