@@ -5,19 +5,28 @@ import { IssueTitle } from './issues.ts'
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
 export type DoorSource = z.infer<typeof DoorSource>
 
+/** A NUL, or half of a surrogate pair: what Postgres cannot store in JSON. */
+// oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
+const UNSTORABLE = /\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
+
+/**
+ * Text from someone else's alert as the factory keeps it: what Postgres cannot store (a NUL, half of a surrogate pair) becomes
+ * U+FFFD, other control characters a space, and the ends are trimmed. The door's parsers and the intake both run it, so a name
+ * is the same on both sides.
+ */
+export const cleanText = (text: string): string =>
+  text
+    .replace(UNSTORABLE, '\ufffd')
+    // oxlint-disable-next-line no-control-regex -- exactly what is removed
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
+    .trim()
+
 /** A monitor's name or an event's id: someone else's text that ends up on a terminal, so bounded and without control characters. */
-const Label = z
-  .string()
-  // oxlint-disable-next-line no-control-regex -- exactly what is removed
-  .transform((label) => label.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim())
-  .pipe(z.string().min(1).max(256))
+const Label = z.string().transform(cleanText).pipe(z.string().min(1).max(256))
 
 export const MAX_INTAKE_FACTS_BYTES = 24 * 1024
 
 const MAX_FACTS_DEPTH = 32
-/** A NUL, or half of a surrogate pair: what Postgres cannot store in JSON. */
-// oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
-const UNSTORABLE = /\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
 
 /** Facts as Postgres can store them: the characters it refuses become U+FFFD, and nesting past a few levels is cut. */
 export function storable(value: unknown, depth = 0): unknown {
@@ -47,7 +56,7 @@ export const IntakeInput = z.strictObject({
   monitor: Label,
   event: Label,
   status: z.enum(['down', 'up']),
-  title: IssueTitle,
+  title: z.string().transform(cleanText).pipe(IssueTitle),
   // The size is that of what is stored: sanitizing can make facts longer (a cut nesting becomes a marker).
   facts: z
     .unknown()

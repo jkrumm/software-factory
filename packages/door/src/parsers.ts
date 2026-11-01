@@ -24,7 +24,14 @@ const MAX_TITLE_CHARS = 500
 const MAX_TEXT_CHARS = 1500
 const MAX_LINK_CHARS = 1024
 
-const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+/** The first `max` UTF-16 units, never ending inside a surrogate pair (half of one is no text Postgres stores). */
+const cut = (text: string, max: number): string => {
+  if (text.length <= max) return text
+  const end = /[\ud800-\udbff]/.test(text.charAt(max - 1)) ? max - 1 : max
+  return text.slice(0, end)
+}
+
+const clip = (text: string, max: number): string => (text.length > max ? `${cut(text, max - 1)}…` : text)
 
 function shape<S extends z.ZodType>(schema: S, payload: unknown): z.output<S> {
   const parsed = schema.safeParse(payload)
@@ -125,7 +132,7 @@ const NAMED_TITLE = /^Alert for "(.+)" - /u
  */
 export const hyperdxMonitor = (title: string): string => {
   // Cut, not clipped: an ellipsis at the end would stop the trailing numbers from being peeled off.
-  const bare = title.slice(0, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
+  const bare = cut(title, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
   const named = NAMED_TITLE.exec(bare)?.[1]?.trim()
   if (named) return clip(named, MAX_NAME_CHARS)
   return clip(stripTrailingNumbers(bare) || bare, MAX_NAME_CHARS)

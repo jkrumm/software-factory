@@ -59,6 +59,28 @@ describe('kuma', () => {
   })
 })
 
+/** Every string in a value, keys included. */
+const strings = (value: unknown): string[] =>
+  typeof value === 'string'
+    ? [value]
+    : typeof value === 'object' && value !== null
+      ? Object.entries(value).flatMap(([key, item]) => [key, ...strings(item)])
+      : []
+
+describe('text cut at a limit', () => {
+  test('never ends inside a surrogate pair, wherever the limit falls', async () => {
+    const kuma = (await fixture('kuma-down.json')) as { heartbeat: object }
+    for (let length = 470; length < 530; length++) {
+      const msg = `${'x'.repeat(length)}😀😀😀`
+      const down = alertOf(parseKuma({ ...kuma, msg, heartbeat: { ...kuma.heartbeat, msg } }))
+      const hyper = alertOf(
+        parseHyperdx({ title: `🚨 ${'x'.repeat(length)}😀😀`, body: msg, state: 'ALERT', eventId: msg }),
+      )
+      for (const text of [...strings(down), ...strings(hyper)]) expect(text.isWellFormed()).toBe(true)
+    }
+  })
+})
+
 describe('hyperdx', () => {
   test('a firing alert: the monitor is the alert name, not its value', async () => {
     const alert = alertOf(parseHyperdx(await fixture('hyperdx-alert.json')))
