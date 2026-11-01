@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
 import { childEnv, runProcess } from './exec.ts'
-import { agentName } from './runner.ts'
-import { paneGoneWithdrawn, recordEvent, RUNNER_SESSION, TERMINAL_ADDRESS } from './sessions.ts'
+import { agentName, TERMINAL_ADDRESS } from './runner.ts'
+import { paneGoneWithdrawn, recordEvent, RUNNER_SESSION } from './sessions.ts'
 
 export const WITNESS_INTERVAL_MS = 60_000
 /** A change the runner announces is looked at after this long, so a burst (lost, restarted, a status) is one pass. */

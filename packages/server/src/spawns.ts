@@ -2,7 +2,8 @@ import type { Effort, HoldReason, Spawn, SpawnStatus, Tier } from '@software-fac
 import type { SQL } from 'bun'
 import { admit, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
-import { loadByIds, TERMINAL_ADDRESS } from './sessions.ts'
+import { TERMINAL_ADDRESS } from './runner.ts'
+import { loadByIds } from './sessions.ts'
 
 export type SpawnView = Spawn
 

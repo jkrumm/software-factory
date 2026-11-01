@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { HcClient } from '../src/hc.ts'
 import { HcEvents } from '../src/hc-events.ts'
 import { HcRunner } from '../src/hc-runner.ts'
-import { agentName } from '../src/runner.ts'
+import { agentName, LOCAL_TERMINAL, TERMINAL_ADDRESS } from '../src/runner.ts'
 import { getSession, recordEvent } from '../src/sessions.ts'
 import { type AgentSeen, gitProbe, type RunnerChange, type RunnerView, startWitness, witness } from '../src/witness.ts'
 import { FakeClock } from './support/clock.ts'
@@ -76,8 +76,12 @@ const probe = async (cwd: string) => {
 }
 const pass = () => witness({ sql: db.sql, runner: view, clock, probe })
 const state = async (id: string) => (await getSession(db.sql, id, clock.now()))?.state
-const emit = (session: string, kind: 'session_started' | 'turn_started' | 'session_ended', at: Date, payload = {}) =>
-  recordEvent(db.sql, { key: `${session}:${kind}:${at.toISOString()}`, session, kind, at, payload })
+const emit = (
+  session: string,
+  kind: 'session_started' | 'turn_started' | 'turn_ended' | 'session_ended',
+  at: Date,
+  payload = {},
+) => recordEvent(db.sql, { key: `${session}:${kind}:${at.toISOString()}`, session, kind, at, payload })
 const agent = (over: Partial<AgentSeen> = {}): AgentSeen => ({ paneId: 't1', status: 'idle', ...over })
 const minutes = (n: number) => new Date(clock.now().getTime() - n * 60_000)
 
@@ -144,6 +148,26 @@ describe('the witness', () => {
     // Once: later passes add nothing.
     await pass()
     expect(await db.sql`SELECT 1 FROM factory.events WHERE kind = 'pane_gone'`).toHaveLength(1)
+  })
+
+  test('a pane whose address has letters (base 36: t1n, t3d) is watched like t7: gone after two passes without an agent', async () => {
+    // dotfiles-w3: the core kept a shell where Claude exited, so no agent matches; its address is past t19.
+    await emit('w3', 'session_started', minutes(30), { claudeSessionId: 'c-1' })
+    await emit('w3', 'turn_started', minutes(20))
+    await emit('w3', 'turn_ended', minutes(10))
+    await db.sql`UPDATE factory.sessions SET pane = 't1n' WHERE id = 'w3'`
+    expect(await state('w3')).toBe('idle')
+    await pass()
+    expect(await state('w3')).toBe('idle')
+    expect((await pass()).gone).toEqual(['w3'])
+    expect(await state('w3')).toBe('dead')
+  })
+
+  test('the address of a terminal of this core is t plus base 36, optionally behind a machine; a classic pane is none', () => {
+    for (const address of ['t7', 't19', 't1n', 't3d', 'mini/t1n']) expect(TERMINAL_ADDRESS.test(address)).toBe(true)
+    for (const address of ['w4V:p3J', 'w8:t2', 't', '', 't7 ', 'T7']) expect(TERMINAL_ADDRESS.test(address)).toBe(false)
+    expect(LOCAL_TERMINAL.test('t1n')).toBe(true)
+    expect(LOCAL_TERMINAL.test('mini/t1n')).toBe(false)
   })
 
   test('a pane that came back between the two passes is not gone', async () => {
