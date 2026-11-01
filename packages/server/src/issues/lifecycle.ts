@@ -11,6 +11,9 @@ export const DEFAULT_HOLD_MS = 30 * 60_000
 /** `closed → queued` is for the same fault within this long. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
 
+/** The end of year 9999. */
+const MAX_TIME_MS = 253_402_300_799_000
+
 /** A create the policy refuses; the message is the 422 body. */
 class IssueRefused extends RepoRefused {}
 
@@ -57,8 +60,11 @@ const time = (payload: InboxRow['payload'], name: string): Date | null => {
   return value === null ? null : new Date(value)
 }
 
-const badTime = (payload: InboxRow['payload'], name: string): boolean =>
-  Number.isNaN(time(payload, name)?.getTime() ?? 0)
+/** Not a time, or one outside what Postgres stores (a JavaScript date reaches further). */
+const badTime = (payload: InboxRow['payload'], name: string): boolean => {
+  const ms = time(payload, name)?.getTime() ?? 0
+  return Number.isNaN(ms) || Math.abs(ms) > MAX_TIME_MS
+}
 
 async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
   const question = text(row.payload, 'question')
@@ -249,7 +255,7 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
     SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold},
-        wake_at = ${wakeAt}, updated_at = ${cause.at}, closed_at = ${to === 'closed' ? now : null}
+        wake_at = ${wakeAt}, updated_at = GREATEST(updated_at, ${cause.at}), closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
   if (!row) throw new Error(`issue ${issue.id} is gone`)
