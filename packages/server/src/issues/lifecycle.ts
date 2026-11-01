@@ -27,7 +27,8 @@ export interface InboxRow {
   session: string | null
   at: Date
   payload: Record<string, unknown> | null
-  /** why handling it threw last time, if it did */
+  /** the Issue's revision when handling it last threw, and why */
+  failed_revision: number | null
   error: string | null
 }
 
@@ -284,7 +285,7 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
-    SET state = ${to}, reason = ${step.reason ?? null}, wall_session = ${step.reason === 'wall' ? cause.session : null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits},
+    SET state = ${to}, reason = ${step.reason ?? null}, wall_session = ${step.reason === 'wall' ? cause.session : null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits}, revision = revision + 1,
         wake_at = ${wakeAt}, updated_at = GREATEST(updated_at, ${cause.at}), closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
@@ -298,6 +299,17 @@ async function planEffect(tx: SQL, issue: IssueRow, kind: EffectKind, row: Inbox
     INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
     VALUES (${issue.id}, ${`${kind}:${row.key}`}, ${kind}, ${payload}, ${now})
     ON CONFLICT (key) DO NOTHING`
+}
+
+/** A failed row its Issue moved past is refused, with its line in the Issue's events: a retry must not act on a later attempt. */
+export async function supersede(tx: SQL, issue: IssueRow, row: InboxRow): Promise<string> {
+  const detail = `superseded: ${row.error}`
+  await logEvent(
+    tx,
+    { issueId: issue.id, key: `superseded:${row.key}`, kind: 'refused', from: issue.state, to: null, at: row.at },
+    { event: row.kind, detail },
+  )
+  return detail
 }
 
 export type Handled = { issue: IssueRow; result: 'applied' | 'refused' | 'ignored'; detail: string | null }

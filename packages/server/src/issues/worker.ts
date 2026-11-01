@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { type EffectPorts, runEffects } from './effects.ts'
-import { applyEvent, fireTimers, type InboxRow } from './lifecycle.ts'
+import { applyEvent, fireTimers, type InboxRow, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
 
 /** Most rows of one Issue in one transaction, and most Issues in one pass: the rest wait for the next. */
@@ -34,7 +34,7 @@ async function takeIssue(
       FOR NO KEY UPDATE OF i SKIP LOCKED`
     if (!locked) return undefined
     const rows: InboxRow[] = await tx`
-      SELECT id, issue_id, key, kind, session, at, payload, error FROM factory.issue_inbox
+      SELECT id, issue_id, key, kind, session, at, payload, failed_revision, error FROM factory.issue_inbox
       WHERE issue_id = ${locked.id} AND handled_at IS NULL
       ORDER BY (error IS NOT NULL), at, id
       LIMIT ${ROWS_PER_ISSUE}
@@ -42,11 +42,10 @@ async function takeIssue(
     let issue = locked
     let failed = false
     for (const row of rows) {
-      // A retry must not act on an Issue that moved on without it: a failed `close` would end the next attempt.
-      if (row.error && row.at < issue.updated_at) {
-        await tx`
-          UPDATE factory.issue_inbox SET handled_at = ${now()}, result = 'refused', detail = ${`superseded: ${row.error}`}
-          WHERE id = ${row.id}`
+      // A failed `close` retried after a stop, a reopen and an admission would end the new attempt.
+      if (row.failed_revision !== null && row.failed_revision !== issue.revision) {
+        const detail = await supersede(tx, issue, row)
+        await tx`UPDATE factory.issue_inbox SET handled_at = ${now()}, result = 'refused', detail = ${detail} WHERE id = ${row.id}`
         continue
       }
       try {
@@ -54,7 +53,7 @@ async function takeIssue(
           const handled = await applyEvent(point, issue, row, now())
           await point`
             UPDATE factory.issue_inbox
-            SET handled_at = ${now()}, result = ${handled.result}, detail = ${handled.detail}, error = NULL
+            SET handled_at = ${now()}, result = ${handled.result}, detail = ${handled.detail}, error = NULL, failed_revision = NULL
             WHERE id = ${row.id}`
           return handled.issue
         })
@@ -62,7 +61,7 @@ async function takeIssue(
         const message = error instanceof Error ? error.message : String(error)
         failed = true
         errors.push(`issue ${locked.id}: ${row.key}: ${message}`)
-        await tx`UPDATE factory.issue_inbox SET error = ${message} WHERE id = ${row.id}`
+        await tx`UPDATE factory.issue_inbox SET error = ${message}, failed_revision = ${issue.revision} WHERE id = ${row.id}`
       }
     }
     return { id: locked.id, failed }

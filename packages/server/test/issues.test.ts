@@ -740,10 +740,57 @@ describe('the inbox', () => {
     expect(rows[2].result).toBe('applied')
     expect(rows[2].error).toBeNull()
 
-    // It stays visible, one line a pass, and holds up nothing that comes later.
-    await send(good, 'reopen')
+    // Its Issue has moved past it, at the same event time too: refused on the next pass, with a line in the Issue's events.
+    expect(await pass()).toEqual([])
+    const [row] = await db.sql`SELECT result, error FROM factory.issue_inbox WHERE key = ${poison}`
+    expect(row.result).toBe('refused')
+    expect((await trail(bad)).at(-1)).toBe('refused')
+  })
+
+  test('a failed row on an Issue that did not move stays, one line a pass, and holds up nothing', async () => {
+    const id = await working()
+    const poison = `created:${id}`
+    await send(id, 'phase', undefined, poison)
     expect(await pass()).toHaveLength(1)
-    expect((await state(good)).state).toBe('queued')
+    await send(id, 'phase')
+    expect(await pass()).toHaveLength(1)
+    expect((await inbox(id)).slice(-2).map((r) => r.result)).toEqual([null, 'applied'])
+  })
+
+  test('a late event that failed is retried while the Issue has not moved, however old it is', async () => {
+    const id = await working()
+    clock.advance(60_000)
+    await enqueue(db.sql, {
+      issueId: id,
+      key: 'late',
+      kind: 'close',
+      at: new Date(clock.now().getTime() - 120_000),
+    })
+    let calls = 0
+    const failingOnce = () => {
+      if (++calls === 1) throw new Error('a handler threw')
+      return clock.now()
+    }
+    expect(await processInbox(db.sql, failingOnce)).toHaveLength(1)
+    expect(await pass()).toEqual([])
+    expect((await state(id)).state).toBe('closed')
+  })
+
+  test('an error with no message still counts as a failure', async () => {
+    const id = await working()
+    await send(id, 'close')
+    await send(id, 'stop')
+    let calls = 0
+    const failingOnce = () => {
+      if (++calls === 1) throw new Error('')
+      return clock.now()
+    }
+    await processInbox(db.sql, failingOnce)
+    expect((await state(id)).outcome).toBe('dropped')
+    await send(id, 'reopen')
+    await send(id, 'admitted')
+    await pass()
+    expect(await state(id)).toMatchObject({ state: 'working', attempt: 2 })
   })
 
   test('a failed row the Issue has moved past is refused, not retried against a later attempt', async () => {
