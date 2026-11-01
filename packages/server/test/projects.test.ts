@@ -675,7 +675,7 @@ describe('claims', () => {
     await lead('s1', solo, i1)
     await lead('s2', solo, i2)
     await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped', closed_at = ${clock.now()} WHERE id IN (${i2}, ${i3})`
-    await expect(lead('s3', solo, i3)).rejects.toBeInstanceOf(IssueClosed)
+    expect(await lead('s3', solo, i3).catch((error: unknown) => error)).toBeInstanceOf(IssueClosed)
     expect(await db.sql`SELECT 1 FROM factory.spawns WHERE key = 's3'`).toHaveLength(0)
 
     clock.advance(31_000)
