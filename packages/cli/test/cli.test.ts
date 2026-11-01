@@ -238,6 +238,16 @@ beforeAll(() => {
         if (req.method === 'POST') {
           const body = (await req.json()) as { key: string }
           spawnCalls.push(body)
+          if (body.key === 'spent') {
+            return Response.json(
+              {
+                error: 'spawn key spent is spent: its agent ended; create again under another key',
+                code: 'key_spent',
+                spawn: { ...SPAWNS[0], key: 'spent', status: 'ended' },
+              },
+              { status: 409 },
+            )
+          }
           return Response.json({ ...SPAWNS[1], ...body, status: 'queued', resumeAt: null }, { status: 201 })
         }
         return Response.json({ spawns: SPAWNS })
@@ -605,6 +615,18 @@ describe('factory spawn create', () => {
     await factory(['spawn', 'create', 'w8', '--repo', '/work/repo', '--prompt', 'x'], env)
     expect(spawnCalls).toHaveLength(1)
     expect(socketSpawnCalls).toHaveLength(1)
+  })
+
+  test('a spent key is a conflict whose error line names key_spent and carries the stored spawn', async () => {
+    const r = await factory(['spawn', 'create', 'spent', '--repo', '/work/repo', '--prompt', 'x'])
+    expect(r.code).toBe(EXIT.conflict)
+    expect(JSON.parse(r.stderr)).toMatchObject({
+      error: {
+        kind: 'conflict',
+        code: 'key_spent',
+        details: { status: 409, spawn: { key: 'spent', status: 'ended' } },
+      },
+    })
   })
 
   test('a key, a repo and a prompt are required', async () => {

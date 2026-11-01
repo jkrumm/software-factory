@@ -11,6 +11,7 @@ import {
   SessionList,
   Slot,
   SlotRelease,
+  ErrorBody,
   Spawn,
   SpawnList,
   Status,
@@ -214,6 +215,20 @@ const resolveProject = (project: string, repoRoots: readonly string[]): Promise<
     throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
   })
 
+/** The answer for a key that already has a spawn: the row, or `key_spent` when its agent is gone. */
+const replay = (spawn: Spawn): Response =>
+  spawn.status === 'ended'
+    ? respond(
+        ErrorBody,
+        {
+          error: `spawn key ${spawn.key} is spent: its agent ended; create again under another key`,
+          code: 'key_spent',
+          spawn,
+        },
+        409,
+      )
+    : respond(Spawn, spawn)
+
 /**
  * `POST /spawns`, on the port with the token and on the socket without it: the same body, the same validation and the same
  * repo-roots check, so a pane that can reach the socket asks for no more than a holder of the token.
@@ -222,9 +237,10 @@ const spawnHandler =
   (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[]) =>
   async (req: Request): Promise<Response> => {
     const input = await parseBody(req, SpawnInput)
-    // A replay of a known key answers with the row it made, whatever the role table says now.
-    const known = await getSpawn(sql, input.key)
-    if (known) return respond(Spawn, known)
+    // A replay of a known key answers with the row it made, whatever the role table says now. A spent key (its agent is
+    // gone) answers 409 `key_spent` with that row: it is never revived, so a replayed old create starts nothing.
+    const known = await getSpawn(sql, input.key, clock.now())
+    if (known) return replay(known)
     const entry = roles.get(input.role)
     if (!entry) throw new Refusal(`unknown role ${input.role} (${[...roles.keys()].join(', ')})`, 422)
     // The policy decides before anything is stored; the row keeps the resolved path.
@@ -240,12 +256,12 @@ const spawnHandler =
       { ...input, repo, space, newSpace: input.new_space, tier: entry.tier, effort: entry.effort },
       clock.now(),
     )
-    return respond(Spawn, spawn, created ? 201 : 200)
+    return created ? respond(Spawn, spawn, 201) : replay(spawn)
   }
 
 /** `GET /spawns/:key`. */
-const spawnGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/spawns/:key'>) => {
-  const spawn = await getSpawn(sql, req.params.key)
+const spawnGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/spawns/:key'>) => {
+  const spawn = await getSpawn(sql, req.params.key, clock.now())
   return spawn ? respond(Spawn, spawn) : json({ error: 'unknown spawn' }, 404)
 }
 
@@ -306,15 +322,15 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now()))) },
     '/spawns': {
-      GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql) })),
+      GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots)),
     },
     '/spawns/:key': {
-      GET: route(spawnGetHandler(sql)),
+      GET: route(spawnGetHandler(sql, clock)),
     },
     '/spawns/:key/requeue': {
       POST: route(async (req: Bun.BunRequest<'/spawns/:key/requeue'>) => {
-        const result = await requeueSpawn(sql, req.params.key)
+        const result = await requeueSpawn(sql, req.params.key, clock.now())
         if ('spawn' in result) return respond(Spawn, result.spawn)
         if (result.problem === 'unknown') return json({ error: 'unknown spawn' }, 404)
         return json({ error: `spawn is ${result.status}; only a failed spawn can be re-queued` }, 409)
@@ -416,7 +432,7 @@ export function serveHooks(deps: {
       '/sessions/:id/stop-check': { POST: viaSocket(stopCheckHandler(deps.sql, deps.clock)) },
       '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
-      '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql)) },
+      '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
     },
     fetch: () => json({ error: 'not found' }, 404),

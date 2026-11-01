@@ -9,6 +9,9 @@ export type { SessionState }
 /** The pseudo-session the runner's own events (a restart) are filed under: no real name starts with an underscore. */
 export const RUNNER_SESSION = '_runner'
 
+/** A terminal of this core (`t7`, or `machine/t7`): the only panes the witness can see, and the only ones that can still be live. */
+export const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t\d+$/
+
 /** A `working` session whose worktree has not changed for this long, while the runner also says `working`, is `stuck`. */
 export const STUCK_AFTER_MS = 45 * 60_000
 /** What the runner said counts as agreeing only while it is this fresh: the witness reads it every minute. */
@@ -422,6 +425,16 @@ async function derive(sql: SQL, rows: readonly SessionRow[], now: Date): Promise
         ]
       : []
   })
+}
+
+/** The sessions with these ids, derived: what a spawn's end is read from. */
+export async function loadByIds(sql: SQL, ids: readonly string[], now: Date): Promise<Loaded[]> {
+  if (ids.length === 0) return []
+  const rows: SessionRow[] = await sql`
+    SELECT s.*, p.account AS spawn_account, p.role AS spawn_role, p.repo, p.tier, p.effort, p.parent
+    FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.spawn_key
+    WHERE s.id IN ${sql(ids)}`
+  return derive(sql, rows, now)
 }
 
 /** The sessions of the spawns `parent` started, not ended: the Stop hook's question, answered without reading the rest. */

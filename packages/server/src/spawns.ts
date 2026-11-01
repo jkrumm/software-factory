@@ -2,6 +2,7 @@ import type { Effort, HoldReason, Spawn, SpawnStatus, Tier } from '@software-fac
 import type { SQL } from 'bun'
 import { admit, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
+import { loadByIds, TERMINAL_ADDRESS } from './sessions.ts'
 
 export type SpawnView = Spawn
 
@@ -44,17 +45,44 @@ export const toView = (row: SpawnRow): SpawnView => ({
   parent: row.parent,
 })
 
-export async function getSpawn(sql: SQL, key: string): Promise<SpawnView | undefined> {
-  const [row]: SpawnRow[] = await sql`
-    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns WHERE key = ${key}`
-  return row && toView(row)
+/**
+ * A `started` spawn whose agent is gone reads as `ended`; nothing stores it. The agent is gone when its session is `dead`
+ * (a pane the witness lost, a session that ended), or when its pane is no terminal of the current core: a classic-herdr
+ * pane (`w4V:p3J`) of the time before herdr-core, or none recorded. A spawn that is still `starting` in the session
+ * sense (no hook event yet) in a pane of this core is live.
+ */
+export async function withEnded(sql: SQL, spawns: readonly SpawnView[], now: Date): Promise<SpawnView[]> {
+  const started = spawns.filter((s) => s.status === 'started')
+  if (started.length === 0) return [...spawns]
+  const sessions = new Map(
+    (
+      await loadByIds(
+        sql,
+        started.map((s) => s.key),
+        now,
+      )
+    ).map((l) => [l.view.id, l.view]),
+  )
+  return spawns.map((spawn) => {
+    if (spawn.status !== 'started') return spawn
+    const session = sessions.get(spawn.key)
+    const pane = session?.pane ?? spawn.pane
+    const ended = session?.state === 'dead' || pane === null || !TERMINAL_ADDRESS.test(pane)
+    return ended ? { ...spawn, status: 'ended' } : spawn
+  })
 }
 
-export async function listSpawns(sql: SQL, limit = 200): Promise<SpawnView[]> {
+export async function getSpawn(sql: SQL, key: string, now: Date): Promise<SpawnView | undefined> {
+  const [row]: SpawnRow[] = await sql`
+    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns WHERE key = ${key}`
+  return row && (await withEnded(sql, [toView(row)], now))[0]
+}
+
+export async function listSpawns(sql: SQL, now: Date, limit = 200): Promise<SpawnView[]> {
   const rows: SpawnRow[] = await sql`
     SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns
     ORDER BY created_at DESC, key LIMIT ${limit}`
-  return rows.map(toView)
+  return withEnded(sql, rows.map(toView), now)
 }
 
 /** A spawn as it is stored: the role has been looked up, so its tier and effort are the table's of that moment. */
@@ -78,7 +106,7 @@ export interface NewSpawn {
  * behind the capacity lock: with room it is `queued` on an account and the next tick starts it; held by the queue state
  * or the one-wave-per-repo rule it is `queued` with its reason and no account; without capacity it is `waiting` with
  * `resume_at` at the first opening (none if no reading names one: a new reading wakes it). A repeated key returns the
- * existing row untouched.
+ * existing row untouched, `ended` included: the caller refuses a spent key (`key_spent`), a row is never revived.
  */
 export async function createSpawn(
   sql: SQL,
@@ -87,7 +115,7 @@ export async function createSpawn(
 ): Promise<{ spawn: SpawnView; created: boolean }> {
   return sql.begin(async (tx) => {
     await lockCapacity(tx)
-    const existing = await getSpawn(tx, input.key)
+    const existing = await getSpawn(tx, input.key, now)
     if (existing) return { spawn: existing, created: false }
 
     const decision = await admit(tx, { key: input.key, repo: input.repo, role: input.role }, now)
@@ -118,6 +146,7 @@ export async function createSpawn(
 export async function requeueSpawn(
   sql: SQL,
   key: string,
+  now: Date,
 ): Promise<{ spawn: SpawnView } | { problem: 'unknown' | 'not_failed'; status?: SpawnStatus }> {
   const [row]: SpawnRow[] = await sql`
     UPDATE factory.spawns
@@ -126,6 +155,6 @@ export async function requeueSpawn(
     WHERE key = ${key} AND status = 'failed'
     RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
   if (row) return { spawn: toView(row) }
-  const current = await getSpawn(sql, key)
+  const current = await getSpawn(sql, key, now)
   return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }
 }

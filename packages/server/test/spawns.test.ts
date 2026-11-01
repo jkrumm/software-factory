@@ -376,6 +376,68 @@ describe('a new reading and a new spawn do not race', () => {
   })
 })
 
+describe('a spawn whose agent is gone is ended, and its key is spent', () => {
+  const endSession = (key: string, kind: 'session_ended' | 'pane_gone') =>
+    db.sql`INSERT INTO factory.events (key, session, kind, at) VALUES (${`${key}:${kind}`}, ${key}, ${kind}, ${clock.now()})`
+
+  test('a live key is replayed with 200; once the session is dead the same create is 409 key_spent and starts nothing', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s1')
+    await runTick()
+    expect((await spawn('s1')).status).toBe(200)
+
+    clock.advance(1000)
+    await endSession('s1', 'pane_gone')
+    expect(await status('s1')).toMatchObject({ key: 's1', status: 'ended' })
+    const again = await spawn('s1')
+    expect(again.status).toBe(409)
+    expect(await again.json()).toMatchObject({
+      code: 'key_spent',
+      error: expect.stringContaining('s1'),
+      spawn: { key: 's1', status: 'ended', session: expect.stringMatching(/^t\d+$/) },
+    })
+    // Never revived: no second terminal, and the stored row is as it was.
+    await runTick()
+    expect(await tabs()).toEqual(['s1'])
+    const [row] = await db.sql`SELECT status FROM factory.spawns WHERE key = 's1'`
+    expect(row.status).toBe('started')
+  })
+
+  test('a spawn from the time of classic panes is ended, with or without a session row', async () => {
+    for (const key of ['old-1', 'old-2']) {
+      await db.sql`
+        INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, session, created_at)
+        VALUES (${key}, ${TEST_REPO}, 'p', 'worker', 'sonnet', 'high', 'started', 'w4V:p3J', ${clock.now()})`
+    }
+    await db.sql`INSERT INTO factory.sessions (id, spawn_key, pane, created_at) VALUES ('old-2', 'old-2', 'w4V:p3J', ${clock.now()})`
+    expect(await status('old-1')).toMatchObject({ status: 'ended' })
+    expect(await status('old-2')).toMatchObject({ status: 'ended' })
+    const list = (await (await app.get('/spawns')).json()) as { spawns: { key: string; status: string }[] }
+    expect(list.spawns.map((x) => x.status)).toEqual(['ended', 'ended'])
+    expect((await spawn('old-1')).status).toBe(409)
+    // Status shows what is waiting to run, not what has run.
+    const shown = (await (await app.get('/status')).json()) as { queue: { spawns: unknown[] } }
+    expect(shown.queue.spawns).toEqual([])
+  })
+
+  test('a failed or queued key is not spent: its row is replayed as before', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('q1')
+    const again = await spawn('q1')
+    expect(again.status).toBe(200)
+    expect(await again.json()).toMatchObject({ key: 'q1', status: 'queued' })
+  })
+
+  test('a session that ended by its own hook ends the spawn too', async () => {
+    await reading('a', 10, 10, inHours(2))
+    await spawn('s2')
+    await runTick()
+    clock.advance(1000)
+    await endSession('s2', 'session_ended')
+    expect(await status('s2')).toMatchObject({ status: 'ended' })
+  })
+})
+
 describe('GET /spawns', () => {
   test('lists the newest first with their status and error', async () => {
     await reading('a', 1, 1, inHours(1))

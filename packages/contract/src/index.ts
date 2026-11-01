@@ -9,7 +9,11 @@ export { EVENT_KINDS, type EventKind } from './spool.ts'
  * with the same schema, so a drift between the two releases is a parse failure (exit 9), never a cast that lies.
  */
 
-export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'failed'])
+/**
+ * `ended` is never stored: it is a `started` spawn whose agent is gone, derived whenever a spawn is read (its session is
+ * `dead`, or its pane is no terminal of the current core). An ended spawn's key is spent.
+ */
+export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'ended', 'failed'])
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
 /** Why a queued spawn is not starting although capacity may be there: the queue state, or the one-wave-per-repo rule. */
@@ -209,5 +213,6 @@ export type Slot = z.infer<typeof Slot>
 export const SlotRelease = z.object({ released: z.boolean() })
 export type SlotRelease = z.infer<typeof SlotRelease>
 
-export const ErrorBody = z.object({ error: z.string() })
+/** `code` names a refusal a client can act on (`key_spent`); `spawn` is the stored spawn it concerns. */
+export const ErrorBody = z.object({ error: z.string(), code: z.string().optional(), spawn: Spawn.optional() })
 export type ErrorBody = z.infer<typeof ErrorBody>

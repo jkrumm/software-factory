@@ -4,7 +4,7 @@ import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
 import { childEnv, runProcess } from './exec.ts'
 import { agentName } from './runner.ts'
-import { paneGoneWithdrawn, recordEvent, RUNNER_SESSION } from './sessions.ts'
+import { paneGoneWithdrawn, recordEvent, RUNNER_SESSION, TERMINAL_ADDRESS } from './sessions.ts'
 
 export const WITNESS_INTERVAL_MS = 60_000
 /** A change the runner announces is looked at after this long, so a burst (lost, restarted, a status) is one pass. */
@@ -12,8 +12,6 @@ export const WITNESS_DEBOUNCE_MS = 2_000
 const PROBE_CONCURRENCY = 4
 /** Consecutive passes with no runner agent for a session before its pane counts as gone. */
 export const MISSES_FOR_GONE = 2
-/** A terminal of this core (`t7`, or `machine/t7`): the only panes the witness can see. */
-const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t\d+$/
 /** `pid@core id`, what `serverId()` answers; the format before it (`pid@start time`) is read as "not known yet". */
 const SERVER_ID = /^\d+@[0-9a-f]{32}$/
 
