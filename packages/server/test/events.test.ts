@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { type DeriveInput, deriveState, type EventKind, type Fact, type Witnessed } from '../src/sessions.ts'
+import {
+  type DeriveInput,
+  deriveState,
+  type EventKind,
+  type Fact,
+  isFinished,
+  type Witnessed,
+} from '../src/sessions.ts'
 import { startApp, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -249,5 +256,27 @@ describe('POST /events validation', () => {
       FROM factory.events ORDER BY id`
     expect(rows[0]).toMatchObject({ key: 'p', type: 'object', resets_at: 'later', n: '1' })
     expect(rows[1]).toMatchObject({ key: 'none', type: null })
+  })
+})
+
+describe('isFinished', () => {
+  const f = (kind: EventKind, at: number, source?: string): Fact => ({ kind, at: new Date(at), source })
+  test('a history with turns and no recorded start is one life', () => {
+    expect(isFinished('idle', [f('turn_started', 1), f('turn_ended', 2)])).toBe(true)
+    expect(isFinished('idle', [f('turn_started', 1)])).toBe(false)
+  })
+  test('a resume inherits the life before it, a clear does not, and only an idle session is finished', () => {
+    const lives = (source: string) => [
+      f('session_started', 1, 'startup'),
+      f('turn_started', 2),
+      f('turn_ended', 3),
+      f('session_started', 4, source),
+    ]
+    expect(isFinished('idle', lives('resume'))).toBe(true)
+    expect(isFinished('idle', lives('clear'))).toBe(false)
+    expect(isFinished('working', lives('resume'))).toBe(false)
+    expect(isFinished('idle', [f('session_started', 1), f('turn_started', 2), f('session_started', 4, 'resume')])).toBe(
+      false,
+    )
   })
 })

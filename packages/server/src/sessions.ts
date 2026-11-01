@@ -372,7 +372,9 @@ function lifeFinished(facts: readonly Fact[], starts: readonly number[], at: num
 export const isFinished = (state: SessionState | undefined, facts: readonly Fact[]): boolean => {
   if (state !== 'idle') return false
   const starts = facts.flatMap((f, i) => (f.kind === 'session_started' ? [i] : []))
-  return starts.length > 0 && lifeFinished(facts, starts, starts.length - 1)
+  // No start recorded: the whole history is one life.
+  if (starts.length === 0) return facts.some((f) => f.kind === 'turn_ended')
+  return lifeFinished(facts, starts, starts.length - 1)
 }
 
 /** A session the factory started, that is not dead: what the one-wave-per-repo and pace rules count. */
