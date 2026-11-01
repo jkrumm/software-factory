@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
+import { dropEmptySession } from '../sessions.ts'
 
 export const claimKey = (project: string): string => `repo:${project}`
 
@@ -101,6 +102,8 @@ export async function releaseClosed(sql: SQL): Promise<{ released: number; faile
       FROM factory.issues i
       WHERE i.id = s.issue_id AND i.state = 'closed' AND s.status IN ('queued', 'waiting')
       RETURNING s.key`
+    // A retry that had opened its session row leaves none behind: a row with no pane would hold the repo's `pace` or `wave`.
+    for (const { key } of failed) await dropEmptySession(tx, key)
     const released = await tx.unsafe(
       `DELETE FROM factory.claims c USING factory.issues i
        WHERE i.id = c.issue_id AND (i.state = 'closed' OR (${IDLE}))

@@ -309,9 +309,16 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
     rulesError = `rules: ${error instanceof Error ? error.message : String(error)}`
   }
   // Projects before the claims: a closed Issue's place is free and a newly named repo has its row when its spawn is admitted.
-  const projectErrors = await projectPass(deps.sql, deps.projects)
+  const projects = await projectPass(deps.sql, deps.projects)
   const { claims, failed, skipped } = await claimDue(deps)
-  const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [...projectErrors], replayed }
+  const result: TickResult = {
+    started: [],
+    failed: [...projects.failed, ...failed],
+    retrying: [],
+    skipped,
+    errors: [...projects.errors],
+    replayed,
+  }
   if (replayError) result.errors.push(replayError)
   if (quotaError) result.errors.push(quotaError)
   if (rulesError) result.errors.push(rulesError)

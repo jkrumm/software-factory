@@ -307,6 +307,15 @@ describe('a broken manifest', () => {
     expect(await upkeep()).toHaveLength(2)
   })
 
+  test('an empty project.yaml is a broken manifest like any other', async () => {
+    fixture.repo('blank', { 'project.yaml': '' })
+    await runSync()
+    expect(await getProject('blank')).toMatchObject({
+      source: 'defaults',
+      manifestError: { issue: expect.any(Number) },
+    })
+  })
+
   test('a manifest that was never valid leaves the defaults and still opens its Issue', async () => {
     fixture.repo('never', { 'project.yaml': 'apiVersion: factory/v1\nname: never\n' })
     await runSync()
@@ -502,6 +511,12 @@ describe('the make contract', () => {
 })
 
 describe('the make contract and links', () => {
+  test('a named pipe called Makefile is not waited for', async () => {
+    const path = fixture.repo('piped', {})
+    expect(Bun.spawnSync(['mkfifo', join(path, 'Makefile')]).exitCode).toBe(0)
+    expect(await makeTargetsOf(path)).toMatchObject({ makefile: true, check: false })
+  })
+
   test('a Makefile or an include that is a link out of the repo is not read', async () => {
     const outside = fixture.repo('outside', { 'secret.mk': 'deploy:\n\t@true\n', Makefile: 'logs:\n\t@true\n' })
     const path = fixture.repo('linked', { 'inc.txt': 'x' })

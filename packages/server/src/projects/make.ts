@@ -80,11 +80,13 @@ export async function makeTargetsOf(repo: string): Promise<MakeTargets> {
   const targets = new Set<string>()
   const seen = new Set<string>()
   // A link that leads out of the repo, or anything but a regular file, is not read. The file is opened without following a link
-  // (the real path was resolved just before) and read up to the limit, so a swap in between reads nothing outside.
+  // (the real path was resolved just before; a named pipe opens at once and is refused as no regular file) and read up to the limit, so a swap in between reads nothing outside.
   const readable = async (file: string): Promise<string | undefined> => {
     const real = await realpath(file).catch(() => undefined)
     if (!real?.startsWith(`${root}${sep}`)) return undefined
-    const handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => undefined)
+    const handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK).catch(
+      () => undefined,
+    )
     if (!handle) return undefined
     try {
       if (!(await handle.stat()).isFile()) return undefined
