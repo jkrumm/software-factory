@@ -18,3 +18,9 @@ Tests: a golden test per path (classify ok, failed, over the ceiling; admit, att
 **Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`): never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy. End with a report: done / deferred, one line each.
 
 **From the lead's review of Wave 1:** `ask` stores `expiresAt` and `default`, but nothing fires on them. `ask` sets `wake_at` to its expiry; a passed expiry takes the default and wakes the lead with it, or parks with a line when there is no default.
+
+**From Waves 1 and 2:**
+- `lifecycle.ts` is 483 lines against §4's reversal bound. The bound measures the state machine, not the file: move what is not the table (dependencies, the IuRoot check, timers) into sibling modules in a pure-move commit first. If the table itself still passes about 500 lines, stop and report.
+- Set `issue_id` on the lead's session only: a wall parks the Issue from any session with an `issue_id` and only that session's turn ends it, so a worker's wall would strand the lead.
+- A `verify` effect with no port holds back a later `note_lead` on an open Issue until Wave 4: don't plan `verify` before Wave 4, or skip portless effects for an open Issue's notes.
+- Migration `016_*` is yours. `createSpawn` already takes `issueId`; `POST /spawns` does not.
