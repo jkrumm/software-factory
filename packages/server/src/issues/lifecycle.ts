@@ -308,6 +308,12 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     { issueId: issue.id, key: row.key, kind, from: issue.state, to: step.to ?? null, at: row.at },
     row.payload,
   )
+  if (step.to === 'closed') {
+    // A closed Issue wants no lead, no note and no check: an older `finalize` still has work to do.
+    await tx`
+      UPDATE factory.issue_effects SET cancelled_at = ${now}
+      WHERE issue_id = ${issue.id} AND done_at IS NULL AND cancelled_at IS NULL AND kind <> 'finalize'`
+  }
   for (const effect of [...(step.effects ?? []), ...(step.to === 'closed' ? (['finalize'] as const) : [])]) {
     await planEffect(tx, moved, effect, row, now)
   }

@@ -102,7 +102,8 @@ CREATE TABLE factory.issue_events (
 CREATE INDEX issue_events_timeline ON factory.issue_events (issue_id, at, id);
 
 -- What a transition asks of the world, written in its transaction; a port does it after the commit. `key` is
--- `<effect>:<inbox key>`, so a replay finds it. `done_at` is set after the port answered.
+-- `<effect>:<inbox key>`, so a replay finds it. `done_at` is set after the port answered, `cancelled_at` when a close made the
+-- effect pointless before it ran.
 CREATE TABLE factory.issue_effects (
   id         bigserial PRIMARY KEY,
   issue_id   integer NOT NULL REFERENCES factory.issues (id),
@@ -112,9 +113,10 @@ CREATE TABLE factory.issue_effects (
   created_at timestamptz NOT NULL,
   attempts   integer NOT NULL DEFAULT 0,
   error      text,
-  done_at    timestamptz
+  done_at    timestamptz,
+  cancelled_at timestamptz
 );
-CREATE INDEX issue_effects_open ON factory.issue_effects (id) WHERE done_at IS NULL;
+CREATE INDEX issue_effects_open ON factory.issue_effects (id) WHERE done_at IS NULL AND cancelled_at IS NULL;
 
 CREATE TABLE factory.decisions (
   id             bigserial PRIMARY KEY,

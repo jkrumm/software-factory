@@ -702,11 +702,43 @@ describe('effects', () => {
   test('an effect never overtakes an earlier one that has no port yet', async () => {
     const { id } = await file()
     await send(id, 'admitted')
-    await send(id, 'stop')
+    await send(id, 'note', { text: 'a fact' })
     await processInbox(db.sql, now)
     const calls: string[] = []
-    await runEffects(db.sql, { finalize: async (effect) => void calls.push(effect.key) }, now)
+    await runEffects(db.sql, { note_lead: async (effect) => void calls.push(effect.key) }, now)
     expect(calls).toEqual([])
+  })
+
+  test('a close cancels what it makes pointless: no lead, no note, and finalize waits behind neither', async () => {
+    const { id } = await file()
+    await send(id, 'admitted')
+    await send(id, 'note', { text: 'a fact' })
+    await send(id, 'stop', undefined, 'stop')
+    await processInbox(db.sql, now)
+    expect(await effects(id)).toEqual(['start_lead', 'note_lead', 'finalize'])
+
+    // Only finalize has a port: the portless start_lead does not hold it back.
+    const calls: string[] = []
+    await runEffects(db.sql, { finalize: async (effect) => void calls.push(effect.key) }, now)
+    expect(calls).toEqual(['finalize:stop'])
+
+    // Every port there: the closed Issue still gets nothing else.
+    const world = new World()
+    expect(await pass(world.ports)).toEqual([])
+    expect(world.calls).toEqual([])
+    const rows = await db.sql`SELECT kind FROM factory.issue_effects WHERE cancelled_at IS NOT NULL ORDER BY id`
+    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['start_lead', 'note_lead'])
+  })
+
+  test('a finalize still open survives the next close: a reopen runs it before the new lead', async () => {
+    const id = await working()
+    await step(id, 'stop', undefined, undefined)
+    await step(id, 'reopen')
+    await step(id, 'admitted')
+    await step(id, 'drop')
+    const open = await db.sql`
+      SELECT kind FROM factory.issue_effects WHERE done_at IS NULL AND cancelled_at IS NULL ORDER BY id`
+    expect(open.map((r: { kind: string }) => r.kind)).toEqual(['finalize', 'finalize'])
   })
 
   test('an Issue whose port keeps failing leaves room for the others', async () => {
@@ -744,7 +776,7 @@ describe('effects', () => {
   test('a failing port is retried under the same key and keeps its Issue in order', async () => {
     const { id } = await file()
     await send(id, 'admitted', undefined, 'admit')
-    await send(id, 'stop', undefined, 'stop')
+    await send(id, 'note', { text: 'a fact' }, 'n1')
     await processInbox(db.sql, now)
     const calls: string[] = []
     let failing = true
@@ -753,7 +785,7 @@ describe('effects', () => {
         calls.push(effect.key)
         if (failing) throw new Error('the runner is down')
       },
-      finalize: async (effect) => {
+      note_lead: async (effect) => {
         calls.push(effect.key)
       },
     }
@@ -765,7 +797,7 @@ describe('effects', () => {
 
     failing = false
     expect(await runEffects(db.sql, ports, now)).toEqual([])
-    expect(calls).toEqual(['start_lead:admit', 'start_lead:admit', 'finalize:stop'])
+    expect(calls).toEqual(['start_lead:admit', 'start_lead:admit', 'note_lead:n1'])
     expect(await runEffects(db.sql, ports, now)).toEqual([])
     expect(calls).toHaveLength(3)
   })
@@ -846,7 +878,7 @@ describe('the replay test: a crash after every effect', () => {
     attempt: (await state(id)).attempt,
     events: await trail(id),
     effects: await effects(id),
-    open: (await db.sql`SELECT 1 FROM factory.issue_effects WHERE done_at IS NULL`).length,
+    open: (await db.sql`SELECT 1 FROM factory.issue_effects WHERE done_at IS NULL AND cancelled_at IS NULL`).length,
     unhandled: (await db.sql`SELECT 1 FROM factory.issue_inbox WHERE handled_at IS NULL`).length,
     decisions: (await db.sql`SELECT 1 FROM factory.decisions`).length,
   })
