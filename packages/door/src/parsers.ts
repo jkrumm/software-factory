@@ -37,7 +37,8 @@ const cut = (text: string, max: number): string => {
 }
 
 /** A short field of a payload as a fact: cut, or null when there is none. */
-const field = (text: string | null | undefined): string | null => (text ? clip(text, MAX_FIELD_CHARS) : null)
+const field = (text: string | null | undefined): string | null =>
+  text ? clip(redactUrls(text), MAX_FIELD_CHARS) : null
 
 /** A piece of an event id: short enough that the pieces and the status after them fit the name a key may have. */
 const part = (text: string | null | undefined): string => clip(text ?? '', MAX_PART_CHARS)
@@ -186,8 +187,8 @@ export const parseHyperdx: Parser = (payload) => {
       facts: {
         title: clip(title, MAX_TITLE_CHARS),
         body: hook.body ? prose(hook.body, MAX_TEXT_CHARS) : null,
-        // A deep link's query is the search the alert ran: it stays, the userinfo does not.
-        link: hook.link ? clip(withoutUserinfo(hook.link), MAX_LINK_CHARS) : null,
+        // A deep link's query is the search the alert ran: it stays, the userinfo and the fragment do not.
+        link: hook.link ? clip(withoutUserinfo(hook.link).replace(/#.*$/s, ''), MAX_LINK_CHARS) : null,
         alertId,
         eventId,
         window: { start: startTime, end: endTime },
