@@ -222,7 +222,7 @@ describe('rule 2: routed, an Issue open', () => {
     expect(await inbox()).toMatchObject([
       {
         issue_id: issue,
-        key: 'kuma:forecast-api:again',
+        key: 'door:kuma:forecast-api:again',
         kind: 'signal',
         payload: { regression: true, status: 'down' },
       },
@@ -317,6 +317,27 @@ describe('what a payload cannot do', () => {
     expect(row?.facts.details).toEqual(facts)
   })
 
+  test('facts Postgres cannot store are made storable, for a new Issue and for a signal', async () => {
+    await route()
+    const facts = { lone: 'a\ud800b', nul: 'x\u0000y', ['k\u0000']: [{ deep: '\udc00' }] }
+    expect((await intake({ facts })).status).toBe(201)
+    expect((await intake({ event: 'again', facts })).status).toBe(200)
+    expect((await issues())[0]?.facts.details).toEqual({
+      lone: 'a\ufffdb',
+      nul: 'x\ufffdy',
+      'k\ufffd': [{ deep: '\ufffd' }],
+    })
+    expect(await inbox()).toHaveLength(1)
+  })
+
+  test('an alert whose source is named like a timer cannot pass for its replay', async () => {
+    await app.send('PUT', '/door/routes', { source: 'wake', monitor: '1', repo: TEST_REPO })
+    const { issue } = await ack(await intake({ source: 'wake', monitor: '1', event: 'x' }))
+    await db.sql`INSERT INTO factory.issue_inbox (issue_id, key, kind, at) VALUES (${issue}, 'wake:1:y', 'wake', ${clock.now()})`
+    const response = await intake({ source: 'wake', monitor: '1', event: 'y' })
+    expect((await ack(response)).outcome).toBe('attached')
+  })
+
   test('/intake is on the socket only', async () => {
     expect((await app.send('POST', '/intake', alert())).status).toBe(404)
     expect((await viaSocket('/door/routes', {}, 'PUT')).status).toBe(404)
@@ -329,7 +350,7 @@ describe('what a payload cannot do', () => {
     expect((await intake({ monitor: '' })).status).toBe(400)
     expect((await intake({ source: 'Kuma' })).status).toBe(400)
     expect((await intake({ status: 'sideways' })).status).toBe(400)
-    expect((await intake({ facts: { lone: '\ud800' } })).status).toBe(422)
+    expect(await issues()).toEqual([])
     expect(await issues()).toEqual([])
   })
 })

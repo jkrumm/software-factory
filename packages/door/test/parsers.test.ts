@@ -115,6 +115,10 @@ describe('hyperdx', () => {
     expect(performance.now() - started).toBeLessThan(500)
   })
 
+  test('a value too long for the title does not change the name', () => {
+    expect(hyperdxMonitor(`CPU ${'9'.repeat(600)}`)).toBe(hyperdxMonitor(`CPU ${'8'.repeat(700)}`))
+  })
+
   test('the names it makes stay inside the limits of the contract', () => {
     const alert = alertOf(parseHyperdx({ title: 'x'.repeat(5000), state: 'ALERT', eventId: 'e'.repeat(1000) }))
     expect(alert.monitor.length).toBeLessThanOrEqual(256)

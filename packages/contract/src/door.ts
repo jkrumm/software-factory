@@ -14,6 +14,22 @@ const Label = z
 
 export const MAX_INTAKE_FACTS_BYTES = 24 * 1024
 
+const MAX_FACTS_DEPTH = 32
+/** A NUL, or half of a surrogate pair: what Postgres cannot store in JSON. */
+// oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
+const UNSTORABLE = /\u0000|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
+
+/** Facts as Postgres can store them: the characters it refuses become U+FFFD, and nesting past a few levels is cut. */
+export function storable(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return value.replace(UNSTORABLE, '\ufffd')
+  if (typeof value !== 'object' || value === null) return value
+  if (depth >= MAX_FACTS_DEPTH) return '[too deep]'
+  if (Array.isArray(value)) return value.map((item) => storable(item, depth + 1))
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key.replace(UNSTORABLE, '\ufffd'), storable(item, depth + 1)]),
+  )
+}
+
 const fitsFacts = (facts: unknown): boolean => {
   try {
     return Buffer.byteLength(JSON.stringify(facts) ?? '') <= MAX_INTAKE_FACTS_BYTES
@@ -32,7 +48,11 @@ export const IntakeInput = z.strictObject({
   event: Label,
   status: z.enum(['down', 'up']),
   title: IssueTitle,
-  facts: z.unknown().refine(fitsFacts, `facts are larger than ${MAX_INTAKE_FACTS_BYTES} bytes`).default({}),
+  facts: z
+    .unknown()
+    .refine(fitsFacts, `facts are larger than ${MAX_INTAKE_FACTS_BYTES} bytes`)
+    .default({})
+    .transform((facts) => storable(facts)),
 })
 export type IntakeInput = z.output<typeof IntakeInput>
 

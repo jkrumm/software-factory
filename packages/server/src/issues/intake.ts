@@ -63,7 +63,10 @@ export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeC
     if (created) return { status: 200, ack: { outcome: 'replayed', issue: created.id } }
 
     // An event that was a signal before is one now, whatever became of the Issue it went to: a retry must not make a second Issue.
-    const [filedBefore]: { issue_id: number }[] = await tx`SELECT issue_id FROM factory.issue_inbox WHERE key = ${key}`
+    // The inbox's keys are one space for every kind of row (`wake:...`, `hold:...`), so the door's have a prefix of their own.
+    const inboxKey = `door:${key}`
+    const [filedBefore]: { issue_id: number }[] =
+      await tx`SELECT issue_id FROM factory.issue_inbox WHERE key = ${inboxKey}`
     if (filedBefore) return { status: 200, ack: { outcome: 'replayed', issue: filedBefore.issue_id } }
 
     const [open]: { id: number }[] = await tx`
@@ -74,7 +77,7 @@ export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeC
       // Wave 1 moves a `watching` Issue back to work on `regression: true` and records the signal everywhere else.
       const { duplicate } = await enqueue(tx, {
         issueId: open.id,
-        key,
+        key: inboxKey,
         kind: 'signal',
         at: now,
         payload: {
