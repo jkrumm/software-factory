@@ -340,8 +340,8 @@ async function inIuRoot(repo: string, submitted: string, roots: readonly string[
   return false
 }
 
-/** Postgres refuses this JSON: half a surrogate pair, or a NUL. */
-const UNSTORABLE_JSON = new Set(['22P02', '22P05'])
+/** Postgres refuses this JSON: half a surrogate pair, a NUL, or nesting past its stack, whose depth differs per host. */
+const UNSTORABLE_JSON = new Set(['22P02', '22P05', '54001'])
 
 /**
  * Stores a new Issue, always `queued`, with its first `issue_events` row. A repeated `(source, sourceKey)` answers the stored
