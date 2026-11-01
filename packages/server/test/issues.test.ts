@@ -1071,6 +1071,7 @@ describe('the replay test: a crash after every effect', () => {
     return (await file('replay')).id
   }
 
+  // A whole run per crash point, against a real Postgres: seconds alone, more on a loaded host.
   test('every crash point replays to the run without one, with zero duplicates', async () => {
     const id = await reset()
     const clean = new World()
@@ -1098,5 +1099,5 @@ describe('the replay test: a crash after every effect', () => {
       for (const key of world.done) expect(world.count(key)).toBe(1)
       expect([...world.done].sort()).toEqual([...clean.done].sort())
     }
-  })
+  }, 120_000)
 })
