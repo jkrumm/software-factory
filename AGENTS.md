@@ -68,7 +68,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   Placement is by labels, no window needed: a **tab** (any role, or a worker whose parent session has no known terminal) has
   `no_parent`, `herdr.space`, `herdr.tab` (`tb-<12 hex of sha256 of the key>`) and `factory.tab_name`; its entry in the app's
   document is named after the key once the app has one (compare-and-set on `version`, `app-doc.ts`; the witness retries on a label
-  or document event). A **worker** (`worker`/`mechanical`, not `new_space`) whose parent session has a terminal (`StartInput.parentTerminal`, the
+  or document event). A **worker** (`worker`/`mechanical`/`deep`, not `new_space`) whose parent session has a terminal (`StartInput.parentTerminal`, the
   parent's `pane`) is that terminal's hidden child: `parent`, `outlive_parent`, `no_notify` (the factory wakes parents itself), no
   labels but the key; its result has no tab (null) and the space of its parent's `herdr.space` label (null if none); a parent
   that is gone (`not_found`) makes that try a tab. The app's document is read for spaces: only a confirmed absence (`not_found`, never
@@ -263,7 +263,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   stays `queued` with `hold` set (`drain|pace|wave`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
   `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 - **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
-  model id) and effort (`low|medium|high|xhigh|max`). `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
+  model id) and effort (`low|medium|high|xhigh|max`). `deep` is a worker raised for novel hard logic (opus, high): placed like a worker. `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
   of a known key answers with its row) and
   stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
   at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one), so an edit needs a deploy or restart, and a

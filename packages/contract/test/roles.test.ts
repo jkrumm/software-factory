@@ -11,6 +11,7 @@ describe('config/roles.json', () => {
       'wave',
       'worker',
       'mechanical',
+      'deep',
       'implementer',
       'verifier',
       'Explore',
@@ -23,6 +24,7 @@ describe('config/roles.json', () => {
     expect(table.get('worker')).toEqual({ role: 'worker', tier: 'sonnet', effort: 'high' })
     expect(table.get('lead')).toEqual({ role: 'lead', tier: 'opus', effort: 'high' })
     expect(table.get('mechanical')?.tier).toBe('haiku')
+    expect(table.get('deep')).toEqual({ role: 'deep', tier: 'opus', effort: 'high' })
   })
 
   test('an entry prints as exactly role, tier, effort, in that order', async () => {

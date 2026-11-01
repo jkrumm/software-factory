@@ -82,8 +82,8 @@ const defaultSpaceId = (root: string): string => `sp-${basename(root)}-${sha(roo
 /** A space of a spawn's own: the key is in the hash, so its retry makes the same one. */
 const ownSpaceId = (root: string, key: string): string => `sp-${basename(root)}-${sha(`${root}\0${key}`)}`
 
-/** Whether the factory started this role as a hidden child of its parent's terminal. */
-const isWorker = (role: string): boolean => role === 'worker' || role === 'mechanical'
+/** Whether the factory started this role as a hidden child of its parent's terminal (`deep`: a worker raised for novel hard logic). */
+const isWorker = (role: string): boolean => role === 'worker' || role === 'mechanical' || role === 'deep'
 
 type Placement =
   /** a tab of its own: named after the key once the app has adopted it */

@@ -170,7 +170,7 @@ describe('hc adapter: where the terminal goes', () => {
     expect(params).not.toHaveProperty('parent')
   })
 
-  test.each(['worker', 'mechanical'])(
+  test.each(['worker', 'mechanical', 'deep'])(
     'a %s with a known parent terminal is its hidden child: parent, no labels but the key, no notes',
     async (role) => {
       await runner.start({ ...input, key: 'lead', role: 'lead' })
