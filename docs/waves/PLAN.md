@@ -55,13 +55,29 @@ found real blocking bugs in argo Wave 4, PR #6 and argo Wave 5's fixes); `make c
 factory and Argo `make verify` green after each deploy; F1 Wave 5 proven live by the lead. Master CI in agent-workflows
 was red after I1 Wave 2 (BSD `stat`), fixed in `9803d88`. Handoff: `docs/waves/handoff/program.md`.
 
-## Wave 4 — Program lead, rotation 4            <!-- status: active -->
+## Wave 4 — Program lead, rotation 4            <!-- status: done -->
 Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md`, `docs/program.md`, `docs/waves/handoff/program.md` first.
 
-- [ ] Take over the two agents from the handoff; review each close-out and land or spawn the next.
-- [ ] F1 Wave 6: review the gate run's evidence; on a pass, the retirement (FL8) as workers, then F1 done.
-- [ ] I1 Wave 3 once the owner's click-through is in.
-- [ ] Author and start track U's plan; author F2's once F1 is done.
+- [x] Take over the two agents from the handoff; review each close-out and land or spawn the next.
+- [x] F1 Wave 6: review the gate run's evidence; on a pass, the retirement (FL8) as workers, then F1 done.
+- [x] I1 Wave 3 once the owner's click-through is in.
+- [x] Author and start track U's plan; author F2's once F1 is done.
+- [x] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
+
+**Left behind:** written by rotation 5 from git, the rotation ended without a close-out. Landed: the gate (#8, #10), the wake
+rule (#9) and the wake that ends its wait (#13), the opening fix (#11), the retirement, U's and F2's plans; the herdr-core runner
+(`437a4ea`, FL9, by dotfiles Wave 2). Open: the gamedays PR #12 (built before the herdr-core runner) and the deps PR #15.
+
+## Wave 5 — Program lead, rotation 5            <!-- status: active -->
+Opus/high. Started 2026-11-01 by the owner as a review of the whole estate.
+
+- [x] Review the factory, agw, the herdr-core port and their wiring against each other (findings: `docs/waves/handoff/program.md`).
+- [x] F1 fixes from that review (brief `docs/waves/briefs/f1-fixes-2026-11-01.md`, PR #16, dotfiles `f526f15`): spent keys, the
+  core-restart resume, resumed finished waves, a missed dead terminal. Deployed `e0f227ba573e`, `make verify` green; spent keys and
+  the dead terminal proven live, the two restart paths only by tests (proof needs a core restart: dotfiles Wave 9's window).
+- [x] agw review rework planned (`agent-workflows/docs/review-v2.md`, `15a44fb`); waits for the owner's three decisions there.
+- [ ] Owner decision: the order after F1 (full F2 Issue machine first, or a thin intake loop first; handoff §Next).
+- [ ] Land or close PR #12 (gamedays) against the herdr-core runner; PR #15 (deps).
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
 **Left behind:**

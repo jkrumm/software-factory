@@ -67,7 +67,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   that is gone (`not_found`) makes that try a tab. The app's document is read for spaces: only a confirmed absence (`not_found`, never
   written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
   refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
-  `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely and unverified against the app.
+  `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely; the live document (2026-11-01) confirms it.
 - **A failed spawn leaves its terminal.** It is labelled with the key and `factory spawn requeue` finds it again (an agent already
   running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A finished terminal is
   removed and made again on every try, so a retry on another account gets that account's environment.
