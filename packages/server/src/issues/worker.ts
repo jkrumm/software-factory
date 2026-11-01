@@ -8,7 +8,7 @@ const ROWS_PER_ISSUE = 50
 const ISSUES_PER_PASS = 20
 
 /**
- * Takes the Issue with the oldest unhandled row, those with a failed row last, and works through its rows in one transaction,
+ * Takes the Issue with the oldest new row, those with only failed rows last, and works through its rows in one transaction,
  * oldest first and failed rows after the rest. The Issue's row is the lock, so one Issue has one worker. `FOR NO KEY UPDATE`, the
  * form of `FOR UPDATE` that leaves foreign keys alone: a session event copied in meanwhile only needs `KEY SHARE` on it, and must
  * not wait for this transaction. Each row has a savepoint: one that throws is undone alone, keeps its error and stays unhandled,
@@ -25,11 +25,11 @@ async function takeIssue(
     const [locked]: IssueRow[] = await tx`
       SELECT i.* FROM factory.issues i
       JOIN (
-        SELECT issue_id, min(id) AS oldest, bool_or(error IS NOT NULL) AS failing
+        SELECT issue_id, min(id) FILTER (WHERE error IS NULL) AS fresh, min(id) AS oldest
         FROM factory.issue_inbox WHERE handled_at IS NULL GROUP BY issue_id
       ) o ON o.issue_id = i.id
       WHERE i.id NOT IN ${tx([0, ...skip])}
-      ORDER BY o.failing, o.oldest
+      ORDER BY o.fresh NULLS LAST, o.oldest
       LIMIT 1
       FOR NO KEY UPDATE OF i SKIP LOCKED`
     if (!locked) return undefined

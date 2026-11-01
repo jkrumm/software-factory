@@ -814,6 +814,16 @@ describe('the inbox', () => {
     expect(await processInbox(db.sql, always)).toHaveLength(25)
   })
 
+  test('a failed row does not put a new stop behind every other Issue', async () => {
+    const id = await working()
+    await send(id, 'phase')
+    await db.sql`UPDATE factory.issue_inbox SET error = 'it failed before' WHERE issue_id = ${id} AND handled_at IS NULL`
+    await send(id, 'stop')
+    for (let i = 0; i < 25; i++) await send(await working(), 'phase')
+    await processInbox(db.sql, now)
+    expect((await state(id)).state).toBe('closed')
+  })
+
   test('Issues that keep failing do not fill a pass: the others go first', async () => {
     const failing: number[] = []
     for (let i = 0; i < 25; i++) {
