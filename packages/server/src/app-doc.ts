@@ -102,13 +102,12 @@ export async function seedSpace(rpc: Rpc, space: { id: string; folder: string })
       const siblings = entries.filter(
         (entry) => typeof entry.folder === 'string' && real(entry.folder) === space.folder,
       )
-      const name = basename(space.folder)
-      value.spaces.push({
-        id: space.id,
-        name: siblings.length === 0 ? name : `${name} ${siblings.length + 1}`,
-        folder: space.folder,
-        tabs: [],
-      })
+      const taken = new Set(entries.map((entry) => entry.name))
+      const base = basename(space.folder)
+      let n = siblings.length + 1
+      let name = siblings.length === 0 ? base : `${base} ${n}`
+      while (siblings.length > 0 && taken.has(name)) name = `${base} ${++n}`
+      value.spaces.push({ id: space.id, name, folder: space.folder, tabs: [] })
       try {
         await rpc('doc.set', { name: APP_DOC, version: doc.version, value }, DocSet)
         return
