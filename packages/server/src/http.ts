@@ -2,6 +2,10 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import {
   EventAck,
   Health,
+  Issue,
+  IssueId,
+  IssueInput,
+  IssueList,
   Prompt,
   Quota,
   QuotaList,
@@ -21,6 +25,8 @@ import type { SQL } from 'bun'
 import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { createIssue } from './issues/lifecycle.ts'
+import { getIssue, listIssues } from './issues/read.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
 import { getQueue, setQueue } from './queue.ts'
 import { recordPrompt } from './prompts.ts'
@@ -271,6 +277,33 @@ const sessionGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest
   return session ? respond(Session, session) : json({ error: 'unknown session' }, 404)
 }
 
+/**
+ * `POST /issues`, on the port and on the socket, like a spawn: the first create of a `(source, source_key)` is 201, a replay
+ * 200 with the stored row, closed or not. A repo outside the roots and an alert in IuRoot are 422, nothing stored.
+ */
+const issueCreateHandler =
+  (sql: SQL, clock: Clock, repoRoots: readonly string[]) =>
+  async (req: Request): Promise<Response> => {
+    const { source, source_key: sourceKey, repo, title, facts } = await parseBody(req, IssueInput)
+    const { issue, created } = await createIssue(
+      sql,
+      { source, sourceKey, repo, title, facts },
+      { repoRoots, now: clock.now() },
+    ).catch((error) => {
+      throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
+    })
+    return respond(Issue, issue, created ? 201 : 200)
+  }
+
+/** `GET /issues`: newest first, without facts. */
+const issueListHandler = (sql: SQL) => async () => respond(IssueList, { issues: await listIssues(sql) })
+
+/** `GET /issues/:id`. */
+const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>) => {
+  const issue = await getIssue(sql, parseParam(IssueId, req.params.id))
+  return issue ? respond(Issue, issue) : json({ error: 'unknown issue' }, 404)
+}
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -336,6 +369,11 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
         return json({ error: `spawn is ${result.status}; only a failed spawn can be re-queued` }, 409)
       }),
     },
+    '/issues': {
+      GET: route(issueListHandler(sql)),
+      POST: route(issueCreateHandler(sql, clock, repoRoots)),
+    },
+    '/issues/:id': { GET: route(issueGetHandler(sql)) },
     '/quota': {
       GET: route(async () => {
         const now = clock.now()
@@ -400,9 +438,9 @@ export function serve(deps: AppDeps & { port: number }) {
 
 /**
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
- * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` (a pane starting work: the same body, validation and repo-roots
- * check as the port) and three reads a spawner needs to follow what it started (`GET /spawns/:key`, `GET /sessions/:id`,
- * `GET /queue`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
+ * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
+ * `GET /sessions/:id`, `GET /queue`) and the Issue reads (`GET /issues[/:id]`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -434,6 +472,11 @@ export function serveHooks(deps: {
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
+      '/issues': {
+        GET: viaSocket(issueListHandler(deps.sql)),
+        POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
+      },
+      '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,

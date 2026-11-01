@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { Effort, RoleName, Tier } from './roles.ts'
 
+export * from './issues.ts'
 export * from './roles.ts'
 export { EVENT_KINDS, type EventKind } from './spool.ts'
 

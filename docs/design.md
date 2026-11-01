@@ -301,7 +301,8 @@ pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local
 (below). The hook has no token and the Runner
 keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
 `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`),
-`POST /sessions/:id/stop-check`, `PUT|DELETE /slots/:id` (`factory slot run`), `POST /spawns` (a pane starts work, below), and
+`POST /sessions/:id/stop-check`, `PUT|DELETE /slots/:id` (`factory slot run`), `POST /spawns` (a pane starts work, below),
+`POST /issues` and `GET /issues[/:id]` (a pane files work, §4), and
 three reads a spawner needs to follow it, `GET /spawns/:key`, `GET /sessions/:id` and `GET /queue[?project=]` (`factory spawn get`,
 `session get`, `queue get` use the socket when `FACTORY_TOKEN` is not set), which a session in a pane runs without a token, and
 nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
@@ -553,31 +554,55 @@ stateDiagram-v2
   settling --> closed: healed or runbook
   settling --> queued
   queued --> working: a lead starts
+  queued --> closed: stopped
   working --> waiting: a decision, a wall, a dependency
   waiting --> working
+  waiting --> closed: stopped
   working --> watching: shipped with evidence
   working --> closed: closed or dropped with a reason
-  watching --> closed: holds
+  watching --> closed: holds, or stopped
   watching --> working: regression
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason. A stopped Issue is closed as dropped. Pausing is a flag on the project.
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`). A stopped Issue
+is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
-- **One writer.** `issues.state` changes in one module, a transition table over these states.
+- **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
+  transition table, a test pins its edges to this diagram, and the same transaction writes an `issue_events` row for every event
+  it applies. An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
+  line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
-  a session with an `issue_id` is copied in by the same transaction that stores it.
+  a session with an `issue_id` is copied in by the same transaction that stores it (`recordIn`, the only writer of session
+  events, so the live post, the spool replay and the witness all pass there). A `turn_started` takes back only what a wall parked.
 
 | Event | Sent by | Key |
 |-|-|-|
-| `signal` | dedup: a repeat or regression | the source's event id |
+| `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload, a regression | the source's event id |
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` | `<issue>:<verb>:<call id>` |
 | session events | hooks, live or from the spool | as in §3 |
-| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>`, `wake:<issue>:<at>` |
-| `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park` | the owner or the orchestrator | the intent's id |
+| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<at>`, `wake:<issue>:<at>`: the time is in the key, as a regression and a second ship is a second hold of one attempt |
+| `verified` | the check after the hold (W4) | the check's id |
+| `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park`, `reopen` | the owner or the orchestrator | the intent's id |
+| `settled`, `healed` | settle (F3) | the run's id |
 
-- **One Issue at a time.** A worker takes an Issue's oldest unhandled rows under `FOR UPDATE SKIP LOCKED`.
+- **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
+  SKIP LOCKED`, the form that leaves foreign keys alone: copying a session event in needs `KEY SHARE` on the Issue and never waits
+  for a worker. It works through up to 50 rows in one transaction, oldest event first. A handler that throws rolls that Issue back,
+  leaves the error on its oldest row and in the tick's errors, and costs no other Issue.
+- **Effects run after the commit.** A step's effects (`start_lead`, `note_lead`, `verify`, `finalize`; every step into `closed`
+  has `finalize`) are rows in `issue_effects` under `<effect>:<inbox key>`, in the transition's transaction. `runEffects` calls
+  the port outside any transaction, oldest first, and a port that fails keeps its Issue's later effects back. A crash after the
+  call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded:
+  W1 wires none (`TickDeps.issuePorts`), and the wave that brings a port runs what waited. `hold_over` asks for `verify` and
+  closes nothing: until W4's check reports `verified` the Issue stays `watching`.
+- **Intake.** `POST /issues` (token and socket, `factory issue new`; `GET /issues[/:id]`, `issue list|show`) and `createIssue`
+  for what the server files itself. An Issue has `source` (`request|alert` through the API, open in the table), `source_key` (unique per
+  source, required: the CLI makes one per call unless `--key` says otherwise), `repo` (resolved and checked like a spawn's,
+  422), a title with control characters removed, and `facts` (any JSON, at most 32 KiB, data, never instructions; what Postgres
+  cannot store is 422). A repeated key answers 200 with the stored row, a closed one too. An `alert` whose real path
+  has an `IuRoot` segment is refused (422): decision 3, in the function the door uses too.
 - **Attach or start.** A lead's pane is `lead-<issue>-<attempt>`; spawning again attaches. A prompt id
   (`issue:<id>:<phase>:<n>`) is recorded before typing. A GitHub comment carries a marker, a card a key.
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.
@@ -847,19 +872,20 @@ group.
 
 | Table | Holds | Track |
 |-|-|-|
-| `sessions` | pane, worktree, Claude session id, transcript path, repo, role, parent, account in effect, model, effort, nullable `issue_id` | F1 |
-| `session_events` | every hook and witness fact, unique key, payload, seen at | F1 |
+| `sessions` | pane, worktree, Claude session id, transcript path, repo, role, parent, account in effect, model, effort, nullable `issue_id` (F2) | F1 |
+| `events` | every hook and witness fact, unique key, payload, seen at | F1 |
 | `spawn_requests` | key, repo, role, prompt, tier, effort, requested at, `resume_at`, account, resulting session | F1 |
 | `queue_scopes` | scope, state (`run`, `pace`, `drain`), reason, who, when | F1 |
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
 | `prompts` | prompt id, session, text, typed at, delivered at | F1 |
 | `slots` | holder, lease, command | F1 |
-| `projects` | every repo: synced `project.yaml` or defaults, pause flag | F1 (slug only), F2 |
-| `issues`, `issue_deps` | kind, class, title, state, parent, root cause, fix, summary, `wake_at` | F2 |
-| `issue_inbox` | every event for an Issue, key, handled at | F2 |
+| `projects` | every repo: synced `project.yaml` or defaults, make targets, pause flag; the table exists from W1, Wave 2 fills it | F2 |
+| `issues`, `issue_deps` | source, source key, repo, facts, kind, class, title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
+| `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
+| `issue_effects` | what a transition asks of the world, key, attempts, error, done at | F2 |
 | `issue_links` | Signal → Issue, Issue → Issue, who, why, whether it acted | F2 |
 | `claims` | key, holders, queued Issues | F2 |
-| `events` | phases, notes, orchestrator actions, state changes | F2 |
+| `issue_events` | phases, notes, orchestrator actions, state changes (`events` is the session store's name since F1) | F2 |
 | `evidence` | per Issue: kind, link or payload, at, from whom | F2 |
 | `decisions` | question, options, default, expiry, answer, who, when | F2 |
 | `artifacts`, `comments` | plan or report as path@sha, comment threads | F2 |

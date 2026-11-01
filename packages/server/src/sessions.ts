@@ -1,6 +1,7 @@
 import type { Effort, Session, SessionState, Tier, WaitOn } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { ACCOUNT_NAME, ROLE_NAME } from '@software-factory/contract/spool'
+import { copySessionEvent } from './issues/inbox.ts'
 import type { EVENT_KINDS, EventInput } from './schemas.ts'
 
 export type EventKind = (typeof EVENT_KINDS)[number]
@@ -19,8 +20,9 @@ export const AGENT_FRESH_MS = 5 * 60_000
 
 /**
  * Stores an event and everything it implies in one transaction: the session's row (created by the first event of a
- * name, linked to the spawn it came from), and for `session_started` the binding of Claude's session id and transcript
- * path. A repeated `key` changes nothing and reports `duplicate: true`.
+ * name, linked to the spawn it came from), for `session_started` the binding of Claude's session id and transcript
+ * path, and for a session that works on an Issue the row in the Issue's inbox. A repeated `key` changes nothing and reports
+ * `duplicate: true`.
  */
 export async function recordEvent(sql: SQL, event: EventInput): Promise<{ duplicate: boolean }> {
   return sql.begin((tx) => recordIn(tx, event))
@@ -64,6 +66,7 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
           bound_at = ${event.at}
       WHERE id = ${event.session} AND (bound_at IS NULL OR bound_at <= ${event.at})`
   }
+  await copySessionEvent(tx, event)
   return { duplicate: false }
 }
 

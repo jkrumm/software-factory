@@ -3,6 +3,9 @@ import { parseArgs } from 'node:util'
 import {
   DEFAULT_ROLES_FILE,
   Health,
+  Issue,
+  IssueList,
+  type IssueSummary,
   loadRoleTable,
   Prompt,
   type Quota,
@@ -47,6 +50,12 @@ commands:
                   type <text> into the session once it is at its prompt (held while it works), confirmed by its next
                   turn; --id makes a repeated call one note (default: a fresh id per call). Use -- before text that
                   starts with a dash
+  issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source request|alert]
+                  file an Issue. --facts is JSON up to 32 KiB, from a file or stdin, kept as data. --key makes a replay one
+                  Issue, whatever became of it (default: a fresh key per call). A repo must be inside the allowed roots
+                  (token or socket, as spawn create)
+  issue list      the Issues, newest first (token or socket)
+  issue show <id> one Issue with its facts (token or socket)
   queue get [--project <path>]
                   the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
                   (token or socket)
@@ -71,13 +80,14 @@ commands:
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note: the note's idempotency key
 --repo, --prompt, --role, --parent, --space, --new-space  spawn create
+--title, --facts, --key, --source  issue new
 --name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
 FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
-                 spawn create|get, session get and queue get fall back to the socket without it)
+                 spawn create|get, session get, queue get and issue new|list|show fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_SLOT_WAIT_MS  slot run: longest wait for a slot before running without one (default 600000)
@@ -156,6 +166,9 @@ export function statusScreen(s: Status): string {
 
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
+const issueLine = (i: IssueSummary) =>
+  [i.id, i.state, i.reason ?? i.outcome, i.source, i.repo, i.title].map(cell).join('\t')
+
 const sessionLine = (s: Session) =>
   [s.id, s.state, s.wait, s.turn, s.pane, s.claudeSessionId, s.lastEventAt].map(cell).join('\t')
 
@@ -173,6 +186,27 @@ interface Flags {
   space?: string
   'new-space'?: boolean
   name?: string
+  title?: string
+  facts?: string
+  key?: string
+  source?: string
+}
+
+/** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
+async function readFacts(from: string, io: Io): Promise<unknown> {
+  if (from !== '-' && !from.startsWith('@')) throw usage('--facts takes @file or - (stdin)')
+  const text = await (from === '-'
+    ? (io.stdin?.() ?? Promise.resolve(''))
+    : Bun.file(from.slice(1))
+        .text()
+        .catch(() => {
+          throw usage(`cannot read ${from.slice(1)}`)
+        }))
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw usage('--facts is not valid JSON')
+  }
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -300,6 +334,45 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, sessionLine(body))
   }
 
+  if (key === 'issue new') {
+    if (!flags.repo || !flags.title) {
+      throw usage('usage: issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source <source>]')
+    }
+    const facts = flags.facts === undefined ? undefined : await readFacts(flags.facts, io)
+    const { body } = await call(io, '/issues', {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: Issue,
+      body: {
+        repo: resolve(flags.repo),
+        title: flags.title,
+        source_key: flags.key ?? crypto.randomUUID(),
+        ...(flags.source ? { source: flags.source } : {}),
+        ...(facts === undefined ? {} : { facts }),
+      },
+    })
+    return print(body, issueLine(body))
+  }
+
+  if (key === 'issue list') {
+    const { body } = await call(io, '/issues', { auth: true, socket: 'fallback', schema: IssueList })
+    const lines = body.issues.map(issueLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (words[0] === 'issue' && words[1] === 'show') {
+    const target = words[2]
+    if (!target || words.length > 3) throw usage('usage: issue show <id>')
+    const { body } = await call(io, `/issues/${encodeURIComponent(target)}`, {
+      auth: true,
+      socket: 'fallback',
+      schema: Issue,
+    })
+    return print(body, issueLine(body))
+  }
+
   if (key === 'queue get') {
     const query = flags.project === undefined ? '' : `?project=${encodeURIComponent(resolve(flags.project))}`
     const { body } = await call(io, `/queue${query}`, { auth: true, socket: 'fallback', schema: QueueView })
@@ -353,7 +426,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   throw usage(words.length ? `unknown command: ${key}` : 'no command', `${BIN} --help lists the commands`)
 }
 
-/** Runs one invocation and returns its exit code. Nothing here reads stdin or asks anything. */
+/** Runs one invocation and returns its exit code. Nothing asks anything; stdin is read only for `--facts -`. */
 export async function run(argv: string[], io: Io): Promise<number> {
   try {
     let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>
@@ -405,5 +478,9 @@ const OPTIONS = {
   space: { type: 'string' },
   'new-space': { type: 'boolean' },
   name: { type: 'string' },
+  title: { type: 'string' },
+  facts: { type: 'string' },
+  key: { type: 'string' },
+  source: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const
