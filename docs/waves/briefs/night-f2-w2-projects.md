@@ -4,6 +4,8 @@ Owned files: `packages/server/src/projects/**` (new), `packages/server/src/admis
 
 # Brief: F2 Wave 2, `project.yaml` v0 and claims
 
+Your migration is `015_*` (D takes 013, the door 014): rebase on `origin/master` before you open the PR.
+
 Read `AGENTS.md`, `docs/waves/f2.md` (Wave 2), `docs/design.md` §4 (Claims), §9, §12, and `packages/server/src/issues/` (Wave 1, live) first. The steps are Wave 2 of `f2.md`.
 
 1. **The v0 schema** (zod, `packages/contract/src/projects.ts`, YAML parsed with a pinned dependency, check it with `/research`, never from memory; exact pin, the release-age cooldown applies): `apiVersion: factory/v2`, `name`,

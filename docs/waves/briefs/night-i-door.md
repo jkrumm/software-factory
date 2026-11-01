@@ -4,6 +4,8 @@ Owned files: `packages/door/**` (new), `packages/contract/src/door.ts` (new) and
 
 # Brief: I, the factory door (owner decision 2, 2026-11-01)
 
+Your migration is `014_*` (D takes 013, Wave 2 takes 015): rebase on `origin/master` before you open the PR.
+
 Read `AGENTS.md`, `docs/waves/night-2026-11-01.md` (decisions 2 and 3), `docs/design.md` §4 and §5, and `packages/server/src/issues/` (F2 Wave 1, live) first.
 Today every alert goes to Slack only. The door makes a real alert one Issue. F3's dedup, settle and runbooks are out of scope; an
 alert-born Issue only queues until F2 Wave 4 is live.
