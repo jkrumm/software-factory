@@ -3,7 +3,7 @@
     "monitorID": 12,
     "status": 0,
     "time": "2026-11-01 21:14:07.512",
-    "msg": "connect ECONNREFUSED 10.0.0.5:3000",
+    "msg": "connect ECONNREFUSED 192.0.2.5:3000",
     "important": true,
     "duration": 0,
     "retries": 3,
@@ -44,5 +44,5 @@
     "notificationIDList": { "4": true },
     "tags": [{ "name": "prod", "value": "", "color": "#059669" }]
   },
-  "msg": "[forecast-api] [🔴 Down] connect ECONNREFUSED 10.0.0.5:3000"
+  "msg": "[forecast-api] [🔴 Down] connect ECONNREFUSED 192.0.2.5:3000"
 }

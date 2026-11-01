@@ -930,7 +930,9 @@ runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and th
   the common path); (2) routed, an Issue of this monitor not closed, the event is a `signal` inbox row on it, `regression: true` when
   down (200); (3) routed, none open, down: `createIssue` (`source: alert`, key `<source>:<monitor>:<event>`, the route's repo) (201);
   (4) routed, none open, up: only the route's counter (202). A replayed event is one effect: the Issue's key, the inbox key and the
-  counters' last event. The event that created an Issue is not a signal on it later.
+  counters' last event (a counter keeps only its latest event, so an older retry counts again). The event that created an Issue, and one that was a
+  signal, are not filed again later, whatever became of the Issue. The key escapes `:` and `%` in the monitor, so two monitors never share one. A signal carries the
+  alert's facts. An open Issue keeps its monitor until it closes, also when the route has moved to another repo.
 - **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
   the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line.
 

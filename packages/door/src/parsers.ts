@@ -21,7 +21,8 @@ export type Parser = (payload: unknown) => Parsed
 
 const MAX_NAME_CHARS = 256
 const MAX_TITLE_CHARS = 500
-const MAX_TEXT_CHARS = 4000
+const MAX_TEXT_CHARS = 1500
+const MAX_LINK_CHARS = 1024
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
@@ -40,7 +41,7 @@ const KumaPayload = z.object({
       hostname: z.string().nullish(),
       port: z.union([z.number(), z.string()]).nullish(),
     })
-    .nullish(),
+    .nullable(),
   heartbeat: z
     .object({
       status: z.number(),
@@ -49,12 +50,12 @@ const KumaPayload = z.object({
       ping: z.number().nullish(),
       retries: z.number().nullish(),
     })
-    .nullish(),
+    .nullable(),
 })
 
 /**
  * Uptime Kuma's webhook provider: `{ heartbeat, monitor, msg }`. The monitor's `url` is not read (it can carry credentials), and
- * its name is the key because ids change between syncs. The test message has no heartbeat and no monitor; a pending (2) or
+ * its name is the key because ids change between syncs. The test message has both keys, null; one that lacks them is not Kuma's; a pending (2) or
  * maintenance (3) beat is neither down nor up.
  */
 export const parseKuma: Parser = (payload) => {
@@ -101,9 +102,19 @@ const HyperdxPayload = z.object({
 })
 
 /** The 🚨 and ✅ that HyperDX puts in front of a title. */
-const TITLE_PREFIX = /^(?:\u{1F6A8}|✅)️?\s*/u
-/** Numbers at the end of a title (a count, a percentage, a threshold) change from one alert to the next. */
-const TRAILING_NUMBERS = /(?:[\s:=#(<>≤≥\-–—]*\d[\d.,]*%?\)?)+$/u
+// oxlint-disable-next-line prefer-regex-literals -- the formatter turns \u escapes in a literal into invisible characters
+const TITLE_PREFIX = new RegExp('^(?:\\u{1F6A8}|\\u2705)\\uFE0F?\\s*', 'u')
+/** One number at the end of a title (a count, a percentage, a threshold), with what leads into it. */
+// oxlint-disable-next-line prefer-regex-literals -- as above
+const TRAILING_NUMBER = new RegExp('[\\s:=#(<>\\u2264\\u2265\\-\\u2013\\u2014]*\\d[\\d.,]*%?\\)?$', 'u')
+
+/** Peels the numbers off the end one by one. The caller clips the title, so the quadratic worst case stays small. */
+const stripTrailingNumbers = (text: string): string => {
+  let rest = text
+  for (let next = rest.replace(TRAILING_NUMBER, ''); next !== rest; next = rest.replace(TRAILING_NUMBER, ''))
+    rest = next
+  return rest.trim()
+}
 
 /** HyperDX titles an alert `Alert for "<name>" - <value> ...`: the name is what stays the same from one firing to the next. */
 const NAMED_TITLE = /^Alert for "(.+)" - /u
@@ -113,10 +124,10 @@ const NAMED_TITLE = /^Alert for "(.+)" - /u
  * the numbers at its end. The value in the title (a count, a percentage) changes with every firing.
  */
 export const hyperdxMonitor = (title: string): string => {
-  const bare = title.replace(TITLE_PREFIX, '').trim()
+  const bare = clip(title, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
   const named = NAMED_TITLE.exec(bare)?.[1]?.trim()
   if (named) return clip(named, MAX_NAME_CHARS)
-  return clip(bare.replace(TRAILING_NUMBERS, '').trim() || bare, MAX_NAME_CHARS)
+  return clip(stripTrailingNumbers(bare) || bare, MAX_NAME_CHARS)
 }
 
 /**
@@ -139,7 +150,7 @@ export const parseHyperdx: Parser = (payload) => {
       facts: {
         title: clip(hook.title, MAX_TITLE_CHARS),
         body: hook.body ? clip(hook.body, MAX_TEXT_CHARS) : null,
-        link: hook.link ? clip(hook.link, 2048) : null,
+        link: hook.link ? clip(hook.link, MAX_LINK_CHARS) : null,
         alertId: hook.alertId ?? null,
         eventId: hook.eventId,
         window: { start: hook.startTime ?? null, end: hook.endTime ?? null },
