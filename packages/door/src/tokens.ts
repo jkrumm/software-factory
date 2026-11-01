@@ -1,5 +1,15 @@
 import { randomBytes } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { DoorSource } from '@software-factory/contract'
 import { z } from 'zod'
@@ -72,8 +82,20 @@ export function newToken(path: string, source: string, options: { rotate?: boole
   const token = randomBytes(32).toString('base64url')
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   const tmp = `${path}.${process.pid}.tmp`
-  writeFileSync(tmp, `${JSON.stringify({ ...tokens, [name.data]: token }, null, 2)}\n`, { mode: 0o600 })
-  chmodSync(tmp, 0o600)
-  renameSync(tmp, path)
+  // Made with mode 0600 from the first byte (`wx` after a removal, so a leftover file with another mode cannot be written into),
+  // and gone again if anything fails before the rename.
+  rmSync(tmp, { force: true })
+  try {
+    const fd = openSync(tmp, 'wx', 0o600)
+    try {
+      writeSync(fd, `${JSON.stringify({ ...tokens, [name.data]: token }, null, 2)}\n`)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, path)
+  } catch (error) {
+    rmSync(tmp, { force: true })
+    throw error
+  }
   return token
 }
