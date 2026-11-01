@@ -216,7 +216,7 @@ export class ProjectSync {
     const dirName = basename(repo)
     const [prev]: Row[] = await sql`
       SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
-    if (!prev && !text && skipEmpty) return undefined
+    if (!prev && (text === null || text === undefined) && skipEmpty) return undefined
 
     const now = this.deps.now()
     const name = prev?.name ?? (await this.freeName(dirName, repo))

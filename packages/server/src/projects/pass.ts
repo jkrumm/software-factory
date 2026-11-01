@@ -4,10 +4,11 @@ import type { ProjectSync } from './sync.ts'
 
 /**
  * The tick's share of projects, before it claims spawns: the claims of closed Issues are given back (so the next Issue
- * is promoted in this very pass), then the projects are synced if a sync is due. Returns the errors the pass had, for the tick's result.
+ * is promoted in this very pass), then the projects are synced if a sync is due. Returns the errors the pass had and the spawns it failed, for the tick's result.
  */
-export async function projectPass(sql: SQL, sync?: ProjectSync): Promise<string[]> {
+export async function projectPass(sql: SQL, sync?: ProjectSync): Promise<{ errors: string[]; failed: string[] }> {
   const errors: string[] = []
+  let failed: string[] = []
   try {
     for (const key of (await releaseClosed(sql)).failed)
       console.error('spawn failed', { key, reason: 'its Issue closed' })
@@ -20,5 +21,5 @@ export async function projectPass(sql: SQL, sync?: ProjectSync): Promise<string[
   } catch (error) {
     errors.push(`projects: ${error instanceof Error ? error.message : String(error)}`)
   }
-  return errors
+  return { errors, failed }
 }
