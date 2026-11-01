@@ -1,0 +1,9 @@
+2026-10-30T20:44:00.652Z run fgd-g3-working: release dd9b001e2023, server pid 41371, base commit e73e823
+2026-10-30T20:44:00.668Z run fgd-g3-working: spawn create (role worker, repo factory-gameday), watcher working armed
+{"key":"fgd-g3-working","status":"queued","account":"iu","role":"worker","tier":"sonnet","effort":"high"}
+2026-10-30T20:44:10.082Z kill: -9 server pid 41371 at moment 'working' for fgd-g3-working; children at the kill: none
+2026-10-30T20:44:10.139Z kill: herdr agent for fgd-g3-working right after: {"agent_status":"working","interactive_ready":true,"state_change_seq":15517,"completion_seq":null}
+2026-10-30T20:44:10.911Z kill: server back as pid 35179, healthy 829 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-10-30T20:44:11.563Z run fgd-g3-working: spawn: starting attempts=1 pane=- hold=- | session: working turn=1
+2026-10-30T20:45:08.978Z run fgd-g3-working: spawn: starting attempts=1 pane=- hold=- | session: idle turn=1
+2026-10-30T20:48:09.849Z run fgd-g3-working: spawn: started attempts=2 pane=w72:p1 hold=- | session: idle turn=1

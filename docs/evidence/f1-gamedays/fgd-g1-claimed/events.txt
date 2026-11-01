@@ -1,0 +1,6 @@
+session_started|fgd-g1-claimed:session_started:0|20:13:26.131
+turn_started|fgd-g1-claimed:turn_started:1|20:17:27.262
+turn_ended|fgd-g1-claimed:turn_ended:1|20:17:35.129
+turn_started|fgd-g1-claimed:turn_started:2|20:18:22.657
+turn_ended|fgd-g1-claimed:turn_ended:2|20:18:27.457
+prompt_idle|fgd-g1-claimed:prompt_idle:2|20:19:27.502

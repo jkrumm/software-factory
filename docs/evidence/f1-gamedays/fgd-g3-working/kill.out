@@ -1,0 +1,3 @@
+2026-10-30T20:44:10.082Z kill: -9 server pid 41371 at moment 'working' for fgd-g3-working; children at the kill: none
+2026-10-30T20:44:10.139Z kill: herdr agent for fgd-g3-working right after: {"agent_status":"working","interactive_ready":true,"state_change_seq":15517,"completion_seq":null}
+2026-10-30T20:44:10.911Z kill: server back as pid 35179, healthy 829 ms after the kill (the LaunchAgent restarted it, KeepAlive)
