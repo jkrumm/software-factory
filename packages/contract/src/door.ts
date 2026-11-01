@@ -1,0 +1,86 @@
+import { z } from 'zod'
+import { IssueTitle } from './issues.ts'
+
+/** The name of an intake source: the path segment of `POST /alert/<source>` and the key of its token. */
+export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
+export type DoorSource = z.infer<typeof DoorSource>
+
+const noNul = (value: string): boolean => !value.includes('\0')
+
+/** A monitor's name or an event's id: someone else's text, so bounded, and never a NUL. */
+const Label = z.string().min(1).max(256).refine(noNul, 'not a valid name')
+
+export const MAX_INTAKE_FACTS_BYTES = 16 * 1024
+
+const fitsFacts = (facts: unknown): boolean => {
+  try {
+    return Buffer.byteLength(JSON.stringify(facts) ?? '') <= MAX_INTAKE_FACTS_BYTES
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `POST /intake`, on the socket only: what the door files for one alert. The payload is data: nothing in it picks a repo, a role,
+ * a path or a command, so there is no such field here; the repo comes from the registry.
+ */
+export const IntakeInput = z.strictObject({
+  source: DoorSource,
+  monitor: Label,
+  event: Label,
+  status: z.enum(['down', 'up']),
+  title: IssueTitle,
+  facts: z.unknown().refine(fitsFacts, `facts are larger than ${MAX_INTAKE_FACTS_BYTES} bytes`).default({}),
+})
+export type IntakeInput = z.output<typeof IntakeInput>
+
+/**
+ * What the intake did. `unrouted`: no route, counted. `quiet`: routed, but an `up` with no open Issue, counted on the route.
+ * `attached`: a signal on the open Issue. `created`: a new Issue. `replayed`: this event was filed before.
+ */
+export const IntakeOutcome = z.enum(['unrouted', 'quiet', 'attached', 'created', 'replayed'])
+export type IntakeOutcome = z.infer<typeof IntakeOutcome>
+
+export const IntakeAck = z.object({ outcome: IntakeOutcome, issue: z.number().int().nullable() })
+export type IntakeAck = z.infer<typeof IntakeAck>
+
+/** `PUT /door/routes`: which repo an alert of this monitor concerns. */
+export const DoorRouteInput = z.strictObject({
+  source: DoorSource,
+  monitor: Label,
+  repo: z
+    .string()
+    .max(1024)
+    .regex(/^\/[^\0]*$/, 'not an absolute path'),
+})
+export type DoorRouteInput = z.output<typeof DoorRouteInput>
+
+/** `DELETE /door/routes`. */
+export const DoorRouteKey = z.strictObject({ source: DoorSource, monitor: Label })
+export type DoorRouteKey = z.output<typeof DoorRouteKey>
+
+export const DoorRoute = z.object({
+  source: z.string(),
+  monitor: z.string(),
+  repo: z.string(),
+  /** alerts that filed nothing here (an `up` with no open Issue) */
+  quiet: z.number().int(),
+  lastQuietAt: z.string().nullable(),
+})
+export type DoorRoute = z.infer<typeof DoorRoute>
+
+export const DoorRouteList = z.object({ routes: z.array(DoorRoute) })
+export type DoorRouteList = z.infer<typeof DoorRouteList>
+
+/** A monitor that raised alerts with no route: what the owner reads to decide what to route. */
+export const DoorUnrouted = z.object({
+  source: z.string(),
+  monitor: z.string(),
+  count: z.number().int(),
+  lastSeen: z.string(),
+  lastTitle: z.string(),
+})
+export type DoorUnrouted = z.infer<typeof DoorUnrouted>
+
+export const DoorUnroutedList = z.object({ unrouted: z.array(DoorUnrouted) })
+export type DoorUnroutedList = z.infer<typeof DoorUnroutedList>

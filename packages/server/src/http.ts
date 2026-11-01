@@ -1,7 +1,14 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import {
+  DoorRoute,
+  DoorRouteInput,
+  DoorRouteKey,
+  DoorRouteList,
+  DoorUnroutedList,
   EventAck,
   Health,
+  IntakeAck,
+  IntakeInput,
   Issue,
   IssueId,
   IssueInput,
@@ -29,6 +36,7 @@ import type { SQL } from 'bun'
 import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
 import { createIssue } from './issues/lifecycle.ts'
 import { getIssue, listIssues } from './issues/read.ts'
 import { getProject, listProjects } from './projects/store.ts'
@@ -321,6 +329,39 @@ const projectGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/projects/:n
   return project ? respond(Project, project) : json({ error: 'unknown project' }, 404)
 }
 
+/** A refused repo is the caller's 422, with the reason; anything else is the server's. */
+const asRefusal = (error: unknown): never => {
+  throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
+}
+
+/**
+ * `POST /intake`, on the socket only: the door files one alert (docs/design.md §11). The repo is the registry's, so a refusal
+ * here (a route that now points outside the roots, or into IuRoot) is a 422 that files nothing.
+ */
+const intakeHandler =
+  (sql: SQL, clock: Clock, repoRoots: readonly string[]) =>
+  async (req: Request): Promise<Response> => {
+    const input = await parseBody(req, IntakeInput)
+    const { status, ack } = await intakeAlert(sql, input, { repoRoots, now: clock.now() }).catch(asRefusal)
+    return respond(IntakeAck, ack, status)
+  }
+
+/** `PUT|DELETE|GET /door/routes` and `GET /door/unrouted`: the registry the owner keeps, on the token API. */
+const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => ({
+  routes: {
+    GET: async () => respond(DoorRouteList, { routes: await listRoutes(sql) }),
+    PUT: async (req: Request) => {
+      const input = await parseBody(req, DoorRouteInput)
+      return respond(DoorRoute, await setRoute(sql, input, { repoRoots, now: clock.now() }).catch(asRefusal))
+    },
+    DELETE: async (req: Request) => {
+      const removed = await removeRoute(sql, await parseBody(req, DoorRouteKey))
+      return removed ? respond(DoorRoute, removed) : json({ error: 'unknown route' }, 404)
+    },
+  },
+  unrouted: { GET: async () => respond(DoorUnroutedList, { unrouted: await listUnrouted(sql) }) },
+})
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -341,6 +382,7 @@ const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
 /** The route table for `Bun.serve`. */
 export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota, projects }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
+  const door = doorHandlers(sql, clock, repoRoots)
   return {
     '/health': {
       GET: guarded(
@@ -394,6 +436,8 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
     '/projects': { GET: route(projectListHandler(sql)) },
     '/projects/sync': { POST: route(async () => respond(ProjectSyncResult, await projects.syncNow())) },
     '/projects/:name': { GET: route(projectGetHandler(sql)) },
+    '/door/routes': { GET: route(door.routes.GET), PUT: route(door.routes.PUT), DELETE: route(door.routes.DELETE) },
+    '/door/unrouted': { GET: route(door.unrouted.GET) },
     '/quota': {
       GET: route(async () => {
         const now = clock.now()
@@ -460,7 +504,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`) and the project reads (`GET /projects[/:name]`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -499,6 +543,8 @@ export function serveHooks(deps: {
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
+      // The door's: a process that holds no token and no database credential, and can file Issues and nothing else.
+      '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,
