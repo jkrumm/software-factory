@@ -323,6 +323,20 @@ describe('golden paths: transitions and effects', () => {
     expect(await effects(id)).toEqual(['start_lead', 'note_lead'])
   })
 
+  test('a second wait for the same time wakes too: each wait is a timer of its own', async () => {
+    const id = await working()
+    const until = new Date(clock.now().getTime() + 60_000).toISOString()
+    await step(id, 'wait', { until })
+    clock.advance(60_000)
+    await pass()
+    expect((await state(id)).state).toBe('working')
+
+    await step(id, 'wait', { until })
+    await pass()
+    expect((await state(id)).state).toBe('working')
+    expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(2)
+  })
+
   test('a dependency: waits until everything it depends on is closed', async () => {
     const blocker = await working()
     const other = await working()

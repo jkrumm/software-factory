@@ -250,11 +250,12 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const to = step.to ?? issue.state
   const attempt = step.newAttempt ? issue.attempt + 1 : issue.attempt
   const hold = step.hold ? issue.hold + 1 : issue.hold
+  const waits = step.reason === 'wait' ? issue.waits + 1 : issue.waits
   const until = step.reason === 'wait' ? time(cause.payload, 'until') : null
   const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
-    SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold},
+    SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits},
         wake_at = ${wakeAt}, updated_at = GREATEST(updated_at, ${cause.at}), closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
@@ -400,8 +401,8 @@ export const createIssue = (
  */
 export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<number> {
   return sql.begin(async (tx) => {
-    const due: Pick<IssueRow, 'id' | 'state' | 'attempt' | 'hold' | 'wake_at'>[] = await tx`
-      SELECT id, state, attempt, hold, wake_at FROM factory.issues
+    const due: Pick<IssueRow, 'id' | 'state' | 'attempt' | 'hold' | 'waits'>[] = await tx`
+      SELECT id, state, attempt, hold, waits FROM factory.issues
       WHERE wake_at <= ${now}
       ORDER BY wake_at, id LIMIT ${batch}
       FOR NO KEY UPDATE SKIP LOCKED`
@@ -410,7 +411,7 @@ export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<numbe
         const key = `hold:${issue.id}:${issue.attempt}:${issue.hold}`
         await enqueue(tx, { issueId: issue.id, key, kind: 'hold_over', at: now, payload: { hold: issue.hold } })
       } else if (issue.state === 'waiting') {
-        const key = `wake:${issue.id}:${issue.wake_at?.toISOString()}`
+        const key = `wake:${issue.id}:${issue.waits}`
         await enqueue(tx, { issueId: issue.id, key, kind: 'wake', at: now, payload: { for: 'wait' } })
       }
       await tx`UPDATE factory.issues SET wake_at = NULL WHERE id = ${issue.id}`

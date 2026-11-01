@@ -34,6 +34,8 @@ CREATE TABLE factory.issues (
   attempt    integer NOT NULL DEFAULT 0,
   -- counts the ships: a regression and a second ship is a second hold of one attempt, and proof names the hold it is for
   hold       integer NOT NULL DEFAULT 0,
+  -- counts the timed waits, for the same reason: two waits for one time are two timers
+  waits      integer NOT NULL DEFAULT 0,
   wake_at    timestamptz,
   created_at timestamptz NOT NULL,
   updated_at timestamptz NOT NULL,
