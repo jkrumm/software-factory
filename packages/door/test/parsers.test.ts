@@ -116,7 +116,9 @@ describe('hyperdx', () => {
       status: 'down',
       title: 'Alert for "API error rate" - 57 lines found',
     })
-    expect(alert.event).toBe('6f0b6a7c-2f43-4d51-9c1e-0a1f2b3c4d5e@2026-11-01T21:05:00.000Z:down')
+    expect(alert.event).toBe(
+      '6f0b6a7c-2f43-4d51-9c1e-0a1f2b3c4d5e@2026-11-01T21:05:00.000Z/2026-11-01T21:10:00.000Z:down',
+    )
     expect(alert.facts).toMatchObject({ link: expect.stringContaining('hyperdx'), alertId: '65f1c0ffee00112233445566' })
   })
 
@@ -125,6 +127,13 @@ describe('hyperdx', () => {
     const up = alertOf(parseHyperdx(await fixture('hyperdx-ok.json')))
     expect(up).toMatchObject({ monitor: down.monitor, status: 'up' })
     expect(up.event).not.toBe(down.event)
+  })
+
+  test('a re-fire over a later window is another event, a retry of one notification is the same', async () => {
+    const base = (await fixture('hyperdx-alert.json')) as Record<string, unknown>
+    const event = (extra: object) => alertOf(parseHyperdx({ ...base, ...extra })).event
+    expect(event({ endTime: '2026-11-01T21:15:00.000Z' })).not.toBe(event({}))
+    expect(event({})).toBe(event({}))
   })
 
   test('a state that is neither ALERT nor OK files nothing', async () => {
@@ -139,7 +148,7 @@ describe('hyperdx', () => {
 
   test('a numeric window, as an unquoted template slot sends it, is read too', async () => {
     const payload = { ...((await fixture('hyperdx-alert.json')) as object), startTime: 1793567100000 }
-    expect(alertOf(parseHyperdx(payload)).event).toEndWith('@1793567100000:down')
+    expect(alertOf(parseHyperdx(payload)).event).toMatch(/@1793567100000\/2026-11-01T21:10:00.000Z:down$/)
   })
 
   test('a title of another shape loses its prefix and its trailing numbers', () => {

@@ -154,8 +154,8 @@ export const hyperdxMonitor = (title: string): string => {
 
 /**
  * HyperDX's generic webhook, whose body is the template in this package's README. `{{state}}` is `ALERT` while it fires and `OK`
- * when it recovers; the firing and the recovery share an `eventId`, so the event is that id with the window it began in and the
- * status. Any other state is neither.
+ * when it recovers; the firing and the recovery share an `eventId`, so the event is that id with the window it was evaluated over (start and end) and the
+ * status: a re-fire over a later window is a new event, a retry of one notification is the same. Any other state is neither.
  */
 export const parseHyperdx: Parser = (payload) => {
   const hook = shape(HyperdxPayload, payload)
@@ -167,7 +167,7 @@ export const parseHyperdx: Parser = (payload) => {
     kind: 'alert',
     alert: {
       monitor,
-      event: `${part(eventId)}@${part(startTime)}:${status}`,
+      event: `${part(eventId)}@${part(startTime)}/${part(endTime)}:${status}`,
       status,
       title: clip(hook.title.replace(TITLE_PREFIX, '').trim() || monitor, MAX_TITLE_CHARS),
       facts: {
