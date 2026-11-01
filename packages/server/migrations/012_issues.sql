@@ -120,7 +120,7 @@ CREATE TABLE factory.issue_effects (
   done_at    timestamptz,
   cancelled_at timestamptz
 );
-CREATE INDEX issue_effects_open ON factory.issue_effects (id) WHERE done_at IS NULL AND cancelled_at IS NULL;
+CREATE INDEX issue_effects_open ON factory.issue_effects (issue_id, id) WHERE done_at IS NULL AND cancelled_at IS NULL;
 
 CREATE TABLE factory.decisions (
   id             bigserial PRIMARY KEY,
