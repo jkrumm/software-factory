@@ -11,6 +11,7 @@ import {
   Budget,
   DEFAULT_DELIVER_WAIT_MS,
   DEFAULT_START_BUDGET_MS,
+  LOCAL_TERMINAL,
   real,
   type Runner,
   RunnerError,
@@ -288,7 +289,7 @@ export class HcRunner implements Runner {
   private async place(input: StartInput, root: string, budget: Budget): Promise<Placement> {
     const parent = input.parentTerminal
     // A spawn that asks for a space of its own is a tab, whatever its role: a hidden child has no space.
-    if (isWorker(input.role) && parent && /^t\d+$/.test(parent) && !input.newSpace) {
+    if (isWorker(input.role) && parent && LOCAL_TERMINAL.test(parent) && !input.newSpace) {
       // No labels: the app shows it as a sub-agent of its parent, not as a tab. The factory wakes the parent itself, so
       // the core must not type its own notes into it. It outlives the parent's program: the factory decides when it ends.
       return { kind: 'child', params: { parent, outlive_parent: true, no_notify: true } }

@@ -9,9 +9,6 @@ export type { SessionState }
 /** The pseudo-session the runner's own events (a restart) are filed under: no real name starts with an underscore. */
 export const RUNNER_SESSION = '_runner'
 
-/** A terminal of this core (`t7`, or `machine/t7`): the only panes the witness can see, and the only ones that can still be live. */
-export const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t\d+$/
-
 /** A `working` session whose worktree has not changed for this long, while the runner also says `working`, is `stuck`. */
 export const STUCK_AFTER_MS = 45 * 60_000
 /** What the runner said counts as agreeing only while it is this fresh: the witness reads it every minute. */

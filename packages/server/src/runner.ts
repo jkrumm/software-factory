@@ -87,6 +87,13 @@ export const DEFAULT_DELIVER_WAIT_MS = 30_000
 
 const Registry = z.object({ accounts: z.record(z.string(), z.object({ dir: z.string().nullable() })) })
 
+/**
+ * An address of a terminal of the current core: `t7`, `t1n` (base 36, so letters come after `t19`), or `machine/t7`. A classic
+ * herdr pane (`w4V:p3J`) is none. `LOCAL_TERMINAL` is the form a parent is named by.
+ */
+export const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t[0-9a-z]+$/
+export const LOCAL_TERMINAL = /^t[0-9a-z]+$/
+
 /** A terminal name: a leading lowercase letter, then `[a-z0-9-]`, at most 32 characters (herdr-core takes more, this is the narrow subset). */
 export function agentName(key: string): string {
   const clean = key

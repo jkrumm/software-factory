@@ -193,7 +193,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   (`pid@core id` from `server.status`): a change is the event `runner_restarted` (pseudo-session `_runner`); a stored identity in the
   old format (`pid@start time`) is replaced without one. A session is matched to a terminal by its `factory.key` label, Claude session
   id, address, then name (a terminal carrying another session's key is never matched, by any of them, nor by a status event); a `terminal.list` never undoes a newer stream event; a record that does not parse fails the whole snapshot or list (the stream reconnects with its backoff), and a failed refresh after an unreadable line makes `agents()` ask the core directly; a finished terminal, or one the core put a shell into after the program died (no status, Claude not in the
-  foreground), is no agent. A session whose pane is a terminal of this core (`t7`) and that no agent matches in two passes in a row
+  foreground), is no agent. A session whose pane is a terminal of this core (`t7`, `t1n`: `t` and base 36, so letters follow `t19`; a classic pane `w4V:p3J` is none) and that no agent matches in two passes in a row
   gets `pane_gone` (= `dead`, key per disappearance); a pass in which the runner restarted or could not be identified counts nobody
   as missing, and an agent that returns revives the session. Git runs without the server's secrets, `core.fsmonitor` or hooks (the
   agent controls `.git/config`), four probes at a time. `GET /sessions` answers with the newest 200.
