@@ -100,7 +100,8 @@ Checked against the build deployed on the vps (its `generic.js` and `template.js
 - `{{title}}` carries a prefix (🚨 firing, ✅ resolved) and its shape is `Alert for "<name>" - <value> ...`. The value changes with
   every firing, so `monitor` is the quoted `<name>`; a title of another shape loses its prefix and its trailing numbers.
   Route by that name: `factory door unrouted` shows what arrived.
-- `{{eventId}}` is the same for a firing and its recovery, so `event` = `eventId@startTime:status`.
+- `{{eventId}}` is the same for a firing and its recovery, so `event` = `eventId@startTime/endTime:status`: the window it was evaluated
+  over and the status tell one notification from the next, and a retry of one is the same event.
 - Delivery is at least once, with an `Idempotency-Key` header the door ignores: a repeat is the same event key, so one effect.
 - HyperDX posts with `Content-Type: application/json`, follows no redirects and blocks private and loopback targets; whether a
   tailnet address passes that check is for the first Test Webhook to show.
