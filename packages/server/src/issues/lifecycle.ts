@@ -302,11 +302,11 @@ async function planEffect(tx: SQL, issue: IssueRow, kind: EffectKind, row: Inbox
 }
 
 /** A failed row its Issue moved past is refused, with its line in the Issue's events: a retry must not act on a later attempt. */
-export async function supersede(tx: SQL, issue: IssueRow, row: InboxRow): Promise<string> {
+export async function supersede(tx: SQL, issue: IssueRow, row: InboxRow, now: Date): Promise<string> {
   const detail = `superseded: ${row.error}`
   await logEvent(
     tx,
-    { issueId: issue.id, key: `superseded:${row.key}`, kind: 'refused', from: issue.state, to: null, at: row.at },
+    { issueId: issue.id, key: `superseded:${row.key}`, kind: 'refused', from: issue.state, to: null, at: now },
     { event: row.kind, detail },
   )
   return detail

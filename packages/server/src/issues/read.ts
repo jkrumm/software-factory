@@ -25,7 +25,10 @@ export interface IssueRow {
   closed_at: Date | null
 }
 
-const summary = (row: Omit<IssueRow, 'facts'>): IssueSummary => ({
+/** What a list selects: the row without what only the lifecycle and `GET /issues/:id` read. */
+type SummaryRow = Omit<IssueRow, 'facts' | 'wall_session' | 'hold' | 'waits' | 'revision'>
+
+const summary = (row: SummaryRow): IssueSummary => ({
   id: row.id,
   state: row.state,
   reason: row.reason,
@@ -59,7 +62,7 @@ export async function findIssue(sql: SQL, source: string, sourceKey: string): Pr
 
 /** Newest first; a list carries no facts, `GET /issues/:id` does. */
 export async function listIssues(sql: SQL, limit = 200): Promise<IssueSummary[]> {
-  const rows: Omit<IssueRow, 'facts'>[] = await sql`
+  const rows: SummaryRow[] = await sql`
     SELECT id, state, reason, outcome, source, source_key, repo, title, kind, class, parent, attempt, wake_at, created_at,
            updated_at, closed_at
     FROM factory.issues ORDER BY created_at DESC, id DESC LIMIT ${limit}`

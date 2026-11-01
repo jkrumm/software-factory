@@ -42,14 +42,16 @@ async function takeIssue(
     let issue = locked
     let failed = false
     for (const row of rows) {
-      // A failed `close` retried after a stop, a reopen and an admission would end the new attempt.
-      if (row.failed_revision !== null && row.failed_revision !== issue.revision) {
-        const detail = await supersede(tx, issue, row)
-        await tx`UPDATE factory.issue_inbox SET handled_at = ${now()}, result = 'refused', detail = ${detail} WHERE id = ${row.id}`
-        continue
-      }
       try {
         issue = await tx.savepoint(async (point) => {
+          // A failed `close` retried after a stop, a reopen and an admission would end the new attempt.
+          if (row.failed_revision !== null && row.failed_revision !== issue.revision) {
+            const detail = await supersede(point, issue, row, now())
+            await point`
+              UPDATE factory.issue_inbox SET handled_at = ${now()}, result = 'refused', detail = ${detail}
+              WHERE id = ${row.id}`
+            return issue
+          }
           const handled = await applyEvent(point, issue, row, now())
           await point`
             UPDATE factory.issue_inbox
