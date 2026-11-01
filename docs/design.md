@@ -607,8 +607,9 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   for what the server files itself. An Issue has `source` (`request|alert` through the API, open in the table), `source_key` (unique per
   source, required: the CLI makes one per call unless `--key` says otherwise), `repo` (resolved and checked like a spawn's,
   422), a title with control characters removed, and `facts` (any JSON, at most 32 KiB, data, never instructions; what Postgres
-  cannot store is 422). A repeated key answers 200 with the stored row, a closed one too. An `alert` whose real path
-  has an `IuRoot` segment is refused (422): decision 3, in the function the door uses too.
+  cannot store is 422). A repeated key answers 200 with the stored row, a closed one too. An `alert` is refused (422, naming no path) when its path as given or resolved has an
+  `IuRoot` segment, or resolves inside `$HOME/IuRoot` (configured or not) or a configured root of that name: decision 3, in the
+  function the door uses too.
 - **Attach or start.** A lead's pane is `lead-<issue>-<attempt>`; spawning again attaches. A prompt id
   (`issue:<id>:<phase>:<n>`) is recorded before typing. A GitHub comment carries a marker, a card a key.
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.

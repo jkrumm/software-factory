@@ -1,5 +1,7 @@
 import type { Issue, IssueOutcome, IssueState, WaitReason } from '@software-factory/contract'
 import { realpath } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SQL } from 'bun'
 import { RepoRefused, resolveRepo } from '../repos.ts'
 import type { EffectKind } from './effects.ts'
@@ -362,12 +364,13 @@ export interface NewIssue {
 const namesIuRoot = (path: string): boolean => path.split('/').some((part) => part.toLowerCase() === 'iuroot')
 
 /**
- * An alert never reaches the IuRoot workspace (decision 3). The path is real, so a link inside SourceRoot does not hide it, and
- * a path or a configured root that names IuRoot and links to a neutral place still counts by that name.
+ * An alert never reaches the IuRoot workspace (decision 3). By name, on the path as given and as resolved, and by place: inside the
+ * resolved `$HOME/IuRoot`, configured or not, or a configured root that names IuRoot, so a link of any name is caught.
  */
-async function inIuRoot(repo: string, submitted: string, roots: readonly string[]): Promise<boolean> {
+async function inIuRoot(submitted: string, roots: readonly string[]): Promise<boolean> {
+  const repo = await realpath(submitted).catch(() => submitted)
   if (namesIuRoot(repo) || namesIuRoot(submitted)) return true
-  for (const root of roots.filter(namesIuRoot)) {
+  for (const root of [join(process.env.HOME ?? homedir(), 'IuRoot'), ...roots.filter(namesIuRoot)]) {
     const real = await realpath(root).catch(() => undefined)
     if (real && (repo === real || repo.startsWith(`${real}/`))) return true
   }
@@ -391,10 +394,11 @@ export async function createIssueIn(
   const known = await findIssue(tx, input.source, input.sourceKey)
   if (known) return { issue: known, created: false }
 
-  const repo = await resolveRepo(input.repo, context.repoRoots)
-  if (input.source === 'alert' && (await inIuRoot(repo, input.repo, context.repoRoots))) {
-    throw new IssueRefused(`an alert files no Issue in IuRoot: ${repo}`)
+  // First, and with no path in the answer: the roots' refusal below names the resolved path.
+  if (input.source === 'alert' && (await inIuRoot(input.repo, context.repoRoots))) {
+    throw new IssueRefused('an alert files no Issue in IuRoot')
   }
+  const repo = await resolveRepo(input.repo, context.repoRoots)
 
   const facts = JSON.stringify(input.facts)
   const rows: IssueRow[] = await tx`

@@ -141,6 +141,41 @@ describe('POST /issues', () => {
     expect(await stored()).toBe(0)
   })
 
+  test('a link of any name into the home IuRoot is refused, configured or not, and the answer names no path', async () => {
+    const home = join(TEST_ROOT, 'home')
+    const place = join(TEST_ROOT, 'plain-name')
+    const alias = join(TEST_ROOT, 'alias')
+    mkdirSync(join(place, 'work'), { recursive: true })
+    mkdirSync(home)
+    symlinkSync(place, join(home, 'IuRoot'))
+    symlinkSync(join(place, 'work'), alias)
+    const before = process.env.HOME
+    process.env.HOME = home
+    try {
+      for (const repo of [alias, join(place, 'work')]) {
+        const refused = await post({ source: 'alert', repo })
+        expect(refused.status).toBe(422)
+        expect(await refused.text()).not.toContain('plain-name')
+      }
+      expect(await stored()).toBe(0)
+      expect((await post({ repo: alias })).status).toBe(201)
+    } finally {
+      process.env.HOME = before
+    }
+  })
+
+  test('an alert refused outside the roots names no resolved path either', async () => {
+    const elsewhere = mkdtempSync('/tmp/factory-elsewhere-')
+    const target = join(elsewhere, 'IuRoot', 'secret-name')
+    mkdirSync(target, { recursive: true })
+    const link = join(TEST_ROOT, 'innocent')
+    symlinkSync(target, link)
+    const refused = await post({ source: 'alert', repo: link })
+    expect(refused.status).toBe(422)
+    expect(await refused.text()).not.toContain('secret-name')
+    rmSync(elsewhere, { recursive: true, force: true })
+  })
+
   test('a body cannot name a state, an unknown source, or too many facts', async () => {
     expect((await post({ state: 'settling' })).status).toBe(400)
     expect((await post({ state: 'working' })).status).toBe(400)
