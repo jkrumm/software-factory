@@ -1,0 +1,12 @@
+# The factory's own manifest (docs/design.md §9). Read from the default branch by `factory project sync`.
+apiVersion: factory/v2
+name: software-factory
+deploy:
+  mode: make # `make deploy` on the mini, `make verify` proves it
+  targets:
+    - { name: mini, host: mini, verify: make verify }
+  hold: 30m
+  migrations: [packages/server/migrations/]
+ship:
+  - { paths: ['**'], via: pr }
+leads: 1
