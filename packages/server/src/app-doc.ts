@@ -82,7 +82,7 @@ export async function nameTab(rpc: Rpc, tab: string, name: string): Promise<void
  * the app writes it. A second space for a folder already in the document is named `<basename> <n>` to tell it apart.
  *
  * An entry with the id is never touched, and neither is a document that is not the app's (a value that is not null and has
- * no `spaces` array). Written against the version just read; a conflict reads again. Best effort, never throwing: the id is
+ * no `spaces` array, or a list with an entry that has no id). Written against the version just read; a conflict reads again. Best effort, never throwing: the id is
  * the one the terminal's label carries, so a later seed, or the app, still lands on the same space.
  */
 export async function seedSpace(rpc: Rpc, space: { id: string; folder: string }): Promise<void> {
@@ -97,7 +97,9 @@ export async function seedSpace(rpc: Rpc, space: { id: string; folder: string })
       }
       const value = doc.value === null ? { spaces: [] } : doc.value
       if (!isRecord(value) || !Array.isArray(value.spaces)) return
-      const entries = value.spaces.filter(isRecord)
+      // The same reading as `appSpaces`: a list with an entry that has no id is not the app's, so nothing is added to it.
+      const entries = value.spaces.filter((entry) => isRecord(entry) && typeof entry.id === 'string')
+      if (entries.length !== value.spaces.length) return
       if (entries.some((entry) => entry.id === space.id)) return
       const siblings = entries.filter(
         (entry) => typeof entry.folder === 'string' && real(entry.folder) === space.folder,

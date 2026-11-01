@@ -44,7 +44,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `{ id, name: basename(space path), folder: space path, tabs: [] }` appended to `spaces[]`, compare-and-set on `version`, a
   conflict reads again (3 tries), a value of null (never written) starts `{ spaces: [] }`. The path is the space's (the main
   checkout for a worktree). A second space for a folder that already has an entry is named `<basename> <n>` (`app 2`). An entry
-  with the id is never touched, nor a document that has no `spaces` array. Best effort like `nameTab`: a failure does not fail the
+  with the id is never touched, nor a document with no `spaces` array or with an entry that has no id (not the app's). Best effort like `nameTab`: a failure does not fail the
   start, the id stays the label's, and the next start for that id seeds again. Not seeded: an id found in the document, a foreign
   id with a terminal in it, a hidden child. The result names the terminal, the tab and
   the space (`spawns.session|tab|workspace`; `Spawn.pane` is `session`). A try that fails reports its space
