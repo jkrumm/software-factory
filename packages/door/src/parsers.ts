@@ -61,7 +61,7 @@ const KumaPayload = z.object({
   msg: z.string().nullish(),
   monitor: z
     .object({
-      name: z.string().min(1),
+      name: z.string(),
       type: z.string().nullish(),
       hostname: z.string().nullish(),
       port: z.union([z.number(), z.string()]).nullish(),
@@ -70,7 +70,7 @@ const KumaPayload = z.object({
   heartbeat: z
     .object({
       status: z.number(),
-      time: z.string().min(1),
+      time: z.string(),
       msg: z.string().nullish(),
       ping: z.number().nullish(),
       retries: z.number().nullish(),
@@ -125,13 +125,13 @@ export const parseKuma: Parser = (payload) => {
 const Instant = z.union([z.string(), z.number()]).transform(String)
 
 const HyperdxPayload = z.object({
-  title: z.string().min(1),
+  title: z.string(),
   body: z.string().nullish(),
   link: z.string().nullish(),
   state: z.string(),
   startTime: Instant.nullish(),
   endTime: Instant.nullish(),
-  eventId: z.string().min(1),
+  eventId: z.string(),
   alertId: z.string().nullish(),
 })
 
