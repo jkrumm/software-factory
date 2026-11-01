@@ -734,6 +734,35 @@ describe('runner restart', () => {
       expect((await prompts())[0]).toMatchObject({ via: 'type', status: 'sent' })
     })
 
+    test('an idle notice after the resume does not stop the note, and neither does a resume that landed before the restart was noticed', async () => {
+      await resumedInPlace()
+      await w.emit('s', 'prompt_idle', w.at(6))
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      await deliver()
+      expect(runner.typed).toEqual([{ pane: 'w1:s', text: RESTART_NOTE }])
+
+      // The core's resume reached the factory before the witness recorded the restart.
+      await w.spawned('early', { account: 'b', repo: '/work/repo' })
+      await w.emit('early', 'turn_started', w.at(20))
+      await w.emit('early', 'session_started', w.at(11), { claudeSessionId: 'claude-early', source: 'resume' })
+      await db.sql`UPDATE factory.sessions SET agent_seen_at = ${w.at(8)} WHERE id = 'early'`
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:early`])
+      expect((await prompts()).find((p) => p.session === 'early')).toMatchObject({ via: 'type' })
+    })
+
+    test('a start that reports no source is not a resume', async () => {
+      await w.spawned('s', { account: 'b', repo: '/work/repo' })
+      await w.emit('s', 'turn_started', w.at(20))
+      await restartEvent(w.at(10))
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      clock.advance(minutes(1))
+      await w.emit('s', 'session_started', clock.now(), { claudeSessionId: 'claude-s', source: 'resume' })
+      await w.emit('s', 'session_started', new Date(clock.now().getTime() + 1), { claudeSessionId: 'claude-s' })
+      await deliver()
+      expect(runner.typed).toEqual([])
+      expect((await prompts())[0]).toMatchObject({ via: 'resume', status: 'failed' })
+    })
+
     test('a resume that something else typed and a session that has worked since are not told again', async () => {
       await resumedInPlace()
       await w.emit('s', 'turn_started', w.at(7))
