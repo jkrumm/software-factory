@@ -26,6 +26,10 @@ holds what that table does not. The rotation 3 page is in git history.
   count `-rN` agents; `Spawn.pane` keeps the original pane after the witness rematches; `hc-resume` resumes without
   `--model/--effort`; a `pane_gone` spends a key even if the agent comes back; `docs/remote-dev.md` still says every
   structured create error falls back to hc.
+- **Also open:** `rd`'s direct-to-hc path never seeds a new space's entry (the factory does since PR #17), so an `rd` tab in a
+  repo with no space still gets a space named after its cwd. `rd close` refuses a worker whose worktree `gh pr merge
+  --delete-branch` already removed ("could not read git status"); close those with `hc kill` after checking the branch is on master.
+  A spawn's seed is best effort: the rest of the PR's own deferred list is in PR #17.
 - **Waves are tabs by design.** Only fan workers are hidden children, and they show nowhere because the jk layout replaces
   the app's `agents` mod. If the owner wants "only the orchestrator tab", orchestrated waves become hidden children of
   the orchestrator's terminal and `jk-board` lists them (with `terminal.peek`); unused app features that fit: `tab.settle`

@@ -76,6 +76,8 @@ Opus/high. Started 2026-11-01 by the owner as a review of the whole estate.
   core-restart resume, resumed finished waves, a missed dead terminal. Deployed `e0f227ba573e`, `make verify` green; spent keys and
   the dead terminal proven live, the two restart paths only by tests (proof needs a core restart: dotfiles Wave 9's window).
 - [x] agw review rework planned (`agent-workflows/docs/review-v2.md`, `15a44fb`); waits for the owner's three decisions there.
+- [x] A new space is seeded in the app's document with the main checkout's name and folder (owner-reported; brief
+  `docs/waves/briefs/f1-seed-space-2026-11-01.md`, PR #17, deployed `a2a18a26e686`). `rd`'s direct-to-hc path has the same gap.
 - [ ] Owner decision: the order after F1 (full F2 Issue machine first, or a thin intake loop first; handoff §Next).
 - [ ] Land or close PR #12 (gamedays) against the herdr-core runner; PR #15 (deps).
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
