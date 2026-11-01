@@ -38,6 +38,8 @@ CREATE TABLE factory.issues (
   hold       integer NOT NULL DEFAULT 0,
   -- counts the timed waits, for the same reason: two waits for one time are two timers
   waits      integer NOT NULL DEFAULT 0,
+  -- counts the moves: a failed inbox row is retried only while this has not changed
+  revision   integer NOT NULL DEFAULT 0,
   wake_at    timestamptz,
   created_at timestamptz NOT NULL,
   updated_at timestamptz NOT NULL,
@@ -72,6 +74,8 @@ CREATE TABLE factory.issue_inbox (
   detail     text,
   -- the last failure of a handler that threw: the row stays unhandled, and the rows behind it go on
   error      text,
+  -- the Issue's revision when it failed: an Issue that has moved since is past this row
+  failed_revision integer,
   CHECK ((handled_at IS NULL) = (result IS NULL))
 );
 CREATE INDEX issue_inbox_unhandled ON factory.issue_inbox (issue_id, at, id) WHERE handled_at IS NULL;

@@ -18,6 +18,7 @@ export interface IssueRow {
   attempt: number
   hold: number
   waits: number
+  revision: number
   wake_at: Date | null
   created_at: Date
   updated_at: Date
