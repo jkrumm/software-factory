@@ -40,8 +40,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   session's context. The socket (mode 0600) is the hook's credential; the witness alone records `runner_restarted` and
   `pane_gone`.
 - **Placement and sessions.** The Runner looks before it acts: a terminal carries `factory.key=<spawn key>`, and a live one
-  running claude is never started twice. One space per repo, keyed by path. A `worker`, `mechanical` or `deep` spawn with a
-  parent terminal is that terminal's hidden child; every other role is a tab. State is derived from stored events, never stored.
+  running claude is never started twice. One space per repo, keyed by path. A spawn with a parent
+  terminal is that terminal's hidden child when `placement` says `child`, else by role: `worker`, `mechanical` or `deep` child, every
+  other role a tab. State is derived from stored events, never stored.
 - **Roles** (`config/roles.json`): role → tier (`haiku|sonnet|opus`, never a model id) and effort. `deep` is a worker raised for
   novel hard logic (opus, high). `rd --role` depends on `factory role get <role> --format json` printing exactly
   `{"role","tier","effort"}`; unknown is exit 4. Values change only on measured data.

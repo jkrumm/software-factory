@@ -154,6 +154,25 @@ describe('the parent terminal', () => {
   test('is absent while the parent has no pane', async () => {
     expect(await startedWith(null)).toEqual([undefined])
   })
+
+  test("the spawn's placement reaches the Runner, absent when none was asked for", async () => {
+    const seen: (string | undefined)[] = []
+    const runner: Runner = {
+      ...noType,
+      start: async (input) => {
+        seen.push(input.placement)
+        return { session: `t${seen.length}`, tab: null, workspace: null }
+      },
+    }
+    await createSpawn(db.sql, { key: 'plain', repo: '/work/repo', prompt: 'x', ...WORKER }, clock.now())
+    await createSpawn(
+      db.sql,
+      { key: 'kid', repo: '/work/repo', prompt: 'x', placement: 'child', ...WORKER },
+      clock.now(),
+    )
+    await tick(deps(runner))
+    expect([...seen].sort()).toEqual(['child', undefined])
+  })
 })
 
 describe('failures', () => {

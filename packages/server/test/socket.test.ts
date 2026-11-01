@@ -100,12 +100,68 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
     expect(await db.sql`SELECT prompt FROM factory.spawns WHERE key = 'again'`).toEqual([{ prompt: 'go' }])
   })
 
+  test('placement is stored, answered, and part of the replay; absent is null (the role default)', async () => {
+    const made = await viaSocket('POST', '/spawns', {
+      key: 'w',
+      repo: TEST_REPO,
+      prompt: 'go',
+      role: 'lead',
+      placement: 'child',
+    })
+    expect(made.status).toBe(201)
+    expect(Spawn.parse(await made.json()).placement).toBe('child')
+    // A replay answers the row as stored, whatever the second body says.
+    const again = await viaSocket('POST', '/spawns', {
+      key: 'w',
+      repo: TEST_REPO,
+      prompt: 'go',
+      role: 'lead',
+      placement: 'tab',
+    })
+    expect(again.status).toBe(200)
+    expect(Spawn.parse(await again.json()).placement).toBe('child')
+    expect(Spawn.parse(await (await viaSocket('GET', '/spawns/w')).json()).placement).toBe('child')
+    const plain = await app.send('POST', '/spawns', { key: 'p', repo: TEST_REPO, prompt: 'go' })
+    expect(Spawn.parse(await plain.json()).placement).toBeNull()
+    expect(await db.sql`SELECT key, placement FROM factory.spawns ORDER BY key`).toEqual([
+      { key: 'p', placement: null },
+      { key: 'w', placement: 'child' },
+    ])
+  })
+
+  test('a lead asked for as a child sits in its parent terminal; asked for as a tab, in a tab of its own', async () => {
+    await viaSocket('POST', '/spawns', { key: 'boss', repo: TEST_REPO, prompt: 'go', role: 'mother' })
+    await runTick()
+    const boss = Spawn.parse(await (await viaSocket('GET', '/spawns/boss')).json())
+    await db.sql`UPDATE factory.sessions SET pane = ${boss.pane} WHERE id = 'boss'`
+    for (const [key, placement] of [
+      ['hidden', 'child'],
+      ['next', 'tab'],
+    ] as const) {
+      await viaSocket('POST', '/spawns', {
+        key,
+        repo: TEST_REPO,
+        prompt: 'go',
+        role: 'lead',
+        parent: 'boss',
+        placement,
+      })
+    }
+    await runTick()
+    const terminals = (await hc.state()).terminals
+    const of = (key: string) => terminals.find((t) => t.labels['factory.key'] === key)
+    expect(of('hidden')).toMatchObject({ parent: boss.pane, notify: false })
+    expect(of('next')?.parent ?? null).toBeNull()
+    expect(Spawn.parse(await (await viaSocket('GET', '/spawns/hidden')).json()).tab).toBeNull()
+  })
+
   test('has the same validation as the port', async () => {
     const bad = [
       { key: '-x', repo: TEST_REPO, prompt: 'go' },
       { key: 'k', repo: 'relative', prompt: 'go' },
       { key: 'k', repo: TEST_REPO, prompt: '-flag' },
       { key: 'k', repo: TEST_REPO, prompt: 'go', new_space: 'yes' },
+      { key: 'k', repo: TEST_REPO, prompt: 'go', placement: 'hidden' },
     ]
     for (const body of bad) {
       expect((await viaSocket('POST', '/spawns', body)).status).toBe(400)

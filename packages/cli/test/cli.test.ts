@@ -11,6 +11,7 @@ const ROLE = {
   effort: 'high',
   hold: null,
   parent: null,
+  placement: null,
   repo: '/work/repo',
   space: '/work/repo',
   pane: null,
@@ -60,6 +61,7 @@ const SESSION = {
   role: null,
   account: null,
   parent: null,
+  placement: null,
   since: '2026-10-30T11:59:00.000Z',
 }
 const QUOTA = {
@@ -597,6 +599,22 @@ describe('factory spawn create', () => {
     expect(spawnCalls).toEqual([
       { key: 'f1', repo: '/work/repo/wt', prompt: 'x', space: '/work/repo', new_space: true },
     ])
+  })
+
+  test('--placement travels in the body, and anything but tab|child is a usage error', async () => {
+    spawnCalls.length = 0
+    await factory(['spawn', 'create', 'p1', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'child'], {
+      FACTORY_SESSION: '',
+    })
+    expect(spawnCalls).toEqual([{ key: 'p1', repo: '/work/repo', prompt: 'x', placement: 'child' }])
+    const bad = await factory(
+      ['spawn', 'create', 'p2', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'hidden'],
+      {
+        FACTORY_SESSION: '',
+      },
+    )
+    expect(bad.code).toBe(2)
+    expect(spawnCalls).toHaveLength(1)
   })
 
   test('without a token it goes by the socket, with the caller as parent; with one, by the port', async () => {

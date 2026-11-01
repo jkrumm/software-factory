@@ -1,4 +1,4 @@
-import type { Effort, Prompt, PromptStatus, Tier } from '@software-factory/contract'
+import type { Effort, Placement, Prompt, PromptStatus, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
@@ -214,6 +214,7 @@ interface Target {
     repo: string
     space: string
     new_space: boolean
+    placement: Placement | null
     workspace: string | null
     role: string
     account: string | null
@@ -234,7 +235,7 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
   const session = await getSession(sql, id, now)
   if (!session) return undefined
   const [spawn] = session.spawn
-    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
+    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
     : []
   const [life] = await sql`
     SELECT kind FROM factory.events
@@ -477,6 +478,7 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
     space: spawn.space,
     // Back into its own space: with several spaces of the same path (`new_space`), the path alone cannot say which.
     workspace: spawn.workspace,
+    placement: spawn.placement ?? undefined,
     role: spawn.role,
     prompt: prompt.text,
     account: spawn.account,
