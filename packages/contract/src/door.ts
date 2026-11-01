@@ -48,11 +48,12 @@ export const IntakeInput = z.strictObject({
   event: Label,
   status: z.enum(['down', 'up']),
   title: IssueTitle,
+  // The size is that of what is stored: sanitizing can make facts longer (a cut nesting becomes a marker).
   facts: z
     .unknown()
-    .refine(fitsFacts, `facts are larger than ${MAX_INTAKE_FACTS_BYTES} bytes`)
     .default({})
-    .transform((facts) => storable(facts)),
+    .transform((facts) => storable(facts))
+    .refine(fitsFacts, `facts are larger than ${MAX_INTAKE_FACTS_BYTES} bytes`),
 })
 export type IntakeInput = z.output<typeof IntakeInput>
 
