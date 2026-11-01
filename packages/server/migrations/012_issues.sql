@@ -30,6 +30,8 @@ CREATE TABLE factory.issues (
   fix        text,
   summary    text,
   reason     text,
+  -- the session that hit the wall: only its next turn ends it
+  wall_session text,
   outcome    text,
   attempt    integer NOT NULL DEFAULT 0,
   -- counts the ships: a regression and a second ship is a second hold of one attempt, and proof names the hold it is for

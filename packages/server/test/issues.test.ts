@@ -273,6 +273,24 @@ describe('golden paths: transitions and effects', () => {
     ])
   })
 
+  test("a worker's turn does not end its lead's wall: only the session that hit it does", async () => {
+    const id = await working()
+    const event = (session: string, kind: string, key: string) =>
+      enqueue(db.sql, { issueId: id, key, kind, at: clock.now(), session })
+    await event('lead-1-1', 'limit_stop', 'wall')
+    await pass()
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wall' })
+
+    await event('worker-1', 'turn_started', 'worker-turn')
+    await pass()
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wall' })
+    expect((await inbox(id)).at(-1)?.result).toBe('ignored')
+
+    await event('lead-1-1', 'turn_started', 'lead-turn')
+    await pass()
+    expect(await state(id)).toMatchObject({ state: 'working', reason: null })
+  })
+
   test('a turn does not take back what a turn did not cause: a parked Issue stays parked', async () => {
     const id = await working()
     await step(id, 'park')
