@@ -806,6 +806,20 @@ describe('the inbox', () => {
   })
 })
 
+describe('the inbox index', () => {
+  test("a wall's look for a later turn goes by the index, handled rows and all", async () => {
+    const id = await working()
+    await db.sql`
+      INSERT INTO factory.issue_inbox (issue_id, key, kind, session, at, handled_at, result)
+      SELECT ${id}, 'old:' || n, 'turn_ended', 's1', ${clock.now()}, ${clock.now()}, 'ignored' FROM generate_series(1, 5000) n`
+    await db.sql`ANALYZE factory.issue_inbox`
+    const rows: { 'QUERY PLAN': string }[] = await db.sql.unsafe(`
+      EXPLAIN SELECT 1 FROM factory.issue_inbox
+      WHERE issue_id = ${id} AND session = 's1' AND kind = 'turn_started' AND at > now() LIMIT 1`)
+    expect(rows.map((r) => r['QUERY PLAN']).join('\n')).toContain('issue_inbox_session')
+  })
+})
+
 describe('effects', () => {
   test('an effect never overtakes an earlier one that has no port yet', async () => {
     const { id } = await file()

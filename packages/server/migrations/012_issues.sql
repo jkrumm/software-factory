@@ -73,6 +73,8 @@ CREATE TABLE factory.issue_inbox (
   CHECK ((handled_at IS NULL) = (result IS NULL))
 );
 CREATE INDEX issue_inbox_unhandled ON factory.issue_inbox (issue_id, at, id) WHERE handled_at IS NULL;
+-- A wall asks whether a turn of its session came after it, handled or not.
+CREATE INDEX issue_inbox_session ON factory.issue_inbox (issue_id, session, kind, at);
 
 CREATE TABLE factory.issue_links (
   id         bigserial PRIMARY KEY,
