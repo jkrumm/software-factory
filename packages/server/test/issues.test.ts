@@ -426,6 +426,27 @@ describe('golden paths: transitions and effects', () => {
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wall' })
   })
 
+  test('a delayed event does not move the Issue back in time: a later stale wall still refuses', async () => {
+    const id = await working()
+    await step(id, 'ship')
+    const shipped = clock.now()
+    await enqueue(db.sql, {
+      issueId: id,
+      key: 'late-regression',
+      kind: 'regression',
+      at: new Date(shipped.getTime() - 20_000),
+    })
+    await enqueue(db.sql, {
+      issueId: id,
+      key: 'old-wall',
+      kind: 'limit_stop',
+      at: new Date(shipped.getTime() - 10_000),
+      session: 's1',
+    })
+    await pass()
+    expect((await state(id)).state).toBe('working')
+  })
+
   test('a turn from before the wall, delivered after it, does not end it', async () => {
     const id = await working()
     const turnAt = clock.now()
@@ -627,6 +648,7 @@ describe('the inbox', () => {
   test.each([
     ['an ask with a bad expiry', 'ask', { question: 'q', expiresAt: 'not a time' }],
     ['a wait with a bad time', 'wait', { until: 'not a time' }],
+    ['a time Postgres cannot store', 'ask', { question: 'q', expiresAt: '-010000-01-01T00:00:00.000Z' }],
     ['a dep on an id past the column', 'dep', { on: 99_999_999_999 }],
     ['a dep on a fraction', 'dep', { on: 1.5 }],
   ])('%s is refused, and does not hold up what follows', async (_, kind, payload) => {

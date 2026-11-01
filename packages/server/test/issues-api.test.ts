@@ -128,13 +128,16 @@ describe('POST /issues', () => {
     expect(await stored()).toBe(0)
   })
 
-  test('the linked IuRoot itself, and a submitted link that names IuRoot, are refused too', async () => {
-    const context = { repoRoots: [LINKED_ROOT, TEST_ROOT], now: clock.now() }
+  test('the configured IuRoot itself is refused, and so is a submitted link that alone names it', async () => {
     const alert = { source: 'alert', sourceKey: 'a', title: 't', facts: {} }
-    expect(await createIssue(db.sql, { ...alert, repo: LINKED_ROOT }, context).catch(String)).toContain('IuRoot')
-    const link = join(TEST_ROOT, 'IuRoot-link', 'iuroot-too')
-    symlinkSync(NEUTRAL, link)
-    expect(await createIssue(db.sql, { ...alert, repo: join(link, 'work') }, context).catch(String)).toContain('IuRoot')
+    const now = clock.now()
+    const both = { repoRoots: [LINKED_ROOT, TEST_ROOT], now }
+    expect(await createIssue(db.sql, { ...alert, repo: LINKED_ROOT }, both).catch(String)).toContain('IuRoot')
+
+    // Only the parent is a root: the real path is neutral, the path as given is all that says IuRoot.
+    const parent = { repoRoots: [TEST_ROOT], now }
+    const repo = join(LINKED_ROOT, 'work')
+    expect(await createIssue(db.sql, { ...alert, repo }, parent).catch(String)).toContain('IuRoot')
     expect(await stored()).toBe(0)
   })
 
