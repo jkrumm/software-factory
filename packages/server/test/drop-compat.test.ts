@@ -29,6 +29,7 @@ test('migration 011 drops the herdr columns, the old capacity table and the old 
     ('herdr_restarted:7@x', '_herdr', 'herdr_restarted', ${at}),
     ('herdr_restarted:8@x', '_herdr', 'herdr_restarted', ${at}),
     ('runner_restarted:8@x', '_runner', 'runner_restarted', ${at})`
+  await db.sql`UPDATE factory.sessions SET tab = 'w8:t1'`
   await db.sql`INSERT INTO factory.witness (name, value, at) VALUES ('herdr_server', '99@x', ${at}), ('runner_server', '99@x', ${at})`
 
   for (const name of names.filter((n) => n >= '011')) await copyFile(join(MIGRATIONS_DIR, name), join(dir, name))
@@ -37,6 +38,7 @@ test('migration 011 drops the herdr columns, the old capacity table and the old 
   expect(await db.sql`SELECT agent_status, agent_seen_at FROM factory.sessions`).toEqual([
     { agent_status: 'working', agent_seen_at: at },
   ])
+  expect(await db.sql`SELECT tab FROM factory.sessions`).toEqual([{ tab: null }])
   expect(
     await db.sql`SELECT column_name FROM information_schema.columns
       WHERE table_schema = 'factory' AND table_name = 'sessions' AND column_name LIKE 'herdr%'`,

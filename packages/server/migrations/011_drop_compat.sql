@@ -24,3 +24,7 @@ DELETE FROM factory.witness WHERE name = 'herdr_server';
 
 -- Replaced by `quota_readings` (migration 004); nothing feeds it any more.
 DROP TABLE factory.capacity_readings;
+
+-- A session no spawn describes took its tab from the classic `HERDR_TAB_ID`; the hook no longer reports one, and a pane it
+-- moves to would keep the old tab.
+UPDATE factory.sessions SET tab = NULL WHERE spawn_key IS NULL;
