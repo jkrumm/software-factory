@@ -30,39 +30,50 @@ interface EffectRow {
 const BATCH = 20
 
 /**
- * Runs recorded effects, oldest first. Never inside a transaction: the attempt is committed, the port is called, the result
- * goes in a new statement. A crash between the two leaves the row open, and the next pass calls the port again under the same
- * key. A port that fails keeps the Issue's later effects for the next pass, so they stay in order.
+ * Runs recorded effects: of each Issue only the oldest open one, whatever its kind, so an effect never overtakes an earlier one
+ * that has no port yet. The least tried go first, so Issues whose port keeps failing leave room for the rest. Never inside a
+ * transaction: the attempt is committed, the port is called, the result goes in a new statement. A crash between the two leaves
+ * the row open, and the next pass calls the port again under the same key. A port that fails ends its Issue's turn for this pass.
+ * One caller at a time: the tick, which the one server never overlaps.
  */
 export async function runEffects(sql: SQL, ports: EffectPorts, now: () => Date): Promise<string[]> {
   const kinds = Object.keys(ports)
   if (kinds.length === 0) return []
-  const rows: EffectRow[] = await sql`
-    SELECT id, issue_id, key, kind, payload, attempts FROM factory.issue_effects
-    WHERE done_at IS NULL AND kind IN ${sql(kinds)}
-    ORDER BY id LIMIT ${BATCH}`
-
   const errors: string[] = []
   const stopped = new Set<number>()
-  for (const row of rows) {
-    if (stopped.has(row.issue_id)) continue
-    const attempts = row.attempts + 1
-    await sql`UPDATE factory.issue_effects SET attempts = ${attempts} WHERE id = ${row.id}`
-    try {
-      await ports[row.kind]?.({
-        id: Number(row.id),
-        issueId: row.issue_id,
-        key: row.key,
-        kind: row.kind,
-        payload: row.payload,
-        attempts,
-      })
-      await sql`UPDATE factory.issue_effects SET done_at = ${now()}, error = NULL WHERE id = ${row.id}`
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      stopped.add(row.issue_id)
-      errors.push(`${row.key}: ${message}`)
-      await sql`UPDATE factory.issue_effects SET error = ${message} WHERE id = ${row.id}`
+  let budget = BATCH
+  while (budget > 0) {
+    const rows: EffectRow[] = await sql`
+      SELECT * FROM (
+        SELECT DISTINCT ON (issue_id) id, issue_id, key, kind, payload, attempts
+        FROM factory.issue_effects
+        WHERE done_at IS NULL AND issue_id NOT IN ${sql([0, ...stopped])}
+        ORDER BY issue_id, id
+      ) head
+      WHERE kind IN ${sql(kinds)}
+      ORDER BY attempts, id
+      LIMIT ${budget}`
+    if (rows.length === 0) break
+    budget -= rows.length
+    for (const row of rows) {
+      const attempts = row.attempts + 1
+      await sql`UPDATE factory.issue_effects SET attempts = ${attempts} WHERE id = ${row.id}`
+      try {
+        await ports[row.kind]?.({
+          id: Number(row.id),
+          issueId: row.issue_id,
+          key: row.key,
+          kind: row.kind,
+          payload: row.payload,
+          attempts,
+        })
+        await sql`UPDATE factory.issue_effects SET done_at = ${now()}, error = NULL WHERE id = ${row.id}`
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        stopped.add(row.issue_id)
+        errors.push(`${row.key}: ${message}`)
+        await sql`UPDATE factory.issue_effects SET error = ${message} WHERE id = ${row.id}`
+      }
     }
   }
   return errors

@@ -582,18 +582,20 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` | `<issue>:<verb>:<call id>` |
 | session events | hooks, live or from the spool | as in §3 |
-| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<at>`, `wake:<issue>:<at>`: the time is in the key, as a regression and a second ship is a second hold of one attempt |
-| `verified` | the check after the hold (W4) | the check's id |
+| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<at>`: `hold` counts the ships, as a regression and a second ship is a second hold of one attempt |
+| `verified` | the check after the hold (W4), naming its `hold`: proof of an earlier hold is refused | the check's id |
 | `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park`, `reopen` | the owner or the orchestrator | the intent's id |
 | `settled`, `healed` | settle (F3) | the run's id |
 
 - **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
   SKIP LOCKED`, the form that leaves foreign keys alone: copying a session event in needs `KEY SHARE` on the Issue and never waits
   for a worker. It works through up to 50 rows in one transaction, oldest event first. A handler that throws rolls that Issue back,
-  leaves the error on its oldest row and in the tick's errors, and costs no other Issue.
+  leaves the error on its oldest row and in the tick's errors, and goes last from then on, so it costs no other Issue.
+  Events carry what they end: a wake its `for`, the end of a hold and its proof their `hold`, so one that arrives late refuses.
 - **Effects run after the commit.** A step's effects (`start_lead`, `note_lead`, `verify`, `finalize`; every step into `closed`
   has `finalize`) are rows in `issue_effects` under `<effect>:<inbox key>`, in the transition's transaction. `runEffects` calls
-  the port outside any transaction, oldest first, and a port that fails keeps its Issue's later effects back. A crash after the
+  the port outside any transaction, only for each Issue's oldest open effect, so nothing overtakes an effect that has no port yet
+  or failed, least tried first. A crash after the
   call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded:
   W1 wires none (`TickDeps.issuePorts`), and the wave that brings a port runs what waited. `hold_over` asks for `verify` and
   closes nothing: until W4's check reports `verified` the Issue stays `watching`.
