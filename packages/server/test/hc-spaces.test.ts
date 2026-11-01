@@ -386,6 +386,9 @@ describe('seeding a new space in the app document', () => {
     await hc.setDoc('herdr-app', { spaces: 'none' })
     await start('b', '/work/app')
     expect(await hc.callsOf('doc.set')).toHaveLength(0)
+    await hc.setDoc('herdr-app', { spaces: [{ id: 'sp1', folder: '/work/app', tabs: [] }, 'junk'] })
+    await start('c', '/work/app')
+    expect(await hc.callsOf('doc.set')).toHaveLength(0)
   })
 
   test('a core that refuses the document with not_found gets it created', async () => {
