@@ -91,13 +91,24 @@ async function answerDecision({ tx, issue, row, now }: Context): Promise<string 
 const isIssueId = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2_147_483_647
 
-/** Only an open Issue can be waited on: a closed one would never wake this one. */
+/**
+ * Only an open Issue can be waited on: a closed one would never wake this one. The blocker's row is locked, so a close in flight
+ * finishes first and is seen here, and one that comes later sees the new row. A dep that closes a cycle would wake nobody.
+ */
 async function addDependency({ tx, issue, row }: Context): Promise<string | undefined> {
   const on = row.payload?.on
   if (!isIssueId(on) || on === issue.id) return 'a dep needs another Issue in `on`'
-  const [blocker]: Pick<IssueRow, 'state'>[] = await tx`SELECT state FROM factory.issues WHERE id = ${on}`
+  const [blocker]: Pick<IssueRow, 'state'>[] = await tx`SELECT state FROM factory.issues WHERE id = ${on} FOR SHARE`
   if (!blocker) return `no Issue ${on}`
   if (blocker.state === 'closed') return `Issue ${on} is closed already`
+  const [cycle] = await tx`
+    WITH RECURSIVE reached (id) AS (
+      SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${on}
+      UNION
+      SELECT d.on_issue FROM factory.issue_deps d JOIN reached r ON d.issue_id = r.id
+    )
+    SELECT 1 FROM reached WHERE id = ${issue.id}`
+  if (cycle) return `Issue ${on} depends on this one`
   await tx`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${issue.id}, ${on}) ON CONFLICT DO NOTHING`
   return undefined
 }
@@ -115,14 +126,11 @@ async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefin
   return later ? 'a turn has started since this wall' : undefined
 }
 
-/** A wake answers the wait it was filed for, and a dependency's only once nothing it depends on is open. */
+/** A wake answers the wait it was filed for, and a dependency's only once no dependency is left: a close removes its rows. */
 async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefined> {
   if (row.payload?.for !== issue.reason) return `this wake is not for a ${issue.reason} wait`
   if (issue.reason !== 'dependency') return undefined
-  const [open] = await tx`
-    SELECT 1 FROM factory.issue_deps d JOIN factory.issues b ON b.id = d.on_issue
-    WHERE d.issue_id = ${issue.id} AND b.state <> 'closed'
-    LIMIT 1`
+  const [open] = await tx`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${issue.id} LIMIT 1`
   return open ? 'an Issue it depends on is open' : undefined
 }
 
@@ -224,18 +232,27 @@ const SILENT = new Set([
   'pane_gone',
 ])
 
-/** A closed Issue lets go of the Issues waiting on it: each is woken once nothing it depends on is open. */
-async function wakeDependents(tx: SQL, issueId: number, cause: InboxRow, now: Date): Promise<void> {
-  const freed: { id: number }[] = await tx`
-    SELECT i.id FROM factory.issue_deps d
-    JOIN factory.issues i ON i.id = d.issue_id
-    WHERE d.on_issue = ${issueId} AND i.state = 'waiting' AND i.reason = 'dependency'
-      AND NOT EXISTS (
-        SELECT 1 FROM factory.issue_deps o JOIN factory.issues b ON b.id = o.on_issue
-        WHERE o.issue_id = i.id AND b.state <> 'closed')`
-  for (const { id } of freed) {
-    const key = `wake:${id}:dep:${cause.key}`
-    await enqueue(tx, { issueId: id, key, kind: 'wake', at: now, payload: { for: 'dependency' } })
+/**
+ * A close satisfies every dep on the Issue and ends its own: the rows go, so a blocker that reopens later holds nobody back. An
+ * Issue left with no dep is woken.
+ */
+async function releaseDependents(tx: SQL, issueId: number, cause: InboxRow, now: Date): Promise<void> {
+  const released: { issue_id: number }[] = await tx`
+    DELETE FROM factory.issue_deps WHERE on_issue = ${issueId} RETURNING issue_id`
+  await tx`DELETE FROM factory.issue_deps WHERE issue_id = ${issueId}`
+  for (const { issue_id: id } of released) {
+    const [free] = await tx`
+      SELECT 1 FROM factory.issues i
+      WHERE i.id = ${id} AND i.state = 'waiting' AND i.reason = 'dependency'
+        AND NOT EXISTS (SELECT 1 FROM factory.issue_deps d WHERE d.issue_id = i.id)`
+    if (!free) continue
+    await enqueue(tx, {
+      issueId: id,
+      key: `wake:${id}:dep:${cause.key}`,
+      kind: 'wake',
+      at: now,
+      payload: { for: 'dependency' },
+    })
   }
 }
 
@@ -318,7 +335,7 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     await planEffect(tx, moved, effect, row, now)
   }
   if (step.to === 'closed') {
-    await wakeDependents(tx, issue.id, row, now)
+    await releaseDependents(tx, issue.id, row, now)
     // Nobody is left to act on an open question, and a reopened Issue asks again.
     await tx`
       UPDATE factory.decisions SET answered_by = 'closed', answered_at = ${now}
