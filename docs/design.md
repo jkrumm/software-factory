@@ -643,7 +643,7 @@ cannot close.
 | Watch | factory | the hold, `make verify`, the probes | closed, or a regression back to the lead |
 | Learn | factory | `agw` workflows, from the lead's report | known fix, labels, runbook candidates, changelog |
 
-**Three ways in.** Signals from sources and jobs go through dedup. Requests go straight to Classify: Argo, Hermes,
+**Three ways in.** Signals from sources and jobs go through dedup (until F3, an alert reaches the loop through the door, §11, as one Issue). Requests go straight to Classify: Argo, Hermes,
 `factory issue new`, a TickTick item tagged `#factory`, a GitHub issue labelled `factory`, a `/factory` comment by
 the owner. A label starts work rather than authorship, because every agent on the mini acts as the owner's GitHub
 user; an issue labelled `alert` is a signal. The factory never triggers on its own comments, and text it cannot parse
@@ -908,6 +908,31 @@ tuning at 50 closed Issues, security audits per repo at about 2,000 changed line
 | **Hermes** | factory API | "do X" becomes `factory issue new`; "how is X going" reads the factory. It never implements |
 | **Argo** | reads `factory` views directly, forwards intents to the API | depth: queue history, scorecard, cost per Issue |
 | **Agents** | `factory` CLI | §2's small block |
+
+### The factory door (owner decision 2, 2026-11-01)
+
+Today every alert goes to Slack only. The door makes a real alert one Issue, from the tailnet, before F3's dedup, settle and
+runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and the hold) is live (decision 3).
+
+- **A process of its own,** `packages/door`: one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
+  `tailscale serve` terminates TLS on the mini's tailnet name and the ACL gives that port, and nothing else, to `tag:homelab` and
+  `tag:vps`. A bearer token per source (`~/.config/factory/door-tokens.json`, mode 0600, `factory door token new <source>`) is
+  checked in constant time, the body is capped at 64 KiB as it is read, JSON only. Nothing is logged but a status line.
+- **It holds no factory token and no database credential.** It posts one line to the server's unix socket (`POST /intake`, the
+  hook's boundary), so a compromised door can file Issues and nothing else. The socket down is a 503 (Kuma retries); nothing is spooled.
+- **A parser per source** is a pure function from the payload to `{ monitor, event, status, title, facts }`: `kuma` and `hyperdx`
+  (README of the package: the template the vps repo uses). The payload is data. Nothing in it picks a repo, a role, a path or a command.
+- **The registry** is `factory.door_routes (source, monitor, repo)` in the database, not in git: monitor names and repos are the
+  owner's estate (`factory door route set|rm|list`, `factory door unrouted`, on the token API). The repo is checked like a spawn's
+  (422), and a route into IuRoot is refused when it is set, as an alert's Issue is when it is filed: one policy, in `createIssue`.
+- **`POST /intake`** (`issues/intake.ts`, socket only) files in one transaction, the route row locked so one monitor's alerts go in
+  one at a time: (1) no route, no Issue, one `door_unrouted` row counts it (202: Kuma attaches every provider to every monitor, so this is
+  the common path); (2) routed, an Issue of this monitor not closed, the event is a `signal` inbox row on it, `regression: true` when
+  down (200); (3) routed, none open, down: `createIssue` (`source: alert`, key `<source>:<monitor>:<event>`, the route's repo) (201);
+  (4) routed, none open, up: only the route's counter (202). A replayed event is one effect: the Issue's key, the inbox key and the
+  counters' last event. The event that created an Issue is not a signal on it later.
+- **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
+  the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
