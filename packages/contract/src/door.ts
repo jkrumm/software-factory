@@ -5,12 +5,14 @@ import { IssueTitle } from './issues.ts'
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
 export type DoorSource = z.infer<typeof DoorSource>
 
-const noNul = (value: string): boolean => !value.includes('\0')
+/** A monitor's name or an event's id: someone else's text that ends up on a terminal, so bounded and without control characters. */
+const Label = z
+  .string()
+  // oxlint-disable-next-line no-control-regex -- exactly what is removed
+  .transform((label) => label.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim())
+  .pipe(z.string().min(1).max(256))
 
-/** A monitor's name or an event's id: someone else's text, so bounded, and never a NUL. */
-const Label = z.string().min(1).max(256).refine(noNul, 'not a valid name')
-
-export const MAX_INTAKE_FACTS_BYTES = 16 * 1024
+export const MAX_INTAKE_FACTS_BYTES = 24 * 1024
 
 const fitsFacts = (facts: unknown): boolean => {
   try {

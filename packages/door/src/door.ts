@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { IntakeAck, type IntakeInput } from '@software-factory/contract'
+import { IntakeAck, type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
 import { type Parser, PARSERS, PayloadError } from './parsers.ts'
 import type { Tokens } from './tokens.ts'
 
@@ -23,6 +23,13 @@ const ROUTE = /^\/alert\/([a-z][a-z0-9-]{0,31})$/
 const digest = (value: string) => createHash('sha256').update(value).digest()
 /** What an unknown source is compared with, so it costs the same as a known one. */
 const NO_TOKEN = digest('no such source')
+
+/** The facts the server takes, or a marker that there were more: an alert is never lost to the size of its detail. */
+const fitFacts = (facts: Record<string, unknown>): Record<string, unknown> =>
+  Buffer.byteLength(JSON.stringify(facts)) <= MAX_INTAKE_FACTS_BYTES ? facts : { truncated: true }
+
+const own = <T>(table: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.hasOwn(table, key) ? table[key] : undefined
 
 const reply = (status: number, body?: unknown, headers?: Record<string, string>): Response =>
   body === undefined ? new Response(null, { status, headers }) : Response.json(body, { status, headers })
@@ -60,7 +67,7 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
   const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`))
 
   async function handle(req: Request, source: string): Promise<Response> {
-    const parse = parsers[source]
+    const parse = own(parsers, source)
     // A token with no parser behind it: authorized, and then nothing to do with the body.
     if (!parse) return reply(404, { error: 'no such source' })
     const type = req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
@@ -91,7 +98,7 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
 
     let filed: Filed
     try {
-      filed = await options.file({ source, ...parsed.alert })
+      filed = await options.file({ source, ...parsed.alert, facts: fitFacts(parsed.alert.facts) })
     } catch {
       return reply(503, { error: 'the factory is not reachable' })
     }
@@ -113,7 +120,7 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
     try {
       if (!source) response = reply(404)
       else if (req.method !== 'POST') response = reply(405, undefined, { allow: 'POST' })
-      else if (!authorized(req, options.tokens[source])) {
+      else if (!authorized(req, own(options.tokens, source))) {
         response = reply(401, undefined, { 'www-authenticate': 'Bearer' })
       } else {
         label = source

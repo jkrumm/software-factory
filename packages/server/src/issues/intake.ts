@@ -23,8 +23,12 @@ export interface IntakeResult {
   ack: IntakeAck
 }
 
+/**
+ * `<source>:<monitor>:<event>`. A source has no colon, and the monitor's own colons and percent signs are escaped, so two different
+ * pairs never make one key; a name without either is in the key as it is.
+ */
 const alertKey = (input: Pick<IntakeInput, 'source' | 'monitor' | 'event'>): string =>
-  `${input.source}:${input.monitor}:${input.event}`
+  `${input.source}:${input.monitor.replace(/[%:]/g, (c) => (c === '%' ? '%25' : '%3A'))}:${input.event}`
 
 /**
  * Files one alert, in one transaction. The route row is locked first, so two alerts of one monitor are filed one after the other
@@ -58,6 +62,10 @@ export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeC
     const created = await findIssue(tx, 'alert', key)
     if (created) return { status: 200, ack: { outcome: 'replayed', issue: created.id } }
 
+    // An event that was a signal before is one now, whatever became of the Issue it went to: a retry must not make a second Issue.
+    const [filedBefore]: { issue_id: number }[] = await tx`SELECT issue_id FROM factory.issue_inbox WHERE key = ${key}`
+    if (filedBefore) return { status: 200, ack: { outcome: 'replayed', issue: filedBefore.issue_id } }
+
     const [open]: { id: number }[] = await tx`
       SELECT i.id FROM factory.door_issues d JOIN factory.issues i ON i.id = d.issue_id
       WHERE d.source = ${input.source} AND d.monitor = ${input.monitor} AND i.state <> 'closed'
@@ -69,7 +77,13 @@ export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeC
         key,
         kind: 'signal',
         at: now,
-        payload: { regression: input.status === 'down', status: input.status, title: input.title, event: input.event },
+        payload: {
+          regression: input.status === 'down',
+          status: input.status,
+          title: input.title,
+          event: input.event,
+          facts: input.facts,
+        },
       })
       return { status: 200, ack: { outcome: duplicate ? 'replayed' : 'attached', issue: open.id } }
     }
@@ -171,11 +185,13 @@ export async function listRoutes(sql: SQL): Promise<DoorRoute[]> {
   return rows.map(toRoute)
 }
 
-/** Most recent first, and not more than the owner reads in one go. */
-export async function listUnrouted(sql: SQL, limit = 200): Promise<DoorUnrouted[]> {
+/** Most recent first. Each alert keeps only its latest event, so a retry of an older one than the last counts again. */
+export async function listUnrouted(sql: SQL, limit = 1000): Promise<DoorUnrouted[]> {
+  // A route set while an alert was in flight can leave a row behind: a routed monitor is not unrouted.
   const rows: { source: string; monitor: string; count: number; last_seen: Date; last_title: string }[] = await sql`
-    SELECT source, monitor, count, last_seen, last_title FROM factory.door_unrouted
-    ORDER BY last_seen DESC, source, monitor LIMIT ${limit}`
+    SELECT u.source, u.monitor, u.count, u.last_seen, u.last_title FROM factory.door_unrouted u
+    WHERE NOT EXISTS (SELECT 1 FROM factory.door_routes r WHERE r.source = u.source AND r.monitor = u.monitor)
+    ORDER BY u.last_seen DESC, u.source, u.monitor LIMIT ${limit}`
   return rows.map((row) => ({
     source: row.source,
     monitor: row.monitor,

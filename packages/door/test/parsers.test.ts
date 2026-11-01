@@ -17,7 +17,7 @@ describe('kuma', () => {
       monitor: 'forecast-api',
       event: '2026-11-01 21:14:07.512',
       status: 'down',
-      title: 'forecast-api is down: connect ECONNREFUSED 10.0.0.5:3000',
+      title: 'forecast-api is down: connect ECONNREFUSED 192.0.2.5:3000',
     })
     expect(alert.facts).toMatchObject({ monitor: { type: 'http', hostname: 'example.com', port: 443 } })
   })
@@ -39,6 +39,11 @@ describe('kuma', () => {
 
   test('a pending beat is neither down nor up', async () => {
     expect(parseKuma(await fixture('kuma-pending.json')).kind).toBe('ignore')
+  })
+
+  test('an object with neither key is not Kuma’s test message', () => {
+    expect(() => parseKuma({})).toThrow(PayloadError)
+    expect(() => parseKuma({ msg: 'Testing' })).toThrow(PayloadError)
   })
 
   test('a heartbeat without its monitor is not a Kuma payload', () => {
@@ -94,6 +99,20 @@ describe('hyperdx', () => {
     expect(hyperdxMonitor('Errors > 5')).toBe('Errors')
     expect(hyperdxMonitor('12345')).toBe('12345')
     expect(hyperdxMonitor('p99 latency')).toBe('p99 latency')
+  })
+
+  test('a title made to backtrack costs nothing', () => {
+    const started = performance.now()
+    for (const title of [
+      `${'1'.repeat(60_000)}x`,
+      `${'1.'.repeat(30_000)}x`,
+      `${' 1'.repeat(30_000)}x`,
+      `Alert for "${'1'.repeat(60_000)}`,
+    ]) {
+      hyperdxMonitor(title)
+      parseHyperdx({ title, state: 'ALERT', eventId: 'e' })
+    }
+    expect(performance.now() - started).toBeLessThan(500)
   })
 
   test('the names it makes stay inside the limits of the contract', () => {

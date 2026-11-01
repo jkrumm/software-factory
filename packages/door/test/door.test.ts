@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { IntakeInput } from '@software-factory/contract'
+import { type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
 import { createDoor, fileViaSocket, type Filed, MAX_BODY_BYTES } from '../src/door.ts'
 
 const KUMA_TOKEN = 'kuma-token-0123456789-abcdef'
@@ -122,6 +122,13 @@ describe('the token', () => {
     expect(filed).toEqual([])
   })
 
+  test('a source named like an inherited property is an unknown source, not an error', async () => {
+    for (const name of ['constructor', 'tostring', 'valueof']) {
+      const response = await alert('kuma-down.json', `/alert/${name}`)
+      expect(response.status).toBe(401)
+    }
+  })
+
   test('the check comes before the content type and the body', async () => {
     const response = await send('/alert/kuma', {
       token: 'wrong',
@@ -208,6 +215,18 @@ describe('the server', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test('detail too large for the server is cut and the alert still filed', async () => {
+    const msg = '障'.repeat(1500)
+    const base = (await fixture('kuma-down.json')) as { heartbeat: object }
+    const response = await send('/alert/kuma', {
+      body: JSON.stringify({ ...base, msg, heartbeat: { ...base.heartbeat, msg } }),
+    })
+    expect(response.status).toBe(201)
+    const sent = JSON.stringify(filed[0]?.facts)
+    expect(Buffer.byteLength(sent)).toBeLessThanOrEqual(MAX_INTAKE_FACTS_BYTES)
+    expect(Buffer.byteLength(JSON.stringify(filed[0]))).toBeLessThan(MAX_BODY_BYTES)
   })
 
   test('a server error is 503; a refusal is 422 without its reason; a drifted answer is 502', async () => {

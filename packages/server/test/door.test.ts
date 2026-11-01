@@ -98,6 +98,17 @@ describe('rule 1: no route', () => {
     ])
   })
 
+  test('names lose their control characters before anything is keyed or shown', async () => {
+    await intake({ monitor: 'api\u001b[2J\nx' })
+    expect(await rows('door_unrouted')).toMatchObject([{ monitor: 'api [2J x' }])
+  })
+
+  test('a monitor routed while its alert was in flight is not listed as unrouted', async () => {
+    await route()
+    await db.sql`INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event) VALUES ('kuma', 'forecast-api', 1, ${clock.now()}, 't', 'e')`
+    expect(DoorUnroutedList.parse(await (await app.get('/door/unrouted')).json()).unrouted).toEqual([])
+  })
+
   test('one row per source and monitor, kept small', async () => {
     for (const [source, monitor] of [
       ['kuma', 'a'],
@@ -162,6 +173,26 @@ describe('rule 3: routed, none open, down', () => {
     expect(await inbox()).toEqual([])
     expect(await processInbox(db.sql, () => clock.now())).toEqual([])
     expect((await issues())[0]?.state).toBe('watching')
+  })
+
+  test('a retry of an event that was a signal, after its Issue closed, makes no Issue', async () => {
+    await route()
+    const { issue } = await ack(await intake())
+    await intake({ event: 'again' })
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${issue}`
+    const replay = await intake({ event: 'again' })
+    expect(replay.status).toBe(200)
+    expect(await ack(replay)).toEqual({ outcome: 'replayed', issue })
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('two monitors whose names and events run together are two keys', async () => {
+    await route()
+    await app.send('PUT', '/door/routes', { source: 'kuma', monitor: 'db', repo: OTHER_REPO })
+    await app.send('PUT', '/door/routes', { source: 'kuma', monitor: 'db:primary', repo: OTHER_REPO })
+    expect((await intake({ monitor: 'db', event: 'primary:1' })).status).toBe(201)
+    expect((await intake({ monitor: 'db:primary', event: '1' })).status).toBe(201)
+    expect(await issues()).toHaveLength(2)
   })
 
   test('a closed Issue is not open: the next down event makes a new one, and the old event’s replay makes none', async () => {
@@ -294,7 +325,7 @@ describe('what a payload cannot do', () => {
 
   test('facts that cannot be stored, or are too large, are 400 and 422 and file nothing', async () => {
     await route()
-    expect((await intake({ facts: { big: 'x'.repeat(17 * 1024) } })).status).toBe(400)
+    expect((await intake({ facts: { big: 'x'.repeat(25 * 1024) } })).status).toBe(400)
     expect((await intake({ monitor: '' })).status).toBe(400)
     expect((await intake({ source: 'Kuma' })).status).toBe(400)
     expect((await intake({ status: 'sideways' })).status).toBe(400)
