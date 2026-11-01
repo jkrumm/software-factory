@@ -11,6 +11,10 @@
 # and the deploy exits 1. The plist points at the release path, not at `current`: the plist is then the single
 # statement of what runs, and a swap of the symlink can never change a running server's code underneath it.
 #
+# The factory door (packages/door, its own LaunchAgent) is installed and restarted from the same release directory once the
+# server is healthy. It never fails the deploy: a door that cannot start (no tokens file yet) is a warning here and a failed
+# line in `make verify`, and the server it files into is untouched.
+#
 # DRY_RUN=1 prints the plan and the rendered plist and touches nothing (no fetch, no launchd, no ~/.local/bin).
 #
 # Everything lives inside `main`, called on the last line when the file is run (not when it is sourced): this file is
@@ -21,6 +25,11 @@ set -u
 
 LABEL="com.jkrumm.software-factory"
 PORT=7793
+DOOR_LABEL="com.jkrumm.factory-door"
+DOOR_PORT=8796
+DOOR_PLIST="$HOME/Library/LaunchAgents/$DOOR_LABEL.plist"
+# The door answers within a second or two when it can start at all.
+DOOR_WAIT_SECS="${DOOR_WAIT_SECS:-20}"
 # The branch to deploy: master, or another branch to prove a change live before it is merged (FACTORY_REF=<branch>).
 REF="${FACTORY_REF:-master}"
 [[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || { echo "FACTORY_REF is not a plain branch name: $REF" >&2; exit 1; }
@@ -66,9 +75,9 @@ write_atomic() { # $1 path, $2 content
 
 # The dotfiles heartbeat pages on every restart of a KeepAlive job; one epoch line marks this one deliberate.
 # Best-effort: a failed write costs a false page, never a deploy.
-mark_deliberate_restart() {
+mark_deliberate_restart() { # $1 label (default: the server's)
   local dir="$HOME/.local/state/devhost/deliberate-restart"
-  { mkdir -p "$dir" && date +%s >> "$dir/$LABEL"; } 2>/dev/null || true
+  { mkdir -p "$dir" && date +%s >> "$dir/${1:-$LABEL}"; } 2>/dev/null || true
 }
 
 render_plist() { # $1 template, $2 release dir, $3 sha -> stdout
@@ -76,6 +85,7 @@ render_plist() { # $1 template, $2 release dir, $3 sha -> stdout
 }
 
 template_of() { echo "$1/deploy/$LABEL.plist.template"; } # $1 release dir
+door_template_of() { echo "$1/deploy/$DOOR_LABEL.plist.template"; } # $1 release dir
 
 tail_logs() {
   local f
@@ -216,6 +226,39 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
   fi
 }
 
+# The door's health is its 401: an unauthenticated POST is refused by a door that is up, whatever its tokens are.
+door_answers() {
+  [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST -H 'content-type: application/json' -d '{}' \
+    "http://127.0.0.1:$DOOR_PORT/alert/kuma" 2>/dev/null)" == "401" ]]
+}
+
+# Installs the door from the release and restarts it. Never fails the deploy: it says why the door is not up and goes on.
+deploy_door() { # $1 release dir, $2 sha
+  local template tmp i=0
+  template=$(door_template_of "$1")
+  if [[ ! -f "$template" ]]; then log "WARNING: $template missing: the door is left as it is"; return 0; fi
+  tmp="$DOOR_PLIST.tmp.$$"
+  if ! { render_plist "$template" "$1" "$2" > "$tmp" && plutil -lint "$tmp" >/dev/null; }; then
+    rm -f "$tmp"; log "WARNING: rendering the door's plist failed: the door is left as it is"; return 0
+  fi
+  if launchctl print "gui/$(id -u)/$DOOR_LABEL" >/dev/null 2>&1; then
+    mark_deliberate_restart "$DOOR_LABEL"
+    launchctl bootout "gui/$(id -u)/$DOOR_LABEL" 2>/dev/null
+    while (( i < 15 )) && launchctl print "gui/$(id -u)/$DOOR_LABEL" >/dev/null 2>&1; do sleep 1; i=$((i + 1)); done
+  fi
+  mv -f "$tmp" "$DOOR_PLIST" || { log "WARNING: cannot write $DOOR_PLIST"; return 0; }
+  launchctl bootstrap "gui/$(id -u)" "$DOOR_PLIST" || { log "WARNING: launchctl bootstrap of the door failed"; return 0; }
+  i=0
+  while (( i < DOOR_WAIT_SECS )); do
+    if door_answers; then log "door OK: 127.0.0.1:$DOOR_PORT refuses an unauthenticated POST (401)"; return 0; fi
+    sleep 1; i=$((i + 1))
+  done
+  log "WARNING: the door does not answer on 127.0.0.1:$DOOR_PORT after ${DOOR_WAIT_SECS}s (make verify fails until it does; create its tokens with: factory door token new <source>)"
+  local f="$HOME/Library/Logs/factory-door.err.log"
+  if [[ -f "$f" ]]; then echo "--- tail -n 5 $f" >&2; tail -n 5 "$f" >&2; fi
+  return 0
+}
+
 # Every ref of .env.tpl must resolve before anything is stopped: a missing secret refuses the deploy, never a rollback.
 check_refs() { # $1 release dir
   local key ref missing=""
@@ -257,6 +300,10 @@ main() {
     act ln -sfn "$RELEASES/$sha" "$CURRENT"
     act ln -sf "$CURRENT/packages/cli/bin/factory.ts" "$CLI_LINK"
     act "write $SHA_FILE ($sha) and $PREV_FILE (${old:-none})"
+    log "rendered $DOOR_PLIST (the door, from the same release):"
+    render_plist "$(door_template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
+    act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
+    act "wait up to ${DOOR_WAIT_SECS}s for an unauthenticated POST to 127.0.0.1:$DOOR_PORT/alert/kuma to answer 401; a door that does not start (no tokens file) is a warning, never a failed deploy"
     act "prune releases beyond the newest $KEEP_RELEASES"
     return 0
   fi
@@ -324,6 +371,7 @@ main() {
   if [[ -n "$old" && "$old" != "$sha" ]]; then write_atomic "$PREV_FILE" "$old"; fi
   ln -sf "$CURRENT/packages/cli/bin/factory.ts" "$CLI_LINK" || die "linking $CLI_LINK failed"
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
+  deploy_door "$release" "$sha"
   prune_releases "$sha" "$(read_sha "$PREV_FILE")"
   log "deploy OK: ${sha:0:12} healthy; factory -> $CLI_LINK"
 }

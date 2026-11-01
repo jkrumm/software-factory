@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jkrumm.factory-door</string>
+
+  <!-- The factory door: POST /alert/<source> on 127.0.0.1 only. `tailscale serve` publishes the port on the mini's tailnet name
+       and the ACL gives it to tag:homelab and tag:vps. The door holds no factory token and no database credential: it posts to
+       the server's unix socket. Never a Homebrew binary directly (macOS BTM disallows it): the wrapper is the indirection. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__RELEASE_DIR__/scripts/launch-door.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__RELEASE_DIR__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:__HOME__/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>FACTORY_DOOR_PORT</key>
+    <string>8796</string>
+    <key>FACTORY_VERSION</key>
+    <string>__SHA__</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- Plain `true`: make doctor grades a KeepAlive job that is down. -->
+  <key>KeepAlive</key>
+  <true/>
+  <!-- A door that refuses to start (no tokens file, loose mode) retries at this pace, not in a tight loop; creating the tokens
+       file is enough, no deploy is needed. -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/factory-door.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/factory-door.err.log</string>
+</dict>
+</plist>
