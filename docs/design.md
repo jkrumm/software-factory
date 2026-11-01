@@ -940,7 +940,9 @@ runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and th
   signal, are not filed again later, whatever became of the Issue. The key escapes `:` and `%` in the monitor, so two monitors never share one. A signal carries the
   alert's facts. An open Issue keeps its monitor until it closes, also when the route has moved to another repo.
 - **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
-  the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line.
+  the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line. The door restarts at every deploy: for
+  the seconds it is down a POST is refused at the connection, and Slack still gets every alert, so nothing is lost that was not already
+  only in Slack.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
