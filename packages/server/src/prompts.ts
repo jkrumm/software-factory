@@ -494,7 +494,7 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
   // The new pane in one transaction, after the call: a crash between the two rows would leave the spawn pointing at a dead pane.
   await deps.sql.begin(async (tx) => {
     await tx`UPDATE factory.sessions SET pane = ${pane}, tab = ${tab}, pane_misses = 0 WHERE id = ${prompt.session}`
-    await tx`UPDATE factory.spawns SET session = ${pane}, tab = ${tab}, workspace = ${workspace} WHERE key = ${spawn.key}`
+    await tx`UPDATE factory.spawns SET session = ${pane}, tab = ${tab}, workspace = COALESCE(${workspace}, workspace) WHERE key = ${spawn.key}`
   })
   return 'typed'
 }
