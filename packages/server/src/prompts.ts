@@ -224,8 +224,8 @@ interface Target {
   /** the session shows life after `since`: a hook event, or the runner showing its agent */
   alive(since: Date): Promise<boolean>
   /**
-   * The only life since `since` is a resume that something else typed (`hc-resume`): hook events, all `session_started`
-   * with source `resume`, and no turn. The session is back, at its prompt, and has not been told to carry on.
+   * The only life since `since` is a resume that something else typed (`hc-resume`): hook events that are `session_started`
+   * with source `resume` or an idle notice, at least one resume, and no turn. The session is back, at its prompt, and has not been told to carry on.
    */
   resumedInPlace(since: Date): Promise<boolean>
 }
@@ -256,10 +256,11 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
     },
     resumedInPlace: async (since) => {
       const [row] = await sql`
-        SELECT count(*) > 0 AND bool_and(kind = 'session_started' AND payload->>'source' = 'resume') AS resumed
+        SELECT bool_or(kind = 'session_started' AND payload->>'source' = 'resume') AS resumed,
+               bool_and(kind = 'prompt_idle' OR (kind = 'session_started' AND COALESCE(payload->>'source', '') = 'resume')) AS only
         FROM factory.events
         WHERE session = ${id} AND at > ${since} AND kind IN ${sql(HOOK_KINDS)}`
-      return row?.resumed === true
+      return row?.resumed === true && row?.only === true
     },
   }
 }

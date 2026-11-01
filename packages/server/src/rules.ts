@@ -182,12 +182,18 @@ async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<C
   })
 }
 
-/** Whether a turn was open at `at`: the latest turn event of the life that was current then, up to then, is a start. */
-const openTurnAt = (facts: readonly Fact[], at: Date): boolean => {
-  const turns = thisLife(facts.filter((f) => f.at <= at)).filter(
-    (f) => f.kind === 'turn_started' || f.kind === 'turn_ended',
+/**
+ * The turn that was open at `at`, if any: the latest turn event up to then is a start, and no life of another kind began
+ * after it. A `session_started` with source `resume` puts the conversation back where it stopped, so it does not close
+ * the turn it resumes (and one that landed a moment before the witness noticed the restart still finds it).
+ */
+const openTurnAt = (facts: readonly Fact[], at: Date): { index: number } | undefined => {
+  const index = facts.findLastIndex((f) => f.at <= at && (f.kind === 'turn_started' || f.kind === 'turn_ended'))
+  if (index < 0 || facts[index]?.kind !== 'turn_started') return undefined
+  const otherLife = facts.some(
+    (f, i) => i > index && f.at <= at && f.kind === 'session_started' && f.source !== 'resume',
   )
-  return turns[turns.length - 1]?.kind === 'turn_started'
+  return otherLife ? undefined : { index }
 }
 
 /**
@@ -214,10 +220,15 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
     const server = event.payload?.to
     if (!server) continue
     for (const { view, facts, agentSeenAt, repo } of sessions) {
-      if (!openTurnAt(facts, event.at)) continue
+      const open = openTurnAt(facts, event.at)
+      if (!open) continue
       const lived = facts.filter((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))
+      // Resumed in place: since the cut-off turn the session said only that it was resumed (and, idle, that it is idle). The
+      // resume may have landed just before the witness noticed the restart.
+      const resumes = facts.filter((f, i) => i > open.index && f.kind === 'session_started' && f.source === 'resume')
       const resumedInPlace =
-        lived.length > 0 && lived.every((f) => f.kind === 'session_started' && f.source === 'resume')
+        resumes.length > 0 &&
+        lived.every((f) => (f.kind === 'session_started' && f.source === 'resume') || f.kind === 'prompt_idle')
       if (lived.length > 0 && !resumedInPlace) continue
       if (!resumedInPlace && agentSeenAt && agentSeenAt > event.at) continue
       const base = { id: `restart:${server}:${view.id}`, session: view.id, source: 'restart', text: RESTART_NOTE }

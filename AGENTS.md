@@ -154,7 +154,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     reserves that account in the same locked transaction that admits it (given back if the start fails), so a spawn claim in between
     sees it taken. A restart prompt never re-arms. **One resumer per session:** `hc-resume` (dotfiles) types `claude --resume`
     into every kept terminal with the resume labels, factory spawns included, and types no prompt. A session whose only events since
-    the restart are `session_started` with source `resume` (no turn) was resumed in place: the same note is typed into it (`via: type`,
+    the cut-off turn are `session_started` with source `resume` (an idle notice may follow; no turn; the resume may even precede the
+    witness's `runner_restarted`) was resumed in place: the same note is typed into it (`via: type`,
     the same id), nothing is started. A resume prompt recorded before that resume landed is turned into a typed one at delivery, so the
     factory never starts a second copy of a conversation something else resumed. `hc-resume` is not changed: skipping factory terminals
     would leave idle and waiting sessions (an orchestrator waiting on its workers) as a shell nobody resumes. A session that is not a factory spawn (or never reported its Claude session
@@ -213,7 +214,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   current core (a classic-herdr pane, or none). A create under an ended spawn's key answers **409** `{error, code:
   "key_spent", spawn}` and never revives the row; the CLI exits 5 (`conflict`) with `code` and `details.spawn` on the error
   line, and `rd` derives the next key (`<key>-r2`, …). `factory status` lists neither `started` nor `ended` spawns. An
-  older `rd` treats the 409 as a structured error and falls back to bare hc: roll `rd` out before the server. The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
+  older `rd` treats the 409 as a structured error and falls back to bare hc: roll `rd` out before the server. The server and the CLI release together: an older CLI does not parse `ended` (exit 9). The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
   uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
   socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
   repo roots still bound where it can start, and a same-user pane can already start Claude Code through hc).
