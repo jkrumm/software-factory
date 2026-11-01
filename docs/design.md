@@ -574,7 +574,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
   a session with an `issue_id` is copied in by the same transaction that stores it (`recordIn`, the only writer of session
-  events, so the live post, the spool replay and the witness all pass there). A `turn_started` takes back only what a wall parked.
+  events, so the live post, the spool replay and the witness all pass there). A `turn_started` takes back only what a wall parked, and only from the session that hit the wall (`wall_session`).
 
 | Event | Sent by | Key |
 |-|-|-|

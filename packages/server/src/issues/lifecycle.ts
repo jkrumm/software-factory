@@ -38,6 +38,8 @@ interface Step {
   outcome?: IssueOutcome
   /** applies only to an Issue waiting for this reason */
   only?: WaitReason
+  /** applies only then: otherwise the event is as if the state had no entry */
+  when?: (context: Context) => boolean
   /** a new lead: the next attempt */
   newAttempt?: true
   /** starts a new hold */
@@ -174,7 +176,8 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     waiting: {
       to: 'working',
       only: 'wall',
-      refuse: ({ issue, row }) => (older(row, issue) ? 'this turn is older than the wall' : undefined),
+      // The session that hit the wall is past it; a worker's turn says nothing about its lead, nor an older turn about the wall.
+      when: ({ issue, row }) => row.session === issue.wall_session && !older(row, issue),
     },
   },
   // dedup: a repeat is recorded; `regression` is a signal whose payload says so
@@ -276,7 +279,7 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
-    SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits},
+    SET state = ${to}, reason = ${step.reason ?? null}, wall_session = ${step.reason === 'wall' ? cause.session : null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits},
         wake_at = ${wakeAt}, updated_at = GREATEST(updated_at, ${cause.at}), closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
@@ -302,8 +305,10 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
   // Only a state that can regress reads the flag: elsewhere it is a signal like any other, which is the door's common case.
   const regressed = row.kind === 'signal' && row.payload?.regression === true && TABLE.regression?.[issue.state]
   const kind = regressed ? 'regression' : row.kind
+  const context = { tx, issue, row, now }
   const found = TABLE[kind]?.[issue.state]
-  const step = found?.only && found.only !== issue.reason ? undefined : found
+  const fits = found && (!found.only || found.only === issue.reason) && (!found.when || found.when(context))
+  const step = fits ? found : undefined
   const refused = async (detail: string): Promise<Handled> => {
     await logEvent(
       tx,
@@ -317,7 +322,6 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     return refused(`${kind} does not apply to a ${issue.state} Issue`)
   }
 
-  const context = { tx, issue, row, now }
   const refusal = step.refuse?.(context) ?? (await step.apply?.(context))
   if (refusal) return refused(refusal)
 

@@ -5,6 +5,7 @@ export interface IssueRow {
   id: number
   state: IssueState
   reason: WaitReason | null
+  wall_session: string | null
   outcome: IssueOutcome | null
   source: string
   source_key: string
