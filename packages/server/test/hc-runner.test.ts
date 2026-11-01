@@ -253,9 +253,11 @@ describe('hc adapter: naming the tab', () => {
     expect(doc?.value).toEqual(space('spawn-1'))
   })
 
-  test('no entry yet (the app has not adopted the tab): the document is not written', async () => {
+  test('no entry yet (the app has not adopted the tab): only the space is seeded, no tab is written', async () => {
     await runner.start(input)
-    expect(await count('doc.set')).toBe(0)
+    expect(await count('doc.set')).toBe(1)
+    const doc = (await hc.state()).docs['herdr-app']?.value as { spaces: { tabs: unknown[] }[] } | undefined
+    expect(doc?.spaces.map((s) => s.tabs)).toEqual([[]])
     expect((await run()).labels).toMatchObject({ 'factory.tab_name': 'spawn-1' })
   })
 
@@ -290,8 +292,9 @@ describe('hc adapter: naming the tab', () => {
   test('a hidden worker has no tab to name', async () => {
     await runner.start({ ...input, key: 'lead', role: 'lead' })
     await hc.setDoc('herdr-app', space('3'))
+    const before = await count('doc.set')
     await runner.start({ ...input, key: 'spawn-1', parentTerminal: 't1' })
-    expect(await count('doc.set')).toBe(0)
+    expect(await count('doc.set')).toBe(before)
   })
 })
 
