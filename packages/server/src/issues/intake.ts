@@ -17,6 +17,9 @@ export interface IntakeContext {
   now: Date
 }
 
+/** How long a monitor with no route stays listed after its last alert. */
+export const UNROUTED_KEEP_MS = 30 * 24 * 60 * 60_000
+
 /** The HTTP status and the body of an intake. */
 export interface IntakeResult {
   status: 200 | 201 | 202
@@ -48,6 +51,9 @@ export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeC
     const [route]: { repo: string }[] = await tx`
       SELECT repo FROM factory.door_routes WHERE source = ${input.source} AND monitor = ${input.monitor} FOR UPDATE`
     if (!route) {
+      // A row not seen for a month is a monitor nobody alerts on: the table is a recent list, not a history, and a sender with a
+      // token cannot grow it past what it has made in thirty days.
+      await tx`DELETE FROM factory.door_unrouted WHERE last_seen < ${new Date(now.getTime() - UNROUTED_KEEP_MS)}`
       await tx`
         INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event)
         VALUES (${input.source}, ${input.monitor}, 1, ${now}, ${input.title}, ${input.event})
