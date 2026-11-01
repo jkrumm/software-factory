@@ -152,7 +152,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     `restart:<new server identity>:<session>`. A resume starts an agent, so it is admitted like a spawn claim (held under
     `drain`, `pace` or a full account, only on the account the conversation lives in; the hold shows in the prompt's error) and
     reserves that account in the same locked transaction that admits it (given back if the start fails), so a spawn claim in between
-    sees it taken. A restart prompt never re-arms. A session that is not a factory spawn (or never reported its Claude session
+    sees it taken. A restart prompt never re-arms. **One resumer per session:** `hc-resume` (dotfiles) types `claude --resume`
+    into every kept terminal with the resume labels, factory spawns included, and types no prompt. A session whose only events since
+    the restart are `session_started` with source `resume` (no turn) was resumed in place: the same note is typed into it (`via: type`,
+    the same id), nothing is started. A resume prompt recorded before that resume landed is turned into a typed one at delivery, so the
+    factory never starts a second copy of a conversation something else resumed. `hc-resume` is not changed: skipping factory terminals
+    would leave idle and waiting sessions (an orchestrator waiting on its workers) as a shell nobody resumes. A session that is not a factory spawn (or never reported its Claude session
     id) gets a `failed` prompt with the reason: that is its line in status.
 - **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
   and spawns), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,

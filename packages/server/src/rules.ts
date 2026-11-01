@@ -182,17 +182,26 @@ async function wake(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<C
   })
 }
 
-/** Whether a turn was open at `at`: the latest turn event of this life up to then is a start. */
+/** Whether a turn was open at `at`: the latest turn event of the life that was current then, up to then, is a start. */
 const openTurnAt = (facts: readonly Fact[], at: Date): boolean => {
-  const turns = thisLife(facts).filter((f) => f.at <= at && (f.kind === 'turn_started' || f.kind === 'turn_ended'))
+  const turns = thisLife(facts.filter((f) => f.at <= at)).filter(
+    (f) => f.kind === 'turn_started' || f.kind === 'turn_ended',
+  )
   return turns[turns.length - 1]?.kind === 'turn_started'
 }
 
 /**
  * runner restart: `restart:<server>:<session>`, where the server is the new one's identity (core pid and id). A session
- * that had a turn open when the runner restarted, has said nothing since and that the runner has not shown again is cut off: it is
- * resumed by id with a note. One that cannot be resumed (not started by the factory, no Claude session id) gets a failed
- * prompt, which is the line in status.
+ * that had a turn open when the runner restarted is cut off, and one of two things has happened to it since:
+ *
+ * - Nothing: no hook event, and the runner has not shown its agent. It is resumed by id with a note, in a new tab.
+ * - Something resumed it in place (`hc-resume` types `claude --resume` into the kept terminal): its only events since are
+ *   `session_started` with source `resume`, no turn. That resume carries no prompt, so the session idles mid-work until the
+ *   same note is typed into it. The factory never starts a second copy of a conversation something else resumed.
+ *
+ * A session that has lived on (a turn event, another kind of start) is left alone. One that cannot be resumed (not started
+ * by the factory, no Claude session id) gets a failed prompt, which is the line in status; typing into one that came back
+ * needs neither.
  */
 async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promise<Candidate[]> {
   const since = new Date(now.getTime() - RESTART_WINDOW_MS)
@@ -206,9 +215,16 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
     if (!server) continue
     for (const { view, facts, agentSeenAt, repo } of sessions) {
       if (!openTurnAt(facts, event.at)) continue
-      if (facts.some((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))) continue
-      if (agentSeenAt && agentSeenAt > event.at) continue
-      const base = { id: `restart:${server}:${view.id}`, session: view.id, source: 'restart', via: 'resume' as const }
+      const lived = facts.filter((f) => f.at > event.at && HOOK_KINDS.includes(f.kind))
+      const resumedInPlace =
+        lived.length > 0 && lived.every((f) => f.kind === 'session_started' && f.source === 'resume')
+      if (lived.length > 0 && !resumedInPlace) continue
+      if (!resumedInPlace && agentSeenAt && agentSeenAt > event.at) continue
+      const base = { id: `restart:${server}:${view.id}`, session: view.id, source: 'restart', text: RESTART_NOTE }
+      if (resumedInPlace) {
+        out.push({ ...base, via: 'type' })
+        continue
+      }
       const reason =
         !view.spawn || !repo || !view.account
           ? 'was not started by the factory'
@@ -217,8 +233,8 @@ async function restarts(sql: SQL, sessions: readonly Loaded[], now: Date): Promi
             : undefined
       out.push(
         reason
-          ? { ...base, text: RESTART_NOTE, failed: `cut off by a runner restart, cannot be resumed: it ${reason}` }
-          : { ...base, text: RESTART_NOTE },
+          ? { ...base, via: 'resume', failed: `cut off by a runner restart, cannot be resumed: it ${reason}` }
+          : { ...base, via: 'resume' },
       )
     }
   }

@@ -690,6 +690,98 @@ describe('runner restart', () => {
     expect((await evaluate()).created).toEqual([])
   })
 
+  describe('a session something else resumed in place (hc-resume types `claude --resume` into the kept terminal)', () => {
+    /** A spawn cut off mid-turn by a restart that hc-resume then resumed: a resume start, no turn, the agent shown again. */
+    async function resumedInPlace() {
+      await w.spawned('s', { account: 'b', repo: '/work/repo' })
+      await w.emit('s', 'turn_started', w.at(20))
+      await restartEvent(w.at(10))
+      await w.emit('s', 'session_started', w.at(9), { claudeSessionId: 'claude-s', source: 'resume' })
+      await db.sql`UPDATE factory.sessions SET agent_seen_at = ${w.at(8)}, agent_status = 'idle' WHERE id = 's'`
+    }
+
+    test('gets the note typed into it, once; nothing is started, and the first turn proves the note', async () => {
+      await resumedInPlace()
+      expect((await getSession(db.sql, 's', clock.now()))?.state).toBe('idle')
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      expect((await prompts())[0]).toMatchObject({ via: 'type', source: 'restart', text: RESTART_NOTE })
+
+      expect((await deliver()).sent).toEqual([`restart:${NEW_SERVER}:s`])
+      expect(runner.typed).toEqual([{ pane: 'w1:s', text: RESTART_NOTE }])
+      expect(runner.started).toEqual([])
+
+      clock.advance(5_000)
+      await w.emit('s', 'turn_started', clock.now())
+      await deliver()
+      expect((await prompts())[0]?.status).toBe('delivered')
+      await replayIsSilent()
+      expect(runner.typed).toHaveLength(1)
+    })
+
+    test('a resume the rule already queued is typed instead of started when the in-place resume lands before it runs', async () => {
+      await w.spawned('s', { account: 'b', repo: '/work/repo' })
+      await w.emit('s', 'turn_started', w.at(20))
+      await restartEvent(w.at(10))
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      expect((await prompts())[0]).toMatchObject({ via: 'resume', status: 'pending' })
+
+      // hc-resume was slower than the rule: its resume start arrives after the prompt was recorded.
+      clock.advance(minutes(1))
+      await w.emit('s', 'session_started', clock.now(), { claudeSessionId: 'claude-s', source: 'resume' })
+      expect((await deliver()).sent).toEqual([`restart:${NEW_SERVER}:s`])
+      expect(runner.started).toEqual([])
+      expect(runner.typed).toEqual([{ pane: 'w1:s', text: RESTART_NOTE }])
+      expect((await prompts())[0]).toMatchObject({ via: 'type', status: 'sent' })
+    })
+
+    test('a resume that something else typed and a session that has worked since are not told again', async () => {
+      await resumedInPlace()
+      await w.emit('s', 'turn_started', w.at(7))
+      expect((await evaluate()).created).toEqual([])
+
+      // Another kind of start (a clear) is not a resume of the lost turn.
+      await w.spawned('c', { account: 'b', repo: '/work/repo' })
+      await w.emit('c', 'turn_started', w.at(20))
+      await w.emit('c', 'session_started', w.at(9), { claudeSessionId: 'claude-c', source: 'clear' })
+      expect((await evaluate()).created).toEqual([])
+    })
+
+    test('the fake core: the note goes to the terminal that was resumed, and no second copy of the conversation starts', async () => {
+      const real = new HcRunner({
+        bin: hc.bin,
+        clock,
+        pretrustBin: hc.pretrustBin,
+        accountsFile: hc.accountsFile,
+        home: '/home/me',
+        deliverWaitMs: 3_000,
+      })
+      await w.spawned('s', { account: 'b', repo: '/work/repo' })
+      await w.emit('s', 'turn_started', w.at(20))
+      const { session } = await real.start({
+        key: 's',
+        repo: '/work/repo',
+        prompt: 'work',
+        role: 'worker',
+        tier: 'sonnet',
+        effort: 'high',
+        account: 'b',
+      })
+      await db.sql`UPDATE factory.sessions SET pane = ${session} WHERE id = 's'`
+      await restartEvent(w.at(10))
+      // hc-resume typed `claude --resume` into the kept terminal: it runs Claude again, at its prompt.
+      await hc.setStatus(session, 'idle')
+      await w.emit('s', 'session_started', w.at(9), { claudeSessionId: 'claude-s', source: 'resume' })
+      await db.sql`UPDATE factory.sessions SET agent_seen_at = ${w.at(8)} WHERE id = 's'`
+
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      expect((await deliverPrompts({ sql: db.sql, runner: real, clock })).sent).toEqual([`restart:${NEW_SERVER}:s`])
+      const state = await hc.state()
+      expect(state.terminals).toHaveLength(1)
+      expect(state.runs).toHaveLength(1)
+      expect(state.sent).toMatchObject([{ terminal: session, text: RESTART_NOTE }])
+    })
+  })
+
   test('a fresh restart waits for the witness; a session the factory did not start is a line in status, not a resume', async () => {
     await w.emit('rd', 'session_started', w.at(30), { claudeSessionId: 'c-rd', account: 'a' })
     await w.emit('rd', 'turn_started', w.at(20))
