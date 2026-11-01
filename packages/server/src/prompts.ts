@@ -223,6 +223,11 @@ interface Target {
   ended: boolean
   /** the session shows life after `since`: a hook event, or the runner showing its agent */
   alive(since: Date): Promise<boolean>
+  /**
+   * The only life since `since` is a resume that something else typed (`hc-resume`): hook events, all `session_started`
+   * with source `resume`, and no turn. The session is back, at its prompt, and has not been told to carry on.
+   */
+  resumedInPlace(since: Date): Promise<boolean>
 }
 
 async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undefined> {
@@ -248,6 +253,13 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
                     AND kind IN ${sql(HOOK_KINDS)})
                 OR (SELECT agent_seen_at > ${since} FROM factory.sessions WHERE id = ${id})) AS alive`
       return row?.alive === true
+    },
+    resumedInPlace: async (since) => {
+      const [row] = await sql`
+        SELECT count(*) > 0 AND bool_and(kind = 'session_started' AND payload->>'source' = 'resume') AS resumed
+        FROM factory.events
+        WHERE session = ${id} AND at > ${since} AND kind IN ${sql(HOOK_KINDS)}`
+      return row?.resumed === true
     },
   }
 }
@@ -339,6 +351,17 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     if (attempts >= DELIVER_BATCH) break
     if (typedTo.has(prompt.session)) continue
     const target = await targetOf(sql, prompt.session, clock.now())
+    // A restart resume that something else did first (the kept terminal's own resume) is typed into the session that is
+    // back, never started a second time: the note is the same, the way in differs.
+    if (
+      target &&
+      prompt.via === 'resume' &&
+      prompt.source === 'restart' &&
+      (await target.resumedInPlace(prompt.created_at))
+    ) {
+      await sql`UPDATE factory.prompts SET via = 'type', error = NULL WHERE id = ${prompt.id} AND status = 'pending'`
+      prompt.via = 'type'
+    }
     const refusal = !target
       ? `unknown session ${prompt.session}`
       : prompt.via === 'resume' && target.ended

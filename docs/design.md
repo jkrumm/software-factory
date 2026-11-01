@@ -182,7 +182,7 @@ that applies wins.
 | **Folder trust** | any spawn | pre-trust the path before starting the agent, for new repos as well as worktrees | none, idempotent |
 | **Blocked** | `blocked` for 2 minutes | a line in `factory status`, and to the session's parent if it has one | event id |
 | **Wake** | a session `waiting` on its workers, with child sessions, none unfinished (`dead`, or `idle` after a turn; a spawn without a session yet is unfinished) | one note listing the children and their states; once a turn proves it, the wait it answers is cleared (unless a newer wait was declared) | `wake:<session>:<wait event id>` |
-| **runner restart** | the server identity (core pid or id) changed | each affected session resumes by id, with a note that a turn was cut off | `restart:<server>:<session>` |
+| **runner restart** | the server identity (core pid or id) changed | each affected session resumes by id, with a note that a turn was cut off; one the kept terminal's own resume (`hc-resume`) already brought back gets the note typed instead | `restart:<server>:<session>` |
 
 The send-back counts only child sessions the factory knows. A background shell inside a session is invisible to
 a hook; that gap stays until a measured failure says otherwise.
