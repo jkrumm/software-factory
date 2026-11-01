@@ -413,6 +413,30 @@ describe('golden paths: transitions and effects', () => {
     expect((await inbox(id)).map((r) => r.result)).toEqual(['applied', 'refused', 'ignored', 'refused'])
   })
 
+  test('a wall after a transition that was handled late still parks: event times decide', async () => {
+    const { id } = await file()
+    const admittedAt = clock.now()
+    await send(id, 'admitted')
+    clock.advance(1000)
+    const wallAt = clock.now()
+    clock.advance(10_000)
+    await enqueue(db.sql, { issueId: id, key: 'wall', kind: 'limit_stop', at: wallAt, session: 's1' })
+    await pass()
+    expect(admittedAt < wallAt).toBe(true)
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wall' })
+  })
+
+  test('a turn from before the wall, delivered after it, does not end it', async () => {
+    const id = await working()
+    const turnAt = clock.now()
+    clock.advance(1000)
+    await enqueue(db.sql, { issueId: id, key: 'wall', kind: 'limit_stop', at: clock.now(), session: 's1' })
+    await pass()
+    await enqueue(db.sql, { issueId: id, key: 'old-turn', kind: 'turn_started', at: turnAt, session: 's1' })
+    await pass()
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wall' })
+  })
+
   test('a stop closes an open question: answering a later one leaves it alone', async () => {
     const id = await working()
     await step(id, 'ask', { question: 'first?' })
@@ -570,6 +594,22 @@ describe('the inbox', () => {
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE error IS NOT NULL`).toHaveLength(0)
   })
 
+  test('an expiry that is a time by a lenient reading is stored as one, not thrown on', async () => {
+    const id = await working()
+    await step(id, 'ask', { question: 'q', expiresAt: '2026-02-30T00:00:00Z' })
+    expect((await state(id)).reason).toBe('decision')
+  })
+
+  test('every failed Issue gets its try each pass, however many failed', async () => {
+    const ids: number[] = []
+    for (let i = 0; i < 25; i++) ids.push(await working())
+    for (const id of ids) await send(id, 'close')
+    const always = () => {
+      throw new Error('down')
+    }
+    expect(await processInbox(db.sql, always)).toHaveLength(25)
+  })
+
   test('Issues that keep failing do not fill a pass: the others go first', async () => {
     const failing: number[] = []
     for (let i = 0; i < 25; i++) {
@@ -588,6 +628,7 @@ describe('the inbox', () => {
     ['an ask with a bad expiry', 'ask', { question: 'q', expiresAt: 'not a time' }],
     ['a wait with a bad time', 'wait', { until: 'not a time' }],
     ['a dep on an id past the column', 'dep', { on: 99_999_999_999 }],
+    ['a dep on a fraction', 'dep', { on: 1.5 }],
   ])('%s is refused, and does not hold up what follows', async (_, kind, payload) => {
     const id = await working()
     await send(id, kind, payload)

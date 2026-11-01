@@ -12,7 +12,7 @@ export const DEFAULT_HOLD_MS = 30 * 60_000
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
 
 /** A create the policy refuses; the message is the 422 body. */
-export class IssueRefused extends RepoRefused {}
+class IssueRefused extends RepoRefused {}
 
 export interface InboxRow {
   id: string
@@ -51,10 +51,14 @@ const text = (payload: InboxRow['payload'], name: string): string | null => {
   return typeof value === 'string' && value ? value : null
 }
 
-const badTime = (payload: InboxRow['payload'], name: string): boolean => {
+/** A time from a payload as a `Date`, the form Postgres cannot refuse; invalid when it is no time. */
+const time = (payload: InboxRow['payload'], name: string): Date | null => {
   const value = text(payload, name)
-  return value !== null && Number.isNaN(Date.parse(value))
+  return value === null ? null : new Date(value)
 }
+
+const badTime = (payload: InboxRow['payload'], name: string): boolean =>
+  Number.isNaN(time(payload, name)?.getTime() ?? 0)
 
 async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
   const question = text(row.payload, 'question')
@@ -64,7 +68,7 @@ async function recordDecision({ tx, issue, row, now }: Context): Promise<string 
   await tx`
     INSERT INTO factory.decisions (issue_id, key, question, options, default_option, expires_at, created_at)
     VALUES (${issue.id}, ${row.key}, ${question}, ${options}::text::jsonb, ${text(row.payload, 'default')},
-            ${text(row.payload, 'expiresAt')}, ${now})
+            ${time(row.payload, 'expiresAt')}, ${now})
     ON CONFLICT (key) DO NOTHING`
   return undefined
 }
@@ -92,9 +96,12 @@ async function addDependency({ tx, issue, row }: Context): Promise<string | unde
   return undefined
 }
 
+/** The event happened before the one that put the Issue where it is: it says nothing about now. */
+const older = (row: InboxRow, issue: IssueRow): boolean => row.at < issue.updated_at
+
 /** A wall that happened before the Issue last moved, or before a turn already seen, is over. A late spool line can be either. */
 async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
-  if (row.at < issue.updated_at) return 'this wall is older than the state it would end'
+  if (older(row, issue)) return 'this wall is older than the state it would end'
   const [later] = await tx`
     SELECT 1 FROM factory.issue_inbox
     WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
@@ -145,7 +152,13 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   drop: { working: { to: 'closed', outcome: 'dropped' } },
   // session events
   limit_stop: { working: { to: 'waiting', reason: 'wall', apply: wallIsNews } },
-  turn_started: { waiting: { to: 'working', only: 'wall' } },
+  turn_started: {
+    waiting: {
+      to: 'working',
+      only: 'wall',
+      refuse: ({ issue, row }) => (older(row, issue) ? 'this turn is older than the wall' : undefined),
+    },
+  },
   // dedup: a repeat is recorded; `regression` is a signal whose payload says so
   signal: {
     settling: recorded,
@@ -202,7 +215,7 @@ const SILENT = new Set([
 ])
 
 /** A closed Issue lets go of the Issues waiting on it: each is woken once nothing it depends on is open. */
-async function wakeDependents(tx: SQL, issueId: number, now: Date): Promise<void> {
+async function wakeDependents(tx: SQL, issueId: number, cause: InboxRow, now: Date): Promise<void> {
   const freed: { id: number }[] = await tx`
     SELECT i.id FROM factory.issue_deps d
     JOIN factory.issues i ON i.id = d.issue_id
@@ -211,7 +224,7 @@ async function wakeDependents(tx: SQL, issueId: number, now: Date): Promise<void
         SELECT 1 FROM factory.issue_deps o JOIN factory.issues b ON b.id = o.on_issue
         WHERE o.issue_id = i.id AND b.state <> 'closed')`
   for (const { id } of freed) {
-    const key = `wake:${id}:dep:${issueId}:${now.toISOString()}`
+    const key = `wake:${id}:dep:${cause.key}`
     await enqueue(tx, { issueId: id, key, kind: 'wake', at: now, payload: { for: 'dependency' } })
   }
 }
@@ -231,12 +244,12 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const to = step.to ?? issue.state
   const attempt = step.newAttempt ? issue.attempt + 1 : issue.attempt
   const hold = step.hold ? issue.hold + 1 : issue.hold
-  const until = step.reason === 'wait' ? text(cause.payload, 'until') : null
-  const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until ? new Date(until) : null
+  const until = step.reason === 'wait' ? time(cause.payload, 'until') : null
+  const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
     SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold},
-        wake_at = ${wakeAt}, updated_at = ${now}, closed_at = ${to === 'closed' ? now : null}
+        wake_at = ${wakeAt}, updated_at = ${cause.at}, closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
   if (!row) throw new Error(`issue ${issue.id} is gone`)
@@ -288,7 +301,7 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     await planEffect(tx, moved, effect, row, now)
   }
   if (step.to === 'closed') {
-    await wakeDependents(tx, issue.id, now)
+    await wakeDependents(tx, issue.id, row, now)
     // Nobody is left to act on an open question, and a reopened Issue asks again.
     await tx`
       UPDATE factory.decisions SET answered_by = 'closed', answered_at = ${now}
@@ -310,13 +323,13 @@ const namesIuRoot = (path: string): boolean => path.split('/').some((part) => pa
 
 /**
  * An alert never reaches the IuRoot workspace (decision 3). The path is real, so a link inside SourceRoot does not hide it, and
- * a configured IuRoot that is itself a link to a neutral path still counts by its configured name.
+ * a path or a configured root that names IuRoot and links to a neutral place still counts by that name.
  */
-async function inIuRoot(repo: string, roots: readonly string[]): Promise<boolean> {
-  if (namesIuRoot(repo)) return true
+async function inIuRoot(repo: string, submitted: string, roots: readonly string[]): Promise<boolean> {
+  if (namesIuRoot(repo) || namesIuRoot(submitted)) return true
   for (const root of roots.filter(namesIuRoot)) {
     const real = await realpath(root).catch(() => undefined)
-    if (real && repo.startsWith(`${real}/`)) return true
+    if (real && (repo === real || repo.startsWith(`${real}/`))) return true
   }
   return false
 }
@@ -339,7 +352,7 @@ export async function createIssueIn(
   if (known) return { issue: known, created: false }
 
   const repo = await resolveRepo(input.repo, context.repoRoots)
-  if (input.source === 'alert' && (await inIuRoot(repo, context.repoRoots))) {
+  if (input.source === 'alert' && (await inIuRoot(repo, input.repo, context.repoRoots))) {
     throw new IssueRefused(`an alert files no Issue in IuRoot: ${repo}`)
   }
 

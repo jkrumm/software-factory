@@ -64,10 +64,13 @@ async function recordFailure(sql: SQL, issueId: number, message: string): Promis
 export async function processInbox(sql: SQL, now: () => Date): Promise<string[]> {
   const errors: string[] = []
   const skip = new Set<number>()
-  for (let n = 0; n < ISSUES_PER_PASS; n++) {
+  let worked = 0
+  // A failure counts against nothing: `skip` ends the loop, and every failed Issue gets its try each pass.
+  while (worked < ISSUES_PER_PASS) {
     const taken: { id?: number } = {}
     try {
       if (!(await takeIssue(sql, skip, now, taken))) break
+      worked++
     } catch (error) {
       if (taken.id === undefined) throw error
       const message = error instanceof Error ? error.message : String(error)
