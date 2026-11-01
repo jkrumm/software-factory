@@ -1,0 +1,26 @@
+{
+  "heartbeat": {
+    "monitorID": 12,
+    "status": 1,
+    "time": "2026-11-01 21:19:07.331",
+    "msg": "200 - OK",
+    "important": true,
+    "duration": 300,
+    "retries": 0,
+    "ping": 84,
+    "timezone": "Europe/Berlin",
+    "timezoneOffset": "+01:00",
+    "localDateTime": "2026-11-01 22:19:07"
+  },
+  "monitor": {
+    "id": 12,
+    "name": "forecast-api",
+    "url": "https://svc:s3cret-url-token@example.com/health?key=also-secret",
+    "hostname": "example.com",
+    "port": 443,
+    "type": "http",
+    "interval": 60,
+    "tags": []
+  },
+  "msg": "[forecast-api] [✅ Up] 200 - OK"
+}
