@@ -23,6 +23,9 @@ const MAX_NAME_CHARS = 256
 const MAX_TITLE_CHARS = 500
 const MAX_TEXT_CHARS = 1500
 const MAX_LINK_CHARS = 1024
+/** A type, a host, a port, a time, an id: short by nature, so a long one is a mistake or an attack, and is cut. */
+const MAX_FIELD_CHARS = 128
+const MAX_PART_CHARS = 64
 
 /** The first `max` UTF-16 units, never ending inside a surrogate pair (half of one is no text Postgres stores). */
 const cut = (text: string, max: number): string => {
@@ -30,6 +33,12 @@ const cut = (text: string, max: number): string => {
   const end = /[\ud800-\udbff]/.test(text.charAt(max - 1)) ? max - 1 : max
   return text.slice(0, end)
 }
+
+/** A short field of a payload as a fact: cut, or null when there is none. */
+const field = (text: string | null | undefined): string | null => (text ? clip(text, MAX_FIELD_CHARS) : null)
+
+/** A piece of an event id: short enough that the pieces and the status after them fit the name a key may have. */
+const part = (text: string | null | undefined): string => clip(text ?? '', MAX_PART_CHARS)
 
 const clip = (text: string, max: number): string => (text.length > max ? `${cut(text, max - 1)}…` : text)
 
@@ -73,19 +82,24 @@ export const parseKuma: Parser = (payload) => {
   const status = heartbeat.status === 0 ? 'down' : 'up'
   const name = clip(monitor.name, MAX_NAME_CHARS)
   const detail = heartbeat.msg ?? msg
+  const time = clip(heartbeat.time, MAX_FIELD_CHARS)
   return {
     kind: 'alert',
     alert: {
       monitor: name,
-      event: clip(heartbeat.time, MAX_NAME_CHARS),
+      event: time,
       status,
       title: clip(detail ? `${name} is ${status}: ${detail}` : `${name} is ${status}`, MAX_TITLE_CHARS),
       facts: {
         msg: msg ? clip(msg, MAX_TEXT_CHARS) : null,
-        monitor: { type: monitor.type ?? null, hostname: monitor.hostname ?? null, port: monitor.port ?? null },
+        monitor: {
+          type: field(monitor.type),
+          hostname: field(monitor.hostname),
+          port: typeof monitor.port === 'number' ? monitor.port : field(monitor.port),
+        },
         heartbeat: {
           status: heartbeat.status,
-          time: heartbeat.time,
+          time,
           msg: heartbeat.msg ? clip(heartbeat.msg, MAX_TEXT_CHARS) : null,
           ping: heartbeat.ping ?? null,
           retries: heartbeat.retries ?? null,
@@ -148,20 +162,21 @@ export const parseHyperdx: Parser = (payload) => {
   if (hook.state !== 'ALERT' && hook.state !== 'OK') return { kind: 'ignore', reason: 'neither firing nor resolved' }
   const status = hook.state === 'ALERT' ? 'down' : 'up'
   const monitor = hyperdxMonitor(hook.title)
+  const [eventId, startTime, endTime, alertId] = [hook.eventId, hook.startTime, hook.endTime, hook.alertId].map(field)
   return {
     kind: 'alert',
     alert: {
       monitor,
-      event: clip(`${hook.eventId}@${hook.startTime ?? ''}:${status}`, MAX_NAME_CHARS),
+      event: `${part(eventId)}@${part(startTime)}:${status}`,
       status,
       title: clip(hook.title.replace(TITLE_PREFIX, '').trim() || monitor, MAX_TITLE_CHARS),
       facts: {
         title: clip(hook.title, MAX_TITLE_CHARS),
         body: hook.body ? clip(hook.body, MAX_TEXT_CHARS) : null,
         link: hook.link ? clip(hook.link, MAX_LINK_CHARS) : null,
-        alertId: hook.alertId ?? null,
-        eventId: hook.eventId,
-        window: { start: hook.startTime ?? null, end: hook.endTime ?? null },
+        alertId,
+        eventId,
+        window: { start: startTime, end: endTime },
       },
     },
   }
