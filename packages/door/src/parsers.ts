@@ -1,5 +1,6 @@
 import { cleanText } from '@software-factory/contract'
 import { z } from 'zod'
+import { redactUrls, withoutUserinfo } from './redact.ts'
 
 /** What every source's payload comes down to. The payload is data: nothing in it picks a repo, a role, a path or a command. */
 export interface Alert {
@@ -42,7 +43,10 @@ const field = (text: string | null | undefined): string | null => (text ? clip(t
 const part = (text: string | null | undefined): string => clip(text ?? '', MAX_PART_CHARS)
 
 /** A name as the factory keeps it, or the source's own name when nothing is left of it: an alert is never refused for its label. */
-const name = (text: string, max: number, fallback: string): string => clip(cleanText(text), max) || fallback
+const name = (text: string, max: number, fallback: string): string => clip(redactUrls(cleanText(text)), max) || fallback
+
+/** Free text as a fact: URLs redacted, then cut. */
+const prose = (text: string, max: number): string => clip(redactUrls(text), max)
 
 const clip = (text: string, max: number): string => (text.length > max ? `${cut(text, max - 1)}…` : text)
 
@@ -99,7 +103,7 @@ export const parseKuma: Parser = (payload) => {
         `${label} is ${status}`,
       ),
       facts: {
-        msg: msg ? clip(msg, MAX_TEXT_CHARS) : null,
+        msg: msg ? prose(msg, MAX_TEXT_CHARS) : null,
         monitor: {
           type: field(monitor.type),
           hostname: field(monitor.hostname),
@@ -108,7 +112,7 @@ export const parseKuma: Parser = (payload) => {
         heartbeat: {
           status: heartbeat.status,
           time,
-          msg: heartbeat.msg ? clip(heartbeat.msg, MAX_TEXT_CHARS) : null,
+          msg: heartbeat.msg ? prose(heartbeat.msg, MAX_TEXT_CHARS) : null,
           ping: heartbeat.ping ?? null,
           retries: heartbeat.retries ?? null,
         },
@@ -169,7 +173,8 @@ export const parseHyperdx: Parser = (payload) => {
   const hook = shape(HyperdxPayload, payload)
   if (hook.state !== 'ALERT' && hook.state !== 'OK') return { kind: 'ignore', reason: 'neither firing nor resolved' }
   const status = hook.state === 'ALERT' ? 'down' : 'up'
-  const monitor = hyperdxMonitor(hook.title) || 'hyperdx'
+  const title = redactUrls(hook.title)
+  const monitor = hyperdxMonitor(title) || 'hyperdx'
   const [eventId, startTime, endTime, alertId] = [hook.eventId, hook.startTime, hook.endTime, hook.alertId].map(field)
   return {
     kind: 'alert',
@@ -177,11 +182,12 @@ export const parseHyperdx: Parser = (payload) => {
       monitor,
       event: `${part(eventId)}@${part(startTime)}/${part(endTime)}:${status}`,
       status,
-      title: name(hook.title.replace(TITLE_PREFIX, ''), MAX_TITLE_CHARS, monitor),
+      title: name(title.replace(TITLE_PREFIX, ''), MAX_TITLE_CHARS, monitor),
       facts: {
-        title: clip(hook.title, MAX_TITLE_CHARS),
-        body: hook.body ? clip(hook.body, MAX_TEXT_CHARS) : null,
-        link: hook.link ? clip(hook.link, MAX_LINK_CHARS) : null,
+        title: clip(title, MAX_TITLE_CHARS),
+        body: hook.body ? prose(hook.body, MAX_TEXT_CHARS) : null,
+        // A deep link's query is the search the alert ran: it stays, the userinfo does not.
+        link: hook.link ? clip(withoutUserinfo(hook.link), MAX_LINK_CHARS) : null,
         alertId,
         eventId,
         window: { start: startTime, end: endTime },

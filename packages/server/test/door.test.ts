@@ -501,6 +501,31 @@ describe('the door in front of the server', () => {
     ])
   })
 
+  test('a credential in a URL of the message is in no table', async () => {
+    const msg = 'connect https://svc:s3cret-url-pw@db.example.com/x?password=s3cret-query-pw failed'
+    const base = (await fixture('kuma-down.json')) as { heartbeat: object }
+    const send = (extra: object) =>
+      door()(
+        new Request('http://localhost/alert/kuma', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ ...base, msg, heartbeat: { ...base.heartbeat, msg, ...extra } }),
+        }),
+      )
+    expect((await send({})).status).toBe(202)
+    await app.send('PUT', '/door/routes', { source: 'kuma', monitor: 'forecast-api', repo: TEST_REPO })
+    expect((await send({ time: 't2' })).status).toBe(201)
+    expect((await send({ time: 't3' })).status).toBe(200)
+    const everything = JSON.stringify([
+      await issues(),
+      await inbox(),
+      await rows('issue_events'),
+      await rows('door_unrouted'),
+    ])
+    expect(everything).toContain('db.example.com/x?[redacted]')
+    expect(everything).not.toContain('s3cret')
+  })
+
   test('a stopped factory is a 503 at the door', async () => {
     await hooks.stop(true)
     try {
