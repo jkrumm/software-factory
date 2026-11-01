@@ -1,5 +1,15 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { loadTokens, newToken, TokenExists, TokensError, tokensFileFrom } from '../src/tokens.ts'
 
@@ -78,6 +88,31 @@ describe('newToken', () => {
     const rotated = newToken(path, 'kuma', { rotate: true })
     expect(rotated).not.toBe(TOKEN)
     expect(loadTokens(path)).toEqual({ kuma: rotated })
+  })
+
+  test('a leftover temp file of another mode is not written into, and none is left behind', () => {
+    const path = join(dir, 'stale', 'door-tokens.json')
+    mkdirSync(join(dir, 'stale'))
+    const tmp = `${path}.${process.pid}.tmp`
+    writeFileSync(tmp, 'old secret', { mode: 0o644 })
+    chmodSync(tmp, 0o644)
+    const token = newToken(path, 'kuma')
+    expect(existsSync(tmp)).toBe(false)
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(readFileSync(path, 'utf8')).not.toContain('old secret')
+    expect(loadTokens(path)).toEqual({ kuma: token })
+  })
+
+  test.skipIf(process.getuid?.() === 0)('a directory it cannot write to fails without leaving a file', () => {
+    const locked = join(dir, 'locked')
+    mkdirSync(locked)
+    chmodSync(locked, 0o500)
+    try {
+      expect(() => newToken(join(locked, 'door-tokens.json'), 'kuma')).toThrow()
+      expect(readdirSync(locked)).toEqual([])
+    } finally {
+      chmodSync(locked, 0o700)
+    }
   })
 
   test('writes nothing over a file with loose mode, or a name that is no source', () => {
