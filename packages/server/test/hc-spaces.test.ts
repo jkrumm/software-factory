@@ -334,6 +334,17 @@ describe('seeding a new space in the app document', () => {
     ])
   })
 
+  test('a second space never takes a name another entry has', async () => {
+    await hc.setDoc('herdr-app', {
+      spaces: [
+        { id: 'sp1', folder: '/work/app', name: 'app', tabs: [] },
+        { id: 'sp3', folder: '/work/app', name: 'app 3', tabs: [] },
+      ],
+    })
+    const own = await start('a', '/work/app', { newSpace: true })
+    expect((await docSpaces()).find((s) => s.id === own.workspace)?.name).toBe('app 4')
+  })
+
   test('a conflict reads the document again and writes against the new version, keeping what was added meanwhile', async () => {
     await hc.setDoc('herdr-app', { spaces: [] })
     await hc.plan('doc.set:conflict')
