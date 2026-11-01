@@ -12,7 +12,8 @@ const ISSUES_PER_PASS = 20
  * oldest first and failed rows after the rest. The Issue's row is the lock, so one Issue has one worker. `FOR NO KEY UPDATE`, the
  * form of `FOR UPDATE` that leaves foreign keys alone: a session event copied in meanwhile only needs `KEY SHARE` on it, and must
  * not wait for this transaction. Each row has a savepoint: one that throws is undone alone, keeps its error and stays unhandled,
- * and the rows behind it, an owner's stop among them, still apply. Undefined when no Issue is left to take.
+ * and the rows behind it, an owner's stop among them, still apply; once the Issue has moved past it, it is refused as superseded.
+ * Undefined when no Issue is left to take.
  */
 async function takeIssue(
   sql: SQL,
@@ -33,7 +34,7 @@ async function takeIssue(
       FOR NO KEY UPDATE OF i SKIP LOCKED`
     if (!locked) return undefined
     const rows: InboxRow[] = await tx`
-      SELECT id, issue_id, key, kind, session, at, payload FROM factory.issue_inbox
+      SELECT id, issue_id, key, kind, session, at, payload, error FROM factory.issue_inbox
       WHERE issue_id = ${locked.id} AND handled_at IS NULL
       ORDER BY (error IS NOT NULL), at, id
       LIMIT ${ROWS_PER_ISSUE}
@@ -41,6 +42,13 @@ async function takeIssue(
     let issue = locked
     let failed = false
     for (const row of rows) {
+      // A retry must not act on an Issue that moved on without it: a failed `close` would end the next attempt.
+      if (row.error && row.at < issue.updated_at) {
+        await tx`
+          UPDATE factory.issue_inbox SET handled_at = ${now()}, result = 'refused', detail = ${`superseded: ${row.error}`}
+          WHERE id = ${row.id}`
+        continue
+      }
       try {
         issue = await tx.savepoint(async (point) => {
           const handled = await applyEvent(point, issue, row, now())

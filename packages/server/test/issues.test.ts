@@ -746,6 +746,28 @@ describe('the inbox', () => {
     expect((await state(good)).state).toBe('queued')
   })
 
+  test('a failed row the Issue has moved past is refused, not retried against a later attempt', async () => {
+    const id = await working()
+    await send(id, 'close')
+    clock.advance(1000)
+    await send(id, 'stop')
+    let calls = 0
+    const failingFirst = () => {
+      if (++calls === 1) throw new Error('a handler threw')
+      return clock.now()
+    }
+    expect(await processInbox(db.sql, failingFirst)).toHaveLength(1)
+    expect(await state(id)).toMatchObject({ state: 'closed', outcome: 'dropped' })
+
+    clock.advance(1000)
+    await send(id, 'reopen')
+    await send(id, 'admitted')
+    expect(await pass()).toEqual([])
+    expect(await state(id)).toMatchObject({ state: 'working', attempt: 2 })
+    const [failed] = await db.sql`SELECT result, detail FROM factory.issue_inbox WHERE kind = 'close'`
+    expect(failed).toEqual({ result: 'refused', detail: 'superseded: a handler threw' })
+  })
+
   test('a failed row that works next time loses its error', async () => {
     const id = await working()
     await send(id, 'phase')

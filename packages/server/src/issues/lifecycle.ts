@@ -27,6 +27,8 @@ export interface InboxRow {
   session: string | null
   at: Date
   payload: Record<string, unknown> | null
+  /** why handling it threw last time, if it did */
+  error: string | null
 }
 
 type Context = { tx: SQL; issue: IssueRow; row: InboxRow; now: Date }
