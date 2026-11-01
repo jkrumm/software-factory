@@ -1,8 +1,9 @@
 # factory door
 
 The one way an alert from the tailnet becomes a factory Issue. A Bun server of its own, one route: `POST /alert/<source>`.
-It holds no factory token and no database credential: it posts one line to the server's unix socket (`POST /intake`), so
-a compromised door can file Issues and nothing else. Design and rules: `docs/design.md` §11.
+It holds no factory token and no database credential: it posts one line to the server's unix socket (`POST /intake`). That
+socket is the hook's, a same-user boundary (SF11), so a compromised door has what any pane has: it can call the socket's other
+routes too (`POST /issues`, `POST /spawns`), but it has no token, no database access and no write to the queue. Design and rules: `docs/design.md` §11.
 
 ```
 Kuma / HyperDX ──TLS──▶ tailscale serve ──▶ 127.0.0.1:8796 (the door) ──unix socket──▶ the server (POST /intake)

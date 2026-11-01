@@ -543,7 +543,8 @@ export function serveHooks(deps: {
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
-      // The door's: a process that holds no token and no database credential, and can file Issues and nothing else.
+      // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
+      // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
