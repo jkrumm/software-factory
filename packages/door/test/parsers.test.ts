@@ -81,6 +81,33 @@ describe('text cut at a limit', () => {
   })
 })
 
+describe('short fields', () => {
+  const long = 'z'.repeat(9000)
+
+  test('a Kuma type, host, port and time of 9 KB are cut, and the facts stay small', async () => {
+    const base = (await fixture('kuma-down.json')) as { heartbeat: object; monitor: object }
+    const alert = alertOf(
+      parseKuma({
+        ...base,
+        monitor: { ...base.monitor, type: long, hostname: long, port: long },
+        heartbeat: { ...base.heartbeat, time: long },
+      }),
+    )
+    expect(Buffer.byteLength(JSON.stringify(alert.facts))).toBeLessThan(6000)
+    expect(alert.event.length).toBeLessThanOrEqual(128)
+    expect(alert.facts).toMatchObject({ monitor: { type: expect.stringMatching(/^z+…$/) } })
+  })
+
+  test('a HyperDX id and window of 9 KB are cut too, and the event still ends in its status', async () => {
+    const base = (await fixture('hyperdx-alert.json')) as object
+    const alert = alertOf(
+      parseHyperdx({ ...base, eventId: long, alertId: long, startTime: long, endTime: long, link: long }),
+    )
+    expect(Buffer.byteLength(JSON.stringify(alert.facts))).toBeLessThan(6000)
+    expect(alert.event.endsWith(':down')).toBe(true)
+  })
+})
+
 describe('hyperdx', () => {
   test('a firing alert: the monitor is the alert name, not its value', async () => {
     const alert = alertOf(parseHyperdx(await fixture('hyperdx-alert.json')))
