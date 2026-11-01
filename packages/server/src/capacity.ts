@@ -104,13 +104,6 @@ export async function recordReadings(sql: SQL, readings: readonly NamedQuota[], 
            weekly_resets_at, exhausted_until)
         VALUES (${r.account}, ${now}, ${sampledAt}, ${r.enabled}, ${r.authOk}, ${r.fiveHourUsed}, ${r.weeklyUsed},
                 ${r.fiveHourResetsAt}, ${r.weeklyResetsAt}, ${r.exhaustedUntil})`
-      // For one release the previous server's table is still fed, so a rollback finds live readings, not frozen ones.
-      const resetsAt = r.fiveHourResetsAt ?? r.weeklyResetsAt
-      if (r.fiveHourUsed !== null && r.weeklyUsed !== null && resetsAt) {
-        await tx`
-          INSERT INTO factory.capacity_readings (account, weekly_used, five_hour_used, resets_at)
-          VALUES (${r.account}, ${r.weeklyUsed}, ${r.fiveHourUsed}, ${resetsAt})`
-      }
     }
     await pruneReadings(tx, now)
     const latest = await latestReadings(tx)
@@ -123,8 +116,6 @@ async function pruneReadings(tx: SQL, now: Date): Promise<void> {
   await tx`
     DELETE FROM factory.quota_readings
     WHERE read_at < ${before} AND id NOT IN (SELECT max(id) FROM factory.quota_readings GROUP BY account)`
-  // The previous release's table has no clock: it keeps the newest hundred thousand rows.
-  await tx`DELETE FROM factory.capacity_readings WHERE id < (SELECT max(id) FROM factory.capacity_readings) - 100000`
 }
 
 /** Test and ops convenience: one reading of one account. */

@@ -49,8 +49,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   id with a terminal in it, a hidden child. The result names the terminal, the tab and
   the space (`spawns.session|tab|workspace`; `Spawn.pane` is `session`). A try that fails reports its space
   (`RunnerError.workspace`), the tick records it, and a retry or a runner-restart resume passes it back as `StartInput.workspace`:
-  it wins when it is an id the Runner made (`sp…`) or a live terminal is in it. The previous release ignores `space`, `new_space`
-  and the recorded space: drain the queue before rolling back.
+  it wins when it is an id the Runner made (`sp…`) or a live terminal is in it.
 - **The runner looks before it acts.** `HcRunner` (`hc-runner.ts`, herdr-core 0.1.15 over `hc connect`; `HcClient` in `hc.ts` is one
   short-lived process per JSON-RPC call: `hello`, the request, stdin closed, the reply read by id, each under the process timeout
   and the start budget, `childEnv()` stripping the factory's secrets; `HC_BIN`, and `HC_SESSION` for tests, pick the binary and the
@@ -100,7 +99,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
   identity; a same-user pane can already drive any terminal through hc, so this adds no capability, and it is a known and accepted
   cross-session path); an event of
-  kind `runner_restarted` (or the old `herdr_restarted`) or `pane_gone`, or filed under `_runner` (or `_herdr`), is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
+  kind `runner_restarted` or `pane_gone`, or filed under `_runner`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
   the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
   stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
   session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account` (only if it is a name in the registry's alphabet, checked in the hook and again by the server), which is how
@@ -193,16 +192,14 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   spawn that fails for good without a pane or event takes its row with it), an `rd` name when its first event arrives. `session_started` binds
   Claude's session id, transcript path and cwd (the join key with `usage`); an older start delivered late does not
   overwrite a newer binding. The hook also reports what the pane knows of itself: `FACTORY_ROLE` (the role; a spawn's own
-  role wins) and its terminal (`HC_TERMINAL_ID` as `pane`, with no tab; `HERDR_PANE_ID` and `HERDR_TAB_ID` while an `rd` session is
-  still in a classic pane), so `session get` answers `pane` for an `rd` session too (nothing in the factory reads `tab`).
+  role wins) and its terminal (`HC_TERMINAL_ID` as `pane`, with no tab), so `session get` answers `pane` for an `rd` session too (nothing in the factory reads `tab`).
 - **The witness** (`witness.ts`, `hc-events.ts`) follows herdr-core's event stream: one long-lived `hc connect` (`events.subscribe`)
   keeps a map of every terminal (the snapshot, then `created`/`restarted`/`status`/`turn`/`foreground`/`labels`/`lost`/`finished`/
   `removed`; `missed` replaces the map; a line that is not JSON is dropped and the map read again). The stream ending (a core
   restart, a dead `hc`, 45 s without a heartbeat) reconnects with a wait that doubles to 30 s and reads `server.status`: a changed
   `pid@core id` asks for a pass. While the stream is down `agents()` asks `terminal.list` directly, and a core that does not
   answer records nothing. A pass runs every minute, on a debounced `lost`/`finished`/`removed`/`restarted` event of a known
-  session's terminal, and on a restart; a `status`/`turn` event stores the agent's status at once (`agent_status`, and
-  `herdr_status` too for one release: a rollback reads those). A pass records each session's agent status, the worktree's last
+  session's terminal, and on a restart; a `status`/`turn` event stores the agent's status at once (`agent_status`). A pass records each session's agent status, the worktree's last
   change (`git log` + `git status` with `GIT_OPTIONAL_LOCKS=0`, only for an agent that is working), and the server
   (`pid@core id` from `server.status`): a change is the event `runner_restarted` (pseudo-session `_runner`); a stored identity in the
   old format (`pid@start time`) is replaced without one. A session is matched to a terminal by its `factory.key` label, Claude session
@@ -211,18 +208,13 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   gets `pane_gone` (= `dead`, key per disappearance); a pass in which the runner restarted or could not be identified counts nobody
   as missing, and an agent that returns revives the session. Git runs without the server's secrets, `core.fsmonitor` or hooks (the
   agent controls `.git/config`), four probes at a time. `GET /sessions` answers with the newest 200.
-  Migration 010 renamed the vocabulary (`herdr_restarted` → `runner_restarted`, `_herdr` → `_runner`, `herdr_status|seen_at` →
-  `agent_status|seen_at`, `herdrStatus` → `agentStatus` in the contract, which has no version constant): the old kind and columns
-  stay for one release so a rollback starts, and `Session` emits both `agentStatus|agentSeenAt` and the deprecated
-  `herdrStatus|herdrSeenAt` (argo and agw follow in dotfiles Wave 4); drop them, and this sentence, in the release after.
 - **Panes are clients (SF11).** `POST /spawns` on the socket takes the HTTP route's body, validation (400), role check (422) and
   `FACTORY_REPO_ROOTS` check for `repo` and `space` (422, nothing stored), and is idempotent by key (a second create answers the
   stored spawn, 200) **while the key is live**. A `started` spawn whose agent is gone reads as `ended` in every view
   (`spawn list|get`, the create's answer; nothing stores it): its session is `dead`, or its pane is no terminal of the
   current core (a classic-herdr pane, or none). A create under an ended spawn's key answers **409** `{error, code:
   "key_spent", spawn}` and never revives the row; the CLI exits 5 (`conflict`) with `code` and `details.spawn` on the error
-  line, and `rd` derives the next key (`<key>-r2`, …). `factory status` lists neither `started` nor `ended` spawns. An
-  older `rd` treats the 409 as a structured error and falls back to bare hc: roll `rd` out before the server. The server and the CLI release together: an older CLI does not parse `ended` (exit 9). The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
+  line, and `rd` derives the next key (`<key>-r2`, …). `factory status` lists neither `started` nor `ended` spawns. The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
   uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
   socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
   repo roots still bound where it can start, and a same-user pane can already start Claude Code through hc).
@@ -247,9 +239,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   A reading not renewed for 10 minutes is stale and admits nothing (a stopped poller, an account that left the registry); the
   age of the picker's own sample is not judged, only stored. A window the picker has no number for counts as unused (as the
   picker weighs it); both without, or no sample time, is no sample and the account is closed. Rows older than a week are
-  deleted, the newest of each account kept. `capacity_readings` (the previous release's table) is still fed for one release so a
-  rollback finds live readings; drop it, and this sentence, in the release after. A rollback to the Wave 2 release is not
-  fail-safe otherwise: it knows no holds, roles or per-sample loads, so drain by waiting for the queue to empty first.
+  deleted, the newest of each account kept.
 - **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
   1. queue state `drain`: hold. 2. role `wave` while another live session (derived state not `dead`) of a `wave` spawn
   has the same repo: hold `wave`, except a session that has finished (`idle` after a turn that ended since its last `session_started`, or resumed (`source: resume`) with no
@@ -291,8 +281,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   The `factory` role owns the schema in the database `shared` (`vps: make db-shared`), holds no CREATE on the database
   and has 10 connections; `launch.sh` builds `DATABASE_URL` from its password (`.env.tpl` refs through `secrets-run`),
   never from a tracked file.
-  Migrations are additive for one release (expand, then contract): a rollback starts the previous release on the
-  migrated schema.
+  Migrations are expand, then contract.
 - **The API is authenticated.** Every route but `GET /health` needs `Authorization: Bearer <FACTORY_TOKEN>`; a body
   needs `application/json` (415), at most 64 KiB (413), and the Host must be loopback (421). The CLI reads the token
   from `FACTORY_TOKEN`; run it under `secrets-run run --env-file=.env.tpl -- factory ...`.

@@ -207,30 +207,29 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
   const event = (kind: string, payload: Record<string, unknown>) =>
     viaSocket('POST', '/events', { key: `rd:${kind}`, session: 'rd-1', kind, at: '2026-10-30T12:00:00.000Z', payload })
 
-  test('session_started records the role, the pane and the tab', async () => {
+  test('session_started records the role and the pane', async () => {
     await event('session_started', {
       claudeSessionId: 'c1',
       cwd: TEST_REPO,
       role: 'wave',
-      pane: 'w7:p3',
-      tab: 'w7:t3',
+      pane: 't3',
     })
     const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())
-    expect(session).toMatchObject({ role: 'wave', pane: 'w7:p3', tab: 'w7:t3', spawn: null })
+    expect(session).toMatchObject({ role: 'wave', pane: 't3', tab: null, spawn: null })
   })
 
   test('a name rd reuses in a new pane is the new pane; a spawn keeps the pane its Runner made', async () => {
-    await event('session_started', { claudeSessionId: 'c1', pane: 'w7:p3', tab: 'w7:t3' })
+    await event('session_started', { claudeSessionId: 'c1', pane: 't3' })
     await viaSocket('POST', '/events', {
       key: 'rd:again',
       session: 'rd-1',
       kind: 'session_started',
       at: '2026-10-30T13:00:00.000Z',
-      payload: { claudeSessionId: 'c2', pane: 'w9:p1', tab: 'w9:t1' },
+      payload: { claudeSessionId: 'c2', pane: 't9' },
     })
     expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json())).toMatchObject({
-      pane: 'w9:p1',
-      tab: 'w9:t1',
+      pane: 't9',
+      tab: null,
     })
 
     await viaSocket('POST', '/spawns', { key: 'sp', repo: TEST_REPO, prompt: 'go' })
@@ -241,7 +240,7 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
       session: 'sp',
       kind: 'session_started',
       at: '2026-10-30T13:00:00.000Z',
-      payload: { claudeSessionId: 'c3', pane: 'w9:p9', tab: 'w9:t9' },
+      payload: { claudeSessionId: 'c3', pane: 't99' },
     })
     expect(Session.parse(await (await viaSocket('GET', '/sessions/sp')).json())).toMatchObject({
       pane: own.pane,
@@ -254,7 +253,7 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     expect(Session.parse(await (await viaSocket('GET', '/sessions/rd-1')).json()).role).toBeNull()
   })
 
-  test('the hook binary reports FACTORY_ROLE and HC_TERMINAL_ID (HERDR_PANE_ID for a classic pane) at session-start, and no tab for a terminal of the core', async () => {
+  test('the hook binary reports FACTORY_ROLE and HC_TERMINAL_ID at session-start', async () => {
     const spool = mkdtempSync('/tmp/factory-spool-')
     const proc = Bun.spawn(['bun', CLI, 'hook', 'session-start'], {
       env: {
@@ -262,8 +261,6 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
         FACTORY_SESSION: 'rd-2',
         FACTORY_ROLE: 'lead',
         HC_TERMINAL_ID: 't8',
-        HERDR_PANE_ID: 'w8:p1',
-        HERDR_TAB_ID: 'w8:t1',
         FACTORY_SOCKET: socket,
         FACTORY_SPOOL_DIR: spool,
       },
@@ -276,30 +273,6 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
     rmSync(spool, { recursive: true, force: true })
     const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-2')).json())
     expect(session).toMatchObject({ role: 'lead', pane: 't8', tab: null })
-  })
-
-  test('a session still in a classic pane reports that pane and its tab', async () => {
-    const spool = mkdtempSync('/tmp/factory-spool-')
-    // Run inside an hc terminal, the test's own HC_TERMINAL_ID would win over the classic pane it fakes.
-    const { HC_TERMINAL_ID: _own, ...outside } = process.env
-    const proc = Bun.spawn(['bun', CLI, 'hook', 'session-start'], {
-      env: {
-        ...outside,
-        FACTORY_SESSION: 'rd-3',
-        HERDR_PANE_ID: 'w8:p2',
-        HERDR_TAB_ID: 'w8:t2',
-        FACTORY_SOCKET: socket,
-        FACTORY_SPOOL_DIR: spool,
-      },
-      stdin: new Blob([JSON.stringify({ session_id: 'c3', cwd: TEST_REPO })]),
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    expect(await proc.stdout.text()).toBe('')
-    expect(await proc.exited).toBe(0)
-    rmSync(spool, { recursive: true, force: true })
-    const session = Session.parse(await (await viaSocket('GET', '/sessions/rd-3')).json())
-    expect(session).toMatchObject({ pane: 'w8:p2', tab: 'w8:t2' })
   })
 })
 

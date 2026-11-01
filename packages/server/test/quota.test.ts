@@ -262,17 +262,6 @@ describe('the poller', () => {
     expect(slow.reads).toBe(2)
   })
 
-  test("the previous release's table is fed too, with the readings it can hold", async () => {
-    const resets = new Date(clock.now().getTime() + 3_600_000)
-    source.readings = [
-      { account: 'a', ...usage(10, 20, resets) },
-      { account: 'b', ...usage(null, null, resets) },
-    ]
-    await new QuotaPoller({ sql: db.sql, source, clock }).poll()
-    const rows = await db.sql`SELECT account, weekly_used, five_hour_used FROM factory.capacity_readings`
-    expect(rows).toEqual([{ account: 'a', weekly_used: 10, five_hour_used: 20 }])
-  })
-
   test('a tick whose poll fails reports it in its errors and still starts what has capacity', async () => {
     source.failure = new QuotaError('picker down')
     const runner = new HcRunner({

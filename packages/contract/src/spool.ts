@@ -14,7 +14,6 @@ export const EVENT_KINDS = [
   'session_ended',
   'wait_declared',
   'wait_cleared',
-  'herdr_restarted',
   'runner_restarted',
   'pane_gone',
 ] as const

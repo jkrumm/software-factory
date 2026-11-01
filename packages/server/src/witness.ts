@@ -191,8 +191,7 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
     if (agent) {
       await sql`
         UPDATE factory.sessions
-        SET pane = ${agent.paneId}, agent_status = ${agent.status}, agent_seen_at = ${now},
-            herdr_status = ${agent.status}, herdr_seen_at = ${now}, pane_misses = 0
+        SET pane = ${agent.paneId}, agent_status = ${agent.status}, agent_seen_at = ${now}, pane_misses = 0
         WHERE id = ${row.id}`
       const dir = row.cwd ?? agent.cwd
       if (agent.status === 'working' && dir) {
@@ -204,14 +203,14 @@ export async function witness(deps: WitnessDeps): Promise<WitnessResult> {
       continue
     }
     // Nothing to conclude from a runner that could not be identified, or one that has just restarted, or from a pane
-    // that is not a terminal of this core (an `rd` session still in a classic pane): the witness cannot see it.
+    // that is not a terminal of this core (a spawn from before herdr-core): the witness cannot see it.
     const stillGone =
       row.life === 'pane_gone' &&
       row.life_at !== null &&
       !paneGoneWithdrawn({ goneAt: row.life_at, hookAfter: row.hook_after, agentSeenAt: row.agent_seen_at })
     if (!row.pane || !TERMINAL_ADDRESS.test(row.pane) || restarted || !server || stillGone) continue
     const misses = row.pane_misses + 1
-    await sql`UPDATE factory.sessions SET pane_misses = ${misses}, agent_status = NULL, herdr_status = NULL WHERE id = ${row.id}`
+    await sql`UPDATE factory.sessions SET pane_misses = ${misses}, agent_status = NULL WHERE id = ${row.id}`
     if (misses < MISSES_FOR_GONE) continue
     // One key per disappearance: a pane that came back and went again is a second event, not a replay of the first.
     const [{ starts, gones }] = await sql`
@@ -292,7 +291,7 @@ export function startWitness(
     const now = deps.clock.now()
     await deps.sql`
       UPDATE factory.sessions
-      SET agent_status = ${agent.status}, agent_seen_at = ${now}, herdr_status = ${agent.status}, herdr_seen_at = ${now}
+      SET agent_status = ${agent.status}, agent_seen_at = ${now}
       WHERE ${agent.factoryKey === undefined ? deps.sql`pane = ${agent.paneId}` : deps.sql`id = ${agent.factoryKey}`}`
   }
   const unwatch = deps.runner.watch?.((change) => {
