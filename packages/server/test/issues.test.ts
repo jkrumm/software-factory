@@ -493,6 +493,16 @@ describe('golden paths: transitions and effects', () => {
     expect((await trail(id)).at(-1)).toBe('refused')
   })
 
+  test('a late wake of an earlier wait does not end a later one', async () => {
+    const id = await working()
+    const until = new Date(clock.now().getTime() + 3_600_000).toISOString()
+    await step(id, 'wait', { until })
+    await step(id, 'wake', { for: 'wait', wait: 0 })
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    await step(id, 'wake', { for: 'wait', wait: 1 })
+    expect((await state(id)).state).toBe('working')
+  })
+
   test('a wake is checked against what is open now: a new blocker keeps it waiting', async () => {
     const blocker = await working()
     const id = await working()

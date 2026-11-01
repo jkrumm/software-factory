@@ -133,6 +133,7 @@ async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefin
 /** A wake answers the wait it was filed for, and a dependency's only once no dependency is left: a close removes its rows. */
 async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefined> {
   if (row.payload?.for !== issue.reason) return `this wake is not for a ${issue.reason} wait`
+  if (issue.reason === 'wait' && row.payload.wait !== issue.waits) return 'this wake is for an earlier wait'
   if (issue.reason !== 'dependency') return undefined
   const [open] = await tx`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${issue.id} LIMIT 1`
   return open ? 'an Issue it depends on is open' : undefined
@@ -449,7 +450,13 @@ export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<numbe
         await enqueue(tx, { issueId: issue.id, key, kind: 'hold_over', at: now, payload: { hold: issue.hold } })
       } else if (issue.state === 'waiting') {
         const key = `wake:${issue.id}:${issue.waits}`
-        await enqueue(tx, { issueId: issue.id, key, kind: 'wake', at: now, payload: { for: 'wait' } })
+        await enqueue(tx, {
+          issueId: issue.id,
+          key,
+          kind: 'wake',
+          at: now,
+          payload: { for: 'wait', wait: issue.waits },
+        })
       }
       await tx`UPDATE factory.issues SET wake_at = NULL WHERE id = ${issue.id}`
     }
