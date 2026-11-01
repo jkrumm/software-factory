@@ -280,9 +280,11 @@ describe('FACTORY_ROLE and the pane: a session no spawn describes reports its ow
 
   test('a session still in a classic pane reports that pane and its tab', async () => {
     const spool = mkdtempSync('/tmp/factory-spool-')
+    // Run inside an hc terminal, the test's own HC_TERMINAL_ID would win over the classic pane it fakes.
+    const { HC_TERMINAL_ID: _own, ...outside } = process.env
     const proc = Bun.spawn(['bun', CLI, 'hook', 'session-start'], {
       env: {
-        ...process.env,
+        ...outside,
         FACTORY_SESSION: 'rd-3',
         HERDR_PANE_ID: 'w8:p2',
         HERDR_TAB_ID: 'w8:t2',
