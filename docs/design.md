@@ -565,7 +565,7 @@ stateDiagram-v2
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`). A stopped Issue
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`). A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
 is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the

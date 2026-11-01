@@ -337,6 +337,17 @@ describe('golden paths: transitions and effects', () => {
     expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(2)
   })
 
+  test.each([
+    ['no until', {}],
+    ['an until that is no string', { until: 1_800_000_000_000 }],
+    ['an empty until', { until: '' }],
+  ])('a wait with %s is refused: it would have no way out', async (_, payload) => {
+    const id = await working()
+    await step(id, 'wait', payload)
+    expect(await state(id)).toMatchObject({ state: 'working', wakeAt: null })
+    expect((await inbox(id)).at(-1)?.result).toBe('refused')
+  })
+
   test('a dependency: waits until everything it depends on is closed', async () => {
     const blocker = await working()
     const other = await working()
