@@ -15,6 +15,7 @@ export interface IssueRow {
   class: string | null
   parent: number | null
   attempt: number
+  hold: number
   wake_at: Date | null
   created_at: Date
   updated_at: Date

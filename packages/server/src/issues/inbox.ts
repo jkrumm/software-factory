@@ -7,13 +7,15 @@ export interface InboxEvent {
   kind: string
   at: Date
   payload?: Record<string, unknown>
+  /** the session a copied session event came from */
+  session?: string
 }
 
 /** Files one event for an Issue; a repeated key changes nothing. Takes a transaction, or the pool. */
 export async function enqueue(sql: SQL, event: InboxEvent): Promise<{ duplicate: boolean }> {
   const rows = await sql`
-    INSERT INTO factory.issue_inbox (issue_id, key, kind, at, payload)
-    VALUES (${event.issueId}, ${event.key}, ${event.kind}, ${event.at}, ${event.payload ?? null})
+    INSERT INTO factory.issue_inbox (issue_id, key, kind, session, at, payload)
+    VALUES (${event.issueId}, ${event.key}, ${event.kind}, ${event.session ?? null}, ${event.at}, ${event.payload ?? null})
     ON CONFLICT (key) DO NOTHING
     RETURNING id`
   return { duplicate: rows.length === 0 }

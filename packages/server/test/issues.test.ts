@@ -167,7 +167,7 @@ describe('golden paths: transitions and effects', () => {
     expect((await state(id)).state).toBe('watching')
     expect((await state(id)).wakeAt).toBeNull()
 
-    await step(id, 'verified', undefined, world.ports)
+    await step(id, 'verified', { hold: 1 }, world.ports)
     const closed = await state(id)
     expect(closed).toMatchObject({ state: 'closed', outcome: 'done', reason: null })
     expect(closed.closedAt).toBe(clock.now().toISOString())
@@ -337,12 +337,95 @@ describe('golden paths: transitions and effects', () => {
     expect((await state(id)).state).toBe('working')
   })
 
-  test('a dep on an unknown Issue, or on itself, is refused', async () => {
+  test('a dep on an unknown Issue, on itself or on a closed one is refused: nothing would wake it', async () => {
+    const closed = await working()
+    await step(closed, 'close')
     const id = await working()
     await step(id, 'dep', { on: 999 })
     await step(id, 'dep', { on: id })
+    await step(id, 'dep', { on: closed })
     expect((await state(id)).state).toBe('working')
-    expect((await inbox(id)).slice(-2).map((r) => r.result)).toEqual(['refused', 'refused'])
+    expect((await inbox(id)).slice(-3).map((r) => r.result)).toEqual(['refused', 'refused', 'refused'])
+  })
+
+  test('a blocker that reopens and closes again wakes its dependent a second time', async () => {
+    const blocker = await working()
+    const id = await working()
+    await step(id, 'dep', { on: blocker })
+    await step(blocker, 'close')
+    await pass()
+    expect((await state(id)).state).toBe('working')
+
+    await step(blocker, 'reopen')
+    await step(blocker, 'admitted')
+    await step(id, 'dep', { on: blocker })
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'dependency' })
+    clock.advance(1000)
+    await step(blocker, 'close')
+    await pass()
+    expect((await state(id)).state).toBe('working')
+  })
+
+  test('a late wake ends only the wait it was filed for', async () => {
+    const id = await working()
+    await step(id, 'ask', { question: 'which?' })
+    await step(id, 'wake', { for: 'wait' })
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'decision' })
+    expect((await trail(id)).at(-1)).toBe('refused')
+  })
+
+  test('a wake is checked against what is open now: a new blocker keeps it waiting', async () => {
+    const blocker = await working()
+    const id = await working()
+    await step(id, 'dep', { on: blocker })
+    await step(id, 'wake', { for: 'dependency' })
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'dependency' })
+  })
+
+  test('the end of an earlier hold and its proof count for nothing in a later one', async () => {
+    const id = await working()
+    await step(id, 'ship')
+    await step(id, 'regression')
+    await step(id, 'ship')
+    await step(id, 'hold_over', { hold: 1 })
+    await step(id, 'verified', { hold: 1 })
+    expect((await state(id)).state).toBe('watching')
+    expect(await effects(id)).toEqual(['start_lead', 'note_lead'])
+    await step(id, 'verified', { hold: 2 })
+    expect((await state(id)).state).toBe('closed')
+  })
+
+  test('a wall older than the last move, or than a turn seen since, parks nothing', async () => {
+    const id = await working()
+    const wall = (at: Date, key: string) => enqueue(db.sql, { issueId: id, key, kind: 'limit_stop', at, session: 's1' })
+    clock.advance(60_000)
+    await wall(new Date(clock.now().getTime() - 120_000), 'old')
+    await pass()
+    expect((await state(id)).state).toBe('working')
+
+    const before = clock.now()
+    clock.advance(1000)
+    await enqueue(db.sql, { issueId: id, key: 'turn', kind: 'turn_started', at: clock.now(), session: 's1' })
+    await pass()
+    await wall(before, 'late')
+    await pass()
+    expect((await state(id)).state).toBe('working')
+    expect((await inbox(id)).map((r) => r.result)).toEqual(['applied', 'refused', 'ignored', 'refused'])
+  })
+
+  test('a stop closes an open question: answering a later one leaves it alone', async () => {
+    const id = await working()
+    await step(id, 'ask', { question: 'first?' })
+    await step(id, 'stop')
+    await step(id, 'reopen')
+    await step(id, 'admitted')
+    await step(id, 'ask', { question: 'second?' })
+    await step(id, 'answer', { answer: 'yes' })
+    const rows = await db.sql`SELECT question, answer, answered_by FROM factory.decisions ORDER BY id`
+    expect(rows).toEqual([
+      { question: 'first?', answer: null, answered_by: 'closed' },
+      { question: 'second?', answer: 'yes', answered_by: 'owner' },
+    ])
   })
 
   test('reopen within 30 days queues it for a new attempt; past them it is refused', async () => {
@@ -464,17 +547,54 @@ describe('the inbox', () => {
     const bad = await working()
     const good = await working()
     await send(bad, 'phase')
-    await send(bad, 'ask', { question: 'q', expiresAt: 'not a time' })
+    await send(bad, 'close')
     await send(good, 'close')
-    const errors = await processInbox(db.sql, now)
+    let calls = 0
+    const failingOnce = () => {
+      // The second event of the first Issue taken.
+      if (++calls === 3) throw new Error('a handler threw')
+      return clock.now()
+    }
+    const errors = await processInbox(db.sql, failingOnce)
     expect(errors).toHaveLength(1)
-    expect(errors[0]).toStartWith(`issue ${bad}:`)
+    expect(errors[0]).toBe(`issue ${bad}: a handler threw`)
     expect((await state(good)).state).toBe('closed')
     expect((await state(bad)).state).toBe('working')
     const rows =
       await db.sql`SELECT kind, error, handled_at FROM factory.issue_inbox WHERE issue_id = ${bad} AND handled_at IS NULL ORDER BY id`
-    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['phase', 'ask'])
-    expect(rows[0].error).toBeString()
+    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['phase', 'close'])
+    expect(rows[0].error).toBe('a handler threw')
+    // It comes back on the next pass, and the row loses its error once handled.
+    expect(await processInbox(db.sql, now)).toEqual([])
+    expect((await state(bad)).state).toBe('closed')
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE error IS NOT NULL`).toHaveLength(0)
+  })
+
+  test('Issues that keep failing do not fill a pass: the others go first', async () => {
+    const failing: number[] = []
+    for (let i = 0; i < 25; i++) {
+      const id = await working()
+      failing.push(id)
+      await send(id, 'phase')
+      await db.sql`UPDATE factory.issue_inbox SET error = 'it failed before' WHERE issue_id = ${id} AND handled_at IS NULL`
+    }
+    const healthy = await working()
+    await send(healthy, 'close')
+    await processInbox(db.sql, now)
+    expect((await state(healthy)).state).toBe('closed')
+  })
+
+  test.each([
+    ['an ask with a bad expiry', 'ask', { question: 'q', expiresAt: 'not a time' }],
+    ['a wait with a bad time', 'wait', { until: 'not a time' }],
+    ['a dep on an id past the column', 'dep', { on: 99_999_999_999 }],
+  ])('%s is refused, and does not hold up what follows', async (_, kind, payload) => {
+    const id = await working()
+    await send(id, kind, payload)
+    await send(id, 'stop')
+    expect(await pass()).toEqual([])
+    expect((await inbox(id)).slice(-2).map((r) => r.result)).toEqual(['refused', 'applied'])
+    expect((await state(id)).state).toBe('closed')
   })
 
   test('timers fire once, and a timer of an Issue that moved on fires nothing', async () => {
@@ -490,6 +610,39 @@ describe('the inbox', () => {
 })
 
 describe('effects', () => {
+  test('an effect never overtakes an earlier one that has no port yet', async () => {
+    const { id } = await file()
+    await send(id, 'admitted')
+    await send(id, 'stop')
+    await processInbox(db.sql, now)
+    const calls: string[] = []
+    await runEffects(db.sql, { finalize: async (effect) => void calls.push(effect.key) }, now)
+    expect(calls).toEqual([])
+  })
+
+  test('an Issue whose port keeps failing leaves room for the others', async () => {
+    const failing: number[] = []
+    for (let i = 0; i < 25; i++) failing.push((await file()).id)
+    for (const id of failing) await send(id, 'admitted')
+    await processInbox(db.sql, now)
+    const healthy = (await file()).id
+    await send(healthy, 'admitted')
+    await processInbox(db.sql, now)
+    await db.sql`UPDATE factory.issue_effects SET attempts = 3 WHERE issue_id <> ${healthy}`
+    const done: number[] = []
+    await runEffects(
+      db.sql,
+      {
+        start_lead: async (effect) => {
+          if (effect.issueId !== healthy) throw new Error('down')
+          done.push(effect.issueId)
+        },
+      },
+      now,
+    )
+    expect(done).toEqual([healthy])
+  })
+
   test('an effect with no port yet stays recorded and runs when one comes', async () => {
     const id = await working()
     expect(await effects(id)).toEqual(['start_lead'])
@@ -542,7 +695,7 @@ describe('the replay test: a crash after every effect', () => {
     { send: 'signal', payload: { regression: true } },
     { send: 'ship' },
     { advance: DEFAULT_HOLD_MS },
-    { send: 'verified' },
+    { send: 'verified', payload: { hold: 2 } },
   ]
 
   class Crash extends Error {}

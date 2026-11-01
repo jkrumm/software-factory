@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { Issue, IssueList, MAX_FACTS_BYTES } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
+import { createIssue } from '../src/issues/lifecycle.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -12,6 +13,12 @@ const IU_REPO = join(TEST_ROOT, 'IuRoot', 'work')
 const LINK_TO_IU = join(TEST_ROOT, 'looks-fine')
 mkdirSync(IU_REPO, { recursive: true })
 symlinkSync(IU_REPO, LINK_TO_IU)
+// An IuRoot that is itself a link: the real path says nothing of it, the configured root does.
+const NEUTRAL = join(TEST_ROOT, 'neutral')
+mkdirSync(join(NEUTRAL, 'work'), { recursive: true })
+const LINKED_ROOT = join(TEST_ROOT, 'IuRoot-link', 'IuRoot')
+mkdirSync(join(TEST_ROOT, 'IuRoot-link'))
+symlinkSync(NEUTRAL, LINKED_ROOT)
 
 let db: TestDb
 let app: TestApp
@@ -112,6 +119,13 @@ describe('POST /issues', () => {
     expect((await post({ source: 'alert', repo: LINK_TO_IU })).status).toBe(422)
     expect(await stored()).toBe(0)
     expect((await post({ repo: IU_REPO })).status).toBe(201)
+  })
+
+  test('an IuRoot root that is a link counts by its configured name', async () => {
+    const alert = { source: 'alert', sourceKey: 'a', repo: join(LINKED_ROOT, 'work'), title: 't', facts: {} }
+    const refused = await createIssue(db.sql, alert, { repoRoots: [LINKED_ROOT], now: clock.now() }).catch(String)
+    expect(refused).toContain('IuRoot')
+    expect(await stored()).toBe(0)
   })
 
   test('a body cannot name a state, an unknown source, or too many facts', async () => {

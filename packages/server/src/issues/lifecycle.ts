@@ -1,4 +1,5 @@
 import type { Issue, IssueOutcome, IssueState, WaitReason } from '@software-factory/contract'
+import { realpath } from 'node:fs/promises'
 import type { SQL } from 'bun'
 import { RepoRefused, resolveRepo } from '../repos.ts'
 import type { EffectKind } from './effects.ts'
@@ -36,7 +37,7 @@ interface Step {
   only?: WaitReason
   /** a new lead: the next attempt */
   newAttempt?: true
-  /** starts the hold */
+  /** starts a new hold */
   hold?: true
   effects?: EffectKind[]
   /** a refusal the table cannot express */
@@ -50,14 +51,20 @@ const text = (payload: InboxRow['payload'], name: string): string | null => {
   return typeof value === 'string' && value ? value : null
 }
 
+const badTime = (payload: InboxRow['payload'], name: string): boolean => {
+  const value = text(payload, name)
+  return value !== null && Number.isNaN(Date.parse(value))
+}
+
 async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
   const question = text(row.payload, 'question')
   if (!question) return 'an ask needs a question'
+  if (badTime(row.payload, 'expiresAt')) return 'expiresAt is not a time'
   const options = Array.isArray(row.payload?.options) ? JSON.stringify(row.payload.options) : null
-  const expires = text(row.payload, 'expiresAt')
   await tx`
     INSERT INTO factory.decisions (issue_id, key, question, options, default_option, expires_at, created_at)
-    VALUES (${issue.id}, ${row.key}, ${question}, ${options}::text::jsonb, ${text(row.payload, 'default')}, ${expires}, ${now})
+    VALUES (${issue.id}, ${row.key}, ${question}, ${options}::text::jsonb, ${text(row.payload, 'default')},
+            ${text(row.payload, 'expiresAt')}, ${now})
     ON CONFLICT (key) DO NOTHING`
   return undefined
 }
@@ -71,17 +78,44 @@ async function answerDecision({ tx, issue, row, now }: Context): Promise<string 
   return undefined
 }
 
+const isIssueId = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2_147_483_647
+
+/** Only an open Issue can be waited on: a closed one would never wake this one. */
 async function addDependency({ tx, issue, row }: Context): Promise<string | undefined> {
   const on = row.payload?.on
-  if (typeof on !== 'number' || on === issue.id) return 'a dep needs another Issue in `on`'
-  const stored = await tx`
-    INSERT INTO factory.issue_deps (issue_id, on_issue)
-    SELECT ${issue.id}, id FROM factory.issues WHERE id = ${on}
-    ON CONFLICT DO NOTHING
-    RETURNING on_issue`
-  const [known] = stored.length ? stored : await tx`SELECT 1 FROM factory.issues WHERE id = ${on}`
-  return known ? undefined : `no Issue ${on}`
+  if (!isIssueId(on) || on === issue.id) return 'a dep needs another Issue in `on`'
+  const [blocker]: Pick<IssueRow, 'state'>[] = await tx`SELECT state FROM factory.issues WHERE id = ${on}`
+  if (!blocker) return `no Issue ${on}`
+  if (blocker.state === 'closed') return `Issue ${on} is closed already`
+  await tx`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${issue.id}, ${on}) ON CONFLICT DO NOTHING`
+  return undefined
 }
+
+/** A wall that happened before the Issue last moved, or before a turn already seen, is over. A late spool line can be either. */
+async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
+  if (row.at < issue.updated_at) return 'this wall is older than the state it would end'
+  const [later] = await tx`
+    SELECT 1 FROM factory.issue_inbox
+    WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
+    LIMIT 1`
+  return later ? 'a turn has started since this wall' : undefined
+}
+
+/** A wake answers the wait it was filed for, and a dependency's only once nothing it depends on is open. */
+async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefined> {
+  if (row.payload?.for !== issue.reason) return `this wake is not for a ${issue.reason} wait`
+  if (issue.reason !== 'dependency') return undefined
+  const [open] = await tx`
+    SELECT 1 FROM factory.issue_deps d JOIN factory.issues b ON b.id = d.on_issue
+    WHERE d.issue_id = ${issue.id} AND b.state <> 'closed'
+    LIMIT 1`
+  return open ? 'an Issue it depends on is open' : undefined
+}
+
+/** The end of a hold and its proof count only for the hold still running: a regression and a second ship started a new one. */
+const thisHold = ({ issue, row }: Context): string | undefined =>
+  row.payload?.hold === issue.hold ? undefined : `not the current hold (${issue.hold})`
 
 const stopped: Step = { to: 'closed', outcome: 'dropped' }
 const recorded: Step = {}
@@ -97,14 +131,20 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   admitted: { queued: { to: 'working', newAttempt: true, effects: ['start_lead'] } },
   // the lead
   phase: { working: recorded },
-  wait: { working: { to: 'waiting', reason: 'wait' } },
+  wait: {
+    working: {
+      to: 'waiting',
+      reason: 'wait',
+      refuse: ({ row }) => (badTime(row.payload, 'until') ? 'until is not a time' : undefined),
+    },
+  },
   block: { working: { to: 'waiting', reason: 'blocked' } },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
   ship: { working: { to: 'watching', hold: true } },
   close: { working: { to: 'closed', outcome: 'done' } },
   drop: { working: { to: 'closed', outcome: 'dropped' } },
   // session events
-  limit_stop: { working: { to: 'waiting', reason: 'wall' } },
+  limit_stop: { working: { to: 'waiting', reason: 'wall', apply: wallIsNews } },
   turn_started: { waiting: { to: 'working', only: 'wall' } },
   // dedup: a repeat is recorded; `regression` is a signal whose payload says so
   signal: {
@@ -117,9 +157,9 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   },
   regression: { watching: { to: 'working', effects: ['note_lead'] } },
   // the tick and the proof after the hold
-  hold_over: { watching: { effects: ['verify'] } },
-  verified: { watching: { to: 'closed', outcome: 'done' } },
-  wake: { waiting: { to: 'working', effects: ['note_lead'] } },
+  hold_over: { watching: { effects: ['verify'], refuse: thisHold } },
+  verified: { watching: { to: 'closed', outcome: 'done', refuse: thisHold } },
+  wake: { waiting: { to: 'working', effects: ['note_lead'], apply: wakeIsDue } },
   // the owner or the orchestrator
   note: { queued: recorded, working: noted, waiting: noted, watching: noted },
   answer: { waiting: { to: 'working', only: 'decision', effects: ['note_lead'], apply: answerDecision } },
@@ -171,7 +211,8 @@ async function wakeDependents(tx: SQL, issueId: number, now: Date): Promise<void
         SELECT 1 FROM factory.issue_deps o JOIN factory.issues b ON b.id = o.on_issue
         WHERE o.issue_id = i.id AND b.state <> 'closed')`
   for (const { id } of freed) {
-    await enqueue(tx, { issueId: id, key: `wake:${id}:dep:${issueId}`, kind: 'wake', at: now })
+    const key = `wake:${id}:dep:${issueId}:${now.toISOString()}`
+    await enqueue(tx, { issueId: id, key, kind: 'wake', at: now, payload: { for: 'dependency' } })
   }
 }
 
@@ -182,19 +223,19 @@ async function logEvent(
 ): Promise<void> {
   await tx`
     INSERT INTO factory.issue_events (issue_id, key, kind, from_state, to_state, at, payload)
-    VALUES (${input.issueId}, ${input.key}, ${input.kind}, ${input.from}, ${input.to}, ${input.at}, ${payload})
-    ON CONFLICT (key) DO NOTHING`
+    VALUES (${input.issueId}, ${input.key}, ${input.kind}, ${input.from}, ${input.to}, ${input.at}, ${payload})`
 }
 
 /** The one statement that moves an Issue. `step.to` comes from the table, so an edge the table lacks cannot be written. */
 async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: Date): Promise<IssueRow> {
   const to = step.to ?? issue.state
   const attempt = step.newAttempt ? issue.attempt + 1 : issue.attempt
+  const hold = step.hold ? issue.hold + 1 : issue.hold
   const until = step.reason === 'wait' ? text(cause.payload, 'until') : null
   const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until ? new Date(until) : null
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
-    SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt},
+    SET state = ${to}, reason = ${step.reason ?? null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold},
         wake_at = ${wakeAt}, updated_at = ${now}, closed_at = ${to === 'closed' ? now : null}
     WHERE id = ${issue.id}
     RETURNING *`
@@ -203,7 +244,7 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
 }
 
 async function planEffect(tx: SQL, issue: IssueRow, kind: EffectKind, row: InboxRow, now: Date): Promise<void> {
-  const payload = { ...row.payload, attempt: issue.attempt, cause: row.kind }
+  const payload = { ...row.payload, attempt: issue.attempt, hold: issue.hold, cause: row.kind }
   await tx`
     INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
     VALUES (${issue.id}, ${`${kind}:${row.key}`}, ${kind}, ${payload}, ${now})
@@ -246,7 +287,13 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
   for (const effect of [...(step.effects ?? []), ...(step.to === 'closed' ? (['finalize'] as const) : [])]) {
     await planEffect(tx, moved, effect, row, now)
   }
-  if (step.to === 'closed') await wakeDependents(tx, issue.id, now)
+  if (step.to === 'closed') {
+    await wakeDependents(tx, issue.id, now)
+    // Nobody is left to act on an open question, and a reopened Issue asks again.
+    await tx`
+      UPDATE factory.decisions SET answered_by = 'closed', answered_at = ${now}
+      WHERE issue_id = ${issue.id} AND answered_at IS NULL`
+  }
   return { issue: moved, result: 'applied', detail: null }
 }
 
@@ -259,8 +306,20 @@ export interface NewIssue {
   facts: unknown
 }
 
-/** An alert never reaches the IuRoot workspace (decision 3); the path is real, so a link inside SourceRoot does not hide it. */
-const inIuRoot = (repo: string): boolean => repo.split('/').some((part) => part.toLowerCase() === 'iuroot')
+const namesIuRoot = (path: string): boolean => path.split('/').some((part) => part.toLowerCase() === 'iuroot')
+
+/**
+ * An alert never reaches the IuRoot workspace (decision 3). The path is real, so a link inside SourceRoot does not hide it, and
+ * a configured IuRoot that is itself a link to a neutral path still counts by its configured name.
+ */
+async function inIuRoot(repo: string, roots: readonly string[]): Promise<boolean> {
+  if (namesIuRoot(repo)) return true
+  for (const root of roots.filter(namesIuRoot)) {
+    const real = await realpath(root).catch(() => undefined)
+    if (real && repo.startsWith(`${real}/`)) return true
+  }
+  return false
+}
 
 /** Postgres refuses this JSON: half a surrogate pair, or a NUL. */
 const UNSTORABLE_JSON = new Set(['22P02', '22P05'])
@@ -280,7 +339,9 @@ export async function createIssueIn(
   if (known) return { issue: known, created: false }
 
   const repo = await resolveRepo(input.repo, context.repoRoots)
-  if (input.source === 'alert' && inIuRoot(repo)) throw new IssueRefused(`an alert files no Issue in IuRoot: ${repo}`)
+  if (input.source === 'alert' && (await inIuRoot(repo, context.repoRoots))) {
+    throw new IssueRefused(`an alert files no Issue in IuRoot: ${repo}`)
+  }
 
   const facts = JSON.stringify(input.facts)
   const rows: IssueRow[] = await tx`
@@ -316,27 +377,22 @@ export const createIssue = (
 
 /**
  * Turns every passed `wake_at` into its inbox row and clears it, in one transaction, so a timer fires once: `hold_over` for
- * a `watching` Issue, `wake` for a `waiting` one. The key carries the time: a regression and a second ship is a second hold of
- * the same attempt.
+ * a `watching` Issue, `wake` for a `waiting` one. Each names what it ends, so one that comes late ends nothing else.
  */
 export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<number> {
   return sql.begin(async (tx) => {
-    const due: Pick<IssueRow, 'id' | 'state' | 'attempt' | 'wake_at'>[] = await tx`
-      SELECT id, state, attempt, wake_at FROM factory.issues
+    const due: Pick<IssueRow, 'id' | 'state' | 'attempt' | 'hold' | 'wake_at'>[] = await tx`
+      SELECT id, state, attempt, hold, wake_at FROM factory.issues
       WHERE wake_at <= ${now}
       ORDER BY wake_at, id LIMIT ${batch}
       FOR NO KEY UPDATE SKIP LOCKED`
     for (const issue of due) {
-      const at = issue.wake_at?.toISOString()
       if (issue.state === 'watching') {
-        await enqueue(tx, {
-          issueId: issue.id,
-          key: `hold:${issue.id}:${issue.attempt}:${at}`,
-          kind: 'hold_over',
-          at: now,
-        })
+        const key = `hold:${issue.id}:${issue.attempt}:${issue.hold}`
+        await enqueue(tx, { issueId: issue.id, key, kind: 'hold_over', at: now, payload: { hold: issue.hold } })
       } else if (issue.state === 'waiting') {
-        await enqueue(tx, { issueId: issue.id, key: `wake:${issue.id}:${at}`, kind: 'wake', at: now })
+        const key = `wake:${issue.id}:${issue.wake_at?.toISOString()}`
+        await enqueue(tx, { issueId: issue.id, key, kind: 'wake', at: now, payload: { for: 'wait' } })
       }
       await tx`UPDATE factory.issues SET wake_at = NULL WHERE id = ${issue.id}`
     }
