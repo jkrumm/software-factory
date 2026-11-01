@@ -601,6 +601,8 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded:
   W1 wires none (`TickDeps.issuePorts`), and the wave that brings a port runs what waited. `hold_over` asks for `verify` and
   closes nothing: until W4's check reports `verified` the Issue stays `watching`.
+- **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
+  close removes every `issue_deps` row on and of the Issue: a row is a dep still open, and a blocker that reopens holds nobody back.
 - **Intake.** `POST /issues` (token and socket, `factory issue new`; `GET /issues[/:id]`, `issue list|show`) and `createIssue`
   for what the server files itself. An Issue has `source` (`request|alert` through the API, open in the table), `source_key` (unique per
   source, required: the CLI makes one per call unless `--key` says otherwise), `repo` (resolved and checked like a spawn's,

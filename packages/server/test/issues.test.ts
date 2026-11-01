@@ -373,6 +373,68 @@ describe('golden paths: transitions and effects', () => {
     expect((await inbox(id)).slice(-3).map((r) => r.result)).toEqual(['refused', 'refused', 'refused'])
   })
 
+  test('a dep that closes a cycle is refused, direct or through others', async () => {
+    const a = await working()
+    const b = await working()
+    const c = await working()
+    await step(a, 'dep', { on: b })
+    await step(b, 'dep', { on: c })
+    await step(b, 'dep', { on: a })
+    await step(c, 'dep', { on: a })
+    expect((await inbox(b)).at(-1)?.result).toBe('refused')
+    expect((await inbox(c)).at(-1)?.result).toBe('refused')
+    expect((await state(c)).state).toBe('working')
+    await step(c, 'close')
+    await pass()
+    await step(b, 'close')
+    await pass()
+    expect((await state(a)).state).toBe('working')
+  })
+
+  test('a satisfied dep goes with the close: a blocker that reopens does not hold the wake back', async () => {
+    const reopened = await working()
+    const last = await working()
+    const id = await working()
+    await step(id, 'dep', { on: reopened })
+    await step(id, 'dep', { on: last })
+    await step(reopened, 'close')
+    await step(reopened, 'reopen')
+    await step(last, 'close')
+    await pass()
+    expect((await state(id)).state).toBe('working')
+    expect(await db.sql`SELECT 1 FROM factory.issue_deps`).toHaveLength(0)
+  })
+
+  test('a close leaves no dep of the Issue itself behind', async () => {
+    const blocker = await working()
+    const id = await working()
+    await step(id, 'dep', { on: blocker })
+    await step(id, 'stop')
+    expect(await db.sql`SELECT 1 FROM factory.issue_deps`).toHaveLength(0)
+  })
+
+  test('a close in flight is waited for: the dep sees it and refuses, the Issue is not left parked', async () => {
+    const blocker = await working()
+    const id = await working()
+    await send(id, 'dep', { on: blocker })
+    const release = Promise.withResolvers<void>()
+    const closing = Promise.withResolvers<void>()
+    const close = db.sql.begin(async (tx) => {
+      await tx`
+        UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${blocker}`
+      closing.resolve()
+      await release.promise
+    })
+    await closing.promise
+    const worker = pass()
+    await Bun.sleep(100)
+    release.resolve()
+    await close
+    expect(await worker).toEqual([])
+    expect((await state(id)).state).toBe('working')
+    expect((await inbox(id)).at(-1)?.result).toBe('refused')
+  })
+
   test('a blocker that reopens and closes again wakes its dependent a second time', async () => {
     const blocker = await working()
     const id = await working()
