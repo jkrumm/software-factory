@@ -613,31 +613,63 @@ describe('the inbox', () => {
     expect((await state(held)).state).toBe('closed')
   })
 
-  test('a handler that throws costs its own Issue this pass, says why, and nothing of it is half done', async () => {
+  test("a row that throws is undone alone: the error is on it, and an owner's stop behind it applies", async () => {
     const bad = await working()
     const good = await working()
-    await send(bad, 'phase')
-    await send(bad, 'close')
+    // The key of the Issue's first audit row: the insert for this event throws, after its decision and its move.
+    const poison = `created:${bad}`
+    await send(bad, 'ask', { question: 'q' }, poison)
+    await send(bad, 'stop')
     await send(good, 'close')
+
+    const errors = await pass()
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toStartWith(`issue ${bad}: ${poison}: `)
+    expect(await state(bad)).toMatchObject({ state: 'closed', outcome: 'dropped' })
+    expect((await state(good)).state).toBe('closed')
+    expect(await db.sql`SELECT 1 FROM factory.decisions`).toHaveLength(0)
+
+    const rows = await db.sql`SELECT key, result, error FROM factory.issue_inbox WHERE issue_id = ${bad} ORDER BY id`
+    expect(rows[1].key).toBe(poison)
+    expect(rows[1].result).toBeNull()
+    expect(rows[1].error).toBeString()
+    expect(rows[2].result).toBe('applied')
+    expect(rows[2].error).toBeNull()
+
+    // It stays visible, one line a pass, and holds up nothing that comes later.
+    await send(good, 'reopen')
+    expect(await pass()).toHaveLength(1)
+    expect((await state(good)).state).toBe('queued')
+  })
+
+  test('a failed row that works next time loses its error', async () => {
+    const id = await working()
+    await send(id, 'phase')
+    await send(id, 'close')
     let calls = 0
     const failingOnce = () => {
-      // The second event of the first Issue taken.
+      // The second event: each row asks the time twice.
       if (++calls === 3) throw new Error('a handler threw')
       return clock.now()
     }
-    const errors = await processInbox(db.sql, failingOnce)
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toBe(`issue ${bad}: a handler threw`)
-    expect((await state(good)).state).toBe('closed')
-    expect((await state(bad)).state).toBe('working')
-    const rows =
-      await db.sql`SELECT kind, error, handled_at FROM factory.issue_inbox WHERE issue_id = ${bad} AND handled_at IS NULL ORDER BY id`
-    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['phase', 'close'])
-    expect(rows[0].error).toBe('a handler threw')
-    // It comes back on the next pass, and the row loses its error once handled.
+    expect(await processInbox(db.sql, failingOnce)).toHaveLength(1)
+    expect((await state(id)).state).toBe('working')
+    const [left] = await db.sql`SELECT kind, error FROM factory.issue_inbox WHERE handled_at IS NULL`
+    expect(left).toEqual({ kind: 'close', error: 'a handler threw' })
+
     expect(await processInbox(db.sql, now)).toEqual([])
-    expect((await state(bad)).state).toBe('closed')
+    expect((await state(id)).state).toBe('closed')
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE error IS NOT NULL`).toHaveLength(0)
+  })
+
+  test('failed rows go after new ones, so a full batch of them holds nothing up', async () => {
+    const id = await working()
+    await db.sql`
+      INSERT INTO factory.issue_inbox (issue_id, key, kind, at, error)
+      SELECT ${id}, 'failed:' || n, 'phase', ${clock.now()}, 'it failed before' FROM generate_series(1, 60) n`
+    await send(id, 'close')
+    await processInbox(db.sql, now)
+    expect((await state(id)).state).toBe('closed')
   })
 
   test('an expiry that is a time by a lenient reading is stored as one, not thrown on', async () => {

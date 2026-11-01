@@ -589,8 +589,9 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 
 - **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
   SKIP LOCKED`, the form that leaves foreign keys alone: copying a session event in needs `KEY SHARE` on the Issue and never waits
-  for a worker. It works through up to 50 rows in one transaction, oldest event first. A handler that throws rolls that Issue back,
-  leaves the error on its oldest row and in the tick's errors, and goes last from then on, so it costs no other Issue.
+  for a worker. It works through up to 50 rows in one transaction, oldest event first and failed rows after the rest, with a savepoint per
+  row: a handler that throws undoes that row alone, leaves the error on it and in the tick's errors, and the rows behind it, an
+  owner's `stop` among them, still apply. The failed row stays unhandled and is tried again every pass, its Issue last.
   Events carry what they end: a wake its `for`, the end of a hold and its proof their `hold`, so one that arrives late refuses.
 - **Effects run after the commit.** A step's effects (`start_lead`, `note_lead`, `verify`, `finalize`; every step into `closed`
   has `finalize`) are rows in `issue_effects` under `<effect>:<inbox key>`, in the transition's transaction. `runEffects` calls
