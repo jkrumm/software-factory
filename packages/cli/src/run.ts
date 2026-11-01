@@ -2,6 +2,10 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import {
   DEFAULT_ROLES_FILE,
+  DoorRoute,
+  DoorRouteList,
+  type DoorUnrouted,
+  DoorUnroutedList,
   Health,
   Issue,
   IssueList,
@@ -68,6 +72,18 @@ commands:
                   one project: the manifest in force, the make contract (which of check, test, deploy, verify, restart, quality, logs,
                   status its Makefile has), the claim, a manifest that does not parse (token or socket)
   project sync    read every project's project.yaml and Makefile now (token)
+  door route set <source> <monitor> <repo>
+                  send the alerts of a monitor (Kuma: its name; HyperDX: the alert's title without trailing numbers) to a
+                  repo: they become Issues there. The repo must be inside the allowed roots and never IuRoot. Token only.
+                  Use -- before a monitor that starts with a dash
+  door route rm <source> <monitor>
+                  remove a route: its alerts count as unrouted again
+  door route list the routes, with how many quiet alerts (an up with no open Issue) each counted
+  door unrouted   the monitors that raised alerts with no route: source, monitor, count, last seen, last title
+  door token new <source> [--rotate]
+                  write a fresh token (32 random bytes, base64url) for the source into the door's tokens file
+                  (FACTORY_DOOR_TOKENS_FILE, default ~/.config/factory/door-tokens.json, mode 0600) and print it once.
+                  Offline, no server. An existing source needs --rotate; the door reads the file at start, so restart it
   queue get [--project <path>]
                   the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
                   (token or socket)
@@ -93,6 +109,7 @@ commands:
 --id <id>        session note: the note's idempotency key
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
 --title, --facts, --key, --source  issue new
+--rotate         door token new: replace the source's token
 --name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
@@ -102,6 +119,7 @@ FACTORY_TOKEN    the bearer token the server requires (not needed for version, h
                  spawn create|get, session get, queue get and issue new|list|show fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
+FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file
 FACTORY_SLOT_WAIT_MS  slot run: longest wait for a slot before running without one (default 600000)
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.
@@ -214,6 +232,10 @@ const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 const issueLine = (i: IssueSummary) =>
   [i.id, i.state, i.reason ?? i.outcome, i.source, i.repo, i.title].map(cell).join('\t')
 
+const routeLine = (r: DoorRoute) => [r.source, r.monitor, r.repo, r.quiet, r.lastQuietAt].map(cell).join('\t')
+
+const unroutedLine = (u: DoorUnrouted) => [u.source, u.monitor, u.count, u.lastSeen, u.lastTitle].map(cell).join('\t')
+
 const sessionLine = (s: Session) =>
   [s.id, s.state, s.wait, s.turn, s.pane, s.claudeSessionId, s.lastEventAt].map(cell).join('\t')
 
@@ -236,6 +258,7 @@ interface Flags {
   facts?: string
   key?: string
   source?: string
+  rotate?: boolean
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -253,6 +276,68 @@ async function readFacts(from: string, io: Io): Promise<unknown> {
   } catch {
     throw usage('--facts is not valid JSON')
   }
+}
+
+/** `door route set|rm|list`, `door unrouted` and `door token new`. */
+async function door(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
+  const print = (json: unknown, plain: string) => io.out(`${format === 'json' ? JSON.stringify(json) : plain}\n`)
+  const key = words.slice(0, 3).join(' ')
+
+  if (key === 'door route set') {
+    const [, , , source, monitor, repo] = words
+    if (!source || !monitor || !repo || words.length > 6) throw usage('usage: door route set <source> <monitor> <repo>')
+    const { body } = await call(io, '/door/routes', {
+      method: 'PUT',
+      auth: true,
+      schema: DoorRoute,
+      body: { source, monitor, repo: resolve(repo) },
+    })
+    return print(body, routeLine(body))
+  }
+
+  if (key === 'door route rm') {
+    const [, , , source, monitor] = words
+    if (!source || !monitor || words.length > 5) throw usage('usage: door route rm <source> <monitor>')
+    const { body } = await call(io, '/door/routes', {
+      method: 'DELETE',
+      auth: true,
+      schema: DoorRoute,
+      body: { source, monitor },
+    })
+    return print(body, routeLine(body))
+  }
+
+  if (words.join(' ') === 'door route list') {
+    const { body } = await call(io, '/door/routes', { auth: true, schema: DoorRouteList })
+    const lines = body.routes.map(routeLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (words.join(' ') === 'door unrouted') {
+    const { body } = await call(io, '/door/unrouted', { auth: true, schema: DoorUnroutedList })
+    const lines = body.unrouted.map(unroutedLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (key === 'door token new') {
+    const source = words[3]
+    if (!source || words.length > 4) throw usage('usage: door token new <source> [--rotate]')
+    const { newToken, TokenExists, tokensFileFrom, TokensError } = await import('@software-factory/door/tokens')
+    try {
+      const token = newToken(tokensFileFrom(io.env), source, { rotate: flags.rotate })
+      return print({ source, token }, token)
+    } catch (error) {
+      if (error instanceof TokenExists) throw new FactoryError('conflict', error.message)
+      if (error instanceof TokensError) throw new FactoryError('general', error.message)
+      throw error
+    }
+  }
+
+  throw usage(
+    'usage: door route set <source> <monitor> <repo> | door route rm <source> <monitor> | door route list | door unrouted | door token new <source>',
+  )
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -449,6 +534,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     ]
     return print(body, lines.join('\n'))
   }
+  if (words[0] === 'door') return door(words, format, flags, io)
 
   if (key === 'queue get') {
     const query = flags.project === undefined ? '' : `?project=${encodeURIComponent(resolve(flags.project))}`
@@ -560,5 +646,6 @@ const OPTIONS = {
   facts: { type: 'string' },
   key: { type: 'string' },
   source: { type: 'string' },
+  rotate: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const
