@@ -68,7 +68,7 @@ CREATE TABLE factory.issue_inbox (
   handled_at timestamptz,
   result     text CHECK (result IN ('applied', 'refused', 'ignored')),
   detail     text,
-  -- the last failure of a handler that threw: the row stays unhandled and blocks only its own Issue
+  -- the last failure of a handler that threw: the row stays unhandled, and the rows behind it go on
   error      text,
   CHECK ((handled_at IS NULL) = (result IS NULL))
 );
