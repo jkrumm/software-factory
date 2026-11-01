@@ -55,8 +55,8 @@ export async function buildStatus(sql: SQL, now: Date): Promise<Status> {
   )
   const { prompts: notes, more: notesMore } = await listOpenPrompts(sql, now)
   // What is still waiting to run comes first, then what gave up.
-  const spawns = (await listSpawns(sql))
-    .filter((s) => s.status !== 'started')
+  const spawns = (await listSpawns(sql, now))
+    .filter((s) => s.status !== 'started' && s.status !== 'ended')
     .sort((a, b) => Number(a.status === 'failed') - Number(b.status === 'failed'))
   return {
     now: now.toISOString(),

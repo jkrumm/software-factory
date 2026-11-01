@@ -89,7 +89,13 @@ export async function call<S extends z.ZodType>(
     throw new FactoryError(
       kindForStatus(response.status),
       message.success ? message.data.error : `HTTP ${response.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
-      { details: { status: response.status } },
+      {
+        code: message.success ? (message.data.code ?? null) : null,
+        details: {
+          status: response.status,
+          ...(message.success && message.data.spawn ? { spawn: message.data.spawn } : {}),
+        },
+      },
     )
   }
   if (!parsed.success) throw notContract(path, parsed.error.issues[0]?.message ?? 'unparseable body')

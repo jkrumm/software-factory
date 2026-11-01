@@ -144,6 +144,11 @@ A **spawn request** is a row: repo, role, prompt, model and effort from the role
 later the account, a `resume_at`, and the session it became. A spawn without capacity gets a `resume_at` and stays
 in the table; nothing is dropped. The tick starts it when the time comes and admission says yes.
 
+A key is spent when its spawn has ended. `ended` is derived at read time, never stored: the spawn is `started`, and its
+session is `dead` or its pane is no terminal of the current core. Creating under a spent key is a `409 key_spent` that
+carries the stored spawn; a live or queued key still answers 200 with its row. Reviving the row would start work a second
+time, so the caller picks a new key (`rd`: `-r2`, `-r3`).
+
 **Queue state** is `run`, `pace` or `drain`, set per scope: global, project, initiative. The most restrictive scope
 that applies wins.
 

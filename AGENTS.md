@@ -203,7 +203,12 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   `herdrStatus|herdrSeenAt` (argo and agw follow in dotfiles Wave 4); drop them, and this sentence, in the release after.
 - **Panes are clients (SF11).** `POST /spawns` on the socket takes the HTTP route's body, validation (400), role check (422) and
   `FACTORY_REPO_ROOTS` check for `repo` and `space` (422, nothing stored), and is idempotent by key (a second create answers the
-  stored spawn, 200). The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
+  stored spawn, 200) **while the key is live**. A `started` spawn whose agent is gone reads as `ended` in every view
+  (`spawn list|get`, the create's answer; nothing stores it): its session is `dead`, or its pane is no terminal of the
+  current core (a classic-herdr pane, or none). A create under an ended spawn's key answers **409** `{error, code:
+  "key_spent", spawn}` and never revives the row; the CLI exits 5 (`conflict`) with `code` and `details.spawn` on the error
+  line, and `rd` derives the next key (`<key>-r2`, …). `factory status` lists neither `started` nor `ended` spawns. An
+  older `rd` treats the 409 as a structured error and falls back to bare hc: roll `rd` out before the server. The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
   uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
   socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
   repo roots still bound where it can start, and a same-user pane can already start Claude Code through hc).
