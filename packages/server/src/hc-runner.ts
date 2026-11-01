@@ -88,6 +88,9 @@ const isWorker = (role: string): boolean => role === 'worker' || role === 'mecha
 /** What the spawn is placed as: the caller's word, else the role's default. */
 const placementOf = (input: StartInput): 'tab' | 'child' => input.placement ?? (isWorker(input.role) ? 'child' : 'tab')
 
+/** How far up a hidden child's parents its space is looked for. */
+const MAX_ANCESTORS = 8
+
 type Placement =
   /** a tab of its own: named after the key once the app has adopted it */
   | { kind: 'tab'; space: string; tab: string; params: Record<string, unknown> }
@@ -276,13 +279,16 @@ export class HcRunner implements Runner {
    */
   private async resultOf(terminal: Terminal, budget: Budget): Promise<StartResult> {
     let workspace = terminal.labels['herdr.space'] ?? null
-    if (workspace === null && terminal.parent) {
+    // A hidden child of a hidden child (a lead's wave under the night's mother) has the space of the nearest ancestor that has one.
+    let up = terminal.parent
+    for (let hops = 0; workspace === null && up && hops < MAX_ANCESTORS; hops++) {
       try {
-        workspace =
-          (await this.rpc('terminal.get', { terminal: terminal.parent }, Terminal, budget)).labels['herdr.space'] ??
-          null
+        const ancestor = await this.rpc('terminal.get', { terminal: up }, Terminal, budget)
+        workspace = ancestor.labels['herdr.space'] ?? null
+        up = ancestor.parent
       } catch (error) {
         if (!(error instanceof HcError)) throw error
+        break
       }
     }
     return { session: terminal.address, tab: terminal.labels['herdr.tab'] ?? null, workspace }

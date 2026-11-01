@@ -266,6 +266,26 @@ describe('hc adapter: where the terminal goes', () => {
     expect((await hc.state()).terminals).toHaveLength(1)
   })
 
+  test('a hidden child of a hidden child has the space of the nearest ancestor that has one', async () => {
+    const mother = await runner.start({ ...input, key: 'mother', role: 'mother' })
+    const lead = await runner.start({
+      ...input,
+      key: 'lead',
+      role: 'lead',
+      placement: 'child',
+      parentTerminal: mother.session,
+    })
+    const wave = await runner.start({
+      ...input,
+      key: 'wave',
+      role: 'wave',
+      placement: 'child',
+      parentTerminal: lead.session,
+    })
+    expect(lead).toMatchObject({ tab: null, workspace: mother.workspace })
+    expect(wave).toMatchObject({ tab: null, workspace: mother.workspace })
+  })
+
   test('a parent that is not a terminal of this core (a classic pane) is ignored', async () => {
     await runner.start({ ...input, parentTerminal: 'w1:p3' })
     expect(await run()).toMatchObject({ no_parent: true })

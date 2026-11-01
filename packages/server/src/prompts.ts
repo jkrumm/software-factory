@@ -215,6 +215,7 @@ interface Target {
     space: string
     new_space: boolean
     placement: Placement | null
+    parent_pane: string | null
     workspace: string | null
     role: string
     account: string | null
@@ -235,7 +236,9 @@ async function targetOf(sql: SQL, id: string, now: Date): Promise<Target | undef
   const session = await getSession(sql, id, now)
   if (!session) return undefined
   const [spawn] = session.spawn
-    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, role, account, tier, effort FROM factory.spawns WHERE key = ${session.spawn}`
+    ? await sql`SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, role, account, tier, effort,
+        (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
+      FROM factory.spawns WHERE key = ${session.spawn}`
     : []
   const [life] = await sql`
     SELECT kind FROM factory.events
@@ -479,6 +482,8 @@ async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Pr
     // Back into its own space: with several spaces of the same path (`new_space`), the path alone cannot say which.
     workspace: spawn.workspace,
     placement: spawn.placement ?? undefined,
+    // A hidden child goes back under its parent's terminal; a spawn that has a space of its own is a tab, as at its first start.
+    parentTerminal: spawn.new_space ? undefined : (spawn.parent_pane ?? undefined),
     role: spawn.role,
     prompt: prompt.text,
     account: spawn.account,

@@ -155,6 +155,12 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
     expect(Spawn.parse(await (await viaSocket('GET', '/spawns/hidden')).json()).tab).toBeNull()
   })
 
+  test('a spawn answer from a server of before placement (no field) still parses', async () => {
+    const made = await app.send('POST', '/spawns', { key: 'old', repo: TEST_REPO, prompt: 'go' })
+    const { placement: _omitted, ...old } = (await made.json()) as Record<string, unknown>
+    expect(Spawn.parse(old).placement).toBeUndefined()
+  })
+
   test('has the same validation as the port', async () => {
     const bad = [
       { key: '-x', repo: TEST_REPO, prompt: 'go' },

@@ -47,8 +47,8 @@ export const Spawn = z.object({
   error: z.string().nullable(),
   /** the session that asked for it, when one did */
   parent: z.string().nullable(),
-  /** what the caller asked for; null is the role's default (worker roles child, others tab) */
-  placement: Placement.nullable(),
+  /** what the caller asked for; null is the role's default (worker roles child, others tab). A server of before placement sends no field */
+  placement: Placement.nullish(),
 })
 export type Spawn = z.infer<typeof Spawn>
 
