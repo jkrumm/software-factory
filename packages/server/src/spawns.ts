@@ -104,12 +104,14 @@ export interface NewSpawn {
   newSpace?: boolean
   /** the terminal the caller asked for; absent is the role's default */
   placement?: Placement
+  /** the Issue this spawn works: it waits on the Issue's claim on the project. A fleet spawn (a wave, a fan worker, `rd`) has none. */
+  issueId?: number
 }
 
 /**
  * Stores a spawn, always `queued` or `waiting`, never dropped. Admission decides in the same transaction as the insert,
  * behind the capacity lock: with room it is `queued` on an account and the next tick starts it; held by the queue state
- * or the one-wave-per-repo rule it is `queued` with its reason and no account; without capacity it is `waiting` with
+ * the one-wave-per-repo rule or its Issue's claim it is `queued` with its reason and no account; without capacity it is `waiting` with
  * `resume_at` at the first opening (none if no reading names one: a new reading wakes it). A repeated key returns the
  * existing row untouched, `ended` included: the caller refuses a spent key (`key_spent`), a row is never revived.
  */
@@ -123,7 +125,11 @@ export async function createSpawn(
     const existing = await getSpawn(tx, input.key, now)
     if (existing) return { spawn: existing, created: false }
 
-    const decision = await admit(tx, { key: input.key, repo: input.repo, role: input.role }, now)
+    const decision = await admit(
+      tx,
+      { key: input.key, repo: input.repo, role: input.role, issueId: input.issueId },
+      now,
+    )
     const status: SpawnStatus = decision.kind === 'wait' ? 'waiting' : 'queued'
     const account = decision.kind === 'start' ? decision.account : null
     const hold = decision.kind === 'hold' ? decision.reason : null
@@ -135,9 +141,9 @@ export async function createSpawn(
           : null
 
     const [row]: SpawnRow[] = await tx`
-      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent, space, new_space, placement)
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent, space, new_space, placement, issue_id)
       VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${input.role}, ${input.tier}, ${input.effort}, ${status},
-              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false}, ${input.placement ?? null})
+              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false}, ${input.placement ?? null}, ${input.issueId ?? null})
       RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     return { spawn: toView(row), created: true }

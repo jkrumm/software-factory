@@ -8,6 +8,8 @@ import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { issuePass } from './issues/worker.ts'
+import { projectPass } from './projects/pass.ts'
+import type { ProjectSync } from './projects/sync.ts'
 import { deliverPrompts } from './prompts.ts'
 import type { QuotaPoller } from './quota.ts'
 import { evaluateRules } from './rules.ts'
@@ -36,6 +38,8 @@ export interface TickDeps {
   quota?: QuotaPoller
   /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
   issuePorts?: EffectPorts
+  /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
+  projects?: ProjectSync
 }
 
 export interface TickResult {
@@ -86,6 +90,7 @@ interface DueRow {
   tier: Tier
   effort: Effort
   status: 'queued' | 'waiting' | 'starting'
+  issue_id: number | null
   account: string | null
   attempts: number
   error: string | null
@@ -105,7 +110,7 @@ const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
  * Due means `resume_at` has passed (a queued spawn has none), or a claim whose lease ran out. Waiting spawns sort
  * after queued ones and held ones last of all, and a spawn that cannot start leaves the due set (a held one for 30 s), so
  * it does not hold up the rest.
- * Admission (queue state, one wave per repo, capacity) is decided again here: a stored account is only a hint.
+ * Admission (queue state, one wave per repo, pace, the Issue's claim, capacity) is decided again here: a stored account is only a hint.
  */
 export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; failed: string[]; skipped: number }> {
   const { sql, clock } = deps
@@ -115,7 +120,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, account, attempts, error, first_claimed_at,
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at,
         (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
@@ -149,7 +154,12 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
       const decision: Decision =
         reclaimed && row.account
           ? { kind: 'start', account: row.account }
-          : await admit(tx, { key: row.key, repo: row.repo, role: row.role, prefer: row.account }, now, live)
+          : await admit(
+              tx,
+              { key: row.key, repo: row.repo, role: row.role, prefer: row.account, issueId: row.issue_id },
+              now,
+              live,
+            )
       if (decision.kind !== 'start') {
         // Waiting is not failing: the retry clock starts over when the spawn is claimed again.
         const status = decision.kind === 'wait' ? 'waiting' : 'queued'
@@ -298,8 +308,10 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   } catch (error) {
     rulesError = `rules: ${error instanceof Error ? error.message : String(error)}`
   }
+  // Projects before the claims: a closed Issue's place is free and a newly named repo has its row when its spawn is admitted.
+  const projectErrors = await projectPass(deps.sql, deps.projects)
   const { claims, failed, skipped } = await claimDue(deps)
-  const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [], replayed }
+  const result: TickResult = { started: [], failed, retrying: [], skipped, errors: [...projectErrors], replayed }
   if (replayError) result.errors.push(replayError)
   if (quotaError) result.errors.push(quotaError)
   if (rulesError) result.errors.push(rulesError)

@@ -820,7 +820,7 @@ leads: 1
 ticktick: { list: WeatherOrb }
 ```
 
-- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Later (F3):** signals, heal, jobs, ticktick.
+- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Later (F3):** signals, heal, jobs, ticktick: accepted and dropped, so an F3 manifest does not break F2.
 - **A broken manifest** becomes an upkeep Issue; the factory keeps running on the last valid version.
 - **Make contract:** `check`, `test`, `deploy`, `verify`, `restart`, `quality`, `logs`, `status`. `check`, `test` and
   `quality` take `BASE=<ref>`. Every target ends in a one-line verdict. A repo is onboarded when it first has signals
@@ -831,6 +831,49 @@ ticktick: { list: WeatherOrb }
 - **TickTick** stays the list of things only the owner can do; `factory issue block --human` adds an item there.
 - **The brain** keeps one page per project; the factory writes only its *Changelog* section.
 - **homelab-private** stays self-contained: its manifest lives inside it, and nothing about it appears elsewhere.
+
+### As built (F2 Wave 2)
+
+`packages/contract/src/projects.ts` is the schema, `packages/server/src/projects/` the code (`manifest.ts`, `sync.ts`, `make.ts`,
+`claims.ts`, `store.ts`, `pass.ts`), migration `015_projects.sql`.
+
+- **The schema.** `apiVersion: factory/v2`, `name`, `deploy {mode auto|make|agentic|none, targets[{name, host, verify}], hold,
+  migrations[], probes[{name, http, expect}]}`, `ship[{paths[], via push|pr}]`, `leads`. `verify` is an `http(s)` URL or `make <target>`; `hold` is
+  `30s`, `30m`, `2h` or `1d`, at most `7d`, default `30m`; `expect` defaults to 200; `leads` is 1 to 8. Objects are strict: a key
+  that is not in the schema is an error (a typo is not read as a default), except `signals`, `heal`, `jobs` and `ticktick`, which
+  are accepted and dropped. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
+  most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
+  `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
+  says so in a manifest), done means the commit or the document.
+- **Sync** (`ProjectSync`). The manifest is read from the repo's **default branch** with `git show` (`origin/HEAD`, else `main`, else
+  `master`), not from the working tree: a feature branch checked out, or an edit not committed, is not what the factory runs on. A
+  full pass visits every git repo directly under a `FACTORY_REPO_ROOTS` root that has a manifest, every repo that has a row and every
+  repo an Issue or spawn names (a worktree path counts as its repo: the first directory below the root), at most every ten minutes and
+  on `factory project sync` / `POST /projects/sync`. Every other tick looks only for a named repo that has no row. A repo with no
+  manifest and nothing naming it is no project. All reading happens before any transaction; rows are written one after the other. A
+  `git` that times out leaves the row as it was (an error in the tick, not a deleted manifest); a manifest taken away puts the
+  project back on the defaults.
+- **Keys.** The key is the directory's name. Two directories of one name (under different roots): the one stored first keeps
+  `<name>`, the other is `<name>~<first 8 hex of the sha-256 of its real path>`, and a stored repo keeps its key whatever is
+  added later. A claim and a project lookup go by the repo's path (the row whose `repo` is the path or contains it).
+- **A broken manifest** (YAML, schema, a `name` that is not the directory): the row keeps `manifest` and `manifest_sha`, records
+  `manifest_error` and the content's hash, and `createIssue` opens one upkeep Issue (`source: "upkeep"`, `source_key`
+  `manifest:<project>:<sha-256 of the content>`). The same content again finds that Issue, whatever became of it; changed content
+  that is still broken opens another. A manifest that parses clears the error.
+- **The make contract** is a static read of `Makefile` (`GNUmakefile`, `makefile`) and the files it includes by a literal path or a
+  glob (three levels, 64 files, inside the repo): the rule targets of `check test deploy verify restart quality logs status`, stored
+  as `make_targets` with `makefile`. Not `make -pn`: a Makefile may run `$(shell …)` while it is parsed, and this runs inside the
+  server. A target-specific variable (`verify: FLAG=1`) or a pattern rule is not a target.
+- **Claims.** `claims` has a row per (key `repo:<project>`, Issue): `held_at` set once it holds, NULL while it queues. A spawn with an
+  `issue_id` (`createSpawn`'s `issueId`; the HTTP `POST /spawns` takes none) goes through `tryClaim` in `admit`, after `pace` and before
+  capacity: a project admits `leads` holders plus one more for an urgent Issue (`issues.class = 'urgent'`) when no urgent Issue
+  holds yet; otherwise the spawn is held with `hold: "claim"`, no account reserved, and looked at again every 30 s like `pace`. A
+  place that frees goes to the oldest queued Issue (urgent ones first); only an Issue with a spawn still queued, waiting or starting
+  counts as queued, so a failed spawn holds nobody up. A project with no row yet takes no claim: the tick syncs the named repo
+  before it claims, and a claim is decided at every start. A spawn without an Issue (waves, fan workers, `rd`) takes none.
+- **Release.** `releaseClaim` is what finalize calls (Wave 4); until then `releaseClosed` in the tick's project pass gives back the
+  claims of closed Issues before the spawns are claimed, so the next Issue is promoted in the same pass.
+- **Read.** `GET /projects`, `GET /projects/:name` (token and socket), `POST /projects/sync` (token); `factory project list|show|sync`.
 
 ## 10. Jobs
 
@@ -892,12 +935,12 @@ group.
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
 | `prompts` | prompt id, session, text, typed at, delivered at | F1 |
 | `slots` | holder, lease, command | F1 |
-| `projects` | every repo: synced `project.yaml` or defaults, make targets, pause flag; the table exists from W1, Wave 2 fills it | F2 |
+| `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
 | `issues`, `issue_deps` | source, source key, repo, facts, kind, class, title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
 | `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
 | `issue_effects` | what a transition asks of the world, key, attempts, error, done at | F2 |
 | `issue_links` | Signal → Issue, Issue → Issue, who, why, whether it acted | F2 |
-| `claims` | key, holders, queued Issues | F2 |
+| `claims` | key `repo:<project>`, one row per Issue: urgent, queued at, held at (NULL while queued) | F2 |
 | `issue_events` | phases, notes, orchestrator actions, state changes (`events` is the session store's name since F1) | F2 |
 | `evidence` | per Issue: kind, link or payload, at, from whom | F2 |
 | `decisions` | question, options, default, expiry, answer, who, when | F2 |

@@ -1,6 +1,7 @@
 import type { HoldReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { currentLoads, latestReadings, nextOpening, pickEligible } from './capacity.ts'
+import { tryClaim } from './projects/claims.ts'
 import { effectiveState, loadQueueStates } from './queue.ts'
 import { type LiveSession, liveSessions } from './sessions.ts'
 
@@ -25,6 +26,8 @@ export interface Candidate {
   role: string
   /** the account it already has, kept while it is still open */
   prefer?: string | null
+  /** the Issue it works: it waits on the Issue's claim on the project. A fleet spawn has none and takes no claim. */
+  issueId?: number | null
 }
 
 const inside = (a: string, b: string): boolean => a === b || a.startsWith(b.endsWith('/') ? b : `${b}/`)
@@ -45,9 +48,10 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
 
 /**
  * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), one unfinished `wave`
- * session per repo, `pace` (one live session per project), and then an account with room, which under `pace` is
- * also one whose weekly use is at or below the elapsed share of its week. Never spills: with every account closed
- * the answer is to wait for the first opening. Reads inside the caller's transaction; calls nothing outside the database.
+ * session per repo, `pace` (one live session per project), the Issue's claim on its project (`claim`; a spawn with an Issue only),
+ * and then an account with room, which under `pace` is also one whose weekly use is at or below the elapsed share of its week.
+ * Never spills: with every account closed the answer is to wait for the first opening. Works inside the caller's transaction and
+ * calls nothing outside the database; the one write is the claim, taken or queued (no account is reserved by a hold).
  *
  * `live` is the caller's list of live sessions, for a caller that claims several spawns in one transaction and
  * adds each claim to it; without it the sessions are read when a rule needs them.
@@ -67,6 +71,9 @@ export async function admit(
   if (candidate.role === WAVE_ROLE && others.some((s) => s.role === WAVE_ROLE && !s.finished))
     return { kind: 'hold', reason: 'wave' }
   if (state === 'pace' && others.length > 0) return { kind: 'hold', reason: 'pace' }
+  if (candidate.issueId != null && (await tryClaim(tx, candidate.issueId, now)) === 'queued') {
+    return { kind: 'hold', reason: 'claim' }
+  }
 
   const readings = await latestReadings(tx)
   const options = { now, pace: state === 'pace', prefer: candidate.prefer }
