@@ -6,6 +6,10 @@ import {
   IssueId,
   IssueInput,
   IssueList,
+  Project,
+  ProjectList,
+  ProjectName,
+  ProjectSyncResult,
   Prompt,
   Quota,
   QuotaList,
@@ -27,6 +31,8 @@ import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { createIssue } from './issues/lifecycle.ts'
 import { getIssue, listIssues } from './issues/read.ts'
+import { getProject, listProjects } from './projects/store.ts'
+import type { ProjectSync } from './projects/sync.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
 import { getQueue, setQueue } from './queue.ts'
 import { recordPrompt } from './prompts.ts'
@@ -65,6 +71,8 @@ export interface AppDeps {
   roles: RoleTable
   /** reads the account picker on demand (`POST /quota/refresh`) */
   quota: QuotaPoller
+  /** reads the projects' manifests on demand (`POST /projects/sync`) */
+  projects: Pick<ProjectSync, 'syncNow'>
 }
 
 /** Largest request body the server reads. */
@@ -304,6 +312,15 @@ const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>)
   return issue ? respond(Issue, issue) : json({ error: 'unknown issue' }, 404)
 }
 
+/** `GET /projects`: every project, by name. */
+const projectListHandler = (sql: SQL) => async () => respond(ProjectList, { projects: await listProjects(sql) })
+
+/** `GET /projects/:name`. */
+const projectGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/projects/:name'>) => {
+  const project = await getProject(sql, parseParam(ProjectName, req.params.name))
+  return project ? respond(Project, project) : json({ error: 'unknown project' }, 404)
+}
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -322,7 +339,7 @@ const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
 })
 
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota }: AppDeps) {
+export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota, projects }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   return {
     '/health': {
@@ -374,6 +391,9 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
+    '/projects': { GET: route(projectListHandler(sql)) },
+    '/projects/sync': { POST: route(async () => respond(ProjectSyncResult, await projects.syncNow())) },
+    '/projects/:name': { GET: route(projectGetHandler(sql)) },
     '/quota': {
       GET: route(async () => {
         const now = clock.now()
@@ -440,7 +460,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) and the Issue reads (`GET /issues[/:id]`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`) and the project reads (`GET /projects[/:name]`), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -477,6 +497,8 @@ export function serveHooks(deps: {
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
+      '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
+      '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,

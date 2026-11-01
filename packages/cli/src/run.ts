@@ -7,6 +7,9 @@ import {
   IssueList,
   type IssueSummary,
   loadRoleTable,
+  Project,
+  ProjectList,
+  ProjectSyncResult,
   Prompt,
   type Quota,
   Placement,
@@ -60,6 +63,11 @@ commands:
                   (token or socket, as spawn create)
   issue list      the Issues, newest first (token or socket)
   issue show <id> one Issue with its facts (token or socket)
+  project list    the projects: manifest or defaults, leads, who holds the claim and who waits, broken manifests (token or socket)
+  project show <name>
+                  one project: the manifest in force, the make contract (which of check, test, deploy, verify, restart, quality, logs,
+                  status its Makefile has), the claim, a manifest that does not parse (token or socket)
+  project sync    read every project's project.yaml and Makefile now (token)
   queue get [--project <path>]
                   the queue state (run, pace or drain) of the global scope or a project, the effective one, and every scope set
                   (token or socket)
@@ -105,6 +113,39 @@ const cell = (value: unknown) => (value === null || value === undefined ? '-' : 
 
 const spawnLine = (s: Spawn) =>
   [s.key, s.status, s.account, s.resumeAt, s.attempts, s.session, s.role, s.hold].map(cell).join('\t')
+
+const projectLine = (p: Project) =>
+  [
+    p.name,
+    p.source,
+    p.manifest.deploy.mode,
+    `leads ${p.manifest.leads}`,
+    `held ${p.claim.holders.join(',') || '-'}`,
+    `queued ${p.claim.queued.join(',') || '-'}`,
+    p.manifestError ? `broken ${p.manifestError.issue === null ? '' : `#${p.manifestError.issue}`}` : '',
+  ]
+    .filter(Boolean)
+    .join('\t')
+
+/** One project in full: the plain form is a few lines, the json form the whole object. */
+const projectScreen = (p: Project): string =>
+  [
+    projectLine(p),
+    `repo\t${p.repo}`,
+    `ship\t${p.manifest.ship.map((r) => `${r.paths.join(',')} via ${r.via}`).join('; ')}`,
+    `hold\t${p.manifest.deploy.hold}`,
+    `make\t${
+      p.makeTargets === null
+        ? 'not read'
+        : p.makeTargets.makefile
+          ? Object.entries(p.makeTargets)
+              .filter(([name]) => name !== 'makefile')
+              .map(([name, has]) => `${name} ${has ? 'yes' : 'no'}`)
+              .join(', ')
+          : 'no Makefile'
+    }`,
+    ...(p.manifestError ? [`error\t${p.manifestError.message}`] : []),
+  ].join('\n')
 
 const queueLine = (q: QueueView) => [q.scope.project ?? 'global', q.state, q.effective, q.setAt].map(cell).join('\t')
 
@@ -379,6 +420,34 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       schema: Issue,
     })
     return print(body, issueLine(body))
+  }
+
+  if (key === 'project list') {
+    const { body } = await call(io, '/projects', { auth: true, socket: 'fallback', schema: ProjectList })
+    const lines = body.projects.map(projectLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
+  if (words[0] === 'project' && words[1] === 'show') {
+    const target = words[2]
+    if (!target || words.length > 3) throw usage('usage: project show <name>')
+    const { body } = await call(io, `/projects/${encodeURIComponent(target)}`, {
+      auth: true,
+      socket: 'fallback',
+      schema: Project,
+    })
+    return print(body, projectScreen(body))
+  }
+
+  if (key === 'project sync') {
+    const { body } = await call(io, '/projects/sync', { method: 'POST', auth: true, schema: ProjectSyncResult })
+    const lines = [
+      `synced ${body.synced}`,
+      ...body.broken.map((b) => `broken ${b.project}${b.issue === null ? '' : ` #${b.issue}`}`),
+      ...body.errors.map((e) => `error ${e}`),
+    ]
+    return print(body, lines.join('\n'))
   }
 
   if (key === 'queue get') {

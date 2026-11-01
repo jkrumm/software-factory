@@ -7,6 +7,7 @@ import { loadConfig } from './config.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
+import { ProjectSync } from './projects/sync.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { HcClient } from './hc.ts'
 import { HcEvents } from './hc-events.ts'
@@ -56,6 +57,7 @@ await migrate(sql)
 
 const clock = systemClock
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
+const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now() })
 const runner = new HcRunner({
   bin: config.hcBin,
   session: config.hcSession,
@@ -76,6 +78,7 @@ const server = serve({
   repoRoots: config.repoRoots,
   roles,
   quota,
+  projects,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -102,7 +105,7 @@ chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
 const ticker = startTicker(
-  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool, quota },
+  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool, quota, projects },
   TICK_INTERVAL_MS,
   monitor,
 )

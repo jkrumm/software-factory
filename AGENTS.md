@@ -71,12 +71,13 @@ state, roles, process/health/contract/schema/API.
   (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), Issues (`issues/`: `lifecycle.ts` the one writer, `inbox.ts`, `worker.ts`, `effects.ts`,
-  `read.ts`), `migrations/`.
+  `read.ts`), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, the Issues' (`issues.ts`), and the
   role table's schema and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
+- `project.yaml` — this repo's manifest (`docs/design.md` §9); the schema is `packages/contract/src/projects.ts`.
 - `config/roles.json` — the role table (FL4).
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
-  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `project list|show|sync`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

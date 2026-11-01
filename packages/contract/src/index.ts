@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { Effort, RoleName, Tier } from './roles.ts'
 
 export * from './issues.ts'
+export * from './projects.ts'
 export * from './roles.ts'
 export { EVENT_KINDS, type EventKind } from './spool.ts'
 
@@ -17,8 +18,8 @@ export { EVENT_KINDS, type EventKind } from './spool.ts'
 export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'ended', 'failed'])
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
-/** Why a queued spawn is not starting although capacity may be there: the queue state, or the one-wave-per-repo rule. */
-export const HoldReason = z.enum(['drain', 'pace', 'wave'])
+/** Why a queued spawn is not starting although capacity may be there: the queue state, the one-wave-per-repo rule, or its Issue's claim on the project. */
+export const HoldReason = z.enum(['drain', 'pace', 'wave', 'claim'])
 export type HoldReason = z.infer<typeof HoldReason>
 
 /** Where a spawn's terminal goes: a hidden child of its parent's terminal, or a tab of its own. */
