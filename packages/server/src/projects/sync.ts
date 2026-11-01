@@ -9,7 +9,7 @@ import {
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
-import { createIssue } from '../issues/lifecycle.ts'
+import { createIssue } from '../issues/create.ts'
 import { contentSha, parseManifest } from './manifest.ts'
 import { makeTargetsOf } from './make.ts'
 

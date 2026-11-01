@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { Issue, IssueList, MAX_FACTS_BYTES } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
-import { createIssue } from '../src/issues/lifecycle.ts'
+import { createIssue } from '../src/issues/create.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
