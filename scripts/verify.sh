@@ -8,6 +8,8 @@ ROOT="${FACTORY_ROOT:-$HOME/.software-factory}"
 REPO_DIR="$ROOT/repo"
 SHA_FILE="$ROOT/data/deployed-sha"
 PORT=7793
+DOOR_PORT=8796
+DOOR_TOKENS_FILE="${FACTORY_DOOR_TOKENS_FILE:-$HOME/.config/factory/door-tokens.json}"
 # Must be the ref `make deploy` was given (FACTORY_REF, default master).
 REF="${FACTORY_REF:-master}"
 [[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || { echo "FACTORY_REF is not a plain branch name: $REF" >&2; exit 1; }
@@ -47,5 +49,19 @@ factory health >/dev/null || fail "factory health failed"
 secrets-run run --env-file="$ROOT/current/.env.tpl" -- factory spawn list >/dev/null || fail "factory spawn list failed"
 ok "factory health and factory spawn list"
 
+# 5. the door answers an unauthenticated POST with 401 (it has no health route: the 401 is the health check). When it does not,
+#    the reason is the one its launcher left: most often the tokens file, which `make deploy` does not create.
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST -H 'content-type: application/json' -d '{}' \
+  "http://127.0.0.1:$DOOR_PORT/alert/kuma")
+if [[ "$code" != "401" ]]; then
+  reason="POST /alert/kuma without a token answered $code, expected 401"
+  if [[ ! -e "$DOOR_TOKENS_FILE" ]]; then
+    reason="$reason: the tokens file $DOOR_TOKENS_FILE does not exist (factory door token new <source>)"
+  elif [[ -f "$HOME/Library/Logs/factory-door.err.log" ]]; then
+    reason="$reason: $(tail -n 1 "$HOME/Library/Logs/factory-door.err.log")"
+  fi
+  fail "the door on 127.0.0.1:$DOOR_PORT: $reason"
+fi
+ok "the door answers an unauthenticated POST /alert/kuma with 401"
 
 echo "verify: all checks passed"
