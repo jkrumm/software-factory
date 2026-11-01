@@ -1,0 +1,13 @@
+{
+  "heartbeat": {
+    "monitorID": 12,
+    "status": 2,
+    "time": "2026-11-01 21:13:07.100",
+    "msg": "timeout of 48000ms exceeded",
+    "important": false,
+    "retries": 1,
+    "ping": null
+  },
+  "monitor": { "id": 12, "name": "forecast-api", "type": "http", "hostname": "example.com", "port": 443 },
+  "msg": "[forecast-api] [⏳ Pending] timeout of 48000ms exceeded"
+}
