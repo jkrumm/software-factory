@@ -128,6 +128,16 @@ describe('POST /issues', () => {
     expect(await stored()).toBe(0)
   })
 
+  test('the linked IuRoot itself, and a submitted link that names IuRoot, are refused too', async () => {
+    const context = { repoRoots: [LINKED_ROOT, TEST_ROOT], now: clock.now() }
+    const alert = { source: 'alert', sourceKey: 'a', title: 't', facts: {} }
+    expect(await createIssue(db.sql, { ...alert, repo: LINKED_ROOT }, context).catch(String)).toContain('IuRoot')
+    const link = join(TEST_ROOT, 'IuRoot-link', 'iuroot-too')
+    symlinkSync(NEUTRAL, link)
+    expect(await createIssue(db.sql, { ...alert, repo: join(link, 'work') }, context).catch(String)).toContain('IuRoot')
+    expect(await stored()).toBe(0)
+  })
+
   test('a body cannot name a state, an unknown source, or too many facts', async () => {
     expect((await post({ state: 'settling' })).status).toBe(400)
     expect((await post({ state: 'working' })).status).toBe(400)

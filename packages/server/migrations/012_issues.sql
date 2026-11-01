@@ -14,7 +14,7 @@ CREATE TABLE factory.projects (
 
 -- `state` has one writer, `src/issues/lifecycle.ts`. `reason` says why a `waiting` Issue waits, `outcome` how a `closed` one
 -- ended. `source` is open (a CHECK would make a new source a migration); `(source, source_key)` makes a replayed create one
--- Issue. `facts` is data, never instructions.
+-- Issue. `facts` is data, never instructions. `updated_at` is the event time of the last move: what a late event is compared to.
 CREATE TABLE factory.issues (
   id         serial PRIMARY KEY,
   state      text NOT NULL CHECK (state IN ('settling', 'queued', 'working', 'waiting', 'watching', 'closed')),
