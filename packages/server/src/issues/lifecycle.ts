@@ -148,7 +148,11 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     working: {
       to: 'waiting',
       reason: 'wait',
-      refuse: ({ row }) => (badTime(row.payload, 'until') ? 'until is not a time' : undefined),
+      // A wait with no time has no way out but a stop: what has none is `block` or `ask`.
+      refuse: ({ row }) =>
+        text(row.payload, 'until') === null || badTime(row.payload, 'until')
+          ? 'a wait needs a time in `until`'
+          : undefined,
     },
   },
   block: { working: { to: 'waiting', reason: 'blocked' } },
