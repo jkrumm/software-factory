@@ -98,7 +98,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
   11). Sent by rotation 5 (prompt ids `night-2026-11-01-review`, `-pause`); check both were delivered.
 - [x] C0 (`night-c0-cleanup.md`, `worker`), landed and deployed; PR #15 (deps) merged after a local `make check`; PR #12
   rebased onto the herdr-core runner or closed with the reason (its gamedays feed F2 W6).
-- [ ] F2 Wave 1 (`night-f2-w1-issues.md`, `deep`) with D beside it (`night-d-hidden-waves.md`, `worker`; it overlaps W1
+- [x] F2 Wave 1 (`night-f2-w1-issues.md`, `deep`) with D beside it (`night-d-hidden-waves.md`, `worker`; it overlaps W1
   only in route registration: land W1 first, D rebases).
 - [ ] I: `factory-door` once W1 is live (brief to write: `packages/door`, its own LaunchAgent on the tailnet interface,
   POST only, per-source tokens in a 0600 file until the owner seeds them into 1Password in the morning, the monitor → repo
