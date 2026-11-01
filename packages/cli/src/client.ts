@@ -11,6 +11,8 @@ export interface Io {
   env: Record<string, string | undefined>
   out(text: string): void
   err(text: string): void
+  /** what was piped in; only `issue new --facts -` reads it */
+  stdin?(): Promise<string>
 }
 
 const notContract = (path: string, detail: string) =>

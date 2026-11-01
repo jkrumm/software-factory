@@ -6,6 +6,8 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
+import type { EffectPorts } from './issues/effects.ts'
+import { issuePass } from './issues/worker.ts'
 import { deliverPrompts } from './prompts.ts'
 import type { QuotaPoller } from './quota.ts'
 import { evaluateRules } from './rules.ts'
@@ -32,6 +34,8 @@ export interface TickDeps {
   spool?: SpoolReplayer
   /** the account picker's readings, polled once a minute at the start of a pass */
   quota?: QuotaPoller
+  /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
+  issuePorts?: EffectPorts
 }
 
 export interface TickResult {
@@ -313,6 +317,12 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
     await deliverPrompts({ sql: deps.sql, runner: deps.runner, clock: deps.clock })
   } catch (error) {
     result.errors.push(`prompts: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  try {
+    const now = () => deps.clock.now()
+    result.errors.push(...(await issuePass(deps.sql, { now, ports: deps.issuePorts ?? {} })))
+  } catch (error) {
+    result.errors.push(`issues: ${error instanceof Error ? error.message : String(error)}`)
   }
   return result
 }

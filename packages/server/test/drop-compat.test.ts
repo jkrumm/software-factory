@@ -32,7 +32,8 @@ test('migration 011 drops the herdr columns, the old capacity table and the old 
   await db.sql`UPDATE factory.sessions SET tab = 'w8:t1'`
   await db.sql`INSERT INTO factory.witness (name, value, at) VALUES ('herdr_server', '99@x', ${at}), ('runner_server', '99@x', ${at})`
 
-  for (const name of names.filter((n) => n >= '011')) await copyFile(join(MIGRATIONS_DIR, name), join(dir, name))
+  for (const name of names.filter((n) => n.startsWith('011')))
+    await copyFile(join(MIGRATIONS_DIR, name), join(dir, name))
   expect(await migrate(db.sql, dir)).toEqual(['011_drop_compat.sql'])
 
   expect(await db.sql`SELECT agent_status, agent_seen_at FROM factory.sessions`).toEqual([

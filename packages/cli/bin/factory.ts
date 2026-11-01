@@ -11,5 +11,6 @@ if (process.argv[2] === 'hook') {
     env: process.env,
     out: (text) => process.stdout.write(text),
     err: (text) => process.stderr.write(text),
+    stdin: () => Bun.stdin.text(),
   })
 }
