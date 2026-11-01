@@ -757,6 +757,22 @@ describe('the inbox', () => {
     expect((await inbox(id)).slice(-2).map((r) => r.result)).toEqual([null, 'applied'])
   })
 
+  test('a retry that cannot be refused either is one failed row, not a failed pass', async () => {
+    const bad = await working()
+    const good = await working()
+    const key = `created:${bad}`
+    await send(bad, 'phase', undefined, key)
+    await send(bad, 'stop')
+    await send(bad, 'phase', undefined, `superseded:${key}`)
+    expect(await pass()).toHaveLength(1)
+    await send(good, 'close')
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, at) VALUES (${bad}, ${`superseded:${key}`}, 'refused', ${clock.now()})
+      ON CONFLICT (key) DO NOTHING`
+    expect(await pass()).toHaveLength(1)
+    expect((await state(good)).state).toBe('closed')
+  })
+
   test('a late event that failed is retried while the Issue has not moved, however old it is', async () => {
     const id = await working()
     clock.advance(60_000)
