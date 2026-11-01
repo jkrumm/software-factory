@@ -91,7 +91,6 @@ interface DueRow {
   effort: Effort
   status: 'queued' | 'waiting' | 'starting'
   issue_id: number | null
-  issue_state: string | null
   account: string | null
   attempts: number
   error: string | null
@@ -122,7 +121,6 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
       SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at,
-        (SELECT i.state FROM factory.issues i WHERE i.id = factory.spawns.issue_id) AS issue_state,
         (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
@@ -145,15 +143,6 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
     for (const row of due) {
       if (row.first_claimed_at && now.getTime() - row.first_claimed_at.getTime() >= budgetMs) {
         const reason = `gave up: the ${minutes(budgetMs)} retry budget is spent after ${row.attempts} attempts${row.error ? `: ${row.error}` : ''}`
-        await tx`UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason} WHERE key = ${row.key}`
-        if (await dropEmptySession(tx, row.key)) forget(row.key)
-        failed.push({ key: row.key, reason })
-        continue
-      }
-
-      // Its Issue closed while it waited: a lead for it would work on nothing.
-      if (row.issue_id !== null && row.issue_state === 'closed' && row.status !== 'starting') {
-        const reason = `Issue ${row.issue_id} closed before the spawn started`
         await tx`UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${reason} WHERE key = ${row.key}`
         if (await dropEmptySession(tx, row.key)) forget(row.key)
         failed.push({ key: row.key, reason })

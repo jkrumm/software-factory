@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { lockCapacity } from '../capacity.ts'
 
 export const claimKey = (project: string): string => `repo:${project}`
 
@@ -15,10 +16,8 @@ export async function projectOfPath(tx: SQL, path: string): Promise<{ name: stri
 export type ClaimResult =
   /** the Issue holds the claim, now or already */
   | 'held'
-  /** it waits behind the holders, and behind older queued Issues */
+  /** it waits behind the holders and the older queued Issues; an Issue that closed or has no project row yet waits too, and is dealt with by the tick */
   | 'queued'
-  /** nothing to claim: no such Issue, or it closed (callers refuse a spawn of a closed Issue before they ask) */
-  | 'none'
 
 /** Whether the Issue is closed, or gone: a spawn for it has nothing left to do. */
 export async function issueIsClosed(tx: SQL, issueId: number): Promise<boolean> {
@@ -38,7 +37,7 @@ export async function issueIsClosed(tx: SQL, issueId: number): Promise<boolean> 
 export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<ClaimResult> {
   const [issue]: { id: number; repo: string; state: string; class: string | null }[] = await tx`
     SELECT id, repo, state, class FROM factory.issues WHERE id = ${issueId}`
-  if (!issue || issue.state === 'closed') return 'none'
+  if (!issue || issue.state === 'closed') return 'queued'
   const project = await projectOfPath(tx, issue.repo)
   if (!project) return 'queued'
 
@@ -76,18 +75,37 @@ export async function releaseClaim(tx: SQL, issueId: number): Promise<void> {
   await tx`DELETE FROM factory.claims WHERE issue_id = ${issueId}`
 }
 
+const IDLE = `c.held_at IS NOT NULL
+  AND EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status = 'failed')
+  AND NOT EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status <> 'failed')`
+
 /**
- * The claims of Issues that closed, and the held claims of Issues whose every spawn failed (no lead ever ran: `factory spawn
- * requeue` asks again and the claim is decided again). Wave 4's finalize releases the first itself and this part goes.
+ * A held claim of an Issue whose every spawn failed: no lead ran, and the spawn goes back to the end of the line if it is requeued.
+ * Called under the capacity lock, before a requeue and by the sweep.
  */
-export async function releaseClosed(sql: SQL): Promise<number> {
-  const released = await sql`
-    DELETE FROM factory.claims c USING factory.issues i
-    WHERE i.id = c.issue_id AND (
-      i.state = 'closed'
-      OR (c.held_at IS NOT NULL
-        AND EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status = 'failed')
-        AND NOT EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status <> 'failed')))
-    RETURNING c.issue_id`
-  return released.length
+export async function releaseIdleClaim(tx: SQL, issueId: number): Promise<void> {
+  await tx.unsafe(`DELETE FROM factory.claims c WHERE c.issue_id = $1 AND ${IDLE}`, [issueId])
+}
+
+/**
+ * The tick's sweep, under the capacity lock like every admission: the claims of Issues that closed (Wave 4's finalize releases
+ * those itself and this part goes), the held claims of Issues whose every spawn failed (`IDLE`), and the spawns still queued or
+ * waiting for an Issue that closed, which fail: a lead for it would work on nothing. Returns what it released or failed.
+ */
+export async function releaseClosed(sql: SQL): Promise<{ released: number; failed: string[] }> {
+  return sql.begin(async (tx) => {
+    await lockCapacity(tx)
+    const failed: { key: string }[] = await tx`
+      UPDATE factory.spawns s
+      SET status = 'failed', claimed_at = NULL, error = 'Issue ' || s.issue_id || ' closed before the spawn started'
+      FROM factory.issues i
+      WHERE i.id = s.issue_id AND i.state = 'closed' AND s.status IN ('queued', 'waiting')
+      RETURNING s.key`
+    const released = await tx.unsafe(
+      `DELETE FROM factory.claims c USING factory.issues i
+       WHERE i.id = c.issue_id AND (i.state = 'closed' OR (${IDLE}))
+       RETURNING c.issue_id`,
+    )
+    return { released: released.length, failed: failed.map((f) => f.key) }
+  })
 }

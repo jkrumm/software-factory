@@ -186,6 +186,15 @@ describe('which commit is read', () => {
     expect((await syncProject('cloned')).manifest.leads).toBe(3)
   })
 
+  test('a repo whose default branch cannot be found keeps what its row has', async () => {
+    const path = fixture.repo('renamed', { 'project.yaml': MANIFEST.replace('alpha', 'renamed') })
+    await runSync()
+    fixture.git(path, 'branch', '-m', 'develop')
+    const result = await runSync()
+    expect(result.errors).toEqual([])
+    expect(await getProject('renamed')).toMatchObject({ source: 'manifest', manifestError: null })
+  })
+
   test('a git that fails leaves the row as it was, and so does a file that is not a regular one', async () => {
     const path = fixture.repo('failing', { 'project.yaml': MANIFEST.replace('alpha', 'failing') })
     await runSync()
@@ -678,10 +687,12 @@ describe('claims', () => {
     expect(await lead('s3', solo, i3).catch((error: unknown) => error)).toBeInstanceOf(IssueClosed)
     expect(await db.sql`SELECT 1 FROM factory.spawns WHERE key = 's3'`).toHaveLength(0)
 
+    // A waiting spawn with no time to look again is found by the sweep, not by the claim.
+    await db.sql`UPDATE factory.spawns SET status = 'waiting', resume_at = NULL WHERE key = 's2'`
     clock.advance(31_000)
     await projectPass(db.sql, sync)
     const { claims, failed } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
-    expect(failed).toEqual(['s2'])
+    expect(failed).toEqual([])
     expect(claims.map((c) => c.key)).toEqual(['s1'])
     const [row] = await db.sql`SELECT status, error FROM factory.spawns WHERE key = 's2'`
     expect(row).toMatchObject({ status: 'failed', error: expect.stringContaining('closed') })

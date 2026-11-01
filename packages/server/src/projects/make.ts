@@ -1,4 +1,5 @@
-import { readdir, realpath, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { open, readdir, realpath } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import { MAKE_CONTRACT, type MakeTargets } from '@software-factory/contract'
 
@@ -6,6 +7,8 @@ import { MAKE_CONTRACT, type MakeTargets } from '@software-factory/contract'
 const MAX_MAKEFILE_BYTES = 512 * 1024
 const MAX_INCLUDE_DEPTH = 3
 const MAX_FILES = 64
+/** Includes looked at, taken or not: a pattern that matches nothing readable still ends. */
+const MAX_EXAMINED = 256
 const MAKEFILES = ['GNUmakefile', 'makefile', 'Makefile']
 
 const TARGET_LIST = /^[A-Za-z0-9_.][A-Za-z0-9_./-]*(?:[ \t]+[A-Za-z0-9_.][A-Za-z0-9_./-]*)*$/
@@ -76,25 +79,37 @@ export async function makeTargetsOf(repo: string): Promise<MakeTargets> {
 
   const targets = new Set<string>()
   const seen = new Set<string>()
-  // A link that leads out of the repo, or to anything but a regular file, is not read.
+  // A link that leads out of the repo, or anything but a regular file, is not read. The file is opened without following a link
+  // (the real path was resolved just before) and read up to the limit, so a swap in between reads nothing outside.
   const readable = async (file: string): Promise<string | undefined> => {
     const real = await realpath(file).catch(() => undefined)
     if (!real?.startsWith(`${root}${sep}`)) return undefined
-    const info = await stat(real).catch(() => undefined)
-    return info?.isFile() && info.size <= MAX_MAKEFILE_BYTES ? real : undefined
+    const handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => undefined)
+    if (!handle) return undefined
+    try {
+      if (!(await handle.stat()).isFile()) return undefined
+      const buffer = Buffer.alloc(MAX_MAKEFILE_BYTES + 1)
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      return bytesRead > MAX_MAKEFILE_BYTES ? undefined : buffer.toString('utf8', 0, bytesRead)
+    } finally {
+      await handle.close()
+    }
   }
+  let examined = 0
   const visit = async (file: string, depth: number): Promise<void> => {
-    if (seen.size >= MAX_FILES) return
-    const real = await readable(file)
+    if (seen.size >= MAX_FILES || ++examined > MAX_EXAMINED) return
+    const real = await realpath(file).catch(() => undefined)
     if (!real || seen.has(real)) return
+    const text = await readable(real)
+    if (text === undefined) return
     seen.add(real)
-    const read = readMakefile(await Bun.file(real).text())
+    const read = readMakefile(text)
     for (const target of read.targets) targets.add(target)
     if (depth >= MAX_INCLUDE_DEPTH) return
     for (const pattern of read.includes) {
       if (pattern.startsWith('/') || relative(root, resolve(root, pattern)).startsWith('..')) continue
       for await (const next of expand(root, pattern)) {
-        if (seen.size >= MAX_FILES) return
+        if (seen.size >= MAX_FILES || examined > MAX_EXAMINED) return
         await visit(next, depth + 1)
       }
     }

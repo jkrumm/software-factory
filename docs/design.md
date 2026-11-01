@@ -853,8 +853,8 @@ ticktick: { list: WeatherOrb }
   repo an Issue or spawn names (a worktree path counts as its repo: the first directory below the root), at most every ten minutes and
   on `factory project sync` / `POST /projects/sync`. Every other tick looks only for a named repo that has no row. A repo with no
   manifest and nothing naming it is no project. All reading happens before any transaction; rows are written one after the other. Any
-  `git` failure or timeout leaves the row as it was (an error in the tick, not a deleted manifest); only a branch that has no
-  `project.yaml` puts the project back on the defaults.
+  `git` failure or timeout, and a repo with no default branch to find, leaves the row as it was (an error in the tick, not a
+  deleted manifest); only a branch that has no `project.yaml` puts the project back on the defaults.
 - **Keys.** The key is the directory's name. Two directories of one name (under different roots): the one stored first keeps
   `<name>`, the other is `<name>~<first 8 hex of the sha-256 of its real path>`, and a stored repo keeps its key whatever is
   added later. A claim and a project lookup go by the repo's path (the row whose `repo` is the path or contains it).
@@ -863,7 +863,7 @@ ticktick: { list: WeatherOrb }
   `manifest:<project>:<sha-256 of the content>`). The same content again finds that Issue, whatever became of it; changed content
   that is still broken opens another. A manifest that parses clears the error.
 - **The make contract** is a static read of `Makefile` (`GNUmakefile`, `makefile`) and the files it includes by a literal path or a
-  glob (three levels, 64 files, inside the repo): the rule targets of `check test deploy verify restart quality logs status`, stored
+  glob (three levels, 64 files, 256 looked at, inside the repo; opened without following a link, 512 KiB at most): the rule targets of `check test deploy verify restart quality logs status`, stored
   as `make_targets` with `makefile`. Not `make -pn`: a Makefile may run `$(shell …)` while it is parsed, and this runs inside the
   server. A target-specific variable (`verify: FLAG=1`) or a pattern rule is not a target.
 - **Claims.** `claims` has a row per (key `repo:<project>`, Issue): `held_at` set once it holds, NULL while it queues. A spawn with an
@@ -873,11 +873,12 @@ ticktick: { list: WeatherOrb }
   `hold: "claim"`, no account reserved, and looked at again every 30 s like `pace`. A place that frees goes to the oldest queued
   Issue by id (urgent ones first); only an Issue with a spawn still queued, waiting or starting counts as queued. A repo whose
   project has no row yet is held the same way: the tick syncs a named repo before it claims. A spawn for a closed Issue is
-  refused (`IssueClosed`, nothing stored), and a queued one whose Issue closed fails. A spawn without an Issue (waves, fan
+  refused (`IssueClosed`, nothing stored), and a queued or waiting one whose Issue closed fails in the tick's sweep. A spawn without an Issue (waves, fan
   workers, `rd`) takes no claim. The session of a spawn is not bound to its Issue here (Wave 3 does it with the lead).
 - **Release.** `releaseClaim` is what finalize calls (Wave 4); until then `releaseClosed` in the tick's project pass gives back the
   claims of closed Issues, and the held claim of an Issue whose every spawn failed (no lead ever ran; `factory spawn requeue` asks
-  again), before the spawns are claimed, so the next Issue is promoted in the same pass.
+  again), before the spawns are claimed, so the next Issue is promoted in the same pass. The sweep and `requeueSpawn` run under the capacity
+  lock like an admission; a requeue of such a spawn gives the place back first.
 - **Read.** `GET /projects`, `GET /projects/:name` (token and socket), `POST /projects/sync` (token); `factory project list|show|sync`.
 
 ## 10. Jobs
