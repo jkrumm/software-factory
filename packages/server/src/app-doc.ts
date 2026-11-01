@@ -1,5 +1,7 @@
+import { basename } from 'node:path'
 import { z } from 'zod'
 import { HcError } from './hc.ts'
+import { real } from './runner.ts'
 
 /** The document the Herdr app keeps its spaces and tabs in (the product's own name). */
 export const APP_DOC = 'herdr-app'
@@ -63,6 +65,52 @@ export async function nameTab(rpc: Rpc, tab: string, name: string): Promise<void
       entry.name = name
       try {
         await rpc('doc.set', { name: APP_DOC, version: doc.version, value: doc.value }, DocSet)
+        return
+      } catch (error) {
+        if (!(error instanceof HcError && error.refusal?.kind === 'conflict')) return
+      }
+    }
+  } catch {
+    // the name is a courtesy
+  }
+}
+
+/**
+ * Make sure the app's document has an entry for a space the factory is about to put a terminal in, so the app adopts the
+ * terminal into a space named after the repo and rooted at its folder, not one named after the terminal's cwd (a worktree's).
+ * `folder` is the space's resolved path (the main checkout of a worktree). The entry is `{ id, name, folder, tabs: [] }`, as
+ * the app writes it. A second space for a folder already in the document is named `<basename> <n>` to tell it apart.
+ *
+ * An entry with the id is never touched, and neither is a document that is not the app's (a value that is not null and has
+ * no `spaces` array). Written against the version just read; a conflict reads again. Best effort, never throwing: the id is
+ * the one the terminal's label carries, so a later seed, or the app, still lands on the same space.
+ */
+export async function seedSpace(rpc: Rpc, space: { id: string; folder: string }): Promise<void> {
+  try {
+    for (let attempt = 0; attempt < DOC_RETRIES; attempt++) {
+      let doc: z.output<typeof DocGet>
+      try {
+        doc = await rpc('doc.get', { name: APP_DOC }, DocGet)
+      } catch (error) {
+        if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) return
+        doc = { value: null, version: 0 }
+      }
+      const value = doc.value === null ? { spaces: [] } : doc.value
+      if (!isRecord(value) || !Array.isArray(value.spaces)) return
+      const entries = value.spaces.filter(isRecord)
+      if (entries.some((entry) => entry.id === space.id)) return
+      const siblings = entries.filter(
+        (entry) => typeof entry.folder === 'string' && real(entry.folder) === space.folder,
+      )
+      const name = basename(space.folder)
+      value.spaces.push({
+        id: space.id,
+        name: siblings.length === 0 ? name : `${name} ${siblings.length + 1}`,
+        folder: space.folder,
+        tabs: [],
+      })
+      try {
+        await rpc('doc.set', { name: APP_DOC, version: doc.version, value }, DocSet)
         return
       } catch (error) {
         if (!(error instanceof HcError && error.refusal?.kind === 'conflict')) return

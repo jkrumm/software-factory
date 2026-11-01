@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './exec.ts'
-import { appSpaces, nameTab, type Rpc } from './app-doc.ts'
+import { appSpaces, nameTab, seedSpace, type Rpc } from './app-doc.ts'
 import { HcClient, HcError } from './hc.ts'
 import {
   accountEnv,
@@ -302,9 +302,12 @@ export class HcRunner implements Runner {
     root: string,
     budget: Budget,
   ): Promise<Extract<Placement, { kind: 'tab' }>> {
+    const { id, seed } = await this.spaceId(input, root, budget)
+    // The app adopts a terminal into the space its label names; with no entry it makes one named after the terminal's cwd.
+    if (seed) await seedSpace(this.docRpc(budget), { id, folder: root })
     return {
       kind: 'tab',
-      space: await this.spaceId(input, root, budget),
+      space: id,
       tab: tabId(input.key),
       params: { no_parent: true },
     }
@@ -322,18 +325,20 @@ export class HcRunner implements Runner {
   /**
    * The space of a path. A space an earlier try recorded wins (the ids the factory makes start with `sp`; another one
    * only while a terminal is in it); else the app's own entry for the folder; else a stable id. A spawn that asks for a
-   * space of its own gets one only when the path already has a space.
+   * space of its own gets one only when the path already has a space. `seed`: the id is the factory's own, so the app's
+   * document may have no entry for it yet.
    */
-  private async spaceId(input: StartInput, root: string, budget: Budget): Promise<string> {
+  private async spaceId(input: StartInput, root: string, budget: Budget): Promise<{ id: string; seed: boolean }> {
     const recorded = input.workspace
-    if (recorded && (/^sp/.test(recorded) || (await this.occupied(recorded, budget)))) return recorded
+    if (recorded && /^sp/.test(recorded)) return { id: recorded, seed: recorded.startsWith('sp-') }
+    if (recorded && (await this.occupied(recorded, budget))) return { id: recorded, seed: false }
     const known = (await appSpaces(this.docRpc(budget))).find(
       (space) => space.folder !== undefined && real(space.folder) === root,
     )
     const standing = known?.id ?? defaultSpaceId(root)
-    if (!input.newSpace) return standing
+    if (!input.newSpace) return { id: standing, seed: known === undefined }
     const exists = known !== undefined || (await this.occupied(standing, budget))
-    return exists ? ownSpaceId(root, input.key) : standing
+    return { id: exists ? ownSpaceId(root, input.key) : standing, seed: true }
   }
 
   /** Whether a live terminal is in the space. */

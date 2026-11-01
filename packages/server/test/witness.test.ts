@@ -742,7 +742,6 @@ describe('the hc adapter (HcEvents)', () => {
     const { tab } = await spawn()
     const e = stream()
     await until(() => e.streaming)
-    expect(await hc.callsOf('doc.set')).toHaveLength(0)
 
     // The app adopts the tab: its entry appears in the document, under a number.
     const sets = (await hc.callsOf('doc.set')).length

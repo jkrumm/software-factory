@@ -242,3 +242,178 @@ describe('one space per repo, keyed by path', () => {
     })
   })
 })
+
+// The app adopts a terminal into the space its label names; with no entry it names the space after the terminal's cwd (a
+// worktree's). So the runner seeds the entry before it runs the terminal.
+describe('seeding a new space in the app document', () => {
+  type Entry = { id: string; name: string; folder: string; tabs: unknown[]; [key: string]: unknown }
+  const docSpaces = async (): Promise<Entry[]> =>
+    ((await hc.state()).docs['herdr-app']?.value as { spaces: Entry[] } | undefined)?.spaces ?? []
+
+  test('a spawn into a repo with no space seeds one entry: the repo name, the folder, no tabs, the id the label carries', async () => {
+    const { workspace } = await start('a', '/work/app')
+    expect(await docSpaces()).toEqual([{ id: workspace as string, name: 'app', folder: '/work/app', tabs: [] }])
+  })
+
+  test('the entry is there before the terminal is run', async () => {
+    await start('a', '/work/app')
+    const calls = await hc.calls()
+    const seeded = calls.findIndex((c) => c.startsWith('doc.set'))
+    const ran = calls.findIndex((c) => c.startsWith('terminal.run'))
+    expect(seeded).toBeGreaterThanOrEqual(0)
+    expect(seeded).toBeLessThan(ran)
+  })
+
+  test('a worktree spawn into a repo with no space seeds the main checkout, never the worktree', async () => {
+    const { workspace } = await start('fan-1', '/work/app/.claude/worktrees/w1', { space: '/work/app' })
+    expect(await docSpaces()).toEqual([{ id: workspace as string, name: 'app', folder: '/work/app', tabs: [] }])
+  })
+
+  test('an existing entry is found by its folder and left alone', async () => {
+    await hc.setDoc('herdr-app', {
+      keep: 1,
+      spaces: [{ id: 'sp259fabc', folder: '/work/app', name: 'mine', tabs: [], x: 1 }],
+    })
+    await start('a', '/work/app')
+    await start('b', '/work/app/.claude/worktrees/w1', { space: '/work/app' })
+    expect(await hc.callsOf('doc.set')).toHaveLength(0)
+    expect((await hc.state()).docs['herdr-app']?.version).toBe(1)
+  })
+
+  test('other entries and unknown keys of the document are kept', async () => {
+    const other = {
+      id: 'sp1',
+      folder: '/work/other',
+      name: 'other',
+      tabs: [{ id: 'tb1', name: '', root: { type: 'row' } }],
+      x: 1,
+    }
+    await hc.setDoc('herdr-app', { keep: 1, spaces: [other] })
+    const { workspace } = await start('a', '/work/app')
+    expect((await hc.state()).docs['herdr-app']?.value).toEqual({
+      keep: 1,
+      spaces: [other, { id: workspace as string, name: 'app', folder: '/work/app', tabs: [] }],
+    })
+  })
+
+  test('two spawns into the same new repo seed it once', async () => {
+    const one = await start('a', '/work/app')
+    const two = await start('b', '/work/app')
+    const three = await start('c', '/work/app/.claude/worktrees/w1', { space: '/work/app' })
+    expect(two.workspace).toBe(one.workspace)
+    expect(three.workspace).toBe(one.workspace)
+    expect(await docSpaces()).toHaveLength(1)
+    expect(await hc.callsOf('doc.set')).toHaveLength(1)
+  })
+
+  test('two starts at once seed it once', async () => {
+    await Promise.all([start('a', '/work/app'), start('b', '/work/app')])
+    expect(await docSpaces()).toHaveLength(1)
+  })
+
+  test('new_space on a path that has a space seeds a second entry with a name that tells it apart', async () => {
+    const first = await start('a', '/work/app')
+    const own = await start('b', '/work/app', { newSpace: true })
+    const third = await start('c', '/work/app', { newSpace: true })
+    expect((await docSpaces()).map((s) => [s.id, s.name, s.folder])).toEqual([
+      [first.workspace as string, 'app', '/work/app'],
+      [own.workspace as string, 'app 2', '/work/app'],
+      [third.workspace as string, 'app 3', '/work/app'],
+    ])
+    // A retry of the same key finds its entry: nothing more is written.
+    await start('b', '/work/app', { newSpace: true })
+    expect(await docSpaces()).toHaveLength(3)
+  })
+
+  test("new_space on a path the app has a space for seeds a second entry beside the app's", async () => {
+    await appHas('sp259fabc', '/work/app')
+    const own = await start('a', '/work/app', { newSpace: true })
+    expect((await docSpaces()).map((s) => [s.id, s.name])).toEqual([
+      ['sp259fabc', 'x'],
+      [own.workspace as string, 'app 2'],
+    ])
+  })
+
+  test('a conflict reads the document again and writes against the new version, keeping what was added meanwhile', async () => {
+    await hc.setDoc('herdr-app', { spaces: [] })
+    await hc.plan('doc.set:conflict')
+    const { workspace } = await start('a', '/work/app')
+    expect(await hc.callsOf('doc.set')).toHaveLength(2)
+    expect((await docSpaces()).map((s) => s.id)).toEqual([workspace as string])
+  })
+
+  test('three conflicts give up, and the start goes on in the hashed id', async () => {
+    await hc.plan('doc.set:conflict', 'doc.set:conflict', 'doc.set:conflict', 'doc.set:conflict')
+    const { workspace } = await start('a', '/work/app')
+    expect(workspace).toMatch(/^sp-app-/)
+    expect(await hc.callsOf('doc.set')).toHaveLength(3)
+    expect(await docSpaces()).toHaveLength(0)
+    // The next spawn seeds it, under the same id.
+    await start('b', '/work/app')
+    expect((await docSpaces()).map((s) => s.id)).toEqual([workspace as string])
+  })
+
+  test('a doc.set that fails does not fail the start', async () => {
+    await hc.plan('doc.set:exit1')
+    const result = await start('a', '/work/app')
+    expect(result.workspace).toMatch(/^sp-app-/)
+    expect((await hc.state()).terminals).toHaveLength(1)
+  })
+
+  test('a doc.get that fails while seeding does not fail the start', async () => {
+    // the first doc.get finds the space, the second is the seed's
+    await hc.plan('doc.get:ok', 'doc.get:exit1')
+    const result = await start('a', '/work/app')
+    expect(result.workspace).toMatch(/^sp-app-/)
+    expect(await docSpaces()).toHaveLength(0)
+  })
+
+  test("a document that is not the app's is never overwritten", async () => {
+    await hc.setDoc('herdr-app', 'nonsense')
+    await start('a', '/work/app')
+    expect(await hc.callsOf('doc.set')).toHaveLength(0)
+    await hc.setDoc('herdr-app', { spaces: 'none' })
+    await start('b', '/work/app')
+    expect(await hc.callsOf('doc.set')).toHaveLength(0)
+  })
+
+  test('a core that refuses the document with not_found gets it created', async () => {
+    await hc.plan('doc.get:notfound', 'doc.get:notfound')
+    const { workspace } = await start('a', '/work/app')
+    expect((await docSpaces()).map((s) => s.id)).toEqual([workspace as string])
+  })
+
+  test('a hidden worker, and a foreign space with a terminal in it, seed nothing', async () => {
+    await start('lead', '/work/app')
+    const before = (await hc.callsOf('doc.set')).length
+    await start('w', '/work/app', { role: 'worker', parentTerminal: 't1' })
+    expect((await hc.callsOf('doc.set')).length).toBe(before)
+
+    await hc.mutate((state) => {
+      state.terminals.push({
+        address: 't90',
+        argv: ['sleep'],
+        cwd: '/',
+        keep: true,
+        labels: { 'herdr.space': 'w12' },
+        name: null,
+        notify: true,
+        parent: null,
+        state: 'live',
+        status: null,
+        reported: false,
+        turn: 0,
+      })
+    })
+    await start('b', '/work/other', { workspace: 'w12' })
+    expect((await hc.callsOf('doc.set')).length).toBe(before)
+  })
+
+  test('a retry given the space the runner made seeds it again if the first try could not', async () => {
+    await hc.plan('doc.set:exit1')
+    const first = await start('a', '/work/app', { newSpace: true })
+    expect(await docSpaces()).toHaveLength(0)
+    await start('b', '/work/app', { newSpace: true, workspace: first.workspace })
+    expect((await docSpaces()).map((s) => s.id)).toContain(first.workspace as string)
+  })
+})
