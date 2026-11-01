@@ -8,7 +8,7 @@ import type {
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { enqueue } from './inbox.ts'
-import { createIssueIn } from './lifecycle.ts'
+import { createIssueIn } from './create.ts'
 import { findIssue } from './read.ts'
 
 /** The door's intake (docs/design.md §11): one alert becomes a signal on an open Issue, a new Issue, or a count. */

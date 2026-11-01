@@ -1,38 +1,15 @@
-import type { Issue, IssueOutcome, IssueState, WaitReason } from '@software-factory/contract'
-import { realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import type { IssueOutcome, IssueState, WaitReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { RepoRefused, resolveRepo } from '../repos.ts'
+import { addDependency, releaseDependents } from './deps.ts'
+import { answerDecision, recordDecision } from './decisions.ts'
 import type { EffectKind } from './effects.ts'
-import { enqueue } from './inbox.ts'
-import { findIssue, type IssueRow, toIssue } from './read.ts'
+import type { IssueRow } from './read.ts'
+import { badTime, type Context, type InboxRow, logEvent, text, time } from './shared.ts'
 
 /** The hold after `ship`, until a manifest says otherwise (Wave 4). */
 export const DEFAULT_HOLD_MS = 30 * 60_000
 /** `closed → queued` is for the same fault within this long. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
-
-/** The end of year 9999. */
-const MAX_TIME_MS = 253_402_300_799_000
-
-/** A create the policy refuses; the message is the 422 body. */
-class IssueRefused extends RepoRefused {}
-
-export interface InboxRow {
-  id: string
-  issue_id: number
-  key: string
-  kind: string
-  session: string | null
-  at: Date
-  payload: Record<string, unknown> | null
-  /** the Issue's revision when handling it last threw, and why */
-  failed_revision: number | null
-  error: string | null
-}
-
-type Context = { tx: SQL; issue: IssueRow; row: InboxRow; now: Date }
 
 interface Step {
   /** the state it moves to; absent, the event is recorded and the state stays */
@@ -54,70 +31,6 @@ interface Step {
   refuse?: (context: Context) => string | undefined
   /** the rows that go with the event, in its transaction; a string refuses it */
   apply?: (context: Context) => Promise<string | undefined>
-}
-
-const text = (payload: InboxRow['payload'], name: string): string | null => {
-  const value = payload?.[name]
-  return typeof value === 'string' && value ? value : null
-}
-
-/** A time from a payload as a `Date`, the form Postgres cannot refuse; invalid when it is no time. */
-const time = (payload: InboxRow['payload'], name: string): Date | null => {
-  const value = text(payload, name)
-  return value === null ? null : new Date(value)
-}
-
-/** Not a time, or one outside what Postgres stores (a JavaScript date reaches further). */
-const badTime = (payload: InboxRow['payload'], name: string): boolean => {
-  const ms = time(payload, name)?.getTime() ?? 0
-  return Number.isNaN(ms) || ms < 0 || ms > MAX_TIME_MS
-}
-
-async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
-  const question = text(row.payload, 'question')
-  if (!question) return 'an ask needs a question'
-  if (badTime(row.payload, 'expiresAt')) return 'expiresAt is not a time'
-  const options = Array.isArray(row.payload?.options) ? JSON.stringify(row.payload.options) : null
-  await tx`
-    INSERT INTO factory.decisions (issue_id, key, question, options, default_option, expires_at, created_at)
-    VALUES (${issue.id}, ${row.key}, ${question}, ${options}::text::jsonb, ${text(row.payload, 'default')},
-            ${time(row.payload, 'expiresAt')}, ${now})
-    ON CONFLICT (key) DO NOTHING`
-  return undefined
-}
-
-async function answerDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
-  const answer = text(row.payload, 'answer')
-  if (!answer) return 'an answer needs its text'
-  await tx`
-    UPDATE factory.decisions SET answer = ${answer}, answered_by = ${text(row.payload, 'who') ?? 'owner'}, answered_at = ${now}
-    WHERE issue_id = ${issue.id} AND answered_at IS NULL`
-  return undefined
-}
-
-const isIssueId = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2_147_483_647
-
-/**
- * Only an open Issue can be waited on: a closed one would never wake this one. The blocker's row is locked, so a close in flight
- * finishes first and is seen here, and one that comes later sees the new row. A dep that closes a cycle would wake nobody.
- */
-async function addDependency({ tx, issue, row }: Context): Promise<string | undefined> {
-  const on = row.payload?.on
-  if (!isIssueId(on) || on === issue.id) return 'a dep needs another Issue in `on`'
-  const [blocker]: Pick<IssueRow, 'state'>[] = await tx`SELECT state FROM factory.issues WHERE id = ${on} FOR SHARE`
-  if (!blocker) return `no Issue ${on}`
-  if (blocker.state === 'closed') return `Issue ${on} is closed already`
-  const [cycle] = await tx`
-    WITH RECURSIVE reached (id) AS (
-      SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${on}
-      UNION
-      SELECT d.on_issue FROM factory.issue_deps d JOIN reached r ON d.issue_id = r.id
-    )
-    SELECT 1 FROM reached WHERE id = ${issue.id}`
-  if (cycle) return `Issue ${on} depends on this one`
-  await tx`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${issue.id}, ${on}) ON CONFLICT DO NOTHING`
-  return undefined
 }
 
 /** The event happened before the one that put the Issue where it is: it says nothing about now. */
@@ -241,40 +154,6 @@ const SILENT = new Set([
   'pane_gone',
 ])
 
-/**
- * A close satisfies every dep on the Issue and ends its own: the rows go, so a blocker that reopens later holds nobody back. An
- * Issue left with no dep is woken.
- */
-async function releaseDependents(tx: SQL, issueId: number, cause: InboxRow, now: Date): Promise<void> {
-  const released: { issue_id: number }[] = await tx`
-    DELETE FROM factory.issue_deps WHERE on_issue = ${issueId} RETURNING issue_id`
-  await tx`DELETE FROM factory.issue_deps WHERE issue_id = ${issueId}`
-  for (const { issue_id: id } of released) {
-    const [free] = await tx`
-      SELECT 1 FROM factory.issues i
-      WHERE i.id = ${id} AND i.state = 'waiting' AND i.reason = 'dependency'
-        AND NOT EXISTS (SELECT 1 FROM factory.issue_deps d WHERE d.issue_id = i.id)`
-    if (!free) continue
-    await enqueue(tx, {
-      issueId: id,
-      key: `wake:${id}:dep:${cause.key}`,
-      kind: 'wake',
-      at: now,
-      payload: { for: 'dependency' },
-    })
-  }
-}
-
-async function logEvent(
-  tx: SQL,
-  input: { issueId: number; key: string; kind: string; from: IssueState | null; to: IssueState | null; at: Date },
-  payload: Record<string, unknown> | null,
-): Promise<void> {
-  await tx`
-    INSERT INTO factory.issue_events (issue_id, key, kind, from_state, to_state, at, payload)
-    VALUES (${input.issueId}, ${input.key}, ${input.kind}, ${input.from}, ${input.to}, ${input.at}, ${payload})`
-}
-
 /** The one statement that moves an Issue. `step.to` comes from the table, so an edge the table lacks cannot be written. */
 async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: Date): Promise<IssueRow> {
   const to = step.to ?? issue.state
@@ -365,119 +244,4 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
       WHERE issue_id = ${issue.id} AND answered_at IS NULL`
   }
   return { issue: moved, result: 'applied', detail: null }
-}
-
-export interface NewIssue {
-  /** `request` or `alert` through the API; open for what the server files itself (`upkeep`) */
-  source: string
-  sourceKey: string
-  repo: string
-  title: string
-  facts: unknown
-}
-
-const namesIuRoot = (path: string): boolean => path.split('/').some((part) => part.toLowerCase() === 'iuroot')
-
-/**
- * An alert never reaches the IuRoot workspace (decision 3). By name, on the path as given and as resolved, and by place: inside the
- * resolved `$HOME/IuRoot`, configured or not, or a configured root that names IuRoot, so a link of any name is caught.
- */
-async function inIuRoot(submitted: string, roots: readonly string[]): Promise<boolean> {
-  const repo = await realpath(submitted).catch(() => submitted)
-  if (namesIuRoot(repo) || namesIuRoot(submitted)) return true
-  for (const root of [join(process.env.HOME ?? homedir(), 'IuRoot'), ...roots.filter(namesIuRoot)]) {
-    const real = await realpath(root).catch(() => undefined)
-    if (real && (repo === real || repo.startsWith(`${real}/`))) return true
-  }
-  return false
-}
-
-/** Postgres refuses this JSON: half a surrogate pair, a NUL, or nesting past its stack, whose depth differs per host. */
-const UNSTORABLE_JSON = new Set(['22P02', '22P05', '54001'])
-
-/**
- * Stores a new Issue, always `queued`, with its first `issue_events` row. A repeated `(source, sourceKey)` answers the stored
- * row whatever it became, a closed one too: this wave reopens nothing, and the policy has nothing to add to a row it let in.
- * Refused: a repo outside `repoRoots` (as a spawn's), and an alert in IuRoot. Both throw `RepoRefused`.
- */
-export async function createIssueIn(
-  tx: SQL,
-  input: NewIssue,
-  context: { repoRoots: readonly string[]; now: Date },
-): Promise<{ issue: Issue; created: boolean }> {
-  const { now } = context
-  const known = await findIssue(tx, input.source, input.sourceKey)
-  if (known) return { issue: known, created: false }
-
-  const refuseAlert = async (path: string): Promise<void> => {
-    if (input.source !== 'alert' || !(await inIuRoot(path, context.repoRoots))) return
-    throw new IssueRefused('an alert files no Issue in IuRoot')
-  }
-  // First, and with no path in the answer: the roots' refusal names the resolved path. Then the stored path answers for
-  // itself: a link can be pointed elsewhere between the two looks.
-  await refuseAlert(input.repo)
-  const repo = await resolveRepo(input.repo, context.repoRoots)
-  await refuseAlert(repo)
-
-  const facts = JSON.stringify(input.facts)
-  const rows: IssueRow[] = await tx`
-    INSERT INTO factory.issues (state, source, source_key, repo, title, facts, created_at, updated_at)
-    VALUES ('queued', ${input.source}, ${input.sourceKey}, ${repo}, ${input.title}, ${facts}::text::jsonb, ${now}, ${now})
-    ON CONFLICT (source, source_key) DO NOTHING
-    RETURNING *`.catch((error: unknown) => {
-    if (UNSTORABLE_JSON.has((error as { errno?: string }).errno ?? '')) {
-      throw new IssueRefused('facts cannot be stored as JSON')
-    }
-    throw error
-  })
-  const [row] = rows
-  if (!row) {
-    // Lost the race for the key: the winner has committed, or this statement would have waited for it.
-    const winner = await findIssue(tx, input.source, input.sourceKey)
-    if (!winner) throw new Error(`issue ${input.source}:${input.sourceKey} was not stored`)
-    return { issue: winner, created: false }
-  }
-  await logEvent(
-    tx,
-    { issueId: row.id, key: `created:${row.id}`, kind: 'created', from: null, to: 'queued', at: now },
-    { source: row.source },
-  )
-  return { issue: toIssue(row), created: true }
-}
-
-export const createIssue = (
-  sql: SQL,
-  input: NewIssue,
-  context: { repoRoots: readonly string[]; now: Date },
-): Promise<{ issue: Issue; created: boolean }> => sql.begin((tx) => createIssueIn(tx, input, context))
-
-/**
- * Turns every passed `wake_at` into its inbox row and clears it, in one transaction, so a timer fires once: `hold_over` for
- * a `watching` Issue, `wake` for a `waiting` one. Each names what it ends, so one that comes late ends nothing else.
- */
-export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<number> {
-  return sql.begin(async (tx) => {
-    const due: Pick<IssueRow, 'id' | 'state' | 'attempt' | 'hold' | 'waits'>[] = await tx`
-      SELECT id, state, attempt, hold, waits FROM factory.issues
-      WHERE wake_at <= ${now}
-      ORDER BY wake_at, id LIMIT ${batch}
-      FOR NO KEY UPDATE SKIP LOCKED`
-    for (const issue of due) {
-      if (issue.state === 'watching') {
-        const key = `hold:${issue.id}:${issue.attempt}:${issue.hold}`
-        await enqueue(tx, { issueId: issue.id, key, kind: 'hold_over', at: now, payload: { hold: issue.hold } })
-      } else if (issue.state === 'waiting') {
-        const key = `wake:${issue.id}:${issue.waits}`
-        await enqueue(tx, {
-          issueId: issue.id,
-          key,
-          kind: 'wake',
-          at: now,
-          payload: { for: 'wait', wait: issue.waits },
-        })
-      }
-      await tx`UPDATE factory.issues SET wake_at = NULL WHERE id = ${issue.id}`
-    }
-    return due.length
-  })
 }

@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import type { Issue } from '@software-factory/contract'
 import { type Effect, type EffectKind, type EffectPorts, runEffects } from '../src/issues/effects.ts'
 import { enqueue } from '../src/issues/inbox.ts'
-import { createIssue, DEFAULT_HOLD_MS, fireTimers, REOPEN_WINDOW_MS, TABLE } from '../src/issues/lifecycle.ts'
+import { createIssue } from '../src/issues/create.ts'
+import { DEFAULT_HOLD_MS, REOPEN_WINDOW_MS, TABLE } from '../src/issues/lifecycle.ts'
+import { fireTimers } from '../src/issues/timers.ts'
 import { getIssue } from '../src/issues/read.ts'
 import { issuePass, processInbox } from '../src/issues/worker.ts'
 import { openSession, recordEvent } from '../src/sessions.ts'
@@ -132,7 +134,7 @@ describe('the transition table', () => {
     expect((await state(id)).state).toBe('queued')
   })
 
-  test('the only statements that write issues.state are in the lifecycle module', async () => {
+  test('the only statements that write issues.state are in the lifecycle module and the create, which is always queued', async () => {
     const glob = new Bun.Glob('**/*.ts')
     const writers: string[] = []
     const root = `${import.meta.dir}/../src`
@@ -141,7 +143,7 @@ describe('the transition table', () => {
       if (/UPDATE factory\.issues[\s\S]{0,40}SET state|INSERT INTO factory\.issues \(state/.test(text))
         writers.push(path)
     }
-    expect(writers).toEqual(['issues/lifecycle.ts'])
+    expect(writers.sort()).toEqual(['issues/create.ts', 'issues/lifecycle.ts'])
   })
 })
 

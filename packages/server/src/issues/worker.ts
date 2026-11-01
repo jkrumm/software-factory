@@ -1,7 +1,9 @@
 import type { SQL } from 'bun'
 import { type EffectPorts, runEffects } from './effects.ts'
-import { applyEvent, fireTimers, type InboxRow, supersede } from './lifecycle.ts'
+import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
+import type { InboxRow } from './shared.ts'
+import { fireTimers } from './timers.ts'
 
 /** Most rows of one Issue in one transaction, and most Issues in one pass: the rest wait for the next. */
 const ROWS_PER_ISSUE = 50
