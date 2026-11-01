@@ -750,6 +750,15 @@ describe('runner restart', () => {
       expect((await prompts()).find((p) => p.session === 'early')).toMatchObject({ via: 'type' })
     })
 
+    test('a resume of an earlier restart is no answer to a later one: the agent it brought back is lost again', async () => {
+      await w.spawned('s', { account: 'b', repo: '/work/repo', startedMinutesAgo: 200 })
+      await w.emit('s', 'turn_started', w.at(100))
+      await w.emit('s', 'session_started', w.at(95), { claudeSessionId: 'claude-s', source: 'resume' })
+      await restartEvent(w.at(10))
+      expect((await evaluate()).created).toEqual([`restart:${NEW_SERVER}:s`])
+      expect((await prompts())[0]).toMatchObject({ via: 'resume' })
+    })
+
     test('a start that reports no source is not a resume', async () => {
       await w.spawned('s', { account: 'b', repo: '/work/repo' })
       await w.emit('s', 'turn_started', w.at(20))

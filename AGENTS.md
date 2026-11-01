@@ -154,8 +154,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
     reserves that account in the same locked transaction that admits it (given back if the start fails), so a spawn claim in between
     sees it taken. A restart prompt never re-arms. **One resumer per session:** `hc-resume` (dotfiles) types `claude --resume`
     into every kept terminal with the resume labels, factory spawns included, and types no prompt. A session whose only events since
-    the cut-off turn are `session_started` with source `resume` (an idle notice may follow; no turn; the resume may even precede the
-    witness's `runner_restarted`) was resumed in place: the same note is typed into it (`via: type`,
+    the cut-off turn are `session_started` with source `resume` (an idle notice may follow; no turn; the resume may precede the
+    witness's `runner_restarted` by up to 2 minutes; a resume from an earlier restart does not count) was resumed in place: the same note is typed into it (`via: type`,
     the same id), nothing is started. A resume prompt recorded before that resume landed is turned into a typed one at delivery, so the
     factory never starts a second copy of a conversation something else resumed. `hc-resume` is not changed: skipping factory terminals
     would leave idle and waiting sessions (an orchestrator waiting on its workers) as a shell nobody resumes. A session that is not a factory spawn (or never reported its Claude session

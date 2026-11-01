@@ -9,6 +9,9 @@ export type { SessionState }
 /** The pseudo-session the runner's own events (a restart) are filed under: no real name starts with an underscore. */
 export const RUNNER_SESSION = '_runner'
 
+/** A resume of a kept terminal can reach the factory a moment before the witness records the restart it answers. */
+export const RESUME_LEAD_MS = 2 * 60_000
+
 /** A `working` session whose worktree has not changed for this long, while the runner also says `working`, is `stuck`. */
 export const STUCK_AFTER_MS = 45 * 60_000
 /** What the runner said counts as agreeing only while it is this fresh: the witness reads it every minute. */
@@ -371,10 +374,10 @@ function lifeFinished(facts: readonly Fact[], starts: readonly number[], at: num
  */
 export const isFinished = (state: SessionState | undefined, facts: readonly Fact[]): boolean => {
   if (state !== 'idle') return false
+  // Events before the first recorded start (or with none at all) are one implicit life, index -1.
   const starts = facts.flatMap((f, i) => (f.kind === 'session_started' ? [i] : []))
-  // No start recorded: the whole history is one life.
-  if (starts.length === 0) return facts.some((f) => f.kind === 'turn_ended')
-  return lifeFinished(facts, starts, starts.length - 1)
+  if (facts[0]?.kind !== 'session_started') starts.unshift(-1)
+  return starts.length > 0 && lifeFinished(facts, starts, starts.length - 1)
 }
 
 /** A session the factory started, that is not dead: what the one-wave-per-repo and pace rules count. */
