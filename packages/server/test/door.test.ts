@@ -98,6 +98,22 @@ describe('rule 1: no route', () => {
     ])
   })
 
+  test('a monitor not seen for 30 days is dropped when the next unrouted alert comes', async () => {
+    await intake({ monitor: 'old' })
+    clock.advance(29 * 24 * 60 * 60_000)
+    await intake({ monitor: 'recent' })
+    expect(await rows('door_unrouted')).toHaveLength(2)
+    clock.advance(2 * 24 * 60 * 60_000)
+    await intake({ monitor: 'newest' })
+    expect((await rows('door_unrouted')).map((row) => row.monitor).sort()).toEqual(['newest', 'recent'])
+    // seen again, it stays: the clock is its last alert, not its first
+    clock.advance(20 * 24 * 60 * 60_000)
+    await intake({ monitor: 'recent', event: 'again' })
+    clock.advance(20 * 24 * 60 * 60_000)
+    await intake({ monitor: 'other' })
+    expect((await rows('door_unrouted')).map((row) => row.monitor).sort()).toEqual(['other', 'recent'])
+  })
+
   test('names lose their control characters before anything is keyed or shown', async () => {
     await intake({ monitor: 'api\u001b[2J\nx' })
     expect(await rows('door_unrouted')).toMatchObject([{ monitor: 'api [2J x' }])
