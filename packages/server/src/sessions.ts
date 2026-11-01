@@ -98,6 +98,8 @@ export interface Fact {
   /** the event's key: what a rule that answers one event (a blocked prompt) names its effect after */
   key?: string
   detail?: string | null
+  /** of a `session_started`: how the life began (`startup`, `resume`, `clear`, `compact`) */
+  source?: string | null
 }
 
 export interface Witnessed {
@@ -253,6 +255,7 @@ interface FactRow {
   kind: EventKind
   at: Date
   detail: string | null
+  source: string | null
 }
 
 function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | undefined {
@@ -291,7 +294,8 @@ function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | und
 function factRows(sql: SQL, ids: readonly string[]): Promise<FactRow[]> {
   if (ids.length === 0) return Promise.resolve([])
   return sql`
-    SELECT session, key, kind, at, COALESCE(payload->>'on', payload->>'state', payload->>'message') AS detail
+    SELECT session, key, kind, at, COALESCE(payload->>'on', payload->>'state', payload->>'message') AS detail,
+           CASE WHEN kind = 'session_started' THEN payload->>'source' END AS source
     FROM factory.events WHERE session IN ${sql(ids)} ORDER BY session, at, id`
 }
 
@@ -299,7 +303,7 @@ function groupFacts(rows: readonly FactRow[]): Map<string, Fact[]> {
   const bySession = new Map<string, Fact[]>()
   for (const row of rows) {
     const list = bySession.get(row.session) ?? []
-    list.push({ kind: row.kind, at: row.at, key: row.key, detail: row.detail })
+    list.push({ kind: row.kind, at: row.at, key: row.key, detail: row.detail, source: row.source })
     bySession.set(row.session, list)
   }
   return bySession
@@ -347,10 +351,29 @@ export async function listSessions(sql: SQL, now: Date, options: { all?: boolean
   return options.all ? sessions : sessions.filter((s) => s.state !== 'dead')
 }
 
-/** Finished: idle with a turn ended in this life (a resumed session has not worked yet, whatever it did before). */
-export const isFinished = (state: SessionState | undefined, facts: readonly Fact[]): boolean =>
-  state === 'idle' &&
-  facts.slice(facts.findLastIndex((f) => f.kind === 'session_started') + 1).some((f) => f.kind === 'turn_ended')
+/**
+ * Whether the life that begins at `facts[start]` is finished: its last turn event is a `turn_ended`, or it was resumed
+ * (`source: resume`) and has not worked yet, in which case it is as finished as the life before it. A resume puts the
+ * conversation back where it stopped, so a wave that had ended its turn is still a wave that ended its turn, whoever
+ * resumed it and however long the new life has been idle.
+ */
+function lifeFinished(facts: readonly Fact[], starts: readonly number[], at: number): boolean {
+  const start = starts[at] ?? 0
+  const here = facts.slice(start + 1, starts[at + 1] ?? facts.length)
+  const turns = here.filter((f) => f.kind === 'turn_started' || f.kind === 'turn_ended')
+  if (turns.length > 0) return turns[turns.length - 1]?.kind === 'turn_ended'
+  return facts[start]?.source === 'resume' && at > 0 && lifeFinished(facts, starts, at - 1)
+}
+
+/**
+ * Finished: idle with a turn ended in this life, or resumed after one and not worked since (a restart that resumed a
+ * finished wave must not make it a live wave again).
+ */
+export const isFinished = (state: SessionState | undefined, facts: readonly Fact[]): boolean => {
+  if (state !== 'idle') return false
+  const starts = facts.flatMap((f, i) => (f.kind === 'session_started' ? [i] : []))
+  return starts.length > 0 && lifeFinished(facts, starts, starts.length - 1)
+}
 
 /** A session the factory started, that is not dead: what the one-wave-per-repo and pace rules count. */
 export interface LiveSession {

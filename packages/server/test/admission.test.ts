@@ -272,29 +272,87 @@ describe('one active wave per repo', () => {
     expect(await runTick()).toMatchObject({ started: ['wave-2'] })
   })
 
-  test('a wave resumed after it finished is not finished until its first turn ends', async () => {
-    const event = (kind: string, n: number) =>
+  describe('a life that begins after a finished one', () => {
+    const lives = async (source: string, secondTurn: boolean) => {
+      const event = (kind: string, n: number, payload: Record<string, unknown> = {}) =>
+        app.send('POST', '/events', {
+          key: `wave-1:${kind}:${n}`,
+          session: 'wave-1',
+          kind,
+          at: new Date(clock.now().getTime() + n).toISOString(),
+          ...(kind === 'session_started'
+            ? { payload: { claudeSessionId: 'c-wave-1', cwd: TEST_REPO, ...payload } }
+            : {}),
+        })
+      await spawn('wave-1', { role: 'wave' })
+      expect(await runTick()).toMatchObject({ started: ['wave-1'] })
+      await event('session_started', 1, { source: 'startup' })
+      await event('turn_started', 2)
+      await event('turn_ended', 3)
+      // A core restart resumed it (whoever typed the resume): a new life, idle, with no turn yet.
+      await event('session_started', 4, { source })
+      if (secondTurn) {
+        await event('turn_started', 5)
+        await event('turn_ended', 6)
+      }
+    }
+
+    test('resumed, it is as finished as before: it does not hold the repo for the next wave', async () => {
+      await lives('resume', false)
+      const next = await spawn('wave-2', { role: 'wave' })
+      expect(await next.json()).toMatchObject({ hold: null })
+      expect(await runTick()).toMatchObject({ started: ['wave-2'] })
+    })
+
+    test('resumed twice, it is still finished', async () => {
+      await lives('resume', false)
+      await app.send('POST', '/events', {
+        key: 'wave-1:session_started:9',
+        session: 'wave-1',
+        kind: 'session_started',
+        at: new Date(clock.now().getTime() + 9).toISOString(),
+        payload: { claudeSessionId: 'c-wave-1', cwd: TEST_REPO, source: 'resume' },
+      })
+      expect(await (await spawn('wave-2', { role: 'wave' })).json()).toMatchObject({ hold: null })
+    })
+
+    test('a life with another source (a clear) has not worked yet and holds the repo until its first turn ends', async () => {
+      await lives('clear', false)
+      const next = await spawn('wave-2', { role: 'wave' })
+      expect(await next.json()).toMatchObject({ status: 'queued', hold: 'wave' })
+      await app.send('POST', '/events', {
+        key: 'wave-1:turn_started:5',
+        session: 'wave-1',
+        kind: 'turn_started',
+        at: new Date(clock.now().getTime() + 5).toISOString(),
+      })
+      await app.send('POST', '/events', {
+        key: 'wave-1:turn_ended:6',
+        session: 'wave-1',
+        kind: 'turn_ended',
+        at: new Date(clock.now().getTime() + 6).toISOString(),
+      })
+      clock.advance(HOLD_RECHECK_MS)
+      expect(await runTick()).toMatchObject({ started: ['wave-2'] })
+    })
+  })
+
+  test('a wave cut off mid-turn and resumed is still live', async () => {
+    const event = (kind: string, n: number, payload: Record<string, unknown> = {}) =>
       app.send('POST', '/events', {
         key: `wave-1:${kind}:${n}`,
         session: 'wave-1',
         kind,
         at: new Date(clock.now().getTime() + n).toISOString(),
-        ...(kind === 'session_started' ? { payload: { claudeSessionId: 'c-wave-1', cwd: TEST_REPO } } : {}),
+        ...(kind === 'session_started' ? { payload: { claudeSessionId: 'c-wave-1', cwd: TEST_REPO, ...payload } } : {}),
       })
     await spawn('wave-1', { role: 'wave' })
     expect(await runTick()).toMatchObject({ started: ['wave-1'] })
-    await event('session_started', 1)
+    await event('session_started', 1, { source: 'startup' })
     await event('turn_started', 2)
-    await event('turn_ended', 3)
-    // A runner restart resumed it: a new life, idle, with no turn yet.
-    await event('session_started', 4)
-
+    await event('session_started', 4, { source: 'resume' })
     const next = await spawn('wave-2', { role: 'wave' })
     expect(await next.json()).toMatchObject({ status: 'queued', hold: 'wave' })
-    await event('turn_started', 5)
-    await event('turn_ended', 6)
-    clock.advance(HOLD_RECHECK_MS)
-    expect(await runTick()).toMatchObject({ started: ['wave-2'] })
   })
 
   test('a wave that `rd` started counts: its pane reports FACTORY_ROLE and the directory it started in', async () => {
