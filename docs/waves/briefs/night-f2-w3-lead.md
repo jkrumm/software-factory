@@ -16,3 +16,5 @@ Read `AGENTS.md`, `docs/waves/f2.md` (Wave 3), `docs/design.md` §4, §5 ("The l
 Tests: a golden test per path (classify ok, failed, over the ceiling; admit, attach, claim full; an `alert` Issue not admitted with the switch off and admitted with it on; each verb; send-back, park, an owner turn); the replay test extends to the new effects; the standing orders pin. Use the existing fakes for the Runner and a fake for the worktree port.
 
 **Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`): never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy. End with a report: done / deferred, one line each.
+
+**From the lead's review of Wave 1:** `ask` stores `expiresAt` and `default`, but nothing fires on them. `ask` sets `wake_at` to its expiry; a passed expiry takes the default and wakes the lead with it, or parks with a line when there is no default.
