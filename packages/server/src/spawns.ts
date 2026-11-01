@@ -1,4 +1,4 @@
-import type { Effort, HoldReason, Spawn, SpawnStatus, Tier } from '@software-factory/contract'
+import type { Effort, HoldReason, Placement, Spawn, SpawnStatus, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { admit, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
@@ -24,6 +24,7 @@ interface SpawnRow {
   workspace: string | null
   error: string | null
   parent: string | null
+  placement: Placement | null
 }
 
 export const toView = (row: SpawnRow): SpawnView => ({
@@ -44,6 +45,7 @@ export const toView = (row: SpawnRow): SpawnView => ({
   workspace: row.workspace,
   error: row.error,
   parent: row.parent,
+  placement: row.placement,
 })
 
 /**
@@ -75,13 +77,13 @@ export async function withEnded(sql: SQL, spawns: readonly SpawnView[], now: Dat
 
 export async function getSpawn(sql: SQL, key: string, now: Date): Promise<SpawnView | undefined> {
   const [row]: SpawnRow[] = await sql`
-    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns WHERE key = ${key}`
+    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement FROM factory.spawns WHERE key = ${key}`
   return row && (await withEnded(sql, [toView(row)], now))[0]
 }
 
 export async function listSpawns(sql: SQL, now: Date, limit = 200): Promise<SpawnView[]> {
   const rows: SpawnRow[] = await sql`
-    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns
+    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement FROM factory.spawns
     ORDER BY created_at DESC, key LIMIT ${limit}`
   return withEnded(sql, rows.map(toView), now)
 }
@@ -100,6 +102,8 @@ export interface NewSpawn {
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean
+  /** the terminal the caller asked for; absent is the role's default */
+  placement?: Placement
 }
 
 /**
@@ -131,10 +135,10 @@ export async function createSpawn(
           : null
 
     const [row]: SpawnRow[] = await tx`
-      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent, space, new_space)
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent, space, new_space, placement)
       VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${input.role}, ${input.tier}, ${input.effort}, ${status},
-              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false})
-      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
+              ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false}, ${input.placement ?? null})
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     return { spawn: toView(row), created: true }
   })
@@ -154,7 +158,7 @@ export async function requeueSpawn(
     SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
         hold = NULL, assigned_at = NULL
     WHERE key = ${key} AND status = 'failed'
-    RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
+    RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
   if (row) return { spawn: toView(row) }
   const current = await getSpawn(sql, key, now)
   return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }

@@ -203,6 +203,48 @@ describe('hc adapter: where the terminal goes', () => {
     expect(params).not.toHaveProperty('parent')
   })
 
+  const ROLES = ['worker', 'mechanical', 'deep', 'wave', 'lead', 'mother']
+  const WORKER_ROLES = new Set(['worker', 'mechanical', 'deep'])
+
+  describe.each(ROLES)('role %s', (role) => {
+    test.each([undefined, 'tab', 'child'] as const)('placement %p with a known parent terminal', async (placement) => {
+      await runner.start({ ...input, key: 'boss', role: 'mother' })
+      const result = await runner.start({ ...input, key: 'x', role, placement, parentTerminal: 't1' })
+      const params = await run(1)
+      const child = placement === 'child' || (placement === undefined && WORKER_ROLES.has(role))
+      if (!child) {
+        expect(params).toMatchObject({ no_parent: true })
+        expect(params).not.toHaveProperty('parent')
+        expect(result.tab).toBe(tabId('x'))
+        return
+      }
+      // Whatever the role: outlives its parent, never types into it, wears no tab label.
+      expect(params).toMatchObject({ parent: 't1', outlive_parent: true, no_notify: true, keep: true })
+      expect(params).not.toHaveProperty('no_parent')
+      expect(params.labels).toEqual({ 'factory.key': 'x' })
+      expect(result.tab).toBeNull()
+      expect((await hc.state()).terminals[1]).toMatchObject({ parent: 't1', notify: false })
+    })
+
+    test('placement child with no parent terminal is a tab', async () => {
+      const result = await runner.start({ ...input, key: 'x', role, placement: 'child' })
+      expect(await run()).toMatchObject({ no_parent: true })
+      expect(result.tab).toBe(tabId('x'))
+    })
+
+    test('placement child with a parent terminal that is gone is a tab', async () => {
+      const result = await runner.start({ ...input, key: 'x', role, placement: 'child', parentTerminal: 't99' })
+      expect(await run()).toMatchObject({ no_parent: true })
+      expect(result.tab).toBe(tabId('x'))
+    })
+  })
+
+  test('placement child with a space of its own is a tab: a hidden child has no space', async () => {
+    await runner.start({ ...input, key: 'boss', role: 'mother' })
+    await runner.start({ ...input, key: 'x', role: 'lead', placement: 'child', parentTerminal: 't1', newSpace: true })
+    expect(await run(1)).toMatchObject({ no_parent: true })
+  })
+
   test("a hidden worker has no tab of its own: its tab is null and its space is its parent's", async () => {
     const lead = await runner.start({ ...input, key: 'lead', role: 'lead' })
     const kid = await runner.start({ ...input, key: 'kid', parentTerminal: lead.session })

@@ -82,8 +82,11 @@ const defaultSpaceId = (root: string): string => `sp-${basename(root)}-${sha(roo
 /** A space of a spawn's own: the key is in the hash, so its retry makes the same one. */
 const ownSpaceId = (root: string, key: string): string => `sp-${basename(root)}-${sha(`${root}\0${key}`)}`
 
-/** Whether the factory started this role as a hidden child of its parent's terminal (`deep`: a worker raised for novel hard logic). */
+/** Whether this role is a hidden child of its parent's terminal unless the caller says otherwise (`deep`: a worker raised for novel hard logic). */
 const isWorker = (role: string): boolean => role === 'worker' || role === 'mechanical' || role === 'deep'
+
+/** What the spawn is placed as: the caller's word, else the role's default. */
+const placementOf = (input: StartInput): 'tab' | 'child' => input.placement ?? (isWorker(input.role) ? 'child' : 'tab')
 
 type Placement =
   /** a tab of its own: named after the key once the app has adopted it */
@@ -101,8 +104,8 @@ type Placement =
  * No call is made without a process timeout, and all of them together stay inside `startBudgetMs`.
  *
  * Placement is by labels, no window needed: a tab carries `herdr.space` (the app's space for the path, else a stable
- * id) and `herdr.tab` (a stable id for the key) and has no parent; a worker whose parent's terminal is known is that
- * terminal's hidden child instead.
+ * id) and `herdr.tab` (a stable id for the key) and has no parent; a hidden child (`placement: child`, or a worker by
+ * default) whose parent's terminal is known is that terminal's child instead.
  */
 export class HcRunner implements Runner {
   private readonly hc: HcClient
@@ -285,11 +288,12 @@ export class HcRunner implements Runner {
     return { session: terminal.address, tab: terminal.labels['herdr.tab'] ?? null, workspace }
   }
 
-  /** Where the terminal goes: a hidden child of its parent's terminal (a worker), else a tab of its own in the path's space. */
+  /** Where the terminal goes: a hidden child of its parent's terminal (asked for, or a worker by default), else a tab of its own in the path's space. */
   private async place(input: StartInput, root: string, budget: Budget): Promise<Placement> {
     const parent = input.parentTerminal
-    // A spawn that asks for a space of its own is a tab, whatever its role: a hidden child has no space.
-    if (isWorker(input.role) && parent && LOCAL_TERMINAL.test(parent) && !input.newSpace) {
+    // A spawn that asks for a space of its own is a tab, whatever its role: a hidden child has no space. A child with no
+    // known parent terminal is a tab too.
+    if (placementOf(input) === 'child' && parent && LOCAL_TERMINAL.test(parent) && !input.newSpace) {
       // No labels: the app shows it as a sub-agent of its parent, not as a tab. The factory wakes the parent itself, so
       // the core must not type its own notes into it. It outlives the parent's program: the factory decides when it ends.
       return { kind: 'child', params: { parent, outlive_parent: true, no_notify: true } }

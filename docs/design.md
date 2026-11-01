@@ -269,10 +269,15 @@ spawn (a test pins that a path never seen before is trusted first). A prompt can
 Placement is by labels, no window needed: a **tab** (any role, or a worker whose parent session has no known terminal) has
 `no_parent`, `herdr.space`, `herdr.tab` (`tb-<12 hex of sha256 of the key>`) and `factory.tab_name`; its entry in the app's
 document is named after the key once the app has one (compare-and-set on `version`, `app-doc.ts`; the witness retries on a label
-or document event). A **worker** (`worker`/`mechanical`/`deep`, not `new_space`) whose parent session has a terminal (`StartInput.parentTerminal`, the
-parent's `pane`) is that terminal's hidden child: `parent`, `outlive_parent`, `no_notify` (the factory wakes parents itself), no
+or document event). A **hidden child** is a spawn whose parent session has a terminal (`StartInput.parentTerminal`, the parent's `pane`), is not
+`new_space`, and is placed `child`: by the caller's `placement` (`POST /spawns`, token and socket; `factory spawn create
+--placement tab|child`; stored in `spawns.placement`, answered by `Spawn.placement`, part of the idempotent replay, which answers
+the stored row), else by the role's default (`worker`/`mechanical`/`deep` child, every other role a tab). The caller says it
+because the role cannot: a lead spawns both its waves (children) and its successor (a tab). Such a child is that terminal's
+hidden child, whatever its role: `parent`, `outlive_parent`, `no_notify` (the factory wakes parents itself), no
 labels but the key; its result has no tab (null) and the space of its parent's `herdr.space` label (null if none); a parent
-that is gone (`not_found`) makes that try a tab. The app's document is read for spaces: only a confirmed absence (`not_found`, never
+that is gone (`not_found`), or a `child` with no parent terminal at all, makes that try a tab. An older server drops an unknown
+`placement` (the schema is not strict) and answers a row without it, so a client can tell by the missing field. The app's document is read for spaces: only a confirmed absence (`not_found`, never
 written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
 refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
 `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely; the live document (2026-11-01) confirms it.

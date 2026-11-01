@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
-import type { Effort, Tier } from '@software-factory/contract'
+import type { Effort, Placement, Tier } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 
@@ -11,6 +11,8 @@ export interface StartInput {
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean
+  /** what the caller asked for: `child` a hidden child of `parentTerminal`, `tab` a tab; absent is the role's default (worker roles child) */
+  placement?: Placement
   /**
    * The space an earlier try of this spawn used, as the spawn row recorded it: kept while it still counts, whatever the
    * path says. A retry (or a resume) goes back into it, so a new-space spawn never makes a second space for itself.
@@ -26,7 +28,7 @@ export interface StartInput {
   effort: Effort
   /** Claude's own session id: start the agent as `claude --resume <id>`, so the conversation carries on (runner restart) */
   resume?: string
-  /** the terminal the spawn's parent session runs in, if the factory knows it: a worker is started as that terminal's hidden child */
+  /** the terminal the spawn's parent session runs in, if the factory knows it: a hidden child is started in it */
   parentTerminal?: string
 }
 
