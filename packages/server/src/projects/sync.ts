@@ -32,10 +32,12 @@ interface Row {
   repo: string
   manifest: ProjectManifest | null
   manifest_sha: string | null
+  manifest_error: string | null
   manifest_error_sha: string | null
 }
 
-type Manifested = string | null | { bad: string; sha: string }
+/** `undefined`: no default branch to read, so nothing is known (the row keeps what it has) */
+type Manifested = string | null | undefined | { bad: string; sha: string }
 
 const isDirectory = (path: string) =>
   stat(path).then(
@@ -155,12 +157,13 @@ export class ProjectSync {
   }
 
   /**
-   * `project.yaml` as committed on the repo's default branch: its text; `null` when the branch has no such file; `bad` when there is
+   * `project.yaml` as committed on the repo's default branch: its text; `null` when the branch has no such file; `undefined` when there
+   * is no default branch to read (an empty repo, another name); `bad` when there is
    * one that cannot be read as a manifest (not a regular file, larger than the limit), with the hash that keys its upkeep Issue.
    * The branch is resolved first and only that branch is read: `origin/HEAD`'s (the local branch, else `origin/<it>`), else the first
    * of `main` and `master` that exists. Anything git fails at throws, so the row keeps what it has: a failure is not a deletion.
    */
-  private async manifestText(repo: string): Promise<string | null | { bad: string; sha: string }> {
+  private async manifestText(repo: string): Promise<Manifested> {
     if (!(await exists(join(repo, '.git')))) return null
     const run = this.deps.run ?? runProcess
     const env = childEnv({ GIT_TERMINAL_PROMPT: '0' })
@@ -182,7 +185,7 @@ export class ProjectSync {
         break
       }
     }
-    if (!ref) return null
+    if (!ref) return undefined
 
     const listed = (await git(['ls-tree', '-l', ref, '--', 'project.yaml'])).stdout.trim()
     if (!listed) return null
@@ -212,8 +215,8 @@ export class ProjectSync {
     const { sql } = this.deps
     const dirName = basename(repo)
     const [prev]: Row[] = await sql`
-      SELECT name, repo, manifest, manifest_sha, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
-    if (!prev && text === null && skipEmpty) return undefined
+      SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
+    if (!prev && !text && skipEmpty) return undefined
 
     const now = this.deps.now()
     const name = prev?.name ?? (await this.freeName(dirName, repo))
@@ -224,6 +227,11 @@ export class ProjectSync {
     if (text === null) {
       manifest = null
       manifestSha = null
+    } else if (text === undefined) {
+      // Nothing was read: the row keeps its manifest and whatever error it had.
+      if (prev?.manifest_error && prev.manifest_error_sha) {
+        error = { sha: prev.manifest_error_sha, message: prev.manifest_error }
+      }
     } else if (typeof text === 'object') {
       error = { sha: text.sha, message: text.bad }
     } else {

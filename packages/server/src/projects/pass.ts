@@ -9,7 +9,8 @@ import type { ProjectSync } from './sync.ts'
 export async function projectPass(sql: SQL, sync?: ProjectSync): Promise<string[]> {
   const errors: string[] = []
   try {
-    await releaseClosed(sql)
+    for (const key of (await releaseClosed(sql)).failed)
+      console.error('spawn failed', { key, reason: 'its Issue closed' })
   } catch (error) {
     errors.push(`claims: ${error instanceof Error ? error.message : String(error)}`)
   }

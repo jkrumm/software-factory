@@ -2,7 +2,7 @@ import type { Effort, HoldReason, Placement, Spawn, SpawnStatus, Tier } from '@s
 import type { SQL } from 'bun'
 import { admit, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
-import { issueIsClosed } from './projects/claims.ts'
+import { issueIsClosed, releaseIdleClaim } from './projects/claims.ts'
 import { TERMINAL_ADDRESS } from './runner.ts'
 import { loadByIds } from './sessions.ts'
 
@@ -166,12 +166,20 @@ export async function requeueSpawn(
   key: string,
   now: Date,
 ): Promise<{ spawn: SpawnView } | { problem: 'unknown' | 'not_failed'; status?: SpawnStatus }> {
-  const [row]: SpawnRow[] = await sql`
-    UPDATE factory.spawns
-    SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
-        hold = NULL, assigned_at = NULL
-    WHERE key = ${key} AND status = 'failed'
-    RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
+  const row = await sql.begin(async (tx) => {
+    await lockCapacity(tx)
+    // A lead that never ran gives its place back and asks again, behind the Issues that waited meanwhile.
+    const [issue]: { issue_id: number | null }[] = await tx`
+      SELECT issue_id FROM factory.spawns WHERE key = ${key} AND status = 'failed'`
+    if (issue?.issue_id != null) await releaseIdleClaim(tx, issue.issue_id)
+    const [requeued]: SpawnRow[] = await tx`
+      UPDATE factory.spawns
+      SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
+          hold = NULL, assigned_at = NULL
+      WHERE key = ${key} AND status = 'failed'
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
+    return requeued
+  })
   if (row) return { spawn: toView(row) }
   const current = await getSpawn(sql, key, now)
   return current ? { problem: 'not_failed', status: current.status } : { problem: 'unknown' }
