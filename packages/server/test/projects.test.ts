@@ -705,7 +705,7 @@ describe('claims', () => {
     // A waiting spawn with no time to look again is found by the sweep, not by the claim.
     await db.sql`UPDATE factory.spawns SET status = 'waiting', resume_at = NULL WHERE key = 's2'`
     clock.advance(31_000)
-    await projectPass(db.sql, sync)
+    expect((await projectPass(db.sql, sync)).failed).toEqual(['s2'])
     const { claims, failed } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
     expect(failed).toEqual([])
     expect(claims.map((c) => c.key)).toEqual(['s1'])
