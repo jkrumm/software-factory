@@ -772,6 +772,7 @@ describe('factory role', () => {
       'wave',
       'worker',
       'mechanical',
+      'deep',
       'implementer',
       'verifier',
       'Explore',
