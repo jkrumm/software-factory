@@ -347,6 +347,10 @@ describe('what a payload cannot do', () => {
   test('facts that cannot be stored, or are too large, are 400 and 422 and file nothing', async () => {
     await route()
     expect((await intake({ facts: { big: 'x'.repeat(25 * 1024) } })).status).toBe(400)
+    // Small as sent (about 20 KiB), larger once the arrays at the 32nd level are each cut to a marker.
+    let nested: unknown = Array.from({ length: 7000 }, () => [])
+    for (let level = 0; level < 31; level++) nested = [nested]
+    expect((await intake({ facts: nested })).status).toBe(400)
     expect((await intake({ monitor: '' })).status).toBe(400)
     expect((await intake({ source: 'Kuma' })).status).toBe(400)
     expect((await intake({ status: 'sideways' })).status).toBe(400)
