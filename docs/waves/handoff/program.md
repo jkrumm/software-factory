@@ -7,9 +7,9 @@ holds what that table does not. The rotation 3 page is in git history.
 
 | Agent | Repo | Work | Next |
 |-|-|-|-|
-| `dotfiles-w8` | dotfiles (chain wave) | Wave 8: automatic core updates, durable Full Disk Access | its own chain; Wave 9 is the mini maintenance window and carries the review's classic-herdr leftovers (`88b3adf`) |
+| `dotfiles-w8` … `-w10` | dotfiles (chain, finished) | Wave 10 closed the herdr-core migration | owner-timed leftovers only (dotfiles PLAN Wave 9) |
 | `iris-mother`, `iris-w19b` | iris (mother + lead, tabs) | Wave 19 (R5 polish, Mac completion, data safety) | after Wave 19 the mother recommends a pause until the Apple enrolment |
-| `agent-workflows-review-plan` | agent-workflows (lead, idle) | the review rework plan, done (`15a44fb`) | waits for the owner's three decisions in `docs/review-v2.md`; close its tab once they are in |
+| `agent-workflows-w1-r2`, `-w1-r3` | agent-workflows (mother + lead) | the inference gateway (Wave 2), then review v2 | its own night; the owner's review answers go to the mother as one note |
 
 ## What the 2026-11-01 review found
 
@@ -41,9 +41,9 @@ holds what that table does not. The rotation 3 page is in git history.
 
 ## Next
 
-The owner's call (asked 2026-11-01): **A** F2's full Issue machine, then F3 intake, then F4; or **B** (lead's tendency) a
-thin loop first: Kuma, HyperDX and a GitHub label post straight into a self-heal lead spawn keyed by the alert id, review v2
-is its evidence gate, the result goes to the owner through Hermes or iris; the Issue machine grows from real traffic.
+The owner answered (2026-11-01 19:30): F2 in full tonight, intake pulled forward, all eleven decisions as recommended, the
+review eval on Max first. The night runs as `PLAN.md` Wave 6 under a fresh lead; the plan is `docs/waves/night-2026-11-01.md`.
+agw is not the lead's: its mother runs the gateway, then review v2 (agw `docs/waves/PLAN.md` Waves 2–9).
 
 ## Watch
 

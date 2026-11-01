@@ -68,7 +68,7 @@ Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md`, `docs/
 rule (#9) and the wake that ends its wait (#13), the opening fix (#11), the retirement, U's and F2's plans; the herdr-core runner
 (`437a4ea`, FL9, by dotfiles Wave 2). Open: the gamedays PR #12 (built before the herdr-core runner) and the deps PR #15.
 
-## Wave 5 — Program lead, rotation 5            <!-- status: active -->
+## Wave 5 — Program lead, rotation 5            <!-- status: done -->
 Opus/high. Started 2026-11-01 by the owner as a review of the whole estate.
 
 - [x] Review the factory, agw, the herdr-core port and their wiring against each other (findings: `docs/waves/handoff/program.md`).
@@ -78,8 +78,40 @@ Opus/high. Started 2026-11-01 by the owner as a review of the whole estate.
 - [x] agw review rework planned (`agent-workflows/docs/review-v2.md`, `15a44fb`); waits for the owner's three decisions there.
 - [x] A new space is seeded in the app's document with the main checkout's name and folder (owner-reported; brief
   `docs/waves/briefs/f1-seed-space-2026-11-01.md`, PR #17, deployed `a2a18a26e686`). `rd`'s direct-to-hc path has the same gap.
-- [ ] Owner decision: the order after F1 (full F2 Issue machine first, or a thin intake loop first; handoff §Next).
-- [ ] Land or close PR #12 (gamedays) against the herdr-core runner; PR #15 (deps).
+- [x] Owner decision on the order after F1: F2 in full tonight with the intake door pulled forward; all eleven answers in
+  `docs/waves/night-2026-11-01.md` (2026-11-01 19:30).
+- [x] The night planned: `docs/waves/night-2026-11-01.md`, briefs `docs/waves/briefs/night-*.md`, Wave 6 below.
+- [x] Keep `docs/program.md` current at every track change.
+
+**Left behind:** PR #12 (gamedays, built before the herdr-core runner) and #15 (deps) open, both green; moved to Wave 6. The
+restart paths of PR #16 are proven by tests only. agw runs its own
+night under its mother (gateway Wave 2, then review v2); the dotfiles chain closed Wave 10 (the herdr-core migration is done).
+Handoff: `docs/waves/handoff/program.md`.
+
+## Wave 6 — The night of 2026-11-01            <!-- status: active -->
+Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/waves/night-2026-11-01.md` (the plan, the owner's answers, models,
+learning), `docs/waves/f2.md`, `docs/waves/handoff/program.md` first. Briefs: `docs/waves/briefs/night-*.md`; write the
+missing ones from `f2.md` and `docs/design.md` in the same shape (header lines, the foreground-wait line, the gate) and
+commit each before its spawn. Workers are hidden fan workers: `rd fan software-factory [--role deep] <brief>`.
+
+- [ ] Notes first: agw's mother (decisions 8–10 and "keep API spend low, iterate on Max first") and iris' mother (decision
+  11), each with `factory session note <session> --id night-2026-11-01 '<text>'`.
+- [ ] C0 (`night-c0-cleanup.md`, `worker`), landed and deployed; PR #15 (deps) merged after a local `make check`; PR #12
+  rebased onto the herdr-core runner or closed with the reason (its gamedays feed F2 W6).
+- [ ] F2 Wave 1 (`night-f2-w1-issues.md`, `deep`) with D beside it (`night-d-hidden-waves.md`, `worker`; it overlaps W1
+  only in route registration: land W1 first, D rebases).
+- [ ] I: `factory-door` once W1 is live (brief to write: `packages/door`, its own LaunchAgent on the tailnet interface,
+  POST only, per-source tokens in a 0600 file until the owner seeds them into 1Password in the morning, the monitor → repo
+  registry in the database, not in git; the lead wires Kuma and HyperDX to it and proves one real alert becomes one Issue).
+- [ ] F2 Waves 2–5 in order (W4 `deep`, the rest `worker`; W3 adds an agw classify worker on disjoint files and tells agw's
+  mother first). Issue leads start for `alert` Issues only once W4 is live.
+- [ ] N once W3 is live: the notifier (`ask`, parked, failed through Hermes to Slack, the 07:30 digest).
+- [ ] F2 Wave 6, the gate: the gamedays and three real requests from the factory's own backlog (`rd`'s direct-to-hc path seeds no
+  space entry; `hc-resume` resumes without `--model/--effort`; `docs/remote-dev.md` says every structured create error falls back).
+- [ ] Per wave a retro entry in `docs/evidence/night-2026-11-01.md` (the fields in the plan's §Learning on the way); setup
+  defects there or, once W1 is live, as Issues. The morning section proposes changes with their numbers.
+- [ ] Budget marks: `me2` 60 % of its week, `iu` 90 %, `me` untouched (`factory quota get` before every spawn). At a mark,
+  finish what runs, start nothing.
 - [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
 **Left behind:**
