@@ -17,22 +17,30 @@ export type ClaimResult =
   | 'held'
   /** it waits behind the holders, and behind older queued Issues */
   | 'queued'
-  /** nothing to claim: no such open Issue, or its repo has no project row yet (the tick syncs one before it claims) */
+  /** nothing to claim: no such Issue, or it closed (callers refuse a spawn of a closed Issue before they ask) */
   | 'none'
+
+/** Whether the Issue is closed, or gone: a spawn for it has nothing left to do. */
+export async function issueIsClosed(tx: SQL, issueId: number): Promise<boolean> {
+  const [issue]: { state: string }[] = await tx`SELECT state FROM factory.issues WHERE id = ${issueId}`
+  return !issue || issue.state === 'closed'
+}
 
 /**
  * Takes the Issue's claim on its project if there is room, else queues the Issue for it. A project admits `leads` leads (the
- * manifest's, one by default) plus one urgent Issue (`class = 'urgent'`) beyond them. When a place frees, the oldest queued
- * Issue goes first, urgent ones before the rest; only an Issue with a spawn still waiting counts as queued, so one whose spawn
- * failed holds nobody up. Runs in the caller's transaction and writes only `claims`; the callers hold the capacity lock, which
- * makes the count of holders and the insert one step.
+ * manifest's, one by default) and one more for an urgent Issue (`class = 'urgent'`): ordinary holders are at most `leads`, all holders
+ * at most `leads + 1`, so an urgent holder never uses up an ordinary place. When a place frees, the oldest queued Issue goes
+ * first (by Issue id: its age), urgent ones before the rest; only an Issue with a spawn still waiting counts as queued, so one
+ * whose spawn failed holds nobody up. A repo whose project is not synced yet is queued without a row: the tick syncs a named
+ * repo before it claims, and the spawn is looked at again in 30 s. Runs in the caller's transaction and writes only `claims`; the
+ * callers hold the capacity lock, which makes the count of holders and the insert one step.
  */
 export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<ClaimResult> {
   const [issue]: { id: number; repo: string; state: string; class: string | null }[] = await tx`
     SELECT id, repo, state, class FROM factory.issues WHERE id = ${issueId}`
   if (!issue || issue.state === 'closed') return 'none'
   const project = await projectOfPath(tx, issue.repo)
-  if (!project) return 'none'
+  if (!project) return 'queued'
 
   const key = claimKey(project.name)
   const urgent = issue.class === 'urgent'
@@ -44,9 +52,10 @@ export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<Cla
   if (mine?.held) return 'held'
 
   const holders = rows.filter((r) => r.held)
-  const urgentHolders = holders.filter((r) => r.urgent).length
+  const ordinary = holders.filter((r) => !r.urgent).length
   const queued = rows.filter((r) => !r.held && r.pending && r.issue_id !== issueId)
-  const places = (urgent && urgentHolders === 0 ? project.leads + 1 : project.leads) - holders.length
+  const room = project.leads + 1 - holders.length
+  const places = urgent ? room : Math.min(project.leads - ordinary, room)
   const ahead = queued.filter((r) =>
     urgent ? r.urgent && r.issue_id < issueId : r.urgent || r.issue_id < issueId,
   ).length
@@ -67,11 +76,18 @@ export async function releaseClaim(tx: SQL, issueId: number): Promise<void> {
   await tx`DELETE FROM factory.claims WHERE issue_id = ${issueId}`
 }
 
-/** The claims of Issues that closed. Wave 4's finalize releases them itself and this goes. */
+/**
+ * The claims of Issues that closed, and the held claims of Issues whose every spawn failed (no lead ever ran: `factory spawn
+ * requeue` asks again and the claim is decided again). Wave 4's finalize releases the first itself and this part goes.
+ */
 export async function releaseClosed(sql: SQL): Promise<number> {
   const released = await sql`
     DELETE FROM factory.claims c USING factory.issues i
-    WHERE i.id = c.issue_id AND i.state = 'closed'
+    WHERE i.id = c.issue_id AND (
+      i.state = 'closed'
+      OR (c.held_at IS NOT NULL
+        AND EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status = 'failed')
+        AND NOT EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status <> 'failed')))
     RETURNING c.issue_id`
   return released.length
 }

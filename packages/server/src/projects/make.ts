@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import { MAKE_CONTRACT, type MakeTargets } from '@software-factory/contract'
 
@@ -41,13 +41,13 @@ export function readMakefile(text: string): { targets: Set<string>; includes: st
   return { targets, includes }
 }
 
-/** The files `pattern` names inside `root`: a literal path, or a glob. Nothing outside `root`. */
-async function expand(root: string, pattern: string): Promise<string[]> {
-  const found =
-    pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
-      ? await Array.fromAsync(new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true }))
-      : [pattern]
-  return found.map((f) => resolve(root, f)).filter((f) => f.startsWith(`${root}${sep}`))
+/** The files `pattern` names inside `root`: a literal path, or a glob read lazily so the budget stops the walk. */
+async function* expand(root: string, pattern: string): AsyncGenerator<string> {
+  if (!/[*?[]/.test(pattern)) {
+    yield resolve(root, pattern)
+    return
+  }
+  for await (const file of new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true })) yield resolve(root, file)
 }
 
 const EMPTY: MakeTargets = {
@@ -68,24 +68,35 @@ const EMPTY: MakeTargets = {
  * most 64 files, inside the repo); anything built from a variable is not.
  */
 export async function makeTargetsOf(repo: string): Promise<MakeTargets> {
-  const root = resolve(repo)
+  const root = await realpath(resolve(repo)).catch(() => undefined)
+  if (!root) return { ...EMPTY }
   const entries = await readdir(root).catch(() => [] as string[])
   const main = MAKEFILES.find((name) => entries.includes(name))
   if (!main) return { ...EMPTY }
 
   const targets = new Set<string>()
   const seen = new Set<string>()
+  // A link that leads out of the repo, or to anything but a regular file, is not read.
+  const readable = async (file: string): Promise<string | undefined> => {
+    const real = await realpath(file).catch(() => undefined)
+    if (!real?.startsWith(`${root}${sep}`)) return undefined
+    const info = await stat(real).catch(() => undefined)
+    return info?.isFile() && info.size <= MAX_MAKEFILE_BYTES ? real : undefined
+  }
   const visit = async (file: string, depth: number): Promise<void> => {
-    if (seen.has(file) || seen.size >= MAX_FILES) return
-    seen.add(file)
-    const handle = Bun.file(file)
-    if (!(await handle.exists()) || handle.size > MAX_MAKEFILE_BYTES) return
-    const read = readMakefile(await handle.text())
+    if (seen.size >= MAX_FILES) return
+    const real = await readable(file)
+    if (!real || seen.has(real)) return
+    seen.add(real)
+    const read = readMakefile(await Bun.file(real).text())
     for (const target of read.targets) targets.add(target)
     if (depth >= MAX_INCLUDE_DEPTH) return
     for (const pattern of read.includes) {
       if (pattern.startsWith('/') || relative(root, resolve(root, pattern)).startsWith('..')) continue
-      for (const next of await expand(root, pattern)) await visit(next, depth + 1)
+      for await (const next of expand(root, pattern)) {
+        if (seen.size >= MAX_FILES) return
+        await visit(next, depth + 1)
+      }
     }
   }
   await visit(join(root, main), 0)
