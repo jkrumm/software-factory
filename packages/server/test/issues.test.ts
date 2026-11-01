@@ -648,7 +648,8 @@ describe('the inbox', () => {
   test.each([
     ['an ask with a bad expiry', 'ask', { question: 'q', expiresAt: 'not a time' }],
     ['a wait with a bad time', 'wait', { until: 'not a time' }],
-    ['a time Postgres cannot store', 'ask', { question: 'q', expiresAt: '-010000-01-01T00:00:00.000Z' }],
+    ['a time Postgres cannot store', 'ask', { question: 'q', expiresAt: '-005000-01-01T00:00:00.000Z' }],
+    ['a wait for a time Postgres cannot store', 'wait', { until: '+275000-01-01T00:00:00.000Z' }],
     ['a dep on an id past the column', 'dep', { on: 99_999_999_999 }],
     ['a dep on a fraction', 'dep', { on: 1.5 }],
   ])('%s is refused, and does not hold up what follows', async (_, kind, payload) => {

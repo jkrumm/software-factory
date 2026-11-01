@@ -63,7 +63,7 @@ const time = (payload: InboxRow['payload'], name: string): Date | null => {
 /** Not a time, or one outside what Postgres stores (a JavaScript date reaches further). */
 const badTime = (payload: InboxRow['payload'], name: string): boolean => {
   const ms = time(payload, name)?.getTime() ?? 0
-  return Number.isNaN(ms) || Math.abs(ms) > MAX_TIME_MS
+  return Number.isNaN(ms) || ms < 0 || ms > MAX_TIME_MS
 }
 
 async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
