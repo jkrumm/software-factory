@@ -1,6 +1,6 @@
 Branch: f2-w4-evidence
 Title: feat(issues): evidence, the hold and finalize (F2 Wave 4)
-Owned files: `packages/server/src/issues/**`, `packages/server/src/tick.ts` (the hold and wake calls only), `packages/server/src/http.ts` and `socket.ts` (the new routes only), `packages/server/migrations/` (new files only), `packages/contract/src/issues.ts`, `packages/cli/**` (the `issue` verbs), `packages/server/test/**`, `AGENTS.md` (pointer lines), `docs/design.md` §4, §5, §12. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `project.yaml` in any repo.
+Owned files: `packages/server/src/issues/**`, `packages/server/src/tick.ts` (the hold and wake calls only), `packages/server/src/http.ts` (the new routes only; the socket routes are `serveHooks` there), `packages/server/migrations/` (new files only), `packages/contract/src/issues.ts`, `packages/cli/**` (the `issue` verbs), `packages/server/test/**`, `AGENTS.md` (pointer lines), `docs/design.md` §4, §5, §12. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `project.yaml` in any repo.
 
 # Brief: F2 Wave 4, evidence, the hold and finalize
 

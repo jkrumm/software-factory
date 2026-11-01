@@ -1,6 +1,6 @@
 Branch: night-i-door
 Title: feat(door): the factory door, alerts from the tailnet become Issues
-Owned files: `packages/door/**` (new), `packages/contract/src/door.ts` (new) and its index export, `packages/server/src/issues/intake.ts` (new), `packages/server/src/socket.ts` and `http.ts` (the new routes only), `packages/server/migrations/` (new files only), `packages/cli/**` (`door` verbs), `packages/server/test/**`, `scripts/` + `deploy/` (the door's LaunchAgent, deploy and verify), `AGENTS.md` (pointer lines), `docs/design.md` §5 and §11. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `packages/server/src/issues/lifecycle.ts` (use it, ask if it lacks something).
+Owned files: `packages/door/**` (new), `packages/contract/src/door.ts` (new) and its index export, `packages/server/src/issues/intake.ts` (new), `packages/server/src/http.ts` (the new routes only; the socket routes are `serveHooks` there), `packages/server/migrations/` (new files only), `packages/cli/**` (`door` verbs), `packages/server/test/**`, `scripts/` + `deploy/` (the door's LaunchAgent, deploy and verify), `AGENTS.md` (pointer lines), `docs/design.md` §5 and §11. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `packages/server/src/issues/lifecycle.ts` (use it, ask if it lacks something).
 
 # Brief: I, the factory door (owner decision 2, 2026-11-01)
 
@@ -40,7 +40,7 @@ Same shape as dotfiles' `kuma-door/` (read it). So: loopback bind, never a tailn
 - `POST /intake` on the socket only: `{ source, monitor, event, status, title, facts }` (zod). In one transaction, with the rule in `issues/intake.ts`:
   1. No route for `(source, monitor)`: no Issue. Upsert one row in `factory.door_unrouted (source, monitor, count, last_seen, last_title)`. Answer 202.
      Every alert the homelab has arrives here (Kuma attaches every provider to every monitor), so this is the common path, and it stays small.
-  2. Routed, an Issue of this `(source, monitor)` that is not `closed`: the event is a `signal` inbox row (key `<source>:<monitor>:<event>`) on that Issue. 200.
+  2. Routed, an Issue of this `(source, monitor)` that is not `closed`: the event is a `signal` inbox row (key `<source>:<monitor>:<event>`) on that Issue, with `regression: true` in its payload when `status` is down: Wave 1 moves a `watching` Issue only on that. 200.
   3. Routed, none open, `status` down: `createIssue` with `source: "alert"`, `source_key` `<source>:<monitor>:<event>`, `repo` from the route, `title`, `facts`. 201.
      The IuRoot refusal of Wave 1 applies; the route is refused when it is set, too.
   4. Routed, none open, `status` up: nothing but the unrouted-style counter on the route. 202.

@@ -1,6 +1,6 @@
 Branch: f2-w5-status
 Title: feat(status): following leads in factory status (F2 Wave 5)
-Owned files: `packages/server/src/status.ts`, `packages/server/src/issues/**` (reads and the note verb only), `packages/server/src/http.ts` and `socket.ts` (the new routes only), `packages/contract/src/**`, `packages/cli/**`, `packages/server/test/**`, `AGENTS.md`, `docs/design.md`, `docs/waves/f2.md` (Left behind lines only, no status flips). Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `lifecycle.ts`'s transition table.
+Owned files: `packages/server/src/status.ts`, `packages/server/src/issues/**` (reads and the note verb only), `packages/server/src/http.ts` (the new routes only; the socket routes are `serveHooks` there), `packages/contract/src/**`, `packages/cli/**`, `packages/server/test/**`, `AGENTS.md`, `docs/design.md`, `docs/waves/f2.md` (Left behind lines only, no status flips). Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `lifecycle.ts`'s transition table.
 
 # Brief: F2 Wave 5, following leads in `factory status`
 
