@@ -330,6 +330,15 @@ describe('what a payload cannot do', () => {
     expect(await inbox()).toHaveLength(1)
   })
 
+  test('half a surrogate pair in a title, a monitor or an event is made text, not a 500', async () => {
+    await app.send('PUT', '/door/routes', { source: 'kuma', monitor: 'api\ufffd', repo: TEST_REPO })
+    const response = await intake({ monitor: 'api\ud83d', event: 'e\ude00', title: 'down \ud83d' })
+    expect(response.status).toBe(201)
+    expect(await issues()).toMatchObject([{ title: 'down \ufffd', source_key: 'kuma:api\ufffd:e\ufffd' }])
+    expect((await intake({ monitor: 'other\ud83d', title: '\ude00' })).status).toBe(202)
+    expect(await rows('door_unrouted')).toMatchObject([{ monitor: 'other\ufffd', last_title: '\ufffd' }])
+  })
+
   test('an alert whose source is named like a timer cannot pass for its replay', async () => {
     await app.send('PUT', '/door/routes', { source: 'wake', monitor: '1', repo: TEST_REPO })
     const { issue } = await ack(await intake({ source: 'wake', monitor: '1', event: 'x' }))
