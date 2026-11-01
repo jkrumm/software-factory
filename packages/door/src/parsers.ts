@@ -1,3 +1,4 @@
+import { cleanText } from '@software-factory/contract'
 import { z } from 'zod'
 
 /** What every source's payload comes down to. The payload is data: nothing in it picks a repo, a role, a path or a command. */
@@ -40,6 +41,9 @@ const field = (text: string | null | undefined): string | null => (text ? clip(t
 /** A piece of an event id: short enough that the pieces and the status after them fit the name a key may have. */
 const part = (text: string | null | undefined): string => clip(text ?? '', MAX_PART_CHARS)
 
+/** A name as the factory keeps it, or the source's own name when nothing is left of it: an alert is never refused for its label. */
+const name = (text: string, max: number, fallback: string): string => clip(cleanText(text), max) || fallback
+
 const clip = (text: string, max: number): string => (text.length > max ? `${cut(text, max - 1)}…` : text)
 
 function shape<S extends z.ZodType>(schema: S, payload: unknown): z.output<S> {
@@ -80,16 +84,20 @@ export const parseKuma: Parser = (payload) => {
   if (!monitor || !heartbeat) throw new PayloadError('heartbeat and monitor come together')
   if (heartbeat.status !== 0 && heartbeat.status !== 1) return { kind: 'ignore', reason: 'neither down nor up' }
   const status = heartbeat.status === 0 ? 'down' : 'up'
-  const name = clip(monitor.name, MAX_NAME_CHARS)
+  const label = name(monitor.name, MAX_NAME_CHARS, 'kuma')
   const detail = heartbeat.msg ?? msg
-  const time = clip(heartbeat.time, MAX_FIELD_CHARS)
+  const time = name(heartbeat.time, MAX_FIELD_CHARS, '-')
   return {
     kind: 'alert',
     alert: {
-      monitor: name,
+      monitor: label,
       event: time,
       status,
-      title: clip(detail ? `${name} is ${status}: ${detail}` : `${name} is ${status}`, MAX_TITLE_CHARS),
+      title: name(
+        detail ? `${label} is ${status}: ${detail}` : `${label} is ${status}`,
+        MAX_TITLE_CHARS,
+        `${label} is ${status}`,
+      ),
       facts: {
         msg: msg ? clip(msg, MAX_TEXT_CHARS) : null,
         monitor: {
@@ -146,7 +154,7 @@ const NAMED_TITLE = /^Alert for "(.+)" - /u
  */
 export const hyperdxMonitor = (title: string): string => {
   // Cut, not clipped: an ellipsis at the end would stop the trailing numbers from being peeled off.
-  const bare = cut(title, MAX_TITLE_CHARS).replace(TITLE_PREFIX, '').trim()
+  const bare = cleanText(cut(title, MAX_TITLE_CHARS).replace(TITLE_PREFIX, ''))
   const named = NAMED_TITLE.exec(bare)?.[1]?.trim()
   if (named) return clip(named, MAX_NAME_CHARS)
   return clip(stripTrailingNumbers(bare) || bare, MAX_NAME_CHARS)
@@ -161,7 +169,7 @@ export const parseHyperdx: Parser = (payload) => {
   const hook = shape(HyperdxPayload, payload)
   if (hook.state !== 'ALERT' && hook.state !== 'OK') return { kind: 'ignore', reason: 'neither firing nor resolved' }
   const status = hook.state === 'ALERT' ? 'down' : 'up'
-  const monitor = hyperdxMonitor(hook.title)
+  const monitor = hyperdxMonitor(hook.title) || 'hyperdx'
   const [eventId, startTime, endTime, alertId] = [hook.eventId, hook.startTime, hook.endTime, hook.alertId].map(field)
   return {
     kind: 'alert',
@@ -169,7 +177,7 @@ export const parseHyperdx: Parser = (payload) => {
       monitor,
       event: `${part(eventId)}@${part(startTime)}/${part(endTime)}:${status}`,
       status,
-      title: clip(hook.title.replace(TITLE_PREFIX, '').trim() || monitor, MAX_TITLE_CHARS),
+      title: name(hook.title.replace(TITLE_PREFIX, ''), MAX_TITLE_CHARS, monitor),
       facts: {
         title: clip(hook.title, MAX_TITLE_CHARS),
         body: hook.body ? clip(hook.body, MAX_TEXT_CHARS) : null,

@@ -108,6 +108,28 @@ describe('short fields', () => {
   })
 })
 
+describe('a label with nothing left of it', () => {
+  test('is the source’s own name, so the alert still reaches the server', async () => {
+    const base = (await fixture('kuma-down.json')) as { monitor: object; heartbeat: object }
+    for (const name of ['   ', '\u0001\u0002']) {
+      const alert = alertOf(
+        parseKuma({
+          ...base,
+          monitor: { ...base.monitor, name },
+          heartbeat: { ...base.heartbeat, time: name, msg: null },
+          msg: null,
+        }),
+      )
+      expect(alert).toMatchObject({ monitor: 'kuma', event: '-', title: 'kuma is down' })
+    }
+    for (const title of ['🚨', '✅ ', '  ', '🚨 \u0001']) {
+      const alert = alertOf(parseHyperdx({ title, state: 'ALERT', eventId: ' ' }))
+      expect(alert).toMatchObject({ monitor: 'hyperdx', title: 'hyperdx' })
+      expect(alert.event.length).toBeGreaterThan(0)
+    }
+  })
+})
+
 describe('hyperdx', () => {
   test('a firing alert: the monitor is the alert name, not its value', async () => {
     const alert = alertOf(parseHyperdx(await fixture('hyperdx-alert.json')))

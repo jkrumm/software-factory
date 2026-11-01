@@ -486,6 +486,21 @@ describe('the door in front of the server', () => {
     expect((await issues())[0]?.repo).toBe(TEST_REPO)
   })
 
+  test('an alert whose title and name are nothing reaches door_unrouted under the source’s name', async () => {
+    const hyperdx = createDoor({ tokens: { hyperdx: TOKEN }, file: fileViaSocket(socket), log: () => {} })
+    const response = await hyperdx(
+      new Request('http://localhost/alert/hyperdx', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ title: '🚨 ', state: 'ALERT', eventId: 'e1' }),
+      }),
+    )
+    expect(response.status).toBe(202)
+    expect(await rows('door_unrouted')).toMatchObject([
+      { source: 'hyperdx', monitor: 'hyperdx', last_title: 'hyperdx' },
+    ])
+  })
+
   test('a stopped factory is a 503 at the door', async () => {
     await hooks.stop(true)
     try {
