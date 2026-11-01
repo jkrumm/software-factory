@@ -595,7 +595,8 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **Effects run after the commit.** A step's effects (`start_lead`, `note_lead`, `verify`, `finalize`; every step into `closed`
   has `finalize`) are rows in `issue_effects` under `<effect>:<inbox key>`, in the transition's transaction. `runEffects` calls
   the port outside any transaction, only for each Issue's oldest open effect, so nothing overtakes an effect that has no port yet
-  or failed, least tried first. A crash after the
+  or failed, least tried first. A step into `closed` cancels the Issue's open effects but `finalize` (`cancelled_at`): a closed Issue
+  gets no lead, note or check, and `finalize` waits behind nothing. A crash after the
   call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded:
   W1 wires none (`TickDeps.issuePorts`), and the wave that brings a port runs what waited. `hold_over` asks for `verify` and
   closes nothing: until W4's check reports `verified` the Issue stays `watching`.
