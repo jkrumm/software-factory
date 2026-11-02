@@ -477,6 +477,84 @@ describe('a restart and what a start text names', () => {
   })
 })
 
+describe('review follow-ups', () => {
+  test('a root that cannot be listed is an errors line, not a silent loss', async () => {
+    await factoryRows()
+    await builder.refreshNow()
+    chmodSync(estate.src, 0o000)
+    try {
+      if (process.getuid?.() === 0) return
+      const after = await builder.refreshNow()
+      expect(after.errors.some((e) => e.startsWith(`repos ${estate.src}:`))).toBe(true)
+      // the IuRoot repos are another root's: they stand
+      expect(after.repos.some((r) => r.name === 'prometheus-scripts')).toBe(true)
+    } finally {
+      chmodSync(estate.src, 0o755)
+    }
+  })
+
+  test('a refresh that cannot build is a 503 build_failed, not a bare 500', async () => {
+    const failing = startApp({
+      sql: db.sql,
+      clock,
+      repoRoots: [estate.src],
+      fleet: {
+        refreshNow: () => Promise.reject(new Error('the database part could not be read')),
+      },
+    })
+    try {
+      const res = await failing.send('POST', '/fleet/refresh', {})
+      expect(res.status).toBe(503)
+      expect(await res.json()).toMatchObject({ code: 'build_failed' })
+    } finally {
+      await failing.stop()
+    }
+  })
+
+  test('concurrent refreshes share one build that has not started; settled waits for it', async () => {
+    let lists = 0
+    const slow: HcLister = {
+      list: async () => {
+        lists++
+        await Bun.sleep(50)
+        return []
+      },
+    }
+    const shared = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [],
+      home: '/',
+      hc: slow,
+      queue,
+    })
+    const first = shared.refreshNow()
+    const second = shared.refreshNow()
+    expect(second).toBe(first)
+    await shared.settled()
+    expect(lists).toBe(1)
+    await shared.refreshNow()
+    expect(lists).toBe(2)
+  })
+
+  test('a NUL in free text does not stall the snapshot; the three counts do not overlap', async () => {
+    await factoryRows()
+    queueAnswer = async () => [{ id: 'n', text: 'a\u0000b', askedAt: '2026-11-02T11:00:00.000Z', state: null }]
+    // a session that works while hc already says done
+    terminals = terminals.map((t) =>
+      t.address === 't1r' ? { ...t, status: 'done' } : { ...t, status: t.address === 't4h' ? 'done' : t.status },
+    )
+    const built = await builder.refreshNow()
+    const fleet = await get()
+    expect(built.asks.find((a) => a.id === 'queue:n')).toBeDefined()
+    expect(fleet.asks.find((a) => a.id === 'queue:n')?.text).toBe('ab')
+    expect(fleet.summary.working + fleet.summary.idle + fleet.summary.done).toBe(
+      fleet.repos.flatMap((r) => r.sessions).length,
+    )
+  })
+})
+
 describe('the fingerprint and NOTIFY', () => {
   test('moves with the model, not with the clock or a session’s last activity', async () => {
     await factoryRows()

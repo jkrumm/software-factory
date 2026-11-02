@@ -112,11 +112,11 @@ export const FleetAsk = z.strictObject({
 export type FleetAsk = z.infer<typeof FleetAsk>
 
 export const FleetSummary = z.strictObject({
-  /** sessions `working` or `starting` */
+  /** sessions `working` or `starting`; the three counts do not overlap */
   working: z.number().int(),
   /** alive and neither working nor done: idle, waiting, blocked, stuck, walled */
   idle: z.number().int(),
-  /** hc says `done`: the turn ended and the owner has not looked */
+  /** not working, and hc says `done`: the turn ended and the owner has not looked */
   done: z.number().int(),
   asks: z.number().int(),
   /** asks older than 24 h */
