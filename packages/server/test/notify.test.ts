@@ -235,6 +235,12 @@ describe('the text', () => {
     )
   })
 
+  test('file links, unicode paths and links without a scheme are scrubbed too', () => {
+    expect(redact('at file:///Users/alice/SourceRoot/repo and /Users/李明/repo/src')).toBe('at file://…/repo and …/src')
+    expect(redact('open www.example.com/reset?token=short-secret now')).toBe('open www.example.com/reset now')
+    expect(redact('see issue #12 and Fix #3')).toBe('see issue #12 and Fix #3')
+  })
+
   test('no secrets and no hostnames', () => {
     const dirty =
       'Bearer abc123 token ghp_abcdefghijklmnop key sk-abcdefghijklmnop op://vault/item/field https://u:p4ss@example.com/x ' +
@@ -333,6 +339,19 @@ describe('the outbox', () => {
     expect((await rows())[0]).toMatchObject({ status: 'failed', error: 'the send did not report back' })
   })
 
+  test('a delivery that arrives after the row was given up on is recorded as sent', async () => {
+    await record(db.sql, message, now())
+    const late = {
+      send: async () => {
+        // the attempts run out while this send hangs
+        await db.sql`UPDATE factory.notifications SET failed_at = ${now()}, attempts = ${MAX_ATTEMPTS}`
+        return { ok: true as const }
+      },
+    }
+    await sendDue(db.sql, { notifier: late, now })
+    expect((await rows())[0]).toMatchObject({ status: 'sent' })
+  })
+
   test('a failure from a send that outlived its lease does not undo the newer attempt', async () => {
     await record(db.sql, message, now())
     const late = {
@@ -362,11 +381,11 @@ describe('the outbox', () => {
     await Bun.sleep(50)
     expect((await sendDue(db.sql, { notifier, now })).sent).toEqual([])
     release()
-    expect(await pending).toBe(true)
+    expect(await pending).toEqual({ created: true, error: null })
     expect(slow.sent).toEqual(['hello'])
     expect(notifier.calls).toBe(0)
     expect((await rows())[0]).toMatchObject({ status: 'sent', attempts: 1 })
-    expect(await sendNow(db.sql, message, { notifier: slow, now })).toBe(false)
+    expect((await sendNow(db.sql, message, { notifier: slow, now })).created).toBe(false)
   })
 
   test('two senders at once send a row once', async () => {
@@ -483,6 +502,16 @@ describe('the digest', () => {
     const big = renderDigest({ ...data, closed: many, watching: many, parked: [], decisions: [], failedSpawns: [] })
     expect(big.length).toBeLessThan(DIGEST_MAX_CHARS)
     expect(big).toContain('(+494 more)')
+    const accounts = Array.from({ length: 12 }, (_, i) => ({
+      account: `account-${i}-${'x'.repeat(60)}`,
+      fiveHourUsed: 1,
+      weeklyUsed: 2,
+      fresh: true,
+    }))
+    const crowded = renderDigest({ ...data, closed: many, watching: many, quota: accounts })
+    expect(crowded.length).toBeLessThan(DIGEST_MAX_CHARS)
+    expect(crowded).toContain('(+4 more)')
+    expect(crowded).toContain('Ran in 24 h:')
     expect(big).toContain('Quota:')
     expect(big).toContain('Ran in 24 h:')
   })

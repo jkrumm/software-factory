@@ -71,8 +71,8 @@ async function recordResult(
 ): Promise<void> {
   if (result.ok) {
     await sql`
-      UPDATE factory.notifications SET sent_at = ${now}, error = ${note}
-      WHERE key = ${row.key} AND sent_at IS NULL AND failed_at IS NULL`
+      UPDATE factory.notifications SET sent_at = ${now}, error = ${note}, failed_at = NULL
+      WHERE key = ${row.key} AND sent_at IS NULL`
     return
   }
   const spent = row.attempts >= MAX_ATTEMPTS
@@ -130,18 +130,22 @@ export async function sendDue(
 
 /**
  * A message sent now, on the caller's wait: the row is made already claimed (a try counted, leased), so the tick cannot send it
- * beside the caller. `factory notify test` goes this way and learns whether it arrived. False when the key was there already.
+ * beside the caller. `factory notify test` goes this way and learns whether it arrived. `created` is false when the key was there already.
  */
-export async function sendNow(sql: SQL, message: Message, options: SendOptions): Promise<boolean> {
+export async function sendNow(
+  sql: SQL,
+  message: Message,
+  options: SendOptions,
+): Promise<{ created: boolean; error: string | null }> {
   const now = options.now()
   const rows = await sql`
     INSERT INTO factory.notifications (key, kind, issue_id, text, created_at, next_at, attempts)
     VALUES (${message.key}, ${message.kind}, ${message.issueId}, ${message.text}, ${now}, ${new Date(now.getTime() + LEASE_MS)}, 1)
     ON CONFLICT (key) DO NOTHING
     RETURNING key`
-  if (rows.length === 0) return false
-  await deliver(sql, { key: message.key, text: message.text, attempts: 1 }, options)
-  return true
+  if (rows.length === 0) return { created: false, error: null }
+  const error = await deliver(sql, { key: message.key, text: message.text, attempts: 1 }, options)
+  return { created: true, error }
 }
 
 interface Row {
