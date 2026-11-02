@@ -79,11 +79,16 @@ dump_issue "$issue" "$out"
 
 # ---- what happened ----------------------------------------------------------------------------------------------------------------
 ev() { sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $issue AND kind = '$1'"; }
+archive=${FACTORY_ARCHIVE_DIR:-$HOME/.local/share/factory/archive}/$issue/$attempt
+bitten=0
+for t in "$archive"/*.jsonl; do
+  [[ -f $t ]] || continue
+  bitten=$((bitten + $(jq -r 'select(.type == "user") | .message.content | if type == "array" then .[] else empty end | select(.type == "tool_result") | (.content | if type == "string" then . else map(.text // "") | join(" ") end) | select(contains("FAIL the deployed copy: wordstat:"))' "$t" | wc -l | tr -d ' ')))
+done
 ships=$(sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'ship' AND to_state = 'watching'")
 regressions=$(ev regression)
-fix_commits=$(git --git-dir="$remote" log --format=%H master -- deploy/limits.conf | wc -l | tr -d ' ')
 git --git-dir="$remote" log --format='%h %ad %s' --date=format:%H:%M:%S master | scrub >"$out/remote-log.txt"
-log "ships $ships, regressions $regressions, commits touching deploy/limits.conf $fix_commits"
+log "ships $ships, regressions $regressions, production check failures seen by the lead $bitten"
 
 # ---- the pass lines ---------------------------------------------------------------------------------------------------------------
 check "the Issue ran to its close without the owner (not stuck, not idle)" 1 "$((waited && !stuck))"
@@ -106,19 +111,17 @@ if ((regressions > 0)); then
   check "verified holds: the second hold only" "verified:$issue:2" "$(sqlq "SELECT string_agg(key, ',' ORDER BY id) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'verified'")"
   check "regression detail names the deployed config" yes "$(sqlq "SELECT payload::text FROM factory.issue_events WHERE issue_id = $issue AND kind = 'regression' ORDER BY id LIMIT 1" | grep -q 'MAX_WORDS' && echo yes || echo no)"
 else
-  note_line "the lead's own production check caught the bug before the ship (no regression)"
+  note_line "no regression: the bug has to have bitten the lead's own production check before the ship, or the gameday did not happen"
   check "ships" 1 "$ships"
   check "verified holds" "verified:$issue:1" "$(sqlq "SELECT string_agg(key, ',' ORDER BY id) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'verified'")"
-  check_ge "commits that touched deploy/limits.conf (the initial one and the fix)" 2 "$fix_commits"
+  check_ge "tool results in the lead's transcript with the deployed copy's verify failure (only the real output has this text)" 1 "$bitten"
 fi
 
 check "production now: the deployed copy's self test" "selftest: ok words=9 lines=2" "$("$deployed/bin/wordstat" --self-test 2>&1 || true)"
 check "the change is on origin/master (--longest in bin/wordstat)" yes "$(git --git-dir="$remote" show master:bin/wordstat | grep -q -- '--longest' && echo yes || echo no)"
-check "the fix is on origin/master (MAX_WORDS no longer 3)" yes "$(git --git-dir="$remote" show master:deploy/limits.conf | grep -qx 'MAX_WORDS=3' && echo no || echo yes)"
 wt=$repo/.claude/worktrees/factory-$issue-$attempt
 terminals=$(terminals_of "$lead")
 echo "$terminals" | scrub >"$out/hc-terminals.json"
-archive=${FACTORY_ARCHIVE_DIR:-$HOME/.local/share/factory/archive}/$issue/$attempt
 find "$archive" -maxdepth 1 -name '*.jsonl' 2>/dev/null | sed -E 's|.*/[0-9a-f-]{36}\.jsonl|<claude session>.jsonl|' >"$out/archive.txt" || true
 check "finalize ran once (issue_finalized events)" 1 "$(ev issue_finalized)"
 check "claim rows after finalize" 0 "$(sqlq "SELECT count(*) FROM factory.claims WHERE issue_id = $issue")"

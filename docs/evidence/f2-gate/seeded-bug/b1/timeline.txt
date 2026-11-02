@@ -1,0 +1,11 @@
+2026-11-02T05:16:14.238Z run seeded-bug/b1: release 9bc57ae5f45f, base commit d46964a
+2026-11-02T05:16:19.055Z scratch: factory-gameday-bug up; project {"name":"factory-gameday-bug","source":"manifest","mode":"make","hold":"1m","make":{"check":true,"deploy":true,"verify":true}}
+2026-11-02T05:16:19.405Z make check on the scratch repo: check: ok
+2026-11-02T05:16:19.733Z issue 35 filed (source_key f2-bug-b1)
+2026-11-02T05:16:20.948Z issue 35: queued/ (attempt 0, hold 0) | lead: none
+2026-11-02T05:16:31.031Z issue 35: working/ (attempt 1, hold 0) | lead: none
+2026-11-02T05:17:08.613Z issue 35: watching/ (attempt 1, hold 1) | lead: idle turn=1
+2026-11-02T05:18:13.573Z issue 35: closed/ (attempt 1, hold 1) | lead: dead turn=1
+2026-11-02T05:18:22.604Z ships 1, regressions 0, commits touching deploy/limits.conf 2
+teardown: factory-gameday-bug removed
+2026-11-02T05:18:25.960Z run seeded-bug/b1: 0 failed lines, wall 132 s

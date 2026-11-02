@@ -164,7 +164,7 @@ write_report() { # <gameday> <run> <out dir> <issue id> <lead session> <started 
     printf -- '- Lead: %s\n' "$(lead_facts "$id" "$lead")"
     printf -- '- Wall time: %dm%02ds (setup to teardown)\n\n' $((wall / 60)) $((wall % 60))
     printf '## Pass conditions\n\n| Verdict | Line | Expected | Got |\n|-|-|-|-|\n'
-    awk -F'\t' '$1 == "PASS" || $1 == "FAIL" { sub(/^expected /, "", $3); sub(/^got /, "", $4); printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULT"
+    awk -F'\t' '$1 == "PASS" || $1 == "FAIL" { sub(/^expected /, "", $3); sub(/^got /, "", $4); for (i = 2; i <= 4; i++) gsub(/\|/, "\\|", $i); printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULT"
     printf '\n'
     if grep -q '^NOTE' "$RESULT"; then
       printf '## Notes\n\n'

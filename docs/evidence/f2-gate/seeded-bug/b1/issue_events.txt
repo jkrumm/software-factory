@@ -1,0 +1,10 @@
+05:16:19.540|created||queued|created:35|{"source": "request"}
+05:16:22.720|classified|||classified:35|{"kind": "feature", "size": "s", "tier": "sonnet", "class": "routine", "effort": "medium", "clamped": false, "floored": false}
+05:16:26.470|admitted|queued|working|admit:35:1|
+05:16:45.540|phase|working||35:1:phase:009889aa-ea96-461f-ac5f-5b68a3b47725|{"phase": "investigate", "attempt": 1}
+05:16:58.308|phase|working||35:1:phase:cf6019e0-1cda-45de-bd44-b12ed2d4a3cc|{"phase": "production", "attempt": 1}
+05:16:58.349|refused|working||35:1:ship:e0235863-1e87-48cf-82a3-510b1dd25716|{"event": "ship", "detail": "ship refused, evidence missing recorded after the merged commit (2026-11-02T05:16:55.000Z): infra (the service's status and logs after the change). File each with `factory issue evidence 35 --kind <kind> --link 
+05:17:04.596|ship|working|watching|35:1:ship:62c2b96e-8f6b-4033-a3a0-153fc8658df0|{"attempt": 1, "commits": ["f99d778f5134c2f6113388ab8bd49fd7d3c4ba37"], "derived": {"paths": ["bin/wordstat", "deploy/limits.conf", "test/run.sh"], "holdMs": 60000, "commits": ["f99d778f5134c2f6113388ab8bd49fd7d3c4ba37"], "problem": null, "
+05:18:06.497|hold_over|watching||hold:35:1:1|{"hold": 1}
+05:18:06.614|verified|watching|closed|verified:35:1|{"hold": 1, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok f99d778f5134c2f6113388ab8bd49fd7d3c4ba37 (selftest: ok words=9 lines=2)"}]}
+05:18:12.247|issue_finalized|||issue_finalized:35:1|{"attempt": 1}

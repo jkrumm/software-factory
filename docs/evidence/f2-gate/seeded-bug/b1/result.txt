@@ -1,0 +1,19 @@
+PASS	the Issue ran to its close without the owner (not stuck, not idle)	expected 1	got 1
+PASS	Issue after the run: closed/done, attempt 1	expected closed|done|1	got closed|done|1
+PASS	ships (watching entered)	expected at least 1	got 1
+PASS	evidence rows by the lead (not the factory) before the first ship	expected at least 1	got 5
+PASS	the Issue was watching (hold_over events)	expected at least 1	got 1
+PASS	ships	expected 1	got 1
+PASS	verified holds	expected verified:35:1	got verified:35:1
+PASS	production now: the deployed copy's self test	expected selftest: ok words=9 lines=2	got selftest: ok words=9 lines=2
+PASS	the change is on origin/master (--longest in bin/wordstat)	expected yes	got yes
+PASS	the fix is on origin/master (MAX_WORDS no longer 3)	expected yes	got yes
+PASS	finalize ran once (issue_finalized events)	expected 1	got 1
+PASS	claim rows after finalize	expected 0	got 0
+PASS	live terminals of the lead after finalize (tab closed)	expected 0	got 0
+PASS	the lead's worktree directory after finalize	expected no	got no
+PASS	transcripts in the archive for the attempt	expected at least 1	got 1
+PASS	evidence rows of kind transcript	expected at least 1	got 1
+FAIL	the bug bit: a production check failed before the Issue closed (the lead's, or make verify after the hold)	expected 1	got 0
+FAIL	the bug bit: a production check failed before the Issue closed (the lead's, or make verify after the hold)	expected 1	got 0
+NOTE	FINDING, the seed was readable: the lead read deploy/limits.conf (MAX_WORDS=3 against a 9-word self test) and fixed it in its first commit, before any deploy. No production check failed and no regression happened, so neither pass path was exercised. The machine behaved (one ship, one hold, verified, one finalize, transcript archived); the seeded bug did not bite. Run b2 seeds a fault that a read does not show.
