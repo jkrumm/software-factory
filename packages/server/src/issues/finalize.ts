@@ -24,7 +24,7 @@ export interface FinalizeDeps {
 }
 
 /**
- * The claim goes back, a lead that never started never will, and whoever waits for the place is looked at now rather than at its next
+ * The claim goes back, a lead or a worker of it that never started never will, and whoever waits for the place is looked at now rather than at its next
  * recheck. Under the capacity lock like every admission, and on the tick: no check that fills the off-tick jobs may hold a project's place,
  * and between two passes no start is in flight, so a spawn still `starting` is one a crash left, whose lease would otherwise start it
  * later. Each statement finds its work done on a replay.
@@ -34,12 +34,12 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
   await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const keys = await releaseClaim(tx, issueId)
-    const key = leadKey(issueId, attempt)
-    const stopped = await tx`
+    const lead = leadKey(issueId, attempt)
+    const stopped: { key: string }[] = await tx`
       UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${`Issue ${issueId} closed before the spawn started`}
-      WHERE key = ${key} AND status IN ('queued', 'waiting', 'starting')
+      WHERE (key = ${lead} OR parent = ${lead}) AND status IN ('queued', 'waiting', 'starting')
       RETURNING key`
-    if (stopped.length > 0) await dropEmptySession(tx, key)
+    for (const { key } of stopped) await dropEmptySession(tx, key)
     if (keys.length === 0) return
     await tx`
       UPDATE factory.spawns SET resume_at = ${now}

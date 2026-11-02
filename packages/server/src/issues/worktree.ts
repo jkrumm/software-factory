@@ -97,8 +97,9 @@ export class GitWorktrees implements Worktrees {
       const path = await this.listed(repo, branch)
       if (!path) throw new WorktreeFailed(`branch ${branch} already exists in ${repo}`)
       const marker = await this.marker(path)
-      // The sha it was cut from: the base has moved on since, and evidence counts the branch from there.
-      if (marker && existsSync(marker)) return { path, base, sha: (await Bun.file(marker).text()).trim() }
+      // The sha it was cut from: the base has moved on since, and evidence counts the branch from there. A crash in the write leaves none.
+      const cut = marker && existsSync(marker) ? (await Bun.file(marker).text()).trim() : ''
+      if (/^[0-9a-f]{40,64}$/.test(cut)) return { path, base, sha: cut }
       // No lead started in a tree with no marker, but commits say somebody worked here: it is not this code's to delete.
       if ((await this.git(repo, 'rev-list', '--count', `refs/heads/${branch}`, '--not', base)) !== '0')
         throw new WorktreeFailed(`branch ${branch} has commits and no finished setup: it is left as it is`)

@@ -724,7 +724,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target) || !flags.reason) {
       throw usage('usage: issue reopen <id> --reason <text>')
     }
-    const { body } = await call(io, `/issues/${target}/reopen`, {
+    const { status, body } = await call(io, `/issues/${target}/reopen`, {
       method: 'POST',
       auth: true,
       socket: 'fallback',
@@ -733,7 +733,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       body: { reason: flags.reason, ...(flags.id ? { id: flags.id } : {}) },
     })
     print(body, issueLine(body))
-    if (body.state === 'closed') {
+    if (status === 202) {
       throw new FactoryError('pending', 'the reopen is filed and not answered yet', {
         hint: `\`${BIN} issue show ${body.id}\` shows where the Issue stands`,
       })

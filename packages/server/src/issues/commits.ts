@@ -60,35 +60,32 @@ export class GitCommits implements Commits {
       full.push(known.stdout.trim())
     }
 
-    let base = input.merged || full.length > 0 ? await originDefault(repo, this.options) : undefined
-    if (full.length > 0) {
-      const merged = async (sha: string) =>
-        base ? (await git(['merge-base', '--is-ancestor', sha, base])).exitCode === 0 : false
-      if (!base || !(await Promise.all(full.map(merged))).every(Boolean)) {
-        await fetch()
-        base = await originDefault(repo, this.options)
-      }
-      if (!base) throw new CommitsRefused(`${repo} has no origin default branch to check the commits against`)
+    const onBranch = await this.branchCommits(input)
+    const needsBase = input.merged === true && onBranch.length > 0
+    /** Which of what must be on the base is not; every call looks at the base as it is now. */
+    const lacking = async (): Promise<string | undefined> => {
+      if (full.length === 0 && !needsBase) return undefined
+      const base = await originDefault(repo, this.options)
+      if (!base) return `${repo} has no origin default branch to check the commits against`
       for (const sha of full) {
-        if (!(await merged(sha)))
-          throw new CommitsRefused(`commit ${sha.slice(0, 12)} is not on ${base}: merge it first`)
-        // An old commit of the base proves nothing about this attempt.
-        if (cut && (await git(['merge-base', '--is-ancestor', sha, cut])).exitCode === 0)
-          throw new CommitsRefused(`commit ${sha.slice(0, 12)} is older than this attempt`)
+        if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode !== 0)
+          return `commit ${sha.slice(0, 12)} is not on ${base}: merge it first`
       }
+      if (needsBase && !(await branchOnBase(repo, input.branch, base, this.options)))
+        return `${input.branch} holds work that is not on ${base}: merge it first`
+      return undefined
+    }
+    if (await lacking()) {
+      await fetch()
+      const reason = await lacking()
+      if (reason) throw new CommitsRefused(reason)
+    }
+    for (const sha of full) {
+      // An old commit of the base proves nothing about this attempt.
+      if (cut && (await git(['merge-base', '--is-ancestor', sha, cut])).exitCode === 0)
+        throw new CommitsRefused(`commit ${sha.slice(0, 12)} is older than this attempt`)
     }
 
-    const onBranch = await this.branchCommits(input)
-    if (input.merged && onBranch.length > 0) {
-      const merged = async () => base !== undefined && (await branchOnBase(repo, input.branch, base, this.options))
-      if (!(await merged())) {
-        await fetch()
-        base = await originDefault(repo, this.options)
-        if (!(await merged())) {
-          throw new CommitsRefused(`${input.branch} holds work that is not on ${base ?? 'the base'}: merge it first`)
-        }
-      }
-    }
     const commits = [...new Set([...full, ...onBranch])]
     if (commits.length === 0) return { commits, paths: [], mergedAt: null }
 
@@ -115,7 +112,10 @@ export class GitCommits implements Commits {
   private async branchCommits({ repo, branch, cut }: ReadInput): Promise<string[]> {
     if (!cut) return []
     const ref = `refs/heads/${branch}`
-    if ((await gitIn(repo, ['rev-parse', '-q', '--verify', ref], this.options)).exitCode !== 0) return []
+    const found = await gitIn(repo, ['rev-parse', '-q', '--verify', ref], this.options)
+    // One is what `--verify -q` says of a ref that is not there; anything else is a git that failed.
+    if (found.exitCode === 1) return []
+    if (found.exitCode !== 0) throw new Error(`git rev-parse failed (exit ${found.exitCode})`)
     const listed = await gitIn(repo, ['rev-list', `${cut}..${ref}`], this.options)
     if (listed.exitCode !== 0) throw new Error(`git rev-list failed (exit ${listed.exitCode})`)
     return listed.stdout.split('\n').filter(Boolean)

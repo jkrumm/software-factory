@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { existsSync, realpathSync } from 'node:fs'
-import { copyFile, cp, mkdir, rename } from 'node:fs/promises'
+import { copyFile, cp, link, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Effort, Placement, Tier } from '@software-factory/contract'
 import { z } from 'zod'
@@ -169,10 +169,13 @@ export async function stageFork(
   try {
     await mkdir(dir, { recursive: true })
     if (existsSync(subagents)) await cp(subagents, join(dir, input.fork.session), { recursive: true })
-    // Whole or not at all: a second fork of the same session starts from what is there.
+    // Whole or not at all, and never over a file a running fork writes: a link fails where one is there, a rename would replace it.
     const part = `${to}.${input.key}.part`
     await copyFile(input.fork.archive, part)
-    await rename(part, to)
+    await link(part, to).catch((error: unknown) => {
+      if ((error as { code?: string }).code !== 'EEXIST') throw error
+    })
+    await rm(part)
   } catch (error) {
     throw new RunnerError(`the archived session cannot be put back: ${String(error)}`, false)
   }
