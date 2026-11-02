@@ -6,6 +6,7 @@ import {
   DoorRouteList,
   type DoorUnrouted,
   DoorUnroutedList,
+  Fleet,
   Health,
   Issue,
   IssueAnswerAck,
@@ -63,6 +64,9 @@ commands:
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
+  fleet [--refresh]
+                  the fleet read model (plain: asks first, then the repos with a running plan; --format json: all of it).
+                  --refresh builds it now instead of reading the last build (token or socket for the read, token for a refresh)
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -321,6 +325,39 @@ export function statusScreen(s: Status): string {
   ].join('\n')
 }
 
+/** The fleet on one screen: the asks, oldest first, then each repo with a running plan and its live sessions. */
+export function fleetScreen(f: Fleet): string {
+  const out: string[] = []
+  const s = f.summary
+  out.push(
+    `FLEET\t${s.working} working\t${s.idle} idle\t${s.done} done\t${s.asks} asks (${s.staleAsks} older than 24 h)`,
+  )
+  out.push('ASKS')
+  if (f.asks.length === 0) out.push('  -')
+  for (const a of f.asks) {
+    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.text, 100)}`)
+  }
+  out.push('REPOS')
+  const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))
+  if (shown.length === 0) out.push('  -')
+  for (const r of shown) {
+    const plan = [r.plan, ...r.morePlans].find((p) => p?.state === 'running')
+    const active = plan?.waves.find((w) => w.status === 'active')
+    const git = r.git ? `${r.git.branch ?? 'detached'}${r.git.dirty ? '*' : ''}` : '-'
+    out.push(
+      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${oneLine(plan?.title ?? '-', 50)}${active ? `\twave ${active.n} ${oneLine(active.short ?? active.title, 40)}` : ''}`,
+    )
+    for (const x of r.sessions) {
+      out.push(`    ${x.state}\t${x.id}\t${x.role ?? '-'}\t${oneLine(x.title ?? '-', 50)}`)
+    }
+  }
+  if (f.errors.length > 0) {
+    out.push('ERRORS')
+    for (const e of f.errors) out.push(`  ${oneLine(e, 200)}`)
+  }
+  return out.join('\n')
+}
+
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
 const issueLine = (i: IssueSummary) =>
@@ -399,6 +436,7 @@ const sessionLine = (s: Session) =>
 
 interface Flags {
   all?: boolean
+  refresh?: boolean
   on?: string
   done?: boolean
   session?: string
@@ -653,6 +691,18 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       schema: Spawn,
     })
     return print(body, spawnLine(body))
+  }
+
+  if (key === 'fleet') {
+    const refresh = flags.refresh === true
+    const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {
+      method: refresh ? 'POST' : 'GET',
+      auth: true,
+      socket: refresh ? false : 'fallback',
+      timeoutMs: refresh ? 60_000 : undefined,
+      schema: Fleet,
+    })
+    return print(body, fleetScreen(body))
   }
 
   if (key === 'status') {
@@ -1042,6 +1092,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 const OPTIONS = {
   format: { type: 'string' },
   all: { type: 'boolean' },
+  refresh: { type: 'boolean' },
   on: { type: 'string' },
   done: { type: 'boolean' },
   session: { type: 'string' },

@@ -81,6 +81,8 @@ describe('config (finding 5)', () => {
       rolesFile: DEFAULT_ROLES_FILE,
       retryBudgetMs: 30 * 60_000,
       repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
+      visibleRoots: ['/home/me/IuRoot'],
+      askHumanBin: '/home/me/SourceRoot/dotfiles/scripts/ask-human.sh',
       spoolDir: '/home/me/.local/share/factory/spool',
       hookSocket: '/home/me/.local/share/factory/hook.sock',
       slots: 2,
@@ -94,6 +96,13 @@ describe('config (finding 5)', () => {
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
+  })
+
+  test('FACTORY_VISIBLE_ROOTS: the read-only roots of the fleet view, IuRoot by default, off for none', () => {
+    expect(loadConfig({ ...env, FACTORY_VISIBLE_ROOTS: '/a:/b' }).visibleRoots).toEqual(['/a', '/b'])
+    expect(loadConfig({ ...env, FACTORY_VISIBLE_ROOTS: 'off' }).visibleRoots).toEqual([])
+    expect(() => loadConfig({ ...env, FACTORY_VISIBLE_ROOTS: 'relative' })).toThrow('FACTORY_VISIBLE_ROOTS')
+    expect(loadConfig({ ...env, FACTORY_ASK_HUMAN: '/x/ask.sh' }).askHumanBin).toBe('/x/ask.sh')
   })
 
   test('FACTORY_SLOTS is the number of test slots, two by default', () => {

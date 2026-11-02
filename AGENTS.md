@@ -62,6 +62,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 
 **Issues** are `docs/design.md` §4: `src/issues/lifecycle.ts` is the one writer of `issues.state` (a create, always `queued`, is `create.ts`; the door's `intake.ts` files through it); past about 500 lines, stop. `FACTORY_AGW_BIN` is the `agw` Classify calls; `FACTORY_ALERT_LEADS=0` keeps `alert` Issues from starting a lead (default on); `FACTORY_ARCHIVE_DIR` is where a closed attempt's transcripts go (default `~/.local/share/factory/archive`). `issue_id` goes on a lead's session only. `git` and `make verify` never run on the tick or in a transaction: a lead's call waits for its `git`, and `verify` and `finalize` run off the tick (`issues/offtick.ts`).
 
+**The fleet view** is `docs/design.md` §11 "The fleet view": `src/fleet/` (`index.ts` the builder the tick kicks, `model.ts` the pure assembly, `plans.ts`, `sources.ts` hc and the human queue, `git.ts`, `store.ts` the one-row snapshot `factory.fleet_snapshot` and `NOTIFY fleet`), `GET /fleet` (token and socket) and `POST /fleet/refresh` (token), `factory fleet`. It reads and calls no model. Config: `FACTORY_VISIBLE_ROOTS` (read-only roots, default `~/IuRoot`, `off`), `FACTORY_ASK_HUMAN`. Migration `021`.
+
 **Behaviour as built** is in `docs/design.md` §3 "As built": the tick, spaces, the runner, hooks and the socket, prompt delivery,
 the rules that act, the spool, derived state, sessions, the witness, panes as clients, test slots, quota, admission, the queue
 state, roles, process/health/contract/schema/API.
@@ -82,7 +84,7 @@ state, roles, process/health/contract/schema/API.
 - `packages/door` — the factory door: a Bun server, `POST /alert/<source>`, the parsers (`src/parsers.ts`), the tokens file; its README has the HyperDX template.
   Server side: `issues/intake.ts`. LaunchAgent `deploy/com.jkrumm.factory-door.plist.template`, `scripts/launch-door.sh`.
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
-  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show` (`show` is the Issue with its timeline, evidence and questions), `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `issue evidence|reopen|stop|resume <id>`, `issue answer <id> <text>` and `issue note <id> <text>` (the owner's, token only), `notify list|test`, `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show` (`show` is the Issue with its timeline, evidence and questions), `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `issue evidence|reopen|stop|resume <id>`, `issue answer <id> <text>` and `issue note <id> <text>` (the owner's, token only), `notify list|test`, `project list|show|sync`, `fleet [--refresh]`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 - `scripts/gameday/` — the F1 kill gamedays: `run.sh <claimed|working>` `kill -9`s the server at a chosen moment and counts what survives; `setup.sh`, `collect.sh`, `teardown.sh`, `kill-server.sh`, `template/` the scratch repo. Evidence in `docs/evidence/f1-gamedays/`.

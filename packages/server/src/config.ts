@@ -21,6 +21,10 @@ export interface Config {
   retryBudgetMs: number
   /** the directories a spawn's repo must be inside (`FACTORY_REPO_ROOTS`) */
   repoRoots: string[]
+  /** the directories whose repos the fleet view shows read-only (`FACTORY_VISIBLE_ROOTS`, default `$HOME/IuRoot`): never a spawn or Issue target on their account */
+  visibleRoots: string[]
+  /** `dotfiles/scripts/ask-human.sh`, the human queue's reader (`FACTORY_ASK_HUMAN`) */
+  askHumanBin: string
   /** where the hooks append their events (`FACTORY_SPOOL_DIR`) */
   spoolDir: string
   /** the unix socket the hooks post to (`FACTORY_SOCKET`) */
@@ -76,6 +80,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     rolesFile: env.FACTORY_ROLES_FILE || DEFAULT_ROLES_FILE,
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
+    visibleRoots: visibleRoots(env.FACTORY_VISIBLE_ROOTS, env.HOME),
+    askHumanBin: env.FACTORY_ASK_HUMAN || `${required('HOME')}/${DOTFILES}/scripts/ask-human.sh`,
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
     slots: slots(env.FACTORY_SLOTS),
@@ -149,6 +155,17 @@ function repoRoots(value: string | undefined, home: string | undefined): string[
   const relative = roots.find((root) => !root.startsWith('/'))
   if (relative !== undefined || roots.length === 0) {
     throw new Error(`FACTORY_REPO_ROOTS must be colon-separated absolute paths, got: ${raw}`)
+  }
+  return roots
+}
+
+/** Colon-separated absolute paths, `off` for none; the default is the IuRoot workspace under the home directory. */
+function visibleRoots(value: string | undefined, home: string | undefined): string[] {
+  if (value === 'off') return []
+  const raw = value || (home ? `${home}/IuRoot` : '')
+  const roots = raw.split(':').filter(Boolean)
+  if (roots.some((root) => !root.startsWith('/'))) {
+    throw new Error(`FACTORY_VISIBLE_ROOTS must be colon-separated absolute paths or off, got: ${raw}`)
   }
   return roots
 }

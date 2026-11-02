@@ -1104,6 +1104,54 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 - **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
   error if it did not arrive, also when the target is `off`). The test row is made already claimed (`sendNow`), so the tick cannot send it beside the caller.
 
+### The fleet view (FV Wave 1, 2026-11-02)
+
+One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
+`docs/waves/fv.md`). Wave 1 is the deterministic half: no model text, `short`, `headline`, `suggestion` and `actions` are null or empty.
+
+- **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
+  `asks[]`, `repos[]` (`name`, `space`, `visible`, `git`, `plan`, `morePlans`, `sessions[]`), `quota` and `queue` as `factory status`
+  has them, `errors[]`, `builtAt`, `fingerprint`. `working` counts `working` and `starting` sessions, `done` those hc reports `done`
+  (the turn ended unseen), `idle` the rest alive; `staleAsks` are asks older than 24 h.
+- **A snapshot, never built inline.** `FleetBuilder` (`src/fleet/index.ts`) builds off the tick: `tick()` calls `kick()`, which starts a
+  build behind its back when 30 s have passed and none runs; `POST /fleet/refresh` (`factory fleet --refresh`, token only) builds now
+  and waits. The model is one row, `factory.fleet_snapshot` (migration `021`: JSON, fingerprint, `built_at`), written by a short
+  transaction of its own; `GET /fleet` (token API and socket) reads that row, 503 `not_ready` before the first build. Every read is
+  bounded (`git` 5 s, `hc` and the queue script 10 s, plan files 256 KiB) and none runs in a transaction.
+- **Failure is local.** A source that fails (hc, the human queue, a repo's `git`, a plan file) leaves its part as the last build had it
+  (memory; empty after a restart) and adds a line to `errors[]`; the rest of the model stands. Only the database part has no
+  fallback: with nothing to fall back on the build fails, the stored snapshot stays and the tick logs it.
+- **`NOTIFY fleet`.** `pg_notify('fleet', <fingerprint>)` in the snapshot's transaction when the fingerprint is not the stored one. The
+  fingerprint is a sha-256 of the model without `builtAt`, `lastActivityAt`, `readAt` and `sampledAt`, so the clock and a working agent's
+  status messages do not make it move. A terminal the factory does not know has `since` = when the builder first saw it in that state
+  (memory, seeded from the stored snapshot at boot; hc's own time moves with every message).
+- **Repos.** Every git repo directly under `FACTORY_REPO_ROOTS` and `FACTORY_VISIBLE_ROOTS` (default `$HOME/IuRoot`; `off` for none)
+  that has a `docs/waves/PLAN.md` or a live session; a session's repo is the one enclosing its spawn's repo, or its directory. `visible`
+  is true for a repo under a visible root: the owner's read-only IuRoot view, never a spawn or Issue target of this model, and its text
+  stays on the mini (no `agw` call anywhere in this wave; the digest of Wave 2 skips `visible`). The spawn and Issue checks of
+  `FACTORY_REPO_ROOTS` are unchanged: with the default roots, IuRoot is in both lists.
+- **Plans.** A session's plan is, in order: the `docs/waves/*.md` path its start text names (the spawn's prompt, or the longest argument
+  of a terminal; the path named most often, ignoring what follows a `Never` on a line; relative to the spawn's repo or a root, `~/` to
+  the home), else the `docs/waves/PLAN.md` found walking up from its directory to its repo (a worktree counts as its main checkout),
+  else the repo's. A path must resolve to a regular `.md` file of at most 256 KiB under a root, or it is not followed. The repo's
+  `plan` is the one a live session works (its own `PLAN.md` first), else its `PLAN.md`; the others are `morePlans`. Headings
+  `## Wave <n> — <title>` with `<!-- short: … -->` and `<!-- status: <word> [date][, text] -->` (`done`, `active`, `pending`,
+  `scheduled` or `later [until <date>]`; no status is `pending`, another word `unknown`). `lastTouched` is the file's last commit (its
+  mtime when git has none). States: `running` (a live session works it), `done` (every wave), `stale` (an active wave, untouched
+  3 d), `scheduled` (nothing active and the next wave owner-timed, undated or dated ahead), else `planned`. For a visible repo a missing
+  `short` is the title cut at 8 words.
+- **Sessions** are the factory's (`buildStatus`) and hc's Claude Code terminals (`terminal.list`, the RPC behind `hc ls --json`),
+  merged when the terminal's address is the session's pane or its name or `factory.key` label is the session's id; a terminal the
+  factory does not know (an `rd` session, IuRoot's) is its own entry, its state from hc's status, its parent through the parent
+  terminal's name. A session outside every root is left out. `wave` is the `Wave <n>` its start text names, when its plan has it.
+- **Asks** (deterministic sources only; `id` is `<source>:<key>`): `hc:<session>` (hc `blocked` for 2 min, kind `permission`),
+  `wait:<session>` (a declared wait on the owner, `question`), `factory:<hash>` (a `factory status` attention line with its minutes
+  masked, so the key survives the clock; its `at` is when it was first seen), `decision:<key>` (an open decision of an open Issue,
+  `question`) and `queue:<id>` (the human queue through `ask-human.sh list --json`, `human`; the script is dotfiles', at
+  `FACTORY_ASK_HUMAN`; a script that does not print the JSON array yet is an `errors[]` line). Oldest first.
+- **CLI.** `factory fleet [--format json|plain] [--refresh]`: plain is the summary line, the asks, then the repos with a running plan
+  and their sessions, then the errors.
+
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
 

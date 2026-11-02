@@ -1,8 +1,10 @@
 import { z } from 'zod'
+import { FleetBody } from './fleet.ts'
 import { StatusIssue } from './issues.ts'
 import { Effort, RoleName, Tier } from './roles.ts'
 
 export * from './door.ts'
+export * from './fleet.ts'
 export * from './issues.ts'
 export * from './notify.ts'
 export * from './projects.ts'
@@ -225,3 +227,10 @@ export type SlotRelease = z.infer<typeof SlotRelease>
 /** `code` names a refusal a client can act on (`key_spent`); `spawn` is the stored spawn it concerns. */
 export const ErrorBody = z.object({ error: z.string(), code: z.string().optional(), spawn: Spawn.optional() })
 export type ErrorBody = z.infer<typeof ErrorBody>
+
+/** `GET /fleet` (`packages/contract/src/fleet.ts`): the read model, with the quota and the queue as `factory status` has them. */
+export const Fleet = FleetBody.extend({
+  quota: z.array(Quota),
+  queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
+})
+export type Fleet = z.infer<typeof Fleet>

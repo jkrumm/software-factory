@@ -4,6 +4,7 @@ import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
+import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
@@ -68,6 +69,17 @@ const clock = systemClock
 const notifier = makeNotifier(config)
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
 const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now(), fetch: true })
+const hcClient = new HcClient({ bin: config.hcBin, session: config.hcSession })
+const fleet = new FleetBuilder({
+  sql,
+  now: () => clock.now(),
+  roots: config.repoRoots,
+  visibleRoots: config.visibleRoots,
+  home: process.env.HOME ?? '',
+  hc: new HcTerminals(hcClient),
+  queue: new AskHumanQueue(config.askHumanBin),
+  alertLeads: config.alertLeads,
+})
 const runner = new HcRunner({
   bin: config.hcBin,
   session: config.hcSession,
@@ -92,6 +104,7 @@ const server = serve({
   alertLeads: config.alertLeads,
   notifier,
   notifyTarget: config.notifyTarget,
+  fleet,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -164,13 +177,14 @@ const ticker = startTicker(
     issuePorts,
     classification,
     leadWorktrees,
+    fleet,
     alertLeads: config.alertLeads,
     notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz },
   },
   TICK_INTERVAL_MS,
   monitor,
 )
-const events = new HcEvents({ client: new HcClient({ bin: config.hcBin, session: config.hcSession }) })
+const events = new HcEvents({ client: hcClient })
 events.start()
 const witnessLoop = startWitness({ sql, runner: events, clock, probe: gitProbe })
 console.log(`listening on ${server.url.href} (version ${config.version})`)
@@ -189,6 +203,7 @@ async function shutdown(signal: string): Promise<void> {
     await server.stop()
     await hooks.stop()
     await ticker.stop()
+    await fleet.settled()
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)
     await witnessLoop.stop()
