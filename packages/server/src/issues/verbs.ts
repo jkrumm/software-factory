@@ -42,7 +42,8 @@ async function heard(
 }
 
 /**
- * Files one verb of a lead as an inbox row keyed `<issue>:<attempt>:<verb>:<call id>`: the same call twice is one event. The session, when
+ * Files one verb of a lead as an inbox row keyed `<issue>:<attempt>:<verb>:<call id>`: the same call twice is one event, unless a gated
+ * verb was refused, when the call counts again (`:retry:<n>`). The session, when
  * given, must be one that works this Issue, so a lead reports on its own Issue and no other. `ship` and `close` carry what `derive` found
  * from their commits, read here and outside any transaction; the handling (and any refusal, a line in the Issue's events) is the lifecycle's.
  */

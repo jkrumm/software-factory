@@ -14,7 +14,9 @@ import { FileTranscripts } from '../src/issues/archive.ts'
 import { Classification } from '../src/issues/classify.ts'
 import { type CommitRead, type Commits, GitCommits } from '../src/issues/commits.ts'
 import { createIssue } from '../src/issues/create.ts'
-import { type Effect, type EffectPorts } from '../src/issues/effects.ts'
+import { runProcess } from '../src/exec.ts'
+import { type Effect, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
+import { branchOnBase } from '../src/issues/origin.ts'
 import { GitWorktrees } from '../src/issues/worktree.ts'
 import { kindOfPath, requiredEvidence } from '../src/issues/evidence.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
@@ -397,6 +399,25 @@ describe('GitCommits, against a repo with an origin', () => {
       )
     })
 
+    test('a commit that only touches the same files proves nothing', async () => {
+      const { origin, clone, head, cut } = squashed('squash-same-file')
+      fixture.commit(origin, { 'src/a.ts': 'something else\n' })
+      fixture.git(clone, 'fetch', '-q', 'origin')
+      await expect(read({ repo: clone, cut, reported: [head(origin)], merged: true })).rejects.toThrow(
+        'holds work that is not on',
+      )
+    })
+
+    test('a git that cannot answer is no proof, so nothing is deleted', async () => {
+      const { clone, squash } = squashed('squash-git-fails')
+      const failing: typeof runProcess = async (cmd, ...rest) =>
+        cmd.includes('diff') ? { exitCode: 128, stdout: '' } : runProcess(cmd, ...rest)
+      expect(await branchOnBase(clone, 'factory/1-1', 'origin/master', { reported: [squash] })).toBe(true)
+      expect(await branchOnBase(clone, 'factory/1-1', 'origin/master', { reported: [squash], run: failing })).toBe(
+        false,
+      )
+    })
+
     test('finalize removes it on the reported commit, and keeps it with none', async () => {
       const { clone, squash } = squashed('squash-remove')
       fixture.git(clone, 'checkout', '-q', 'master')
@@ -711,6 +732,33 @@ describe('the hold', () => {
     await offTick.settled()
   })
 
+  test('more checks waiting than a pass takes do not starve a note', async () => {
+    const { id, key } = await lead()
+    await enqueue(db.sql, {
+      issueId: id,
+      key: 'owner-note',
+      kind: 'note',
+      at: clock.now(),
+      payload: { text: 'look here' },
+    })
+    await issuePass(db.sql, { now: () => clock.now(), ports: {} })
+    const waiting: EffectPorts = {
+      verify: async () => {
+        throw new Waiting('a check runs')
+      },
+      note_lead: ports().note_lead,
+    }
+    for (let i = 0; i < 25; i++) {
+      const other = await file(newRepo())
+      await db.sql`
+        INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
+        VALUES (${other}, ${`verify:v${i}`}, 'verify', ${{ hold: 1 }}, ${clock.now()})`
+    }
+    await db.sql`UPDATE factory.issue_effects SET id = id + 1000 WHERE key LIKE 'note_lead:%'`
+    await runEffects(db.sql, waiting, () => clock.now())
+    expect(await notes(key)).toHaveLength(1)
+  })
+
   test('a stop kills make verify and all it started, files nothing, and the next server asks again', async () => {
     const repo = fixture.repo(`repo${++repos}`, {})
     const marker = join(repo, 'grandchild.pid')
@@ -963,6 +1011,34 @@ describe('finalize', () => {
     expect(existsSync(to)).toBe(false)
     expect(await store.copy({ from: join(root, 'p', 'ok.jsonl'), to, root })).toBe(true)
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('the account comes from the spawn, not from what the pane says of itself', async () => {
+    const { id, key } = await lead()
+    const [spawn] = await db.sql`SELECT account FROM factory.spawns WHERE key = ${key}`
+    await db.sql`UPDATE factory.sessions SET account = 'someone-else' WHERE id = ${key}`
+    const asked: (string | null)[] = []
+    const asking = {
+      ...ports(),
+      ...finalizePorts({
+        sql: db.sql,
+        clock,
+        runner,
+        worktrees,
+        transcripts: { copy: async () => true },
+        archiveDir: archive,
+        projectsDir: async (account) => {
+          asked.push(account)
+          return '/projects'
+        },
+        making: () => false,
+        offTick,
+      }),
+    }
+    await post(id, 'drop', { reason: 'no', session: key })
+    await issuePass(db.sql, { now: () => clock.now(), ports: asking })
+    await offTick.settled()
+    expect(asked).toEqual([spawn?.account as string])
   })
 
   test('a transcript that is not copied leaves a line, and the attempt still ends', async () => {
