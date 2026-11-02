@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { HcRunner, tabId, terminalName } from '../src/hc-runner.ts'
 import { agentName, RunnerError, type StartInput, UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
@@ -50,6 +52,48 @@ const run = async (n = 0): Promise<Record<string, unknown>> => {
   if (!asked) throw new Error(`no terminal.run number ${n}`)
   return asked.params
 }
+
+describe('hc adapter: a close', () => {
+  test('ends the agent and takes its terminals away; a second close, or a spawn with none, finds nothing to do', async () => {
+    await runner.start(input)
+    await runner.close(input.key)
+    expect((await hc.state()).terminals).toEqual([])
+    await runner.close(input.key)
+    await runner.close('never-started')
+    expect(await count('terminal.kill')).toBe(1)
+  })
+
+  test('a terminal already finished is removed without a kill', async () => {
+    const { session } = await runner.start(input)
+    await hc.finish?.(session)
+    await runner.close(input.key)
+    expect((await hc.state()).terminals).toEqual([])
+  })
+})
+
+describe('hc adapter: a fork of an archived session', () => {
+  test('puts the transcript back under the account’s project directory and resumes it as a fork', async () => {
+    const home = mkdtempSync('/tmp/factory-fork-')
+    const archive = join(home, 'archived.jsonl')
+    writeFileSync(archive, 'the session')
+    const forking = makeRunner({ home })
+    await forking.start({ ...input, repo: home, fork: { session: 'abc-1', archive } })
+    const { argv } = (await run()) as { argv: string[] }
+    expect(argv.slice(-4)).toEqual(['--resume', 'abc-1', '--fork-session', 'do it'])
+    const dir = realpathSync(home).replace(/[^A-Za-z0-9]/g, '-')
+    expect(readFileSync(join(home, '.claude', 'projects', dir, 'abc-1.jsonl'), 'utf8')).toBe('the session')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('an archive that is gone is a failed try, not a session without its past', async () => {
+    const home = mkdtempSync('/tmp/factory-fork-')
+    const forking = makeRunner({ home })
+    const error = await failure(forking, { ...input, repo: home, fork: { session: 'abc', archive: '/nowhere.jsonl' } })
+    expect(error.message).toContain('cannot be put back')
+    expect(await count('terminal.run')).toBe(0)
+    rmSync(home, { recursive: true, force: true })
+  })
+})
 
 describe('hc adapter: a start', () => {
   test('runs Claude Code in a terminal of the spawn, with the prompt as its last argument', async () => {

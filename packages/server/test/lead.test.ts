@@ -5,10 +5,13 @@ import { join } from 'node:path'
 import { IssueVerbAck, type StopCheck } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
 import { Classification } from '../src/issues/classify.ts'
+import type { Commits } from '../src/issues/commits.ts'
 import { createIssue } from '../src/issues/create.ts'
+import { finalizePorts } from '../src/issues/finalize.ts'
 import { leadPorts } from '../src/issues/lead.ts'
 import { WorktreeMaker } from '../src/issues/leadtree.ts'
 import { briefPromptId, leadKey } from '../src/issues/names.ts'
+import { OffTick } from '../src/issues/offtick.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { ProjectSync } from '../src/projects/sync.ts'
 import { QuotaPoller } from '../src/quota.ts'
@@ -36,6 +39,13 @@ class PaneRunner extends FakeRunner {
   }
 }
 
+const SHA = 'a'.repeat(40)
+
+/** Commits as the lead names them, touching nothing that deploys: this file is about the lead, `evidence.test.ts` about the bar. */
+const commits: Commits = {
+  read: async ({ reported }) => ({ commits: [...reported], paths: ['docs/x.md'], mergedAt: null }),
+}
+
 let db: TestDb
 let clock: FakeClock
 const fixture = repoRoot('factory-lead-')
@@ -46,6 +56,7 @@ let worktrees: FakeWorktrees
 let maker: WorktreeMaker
 let runner: PaneRunner
 let classification: Classification
+let offTick: OffTick
 let alerts = false
 let n = 0
 
@@ -71,12 +82,14 @@ async function setup() {
   worktrees = new FakeWorktrees()
   maker = new WorktreeMaker({ sql: db.sql, worktrees, now: () => clock.now() })
   runner = new PaneRunner()
+  offTick = new OffTick()
   classification = new Classification({ sql: db.sql, classifier, roles: TEST_ROLES, now: () => clock.now() })
   sync = new ProjectSync({ sql: db.sql, roots: [fixture.root], now: () => clock.now() })
   await app?.stop()
   app = startApp({
     sql: db.sql,
     clock,
+    commits,
     repoRoots: [fixture.root],
     get alertLeads() {
       return alerts
@@ -87,7 +100,19 @@ beforeEach(setup)
 
 const statusOf = async () => (await (await app.get('/status')).json()) as { attention: string[] }
 
-const ports = () => leadPorts({ sql: db.sql, clock, roles: TEST_ROLES, repoRoots: [fixture.root] })
+const ports = () => ({
+  ...leadPorts({ sql: db.sql, clock, roles: TEST_ROLES, repoRoots: [fixture.root] }),
+  ...finalizePorts({
+    sql: db.sql,
+    clock,
+    runner,
+    worktrees,
+    transcripts: { copy: async () => false },
+    archiveDir: '/nowhere',
+    making: (issueId) => maker.busy(issueId),
+    offTick,
+  }),
+})
 
 /** One tick of the server, then the classifies it started finish. */
 async function pass(extra: { issuePorts?: ReturnType<typeof ports>; settle?: boolean } = {}) {
@@ -104,6 +129,7 @@ async function pass(extra: { issuePorts?: ReturnType<typeof ports>; settle?: boo
   if (extra.settle !== false) {
     await classification.settled()
     await maker.settled()
+    await offTick.settled()
   }
   clock.advance(5_000)
   return result
@@ -277,7 +303,7 @@ describe('classify, then admission', () => {
     expect((await issue(request)).state).toBe('working')
     expect(await trail(alert)).toEqual(['created -→queued', 'classified'])
     const status = await statusOf()
-    expect(status.attention).toContain(`Issue ${alert} is an alert and starts no lead: FACTORY_ALERT_LEADS is not set`)
+    expect(status.attention).toContain(`Issue ${alert} is an alert and starts no lead: FACTORY_ALERT_LEADS is off`)
 
     alerts = true
     await drive(4)
@@ -543,6 +569,8 @@ describe('the lead’s verbs', () => {
       key: `${id}:1:phase:c1`,
       duplicate: false,
       state: 'working',
+      result: null,
+      detail: null,
     })
     await pass()
     expect(await trail(id)).toContain('phase')
@@ -574,13 +602,14 @@ describe('the lead’s verbs', () => {
     const shipped = await lead()
     await post(shipped.id, 'ship', {
       summary: 'done\nit works',
-      evidence: [{ kind: 'commit', link: 'https://example.com/c/1' }],
+      commits: [SHA],
+      evidence: [{ kind: 'service', link: 'https://example.com/c/1' }],
       session: shipped.key,
     })
     await pass()
     expect(await issue(shipped.id)).toMatchObject({ state: 'watching', hold: 1 })
     const closed = await lead()
-    await post(closed.id, 'close', { summary: 'a doc change', session: closed.key })
+    await post(closed.id, 'close', { summary: 'a doc change', document: 'docs/x.md', session: closed.key })
     await pass()
     expect(await issue(closed.id)).toMatchObject({ state: 'closed', outcome: 'done' })
   })
@@ -708,19 +737,20 @@ describe('the lead’s verbs', () => {
   test('a verb filed for an earlier attempt that reaches the Issue on a later one is refused', async () => {
     const { id, key } = await lead()
     // Filed by attempt 1's lead, handled after attempt 2 began.
-    await post(id, 'close', { summary: 'done', session: key })
+    await post(id, 'block', { reason: 'stuck', session: key })
     await db.sql`UPDATE factory.issues SET attempt = 2 WHERE id = ${id}`
     await pass()
     expect((await issue(id)).state).toBe('working')
     expect(await trail(id)).toContain('refused')
-    const [refused] = await db.sql`SELECT detail FROM factory.issue_inbox WHERE kind = 'close'`
-    expect(refused?.detail).toBe('close was filed for attempt 1, the Issue is on attempt 2')
+    const [refused] = await db.sql`SELECT detail FROM factory.issue_inbox WHERE kind = 'block'`
+    expect(refused?.detail).toBe('block was filed for attempt 1, the Issue is on attempt 2')
   })
 
   test('a lead reports through the socket with no token', async () => {
     const dir = mkdtempSync('/tmp/factory-lead-sock-')
     const socketPath = join(dir, 'h.sock')
     const hooks = serveHooks({
+      commits,
       sql: db.sql,
       clock,
       token: TEST_TOKEN,
@@ -750,7 +780,7 @@ describe('what the review found', () => {
   test('a regression reaches the lead as a regression, not as generic news', async () => {
     const { id, key } = await lead()
     await emit(key, 'session_started', clock.now(), { claudeSessionId: 'c1' })
-    await post(id, 'ship', { summary: 'shipped', session: key })
+    await post(id, 'ship', { summary: 'shipped', commits: [SHA], session: key })
     await pass()
     await enqueue(db.sql, {
       issueId: id,
@@ -908,6 +938,7 @@ describe('what the review found', () => {
     const dir = mkdtempSync('/tmp/factory-lead-sock-')
     const socketPath = join(dir, 'h.sock')
     const hooks = serveHooks({
+      commits,
       sql: db.sql,
       clock,
       token: TEST_TOKEN,
@@ -968,17 +999,6 @@ describe('factory issue <verb>', () => {
     const calls: string[][] = [
       ['phase', String(id), '--phase', 'build', '--note', 'half way', '--id', 'p1'],
       ['wait', String(id), '--until', until, '--why', 'a deploy', '--id', 'w1'],
-      [
-        'ship',
-        String(id),
-        '--summary',
-        'shipped',
-        '--evidence',
-        'kind=commit,link=https://example.com/c,note=a, b',
-        '--id',
-        's1',
-      ],
-      ['close', String(id), '--summary', 'nothing deployed', '--id', 'c1'],
       ['block', String(id), '--reason', 'no key', '--id', 'b1'],
       [
         'ask',
@@ -1005,21 +1025,8 @@ describe('factory issue <verb>', () => {
     }
     const rows =
       await db.sql`SELECT kind, session, payload FROM factory.issue_inbox WHERE key LIKE ${`${id}:%`} AND session = ${key} ORDER BY id`
-    expect(rows.map((r: { kind: string }) => r.kind)).toEqual([
-      'phase',
-      'wait',
-      'ship',
-      'close',
-      'block',
-      'ask',
-      'drop',
-    ])
-    expect(rows[2]?.payload).toEqual({
-      attempt: 1,
-      summary: 'shipped',
-      evidence: [{ kind: 'commit', link: 'https://example.com/c', note: 'a, b' }],
-    })
-    expect(rows[5]?.payload).toEqual({
+    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['phase', 'wait', 'block', 'ask', 'drop'])
+    expect(rows[3]?.payload).toEqual({
       attempt: 1,
       question: 'Which?',
       options: ['a', 'b'],
@@ -1039,7 +1046,7 @@ describe('factory issue <verb>', () => {
     const wrong = await factory({ FACTORY_SESSION: mine.key }, 'issue', 'phase', String(theirs.id), '--phase', 'x')
     expect(wrong.code).not.toBe(0)
     expect(wrong.stderr).toContain('does not work this Issue')
-    expect((await factory({}, 'issue', 'ship', '4242', '--summary', 's')).code).toBe(4)
+    expect((await factory({}, 'issue', 'ship', '4242', '--summary', 's', '--commit', SHA)).code).toBe(4)
   })
 })
 

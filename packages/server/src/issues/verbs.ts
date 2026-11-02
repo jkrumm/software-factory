@@ -1,5 +1,13 @@
-import type { IssueAnswerBody, IssueState, IssueVerb, IssueVerbBody } from '@software-factory/contract'
+import type {
+  IssueAnswerBody,
+  IssueEvidenceInput,
+  IssueState,
+  IssueVerb,
+  IssueVerbBody,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
+import type { Commits } from './commits.ts'
+import { derive, storeEvidence } from './evidence.ts'
 import { enqueue } from './inbox.ts'
 import { leadKey } from './names.ts'
 
@@ -10,37 +18,57 @@ export type VerbBody = {
   [V in IssueVerb]: (typeof IssueVerbBody)[V]['_output']
 }[IssueVerb]
 
-export type Filed =
-  | { ok: true; key: string; duplicate: boolean; state: IssueState }
-  | { ok: false; problem: 'unknown_issue' | 'foreign_session' }
+type Unheard = { ok: false; problem: 'unknown_issue' | 'foreign_session' }
+
+export type Filed = { ok: true; key: string; duplicate: boolean; state: IssueState } | Unheard
+
+/** The verbs the evidence decides: their commits are derived before the row is filed, and the call waits for its answer. */
+export const GATED_VERBS: readonly IssueVerb[] = ['ship', 'close']
+
+/** Whether this caller may report on this Issue. On the socket, which has no token, a caller is a session: one that names itself, and works this Issue. */
+async function heard(
+  sql: SQL,
+  issueId: number,
+  attempt: number,
+  session: string | undefined,
+  requireSession: boolean | undefined,
+): Promise<boolean> {
+  if (requireSession && session === undefined) return false
+  if (session === undefined) return true
+  // Only the Issue's current lead reports: an earlier attempt's lead, still open, is not heard.
+  if (session !== leadKey(issueId, attempt)) return false
+  const [works] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${session} AND issue_id = ${issueId}`
+  return works !== undefined
+}
 
 /**
  * Files one verb of a lead as an inbox row keyed `<issue>:<attempt>:<verb>:<call id>`: the same call twice is one event. The session, when
- * given, must be one that works this Issue, so a lead reports on its own Issue and no other. The handling (and any refusal, a line
- * in the Issue's events) is the next tick's; Wave 4 puts the evidence check there, where `ship` and `close` are decided.
+ * given, must be one that works this Issue, so a lead reports on its own Issue and no other. `ship` and `close` carry what `derive` found
+ * from their commits, read here and outside any transaction; the handling (and any refusal, a line in the Issue's events) is the lifecycle's.
  */
 export async function fileVerb(
   sql: SQL,
-  input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date; requireSession?: boolean },
+  input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date; requireSession?: boolean; commits: Commits },
 ): Promise<Filed> {
   const { issueId, verb, now } = input
   const { id, session, ...fields } = input.body
-  const [issue]: { state: IssueState; attempt: number }[] =
-    await sql`SELECT state, attempt FROM factory.issues WHERE id = ${issueId}`
+  const [issue]: { state: IssueState; attempt: number; repo: string }[] =
+    await sql`SELECT state, attempt, repo FROM factory.issues WHERE id = ${issueId}`
   if (!issue) return { ok: false, problem: 'unknown_issue' }
-  // On the socket, which has no token, a caller is a session: one that names itself, and works this Issue.
-  if (input.requireSession && session === undefined) return { ok: false, problem: 'foreign_session' }
-  // Only the Issue's current lead reports: an earlier attempt's lead, still open, is not heard.
-  if (session !== undefined && session !== leadKey(issueId, issue.attempt))
+  if (!(await heard(sql, issueId, issue.attempt, session, input.requireSession)))
     return { ok: false, problem: 'foreign_session' }
-  if (session !== undefined) {
-    const [works] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${session} AND issue_id = ${issueId}`
-    if (!works) return { ok: false, problem: 'foreign_session' }
-  }
   // The attempt is in the key: a second attempt's `--id 1 ship` is its own event, not a duplicate of the first attempt's.
   const key = `${issueId}:${issue.attempt}:${verb}:${id ?? crypto.randomUUID()}`
+  const gated = GATED_VERBS.includes(verb)
+  // A repeated call's row is there already, with the answer it got: git has nothing to add.
+  const [known] = gated ? await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key}` : []
+  const reported = 'commits' in fields ? (fields.commits ?? []) : []
+  const derived =
+    gated && !known
+      ? await derive(sql, input.commits, { issueId, repo: issue.repo, attempt: issue.attempt, reported })
+      : undefined
   // The attempt the call was filed for: a verb that reaches the Issue after a new attempt began is refused, not applied to it.
-  const payload = { ...fields, attempt: issue.attempt }
+  const payload = { ...fields, attempt: issue.attempt, ...(derived ? { derived } : {}) }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: verb, at: now, payload, session })
   return { ok: true, key, duplicate, state: issue.state }
 }
@@ -75,4 +103,40 @@ export async function fileAnswer(
   const payload = { answer, who: 'owner', decision }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: 'answer', at: now, payload })
   return { ok: true, key, duplicate, state: issue.state }
+}
+
+export type Recorded =
+  | { ok: true; key: string; duplicate: boolean; at: Date }
+  | Unheard
+  | { ok: false; problem: 'closed' }
+
+/**
+ * One piece of evidence, keyed `evidence:<issue>:<attempt>:<call id>`, by the Issue's lead or the owner. Its time is the server's, which
+ * is what freshness is measured by. Not an inbox row: it moves nothing, and `ship` reads it where it is.
+ */
+export async function fileEvidence(
+  sql: SQL,
+  input: { issueId: number; body: IssueEvidenceInput; now: Date; requireSession?: boolean },
+): Promise<Recorded> {
+  const { issueId, body, now } = input
+  const [issue]: { state: IssueState; attempt: number }[] =
+    await sql`SELECT state, attempt FROM factory.issues WHERE id = ${issueId}`
+  if (!issue) return { ok: false, problem: 'unknown_issue' }
+  if (!(await heard(sql, issueId, issue.attempt, body.session, input.requireSession)))
+    return { ok: false, problem: 'foreign_session' }
+  const key = `evidence:${issueId}:${issue.attempt}:${body.id ?? crypto.randomUUID()}`
+  const [known]: { at: Date }[] = await sql`SELECT at FROM factory.evidence WHERE key = ${key}`
+  if (known) return { ok: true, key, duplicate: true, at: known.at }
+  if (issue.state === 'closed') return { ok: false, problem: 'closed' }
+  const { duplicate } = await storeEvidence(sql, {
+    issueId,
+    key,
+    attempt: issue.attempt,
+    kind: body.kind,
+    link: body.link,
+    payload: body.text === undefined ? null : { text: body.text },
+    at: now,
+    author: body.session ?? 'owner',
+  })
+  return { ok: true, key, duplicate, at: now }
 }

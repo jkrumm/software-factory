@@ -29,7 +29,7 @@ export interface Config {
   slots: number
   /** the `agw` CLI Classify calls (`FACTORY_AGW_BIN`) */
   agwBin: string
-  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Unset: no (decision 3, until Wave 4 is live) */
+  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Unset: yes (decision 3: evidence and the hold are live); `0` switches it off */
   alertLeads: boolean
   /** `FACTORY_NOTIFY_TARGET`: where Hermes delivers the owner's messages; `off` sends nothing */
   notifyTarget: string
@@ -38,6 +38,8 @@ export interface Config {
   /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
   digestAt: string | null
   digestTz: string
+  /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
+  archiveDir: string
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -78,7 +80,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
     slots: slots(env.FACTORY_SLOTS),
     agwBin: env.FACTORY_AGW_BIN || `${required('HOME')}/.local/bin/agw`,
-    alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS),
+    alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS, true),
+    archiveDir: env.FACTORY_ARCHIVE_DIR || `${required('HOME')}/.local/share/factory/archive`,
     notifyTarget: env.FACTORY_NOTIFY_TARGET || DEFAULT_NOTIFY_TARGET,
     hermesBin: env.HERMES_BIN || `${required('HOME')}/.local/bin/hermes`,
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
@@ -111,9 +114,10 @@ function digestTz(value: string | undefined): string {
   return zone
 }
 
-/** A switch: unset or empty is off; `1`/`true`/`on` is on; anything else is a mistake that must not read as either. */
-function switchOn(name: string, value: string | undefined): boolean {
-  if (value === undefined || value === '' || ['0', 'false', 'off'].includes(value)) return false
+/** A switch: unset or empty is its default; `0`/`false`/`off` is off, `1`/`true`/`on` is on; anything else is a mistake that must not read as either. */
+function switchOn(name: string, value: string | undefined, unset: boolean): boolean {
+  if (value === undefined || value === '') return unset
+  if (['0', 'false', 'off'].includes(value)) return false
   if (['1', 'true', 'on'].includes(value)) return true
   throw new Error(`${name} must be 1 or 0, got: ${value}`)
 }

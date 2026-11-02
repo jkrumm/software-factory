@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
-import { realpathSync } from 'node:fs'
+import { constants, realpathSync } from 'node:fs'
+import { copyFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Effort, Placement, Tier } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
@@ -28,6 +30,8 @@ export interface StartInput {
   effort: Effort
   /** Claude's own session id: start the agent as `claude --resume <id>`, so the conversation carries on (runner restart) */
   resume?: string
+  /** a fork of an archived session: `claude --resume <session> --fork-session`, the archived transcript put back first */
+  fork?: { session: string; archive: string }
   /** the terminal the spawn's parent session runs in, if the factory knows it: a hidden child is started in it */
   parentTerminal?: string
 }
@@ -49,6 +53,8 @@ export interface Runner {
    * queues in Claude Code and one typed into a blocked session answers its dialog, so nothing was sent. An error means nothing is known to have arrived.
    */
   type(input: { pane: string; text: string }): Promise<'typed' | 'busy'>
+  /** Ends the spawn's agent and takes its terminal away, found by the key like a start. No terminal left is what was asked for. */
+  close(key: string): Promise<void>
 }
 
 /** The runner gave up: `permanent` for a refusal that retrying cannot fix, otherwise the spawn is retried later. */
@@ -141,6 +147,28 @@ export async function accountEnv(
     // FACTORY_SESSION switches the hooks on: they report this session's events under the spawn key.
     FACTORY_SESSION: key,
     FACTORY_ROLE: role,
+  }
+}
+
+/**
+ * Puts an archived transcript back where Claude Code looks for a session started in `repo`: its project directory under the account the
+ * spawn got, which is known only here. The file's name and place are Claude Code's own layout, the one thing of it the factory assumes. A
+ * transcript that is there already (its own, or an earlier try's) stays.
+ */
+export async function stageFork(
+  input: Pick<StartInput, 'fork' | 'repo'>,
+  env: Record<string, string>,
+  home: string,
+): Promise<void> {
+  if (!input.fork) return
+  const projects = join(env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'), 'projects')
+  const dir = join(projects, real(input.repo).replace(/[^A-Za-z0-9]/g, '-'))
+  try {
+    await mkdir(dir, { recursive: true })
+    await copyFile(input.fork.archive, join(dir, `${input.fork.session}.jsonl`), constants.COPYFILE_EXCL)
+  } catch (error) {
+    if ((error as { code?: string }).code === 'EEXIST') return
+    throw new RunnerError(`the archived session cannot be put back: ${String(error)}`, false)
   }
 }
 

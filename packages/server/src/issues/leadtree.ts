@@ -110,6 +110,11 @@ export class WorktreeMaker {
     }
   }
 
+  /** Whether a worktree of this Issue is being made right now. */
+  busy(issueId: number): boolean {
+    return this.inflight.has(issueId)
+  }
+
   /** Starts nothing more, and waits up to `waitMs` for what is running: a shutdown does not release its lock under a running `git`. */
   async stop(waitMs: number): Promise<void> {
     this.stopped = true

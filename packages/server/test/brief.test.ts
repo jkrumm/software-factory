@@ -25,6 +25,8 @@ describe('the standing orders', () => {
     expect(createHash('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
       '9e139f58ceaf64cd9916894f171a7e8fd77c9f6dbf86660f1dc338a6a18883bb',
     )
+    expect(DONE_MEANS).toContain('--commit <merged sha>')
+    expect(DONE_MEANS).toContain('factory issue evidence <id>')
     expect(STANDING_ORDERS).toContain('Decide alone.')
     expect(STANDING_ORDERS).toContain('factory issue ask')
     expect(STANDING_ORDERS).toContain('Max')

@@ -4,6 +4,7 @@ import { loadRoleTable, type RoleTable } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
+import type { Commits } from '../../src/issues/commits.ts'
 import { serve } from '../../src/http.ts'
 import type { Notifier } from '../../src/notify/port.ts'
 import { ProjectSync } from '../../src/projects/sync.ts'
@@ -50,6 +51,7 @@ export function startApp(deps: {
   alertLeads?: boolean
   notifier?: Notifier
   notifyTarget?: string
+  commits?: Commits
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)

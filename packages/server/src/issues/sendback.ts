@@ -28,7 +28,7 @@ async function factoryTurn(sql: SQL, session: string, turnAt: Date): Promise<boo
 /**
  * A lead's stop (§5, "Following a lead"), on top of the workers rule: the Issue is `working`, the turn is one the factory started,
  * and nothing has been reported since it began (a verb in the Issue's inbox from this session, handled or not, so a report made
- * a moment before the stop counts). Sent back once, keyed `issue-sendback:<session>:<turn>`; the next stop of that turn, which
+ * a moment before the stop counts; a refused one says nothing, so a lead that stops on a refused `ship` hears of it). Sent back once, keyed `issue-sendback:<session>:<turn>`; the next stop of that turn, which
  * arrives with `stopHookActive`, parks the Issue (`unreported`, one inbox row keyed by the turn) with a line for the owner in
  * `factory status`. The same stop asked again (a retried hook: no `stopHookActive`) is let through and records nothing.
  * Undefined: this rule has nothing to say.
@@ -49,7 +49,9 @@ export async function issueStop(
   if (!turn || !(await factoryTurn(sql, session.id, turn.at))) return undefined
   const [reported] = await sql`
     SELECT 1 FROM factory.issue_inbox
-    WHERE issue_id = ${issueId} AND session = ${session.id} AND kind IN ${sql([...REPORT_VERBS])} AND at >= ${turn.at} LIMIT 1`
+    WHERE issue_id = ${issueId} AND session = ${session.id} AND kind IN ${sql([...REPORT_VERBS])} AND at >= ${turn.at}
+      AND result IS DISTINCT FROM 'refused'
+    LIMIT 1`
   if (reported) return undefined
 
   const key = `issue-sendback:${session.id}:${session.turn}`

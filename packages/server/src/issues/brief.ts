@@ -36,8 +36,9 @@ Verbs (each takes the Issue id first; \`--id <call id>\` makes a repeated call o
 
 - \`factory issue phase <id> --phase <name> [--note <text>]\`
 - \`factory issue wait <id> --until <ISO time> [--why <text>]\`: a timed wait that wakes you
-- \`factory issue ship <id> --summary <three lines> [--evidence kind=<kind>,link=<url>,note=<text> …]\`
-- \`factory issue close <id> --summary <text>\`: done, nothing deployed
+- \`factory issue evidence <id> --kind ui|service|infra|data (--link <url> | --file <path> | --stdin)\`: after the merge; evidence older than the merged commit does not count
+- \`factory issue ship <id> --summary <three lines> --commit <merged sha> … [--evidence kind=<kind>,link=<url>,note=<text> …]\`: refused, with a non-zero exit, until the evidence your commits require is on record; the factory then holds, runs \`make verify\` and the probes, and a failure comes back to you as a note. Stay open through the hold.
+- \`factory issue close <id> --summary <text> (--commit <sha> … | --document <path or url>)\`: done, nothing deployed; refused when the commits touch deployable paths
 - \`factory issue block <id> --reason <text>\`: you cannot go on and nobody can answer
 - \`factory issue ask <id> --question <text> [--option <text> …] [--default <option>] [--expires <ISO time>]\`
 - \`factory issue drop <id> --reason <text>\`: the Issue should not be done
