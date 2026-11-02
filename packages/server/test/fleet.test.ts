@@ -290,8 +290,9 @@ describe('the estate', () => {
       text: 'Allow Bash(rm -rf node_modules)?',
       repo: join(estate.iu, 'prometheus-epx'),
       short: null,
+      tier: 'yours',
       suggestion: null,
-      actions: [],
+      actions: [{ label: 'Later', intent: 'later' }],
     })
     expect(by('decision:q1:dec')).toMatchObject({
       kind: 'question',
@@ -619,6 +620,9 @@ describe('the lead’s review', () => {
         ['GET', '/fleet'],
         ['POST', '/fleet/refresh'],
         ['GET', '/fleet/refresh'],
+        ['POST', '/fleet/asks/queue%3Ax/act'],
+        ['GET', '/fleet/triage'],
+        ['POST', '/fleet/triage/1/undo'],
       ] as const) {
         const res = await fetch(`http://localhost${path}`, { method, unix: socketPath })
         expect(res.status).toBe(404)
@@ -899,7 +903,7 @@ describe('the human queue reader', () => {
       `[ "$1 $2" = "list --json" ] && printf '%s' '[{"id":"a","text":"hi \\"there\\"\\nline","cmd":null,"askedAt":"2026-11-01T10:00:00Z","ageSeconds":5,"state":"queued"}]'`,
     )
     expect(await new AskHumanQueue(bin).list()).toEqual([
-      { id: 'a', text: 'hi "there"\nline', askedAt: '2026-11-01T10:00:00.000Z', state: 'queued' },
+      { id: 'a', text: 'hi "there"\nline', cmd: null, askedAt: '2026-11-01T10:00:00.000Z', state: 'queued' },
     ])
   })
 

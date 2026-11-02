@@ -94,6 +94,7 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
+      probeHosts: new Map(),
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -140,6 +141,13 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '90s' }).fleetDigestEveryMs).toBe(90_000)
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '1h' }).fleetDigestEveryMs).toBe(3_600_000)
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: 'off' }).fleetDigestEveryMs).toBeNull()
+    expect(loadConfig({ ...env, FACTORY_PROBE_HOSTS: 'MacBook=mac-alias, mini=local' }).probeHosts).toEqual(
+      new Map([
+        ['macbook', 'mac-alias'],
+        ['mini', 'local'],
+      ]),
+    )
+    expect(() => loadConfig({ ...env, FACTORY_PROBE_HOSTS: 'macbook=-oProxyCommand=x' })).toThrow('FACTORY_PROBE_HOSTS')
     for (const bad of ['5', '10s', '25h', 'often', '5 m'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_EVERY: bad })).toThrow('FACTORY_DIGEST_EVERY')
   })

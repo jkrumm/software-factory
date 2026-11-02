@@ -1061,7 +1061,9 @@ describe('an ask the session already has', () => {
         source: 'wait',
         kind: 'question',
         short: 'Wants an answer',
-        actions: [],
+        // the deterministic source's own: the triage gives it its tier and actions, the reply only its words
+        tier: 'yours',
+        actions: [{ label: 'Later', intent: 'later' }],
         suggestion: null,
       }),
     ])

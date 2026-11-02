@@ -6,6 +6,8 @@ import {
   DoorRouteList,
   DoorUnroutedList,
   EventAck,
+  ActBody,
+  ActResult,
   Fleet,
   Health,
   IntakeAck,
@@ -46,12 +48,16 @@ import {
   SpawnList,
   Status,
   StopCheck,
+  TriageEntry,
+  TriageList,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import type { FleetActions } from './fleet/act.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
+import { listEntries, undoEntry } from './fleet/triage-store.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
@@ -115,6 +121,8 @@ export interface AppDeps {
   commits?: Commits
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
+  /** the owner's intents on the fleet's asks (`POST /fleet/asks/:id/act`); without it that route is 503 */
+  fleetActions?: Pick<FleetActions, 'act'>
 }
 
 /** Largest request body the server reads. */
@@ -597,6 +605,44 @@ const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
   }
 }
 
+/**
+ * `POST /fleet/asks/:id/act {intent, note?, until?}`: the owner's intent on an ask (resolve, deny, later, archive_plan, hand_off), only
+ * when the ask offers it. 201 for the first, 200 for a repeat (the first one's result). Token API only, like `/fleet`.
+ */
+const fleetActHandler =
+  (actions: AppDeps['fleetActions']) =>
+  async (req: Bun.BunRequest<'/fleet/asks/:id/act'>): Promise<Response> => {
+    const body = await parseBody(req, ActBody)
+    if (!actions) return json({ error: 'the fleet actions are not running', code: 'not_ready' }, 503)
+    const outcome = await actions.act(decodeId(req.params.id), body)
+    if (!outcome.ok) return json({ error: outcome.error, code: outcome.code }, outcome.status)
+    return respond(ActResult, outcome.result, outcome.created ? 201 : 200)
+  }
+
+/** Bun may or may not have decoded the `%3A` of an ask id (`queue:…`); a plain id is the same either way. */
+function decodeId(id: string): string {
+  try {
+    return decodeURIComponent(id)
+  } catch {
+    return id
+  }
+}
+
+/** `GET /fleet/triage`: what the triage did on its own, newest first. */
+const fleetTriageListHandler = (sql: SQL) => async () => respond(TriageList, { entries: await listEntries(sql) })
+
+/** `POST /fleet/triage/:id/undo`: takes a decision back (200 when it was undone before); the next build shows the ask or the plan as it was. */
+const fleetTriageUndoHandler =
+  (sql: SQL, clock: Clock, fleet: AppDeps['fleet']) =>
+  async (req: Bun.BunRequest<'/fleet/triage/:id/undo'>): Promise<Response> => {
+    const id = parseParam(z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER), req.params.id)
+    const done = await undoEntry(sql, id, clock.now())
+    if (!done) return json({ error: 'unknown triage entry' }, 404)
+    if (!done.duplicate)
+      await fleet?.refreshNow().catch((error: unknown) => console.error('fleet refresh after an undo failed', error))
+    return respond(TriageEntry, done.entry, done.duplicate ? 200 : 201)
+  }
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -630,6 +676,7 @@ export function routes({
   notifyTarget = 'off',
   commits = new GitCommits(),
   fleet,
+  fleetActions,
 }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
@@ -665,6 +712,9 @@ export function routes({
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
     '/fleet': { GET: route(fleetGetHandler(sql)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
+    '/fleet/asks/:id/act': { POST: route(fleetActHandler(fleetActions)) },
+    '/fleet/triage': { GET: route(fleetTriageListHandler(sql)) },
+    '/fleet/triage/:id/undo': { POST: route(fleetTriageUndoHandler(sql, clock, fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots)),
@@ -818,7 +868,7 @@ export function serveHooks(deps: {
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
-      // Not here, on purpose: `/fleet` and `/fleet/refresh`. The model holds IuRoot's text and what a pane reads goes to its model.
+      // Not here, on purpose: `/fleet`, `/fleet/refresh`, the asks' acts and the triage. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },

@@ -130,8 +130,10 @@ export function applyDigest(
           text: reply.text,
           source: 'reply',
           at: reply.at,
+          tier: 'yours',
           suggestion: null,
           actions: [],
+          folded: [],
         })
       }
       return { ...s, headline: view.headline(s.id) }
