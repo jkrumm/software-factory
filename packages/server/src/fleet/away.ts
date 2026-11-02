@@ -39,9 +39,18 @@ async function openAsks(sql: SQL, now: Date, except: string): Promise<number> {
  * The owner acted on an ask (`POST /fleet/asks/:id/act`): a presence act for the place it names, and the cursor moves to now when that act
  * leaves no other ask of the open window in Needs you. Never backwards.
  */
-export async function recordAskAct(sql: SQL, input: { place: PresencePlace; ask: string; now: Date }): Promise<void> {
-  const { place, ask, now } = input
+export async function recordAskAct(
+  sql: SQL,
+  input: {
+    place: PresencePlace
+    ask: string
+    now: Date
+    /** false when the snapshot was not refreshed after the act: it may still list what is closed */
+    moveCursor: boolean
+  },
+): Promise<void> {
+  const { place, ask, now, moveCursor } = input
   // Acting on a card is a click on the board at the desk, and Iris in the foreground on the phone.
   await recordPresence(sql, { place, act: place === 'desk' ? 'board_click' : 'foreground', now })
-  if ((await openAsks(sql, now, ask)) === 0) await moveSeen(sql, now)
+  if (moveCursor && (await openAsks(sql, now, ask)) === 0) await moveSeen(sql, now)
 }

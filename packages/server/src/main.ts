@@ -242,7 +242,7 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await fleet.settled()
-    await windows?.settled()
+    await windows?.settled(15_000)
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)
     await witnessLoop.stop()

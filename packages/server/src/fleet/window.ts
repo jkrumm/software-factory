@@ -32,6 +32,7 @@ export const WINDOW_EVERY_MS = 15_000
 const BACKOFF_BASE_MS = 15 * 60_000
 const BACKOFF_MAX_MS = 6 * 3_600_000
 const WAITS_FAILED_MAX = 3
+const PENDING_MAX_MS = 2 * 3_600_000
 const KEEP_MS = 14 * 24 * 3_600_000
 const LINE_MAX = 160
 const SHOWN = 8
@@ -75,7 +76,6 @@ export function windowFacts(groups: Groups): WindowFacts | null {
     return [`${label}: ${total}`, ...shown, ...(total > SHOWN ? [`- (+${total - SHOWN} more)`] : [])].join('\n')
   }
   const sections = [
-    `Window: since ${groups.t.slice(0, 16)}Z`,
     list(
       'Needs the owner',
       needs.map((n) => `${n.yours ? '[yours] ' : ''}${oneLine(n.ask.short ?? n.ask.text)}`),
@@ -124,6 +124,7 @@ interface Row {
   failures: number
   waits_failed: number
   retry_at: Date | null
+  updated_at: Date
 }
 
 type Reply =
@@ -176,15 +177,24 @@ export class WindowDigest {
       })
   }
 
-  async settled(): Promise<void> {
-    await this.running
+  /** Waits for the pass in flight, at most `timeoutMs`: shutdown and the tests. */
+  async settled(timeoutMs = 20_000): Promise<void> {
+    let timer: Timer | undefined
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+    })
+    try {
+      await Promise.race([this.running, bound])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
-  /** One pass: wait for the run in flight, else start the oldest wanted window that is due and under the daily cap. */
+  /** One pass: wait for the run in flight, else start the newest wanted window that is due and under the daily cap (the one the owner is about to read). */
   async pass(): Promise<{ called: boolean; error?: string }> {
     const { sql } = this.deps
     const now = this.deps.now()
-    await sql`DELETE FROM factory.fleet_windows WHERE state IN ('ready', 'failed') AND updated_at < ${new Date(now.getTime() - KEEP_MS)}`
+    await sql`DELETE FROM factory.fleet_windows WHERE state <> 'pending' AND updated_at < ${new Date(now.getTime() - KEEP_MS)}`
     const [pending]: Row[] =
       await sql`SELECT * FROM factory.fleet_windows WHERE state = 'pending' ORDER BY requested_at LIMIT 1`
     if (pending) return this.resume(pending)
@@ -226,6 +236,10 @@ export class WindowDigest {
 
   private async resume(row: Row): Promise<{ called: boolean; error?: string }> {
     if (!row.run_id) return this.fail(row, 'a pending window has no run id', false)
+    // A run that never ends must not hold the queue for good.
+    if (this.deps.now().getTime() - row.updated_at.getTime() > PENDING_MAX_MS) {
+      return this.fail(row, 'the run was still pending after two hours', false)
+    }
     let reply: Reply
     try {
       reply = await this.exec([this.deps.bin, 'run', 'wait', row.run_id, '--format', 'json'])
@@ -252,8 +266,9 @@ export class WindowDigest {
     row: Row,
     reply: Extract<Reply, { kind: 'done' }>,
   ): Promise<{ called: boolean; error?: string }> {
+    // The run is done and its answer is bad: terminal, so the retry is a new run and not the same answer again.
     if (reply.paragraph === null)
-      return this.fail(row, reply.reason ?? 'the window item was not answered', false, reply.cost)
+      return this.fail(row, reply.reason ?? 'the window item was not answered', true, reply.cost)
     const { sql } = this.deps
     const now = this.deps.now()
     try {
