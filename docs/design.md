@@ -997,7 +997,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   back decision says nothing; the rules that read state (`notifyFailures`, the digest) run once a tick as statements of their own, and their
   keys make a replay a no-op. The tick then sends: claim and commit (at most 5 rows, `attempts + 1`, `next_at` = now + a 2-minute lease),
   call the notifier outside any transaction (the calls of one pass side by side, so a dead Hermes costs one timeout), record the result. A
-  failed send backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for a week. A
+  failed send is fenced by the attempt it belongs to (a send that outlived its lease cannot undo a newer attempt; a delivery is always recorded) and backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for a week. A
   crash between the send and its record leaves the lease to run out and the row is sent again: **at-least-once**, so a message may arrive twice.
 - **What goes out**, one line each, `Issue <id> (<repo name>)` first, never a path or a hostname. Agent text (a question, a lead's reason, a
   monitor name) is cut to 200 characters, reduced to one line, scrubbed of token, host and path shapes and of a link's query and fragment (best effort, `notify/text.ts`) and fenced in
@@ -1016,15 +1016,15 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 
 - **The digest** is a pure function (`renderDigest`) of what the database held: Issues closed in 24 h, shipped and watching, parked, decisions
   open, failed spawns, quota per account, and what ran (spawns, session events, Issue events of the last 24 h). Plain text under 3000
-  characters, lists cut at eight. It is due from `FACTORY_DIGEST_AT` (`07:30`, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon
+  characters (a list is cut at six items and 450 characters). It is due from `FACTORY_DIGEST_AT` (`07:30`, before noon, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon
   local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
   three in the afternoon.
 - **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`, on the token API and the
-  socket) files an `answer` event; the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
+  socket) files an `answer` event, bound to the question open at that moment when none is named, so a question asked later cannot take it; the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
   as `socket` or `session <id>`, since a pane can reach it: a lead could answer its own question there, and the record is what shows it.
 - **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
 - **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
-  error if it did not arrive).
+  error if it did not arrive, also when the target is `off`). The test row is made already claimed (`sendNow`), so the tick cannot send it beside the caller.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
