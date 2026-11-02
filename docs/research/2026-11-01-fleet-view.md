@@ -89,15 +89,20 @@ Iris and Argo map the same three states onto their own design systems.
 At the MacBook the owner triages as things arrive. After a night or a long absence the same stream is a pile, so the
 fleet model has a second reading: **what happened since you last looked**.
 
-- **Presence is the last human act, never input idle.** A mouse jiggler, a caffeinated MacBook or a long job make
-  HID idle time and screen state lie, so neither counts. A human act is: a prompt the owner typed into a session (hook
-  events; turns the factory typed itself are subtracted, it records those sends), an action on an ask, opening the board
-  or jumping to an agent, a Touch ID unlock or `op` approval, Iris in the foreground. A voice memo marks the owner present
-  but not caught up. No human act for 45 min opens an away window; the first one after it shows the digest. A wrong
+- **Presence is per place and comes from navigation, never from input or prompts.** A mouse jiggler or a busy MacBook
+  makes HID idle time lie; agents type prompts into each other (`rd say`, notes, `hc send`), so prompt events prove
+  nothing; `AskUserQuestion` is disabled in the owner's Claude Code setup. What only a person does:
+  - **desk** (the Herdr app on the MacBook): a focus change (space, tab, pane), the app's own "looked at" (an agent's
+    `done` turns `idle` once seen), a click on the board, a macOS unlock. To verify when building: that a tab `rd` or the
+    factory opens does not move the app's focus by itself.
+  - **phone** (Iris in the foreground). Iris voice memos come from the couch or the road too, so they count for the
+    phone, never for the desk.
+  No desk act for 45 min opens a desk away window; the first desk act after it shows the digest on the board. A wrong
   guess costs one dismissed card, so trust beats coverage.
-- **Two cursors, server-side.** `owner_present_at` (the last human act) decides interruptions; `owner_seen_at` moves only
-  on "Caught up" or acting on asks, and drives the digest. Both live in the factory, not a surface: catching up in Iris
-  clears the board too.
+- **Cursors, server-side.** `present_at` per place (desk, phone) decides where to interrupt: desk present means the board
+  shows asks live and nothing is pushed; phone present means Iris may show a card; neither means batch everything except
+  the *Yours* tier. `seen_at` is one owner-wide cursor that moves only on "Caught up" or acting on asks, on any surface:
+  catching up in Iris clears the board too.
 - **`GET /fleet/since?t=<cursor>`** answers from facts already recorded (factory events, spawns and notes, the hc events log,
   human-queue `askedAt`, each repo's git log, deploy gates, Kuma changes) grouped as:
 
