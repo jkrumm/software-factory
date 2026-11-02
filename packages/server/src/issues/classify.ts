@@ -1,4 +1,5 @@
 import { ClassifyAnswer, type Effort, type RoleTable, type Tier } from '@software-factory/contract'
+import { basename } from 'node:path'
 import type { SQL } from 'bun'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { logEvent } from './shared.ts'
@@ -31,6 +32,10 @@ export const DEFAULT_CALL_TIMEOUT_MS = 150_000
  * (`rules/agent-limits.md`): this is a hang guard, and a classify that reaches it falls back to defaults like any failure.
  */
 export const DEFAULT_CLASSIFY_DEADLINE_MS = 30 * 60_000
+
+/** What `agw factory-classify` accepts. */
+const MAX_TITLE = 300
+const MAX_FACTS = 20_000
 
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9-]{5,127}$/
 
@@ -75,14 +80,25 @@ export class AgwClassifier implements Classifier {
   async classify(input: ClassifyInput): Promise<unknown> {
     const callMs = this.options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
     const deadline = this.now() + (this.options.deadlineMs ?? DEFAULT_CLASSIFY_DEADLINE_MS)
+    // The workflow's limits: facts a string of at most 20,000 characters and a title of 300 (more is refused, so it is cut);
+    // repo and source are identifiers, so the repo goes by its directory's name, the project's name.
     const stdin = JSON.stringify({
-      title: input.title,
-      facts: input.facts,
-      repo: input.repo,
+      title: input.title.slice(0, MAX_TITLE),
+      facts: (JSON.stringify(input.facts) ?? '{}').slice(0, MAX_FACTS),
+      repo: basename(input.repo),
       source: input.source,
       projects: input.projects,
     })
-    let result = await this.run([this.options.bin, 'factory-classify', '--format', 'json'], callMs, childEnv(), stdin)
+    // The key is the Issue's: a classify asked again after a restart finds its run instead of paying for a second.
+    const command = [
+      this.options.bin,
+      'factory-classify',
+      '--format',
+      'json',
+      '--idempotency-key',
+      `factory-classify-${input.id}`,
+    ]
+    let result = await this.run(command, callMs, childEnv(), stdin)
     while (result.exitCode === EXIT_PENDING) {
       const runId = runIdOf(result.stdout)
       if (!runId) throw new ClassifyFailed('agw says the run is pending but names no run id')
