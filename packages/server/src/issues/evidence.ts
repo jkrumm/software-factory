@@ -175,6 +175,20 @@ export async function storeEvidence(
   return { duplicate: rows.length === 0 }
 }
 
+/** The kinds that still lack fresh evidence, and whether one exists but is older than the merged commit. Commit times have whole seconds, so a report in the commit's own second counts. */
+export function unmetKinds(
+  required: readonly EvidenceKind[],
+  stored: readonly { kind: string; newest: Date }[],
+  mergedAt: string | null,
+): { kind: EvidenceKind; stale: boolean }[] {
+  const since = mergedAt ? new Date(mergedAt).getTime() : 0
+  return required.flatMap((kind): { kind: EvidenceKind; stale: boolean }[] => {
+    const found = stored.find((row) => row.kind === kind)
+    if (!found) return [{ kind, stale: false }]
+    return found.newest.getTime() < since ? [{ kind, stale: true }] : []
+  })
+}
+
 /**
  * The kinds required and not met, each with what it asks for. Existence and freshness only: what the evidence says is never read. Only
  * this attempt's counts: a reopened Issue proves itself again, whatever commit it names.
@@ -184,14 +198,9 @@ async function missingEvidence({ tx, issue }: Context, derived: Derived): Promis
   const stored: { kind: EvidenceKind; newest: Date }[] = await tx`
     SELECT kind, max(at) AS newest FROM factory.evidence
     WHERE issue_id = ${issue.id} AND attempt = ${issue.attempt} AND kind IN ${tx([...derived.required])} GROUP BY kind`
-  const since = derived.mergedAt ? new Date(derived.mergedAt).getTime() : 0
-  return derived.required.flatMap((kind) => {
-    const found = stored.find((row) => row.kind === kind)
-    if (!found) return [`${kind} (${EVIDENCE_MEANS[kind]})`]
-    // Commit times have whole seconds, so a report in the commit's own second counts.
-    if (found.newest.getTime() < since) return [`${kind} (the last one is older than the merged commit)`]
-    return []
-  })
+  return unmetKinds(derived.required, stored, derived.mergedAt).map(({ kind, stale }) =>
+    stale ? `${kind} (the last one is older than the merged commit)` : `${kind} (${EVIDENCE_MEANS[kind]})`,
+  )
 }
 
 interface InlineEvidence {

@@ -17,11 +17,14 @@ import {
   IssueEvidenceInput,
   IssueInput,
   IssueList,
+  IssueNoteAck,
+  IssueNoteBody,
   IssueOwnerInput,
   IssueResumeInput,
   IssueVerb,
   IssueVerbAck,
   IssueVerbBody,
+  IssueView,
   Project,
   NotificationList,
   Notification,
@@ -51,9 +54,10 @@ import { type Commits, GitCommits } from './issues/commits.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
+import { getIssueView } from './issues/follow.ts'
 import { getIssue, listIssues } from './issues/read.ts'
 import { resumeArchived } from './issues/resume.ts'
-import { fileAnswer, fileEvidence, fileVerb, GATED_VERBS } from './issues/verbs.ts'
+import { fileAnswer, fileEvidence, fileNote, fileVerb, GATED_VERBS } from './issues/verbs.ts'
 import { answerNow } from './issues/worker.ts'
 import { getNotification, listNotifications, sendNow } from './notify/outbox.ts'
 import { NullNotifier, type Notifier } from './notify/port.ts'
@@ -351,6 +355,33 @@ const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>)
   return issue ? respond(Issue, issue) : json({ error: 'unknown issue' }, 404)
 }
 
+/** `GET /issues/:id/timeline`: the Issue, its story from `issue_events` and the inbox, oldest first, its evidence and its questions. */
+const issueTimelineHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id/timeline'>) => {
+  const view = await getIssueView(sql, parseParam(IssueId, req.params.id))
+  return view ? respond(IssueView, view) : json({ error: 'unknown issue' }, 404)
+}
+
+/**
+ * `POST /issues/:id/note`, on the token API only: the owner's text for the Issue's lead. One inbox row keyed `<issue>:note:<call id>`; the
+ * same call again is 200 `duplicate`, the first 201. The lead is typed it through the session notes of §3, an Issue with none running keeps
+ * it for the next brief. Not on the socket: a pane that can type into a session already has `session note`, and what a brief carries
+ * is the owner's.
+ */
+const issueNoteHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/issues/:id/note'>): Promise<Response> => {
+    const issueId = parseParam(IssueId, req.params.id)
+    const body = await parseBody(req, IssueNoteBody)
+    const filed = await fileNote(sql, { issueId, body, now: clock.now() })
+    if (!filed.ok) {
+      return filed.problem === 'unknown_issue'
+        ? json({ error: 'unknown issue' }, 404)
+        : json({ error: 'the Issue is closed: reopen it first' }, 409)
+    }
+    const ack = { issue: issueId, key: filed.key, duplicate: filed.duplicate, state: filed.state }
+    return respond(IssueNoteAck, ack, filed.duplicate ? 200 : 201)
+  }
+
 /**
  * `POST /issues/:id/answer`, on the token API only: the owner's answer to an open question. One inbox row keyed
  * `<issue>:answer:<call id>`; the same call again is 200 `duplicate`, the first 201. It is not on the socket, because a pane
@@ -625,6 +656,8 @@ export function routes({
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
+    '/issues/:id/timeline': { GET: route(issueTimelineHandler(sql)) },
+    '/issues/:id/note': { POST: route(issueNoteHandler(sql, clock)) },
     '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock)) },
     '/issues/:id/evidence': { POST: route(issueEvidenceHandler(sql, clock, { requireSession: false })) },
     '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen')) },
@@ -705,7 +738,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -745,6 +778,7 @@ export function serveHooks(deps: {
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
+      '/issues/:id/timeline': { GET: viaSocket(issueTimelineHandler(deps.sql)) },
       '/issues/:id/evidence': { POST: viaSocket(issueEvidenceHandler(deps.sql, deps.clock, { requireSession: true })) },
       '/issues/:id/reopen': { POST: viaSocket(issueOwnerHandler(deps.sql, deps.clock, 'reopen')) },
       '/issues/:id/resume': {

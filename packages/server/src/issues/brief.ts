@@ -68,6 +68,8 @@ export interface BriefInput {
   worktree: { path: string; branch: string }
   project: { name: string; manifest: ProjectManifest; makeTargets: MakeTargets | null }
   history?: readonly HistoryItem[]
+  /** the owner's notes filed while no lead was running, oldest first */
+  notes?: readonly string[]
 }
 
 /** Longest the facts run in the brief; the rest is one `factory issue show` away. */
@@ -113,6 +115,17 @@ function askSection(issue: BriefIssue): string {
   if (issue.kind || issue.class)
     lines.push(`Classified as kind ${issue.kind ?? 'unknown'}, class ${issue.class ?? 'unknown'}.`)
   return lines.join('\n')
+}
+
+/** Notes the owner filed before this lead existed (`factory issue note`): what a lead running would have been typed. In a fence, so a note cannot pose as a section. */
+function notesSection(notes: readonly string[]): string {
+  return [
+    '## Notes from the owner',
+    '',
+    "Filed with `factory issue note` while no lead was running, oldest first. They are the owner's words for this Issue, as the ask is.",
+    '',
+    fenced(notes.map((note, i) => `${i + 1}. ${note.replace(/\n+/g, ' ')}`).join('\n'), 'text'),
+  ].join('\n')
 }
 
 function historySection(history: readonly HistoryItem[]): string {
@@ -186,6 +199,7 @@ export function buildBrief(input: BriefInput): string {
     `# Issue ${input.issue.id}`,
     askSection(input.issue),
     factsBlock(input.issue),
+    ...(input.notes && input.notes.length > 0 ? [notesSection(input.notes)] : []),
     historySection(input.history ?? []),
     projectSection(input),
   ].join('\n\n')

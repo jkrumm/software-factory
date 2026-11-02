@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { StatusIssue } from './issues.ts'
 import { Effort, RoleName, Tier } from './roles.ts'
 
 export * from './door.ts'
@@ -191,6 +192,10 @@ export const Status = z.object({
   sessions: z.array(Session),
   queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
   accounts: z.array(Quota),
+  /** open Issues, and a closed one whose finalize failed in the last day */
+  issues: z.array(StatusIssue),
+  /** open Issues beyond the ones listed */
+  issuesMore: z.number().int(),
   /** prompts not yet delivered, and those that failed in the last day */
   notes: z.array(Prompt),
   /** prompts beyond the ones listed */

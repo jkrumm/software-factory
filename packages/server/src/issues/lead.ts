@@ -14,7 +14,7 @@ import { leadLevel } from './classify.ts'
 import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { enqueue } from './inbox.ts'
 import { worktreeFor } from './leadtree.ts'
-import { briefPromptId, leadBranch, leadKey, regressionPromptId } from './names.ts'
+import { briefPromptId, leadBranch, leadKey, notePromptId, regressionPromptId } from './names.ts'
 
 export interface LeadDeps {
   sql: SQL
@@ -111,6 +111,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const owner = await projectOfPath(sql, issue.repo)
   const project = owner ? await getProject(sql, owner.name) : undefined
   const name = owner?.name ?? basename(issue.repo)
+  const notes = await unsentNotes(sql, issue.id, attempt)
   const prompt = buildBrief({
     issue,
     attempt,
@@ -120,6 +121,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
       manifest: project?.manifest ?? defaultManifest(basename(issue.repo)),
       makeTargets: project?.makeTargets ?? null,
     },
+    notes: notes.map((note) => note.text),
   })
   const now = clock.now()
   try {
@@ -142,6 +144,13 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
             INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count)
             VALUES (${briefPromptId(issue.id, attempt)}, ${key}, 'brief', 'type', ${prompt}, 'delivered', ${now}, ${now}, 1)
             ON CONFLICT (id) DO UPDATE SET text = EXCLUDED.text`
+          // What the brief carries is delivered with it: a later `note_lead` for the same call finds its prompt and types nothing.
+          for (const note of notes) {
+            await tx`
+              INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count)
+              VALUES (${notePromptId(issue.id, note.call)}, ${key}, 'note', 'type', ${note.text}, 'delivered', ${now}, ${now}, 1)
+              ON CONFLICT (id) DO NOTHING`
+          }
         },
       },
       now,
@@ -151,6 +160,24 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
     throw error
   }
 }
+
+/**
+ * The owner's notes (`factory issue note`) that no lead was typed: filed since the previous attempt's brief, applied, and without a
+ * delivered prompt under their call id. Oldest first, a few: the rest are `factory issue show` away.
+ */
+async function unsentNotes(sql: SQL, issueId: number, attempt: number): Promise<{ call: string; text: string }[]> {
+  const rows: { call: string; text: string }[] = await sql`
+    SELECT b.payload->>'call' AS call, b.payload->>'text' AS text FROM factory.issue_inbox b
+    WHERE b.issue_id = ${issueId} AND b.kind = 'note' AND b.result = 'applied'
+      AND b.payload->>'call' IS NOT NULL AND b.payload->>'text' IS NOT NULL
+      AND b.at > COALESCE((SELECT p.created_at FROM factory.prompts p WHERE p.id = ${briefPromptId(issueId, attempt - 1)}), '-infinity'::timestamptz)
+      AND NOT EXISTS (
+        SELECT 1 FROM factory.prompts p WHERE p.id = 'issue:' || b.issue_id || ':note:' || (b.payload->>'call') AND p.status IN ('sent', 'delivered'))
+    ORDER BY b.at, b.id LIMIT ${MAX_BRIEF_NOTES}`
+  return rows
+}
+
+const MAX_BRIEF_NOTES = 20
 
 const clip = (text: string): string => (text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) : text)
 
@@ -213,7 +240,12 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   if (!spawn || !session) throw new Error(`the lead ${key} is not running yet`)
   // A regression is one note per hold, under the Issue's own prompt id; the rest go by the effect's key.
   const hold = effect.payload?.cause === 'regression' ? Number(effect.payload.hold) : Number.NaN
-  const id = Number.isInteger(hold) ? regressionPromptId(effect.issueId, hold) : effect.key
+  const call = effect.payload?.cause === 'note' ? effect.payload.call : undefined
+  const id = Number.isInteger(hold)
+    ? regressionPromptId(effect.issueId, hold)
+    : typeof call === 'string' && call
+      ? notePromptId(effect.issueId, call)
+      : effect.key
   await recordPrompt(
     sql,
     { id, session: key, source: 'note', text: noteText(effect.issueId, effect.payload) },
