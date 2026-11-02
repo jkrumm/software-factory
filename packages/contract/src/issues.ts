@@ -359,6 +359,8 @@ export const IssueView = Issue.extend({
   /** earlier entries cut, when the story is longer than the server shows */
   timelineCut: z.number().int(),
   evidence: z.array(EvidenceEntry),
+  /** older evidence not listed, when there is more than the server shows */
+  evidenceCut: z.number().int(),
   decisions: z.array(DecisionEntry),
 })
 export type IssueView = z.infer<typeof IssueView>

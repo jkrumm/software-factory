@@ -100,6 +100,8 @@ export const WaitInput = z.union([z.strictObject({ on: WaitOn }), z.strictObject
 export type WaitInput = z.infer<typeof WaitInput>
 
 const RULE_PREFIXES = /^(resume|rotate|blocked|wake|restart):/
+/** Prompts the Issue machine keys itself (`issue:<id>:brief|regression|note:...`): a note under such an id would take the place of one. */
+const ISSUE_PREFIX = /^issue:/
 
 /** `factory session note`: `id` makes a repeated call one prompt; a caller that wants every call to count leaves it out. */
 export const NoteInput = z.object({
@@ -110,7 +112,8 @@ export const NoteInput = z.object({
     .refine(
       (id) => !RULE_PREFIXES.test(id),
       'ids starting with a rule name (resume, rotate, blocked, wake, restart) are reserved',
-    ),
+    )
+    .refine((id) => !ISSUE_PREFIX.test(id), "ids starting with issue: are the Issue machine's"),
   text: z
     .string()
     .min(1)

@@ -96,6 +96,8 @@ beforeAll(async () => {
   db = await startTestDb()
 })
 afterAll(async () => {
+  await app?.stop()
+  rmSync(archive, { recursive: true, force: true })
   await db.stop()
   fixture.cleanup()
 })
@@ -517,6 +519,7 @@ describe('factory issue show: the timeline', () => {
       note: `line\none\u001b[2J${'y'.repeat(500)}`,
       session: key,
     })
+    await post(filed.id, 'evidence', { kind: 'ui', link: 'https://x.example/\u001b[2J\u009bclear', session: key })
     await drive(2)
 
     const plain = await factory({}, 'issue', 'show', String(filed.id), '--format', 'plain')
@@ -534,6 +537,7 @@ describe('factory issue show: the timeline', () => {
     const json = IssueView.parse(JSON.parse((await factory({}, 'issue', 'show', String(filed.id))).stdout))
     expect(json.facts).toMatchObject({ alert: expect.stringContaining('x'.repeat(1000)) })
     expect(json.timeline.some((t) => t.kind === 'phase')).toBe(true)
+    expect(json.evidence[0]?.link).toContain('\u001b[2J')
 
     expect((await factory({}, 'issue', 'show', '4242')).code).toBe(4)
     expect((await factory({}, 'issue', 'show')).code).toBe(2)
@@ -695,5 +699,74 @@ describe('factory issue note', () => {
     expect((await factory({}, ...words)).code).toBe(2)
     expect((await factory({}, 'issue', 'note', 'abc', 'x')).code).toBe(2)
     expect((await factory({}, 'issue', 'note', '4242', 'x')).code).toBe(4)
+  })
+})
+
+describe('factory issue note: what a brief carries', () => {
+  const note = (id: number, body: Record<string, unknown>) => app.send('POST', `/issues/${id}/note`, body)
+
+  test('the Issue machine’s prompt ids are not for a pane’s session note', async () => {
+    const { id, key } = await lead()
+    const taken = await app.send('POST', `/sessions/${key}/note`, { id: `issue:${id}:note:n1`, text: 'mine' })
+    expect(taken.status).toBe(400)
+    expect(await promptsOf(key)).toEqual([])
+  })
+
+  test('notes a lead that never started did not receive come again in the next brief', async () => {
+    const id = await file(newRepo(SERVICE))
+    await note(id, { id: 'one', text: 'never read' })
+    await drive(4)
+    const first = leadKey(id, 1)
+    // The first lead never became a session: its brief and the note it carried reached nobody.
+    await db.sql`UPDATE factory.prompts SET session = 'ghost' WHERE session = ${first}`
+    await post(id, 'drop', { reason: 'x' })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    expect(runner.started[1]?.prompt).toContain('never read')
+  })
+
+  test('a note still pending for the old lead moves to the new one with the brief that carries it', async () => {
+    const { id, key } = await lead()
+    runner.answer = 'busy'
+    await note(id, { id: 'late', text: 'pending for the old lead' })
+    await drive(2)
+    expect((await promptsOf(key)).map((p) => p.status)).toEqual(['pending'])
+    await post(id, 'drop', { reason: 'x', session: key })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    expect(runner.started[1]?.prompt).toContain('pending for the old lead')
+    expect((await promptsOf(leadKey(id, 1))).map((p) => p.id)).toEqual([])
+    expect((await promptsOf(leadKey(id, 2))).map((p) => [p.id, p.status])).toEqual([
+      [`issue:${id}:note:late`, 'delivered'],
+    ])
+  })
+
+  test('more notes than a brief shows are counted, and the rest are in issue show', async () => {
+    const id = await file(newRepo(SERVICE))
+    for (let i = 1; i <= 22; i++) await note(id, { id: `n${i}`, text: `note number ${i}` })
+    await drive(4)
+    const brief = runner.started[0]?.prompt ?? ''
+    expect(brief).toContain('20. note number 20')
+    expect(brief).not.toContain('21. ')
+    expect(brief).toContain(`2 more not shown: \`factory issue show ${id}\` has them.`)
+    expect(await promptsOf(leadKey(id, 1))).toHaveLength(20)
+  })
+
+  test('evidence beyond what show lists is counted, and the newest is kept', async () => {
+    const { id } = await lead()
+    for (let i = 0; i < 205; i++) {
+      await db.sql`
+        INSERT INTO factory.evidence (issue_id, key, attempt, kind, link, at, author)
+        VALUES (${id}, ${`bulk:${i}`}, 1, 'service', ${`https://example.com/${i}`}, ${new Date(clock.now().getTime() + i * 1_000)}, 'lead')`
+    }
+    const view = await viewOf(id)
+    expect(view.evidence).toHaveLength(200)
+    expect(view.evidenceCut).toBe(5)
+    expect(view.evidence.at(-1)?.link).toBe('https://example.com/204')
+    expect(view.evidence[0]?.link).toBe('https://example.com/5')
   })
 })
