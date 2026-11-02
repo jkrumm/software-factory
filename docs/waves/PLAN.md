@@ -128,6 +128,7 @@ holds the proposals with numbers. Budget marks held (`me2` 31 %, `iu` 79 %). Ope
 The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md` (merged by agw's lead), dotfiles `docs/waves/fv-board.md`.
 
 - [x] dotfiles `ask-human.sh list --json` (`370ed24`..`94c0b98`).
-- [ ] FV Wave 1 (PR #32): review, land, deploy, prove; agw digest (agw PR #103): full eval, then agw's lead merges.
+- [x] agw digest: agw PR #103 `f02f351`, live (a real call: "Shall I merge it now?" → asks, permission; Haiku on the iu credit pool, $0.00022).
+- [ ] FV Wave 1 (PR #32): review, land, deploy, prove.
 - [ ] FV Waves 2–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
