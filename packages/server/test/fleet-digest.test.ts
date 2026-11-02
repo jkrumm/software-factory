@@ -33,6 +33,7 @@ if (mode === 'pending') { console.log(JSON.stringify({ runId: 'run-pending-1', s
 if (mode === 'slow') await Bun.sleep(5000)
 const words = (t) => t.split(/\\s+/).slice(0, 3).join(' ')
 const results = items.map((i) => {
+  if (i.text.includes('LONGSHORT')) return { id: i.id, short: 'x'.repeat(500) }
   if (i.text.includes('POISON')) return { id: i.id, error: 'the answer broke its schema' }
   if (i.kind === 'heading') return { id: i.id, short: 'Short ' + words(i.text) }
   if (i.kind === 'session') return { id: i.id, short: 'Session', headline: 'Headline ' + words(i.text.split('Last message: ').at(-1)) }
@@ -223,7 +224,7 @@ describe('the pass', () => {
     expect(calls()).toHaveLength(2)
   })
 
-  test('the call is agw digest with the items on stdin, the hour and the batch in its key', async () => {
+  test('the call is agw digest with the items on stdin, the batch, the hour and the failed calls in its key', async () => {
     await builder.refreshNow()
     await digest.settled()
     const [call] = calls()
@@ -232,7 +233,7 @@ describe('the pass', () => {
       '--format',
       'json',
       '--idempotency-key',
-      expect.stringMatching(/^factory-digest-[0-9a-f]{24}-\d+$/),
+      expect.stringMatching(/^factory-digest-[0-9a-f]{24}-\d+-0$/),
     ])
     expect(call?.items.every((i) => /^i\d+$/.test(i.id))).toBe(true)
   })
@@ -250,6 +251,21 @@ describe('the pass', () => {
     // every heading was asked about once
     const texts = calls().flatMap((c) => c.items.map((i) => i.text))
     expect(new Set(texts).size).toBe(70)
+  })
+
+  test('the same heading in many plans is one item', async () => {
+    const feed: DigestFeed = { headings: Array.from({ length: 70 }, () => 'Plan'), sessions: [] }
+    expect(await digest.pass(feed)).toMatchObject({ sent: 1, stored: 1, waiting: 0 })
+    expect(calls()[0]?.items).toHaveLength(1)
+  })
+
+  test('an answer too long, or with control characters, is cleaned or refused; it is never stored whole', async () => {
+    await digest.pass({ headings: ['LONGSHORT heading', 'Plain heading'], sessions: [] })
+    const view = await digest.view()
+    expect(view.heading('Plain heading')).toBe('Short Plain heading')
+    expect(view.heading('LONGSHORT heading')).toBeNull()
+    const [row] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
+    expect(row.n).toBe(1)
   })
 
   test('an item that comes back as an error is stored nowhere and not asked again at once', async () => {
@@ -286,6 +302,22 @@ describe('failure is quiet', () => {
     const healed = await round()
     expect(repoOf(healed, 'rb')?.sessions[0]?.headline).toBe('Headline Now something else')
     expect(healed.digest.lastError).toBeNull()
+  })
+
+  test('a run that failed is not replayed to the retry; a slow one is asked for again', async () => {
+    const feed: DigestFeed = { headings: ['One heading'], sessions: [] }
+    const key = (n: number) => calls()[n]?.args.at(-1)
+    mode('fail')
+    await digest.pass(feed)
+    mode('ok')
+    await digest.pass(feed)
+    expect(key(1)).not.toBe(key(0))
+    expect(key(1)?.endsWith('-1')).toBe(true)
+    const feed2: DigestFeed = { headings: ['Another heading'], sessions: [] }
+    mode('pending')
+    await digest.pass(feed2)
+    await digest.pass(feed2)
+    expect(key(3)).toBe(key(2))
   })
 
   test('a slow call is a failed pass', async () => {
@@ -366,6 +398,14 @@ describe('the cache', () => {
     await nextTurn('rb-a', 'Second report.')
     await round()
     expect(sessionItems()).toHaveLength(2)
+  })
+
+  test('a partial feed does not make the cache forget', async () => {
+    await digest.pass({ headings: ['Kept for now'], sessions: [] })
+    clock.advance(8 * 24 * 3_600_000)
+    await digest.pass({ headings: ['Something else'], sessions: [], complete: false })
+    const rows: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
+    expect(rows[0]?.n).toBe(2)
   })
 
   test('rows nobody wants are dropped after a week', async () => {
