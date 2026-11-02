@@ -1022,7 +1022,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 - **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`) files an `answer`
   event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the
   lead is told in a note. **Token API only, never on the socket**: a pane has no token, so a lead cannot answer its own question, and the
-  answer is always the owner's (`answered_by = owner`). The CLI without `FACTORY_TOKEN` says so (exit 3).
+  answer is always the owner's (`answered_by = owner`). The CLI without `FACTORY_TOKEN` says so (exit 3). The one other way a question is answered is the factory applying its own expired default (§4); and a process of the same user that can run `secrets-run` can fetch the token, which is the perimeter as the trust boundary in §3 states it, not something this route can close.
 - **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
 - **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
   error if it did not arrive, also when the target is `off`). The test row is made already claimed (`sendNow`), so the tick cannot send it beside the caller.
