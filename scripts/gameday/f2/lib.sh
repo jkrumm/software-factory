@@ -61,6 +61,7 @@ ship:
 leads: 1
 YAML
   git -C "$repo" remote add origin "$remote"
+  git -C "$repo" config core.autocrlf false # a template may carry bytes (a CR) that the host's autocrlf=input would strip
   git -C "$repo" add -A
   git -C "$repo" -c user.name=gameday -c user.email=gameday@example.com commit --quiet -m "chore: scratch repo for the F2 gamedays"
   git -C "$repo" push --quiet -u origin master

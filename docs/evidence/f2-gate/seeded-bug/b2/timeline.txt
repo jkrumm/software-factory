@@ -1,0 +1,8 @@
+2026-11-02T05:19:25.727Z run seeded-bug/b2: release 9bc57ae5f45f, base commit 2373f5e
+2026-11-02T05:19:30.665Z scratch: factory-gameday-bug up; project {"name":"factory-gameday-bug","source":"manifest","mode":"make","hold":"1m","make":{"check":true,"deploy":true,"verify":true}}
+2026-11-02T05:19:30.904Z make check on the scratch repo: check: ok
+2026-11-02T05:19:31.217Z issue 36 filed (source_key f2-bug-b2)
+2026-11-02T05:19:32.401Z issue 36: queued/ (attempt 0, hold 0) | lead: none
+2026-11-02T05:19:37.838Z issue 36: working/ (attempt 1, hold 0) | lead: none
+2026-11-02T05:19:59.575Z run aborted by hand: the scratch repo's git (core.autocrlf=input) stripped the CR that arms the seed, so this run could not exercise the bug; stopping Issue 36 before any lead worked
+teardown: factory-gameday-bug removed
