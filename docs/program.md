@@ -134,7 +134,13 @@ TypeScript repo use oxlint and oxfmt.
 gateway alive (`agent-workflows/packages/host/src/workflows/image/README.md` §Icon). The agw host binds
 loopback; the studio app on the MacBook needs a tailnet door (the iris pattern).
 
+### A2: Argo pages
+The Fleet and Factory pages read `GET /fleet` and `GET /fleet/since` (FV) through a server-side call with the factory token; Argo builds no
+collector of its own for sessions, plans or asks. Usage v2, agw insight and Infra (Beszel) stay Argo's.
+
 ### IR: iris
 iris already serves `GET /v1/herd`; its PRD's "Later" list holds quota and the fleet overview
-(`iris/docs/PRD.md`). Point those screens at the factory API from F1, not at herdr or Argo directly.
+(`iris/docs/PRD.md`). Point those screens at the factory API from F1, not at herdr or Argo directly. **FV (2026-11-02):** the fleet,
+waves and decision cards read `GET /fleet` (asks with tier and actions) and `GET /fleet/since` (the away card); iris' own `GET /v1/herd`
+collector goes; the phone reports `POST /fleet/presence {place: phone, act: foreground|memo}`. Token only, so the token lives in iris' `.env.tpl`.
 APNs and TestFlight wait on the Apple developer enrolment.
