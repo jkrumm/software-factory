@@ -940,6 +940,15 @@ describe('stop', () => {
     expect((await stopIt(id, { reason: 'x', surprise: true })).status).toBe(400)
   })
 
+  test('an id another event took is refused: no answer of something else reads as a stop', async () => {
+    const id = await file(newRepo(SERVICE))
+    await enqueue(db.sql, { issueId: id, key: `stop:${id}:taken`, kind: 'turn_started', at: clock.now() })
+    const response = await stopIt(id, { id: 'taken', reason: 'x' })
+    expect(response.status).toBe(409)
+    expect((await issue(id)).state).toBe('queued')
+    expect((await stopIt(id, { id: 'free', reason: 'x' })).status).toBe(200)
+  })
+
   test('the token is required on the port, and the socket has no such route', async () => {
     const id = await file(newRepo(SERVICE))
     const bare = await app.bare(`/issues/${id}/stop`, {
@@ -961,15 +970,20 @@ describe('stop', () => {
       slots: 2,
       commits,
     })
-    const viaSocket = await fetch(`http://localhost/issues/${id}/stop`, {
-      method: 'POST',
-      unix: socketPath,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'x', session: 'anyone' }),
-    })
-    await hooks.stop(true)
-    rmSync(dir, { recursive: true, force: true })
-    expect(viaSocket.status).toBe(400)
+    let status = 0
+    try {
+      const viaSocket = await fetch(`http://localhost/issues/${id}/stop`, {
+        method: 'POST',
+        unix: socketPath,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'x', session: 'anyone' }),
+      })
+      status = viaSocket.status
+    } finally {
+      await hooks.stop(true)
+      rmSync(dir, { recursive: true, force: true })
+    }
+    expect(status).toBe(400)
     expect((await issue(id)).state).toBe('queued')
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'stop'`).toHaveLength(0)
   })
