@@ -737,7 +737,8 @@ export class Digest {
           .map(([key]) => key)
       : []
     if (stale.length > 0) await sql`DELETE FROM factory.fleet_digest WHERE key IN ${sql(stale)}`
-    await sql`DELETE FROM factory.fleet_digest_runs WHERE at < ${new Date(now.getTime() - KEEP_RUNS_MS)}`
+    // A run agw ended for good stays: its count is the attempt in the next call's key.
+    await sql`DELETE FROM factory.fleet_digest_runs WHERE at < ${new Date(now.getTime() - KEEP_RUNS_MS)} AND NOT terminal`
     await sql`DELETE FROM factory.fleet_digest_backoff WHERE retry_at < ${new Date(now.getTime() - KEEP_UNWANTED_MS)}`
   }
 }
