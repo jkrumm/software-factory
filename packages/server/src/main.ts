@@ -21,7 +21,7 @@ import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { HcClient } from './hc.ts'
 import { HcEvents } from './hc-events.ts'
 import { HcRunner } from './hc-runner.ts'
-import { DEFAULT_START_BUDGET_MS } from './runner.ts'
+import { claudeProjectsDir, DEFAULT_START_BUDGET_MS } from './runner.ts'
 import { SpoolReplayer } from './spool.ts'
 import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
 import { gitProbe, startWitness } from './witness.ts'
@@ -124,7 +124,7 @@ const leadWorktrees = new WorktreeMaker({
   now: () => clock.now(),
   retryBudgetMs: config.retryBudgetMs,
 })
-const offTick = new OffTick()
+const offTick = new OffTick({ now: () => clock.now().getTime() })
 const issuePorts = {
   ...leadPorts({ sql, clock, roles, repoRoots: config.repoRoots }),
   ...holdPorts({
@@ -141,6 +141,7 @@ const issuePorts = {
     worktrees,
     transcripts: new FileTranscripts(),
     archiveDir: config.archiveDir,
+    projectsDir: (account) => claudeProjectsDir({ accountsFile: config.accountsFile }, account),
     making: (issueId) => leadWorktrees.busy(issueId),
     offTick,
   }),

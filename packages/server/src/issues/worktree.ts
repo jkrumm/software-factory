@@ -22,7 +22,8 @@ export type Removal = { removed: true } | { kept: string; path: string | null }
  */
 export interface Worktrees {
   create(input: { repo: string; branch: string }): Promise<Worktree>
-  remove(input: { repo: string; branch: string }): Promise<Removal>
+  /** `reported`: the commits the lead reported as merged, what a squash leaves of the branch */
+  remove(input: { repo: string; branch: string; reported?: readonly string[] }): Promise<Removal>
 }
 
 export class WorktreeFailed extends Error {}
@@ -147,7 +148,15 @@ export class GitWorktrees implements Worktrees {
    * Removes the worktree and its branch when it is clean and its commits are on the fetched base; otherwise leaves both and says why. A
    * worktree that is gone already is removed. A failed fetch reads what the last one left, which can only keep more.
    */
-  async remove({ repo, branch }: { repo: string; branch: string }): Promise<Removal> {
+  async remove({
+    repo,
+    branch,
+    reported,
+  }: {
+    repo: string
+    branch: string
+    reported?: readonly string[]
+  }): Promise<Removal> {
     await this.git(repo, 'worktree', 'prune')
     const path = (await this.listed(repo, branch)) ?? null
     if (path && (await this.git(path, 'status', '--porcelain')) !== '')
@@ -155,7 +164,8 @@ export class GitWorktrees implements Worktrees {
     await fetchOrigin(repo, this.options)
     const base = await originDefault(repo, this.options)
     if (!base) return { kept: `${repo} has no origin default branch to check it against`, path }
-    if (!(await branchOnBase(repo, branch, base, this.options))) return { kept: `its commits are not on ${base}`, path }
+    if (!(await branchOnBase(repo, branch, base, { ...this.options, reported })))
+      return { kept: `its commits are not on ${base}`, path }
     if (path && (await this.git(repo, 'worktree', 'remove', path)) === undefined)
       return { kept: 'git worktree remove refused', path }
     await this.git(repo, 'branch', '-D', branch)

@@ -19,6 +19,9 @@ export function durationMs(text: string): number | undefined {
   return Number(match[1]) * UNIT_MS[match[2] as keyof typeof UNIT_MS]
 }
 
+/** The hold where nothing says otherwise, from the one default there is. */
+export const DEFAULT_HOLD_MS = durationMs(DEFAULT_HOLD) ?? 0
+
 /** `https://…` to GET, or `make <target>` to run in the repo. */
 const Verify = z
   .string()

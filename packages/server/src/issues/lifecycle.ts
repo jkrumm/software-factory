@@ -1,4 +1,10 @@
-import { ISSUE_VERBS, type IssueOutcome, type IssueState, type WaitReason } from '@software-factory/contract'
+import {
+  DEFAULT_HOLD_MS,
+  ISSUE_VERBS,
+  type IssueOutcome,
+  type IssueState,
+  type WaitReason,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { notifyMove } from '../notify/rules.ts'
 import { addDependency, releaseDependents } from './deps.ts'
@@ -8,8 +14,6 @@ import { gateClose, gateShip, holdMsOf, recordProof } from './evidence.ts'
 import type { IssueRow } from './read.ts'
 import { badTime, type Context, type InboxRow, logEvent, text, time } from './shared.ts'
 
-/** The hold after `ship`, where nothing says otherwise: `derive` reads the manifest's. */
-export const DEFAULT_HOLD_MS = 30 * 60_000
 /** `closed → queued` is for the same fault within this long. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
 
