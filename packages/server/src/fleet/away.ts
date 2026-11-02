@@ -16,7 +16,12 @@ export async function reportPresence(
   const { sql } = reader
   const now = reader.now()
   const before = await readPresence(sql, now)
-  await recordPresence(sql, { place: input.place, act: input.act, now, until: input.until })
+  // The cursor never goes past where the model was built: no reading ever showed what landed after it (the same cut `readSince` makes).
+  const [built]: { built_at: Date }[] = input.until
+    ? await sql`SELECT built_at FROM factory.fleet_snapshot WHERE id = 1`
+    : []
+  const until = input.until && built && built.built_at < input.until ? built.built_at : input.until
+  await recordPresence(sql, { place: input.place, act: input.act, now, until })
   if (input.place === 'desk' && !before.desk.present && input.act !== 'caught_up') {
     try {
       await readSince(reader, { queue: 'now' })
