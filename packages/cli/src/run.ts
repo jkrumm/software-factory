@@ -100,6 +100,9 @@ commands:
                   record evidence, a link or up to 32 KiB of text; it counts for a ship when it is no older than the merged commit
   issue reopen <id> --reason <text> [--id <call id>]
                   the same fault within 30 days of closing: a new attempt in a fresh worktree. Past 30 days it is refused: issue new
+  issue stop <id> --reason <text> [--id <call id>]
+                  the owner's end of an Issue in any open state, one with no lead too: closed as dropped, then finalized like
+                  every close. Token only, never the socket. A closed Issue is refused (exit 5)
   issue resume <id> [--attempt <n>] [--id <call id>]
                   open an attempt's archived session in a tab of its own, as a fork; the archive stays as it was
   project list    the projects: manifest or defaults, leads, who holds the claim and who waits, broken manifests (token or socket)
@@ -156,7 +159,7 @@ commands:
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
 FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
-                 spawn create|get, session get, queue get and issue new|list|show|evidence|reopen|resume|<verb> fall back to the socket without it)
+                 spawn create|get, session get, queue get and issue new|list|show|evidence|reopen|resume|<verb> (not stop) fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file
@@ -719,22 +722,23 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, [body.issue, body.kind, body.duplicate ? 'duplicate' : 'filed', body.key, body.at].join('\t'))
   }
 
-  if (words[0] === 'issue' && words[1] === 'reopen') {
-    const target = words[2]
+  if (words[0] === 'issue' && (words[1] === 'reopen' || words[1] === 'stop')) {
+    const [, verb, target] = words
     if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target) || !flags.reason) {
-      throw usage('usage: issue reopen <id> --reason <text>')
+      throw usage(`usage: issue ${verb} <id> --reason <text>`)
     }
-    const { status, body } = await call(io, `/issues/${target}/reopen`, {
+    // `stop` is the owner's and takes the token; no pane reaches it by the socket.
+    const { status, body } = await call(io, `/issues/${target}/${verb}`, {
       method: 'POST',
       auth: true,
-      socket: 'fallback',
+      ...(verb === 'reopen' ? { socket: 'fallback' as const } : {}),
       schema: Issue,
       timeoutMs: GIT_CALL_TIMEOUT_MS,
       body: { reason: flags.reason, ...(flags.id ? { id: flags.id } : {}) },
     })
     print(body, issueLine(body))
     if (status === 202) {
-      throw new FactoryError('pending', 'the reopen is filed and not answered yet', {
+      throw new FactoryError('pending', `the ${verb} is filed and not answered yet`, {
         hint: `\`${BIN} issue show ${body.id}\` shows where the Issue stands`,
       })
     }

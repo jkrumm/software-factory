@@ -82,7 +82,7 @@ state, roles, process/health/contract/schema/API.
 - `packages/door` — the factory door: a Bun server, `POST /alert/<source>`, the parsers (`src/parsers.ts`), the tokens file; its README has the HyperDX template.
   Server side: `issues/intake.ts`. LaunchAgent `deploy/com.jkrumm.factory-door.plist.template`, `scripts/launch-door.sh`.
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
-  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `issue evidence|reopen|resume <id>`, `issue answer <id> <text>` (the owner's), `notify list|test`, `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `issue evidence|reopen|stop|resume <id>`, `issue answer <id> <text>` (the owner's), `notify list|test`, `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 - `scripts/gameday/` — the F1 kill gamedays: `run.sh <claimed|working>` `kill -9`s the server at a chosen moment and counts what survives; `setup.sh`, `collect.sh`, `teardown.sh`, `kill-server.sh`, `template/` the scratch repo. Evidence in `docs/evidence/f1-gamedays/`.

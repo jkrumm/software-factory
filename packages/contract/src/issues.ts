@@ -254,9 +254,12 @@ export const IssueEvidenceAck = z.object({
 })
 export type IssueEvidenceAck = z.infer<typeof IssueEvidenceAck>
 
-/** `POST /issues/:id/reopen`: the same fault within 30 days of closing; past that, a new Issue. */
-export const IssueReopenInput = z.strictObject({ id: CallId.optional(), reason: Words(2000) })
-export type IssueReopenInput = z.output<typeof IssueReopenInput>
+/**
+ * `POST /issues/:id/reopen`, the same fault within 30 days of closing (past that, a new Issue), and `POST /issues/:id/stop`, the owner
+ * ending an Issue from any open state, lead or none. Each says why.
+ */
+export const IssueOwnerInput = z.strictObject({ id: CallId.optional(), reason: Words(2000) })
+export type IssueOwnerInput = z.output<typeof IssueOwnerInput>
 
 /** `POST /issues/:id/resume`: a fork of an attempt's archived session; the Issue's latest attempt unless it names one. */
 export const IssueResumeInput = z.strictObject({ id: CallId.optional(), attempt: z.number().int().min(1).optional() })

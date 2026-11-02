@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defaultManifest, IssueEvidenceAck, type ProjectManifest, Spawn } from '@software-factory/contract'
+import { serveHooks } from '../src/http.ts'
 import { FileTranscripts } from '../src/issues/archive.ts'
 import { Classification } from '../src/issues/classify.ts'
 import { type CommitRead, type Commits, GitCommits } from '../src/issues/commits.ts'
@@ -857,6 +858,123 @@ describe('reopen', () => {
   })
 })
 
+describe('stop', () => {
+  const stopIt = (id: number, body: Record<string, unknown> = { reason: 'a door proof' }) => post(id, 'stop', body)
+
+  test('why it exists: a lead’s drop does not reach a queued Issue', async () => {
+    const id = await file(newRepo(SERVICE))
+    await post(id, 'drop', { reason: 'no' })
+    await issuePass(db.sql, { now: () => clock.now(), ports: {} })
+    expect((await issue(id)).state).toBe('queued')
+    expect(await trail(id)).toContain('refused')
+  })
+
+  test.each(['request', 'alert'])(
+    'a queued %s with no lead closes as dropped and finalizes, with the reason on record',
+    async (source) => {
+      const { issue: filed } = await createIssue(
+        db.sql,
+        { source, sourceKey: `stop-${source}`, repo: newRepo(SERVICE), title: 'a proof', facts: {} },
+        { repoRoots: [fixture.root], now: clock.now() },
+      )
+      const response = await stopIt(filed.id)
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ id: filed.id, state: 'closed', outcome: 'dropped', attempt: 0 })
+      await issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+      await offTick.settled()
+      await issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+      expect(await trail(filed.id)).toEqual(['created -→queued', 'stop queued→closed', 'issue_finalized'])
+      const [event] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'stop'`
+      expect(event?.payload).toEqual({ reason: 'a door proof' })
+      expect(runner.closed).toEqual([])
+      expect(worktrees.removed).toEqual([])
+      const open = await db.sql`SELECT 1 FROM factory.issue_effects WHERE done_at IS NULL AND cancelled_at IS NULL`
+      expect(open).toHaveLength(0)
+    },
+  )
+
+  test('a queued Issue that holds a claim gives it back', async () => {
+    const repo = newRepo(SERVICE)
+    const held = await file(repo)
+    await drive(2)
+    const waiting = await file(repo)
+    await drive(2)
+    await db.sql`
+      INSERT INTO factory.claims (key, issue_id, urgent, queued_at, held_at)
+      VALUES ('repo:other', ${waiting}, false, ${clock.now()}, ${clock.now()})`
+    await stopIt(waiting)
+    await drive(2)
+    expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${waiting}`).toHaveLength(0)
+    expect((await issue(held)).state).toBe('working')
+  })
+
+  test('a working lead is closed, its transcript archived and its worktree removed', async () => {
+    const { id, key, repo } = await lead()
+    expect((await stopIt(id)).status).toBe(200)
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'dropped' })
+    expect(runner.closed).toEqual([key])
+    expect(copied).toHaveLength(1)
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(await trail(id)).toContain('issue_finalized')
+  })
+
+  test('a watching Issue stops too, where a lead’s drop is refused, and its hold ends nothing', async () => {
+    const { id } = await shipped()
+    expect((await stopIt(id)).status).toBe(200)
+    expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'dropped', wake_at: null })
+    await drive(3)
+    expect(proof.runs).toBe(0)
+  })
+
+  test('the same call again is one event; a closed Issue is refused, an unknown one 404, a reason required', async () => {
+    const id = await file(newRepo(SERVICE))
+    expect((await stopIt(id, { id: 's1', reason: 'x' })).status).toBe(200)
+    expect((await stopIt(id, { id: 's1', reason: 'x' })).status).toBe(200)
+    expect(await trail(id)).toEqual(['created -→queued', 'stop queued→closed'])
+    const again = await stopIt(id)
+    expect(again.status).toBe(409)
+    expect(((await again.json()) as { error: string }).error).toContain('stop does not apply to a closed Issue')
+    expect((await stopIt(4242)).status).toBe(404)
+    expect((await stopIt(id, {})).status).toBe(400)
+    expect((await stopIt(id, { reason: 'x', surprise: true })).status).toBe(400)
+  })
+
+  test('the token is required on the port, and the socket has no such route', async () => {
+    const id = await file(newRepo(SERVICE))
+    const bare = await app.bare(`/issues/${id}/stop`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'x' }),
+    })
+    expect(bare.status).toBe(401)
+
+    const dir = mkdtempSync('/tmp/factory-stop-sock-')
+    const socketPath = join(dir, 'h.sock')
+    const hooks = serveHooks({
+      sql: db.sql,
+      clock,
+      token: TEST_TOKEN,
+      socketPath,
+      repoRoots: [fixture.root],
+      roles: TEST_ROLES,
+      slots: 2,
+      commits,
+    })
+    const viaSocket = await fetch(`http://localhost/issues/${id}/stop`, {
+      method: 'POST',
+      unix: socketPath,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'x', session: 'anyone' }),
+    })
+    await hooks.stop(true)
+    rmSync(dir, { recursive: true, force: true })
+    expect(viaSocket.status).toBe(400)
+    expect((await issue(id)).state).toBe('queued')
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'stop'`).toHaveLength(0)
+  })
+})
+
 describe('resume', () => {
   test('forks the archived session in a spawn of its own, which is no lead of the Issue', async () => {
     const { id, key, repo } = await lead()
@@ -1156,6 +1274,28 @@ describe('the CLI', () => {
     const accepted = await factory(env, undefined, 'issue', 'ship', String(id), '--summary', 's', '--commit', SHA)
     expect(accepted.code).toBe(0)
     expect((await issue(id)).state).toBe('watching')
+  })
+
+  test('stop takes the token and never falls back to the socket; a refusal exits 5', async () => {
+    const id = await file(newRepo(SERVICE))
+    expect((await factory({}, undefined, 'issue', 'stop', String(id))).code).toBe(2)
+    const noToken = await factory({ FACTORY_TOKEN: '' }, undefined, 'issue', 'stop', String(id), '--reason', 'x')
+    expect(noToken.code).toBe(3)
+    expect((await issue(id)).state).toBe('queued')
+    const stopped = await factory(
+      {},
+      undefined,
+      'issue',
+      'stop',
+      String(id),
+      '--reason',
+      'a door proof',
+      '--format',
+      'plain',
+    )
+    expect(stopped.code).toBe(0)
+    expect(stopped.stdout).toContain(`${id}\tclosed\tdropped`)
+    expect((await factory({}, undefined, 'issue', 'stop', String(id), '--reason', 'x')).code).toBe(5)
   })
 
   test('the flags of evidence, ship, reopen and resume', async () => {

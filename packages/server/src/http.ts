@@ -17,7 +17,7 @@ import {
   IssueEvidenceInput,
   IssueInput,
   IssueList,
-  IssueReopenInput,
+  IssueOwnerInput,
   IssueResumeInput,
   IssueVerb,
   IssueVerbAck,
@@ -455,18 +455,20 @@ const issueEvidenceHandler =
   }
 
 /**
- * `POST /issues/:id/reopen`: the same fault, within 30 days of closing, and the only way a closed Issue moves. The lifecycle decides, and
- * a refusal (an Issue that is not closed, a window that has passed) is the caller's answer.
+ * The owner's own moves. `POST /issues/:id/reopen`: the same fault, within 30 days of closing, and the only way a closed Issue moves.
+ * `POST /issues/:id/stop`: closes an Issue as dropped from any open state, one with no lead too, and finalizes it like every close;
+ * port only, because a session has no business ending an Issue it may not even work. The lifecycle decides: a refusal (an Issue
+ * the event does not apply to, a window that has passed) is the caller's answer, and the same `--id` again gets the same one.
  */
-const issueReopenHandler =
-  (sql: SQL, clock: Clock) =>
-  async (req: Bun.BunRequest<'/issues/:id/reopen'>): Promise<Response> => {
+const issueOwnerHandler =
+  (sql: SQL, clock: Clock, kind: 'reopen' | 'stop') =>
+  async (req: Bun.BunRequest<'/issues/:id/reopen' | '/issues/:id/stop'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
-    const { id, reason } = await parseBody(req, IssueReopenInput)
+    const { id, reason } = await parseBody(req, IssueOwnerInput)
     const issue = await getIssue(sql, issueId)
     if (!issue) return json({ error: 'unknown issue' }, 404)
-    const key = `reopen:${issueId}:${id ?? crypto.randomUUID()}`
-    await enqueue(sql, { issueId, key, kind: 'reopen', at: clock.now(), payload: { reason } })
+    const key = `${kind}:${issueId}:${id ?? crypto.randomUUID()}`
+    await enqueue(sql, { issueId, key, kind, at: clock.now(), payload: { reason } })
     const answer = await answerNow(sql, { issueId, key, now: () => clock.now() })
     if (answer?.result === 'refused') return json({ error: answer.detail, code: 'refused' }, 409)
     // Not answered yet: the row is filed and the tick has it. 202, and the Issue as it stands.
@@ -619,7 +621,8 @@ export function routes({
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
     '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock)) },
     '/issues/:id/evidence': { POST: route(issueEvidenceHandler(sql, clock, { requireSession: false })) },
-    '/issues/:id/reopen': { POST: route(issueReopenHandler(sql, clock)) },
+    '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen')) },
+    '/issues/:id/stop': { POST: route(issueOwnerHandler(sql, clock, 'stop')) },
     '/issues/:id/resume': { POST: route(issueResumeHandler(sql, clock, roles, repoRoots)) },
     '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, commits, { requireSession: false })) },
     '/notifications': { GET: route(notificationListHandler(sql)) },
@@ -737,7 +740,7 @@ export function serveHooks(deps: {
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
       '/issues/:id/evidence': { POST: viaSocket(issueEvidenceHandler(deps.sql, deps.clock, { requireSession: true })) },
-      '/issues/:id/reopen': { POST: viaSocket(issueReopenHandler(deps.sql, deps.clock)) },
+      '/issues/:id/reopen': { POST: viaSocket(issueOwnerHandler(deps.sql, deps.clock, 'reopen')) },
       '/issues/:id/resume': {
         POST: viaSocket(issueResumeHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)),
       },
