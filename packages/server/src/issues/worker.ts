@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import { admitIssues } from './admission.ts'
 import type { Classification } from './classify.ts'
 import { type EffectPorts, runEffects } from './effects.ts'
+import { parkGoneLeads } from './lead.ts'
 import type { WorktreeMaker } from './leadtree.ts'
 import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
@@ -107,6 +108,7 @@ export async function issuePass(
   await input.classification?.start()
   await input.worktrees?.start()
   await fireTimers(sql, input.now())
+  await parkGoneLeads(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)
   return [...errors, ...(await runEffects(sql, input.ports, input.now))]

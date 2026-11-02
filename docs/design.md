@@ -594,7 +594,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
-| `lead_gone` | `note_lead`, when the lead's spawn failed or ended | `lead_gone:<issue>:<attempt>` |
+| `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>` |
 | session events | hooks, live or from the spool | as in §3 |
 | `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified` | the check after the hold (W4), naming its `hold`: proof of an earlier hold is refused | the check's id |
