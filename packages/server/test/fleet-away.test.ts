@@ -346,33 +346,36 @@ describe('the cursor on a stale snapshot', () => {
 })
 
 describe('the cursor on a partial build', () => {
-  test('an act whose build could not read the queue does not move the cursor', async () => {
-    terminals = []
-    requests = [{ id: 'q-a', text: 'Pull the dotfiles', askedAt: '2026-11-02T10:00:00.000Z', state: 'pending' }]
-    await builder.refreshNow()
-    const partial = new FleetActions({
-      sql: db.sql,
-      clock,
-      queue,
-      roles: TEST_ROLES,
-      repoRoots: [estate.src],
-      visibleRoots: [estate.iu],
-      home: estate.src,
-      refresh: async () => ({ errors: ['human queue: the script did not answer'] }),
-    })
-    await app.stop()
-    app = startApp({
-      sql: db.sql,
-      clock,
-      fleet: builder,
-      fleetActions: partial,
-      since: reader,
-      repoRoots: [estate.src],
-    })
-    const res = await app.send('POST', `/fleet/asks/${encodeURIComponent('queue:q-a')}/act`, { intent: 'later' })
-    expect(res.status).toBe(201)
-    expect((await readPresence(db.sql, clock.now())).seenAt).toBeNull()
-  })
+  test.each([['human queue: the script did not answer'], ['digest: agw is down']])(
+    'an act whose build could not read a source (%s) does not move the cursor',
+    async (error) => {
+      terminals = []
+      requests = [{ id: 'q-a', text: 'Pull the dotfiles', askedAt: '2026-11-02T10:00:00.000Z', state: 'pending' }]
+      await builder.refreshNow()
+      const partial = new FleetActions({
+        sql: db.sql,
+        clock,
+        queue,
+        roles: TEST_ROLES,
+        repoRoots: [estate.src],
+        visibleRoots: [estate.iu],
+        home: estate.src,
+        refresh: async () => ({ errors: [error] }),
+      })
+      await app.stop()
+      app = startApp({
+        sql: db.sql,
+        clock,
+        fleet: builder,
+        fleetActions: partial,
+        since: reader,
+        repoRoots: [estate.src],
+      })
+      const res = await app.send('POST', `/fleet/asks/${encodeURIComponent('queue:q-a')}/act`, { intent: 'later' })
+      expect(res.status).toBe(201)
+      expect((await readPresence(db.sql, clock.now())).seenAt).toBeNull()
+    },
+  )
 })
 
 describe('GET /fleet/since', () => {
@@ -764,7 +767,7 @@ describe('the morning reading', () => {
     expect(text).not.toContain('(your last catch-up)')
   })
 
-  test('with no fleet model it says so, also at the cap; an unplaced check counts everything', async () => {
+  test('with no fleet model it says so; a check that places nothing counts everything', async () => {
     const text = await loadMorning(db.sql, { now: clock.now(), date: '2026-11-02', isVisible: () => false })
     expect(text).toContain('The fleet model was not built yet')
     // Everything is the read-only area's when nothing tells it apart: the lines are counts.
