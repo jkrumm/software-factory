@@ -154,10 +154,15 @@ export class FleetActions {
       return refuse(409, 'already_closed', `${askId} was closed already`)
     }
     // The next read shows it; a build that fails leaves the act done.
-    await this.deps.refresh().catch((error: unknown) => console.error('fleet refresh after an act failed', error))
-    // An act is a person's: presence at the place it names (default the desk), and the cursor when nothing else of the window is open.
-    await recordAskAct(sql, { place: body.place ?? 'desk', ask: askId, now }).catch((error: unknown) =>
-      console.error('fleet presence after an act failed', error),
+    let fresh = true
+    await this.deps.refresh().catch((error: unknown) => {
+      fresh = false
+      console.error('fleet refresh after an act failed', error)
+    })
+    // An act is a person's: presence at the place it names (default the desk), and the cursor when nothing else of the window is open
+    // (not on a snapshot that this act did not refresh: it may still list what is closed, or miss what is new).
+    await recordAskAct(sql, { place: body.place ?? 'desk', ask: askId, now, moveCursor: fresh }).catch(
+      (error: unknown) => console.error('fleet presence after an act failed', error),
     )
     return { ok: true, created: true, result: { ...result, duplicate: false } }
   }

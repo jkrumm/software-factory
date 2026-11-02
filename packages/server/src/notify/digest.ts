@@ -114,13 +114,21 @@ export async function loadMorning(
   const oldest = new Date(now.getTime() - DIGEST_WINDOW_MS)
   const cursor = windowStart({ seenAt, now }).t
   const t = cursor > oldest ? cursor : oldest
+  const snapshot = await readSnapshot(sql)
   const groups = await buildSince(sql, {
-    snapshot: await readSnapshot(sql),
+    snapshot,
     now,
     t,
     clamped: false,
     seenAt,
     isVisible: input.isVisible,
   })
-  return renderMorning(groups, input.date)
+  const text = renderMorning(groups, input.date)
+  // No fleet model yet: the asks, commits and sessions are not in this reading, and it must not read as "nothing happened".
+  return snapshot
+    ? text
+    : `${text}\nThe fleet model was not built yet: asks, commits and sessions are missing from this reading`.slice(
+        0,
+        DIGEST_MAX_CHARS,
+      )
 }

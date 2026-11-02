@@ -71,6 +71,7 @@ export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed
         await tx`
           UPDATE factory.notifications SET folded_at = ${now}, folded_reason = ${folded}, next_at = 'infinity'
           WHERE key = ${row.key}`
+        console.log('notify: folded', row.key, folded)
         continue
       }
       const attempts = row.attempts + 1

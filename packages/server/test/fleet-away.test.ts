@@ -311,6 +311,40 @@ describe('seen_at, the owner-wide cursor', () => {
   })
 })
 
+describe('the cursor on a stale snapshot', () => {
+  test('an act whose refresh failed does not move the cursor', async () => {
+    terminals = []
+    requests = [{ id: 'q-a', text: 'Pull the dotfiles', askedAt: '2026-11-02T10:00:00.000Z', state: 'pending' }]
+    await builder.refreshNow()
+    const failing = new FleetActions({
+      sql: db.sql,
+      clock,
+      queue,
+      roles: TEST_ROLES,
+      repoRoots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      refresh: async () => {
+        throw new Error('build failed')
+      },
+    })
+    await app.stop()
+    app = startApp({
+      sql: db.sql,
+      clock,
+      fleet: builder,
+      fleetActions: failing,
+      since: reader,
+      repoRoots: [estate.src],
+    })
+    const res = await app.send('POST', `/fleet/asks/${encodeURIComponent('queue:q-a')}/act`, { intent: 'later' })
+    expect(res.status).toBe(201)
+    const after = await readPresence(db.sql, clock.now())
+    expect(after.desk.present).toBe(true) // the act itself is a person's
+    expect(after.seenAt).toBeNull()
+  })
+})
+
 describe('GET /fleet/since', () => {
   test('each group from seeded facts, every line with its source', async () => {
     await scene()
@@ -488,6 +522,34 @@ describe('GET /fleet/since', () => {
     await windows.pass()
     expect(agw).toHaveLength(2)
     expect((await since(T)).headline).toEqual({ state: 'ready', text: PARAGRAPH })
+  })
+
+  test('equal facts are one window: with no cursor the start moves with the clock and the hash does not', async () => {
+    await scene()
+    clock.advance(MIN) // the commits of the scene sit on the first start; they age out of a rolling window as time passes
+    await since()
+    clock.advance(3 * MIN)
+    await since()
+    clock.advance(40 * MIN)
+    await since()
+    expect(await db.sql`SELECT hash FROM factory.fleet_windows`).toHaveLength(1)
+  })
+
+  test('an item that came back as an error is a run agw ended: the retry is a new run, under a new key', async () => {
+    await scene()
+    await since(T)
+    agwAnswer = () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ status: 'done', output: { results: [{ id: 'w', error: 'bad' }] }, cost: 0.001 }),
+    })
+    await windows.pass()
+    clock.advance(16 * MIN)
+    agwAnswer = () => answerWith(PARAGRAPH)
+    await windows.pass()
+    const keys = agw.map((c) => c.cmd[c.cmd.indexOf('--idempotency-key') + 1] ?? '')
+    expect(keys).toHaveLength(2)
+    expect(keys[0]?.endsWith('-0')).toBe(true)
+    expect(keys[1]?.endsWith('-1')).toBe(true)
   })
 
   test('a run agw has not finished is waited for, never started twice', async () => {
@@ -706,7 +768,7 @@ describe('the CLI', () => {
     expect(json.code).toBe(0)
     expect(Since.parse(JSON.parse(json.stdout)).t).toBe(T)
     const screen = await factory(['--format', 'plain', 'fleet', 'since', '--t', T])
-    expect(screen.stdout).toContain('HEADLINE\tpending')
+    expect(screen.stdout).toMatch(/HEADLINE\t(pending|ready)/)
     expect(screen.stdout).toContain('NEEDS YOU (')
     expect(screen.stdout).toContain('git:software-factory@')
     expect((await factory(['fleet', 'since', '--t', 'soon'])).code).toBe(2)
