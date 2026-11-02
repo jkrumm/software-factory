@@ -1,21 +1,28 @@
 /* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { defaultManifest, IssueEvidenceAck, type ProjectManifest, Spawn } from '@software-factory/contract'
+import {
+  DEFAULT_HOLD_MS,
+  defaultManifest,
+  IssueEvidenceAck,
+  type ProjectManifest,
+  Spawn,
+} from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
 import { FileTranscripts } from '../src/issues/archive.ts'
 import { Classification } from '../src/issues/classify.ts'
 import { type CommitRead, type Commits, GitCommits } from '../src/issues/commits.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { type Effect, type EffectPorts } from '../src/issues/effects.ts'
+import { GitWorktrees } from '../src/issues/worktree.ts'
 import { kindOfPath, requiredEvidence } from '../src/issues/evidence.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
 import { type HoldCheck, holdPorts, MakeAndProbes, type Proof, VERIFY_SETTLE_MS } from '../src/issues/hold.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { leadPorts } from '../src/issues/lead.ts'
 import { WorktreeMaker } from '../src/issues/leadtree.ts'
-import { DEFAULT_HOLD_MS, REOPEN_WINDOW_MS } from '../src/issues/lifecycle.ts'
+import { REOPEN_WINDOW_MS } from '../src/issues/lifecycle.ts'
 import { leadKey, regressionPromptId } from '../src/issues/names.ts'
 import { OffTick } from '../src/issues/offtick.ts'
 import { issuePass } from '../src/issues/worker.ts'
@@ -35,6 +42,7 @@ import { FakeRunner } from './support/world.ts'
 import { FakeWorktrees } from './support/worktree.ts'
 
 const SHA = 'a'.repeat(40)
+const newJobs = (limit?: number) => new OffTick({ limit, now: () => clock.now().getTime() })
 const SERVICE = `apiVersion: factory/v2
 name: NAME
 deploy:
@@ -115,14 +123,15 @@ beforeEach(async () => {
   worktrees = new FakeWorktrees()
   maker = new WorktreeMaker({ sql: db.sql, worktrees, now: () => clock.now() })
   runner = new PaneRunner()
-  offTick = new OffTick()
+  offTick = newJobs()
   classification = new Classification({
     sql: db.sql,
     classifier: new FakeClassifier(),
     roles: TEST_ROLES,
     now: () => clock.now(),
   })
-  sync = new ProjectSync({ sql: db.sql, roots: [fixture.root], now: () => clock.now() })
+  // One full pass per test: this file's clock jumps, and the fixture's repos add up.
+  sync = new ProjectSync({ sql: db.sql, roots: [fixture.root], now: () => clock.now(), intervalMs: 3_650 * 86_400_000 })
   archive = mkdtempSync('/tmp/factory-archive-')
   copied = []
   await app?.stop()
@@ -144,6 +153,7 @@ const ports = (): EffectPorts => ({
       },
     },
     archiveDir: archive,
+    projectsDir: async () => '/projects',
     making: (id) => maker.busy(id),
     offTick,
   }),
@@ -343,6 +353,65 @@ describe('GitCommits, against a repo with an origin', () => {
     expect(found.paths).toEqual(['docs/seen.md', 'src/b.ts'])
   })
 
+  describe('a squash whose lines later commits moved on', () => {
+    /** A branch with two commits on `src/a.ts`, squashed onto the base, and a later commit on the same lines: a three-way merge conflicts. */
+    function squashed(name: string) {
+      const made = cloned(name)
+      fixture.commit(made.origin, { 'src/a.ts': 'old\n' })
+      fixture.git(made.clone, 'fetch', '-q', 'origin')
+      fixture.git(made.clone, 'merge', '-q', '--ff-only', 'origin/master')
+      const cut = made.head(made.clone)
+      fixture.git(made.clone, 'checkout', '-q', '-b', 'factory/1-1')
+      fixture.commit(made.clone, { 'src/a.ts': 'half\n' })
+      fixture.commit(made.clone, { 'src/a.ts': 'whole\n' })
+      fixture.commit(made.origin, { 'src/a.ts': 'whole\n' })
+      const squash = made.head(made.origin)
+      fixture.commit(made.origin, { 'src/a.ts': 'whole and more\n' })
+      fixture.git(made.clone, 'fetch', '-q', 'origin')
+      return { ...made, cut, squash }
+    }
+
+    test('ship takes the commit the lead reports as merged', async () => {
+      const { clone, cut, squash } = squashed('squash-ship')
+      const found = await read({ repo: clone, cut, reported: [squash], merged: true })
+      expect(found.paths).toEqual(['src/a.ts'])
+    })
+
+    test('an unrelated commit, or more work after the merge, is still work not on the base', async () => {
+      const { origin, clone, head, cut, squash } = squashed('squash-other')
+      fixture.commit(origin, { 'docs/other.md': 'x' })
+      fixture.git(clone, 'fetch', '-q', 'origin')
+      await expect(read({ repo: clone, cut, reported: [head(origin)], merged: true })).rejects.toThrow(
+        'holds work that is not on',
+      )
+      const later = Math.floor(Date.now() / 1000) + 3_600
+      fixture.git(clone, 'checkout', '-q', 'factory/1-1')
+      await Bun.write(join(clone, 'src/b.ts'), 'x')
+      Bun.spawnSync(['git', '-C', clone, 'add', '-A'])
+      Bun.spawnSync(
+        ['git', '-C', clone, '-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'more'],
+        { env: { ...process.env, GIT_COMMITTER_DATE: `${later} +0000` } },
+      )
+      await expect(read({ repo: clone, cut, reported: [squash], merged: true })).rejects.toThrow(
+        'holds work that is not on',
+      )
+    })
+
+    test('finalize removes it on the reported commit, and keeps it with none', async () => {
+      const { clone, squash } = squashed('squash-remove')
+      fixture.git(clone, 'checkout', '-q', 'master')
+      const left = join(clone, '.claude', 'worktrees', 'left')
+      fixture.git(clone, 'worktree', 'add', '-q', left, 'factory/1-1')
+      const git = new GitWorktrees()
+      expect(await git.remove({ repo: clone, branch: 'factory/1-1' })).toEqual({
+        kept: 'its commits are not on origin/master',
+        path: left,
+      })
+      expect(await git.remove({ repo: clone, branch: 'factory/1-1', reported: [squash] })).toEqual({ removed: true })
+      expect(existsSync(left)).toBe(false)
+    })
+  })
+
   test('every commit of the branch counts, however many, and a range that cannot be read is a failure', async () => {
     const { clone, cut } = cloned('long')
     fixture.git(clone, 'checkout', '-q', '-b', 'factory/1-1')
@@ -378,15 +447,24 @@ describe('ship', () => {
     expect(await trail(id)).toContain('refused')
   })
 
-  test('the same call again gets the same answer; a new one after the evidence is accepted', async () => {
+  test('a refusal does not pin the answer: the same id derives again, and an accepted call stays one event', async () => {
     const { id, key } = await lead()
-    await ship(id, key, { id: 's1' })
-    expect(commits.calls).toBe(1)
+    commits.failure = new Error('git log did not finish in time')
     expect((await ship(id, key, { id: 's1' })).status).toBe(409)
-    expect(commits.calls).toBe(1)
+    commits.failure = undefined
+    expect((await ship(id, key, { id: 's1' })).status).toBe(409)
+    expect(commits.calls).toBe(2)
     await prove(id, key, 'service')
-    expect((await ship(id, key, { id: 's2' })).status).toBe(201)
+    const accepted = await ship(id, key, { id: 's1' })
+    expect(accepted.status).toBe(201)
+    expect(await accepted.json()).toMatchObject({ key: `${id}:1:ship:s1:retry:2`, result: 'applied' })
     expect((await issue(id)).state).toBe('watching')
+
+    const again = await ship(id, key, { id: 's1' })
+    expect(again.status).toBe(200)
+    expect(await again.json()).toMatchObject({ duplicate: true, key: `${id}:1:ship:s1:retry:2`, result: 'applied' })
+    expect(commits.calls).toBe(3)
+    expect((await issue(id)).hold).toBe(1)
   })
 
   test('accepted: `watching` for the manifest’s hold, with what was found on the row', async () => {
@@ -560,7 +638,7 @@ describe('the hold', () => {
       expect.arrayContaining(['ship working→watching', 'hold_over', 'verified watching→closed', 'issue_finalized']),
     )
     expect(runner.closed).toEqual([key])
-    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [SHA] }])
     await drive(3)
     expect(runner.closed).toHaveLength(1)
     expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
@@ -603,6 +681,81 @@ describe('the hold', () => {
       await offTick.settled()
     }
     expect((await issue(id)).state).toBe('closed')
+  })
+
+  test('a note reaches the lead while the check runs', async () => {
+    const { id, key } = await shipped()
+    let open: (() => void) | undefined
+    proof.run = async () => {
+      proof.runs++
+      await new Promise<void>((resolve) => {
+        open = resolve
+      })
+      return proof.checks
+    }
+    moveTo((await issue(id)).wake_at as Date)
+    const round = () => issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+    await round()
+    await round()
+    expect(proof.runs).toBe(1)
+    await enqueue(db.sql, {
+      issueId: id,
+      key: 'owner-note',
+      kind: 'note',
+      at: clock.now(),
+      payload: { text: 'look here' },
+    })
+    await round()
+    expect((await notes(key)).map((note) => note.text)).toEqual([`Factory, Issue ${id}: look here`])
+    open?.()
+    await offTick.settled()
+  })
+
+  test('a stop kills make verify and all it started, files nothing, and the next server asks again', async () => {
+    const repo = fixture.repo(`repo${++repos}`, {})
+    const marker = join(repo, 'grandchild.pid')
+    fixture.commit(repo, {
+      'project.yaml': SERVICE.replace('NAME', repo.split('/').pop() as string).replace(/ {2}probes:\n.*\n/, ''),
+      Makefile: `verify:\n\t@sleep 60 & echo $$! > ${marker}; wait\n`,
+    })
+    const { id, key } = await lead(repo)
+    await prove(id, key, 'service')
+    expect((await ship(id, key)).status).toBe(201)
+    moveTo((await issue(id)).wake_at as Date)
+    const real = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
+    await issuePass(db.sql, { now: () => clock.now(), ports: real })
+    await issuePass(db.sql, { now: () => clock.now(), ports: real })
+    for (let i = 0; i < 100 && !existsSync(marker); i++) await Bun.sleep(50)
+    const pid = Number(readFileSync(marker, 'utf8'))
+    expect(Bun.spawnSync(['kill', '-0', String(pid)]).exitCode).toBe(0)
+    await offTick.stop(5_000)
+    await Bun.sleep(100)
+    expect(Bun.spawnSync(['kill', '-0', String(pid)]).exitCode).not.toBe(0)
+    await issuePass(db.sql, { now: () => clock.now(), ports: real })
+    expect(await issue(id)).toMatchObject({ state: 'watching' })
+    expect(
+      await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key LIKE 'regression:%' OR key LIKE 'verified:%'`,
+    ).toHaveLength(0)
+  })
+
+  test('a check that threw backs off: it is not started again every pass', async () => {
+    const { id } = await shipped()
+    moveTo((await issue(id)).wake_at as Date)
+    proof.run = async () => {
+      proof.runs++
+      throw new Error('the database went away')
+    }
+    const round = async () => {
+      await issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+      await offTick.settled()
+      clock.advance(5_000)
+    }
+    for (let i = 0; i < 5; i++) await round()
+    expect(proof.runs).toBe(1)
+    clock.advance(30_000)
+    for (let i = 0; i < 2; i++) await round()
+    expect(proof.runs).toBe(2)
+    expect((await issue(id)).state).toBe('watching')
   })
 
   test('a check overtaken by a stop files nothing', async () => {
@@ -717,6 +870,7 @@ describe('finalize', () => {
     expect(status.attention).toContain(`Issue ${id}: it cannot be finalized: hc is down`)
     expect(await trail(id)).not.toContain('issue_finalized')
     runner.failure = undefined
+    clock.advance(60_000)
     await drive(4)
     expect(await trail(id)).toContain('issue_finalized')
     expect((await issue(next)).state).toBe('working')
@@ -752,7 +906,7 @@ describe('finalize', () => {
 
   test('the place is back on the tick, whatever fills the off-tick jobs', async () => {
     const { id, key } = await lead()
-    offTick = new OffTick(0)
+    offTick = newJobs(0)
     await post(id, 'drop', { reason: 'no', session: key })
     await drive(2)
     expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
@@ -779,13 +933,80 @@ describe('finalize', () => {
     writeFileSync(join(dir, 'abc', 'subagents', 'one.jsonl'), 'x')
     const to = join(archive, '1', '1', 'abc.jsonl')
     const store = new FileTranscripts()
-    expect(await store.copy({ from, to })).toBe(true)
-    expect(await store.copy({ from, to })).toBe(true)
+    const root = dir
+    expect(await store.copy({ from, to, root })).toBe(true)
+    expect(await store.copy({ from, to, root })).toBe(true)
     expect(readFileSync(to, 'utf8')).toBe('{"not":"parsed"}\n')
     expect(existsSync(join(archive, '1', '1', 'abc', 'subagents', 'one.jsonl'))).toBe(true)
-    expect(await store.copy({ from: join(dir, 'gone.jsonl'), to })).toBe(false)
-    expect(await store.copy({ from: join(dir, 'abc'), to })).toBe(false)
+    expect(await store.copy({ from: join(dir, 'gone.jsonl'), to, root })).toBe(false)
+    expect(await store.copy({ from: join(dir, 'abc'), to, root })).toBe(false)
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('a path a pane reported is copied only from under the account’s projects directory, through no link', async () => {
+    const dir = mkdtempSync('/tmp/factory-transcripts-')
+    const root = join(dir, 'projects')
+    const outside = join(dir, 'secrets')
+    mkdirSync(join(root, 'p'), { recursive: true })
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'id.jsonl'), 'a secret')
+    writeFileSync(join(root, 'p', 'ok.jsonl'), 'a session')
+    symlinkSync(join(outside, 'id.jsonl'), join(root, 'p', 'file-link.jsonl'))
+    symlinkSync(outside, join(root, 'dir-link'))
+    const to = join(archive, 'x.jsonl')
+    const store = new FileTranscripts()
+    expect(await store.copy({ from: join(root, 'p', 'ok.jsonl'), to, root: undefined })).toBe(false)
+    expect(await store.copy({ from: join(outside, 'id.jsonl'), to, root })).toBe(false)
+    expect(await store.copy({ from: join(root, '..', 'secrets', 'id.jsonl'), to, root })).toBe(false)
+    expect(await store.copy({ from: join(root, 'p', 'file-link.jsonl'), to, root })).toBe(false)
+    expect(await store.copy({ from: join(root, 'dir-link', 'id.jsonl'), to, root })).toBe(false)
+    expect(existsSync(to)).toBe(false)
+    expect(await store.copy({ from: join(root, 'p', 'ok.jsonl'), to, root })).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('a transcript that is not copied leaves a line, and the attempt still ends', async () => {
+    const { id, key } = await lead()
+    const refusing = {
+      ...ports(),
+      ...finalizePorts({
+        sql: db.sql,
+        clock,
+        runner,
+        worktrees,
+        transcripts: new FileTranscripts(),
+        archiveDir: archive,
+        projectsDir: async () => undefined,
+        making: () => false,
+        offTick,
+      }),
+    }
+    await post(id, 'drop', { reason: 'no', session: key })
+    for (let i = 0; i < 3; i++) {
+      await issuePass(db.sql, { now: () => clock.now(), ports: refusing })
+      await offTick.settled()
+    }
+    expect(await trail(id)).toEqual(expect.arrayContaining(['transcript_missing', 'issue_finalized']))
+    expect((await evidence(id)).filter((e) => e.kind === 'transcript')).toEqual([])
+  })
+
+  test('a finalize older than the running attempt leaves that attempt’s claim alone', async () => {
+    const { id, repo } = await lead()
+    // As a finalize planned before its port existed stands: attempt 1 closed and reopened, attempt 2 working and holding the claim.
+    await db.sql`UPDATE factory.issues SET attempt = 2 WHERE id = ${id}`
+    await db.sql`
+      INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
+      VALUES (${id}, 'finalize:old', 'finalize', ${{ attempt: 1, hold: 0, cause: 'stop' }}, ${clock.now()})`
+    const held = await db.sql`SELECT key FROM factory.claims WHERE issue_id = ${id}`
+    expect(held).toHaveLength(1)
+    for (let i = 0; i < 3; i++) {
+      await issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+      await offTick.settled()
+    }
+    expect(await db.sql`SELECT key FROM factory.claims WHERE issue_id = ${id}`).toEqual(held)
+    expect(runner.closed).toEqual([leadKey(id, 1)])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [] }])
+    expect(await trail(id)).toContain('issue_finalized')
   })
 })
 
@@ -808,7 +1029,7 @@ describe('reopen', () => {
     await drive(4)
     expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2 })
     expect(worktrees.made.map((w) => w.branch)).toEqual([`factory/${id}-1`, `factory/${id}-2`])
-    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [SHA] }])
   })
 
   test('past 30 days: refused, with the way to a new Issue', async () => {
@@ -853,6 +1074,7 @@ describe('reopen', () => {
     expect(await issue(id)).toMatchObject({ state: 'queued', attempt: 1 })
     expect(worktrees.made).toHaveLength(1)
     runner.failure = undefined
+    clock.advance(60_000)
     await drive(4)
     expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2 })
     expect(runner.closed).toEqual([key])
@@ -916,7 +1138,7 @@ describe('stop', () => {
     expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'dropped' })
     expect(runner.closed).toEqual([key])
     expect(copied).toHaveLength(1)
-    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [] }])
     expect(await trail(id)).toContain('issue_finalized')
   })
 
@@ -1032,7 +1254,10 @@ describe('the owner’s line', () => {
     const { id, key } = await lead()
     runner.failure = new Error('hc is down')
     await post(id, 'drop', { reason: 'no', session: key })
-    for (let i = 0; i < 8; i++) await pass()
+    for (let i = 0; i < 8; i++) {
+      await pass()
+      clock.advance(5 * 60_000)
+    }
     await notifyFailures(db.sql, clock.now())
     await notifyFailures(db.sql, clock.now())
     const [effect] = await db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'finalize' AND issue_id = ${id}`
@@ -1043,17 +1268,18 @@ describe('the owner’s line', () => {
 
   test('one failed finalize is unlucky, however long it waited before: nothing is sent', async () => {
     const { id, key } = await lead()
-    offTick = new OffTick(0)
+    offTick = newJobs(0)
     await post(id, 'drop', { reason: 'no', session: key })
     for (let i = 0; i < 6; i++) await pass()
     const [waited] =
       await db.sql`SELECT attempts FROM factory.issue_effects WHERE kind = 'finalize' AND issue_id = ${id}`
     expect(waited?.attempts).toBe(0)
-    offTick = new OffTick()
+    offTick = newJobs()
     runner.failure = new Error('hc blinked')
     for (let i = 0; i < 2; i++) await pass()
     await notifyFailures(db.sql, clock.now())
     runner.failure = undefined
+    clock.advance(60_000)
     await drive(3)
     await notifyFailures(db.sql, clock.now())
     expect(await sent(id)).toEqual([])
@@ -1080,7 +1306,7 @@ describe('an Issue watching since before this code', () => {
     expect((await evidence(id)).map((e) => e.kind)).toContain('hold')
     expect(await trail(id)).toContain('issue_finalized')
     expect(runner.closed).toEqual([key])
-    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [] }])
     expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
   })
 
@@ -1243,6 +1469,7 @@ describe('the replay test: a crash after every effect of the hold and finalize',
         clock,
         offTick: tickJobs,
         archiveDir: archive,
+        projectsDir: async () => '/projects',
         making: () => false,
         runner: { close: (key) => around(async () => void world.closed.add(key)) },
         worktrees: {

@@ -37,6 +37,21 @@ export const badTime = (payload: InboxRow['payload'], name: string): boolean => 
   return Number.isNaN(ms) || ms < 0 || ms > MAX_TIME_MS
 }
 
+/** A line in the Issue's events, once per key whoever writes it how often. */
+export async function markEvent(
+  sql: SQL,
+  issueId: number,
+  key: string,
+  kind: string,
+  at: Date,
+  payload: unknown,
+): Promise<void> {
+  await sql`
+    INSERT INTO factory.issue_events (issue_id, key, kind, to_state, at, payload)
+    VALUES (${issueId}, ${key}, ${kind}, NULL, ${at}, ${payload ?? null})
+    ON CONFLICT (key) DO NOTHING`
+}
+
 export async function logEvent(
   tx: SQL,
   input: { issueId: number; key: string; kind: string; from: IssueState | null; to: IssueState | null; at: Date },

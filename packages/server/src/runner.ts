@@ -115,6 +115,32 @@ export function agentName(key: string): string {
   return `${base.slice(0, 25).replace(/-+$/, '')}-${hash}`
 }
 
+async function readRegistry(accountsFile: string): Promise<z.infer<typeof Registry>> {
+  let raw: string
+  try {
+    raw = await Bun.file(accountsFile).text()
+  } catch (cause) {
+    throw new RunnerError(`cannot read the account registry ${accountsFile}: ${String(cause)}`, false)
+  }
+  try {
+    return Registry.parse(JSON.parse(raw))
+  } catch (cause) {
+    throw new RunnerError(`the account registry ${accountsFile} is unusable: ${String(cause)}`, false)
+  }
+}
+
+/** Where an account's Claude Code keeps its sessions (its dir null: the default one). An account the registry has not is none. */
+export async function claudeProjectsDir(
+  options: { accountsFile: string; home?: string },
+  account: string | null,
+): Promise<string | undefined> {
+  if (!account) return undefined
+  const entry = (await readRegistry(options.accountsFile)).accounts[account]
+  if (!entry) return undefined
+  const home = options.home ?? process.env.HOME ?? ''
+  return join(entry.dir ? entry.dir.replace(/^~(?=\/|$)/, home) : join(home, '.claude'), 'projects')
+}
+
 /**
  * The environment a spawn's agent runs with: the account's `CLAUDE_CONFIG_DIR` (absent for the default account, never
  * empty), and the variables that switch the hooks on and tell the usage record who it is. Shared by both runners.
@@ -123,18 +149,7 @@ export async function accountEnv(
   options: { accountsFile: string; home?: string; usageLane?: string },
   { account, key, role }: Pick<StartInput, 'account' | 'key' | 'role'>,
 ): Promise<Record<string, string>> {
-  let raw: string
-  try {
-    raw = await Bun.file(options.accountsFile).text()
-  } catch (cause) {
-    throw new RunnerError(`cannot read the account registry ${options.accountsFile}: ${String(cause)}`, false)
-  }
-  let registry: z.infer<typeof Registry>
-  try {
-    registry = Registry.parse(JSON.parse(raw))
-  } catch (cause) {
-    throw new RunnerError(`the account registry ${options.accountsFile} is unusable: ${String(cause)}`, false)
-  }
+  const registry = await readRegistry(options.accountsFile)
   const entry = registry.accounts[account]
   if (!entry) throw new RunnerError(`account ${account} is not in the registry ${options.accountsFile}`, true)
 

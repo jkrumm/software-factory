@@ -58,10 +58,18 @@ export async function fileVerb(
   if (!(await heard(sql, issueId, issue.attempt, session, input.requireSession)))
     return { ok: false, problem: 'foreign_session' }
   // The attempt is in the key: a second attempt's `--id 1 ship` is its own event, not a duplicate of the first attempt's.
-  const key = `${issueId}:${issue.attempt}:${verb}:${id ?? crypto.randomUUID()}`
+  const first = `${issueId}:${issue.attempt}:${verb}:${id ?? crypto.randomUUID()}`
   const gated = GATED_VERBS.includes(verb)
-  // A repeated call's row is there already, with the answer it got: git has nothing to add.
-  const [known] = gated ? await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key}` : []
+  // A repeated call finds its row and the answer it got, and git has nothing to add. But a refusal says how things stood then, a git
+  // that failed among them: it does not pin the answer, and the call is derived again as a row of its own.
+  const earlier: { key: string; result: string | null }[] = gated
+    ? await sql`
+        SELECT key, result FROM factory.issue_inbox
+        WHERE key = ${first} OR starts_with(key, ${`${first}:retry:`}) ORDER BY id DESC`
+    : []
+  const [latest] = earlier
+  const known = latest !== undefined && latest.result !== 'refused'
+  const key = latest ? (known ? latest.key : `${first}:retry:${earlier.length}`) : first
   const reported = 'commits' in fields ? (fields.commits ?? []) : []
   const derived =
     gated && !known

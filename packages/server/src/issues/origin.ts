@@ -30,12 +30,58 @@ export const fetchOrigin = async (repo: string, options: { run?: Run; git?: stri
   return done?.exitCode === 0
 }
 
-/** Whether all a branch holds is on the base: by commit, or by content (a squash merge leaves no commit of the branch behind). */
+/**
+ * Whether what the lead reported as merged is what the branch holds: on the base, touching every file the branch changes, and no older
+ * than the branch's last commit, so a partial merge with more work after it does not count. What decides a squash whose lines moved on
+ * since, where a three-way merge conflicts and says nothing about whether the work landed.
+ */
+async function landedAs(
+  repo: string,
+  ref: string,
+  base: string,
+  reported: readonly string[],
+  options: { run?: Run; git?: string },
+): Promise<boolean> {
+  const git = (args: string[]) => gitIn(repo, args, options)
+  const onBase: string[] = []
+  for (const sha of reported) {
+    if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode === 0) onBase.push(sha)
+  }
+  const fork = await git(['merge-base', base, ref])
+  if (onBase.length === 0 || fork.exitCode !== 0) return false
+  const names = (done: { stdout: string }) => done.stdout.split(/[\0\n]/).filter(Boolean)
+  const quoteless = ['-c', 'core.quotePath=false']
+  const own = names(await git([...quoteless, 'diff', '--name-only', '-z', fork.stdout.trim(), ref]))
+  const touched = new Set(
+    names(
+      await git([
+        ...quoteless,
+        'log',
+        '--no-walk',
+        '-m',
+        '--first-parent',
+        '--name-only',
+        '-z',
+        '--format=',
+        ...onBase,
+      ]),
+    ),
+  )
+  if (!own.every((path) => touched.has(path))) return false
+  const times = (await git(['log', '--no-walk', '--format=%ct', ...onBase])).stdout.split('\n').filter(Boolean)
+  const tip = Number((await git(['log', '-1', '--format=%ct', ref])).stdout.trim())
+  return Math.max(...times.map(Number)) >= tip
+}
+
+/**
+ * Whether all a branch holds is on the base: by commit; by content, a merge of it that changes nothing; or as the commits the lead
+ * reported as merged. A conflict alone says nothing: later commits on the same lines conflict with a squash that landed.
+ */
 export async function branchOnBase(
   repo: string,
   branch: string,
   base: string,
-  options: { run?: Run; git?: string } = {},
+  options: { run?: Run; git?: string; reported?: readonly string[] } = {},
 ): Promise<boolean> {
   const ref = `refs/heads/${branch}`
   const git = (args: string[]) => gitIn(repo, args, options)
@@ -43,8 +89,9 @@ export async function branchOnBase(
   const ahead = await git(['rev-list', '--count', ref, '--not', base])
   if (ahead.exitCode === 0 && ahead.stdout.trim() === '0') return true
   const merged = await git(['merge-tree', '--write-tree', base, ref])
-  if (merged.exitCode !== 0) return false
-  return merged.stdout.trim() === (await git(['rev-parse', `${base}^{tree}`])).stdout.trim()
+  const tree = await git(['rev-parse', `${base}^{tree}`])
+  if (merged.exitCode === 0 && merged.stdout.trim() === tree.stdout.trim()) return true
+  return landedAs(repo, ref, base, options.reported ?? [], options)
 }
 
 /**

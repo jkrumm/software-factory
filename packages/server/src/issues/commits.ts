@@ -71,7 +71,7 @@ export class GitCommits implements Commits {
         if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode !== 0)
           return `commit ${sha.slice(0, 12)} is not on ${base}: merge it first`
       }
-      if (needsBase && !(await branchOnBase(repo, input.branch, base, this.options)))
+      if (needsBase && !(await branchOnBase(repo, input.branch, base, { ...this.options, reported: full })))
         return `${input.branch} holds work that is not on ${base}: merge it first`
       return undefined
     }

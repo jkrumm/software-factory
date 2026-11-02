@@ -4,10 +4,11 @@ import type { Clock } from '../clock.ts'
 import { releaseClaim } from '../projects/claims.ts'
 import type { Runner } from '../runner.ts'
 import { dropEmptySession } from '../sessions.ts'
-import { archiveAttempt, type TranscriptStore } from './archive.ts'
+import { archiveAttempt, type ProjectsDir, type TranscriptStore } from './archive.ts'
 import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { leadBranch, leadKey } from './names.ts'
 import type { OffTick } from './offtick.ts'
+import { markEvent } from './shared.ts'
 import type { Worktrees } from './worktree.ts'
 
 export interface FinalizeDeps {
@@ -18,6 +19,8 @@ export interface FinalizeDeps {
   transcripts: TranscriptStore
   /** `FACTORY_ARCHIVE_DIR` */
   archiveDir: string
+  /** the account's Claude projects directory: where a transcript may be copied from */
+  projectsDir: ProjectsDir
   /** whether a worktree of the Issue is being made right now: it is removed when that is over */
   making: (issueId: number) => boolean
   offTick: OffTick
@@ -25,7 +28,7 @@ export interface FinalizeDeps {
 
 /**
  * The claim goes back, a lead or a worker of it that never started never will, and whoever waits for the place is looked at now rather than at its next
- * recheck. Under the capacity lock like every admission, and on the tick: no check that fills the off-tick jobs may hold a project's place,
+ * recheck, unless a later attempt holds the claim by now. Under the capacity lock like every admission, and on the tick: no check that fills the off-tick jobs may hold a project's place,
  * and between two passes no start is in flight, so a spawn still `starting` is one a crash left, whose lease would otherwise start it
  * later. Each statement finds its work done on a replay.
  */
@@ -33,7 +36,12 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
   const now = clock.now()
   await sql.begin(async (tx) => {
     await lockCapacity(tx)
-    const keys = await releaseClaim(tx, issueId)
+    // A finalize older than the attempt now running (one planned before this port existed, that nothing waited for) has no claim to give:
+    // the one there is that attempt's.
+    const [issue]: { state: string; attempt: number }[] =
+      await tx`SELECT state, attempt FROM factory.issues WHERE id = ${issueId}`
+    const owned = issue?.state === 'closed' || issue?.attempt === attempt
+    const keys = owned ? await releaseClaim(tx, issueId) : []
     const lead = leadKey(issueId, attempt)
     const stopped: { key: string }[] = await tx`
       UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${`Issue ${issueId} closed before the spawn started`}
@@ -51,14 +59,6 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
 const attemptOf = (effect: Effect): number => Number(effect.payload?.attempt ?? 0)
 
 const once = (issueId: number, attempt: number): string => `issue_finalized:${issueId}:${attempt}`
-
-/** A line in the Issue's events, once per key whoever writes it how often. */
-async function mark(sql: SQL, issueId: number, key: string, kind: string, at: Date, payload: unknown): Promise<void> {
-  await sql`
-    INSERT INTO factory.issue_events (issue_id, key, kind, to_state, at, payload)
-    VALUES (${issueId}, ${key}, ${kind}, NULL, ${at}, ${payload ?? null})
-    ON CONFLICT (key) DO NOTHING`
-}
 
 /**
  * What ends an attempt, from every exit path, in this order (the place was given back already, so nothing here can keep the next Issue
@@ -83,16 +83,30 @@ async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
     const workers: { key: string }[] = await sql`SELECT key FROM factory.spawns WHERE parent = ${lead}`
     for (const key of [lead, ...workers.map((worker) => worker.key)]) await deps.runner.close(key)
     await archiveAttempt(
-      { sql, store: deps.transcripts, dir: deps.archiveDir, now: () => clock.now() },
+      {
+        sql,
+        store: deps.transcripts,
+        dir: deps.archiveDir,
+        projectsDir: deps.projectsDir,
+        now: () => clock.now(),
+      },
       issueId,
       attempt,
     )
-    const tree = await deps.worktrees.remove({ repo: issue.repo, branch: leadBranch(issueId, attempt) })
+    // What the lead reported as merged: a squash leaves no commit of the branch on the base, and nothing else says it landed.
+    const reported: { commits: string[] | null }[] = await sql`
+      SELECT payload->'commits' AS commits FROM factory.issue_inbox
+      WHERE issue_id = ${issueId} AND kind IN ('ship', 'close') AND result = 'applied' AND payload->>'attempt' = ${String(attempt)}`
+    const tree = await deps.worktrees.remove({
+      repo: issue.repo,
+      branch: leadBranch(issueId, attempt),
+      reported: reported.flatMap((row) => row.commits ?? []),
+    })
     if ('kept' in tree) {
-      await mark(sql, issueId, `worktree_kept:${issueId}:${attempt}`, 'worktree_kept', clock.now(), tree)
+      await markEvent(sql, issueId, `worktree_kept:${issueId}:${attempt}`, 'worktree_kept', clock.now(), tree)
     }
   }
-  await mark(sql, issueId, once(issueId, attempt), 'issue_finalized', clock.now(), { attempt })
+  await markEvent(sql, issueId, once(issueId, attempt), 'issue_finalized', clock.now(), { attempt })
 }
 
 export function finalizePorts(deps: FinalizeDeps): Pick<EffectPorts, 'finalize'> {

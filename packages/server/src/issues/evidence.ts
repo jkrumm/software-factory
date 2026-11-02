@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import {
-  DEFAULT_HOLD,
+  DEFAULT_HOLD_MS,
   defaultManifest,
   durationMs,
   EVIDENCE_KINDS,
@@ -120,7 +120,7 @@ export async function derive(
   const owner = await projectOfPath(sql, repo)
   const project = owner ? await getProject(sql, owner.name) : undefined
   const manifest = project?.manifest ?? defaultManifest(basename(repo))
-  const holdMs = durationMs(manifest.deploy.hold) ?? durationMs(DEFAULT_HOLD) ?? 0
+  const holdMs = durationMs(manifest.deploy.hold) ?? DEFAULT_HOLD_MS
   const [tree]: { sha: string | null }[] = await sql`
     SELECT sha FROM factory.lead_worktrees WHERE issue_id = ${issueId} AND attempt = ${attempt}`
   const none = { commits: [], paths: [], required: [], mergedAt: null, holdMs, problem: null }

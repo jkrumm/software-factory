@@ -618,8 +618,8 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   call calls it again under the same key, so a port must find its own work by that key. The ports are `issues/lead.ts`
   (`start_lead`, `note_lead`), `issues/hold.ts` (`verify`) and `issues/finalize.ts` (`finalize`), wired in `TickDeps.issuePorts`. `verify`
   and `finalize` take minutes, so they run **off the tick** (`issues/offtick.ts`): the port's first ask starts the work and throws
-  `Waiting` (no try: `attempts`, which the notifier's failed sweep counts, stays as it was), and the ask after it ended returns or throws what it did. At most four run at once, and nothing of it outlives the process:
-  a restart asks again, and the work finds what it already did by its keys. `hold_over` asks for `verify` and closes nothing: the
+  `Waiting` (no try: `attempts`, which the notifier's failed sweep counts, stays as it was), and the ask after it ended returns or throws what it did. Work that threw starts again after a backoff (30 s doubling to 5 min). At most four run at once, and nothing of it outlives the process:
+  a stop kills `make verify`'s process group, so a restart never has two, a check killed that way files nothing, and a restart asks again and finds what it already did by its keys. `verify` keeps a line of its own in `runEffects`: a note reaches the lead while it runs. `hold_over` asks for `verify` and closes nothing: the
   check's `verified` or `regression` moves the Issue.
 - **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
   close removes every `issue_deps` row on and of the Issue: a row is a dep still open, and a blocker that reopens holds nobody back.
@@ -668,7 +668,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.
 - **The evidence gate.** `ship` names its merged commits (`--commit`, required) and `close` may. Before the row is filed, outside any
   transaction, `derive` (`issues/evidence.ts`) has `GitCommits` (`issues/commits.ts`) resolve them: each must exist and be on `origin/<default>`
-  (looked for again after a `git fetch`, 30 s: a PR merged on GitHub is on no local ref until then) and newer than the worktree's cut, `ship` needs all the branch holds on the base (by commit, or by content for a squash), and what else the branch
+  (looked for again after a `git fetch`, 30 s: a PR merged on GitHub is on no local ref until then) and newer than the worktree's cut, `ship` needs all the branch holds on the base (`branchOnBase`: by commit; by content, a merge of it changing nothing; or as the reported commits, which must touch every file the branch changes and be no older than its last commit, since a squash whose lines later commits moved conflicts in a three-way merge and says nothing by that), and what else the branch
   `factory/<issue>-<attempt>` holds since the worktree's cut counts too, so the commits a lead names do not set its bar (a rebase over
   newer work counts those commits: stricter, never lighter; a merge commit counts as what it brought in). The paths give the kinds required
   by `requiredEvidence`: the manifest's `deploy.migrations` are `data`; `docs/`, `*.md` and tests need nothing; `deploy/`, `scripts/`,
@@ -679,7 +679,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   checks existence and freshness only: a kind is met by a row at or after the newest reported commit's committer time, in whole seconds.
   Refused, the row is `refused` with what is missing in `detail`, the call answers 409 with the same text, and the CLI exits 5. `ship` and `close` are
   handled before the call returns (`answerNow`: the same worker under the same lock as the tick; a row the tick has in hand comes back `result: null`, and
-  the CLI exits 10). A repeated `--id` gets the row's answer again without asking git. A refused verb is no report, so the send-back still applies.
+  the CLI exits 10). A repeated `--id` gets the row's answer again without asking git, unless that answer was a refusal: a refusal says how things stood then, so the call derives again as a row of its own (`<key>:retry:<n>`). A refused verb is no report, so the send-back still applies.
   `close` is refused when the commits touch anything that requires evidence, and when it names neither a merged commit nor a `--document`: what is merely on the branch is no proof.
   `factory issue evidence <id> --kind ui|service|infra|data` (`--link`, `--file`, `--stdin`; at most 32 KiB) is a row in `evidence` keyed
   `evidence:<issue>:<attempt>:<call id>`, by the lead or the owner, under the same rules as a verb, and takes nothing for a closed Issue.
@@ -690,10 +690,10 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   `issue:<id>:regression:<hold>` with the results as JSON on one line, data, and `notify:regression:<issue>:<hold>` on the owner's line. A check whose hold ended meanwhile files nothing, and one whose answer is filed
   runs nothing.
 - **Finalize once,** from every exit path (`issues/finalize.ts`), in this order: on the tick, so no check can hold a project's place, the claim is given back, a lead's spawn that never started fails, and
-  whoever waited for the place is looked at now; off it, the terminals of the lead and the workers it spawned are killed and removed (`Runner.close`, by their label); the attempt's transcripts, the
-  lead's and those workers', are copied to `FACTORY_ARCHIVE_DIR` (default `~/.local/share/factory/archive`)`/<issue>/<attempt>/<claude session>.jsonl`, with the
+  whoever waited for the place is looked at now, unless a later attempt holds the claim by now (a finalize planned before its port existed); off it, the terminals of the lead and the workers it spawned are killed and removed (`Runner.close`, by their label); the attempt's transcripts, the
+  lead's and those workers', if they really lie under the account's Claude projects directory (the path is the pane's word; otherwise a `transcript_missing` line), are copied to `FACTORY_ARCHIVE_DIR` (default `~/.local/share/factory/archive`)`/<issue>/<attempt>/<claude session>.jsonl`, with the
   subagents' directory beside it, and linked in `evidence` (kind `transcript`), never parsed; the worktree and its branch are removed when clean and on the fetched
-  base, by commit or by content (`git merge-tree`: a squash leaves no commit of the branch behind), otherwise kept with an `issue_events` line
+  base (`branchOnBase`, with the commits the lead reported: a squash leaves no commit of the branch behind), otherwise kept with an `issue_events` line
   and a week in `factory status` (ignored files are the setup's, and go with it). `issue_finalized:<issue>:<attempt>` ends it: a second close of an attempt that has it only gives the place
   back. A finalize that fails is tried again and shows in status, and the place is back already. Every step finds its own work done, so a crash between any two replays to one of each.
 - **Reopen.** `factory issue reopen <id> --reason <text>`, the only way a closed Issue moves: within 30 days of closing it is `queued`, and admission gives it a

@@ -35,7 +35,8 @@ interface EffectRow {
 const BATCH = 20
 
 /**
- * Runs recorded effects: of each Issue only the oldest open one, whatever its kind, so an effect never overtakes an earlier one
+ * Runs recorded effects: of each Issue only the oldest open one, whatever its kind, so an effect never overtakes an earlier one, but for
+ * `verify`, which runs for minutes on a line of its own: a note reaches the lead while the check runs. An effect never overtakes one
  * that has no port (but for `verify` and `finalize`, which hold nothing back without one); a close cancels what it makes pointless, so `finalize` waits behind nothing, and a new attempt's `start_lead` waits behind the last attempt's `finalize`. The least tried go first, so Issues whose port keeps failing leave room for the rest. Never inside a
  * transaction: the attempt is committed, the port is called, the result goes in a new statement. A crash between the two leaves
  * the row open, and the next pass calls the port again under the same key. A port that fails ends its Issue's turn for this pass.
@@ -53,11 +54,11 @@ export async function runEffects(sql: SQL, ports: EffectPorts, now: () => Date):
   while (budget > 0) {
     const rows: EffectRow[] = await sql`
       SELECT * FROM (
-        SELECT DISTINCT ON (issue_id) id, issue_id, key, kind, payload, attempts
+        SELECT DISTINCT ON (issue_id, kind = 'verify') id, issue_id, key, kind, payload, attempts
         FROM factory.issue_effects
         WHERE done_at IS NULL AND cancelled_at IS NULL AND issue_id NOT IN ${sql([0, ...stopped])}
           AND kind NOT IN ${sql(['-', ...unported])}
-        ORDER BY issue_id, id
+        ORDER BY issue_id, kind = 'verify', id
       ) head
       WHERE kind IN ${sql(kinds)}
       ORDER BY attempts, id

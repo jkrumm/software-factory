@@ -25,7 +25,8 @@ export interface ProofInput {
 
 /** A port, called outside any transaction. */
 export interface Proof {
-  run(input: ProofInput): Promise<HoldCheck[]>
+  /** `signal`: the server is stopping, nothing of the check may outlive it, and what it answers then says nothing */
+  run(input: ProofInput, signal?: AbortSignal): Promise<HoldCheck[]>
 }
 
 const MAKE_TIMEOUT_MS = 10 * 60_000
@@ -39,12 +40,12 @@ const tail = (text: string): string => (text.length > MAX_DETAIL_CHARS ? `…${t
 export class MakeAndProbes implements Proof {
   constructor(private readonly options: { run?: typeof runProcess } = {}) {}
 
-  async run({ repo, makeVerify, probes }: ProofInput): Promise<HoldCheck[]> {
-    const checks = await Promise.all(probes.map((probe) => this.probe(probe)))
-    return makeVerify ? [await this.makeVerify(repo), ...checks] : checks
+  async run({ repo, makeVerify, probes }: ProofInput, signal?: AbortSignal): Promise<HoldCheck[]> {
+    const checks = await Promise.all(probes.map((probe) => this.probe(probe, signal)))
+    return makeVerify ? [await this.makeVerify(repo, signal), ...checks] : checks
   }
 
-  private async makeVerify(repo: string): Promise<HoldCheck> {
+  private async makeVerify(repo: string, signal?: AbortSignal): Promise<HoldCheck> {
     const run = this.options.run ?? runProcess
     const name = 'make verify'
     try {
@@ -52,6 +53,9 @@ export class MakeAndProbes implements Proof {
         ['sh', '-c', 'exec make -C "$1" verify 2>&1', 'sh', repo],
         MAKE_TIMEOUT_MS,
         childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+        undefined,
+        // Its own group: a kill reaches the recipes `make` started, not `make` alone.
+        { group: true, signal },
       )
       if (done.exitCode === EXIT_TIMEOUT)
         return { name, ok: false, detail: `did not finish in ${MAKE_TIMEOUT_MS / 1000} s` }
@@ -62,10 +66,14 @@ export class MakeAndProbes implements Proof {
     }
   }
 
-  private async probe({ name, http, expect }: ProofInput['probes'][number]): Promise<HoldCheck> {
+  private async probe({ name, http, expect }: ProofInput['probes'][number], signal?: AbortSignal): Promise<HoldCheck> {
     try {
       // A redirect is an answer, and the manifest says which one it wants.
-      const response = await fetch(http, { redirect: 'manual', signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+      const timeout = AbortSignal.timeout(PROBE_TIMEOUT_MS)
+      const response = await fetch(http, {
+        redirect: 'manual',
+        signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
+      })
       await response.body?.cancel()
       return { name, ok: response.status === expect, detail: `HTTP ${response.status}, expected ${expect}` }
     } catch (error) {
@@ -94,7 +102,7 @@ export interface HoldDeps {
  * naming its hold, which goes back to the same lead. Both are keyed by the hold, and a check whose answer is filed already, or whose hold
  * is over, runs nothing: a crash anywhere replays to one answer.
  */
-async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect): Promise<void> {
+async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signal: AbortSignal): Promise<void> {
   const issueId = effect.issueId
   const hold = Number(effect.payload?.hold)
   const current = async () => {
@@ -113,11 +121,12 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect): Prom
   const project = owner ? await getProject(sql, owner.name) : undefined
   const targets: MakeTargets | null = project?.makeTargets ?? null
   const manifest = project?.manifest ?? defaultManifest(basename(issue.repo))
-  const checks = await proof.run({
-    repo: issue.repo,
-    makeVerify: targets?.verify === true,
-    probes: manifest.deploy.probes,
-  })
+  const checks = await proof.run(
+    { repo: issue.repo, makeVerify: targets?.verify === true, probes: manifest.deploy.probes },
+    signal,
+  )
+  // A check the server killed on its way down says nothing about production: the next server asks again.
+  if (signal.aborted) throw new Waiting('the server is stopping')
   // A check takes minutes: a stop or a regression may have ended the hold since.
   if (!(await current())) return
   const green = checks.every((check) => check.ok)
@@ -146,7 +155,7 @@ export function holdPorts(deps: HoldDeps): Pick<EffectPorts, 'verify'> {
   return {
     verify: async (effect) => {
       if (deps.settledAt && deps.clock.now() < deps.settledAt) throw new Waiting('the server has only just started')
-      await deps.offTick.run(effect.key, () => verifyHold(deps, effect))
+      await deps.offTick.run(effect.key, (signal) => verifyHold(deps, effect, signal))
     },
   }
 }

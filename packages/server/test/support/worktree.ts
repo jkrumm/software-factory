@@ -5,7 +5,7 @@ import type { Removal, Worktree, Worktrees } from '../../src/issues/worktree.ts'
 export class FakeWorktrees implements Worktrees {
   made: { repo: string; branch: string }[] = []
   failure?: Error
-  removed: { repo: string; branch: string }[] = []
+  removed: { repo: string; branch: string; reported?: readonly string[] }[] = []
   /** what `remove` answers */
   removal: Removal = { removed: true }
 
@@ -17,8 +17,8 @@ export class FakeWorktrees implements Worktrees {
     return { path, base: 'origin/master', sha: '0'.repeat(40) }
   }
 
-  async remove({ repo, branch }: { repo: string; branch: string }): Promise<Removal> {
-    this.removed.push({ repo, branch })
+  async remove(input: { repo: string; branch: string; reported?: readonly string[] }): Promise<Removal> {
+    this.removed.push(input)
     return this.removal
   }
 }

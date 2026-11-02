@@ -82,7 +82,7 @@ async function setup() {
   worktrees = new FakeWorktrees()
   maker = new WorktreeMaker({ sql: db.sql, worktrees, now: () => clock.now() })
   runner = new PaneRunner()
-  offTick = new OffTick()
+  offTick = new OffTick({ now: () => clock.now().getTime() })
   classification = new Classification({ sql: db.sql, classifier, roles: TEST_ROLES, now: () => clock.now() })
   sync = new ProjectSync({ sql: db.sql, roots: [fixture.root], now: () => clock.now() })
   await app?.stop()
@@ -109,6 +109,7 @@ const ports = () => ({
     worktrees,
     transcripts: { copy: async () => false },
     archiveDir: '/nowhere',
+    projectsDir: async () => undefined,
     making: (issueId) => maker.busy(issueId),
     offTick,
   }),

@@ -6,6 +6,9 @@ export interface ProcessResult {
 /** Stands in for an exit code when the process had to be killed: a transient failure like any other non-zero exit. */
 export const EXIT_TIMEOUT = -1
 
+/** Stands in for an exit code when the caller's signal stopped the process. */
+export const EXIT_STOPPED = -2
+
 /** Longest one `hc` invocation may run before it is killed. */
 export const DEFAULT_PROCESS_TIMEOUT_MS = 10_000
 
@@ -31,13 +34,15 @@ export function childEnv(extra: Record<string, string> = {}): Record<string, str
 
 /**
  * Runs a command and reads its stdout; past `timeoutMs` it is killed and the exit code is `EXIT_TIMEOUT`. `input`, if given,
- * is written to its stdin, which is then closed.
+ * is written to its stdin, which is then closed. `group` gives it a process group of its own, so a kill reaches what it started (`make`
+ * and its recipes); `signal` kills it early, and the exit code is `EXIT_STOPPED`.
  */
 export async function runProcess(
   cmd: string[],
   timeoutMs: number,
   env: Record<string, string | undefined> = childEnv(),
   input?: string,
+  control: { group?: boolean; signal?: AbortSignal } = {},
 ): Promise<ProcessResult> {
   let proc: Bun.Subprocess<Bun.SpawnOptions.Writable, 'pipe', 'ignore'>
   try {
@@ -46,6 +51,7 @@ export async function runProcess(
       stdout: 'pipe',
       stderr: 'ignore',
       env,
+      detached: control.group === true,
     })
   } catch (cause) {
     throw new CannotExecute(cmd[0] ?? '', cause)
@@ -58,11 +64,23 @@ export async function runProcess(
   })
   const finished = Promise.all([proc.stdout.text(), proc.exited]).then(([stdout, exitCode]) => ({ stdout, exitCode }))
   finished.catch(() => {})
+  const stopped = new Promise<'stopped'>((resolve) => {
+    if (control.signal?.aborted) resolve('stopped')
+    control.signal?.addEventListener('abort', () => resolve('stopped'), { once: true })
+  })
+  const kill = () => {
+    if (!control.group) return proc.kill('SIGKILL')
+    try {
+      process.kill(-proc.pid, 'SIGKILL')
+    } catch {
+      // The group is gone: what was wanted.
+    }
+  }
   try {
-    const outcome = await Promise.race([finished, deadline])
-    if (outcome !== 'timeout') return outcome
-    proc.kill('SIGKILL')
-    return { exitCode: EXIT_TIMEOUT, stdout: '' }
+    const outcome = await Promise.race([finished, deadline, stopped])
+    if (outcome !== 'timeout' && outcome !== 'stopped') return outcome
+    kill()
+    return { exitCode: outcome === 'timeout' ? EXIT_TIMEOUT : EXIT_STOPPED, stdout: '' }
   } finally {
     clearTimeout(timer)
   }
