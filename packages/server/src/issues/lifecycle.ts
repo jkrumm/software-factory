@@ -36,25 +36,22 @@ interface Step {
 /** The event happened before the one that put the Issue where it is: it says nothing about now. */
 const older = (row: InboxRow, issue: IssueRow): boolean => row.at < issue.updated_at
 
-/** A stop is over once its session has started another turn: the Issue is not parked for a turn that is behind it. */
-async function stopIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
-  if (older(row, issue)) return 'this stop is older than the state it would end'
-  const [later] = await tx`
-    SELECT 1 FROM factory.issue_inbox
-    WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
-    LIMIT 1`
-  return later ? 'a turn has started since this stop' : undefined
-}
-
-/** A wall that happened before the Issue last moved, or before a turn already seen, is over. A late spool line can be either. */
-async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
-  if (older(row, issue)) return 'this wall is older than the state it would end'
-  const [later] = await tx`
-    SELECT 1 FROM factory.issue_inbox
-    WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
-    LIMIT 1`
-  return later ? 'a turn has started since this wall' : undefined
-}
+/**
+ * What a session event says about an Issue only while nothing newer has happened: a wall or a stop that came before the Issue last
+ * moved, or before a turn its session already began, is over. A late spool line can be either.
+ */
+const isNews =
+  (what: 'wall' | 'stop') =>
+  async ({ tx, issue, row }: Context): Promise<string | undefined> => {
+    if (older(row, issue)) return `this ${what} is older than the state it would end`
+    const [later] = await tx`
+      SELECT 1 FROM factory.issue_inbox
+      WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
+      LIMIT 1`
+    return later ? `a turn has started since this ${what}` : undefined
+  }
+const wallIsNews = isNews('wall')
+const stopIsNews = isNews('stop')
 
 /** A wake answers the wait it was filed for, and a dependency's only once no dependency is left: a close removes its rows. */
 async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefined> {
