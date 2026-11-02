@@ -238,7 +238,7 @@ export class WindowDigest {
     if (!row.run_id) return this.fail(row, 'a pending window has no run id', false)
     // A run that never ends must not hold the queue for good.
     if (this.deps.now().getTime() - row.updated_at.getTime() > PENDING_MAX_MS) {
-      return this.fail(row, 'the run was still pending after two hours', false)
+      return this.fail(row, 'the run was still pending after two hours', true)
     }
     let reply: Reply
     try {

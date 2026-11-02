@@ -46,7 +46,7 @@ const percent = (value: number | null): string => (value === null ? '?' : `${Mat
  * 3000 characters. A message is a template filled with facts (SF2): **no model text** (the headline paragraph stays on the board), agent
  * words are cut, quoted and scrubbed (`quote`), and an IuRoot item is a count only.
  */
-export function renderMorning(groups: SinceGroups, date: string): string {
+export function renderMorning(groups: SinceGroups, date: string, reserve = 0): string {
   const shown = <T extends { visible: boolean }>(items: readonly T[]): T[] => items.filter((i) => !i.visible)
   const hidden = [groups.needsYou, groups.shipped, groups.recovered, groups.running, groups.handled].reduce(
     (n, items) => n + items.filter((i) => i.visible).length,
@@ -101,7 +101,8 @@ export function renderMorning(groups: SinceGroups, date: string): string {
   )
   if (hidden > 0) lines.push(`Read-only area: ${hidden} items, counted only`)
   const text = lines.join('\n')
-  return text.length > DIGEST_MAX_CHARS ? `${text.slice(0, DIGEST_MAX_CHARS - 1)}…` : text
+  const max = DIGEST_MAX_CHARS - reserve
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
 /** The morning reading as of `now` for the local `date`. */
@@ -123,12 +124,8 @@ export async function loadMorning(
     seenAt,
     isVisible: input.isVisible,
   })
-  const text = renderMorning(groups, input.date)
   // No fleet model yet: the asks, commits and sessions are not in this reading, and it must not read as "nothing happened".
-  return snapshot
-    ? text
-    : `${text}\nThe fleet model was not built yet: asks, commits and sessions are missing from this reading`.slice(
-        0,
-        DIGEST_MAX_CHARS,
-      )
+  const note = '\nThe fleet model was not built yet: asks, commits and sessions are missing from this reading'
+  const text = renderMorning(groups, input.date, snapshot ? 0 : note.length)
+  return snapshot ? text : `${text}${note}`
 }
