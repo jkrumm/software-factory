@@ -102,6 +102,18 @@ describe('GitWorktrees', () => {
     expect(existsSync(join(left, 'work.txt'))).toBe(true)
   })
 
+  test('a marker a crash left empty is no finished setup', async () => {
+    const { clone } = cloneOf('empty-marker')
+    const git = new GitWorktrees()
+    const made = await git.create({ repo: clone, branch: 'factory/9-4' })
+    const dir = fixture.git(made.path, 'rev-parse', '--absolute-git-dir')
+    await Bun.write(join(dir, 'factory-ready'), '')
+    await Bun.write(join(made.path, 'half.txt'), 'x')
+    const again = await git.create({ repo: clone, branch: 'factory/9-4' })
+    expect(again.sha).toBe(made.sha)
+    expect(existsSync(join(made.path, 'half.txt'))).toBe(false)
+  })
+
   test('a branch with commits and no finished setup is not deleted', async () => {
     const { clone } = cloneOf('worked')
     const left = join(clone, '.claude', 'worktrees', 'factory-9-2')

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HcRunner, tabId, terminalName } from '../src/hc-runner.ts'
-import { agentName, RunnerError, type StartInput, UncertainTyping } from '../src/runner.ts'
+import { agentName, RunnerError, stageFork, type StartInput, UncertainTyping } from '../src/runner.ts'
 import { FakeClock } from './support/clock.ts'
 import { createFakeHc, type FakeHc } from './support/hc.ts'
 
@@ -82,6 +82,18 @@ describe('hc adapter: a fork of an archived session', () => {
     expect(argv.slice(-4)).toEqual(['--resume', 'abc-1', '--fork-session', 'do it'])
     const dir = realpathSync(home).replace(/[^A-Za-z0-9]/g, '-')
     expect(readFileSync(join(home, '.claude', 'projects', dir, 'abc-1.jsonl'), 'utf8')).toBe('the session')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  test('a session a fork is writing is not replaced by a second fork', async () => {
+    const home = mkdtempSync('/tmp/factory-fork-')
+    const archive = join(home, 'archived.jsonl')
+    writeFileSync(archive, 'the session')
+    await stageFork({ key: 'a', repo: home, fork: { session: 's', archive } }, {}, home)
+    const dir = join(home, '.claude', 'projects', realpathSync(home).replace(/[^A-Za-z0-9]/g, '-'))
+    writeFileSync(join(dir, 's.jsonl'), 'it went on')
+    await stageFork({ key: 'b', repo: home, fork: { session: 's', archive } }, {}, home)
+    expect(readFileSync(join(dir, 's.jsonl'), 'utf8')).toBe('it went on')
     rmSync(home, { recursive: true, force: true })
   })
 

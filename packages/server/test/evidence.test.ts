@@ -723,9 +723,17 @@ describe('finalize', () => {
     await db.sql`
       INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, created_at, parent)
       VALUES ('its-worker', ${repo}, 'x', 'worker', 'sonnet', 'high', 'started', ${clock.now()}, ${key})`
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, created_at, parent)
+      VALUES ('its-next-worker', ${repo}, 'x', 'worker', 'sonnet', 'high', 'queued', ${clock.now()}, ${key})`
     await post(id, 'drop', { reason: 'no', session: key })
-    await drive(3)
-    expect(runner.closed).toEqual([key, 'its-worker'])
+    expect(await issuePass(db.sql, { now: () => clock.now(), ports: ports() })).toEqual([])
+    await offTick.settled()
+    await issuePass(db.sql, { now: () => clock.now(), ports: ports() })
+    expect(runner.closed[0]).toBe(key)
+    expect(runner.closed.slice(1).sort()).toEqual(['its-next-worker', 'its-worker'])
+    const [next] = await db.sql`SELECT status FROM factory.spawns WHERE key = 'its-next-worker'`
+    expect(next?.status).toBe('failed')
   })
 
   test('the place is back on the tick, whatever fills the off-tick jobs', async () => {
