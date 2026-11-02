@@ -96,7 +96,7 @@ export function requiredEvidence(paths: readonly string[], manifest: ProjectMani
 /** The answer of `derive`, carried on the verb's inbox row: the lifecycle decides inside a transaction, where no git can run. */
 export interface Derived {
   commits: string[]
-  /** a sample for the answer and the record; `required` was worked out from all of them */
+  /** a sample for the answer and the record, as `commits` is; `required` was worked out from all of them */
   paths: string[]
   required: EvidenceKind[]
   mergedAt: string | null
@@ -105,7 +105,7 @@ export interface Derived {
   problem: string | null
 }
 
-const MAX_RECORDED_PATHS = 100
+const MAX_RECORDED = 100
 
 /**
  * What the verb's commits require, from git and the project's manifest. Outside any transaction: the lead's call waits for it, the tick
@@ -114,9 +114,9 @@ const MAX_RECORDED_PATHS = 100
 export async function derive(
   sql: SQL,
   commits: Commits,
-  input: { issueId: number; repo: string; attempt: number; reported: readonly string[] },
+  input: { issueId: number; repo: string; attempt: number; reported: readonly string[]; merged: boolean },
 ): Promise<Derived> {
-  const { issueId, repo, attempt, reported } = input
+  const { issueId, repo, attempt, reported, merged } = input
   const owner = await projectOfPath(sql, repo)
   const project = owner ? await getProject(sql, owner.name) : undefined
   const manifest = project?.manifest ?? defaultManifest(basename(repo))
@@ -131,10 +131,11 @@ export async function derive(
       branch: leadBranch(issueId, attempt),
       cut: tree?.sha ?? null,
       reported,
+      merged,
     })
     return {
-      commits: read.commits,
-      paths: read.paths.slice(0, MAX_RECORDED_PATHS),
+      commits: read.commits.slice(0, MAX_RECORDED),
+      paths: read.paths.slice(0, MAX_RECORDED),
       required: requiredEvidence(read.paths, manifest),
       mergedAt: read.mergedAt?.toISOString() ?? null,
       holdMs,
@@ -227,7 +228,10 @@ export async function gateShip(context: Context): Promise<string | undefined> {
   return `ship refused, evidence missing${since}: ${missing.join('; ')}. File each with \`factory issue evidence ${issue.id} --kind <kind> --link <url>\`, then ship again.`
 }
 
-/** `close`: nothing deployed. Commits that touch deployable paths go through `ship`; with none, the commit or the document is the proof. */
+/**
+ * `close`: nothing deployed. Commits that touch deployable paths go through `ship`; with none, the proof is a commit the lead names, which
+ * `derive` found merged, or the document. Something merely on the branch is neither.
+ */
 export async function gateClose({ issue, row }: Context): Promise<string | undefined> {
   const derived = derivedOf(row)
   if (!derived) return 'close came without its commits derived'
@@ -235,7 +239,8 @@ export async function gateClose({ issue, row }: Context): Promise<string | undef
   if (derived.required.length > 0) {
     return `close refused: these commits touch deployable paths (${derived.required.join(', ')}: ${derived.paths.slice(0, 5).join(', ')}). Use \`factory issue ship ${issue.id}\` with its evidence.`
   }
-  if (derived.commits.length === 0 && typeof row.payload?.document !== 'string') {
+  const named = Array.isArray(row.payload?.commits) && row.payload.commits.length > 0
+  if (!named && typeof row.payload?.document !== 'string') {
     return 'close refused: name the commit (--commit <sha>) or the document (--document <path or url>) that is the proof'
   }
   return undefined

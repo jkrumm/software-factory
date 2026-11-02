@@ -30,6 +30,23 @@ export const fetchOrigin = async (repo: string, options: { run?: Run; git?: stri
   return done?.exitCode === 0
 }
 
+/** Whether all a branch holds is on the base: by commit, or by content (a squash merge leaves no commit of the branch behind). */
+export async function branchOnBase(
+  repo: string,
+  branch: string,
+  base: string,
+  options: { run?: Run; git?: string } = {},
+): Promise<boolean> {
+  const ref = `refs/heads/${branch}`
+  const git = (args: string[]) => gitIn(repo, args, options)
+  if ((await git(['rev-parse', '-q', '--verify', ref])).exitCode !== 0) return true
+  const ahead = await git(['rev-list', '--count', ref, '--not', base])
+  if (ahead.exitCode === 0 && ahead.stdout.trim() === '0') return true
+  const merged = await git(['merge-tree', '--write-tree', base, ref])
+  if (merged.exitCode !== 0) return false
+  return merged.stdout.trim() === (await git(['rev-parse', `${base}^{tree}`])).stdout.trim()
+}
+
 /**
  * The remote's default branch as last fetched, `origin/<it>`. Never the local branch: a checkout that is behind says nothing about
  * what was merged. `origin/HEAD` names it; a clone without one has `origin/master` or `origin/main`.

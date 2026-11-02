@@ -1,4 +1,4 @@
-import { fetchOrigin, gitIn, originDefault, type Run } from './origin.ts'
+import { branchOnBase, fetchOrigin, gitIn, originDefault, type Run } from './origin.ts'
 
 /** What an Issue's commits touched. */
 export interface CommitRead {
@@ -15,31 +15,31 @@ export class CommitsRefused extends Error {}
 
 /** A port, called outside any transaction: `git` with `childEnv()` and a process timeout. */
 export interface Commits {
-  read(input: { repo: string; branch: string; cut: string | null; reported: readonly string[] }): Promise<CommitRead>
+  read(input: ReadInput): Promise<CommitRead>
 }
 
-/** More than any lead's branch has; a rebase over a busy base is cut here, and what the reported commits touched still counts. */
-const MAX_BRANCH_COMMITS = 200
-
-/** `git log` asked for every commit at once, with no walk: the commits are listed, not their history. */
-const logOf = (shas: readonly string[], ...format: string[]) => ['log', '--no-walk', ...format, ...shas]
+interface ReadInput {
+  repo: string
+  branch: string
+  /** where the lead's worktree was cut */
+  cut: string | null
+  reported: readonly string[]
+  /** `ship`: all the branch holds must be on the base, so an old commit named in its place proves nothing */
+  merged?: boolean
+}
 
 /**
  * Reads the commits a lead merged: those it reports with `ship`, each of which must be on the remote's default branch, and whatever else
  * is on its branch since the worktree was cut, so the bar is set by what the branch holds and not by what the lead chose to name. A branch
- * rebased over newer work counts those commits too: stricter, never lighter. A merge commit counts as what it brought in. A commit that
- * is not known, or not on the base, is looked for once more after a fetch: a pull request merged on GitHub is on no local ref until then.
+ * rebased over newer work counts those commits too: stricter, never lighter. A merge commit counts as what it brought in. A reported
+ * commit older than the cut is refused, and for `ship` so is a branch with work not on the base. What is not known, or not on the base, is
+ * looked for once more after a fetch: a pull request merged on GitHub is on no local ref until then.
  */
 export class GitCommits implements Commits {
   constructor(private readonly options: { run?: Run; git?: string } = {}) {}
 
-  async read(input: {
-    repo: string
-    branch: string
-    cut: string | null
-    reported: readonly string[]
-  }): Promise<CommitRead> {
-    const { repo, reported } = input
+  async read(input: ReadInput): Promise<CommitRead> {
+    const { repo, reported, cut } = input
     const git = (args: string[]) => gitIn(repo, args, this.options)
     let fetched = false
     const fetch = async () => {
@@ -60,8 +60,8 @@ export class GitCommits implements Commits {
       full.push(known.stdout.trim())
     }
 
+    let base = input.merged || full.length > 0 ? await originDefault(repo, this.options) : undefined
     if (full.length > 0) {
-      let base = await originDefault(repo, this.options)
       const merged = async (sha: string) =>
         base ? (await git(['merge-base', '--is-ancestor', sha, base])).exitCode === 0 : false
       if (!base || !(await Promise.all(full.map(merged))).every(Boolean)) {
@@ -72,33 +72,52 @@ export class GitCommits implements Commits {
       for (const sha of full) {
         if (!(await merged(sha)))
           throw new CommitsRefused(`commit ${sha.slice(0, 12)} is not on ${base}: merge it first`)
+        // An old commit of the base proves nothing about this attempt.
+        if (cut && (await git(['merge-base', '--is-ancestor', sha, cut])).exitCode === 0)
+          throw new CommitsRefused(`commit ${sha.slice(0, 12)} is older than this attempt`)
       }
     }
 
     const onBranch = await this.branchCommits(input)
+    if (input.merged && onBranch.length > 0) {
+      const merged = async () => base !== undefined && (await branchOnBase(repo, input.branch, base, this.options))
+      if (!(await merged())) {
+        await fetch()
+        base = await originDefault(repo, this.options)
+        if (!(await merged())) {
+          throw new CommitsRefused(`${input.branch} holds work that is not on ${base ?? 'the base'}: merge it first`)
+        }
+      }
+    }
     const commits = [...new Set([...full, ...onBranch])]
     if (commits.length === 0) return { commits, paths: [], mergedAt: null }
 
-    const named = await git([
-      '-c',
-      'core.quotePath=false',
-      ...logOf(commits, '-m', '--first-parent', '--name-only', '-z', '--format='),
-    ])
-    if (named.exitCode !== 0) throw new Error(`git log failed (exit ${named.exitCode})`)
-    const paths = [...new Set(named.stdout.split(/[\0\n]/).filter(Boolean))].sort()
+    const named = async (...range: string[]) => {
+      const log = ['-c', 'core.quotePath=false', 'log', '-m', ...range, '--name-only', '-z', '--format=']
+      const done = await git(log)
+      if (done.exitCode !== 0) throw new Error(`git log failed (exit ${done.exitCode})`)
+      return done.stdout.split(/[\0\n]/).filter(Boolean)
+    }
+    const paths = [
+      ...(full.length > 0 ? await named('--no-walk', '--first-parent', ...full) : []),
+      ...(onBranch.length > 0 ? await named(`${cut}..refs/heads/${input.branch}`) : []),
+    ]
+    const unique = [...new Set(paths)].sort()
 
-    if (full.length === 0) return { commits, paths, mergedAt: null }
-    const times = await git(logOf(full, '--format=%ct'))
+    if (full.length === 0) return { commits, paths: unique, mergedAt: null }
+    const times = await git(['log', '--no-walk', '--format=%ct', ...full])
     if (times.exitCode !== 0) throw new Error(`git log failed (exit ${times.exitCode})`)
     const newest = Math.max(...times.stdout.split('\n').filter(Boolean).map(Number))
-    return { commits, paths, mergedAt: new Date(newest * 1000) }
+    return { commits, paths: unique, mergedAt: new Date(newest * 1000) }
   }
 
-  /** The lead's branch since its worktree was cut. No branch, or no cut to count from, is no commits. */
-  private async branchCommits({ repo, branch, cut }: { repo: string; branch: string; cut: string | null }) {
+  /** The lead's branch since its worktree was cut, all of it: a range that cannot be read fails the verb, it does not lower the bar. */
+  private async branchCommits({ repo, branch, cut }: ReadInput): Promise<string[]> {
     if (!cut) return []
-    const range = `${cut}..refs/heads/${branch}`
-    const listed = await gitIn(repo, ['rev-list', `--max-count=${MAX_BRANCH_COMMITS}`, range], this.options)
-    return listed.exitCode === 0 ? listed.stdout.split('\n').filter(Boolean) : []
+    const ref = `refs/heads/${branch}`
+    if ((await gitIn(repo, ['rev-parse', '-q', '--verify', ref], this.options)).exitCode !== 0) return []
+    const listed = await gitIn(repo, ['rev-list', `${cut}..${ref}`], this.options)
+    if (listed.exitCode !== 0) throw new Error(`git rev-list failed (exit ${listed.exitCode})`)
+    return listed.stdout.split('\n').filter(Boolean)
   }
 }

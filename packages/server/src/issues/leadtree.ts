@@ -56,7 +56,8 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
  * is judged on its passes. The pass starts what is due and returns at once; each one runs on its own, one at a time per Issue, and
  * records its result in a statement of its own. A try that fails backs off and is tried again until the retry budget (counted from
  * the first try) is spent: then the row is `failed` and `start_lead` parks the Issue. A row left `making` by a process that died
- * is no one's in flight, and is tried again at once. Only the Issue's current attempt is made.
+ * is no one's in flight, and is tried again at once. Only the Issue's current attempt is made, while it has one: a closed or reopened
+ * Issue has none, and what was asked for before the close would come after finalize and stay.
  */
 export class WorktreeMaker {
   private readonly inflight = new Map<number, Promise<void>>()
@@ -72,7 +73,7 @@ export class WorktreeMaker {
     const due: Due[] = await sql`
       SELECT w.issue_id, w.attempt, i.repo, w.tries, w.first_at
       FROM factory.lead_worktrees w JOIN factory.issues i ON i.id = w.issue_id
-      WHERE w.status IN ('pending', 'making') AND w.next_at <= ${now} AND i.state <> 'closed'
+      WHERE w.status IN ('pending', 'making') AND w.next_at <= ${now} AND i.state NOT IN ('closed', 'queued')
         AND w.attempt = i.attempt
         AND w.issue_id NOT IN ${sql([0, ...this.inflight.keys()])}
       ORDER BY w.first_at, w.issue_id LIMIT ${room}`

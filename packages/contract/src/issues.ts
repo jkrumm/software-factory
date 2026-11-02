@@ -155,7 +155,10 @@ export const MAX_EVIDENCE_BYTES = 32 * 1024
 /** A commit as a lead names it: hex only, so a value can never read as an option of `git`. */
 const Sha = z.string().regex(/^[0-9a-f]{7,64}$/, 'not a commit sha')
 
-const Evidence = z.strictObject({ kind: EvidenceKind, link: Words(1000).optional(), note: Words(1000).optional() })
+/** Evidence that says nothing is none: the kind alone would meet the gate. */
+const Evidence = z
+  .strictObject({ kind: EvidenceKind, link: Words(1000).optional(), note: Words(1000).optional() })
+  .refine((item) => item.link !== undefined || item.note !== undefined, 'evidence needs a link or a note')
 
 /** The body of each verb. `session` is the caller's `FACTORY_SESSION`; a session may only report on the Issue it works. */
 export const IssueVerbBody = {

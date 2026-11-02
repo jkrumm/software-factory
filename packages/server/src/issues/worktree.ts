@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
-import { fetchOrigin, originDefault } from './origin.ts'
+import { branchOnBase, fetchOrigin, originDefault } from './origin.ts'
 
 /** A lead's own checkout: a branch of the repo, cut from the default branch as it is on the remote. */
 export interface Worktree {
@@ -97,7 +97,11 @@ export class GitWorktrees implements Worktrees {
       const path = await this.listed(repo, branch)
       if (!path) throw new WorktreeFailed(`branch ${branch} already exists in ${repo}`)
       const marker = await this.marker(path)
-      if (marker && existsSync(marker)) return { path, base, sha }
+      // The sha it was cut from: the base has moved on since, and evidence counts the branch from there.
+      if (marker && existsSync(marker)) return { path, base, sha: (await Bun.file(marker).text()).trim() }
+      // No lead started in a tree with no marker, but commits say somebody worked here: it is not this code's to delete.
+      if ((await this.git(repo, 'rev-list', '--count', `refs/heads/${branch}`, '--not', base)) !== '0')
+        throw new WorktreeFailed(`branch ${branch} has commits and no finished setup: it is left as it is`)
       await this.discard(repo, branch)
     }
 
@@ -138,15 +142,6 @@ export class GitWorktrees implements Worktrees {
     return path
   }
 
-  /** Whether all the branch holds is on the base: by commit, or by content (a squash merge leaves no commit of the branch behind). */
-  private async onBase(repo: string, branch: string, base: string): Promise<boolean> {
-    const ref = `refs/heads/${branch}`
-    if (!(await this.git(repo, 'rev-parse', '-q', '--verify', ref))) return true
-    if ((await this.git(repo, 'rev-list', '--count', ref, '--not', base)) === '0') return true
-    const merged = await this.git(repo, 'merge-tree', '--write-tree', base, ref)
-    return merged !== undefined && merged === (await this.git(repo, 'rev-parse', `${base}^{tree}`))
-  }
-
   /**
    * Removes the worktree and its branch when it is clean and its commits are on the fetched base; otherwise leaves both and says why. A
    * worktree that is gone already is removed. A failed fetch reads what the last one left, which can only keep more.
@@ -159,7 +154,7 @@ export class GitWorktrees implements Worktrees {
     await fetchOrigin(repo, this.options)
     const base = await originDefault(repo, this.options)
     if (!base) return { kept: `${repo} has no origin default branch to check it against`, path }
-    if (!(await this.onBase(repo, branch, base))) return { kept: `its commits are not on ${base}`, path }
+    if (!(await branchOnBase(repo, branch, base, this.options))) return { kept: `its commits are not on ${base}`, path }
     if (path && (await this.git(repo, 'worktree', 'remove', path)) === undefined)
       return { kept: 'git worktree remove refused', path }
     await this.git(repo, 'branch', '-D', branch)

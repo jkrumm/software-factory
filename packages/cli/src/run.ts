@@ -732,7 +732,13 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       timeoutMs: GIT_CALL_TIMEOUT_MS,
       body: { reason: flags.reason, ...(flags.id ? { id: flags.id } : {}) },
     })
-    return print(body, issueLine(body))
+    print(body, issueLine(body))
+    if (body.state === 'closed') {
+      throw new FactoryError('pending', 'the reopen is filed and not answered yet', {
+        hint: `\`${BIN} issue show ${body.id}\` shows where the Issue stands`,
+      })
+    }
+    return
   }
 
   if (words[0] === 'issue' && words[1] === 'resume') {

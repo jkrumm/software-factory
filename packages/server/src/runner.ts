@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { constants, realpathSync } from 'node:fs'
-import { copyFile, mkdir } from 'node:fs/promises'
+import { existsSync, realpathSync } from 'node:fs'
+import { copyFile, cp, mkdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Effort, Placement, Tier } from '@software-factory/contract'
 import { z } from 'zod'
@@ -156,18 +156,24 @@ export async function accountEnv(
  * transcript that is there already (its own, or an earlier try's) stays.
  */
 export async function stageFork(
-  input: Pick<StartInput, 'fork' | 'repo'>,
+  input: Pick<StartInput, 'fork' | 'key' | 'repo'>,
   env: Record<string, string>,
   home: string,
 ): Promise<void> {
   if (!input.fork) return
   const projects = join(env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'), 'projects')
   const dir = join(projects, real(input.repo).replace(/[^A-Za-z0-9]/g, '-'))
+  const to = join(dir, `${input.fork.session}.jsonl`)
+  if (existsSync(to)) return
+  const subagents = input.fork.archive.replace(/\.jsonl$/, '')
   try {
     await mkdir(dir, { recursive: true })
-    await copyFile(input.fork.archive, join(dir, `${input.fork.session}.jsonl`), constants.COPYFILE_EXCL)
+    if (existsSync(subagents)) await cp(subagents, join(dir, input.fork.session), { recursive: true })
+    // Whole or not at all: a second fork of the same session starts from what is there.
+    const part = `${to}.${input.key}.part`
+    await copyFile(input.fork.archive, part)
+    await rename(part, to)
   } catch (error) {
-    if ((error as { code?: string }).code === 'EEXIST') return
     throw new RunnerError(`the archived session cannot be put back: ${String(error)}`, false)
   }
 }
