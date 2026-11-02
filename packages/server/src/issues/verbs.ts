@@ -24,7 +24,7 @@ export async function fileVerb(
   input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date; requireSession?: boolean },
 ): Promise<Filed> {
   const { issueId, verb, now } = input
-  const { id, session, ...payload } = input.body
+  const { id, session, ...fields } = input.body
   const [issue]: { state: IssueState; attempt: number }[] =
     await sql`SELECT state, attempt FROM factory.issues WHERE id = ${issueId}`
   if (!issue) return { ok: false, problem: 'unknown_issue' }
@@ -39,6 +39,8 @@ export async function fileVerb(
   }
   // The attempt is in the key: a second attempt's `--id 1 ship` is its own event, not a duplicate of the first attempt's.
   const key = `${issueId}:${issue.attempt}:${verb}:${id ?? crypto.randomUUID()}`
+  // The attempt the call was filed for: a verb that reaches the Issue after a new attempt began is refused, not applied to it.
+  const payload = { ...fields, attempt: issue.attempt }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: verb, at: now, payload, session })
   return { ok: true, key, duplicate, state: issue.state }
 }

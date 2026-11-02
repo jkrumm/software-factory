@@ -592,7 +592,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 |-|-|-|
 | `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload while `watching`, a regression | the source's event id |
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
-| `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event) | `<issue>:<attempt>:<verb>:<call id>` |
+| `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
 | `lead_gone` | `note_lead`, when the lead's spawn failed or ended | `lead_gone:<issue>:<attempt>` |
 | session events | hooks, live or from the spool | as in §3 |
