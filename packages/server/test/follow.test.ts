@@ -58,11 +58,13 @@ class FakeCommits implements Commits {
   calls = 0
   /** what a short sha or a name resolves to, as git does */
   resolves: Record<string, string> = {}
+  /** origin/<default> as the ship found it */
+  landedAt: string | null = 'f'.repeat(40)
   async read({ reported }: { reported: readonly string[] }): Promise<CommitRead> {
     this.calls++
     if (this.failure) throw this.failure
     const full = reported.map((sha) => this.resolves[sha] ?? sha)
-    return { reported: full, commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
+    return { landedAt: this.landedAt, commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
   }
 }
 

@@ -96,8 +96,8 @@ export function requiredEvidence(paths: readonly string[], manifest: ProjectMani
 
 /** The answer of `derive`, carried on the verb's inbox row: the lifecycle decides inside a transaction, where no git can run. */
 export interface Derived {
-  /** the commits the lead named, full: the hold checks the deployed version contains these (the branch's own commits may be gone from the base, squashed) */
-  reported: string[]
+  /** `origin/<default>` when the work was proven landed: what the hold requires the deployed version to hold (`CommitRead.landedAt`) */
+  landedAt: string | null
   commits: string[]
   /** a sample for the answer and the record, as `commits` is; `required` was worked out from all of them */
   paths: string[]
@@ -126,7 +126,7 @@ export async function derive(
   const holdMs = durationMs(manifest.deploy.hold) ?? DEFAULT_HOLD_MS
   const [tree]: { sha: string | null }[] = await sql`
     SELECT sha FROM factory.lead_worktrees WHERE issue_id = ${issueId} AND attempt = ${attempt}`
-  const none = { reported: [], commits: [], paths: [], required: [], mergedAt: null, holdMs, problem: null }
+  const none = { landedAt: null, commits: [], paths: [], required: [], mergedAt: null, holdMs, problem: null }
   if (reported.length === 0 && !tree?.sha) return none
   try {
     const read = await commits.read({
@@ -137,7 +137,7 @@ export async function derive(
       merged,
     })
     return {
-      reported: read.reported.slice(0, MAX_RECORDED),
+      landedAt: read.landedAt,
       commits: read.commits.slice(0, MAX_RECORDED),
       paths: read.paths.slice(0, MAX_RECORDED),
       required: requiredEvidence(read.paths, manifest),

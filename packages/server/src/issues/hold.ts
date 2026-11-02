@@ -3,7 +3,6 @@ import { defaultManifest, type MakeTargets, type ProjectManifest } from '@softwa
 import type { SQL } from 'bun'
 import type { Clock } from '../clock.ts'
 import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
-import { makeTargetsOf } from '../projects/make.ts'
 import { projectOfPath } from '../projects/claims.ts'
 import { getProject } from '../projects/store.ts'
 import { type Effect, type EffectPorts, Waiting } from './effects.ts'
@@ -24,10 +23,10 @@ export interface ProofInput {
   /** the make contract says the repo has `make verify` */
   makeVerify: boolean
   /**
-   * Set where the deployed version must hold what was shipped (`deploy.mode: make`, a change that deploys): the commits it must hold.
-   * None is red, never skipped.
+   * Set where the deployed version must hold what was shipped (`deploy.mode: make`, a change that deploys): the `origin/<default>` the
+   * ship found, which it must hold; or why there is none, which is red. Unset is a change that deploys nothing.
    */
-  version?: { shipped: readonly string[] }
+  version?: { landedAt: string } | { problem: string }
   probes: ProjectManifest['deploy']['probes']
 }
 
@@ -44,44 +43,67 @@ const MAX_DETAIL_CHARS = 1_500
 
 const tail = (text: string): string => (text.length > MAX_DETAIL_CHARS ? `…${text.slice(-MAX_DETAIL_CHARS)}` : text)
 
+/** The red line where the Makefile has no `version`: it is a probe, so the lead neither adds nor edits it. */
+export const NO_TARGET_LINE =
+  'no `make version` target: it is a probe, so the owner adds it (it prints the deployed commit sha) and a lead does not: `factory issue block` with this reason'
+
 const VERSION_TIMEOUT_MS = 30_000
 const SHA = /^[0-9a-f]{7,64}$/
+const STDERR_MARK = '\n--stderr--\n'
+/** make's own words for a target it does not have (or no Makefile at all), read under `LC_ALL=C`. */
+const NO_VERSION_TARGET = /No rule to make target\s+[`'\u2018"]?version['\u2019"]?|no makefile found/i
+/** stdout is what `make version` prints and nothing else; stderr is kept apart, for the reason of a failure. */
+const VERSION_SCRIPT = `t=$(mktemp) || exit 1
+make --no-print-directory -s -C "$1" version 2>"$t"
+st=$?
+if [ "$st" -ne 0 ]; then printf '%s' '${STDERR_MARK}'; tail -c ${MAX_DETAIL_CHARS} "$t"; fi
+rm -f "$t"
+exit "$st"`
 
 /**
- * `make version` (the deployed commit, which must hold the shipped ones), `make verify` in the repo, the deployed checkout, and an HTTP
- * GET per probe. Every one runs, the version check red or not: the lead sees every signal. None of them writes the checkout.
+ * `make version` (the deployed commit, which must hold where the work landed), `make verify` in the repo, the deployed checkout, and an
+ * HTTP GET per probe. Every one runs, the version check red or not: the lead sees every signal. None of them writes the checkout.
  */
 export class MakeAndProbes implements Proof {
   constructor(private readonly options: { run?: typeof runProcess } = {}) {}
 
   async run({ repo, makeVerify, version, probes }: ProofInput, signal?: AbortSignal): Promise<HoldCheck[]> {
-    const deployed = version ? [await this.version(repo, version.shipped, signal)] : []
+    const deployed = version ? [await this.version(repo, version, signal)] : []
     const checks = await Promise.all(probes.map((probe) => this.probe(probe, signal)))
     const verify = makeVerify ? [await this.makeVerify(repo, signal)] : []
     return [...deployed, ...verify, ...checks]
   }
 
-  private async version(repo: string, shipped: readonly string[], signal?: AbortSignal): Promise<HoldCheck> {
+  private async version(
+    repo: string,
+    version: NonNullable<ProofInput['version']>,
+    signal?: AbortSignal,
+  ): Promise<HoldCheck> {
     const name = 'deployed version'
     const red = (detail: string): HoldCheck => ({ name, ok: false, detail })
-    if (shipped.length === 0) return red('no shipped commit is on record to check the deployed version against')
-    // A static read of the Makefile, not of the stored contract: the target may have come with this very change.
-    if (!(await makeTargetsOf(repo)).version) return red('add `make version`: the deployed commit sha')
+    if ('problem' in version) return red(version.problem)
     const run = this.options.run ?? runProcess
     try {
+      // Always run it: a read of the Makefile cannot see a target an include built by variable names, and only make knows it has none.
       const done = await run(
-        ['make', '--no-print-directory', '-s', '-C', repo, 'version'],
+        ['sh', '-c', VERSION_SCRIPT, 'sh', repo],
         VERSION_TIMEOUT_MS,
-        childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+        childEnv({ GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }),
         undefined,
         { group: true, signal },
       )
       if (done.exitCode === EXIT_TIMEOUT) return red(`make version did not finish in ${VERSION_TIMEOUT_MS / 1000} s`)
-      const printed = done.stdout.trim()
-      if (done.exitCode !== 0) return red(`make version exit ${done.exitCode}: ${tail(printed)}`)
-      if (!SHA.test(printed))
-        return red(`make version printed ${JSON.stringify(tail(printed))}: one line, the deployed commit sha`)
-      return { name, ...(await deployedHolds(repo, printed, shipped, { run: this.options.run, signal })) }
+      const [printed = '', stderr = ''] = done.stdout.split(STDERR_MARK)
+      if (done.exitCode !== 0) {
+        if (NO_VERSION_TARGET.test(stderr)) return red(NO_TARGET_LINE)
+        return red(`make version exit ${done.exitCode}: ${tail(printed.trim())} ${tail(stderr.trim())}`.trimEnd())
+      }
+      if (!SHA.test(printed.trim()))
+        return red(`make version printed ${JSON.stringify(tail(printed.trim()))}: one line, the deployed commit sha`)
+      return {
+        name,
+        ...(await deployedHolds(repo, printed.trim(), version.landedAt, { run: this.options.run, signal })),
+      }
     } catch (error) {
       // Neither make nor git failing to answer is a retry: the lead is told, with the other checks beside it.
       return red(error instanceof Error ? error.message : String(error))
@@ -141,19 +163,34 @@ export interface HoldDeps {
 }
 
 /**
- * What the deployed version must hold, when the ship that started this hold changed something that deploys under `deploy.mode: make`:
- * the commits the lead named (the merge commit of a squash), else every commit `derive` found. None is an empty list, which the check
- * reds. A ship with nothing derived on it came before the evidence gate: nothing is known of it, and it is held as it was.
+ * What the deployed version must hold, for a ship under `deploy.mode: make` that changed something that deploys: the `origin/<default>`
+ * the ship found. Closed on every gap: no ship of this attempt on record, nothing derived on it, no landed commit, or no project at hold
+ * time (the ship says the project deployed something, and the hold no longer knows how) is a reason, red. Only a ship whose commits
+ * require no evidence (docs, tests) skips it.
  */
-async function versionCheck(sql: SQL, issueId: number, attempt: number): Promise<ProofInput['version']> {
+async function versionCheck(
+  sql: SQL,
+  issueId: number,
+  attempt: number,
+  project: { mode: string } | undefined,
+): Promise<ProofInput['version']> {
   const [row]: { derived: Derived | null }[] = await sql`
     SELECT payload->'derived' AS derived FROM factory.issue_inbox
     WHERE issue_id = ${issueId} AND kind = 'ship' AND result = 'applied' AND (payload->>'attempt')::int = ${attempt}
     ORDER BY id DESC LIMIT 1`
   const derived = row?.derived
-  if (!derived || derived.required.length === 0) return undefined
-  const named = derived.reported ?? []
-  return { shipped: named.length > 0 ? named : (derived.commits ?? []) }
+  if (!project) {
+    return derived && (derived.required?.length ?? 1) > 0
+      ? { problem: 'the project is not known at hold time, so what its deploy should have shown is not either' }
+      : undefined
+  }
+  if (project.mode !== 'make') return undefined
+  if (!row) return { problem: `no ship of attempt ${attempt} is on record to check the deployed version against` }
+  if (!derived) return { problem: 'the ship came without its commits derived: nothing says what it changed' }
+  if (derived.required?.length === 0) return undefined
+  if (!derived.landedAt)
+    return { problem: 'the ship recorded no landed commit on origin to check the deployed version against' }
+  return { landedAt: derived.landedAt }
 }
 
 /**
@@ -180,7 +217,7 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   const project = owner ? await getProject(sql, owner.name) : undefined
   const targets: MakeTargets | null = project?.makeTargets ?? null
   const manifest = project?.manifest ?? defaultManifest(basename(issue.repo))
-  const version = manifest.deploy.mode === 'make' ? await versionCheck(sql, issueId, issue.attempt) : undefined
+  const version = await versionCheck(sql, issueId, issue.attempt, project ? manifest.deploy : undefined)
   const checks = await proof.run(
     { repo: issue.repo, makeVerify: targets?.verify === true, version, probes: manifest.deploy.probes },
     signal,
