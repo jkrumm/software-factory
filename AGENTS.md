@@ -60,7 +60,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   the same commit as the code it describes; behaviour goes to `docs/design.md` §3 "As built", not here.
 - Direct-to-master, conventional commits, no AI attribution.
 
-**Issues** are `docs/design.md` §4: `src/issues/lifecycle.ts` is the one writer of `issues.state`; past about 500 lines, stop.
+**Issues** are `docs/design.md` §4: `src/issues/lifecycle.ts` is the one writer of `issues.state` (a create, always `queued`, is `intake.ts`); past about 500 lines, stop. `FACTORY_AGW_BIN` is the `agw` Classify calls; `FACTORY_ALERT_LEADS=1` lets an `alert` Issue have a lead (off until Wave 4 is live). `issue_id` goes on a lead's session only.
 
 **Behaviour as built** is in `docs/design.md` §3 "As built": the tick, spaces, the runner, hooks and the socket, prompt delivery,
 the rules that act, the spool, derived state, sessions, the witness, panes as clients, test slots, quota, admission, the queue
@@ -73,7 +73,7 @@ state, roles, process/health/contract/schema/API.
   (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), Issues (`issues/`: `lifecycle.ts` the one writer, `inbox.ts`, `worker.ts`, `effects.ts`,
-  `read.ts`), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.
+  `read.ts`; classify, the lead, its brief, worktree, verbs and send-back: `classify.ts`, `admission.ts`, `lead.ts`, `brief.ts`, `worktree.ts`, `verbs.ts`, `sendback.ts`), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, the Issues' (`issues.ts`), and the
   role table's schema and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
 - `project.yaml` — this repo's manifest (`docs/design.md` §9); the schema is `packages/contract/src/projects.ts`.
@@ -81,7 +81,7 @@ state, roles, process/health/contract/schema/API.
 - `packages/door` — the factory door: a Bun server, `POST /alert/<source>`, the parsers (`src/parsers.ts`), the tokens file; its README has the HyperDX template.
   Server side: `issues/intake.ts`. LaunchAgent `deploy/com.jkrumm.factory-door.plist.template`, `scripts/launch-door.sh`.
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
-  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
+  list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 

@@ -576,12 +576,13 @@ stateDiagram-v2
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`). A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported). A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
 is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
   transition table, a test pins its edges to this diagram, and the same transaction writes an `issue_events` row for every event
-  it applies. An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
+  it applies. What is not the table lives beside it: `intake.ts` (a create, always `queued`), `deps.ts`, `decisions.ts`, `timers.ts`, `shared.ts`.
+  The reversal bound measures the table's module (about 250 lines in Wave 3). An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
   line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
   a session with an `issue_id` is copied in by the same transaction that stores it (`recordIn`, the only writer of session
@@ -591,9 +592,10 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 |-|-|-|
 | `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload while `watching`, a regression | the source's event id |
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
-| `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` | `<issue>:<verb>:<call id>` |
+| `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated) | `<issue>:<verb>:<call id>` |
+| `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
 | session events | hooks, live or from the spool | as in §3 |
-| `hold_over`, `wake` | the tick, when `wake_at` passes | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
+| `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified` | the check after the hold (W4), naming its `hold`: proof of an earlier hold is refused | the check's id |
 | `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park`, `reopen` | the owner or the orchestrator | the intent's id |
 | `settled`, `healed` | settle (F3) | the run's id |
@@ -610,8 +612,9 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   the port outside any transaction, only for each Issue's oldest open effect, so nothing overtakes an effect that has no port yet
   or failed, least tried first. A step into `closed` cancels the Issue's open effects but `finalize` (`cancelled_at`): a closed Issue
   gets no lead, note or check, and `finalize` waits behind nothing. A crash after the
-  call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded:
-  W1 wires none (`TickDeps.issuePorts`), and the wave that brings a port runs what waited. `hold_over` asks for `verify` and
+  call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded
+  and undone (`TickDeps.issuePorts`): Wave 3 wires `start_lead` and `note_lead` (`issues/lead.ts`), and Wave 4 brings `verify` and
+  `finalize`; until then a `verify` with no port holds nothing back, so a lead is still told of an answer or a regression. `hold_over` asks for `verify` and
   closes nothing: until W4's check reports `verified` the Issue stays `watching`.
 - **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
   close removes every `issue_deps` row on and of the Issue: a row is a dep still open, and a blocker that reopens holds nobody back.
@@ -622,8 +625,37 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   cannot store is 422). A repeated key answers 200 with the stored row, a closed one too. An `alert` is refused (422, naming no path) when its path as given or resolved has an
   `IuRoot` segment, or resolves inside `$HOME/IuRoot` (configured or not) or a configured root of that name: decision 3, in the
   function the door uses too.
-- **Attach or start.** A lead's pane is `lead-<issue>-<attempt>`; spawning again attaches. A prompt id
-  (`issue:<id>:<phase>:<n>`) is recorded before typing. A GitHub comment carries a marker, a card a key.
+- **Classify.** A queued Issue with no `classified_at` is classified by `agw factory-classify --format json` (`issues/classify.ts`): the
+  Issue's title and facts on stdin as JSON, exit 10 resumed with `agw run wait <runId>`, each call under a process timeout and `childEnv()`.
+  It runs on its own, off the tick (a classify takes minutes, and the tick's health is judged on it): the pump starts at most two, and a
+  result is stored by its own transaction with an `issue_events` line (`classified`, or `classify_failed` with the reason). The answer
+  `{ project, kind, class, size, tier, effort }` is zod-parsed. The Issue's repo decides the project, never the answer. Tier and effort
+  are cut to the role table's `lead` entry and never above `opus/high`. A classify that fails, times out, does not parse or whose
+  command is missing stores the `lead` entry as the defaults: the Issue is admitted all the same, never stuck. A restart loses what was in
+  flight and the next pass asks again. Only an Issue with `classified_at` is admitted.
+- **Admission.** Each pass, under the capacity lock, the classified `queued` Issues (urgent first, then oldest) that the project's claim
+  has room for hold the claim and get `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. Held back, and still `queued`:
+  `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, and an `alert` while `FACTORY_ALERT_LEADS`
+  is unset (decision 3, until Wave 4 is live); `factory status` says which. Requests are not asked.
+- **Attach or start.** `start_lead` makes the worktree `factory/<issue>-<attempt>` of the repo the way `rd fan` does (`issues/worktree.ts`: fetch
+  origin, branch from the default branch, `wtp` where the repo has `.wtp.yml`, outside any transaction, each step under a timeout; the same
+  branch answers its worktree again) and creates the spawn: role `lead`, tier and effort from Classify, key and pane
+  `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
+  spawn's `issue_id` goes on its session, and on the lead's session only: a wall parks the Issue from any session with an `issue_id`, so a
+  worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) before the spawn can
+  type it, and never typed a second time. A GitHub comment carries a marker, a card a key. A lead that cannot be started (no worktree) leaves
+  its effect open and the reason in `factory status`; the effect is tried every pass.
+- **The lead's verbs.** `factory issue phase|wait|ship|close|block|ask|drop <id>` is one inbox row each, key `<issue>:<verb>:<call id>`, on the
+  token API and on the socket (a lead has no token). `FACTORY_SESSION` says which lead: a session may only report on the Issue it works (409).
+  The row is handled by the next tick; `ship` and `close` are recorded with no evidence check yet (Wave 4 puts it in their `refuse`).
+  `ask` records a `decisions` row, shows in `factory status`, and sets `wake_at` to its `expiresAt`: a passed expiry answers the lead with the
+  default (an `answer` from `default`, and a note to the lead), or, with none, records `lapsed` and keeps the question open with a line for the owner:
+  an answer is still taken.
+- **The send-back.** On top of §3's workers rule, a stop of a session with an `issue_id` whose Issue is `working`, in a turn the factory
+  started (the brief, or a prompt the prompt loop typed: not one the owner typed), with no `ship|close|block|ask|wait|drop` from that session
+  since the turn began, is sent back with one line (`issue-sendback:<session>:<turn>`). The next stop of that turn, which arrives with
+  `stop_hook_active`, files `unreported:<issue>:<session>:<turn>`: the Issue is `waiting` for `unreported`, with a line in `factory status`. The same stop
+  asked again records nothing.
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.
 - **Finalize once,** from every exit path: terminal state, release the claim, remove the worktree, promote the next.
 - **Ids survive a restore.** After a restore the sequence moves past every id in pane names and the spool. A lead
@@ -695,12 +727,15 @@ false confidence; the probes are the check that does not depend on it.
 
 - **The ask:** the owner's words, or what the signals saw: what, where, since when, how often.
 - **Facts:** the raw signals, the commands that pull their logs and traces, recent deploys and commits. Alert and
-  issue text is marked as data, never instructions.
-- **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply*.
+  issue text is marked as data, never instructions: the facts are a fenced block (the fence longer than any run of backticks inside), cut at
+  16,000 characters with the way to the rest.
+- **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply*. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets.
 - **Done means:** the evidence table and the `factory` verbs.
 - **Standing orders:** decide alone except the business classes; ask through `factory issue ask`; workers stay on
-  Max. Identical in every brief, so they are a prompt-cache hit.
+  Max; never end a turn on a background shell; every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
+  by a test), so they are a prompt-cache hit. For that the brief opens with the standing orders and the done-means text, which are the same
+  in every brief, and then comes what is this Issue's: the ask, the facts, the history, the project.
 
 Classification sets labels and routing, never a cause. The brief shows just kind and class.
 
@@ -974,10 +1009,10 @@ group.
 | `spawn_requests` | key, repo, role, prompt, tier, effort, requested at, `resume_at`, account, resulting session | F1 |
 | `queue_scopes` | scope, state (`run`, `pace`, `drain`), reason, who, when | F1 |
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
-| `prompts` | prompt id, session, text, typed at, delivered at | F1 |
+| `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered` before the spawn types it as its argument | F1 |
 | `slots` | holder, lease, command | F1 |
 | `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
-| `issues`, `issue_deps` | source, source key, repo, facts, kind, class, title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
+| `issues`, `issue_deps` | source, source key, repo, facts, kind, class, size, the lead's tier and effort, what Classify answered (`classify`) and when (`classified_at`), title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
 | `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
 | `issue_effects` | what a transition asks of the world, key, attempts, error, done at | F2 |
 | `issue_links` | Signal → Issue, Issue → Issue, who, why, whether it acted | F2 |
