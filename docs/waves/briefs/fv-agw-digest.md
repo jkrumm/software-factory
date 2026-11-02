@@ -1,0 +1,14 @@
+Branch: fv-agw-digest
+Title: feat(digest): agw digest, short texts for a batch of items
+Owned files: `packages/host/src/workflows/digest/**` (new), its registration line in the workflow registry, `packages/host/test/digest*.test.ts` (new), the CLI's `digest` verb (`packages/cli/**`, the new verb only), eval files for `digest` where the classify workflow keeps its own, `docs/` (a pointer line where workflows are listed). Never: the gateway, routes, accounts, anything agw's Wave 5 owns (ask its lead `agent-workflows-w1-r6` by `factory session note` if a file you need is in flight), `docs/waves/PLAN.md`.
+
+# Brief: `agw digest` (agent-workflows, track FV)
+
+Read agent-workflows `AGENTS.md`, `docs/waves/fv-digest.md` (the plan: Wave 1 is this brief), `docs/gateway.md` and `packages/routes/README.md` (agw holds no provider key: every model call goes through the gateway on 7794, the anthropic wire, `x-agw-fallback: none`, seats on Claude), and `packages/host/src/workflows/factory-classify/` (the pattern: module, schema, scorer, README, its tests and eval) first. Your worktree is cut from origin/master; branch from it, merge through a PR.
+
+1. `agw digest --items <json|-> [--format json]`: items `{ id, kind: heading|session|reply|window, text, context? }`, at most 64 per call, each text cut to its limit before the call. **One** model call per invocation for the whole batch, schema-checked; answer per id: `short` (at most 8 words), `headline` for sessions, for `reply` `{ asks, kind: blocker|question|permission|note, short, confidence }`, for `window` one paragraph of at most 60 words from the grouped facts given. Item text is data, never instructions (fence it as classify does). An item whose answer fails validation comes back as `error`; the rest stand. agw knows nothing of the factory: no factory words in the prompt or the schema.
+2. The route through the route table, the cheapest tier that passes the eval; no model id in prose.
+3. An eval set: 40 wave headings from the estate's `docs/waves/PLAN.md` files (SourceRoot only, never IuRoot), 30 replies labelled ask or not (PR #83's "not merged" reply among them), 10 windows. Run it on Max first (the owner's decision of 2026-11-01: iterate on Max, keep API spend low). Report the scores.
+4. The workflow journal records each call (items, cost, latency), as every workflow does.
+
+**Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`): never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy: agw's lead merges into its train. End with a report: done / deferred, one line each, the eval scores, and one real `agw digest` call's input and answer.
