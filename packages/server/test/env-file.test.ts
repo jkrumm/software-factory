@@ -81,6 +81,7 @@ describe('scripts/env-file.sh', () => {
       'FACTORY_TOKEN',
       'FACTORY_DB_PASSWORD',
       'DATABASE_URL',
+      'FACTORY_ASK_HUMAN',
       'PORT',
       'PATH',
       'BASH_ENV',

@@ -3,10 +3,10 @@
 # ~/.config/factory/env (FACTORY_ENV_FILE) when it exists: KEY=VALUE lines only (blank lines and # comments allowed), the file mode
 # 0600 and owned by the user, and only the keys below. Nothing in it is evaluated: a line is split at the first = and exported as it
 # is. The whole file is checked before anything is exported. A wrong mode or owner, a line that is not KEY=VALUE, a key that is not
-# listed (a secret, PATH, the port, a typo) or a symlink refuses the start (exit 78): a setting that is silently ignored is worse than
+# listed (a secret, PATH, the port, a program the server would run, a typo) or a symlink refuses the start (exit 78): a setting that is silently ignored is worse than
 # a launch that says why it will not run. Secrets stay in .env.tpl. Read at launch only: an edit takes a LaunchAgent restart.
 
-EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_ASK_HUMAN FACTORY_ALERT_LEADS FACTORY_NOTIFY_TARGET FACTORY_DIGEST_AT FACTORY_DIGEST_TZ "
+EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_ALERT_LEADS FACTORY_NOTIFY_TARGET FACTORY_DIGEST_AT FACTORY_DIGEST_TZ "
 
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
 load_env_file() {
