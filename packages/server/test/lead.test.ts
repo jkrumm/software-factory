@@ -293,6 +293,23 @@ describe('classify, then admission', () => {
     expect((await issue(id)).state).toBe('working')
   })
 
+  test('the lead starts at the level of the role table now, with the floor, whatever was stored', async () => {
+    // Classified long ago, when the table said otherwise: what is stored is out of date.
+    const classified = async (id: number, set: { tier: string; effort: string; kind: string; class: string }) =>
+      db.sql`
+        UPDATE factory.issues SET classified_at = ${clock.now()}, lead_tier = ${set.tier}, lead_effort = ${set.effort},
+          kind = ${set.kind}, class = ${set.class} WHERE id = ${id}`
+    const id = await file(newRepo())
+    await classified(id, { tier: 'opus', effort: 'max', kind: 'bug', class: 'routine' })
+    const incident = await file(newRepo())
+    await classified(incident, { tier: 'haiku', effort: 'low', kind: 'incident', class: 'routine' })
+    await drive(4)
+    const started = async (issueId: number) =>
+      (await spawns()).find((s: { key: string }) => s.key === `lead-${issueId}-1`)
+    expect(await started(id)).toMatchObject({ tier: 'opus', effort: 'high' })
+    expect(await started(incident)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+  })
+
   test('a worktree that cannot be made keeps the effect open, shows in status, and goes on when it can', async () => {
     worktrees.failure = new Error('git fetch origin failed (exit 128)')
     const id = await file(newRepo())
@@ -645,15 +662,10 @@ describe('what the review found', () => {
     const first = await file(repo)
     const second = await file(repo)
     const third = await file(repo)
-    classifier.answer = (input: { id: number }) => ({
-      project: null,
-      kind: input.id === third ? 'incident' : 'bug',
-      class: 'routine',
-      size: 's',
-      tier: 'sonnet',
-      effort: 'medium',
-    })
-    await drive(8)
+    // Classified already (the third is an incident), so only admission decides what happens.
+    await db.sql`UPDATE factory.issues SET classified_at = ${clock.now()}, lead_tier = 'sonnet', lead_effort = 'high', kind = 'bug'`
+    await db.sql`UPDATE factory.issues SET kind = 'incident' WHERE id = ${third}`
+    await drive(4)
     // The first holds the one ordinary place; the incident takes the urgent one; the second waits, and was never looked at.
     expect((await issue(first)).state).toBe('working')
     expect((await issue(third)).state).toBe('working')

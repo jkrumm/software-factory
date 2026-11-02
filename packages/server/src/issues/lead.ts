@@ -9,6 +9,7 @@ import { RepoRefused, resolveRepo } from '../repos.ts'
 import { MAX_PROMPT_CHARS } from '../schemas.ts'
 import { createSpawn, getSpawn, IssueClosed } from '../spawns.ts'
 import { buildBrief } from './brief.ts'
+import { leadLevel } from './classify.ts'
 import type { Effect, EffectPorts } from './effects.ts'
 import type { Worktrees } from './worktree.ts'
 
@@ -70,6 +71,12 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const role = roles.get('lead')
   if (!role) throw new Error('the role table has no `lead`')
 
+  // Against the role table as it is now, not as it was at Classify: a table lowered since is the ceiling, and the floor holds.
+  const level = leadLevel(
+    { tier: issue.lead_tier ?? role.tier, effort: issue.lead_effort ?? role.effort },
+    roles,
+    issue,
+  )
   const branch = leadBranch(issue.id, attempt)
   const made = await deps.worktrees.create({ repo: issue.repo, branch })
   // The worktree is a spawn's repo, so it is inside the allowed roots like any other.
@@ -108,8 +115,8 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
         space: issue.repo,
         prompt,
         role: 'lead',
-        tier: issue.lead_tier ?? role.tier,
-        effort: issue.lead_effort ?? role.effort,
+        tier: level.tier,
+        effort: level.effort,
         issueId: issue.id,
       },
       now,
