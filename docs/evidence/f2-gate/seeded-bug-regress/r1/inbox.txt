@@ -1,0 +1,16 @@
+06:05:17.478|admitted||applied||admit:40:1
+06:05:33.188|session_started|lead-40-1|ignored||lead-40-1:session_started:0
+06:05:33.456|turn_started|lead-40-1|ignored||lead-40-1:turn_started:1
+06:05:41.481|phase|lead-40-1|applied||40:1:phase:f52eda71-fe8c-4740-8f92-5d12abf37979
+06:05:59.775|ship|lead-40-1|applied||40:1:ship:b8b377b3-7222-455a-a31a-1b775d50692a
+06:06:02.840|turn_ended|lead-40-1|ignored||lead-40-1:turn_ended:1
+06:07:02.524|hold_over||applied||hold:40:1:1
+06:07:02.653|regression||applied||regression:40:1
+06:07:02.882|prompt_idle|lead-40-1|ignored||lead-40-1:prompt_idle:1
+06:07:12.830|turn_started|lead-40-1|ignored||lead-40-1:turn_started:2
+06:07:27.284|ship|lead-40-1|applied||40:1:ship:20e6b165-4627-495e-98ee-91a59a13f8f2
+06:07:31.105|turn_ended|lead-40-1|ignored||lead-40-1:turn_ended:2
+06:08:27.553|hold_over||applied||hold:40:1:2
+06:08:27.665|verified||applied||verified:40:2
+06:08:31.144|prompt_idle|lead-40-1|ignored||lead-40-1:prompt_idle:2
+06:08:32.757|session_ended|lead-40-1|ignored||lead-40-1:session_ended:2

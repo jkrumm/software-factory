@@ -1,0 +1,22 @@
+{
+  "id": 40,
+  "state": "closed",
+  "reason": null,
+  "outcome": "done",
+  "source": "request",
+  "sourceKey": "f2-seeded-bug-regress-r1",
+  "repo": "~/SourceRoot/factory-gameday-regress",
+  "title": "Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it.",
+  "kind": "feature",
+  "class": "routine",
+  "size": "m",
+  "tier": "sonnet",
+  "effort": "medium",
+  "classifiedAt": "2026-11-02T06:05:14.983Z",
+  "parent": null,
+  "attempt": 1,
+  "wakeAt": null,
+  "createdAt": "2026-11-02T06:05:10.830Z",
+  "updatedAt": "2026-11-02T06:08:27.665Z",
+  "closedAt": "2026-11-02T06:08:32.606Z"
+}

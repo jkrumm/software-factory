@@ -12,11 +12,12 @@ the script's own log. A run that fails a pass line is a finding and stays; a rer
 | seeded-bug | b1 | no result: the seed (`MAX_WORDS=3`) was readable and the lead fixed it in its first commit, no production check ever failed |
 | seeded-bug | b2 | aborted by hand: git's `core.autocrlf=input` stripped the CR that arms the seed, caught on the timeline before the lead finished |
 | seeded-bug | b3 | **pass**: the lead's own production check (`make verify` after `make deploy`) failed on the CRLF seed, the lead fixed forward, one ship, hold green, closed, finalized once, transcript archived |
+| seeded-bug-regress | r1 | **pass on the machine, one FAIL line on the fix**: the script broke the deployed config after the ship (`MAX_WORDS=3`, outside the repo); `make verify` after the 1m hold was red, `regression:40:1` moved the Issue to `working`, one note to the same session `lead-40-1`, attempt 1, `notify:regression:40:1` sent once; the lead shipped again, hold 2 green, closed, finalized once. The lead did not repair production: it made `--self-test` ignore the production limit and left `MAX_WORDS=3` there, which the FAIL line (the shipped program on the sample, in production) shows |
 
 `quota-checks.txt` is the quota reading before each run (`me2` week and `iu` week, in percent).
 
-The `regression after the hold` branch of the seeded-bug pass condition (`make verify` after the hold moves the Issue back to `working`)
-is coded in `seeded-bug.sh` and was not exercised: both seeded runs that reached a ship were caught by the lead before it.
+The regression branch (`make verify` after the hold moves the Issue back to `working`) got its live proof in r1, in the deterministic mode
+`run.sh seeded-bug-regress`: no seed in the repo, and once the Issue is `watching` the script breaks the deployed config from outside.
 
 ## After the runs: review fixes
 

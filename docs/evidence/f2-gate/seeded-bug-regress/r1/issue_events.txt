@@ -1,0 +1,11 @@
+06:05:10.830|created||queued|created:40|{"source": "request"}
+06:05:14.983|classified|||classified:40|{"kind": "feature", "size": "m", "tier": "sonnet", "class": "routine", "effort": "medium", "clamped": false, "floored": false}
+06:05:17.478|admitted|queued|working|admit:40:1|
+06:05:41.481|phase|working||40:1:phase:f52eda71-fe8c-4740-8f92-5d12abf37979|{"phase": "investigate", "attempt": 1}
+06:05:59.775|ship|working|watching|40:1:ship:b8b377b3-7222-455a-a31a-1b775d50692a|{"attempt": 1, "commits": ["418347ab8d0b060f0a4c2bba9434e2d0f72f2fcd"], "derived": {"paths": ["bin/wordstat", "test/run.sh"], "holdMs": 60000, "commits": ["418347ab8d0b060f0a4c2bba9434e2d0f72f2fcd"], "problem": null, "mergedAt": "2026-11-02
+06:07:02.524|hold_over|watching||hold:40:1:1|{"hold": 1}
+06:07:02.653|regression|watching|working|regression:40:1|{"hold": 1, "title": "make verify failed", "checks": [{"ok": false, "name": "make verify", "detail": "exit 2: verify: FAIL the deployed copy: wordstat: 9 words exceed MAX_WORDS=3 (config/limits.conf)\nselftest: FAIL\nmake: *** [verify] Erro
+06:07:27.284|ship|working|watching|40:1:ship:20e6b165-4627-495e-98ee-91a59a13f8f2|{"attempt": 1, "commits": ["76eea4dcf0ad4c63f6a43ddd5446b395ba0de4f0"], "derived": {"paths": ["bin/wordstat", "test/run.sh"], "holdMs": 60000, "commits": ["76eea4dcf0ad4c63f6a43ddd5446b395ba0de4f0", "418347ab8d0b060f0a4c2bba9434e2d0f72f2fcd
+06:08:27.553|hold_over|watching||hold:40:1:2|{"hold": 2}
+06:08:27.665|verified|watching|closed|verified:40:2|{"hold": 2, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok 76eea4dcf0ad4c63f6a43ddd5446b395ba0de4f0 (selftest: ok words=9 lines=2)"}]}
+06:08:33.298|issue_finalized|||issue_finalized:40:1|{"attempt": 1}
