@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -308,6 +309,38 @@ describe('classify, then admission', () => {
       (await spawns()).find((s: { key: string }) => s.key === `lead-${issueId}-1`)
     expect(await started(id)).toMatchObject({ tier: 'opus', effort: 'high' })
     expect(await started(incident)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+  })
+
+  test('the brief is recorded with the spawn: a create that fails leaves no prompt behind', async () => {
+    const id = await file(newRepo())
+    const input = {
+      key: 'x-1',
+      repo: fixture.root,
+      prompt: 'p',
+      role: 'lead',
+      tier: 'sonnet',
+      effort: 'high',
+      issueId: id,
+    } as const
+    await expect(
+      createSpawn(
+        db.sql,
+        {
+          ...input,
+          withSpawn: async (tx) => {
+            await tx`INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at) VALUES ('p', 'x-1', 'brief', 'type', 't', 'delivered', ${clock.now()}, ${clock.now()})`
+            throw new Error('after the insert')
+          },
+        },
+        clock.now(),
+      ),
+    ).rejects.toThrow('after the insert')
+    expect(await spawns()).toEqual([])
+    expect(await db.sql`SELECT 1 FROM factory.prompts`).toHaveLength(0)
+    // Closed meanwhile: nothing is stored either.
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped', closed_at = ${clock.now()} WHERE id = ${id}`
+    await expect(createSpawn(db.sql, input, clock.now())).rejects.toThrow('closed')
+    expect(await db.sql`SELECT 1 FROM factory.prompts`).toHaveLength(0)
   })
 
   test('a worktree that cannot be made keeps the effect open, shows in status, and goes on when it can', async () => {

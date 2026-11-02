@@ -644,8 +644,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   branch answers its worktree again) and creates the spawn: role `lead`, tier and effort from Classify, key and pane
   `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
   spawn's `issue_id` goes on its session, and on the lead's session only: a wall parks the Issue from any session with an `issue_id`, so a
-  worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) before the spawn can
-  type it, and never typed a second time. A GitHub comment carries a marker, a card a key. A lead that cannot be started (no worktree) leaves
+  worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) in the spawn's own transaction, so a create that fails leaves none, and never typed a second time. A GitHub comment carries a marker, a card a key. A lead that cannot be started (no worktree) leaves
   its effect open and the reason in `factory status`; the effect is tried every pass.
 - **The lead's verbs.** `factory issue phase|wait|ship|close|block|ask|drop <id>` is one inbox row each, key `<issue>:<attempt>:<verb>:<call id>`, on the
   token API and on the socket (a lead has no token). `FACTORY_SESSION` says which lead: a session may only report on the Issue it works, and only its current lead is heard (409; an earlier attempt's lead, still open, is not). A pane that names another session's id stays inside the trust boundary SF11 accepts: the socket's mode 0600 is the credential, as for `session note` and `wait`. On the socket, which has no token, a verb must name one. The `lead-<issue>-<attempt>` spawn keys are reserved (`POST /spawns` refuses them), and `start_lead` attaches only to a spawn of its own Issue.
@@ -1011,7 +1010,7 @@ group.
 | `spawn_requests` | key, repo, role, prompt, tier, effort, requested at, `resume_at`, account, resulting session | F1 |
 | `queue_scopes` | scope, state (`run`, `pace`, `drain`), reason, who, when | F1 |
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
-| `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered` before the spawn types it as its argument | F1 |
+| `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered`, written in the spawn's own transaction | F1 |
 | `slots` | holder, lease, command | F1 |
 | `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
 | `issues`, `issue_deps` | source, source key, repo, facts, kind, class, size, the lead's tier and effort, what Classify answered (`classify`) and when (`classified_at`), title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
