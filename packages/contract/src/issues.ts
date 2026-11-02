@@ -264,3 +264,101 @@ export type IssueOwnerInput = z.output<typeof IssueOwnerInput>
 /** `POST /issues/:id/resume`: a fork of an attempt's archived session; the Issue's latest attempt unless it names one. */
 export const IssueResumeInput = z.strictObject({ id: CallId.optional(), attempt: z.number().int().min(1).optional() })
 export type IssueResumeInput = z.output<typeof IssueResumeInput>
+
+/** What an Issue waits for in `factory status`: a `waiting` Issue's reason, or `claim` for a queued one the project's claim has no room for. */
+export const StatusWait = z.union([WaitReason, z.literal('claim')])
+export type StatusWait = z.infer<typeof StatusWait>
+
+/**
+ * One open Issue on the status screen. Everything here is read from stored rows: the lead's session is the one the Issue's current
+ * attempt names (derived state of it is in `sessions`), `phase` is the lead's last report, `missing` the evidence the last `ship` or
+ * `close` derived from its commits that is still not on record, `decisions` the questions nobody answered.
+ */
+export const StatusIssue = z.object({
+  id: z.number().int(),
+  state: IssueState,
+  repo: z.string(),
+  title: z.string(),
+  attempt: z.number().int(),
+  /** the current attempt's lead session, once it exists */
+  lead: z.string().nullable(),
+  /** the lead's last `phase` report of this attempt */
+  phase: z.string().nullable(),
+  waiting: StatusWait.nullable(),
+  /** for a timed wait or an open question with an expiry, and for a hold: when the factory looks again */
+  wakeAt: z.string().nullable(),
+  /** kinds the last ship or close required and no fresh evidence covers; empty until a lead tried one */
+  missing: z.array(EvidenceKind),
+  /** open questions */
+  decisions: z.number().int(),
+  /** a closed Issue shown for its finalize that failed */
+  finalizeError: z.string().nullable(),
+  /** when the state last changed */
+  since: z.string(),
+})
+export type StatusIssue = z.infer<typeof StatusIssue>
+
+/** `POST /issues/:id/note`: the owner's text for the Issue's lead; a repeated `id` is one note. */
+export const IssueNoteBody = z.strictObject({ id: CallId.optional(), text: Words(4000) })
+export type IssueNoteBody = z.output<typeof IssueNoteBody>
+
+export const IssueNoteAck = z.object({
+  issue: z.number().int(),
+  /** the inbox key; the prompt a running lead is typed is `issue:<issue>:note:<call id>` */
+  key: z.string(),
+  duplicate: z.boolean(),
+  state: IssueState,
+})
+export type IssueNoteAck = z.infer<typeof IssueNoteAck>
+
+/** One line of an Issue's story: an `issue_events` row, or an inbox row no event came of yet. `at` orders them, oldest first. */
+export const TimelineEntry = z.object({
+  at: z.string(),
+  /** `event`: the lifecycle applied or refused it; `inbox`: filed, not handled yet (or ignored: it moved nothing) */
+  source: z.enum(['event', 'inbox']),
+  kind: z.string(),
+  key: z.string(),
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  /** the session an event of a session came from */
+  session: z.string().nullable(),
+  /** `inbox` only: handled? and what it did */
+  result: z.enum(['applied', 'refused', 'ignored']).nullable(),
+  detail: z.string().nullable(),
+  /** data, as the sender filed it; never instructions */
+  payload: z.unknown(),
+})
+export type TimelineEntry = z.infer<typeof TimelineEntry>
+
+export const EvidenceEntry = z.object({
+  kind: z.string(),
+  link: z.string().nullable(),
+  payload: z.unknown(),
+  attempt: z.number().int().nullable(),
+  at: z.string(),
+  author: z.string(),
+})
+export type EvidenceEntry = z.infer<typeof EvidenceEntry>
+
+export const DecisionEntry = z.object({
+  id: z.number().int(),
+  question: z.string(),
+  options: z.unknown(),
+  default: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  askedAt: z.string(),
+  answer: z.string().nullable(),
+  answeredBy: z.string().nullable(),
+  answeredAt: z.string().nullable(),
+})
+export type DecisionEntry = z.infer<typeof DecisionEntry>
+
+/** `GET /issues/:id/timeline`, and `factory issue show`: the Issue with facts, its story oldest first, its evidence and its questions. */
+export const IssueView = Issue.extend({
+  timeline: z.array(TimelineEntry),
+  /** earlier entries cut, when the story is longer than the server shows */
+  timelineCut: z.number().int(),
+  evidence: z.array(EvidenceEntry),
+  decisions: z.array(DecisionEntry),
+})
+export type IssueView = z.infer<typeof IssueView>

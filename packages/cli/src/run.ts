@@ -10,7 +10,11 @@ import {
   Issue,
   IssueAnswerAck,
   IssueList,
+  IssueNoteAck,
   type IssueSummary,
+  IssueView,
+  type StatusIssue,
+  type TimelineEntry,
   IssueEvidenceAck,
   IssueVerb,
   IssueVerbAck,
@@ -59,8 +63,9 @@ commands:
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
-  status          one screen: what needs a look, sessions by state (walled, blocked, stuck first), the queue with its
-                  hold reasons, accounts with their readings, notes not yet delivered
+  status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
+                  missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
+                  reasons, accounts with their readings, notes not yet delivered
   session list [--all]
                   the sessions, newest first, with their derived state (--all adds the dead)
   session get <id>
@@ -76,7 +81,12 @@ commands:
                   Issue, whatever became of it (default: a fresh key per call). A repo must be inside the allowed roots
                   (token or socket, as spawn create)
   issue list      the Issues, newest first (token or socket)
-  issue show <id> one Issue with its facts (token or socket)
+  issue show <id> one Issue: its facts, its story from the lifecycle's events and the inbox oldest first, its evidence and its
+                  questions (token or socket). What senders filed is data: --format plain shows it on one cut line each
+  issue note <id> <text> [--id <call id>]
+                  a note for the Issue's lead (token only): typed into its pane through the session notes, once per call id
+                  (--id makes a repeated call one note). An Issue with no lead running keeps it and the next brief carries it.
+                  Use -- before text that starts with a dash
   issue phase|wait|ship|close|block|ask|drop <id> [--id <call id>] [verb flags]
                   a lead's report on its Issue (token, or the socket from a lead's pane: $FACTORY_SESSION says which lead,
                   and it may only report on the Issue it works). One event per call; --id makes a repeated call one event.
@@ -158,7 +168,7 @@ commands:
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
-FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
+FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role; issue note needs it;
                  spawn create|get, session get, queue get and issue new|list|show|evidence|reopen|resume|<verb> (not stop) fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
@@ -226,11 +236,42 @@ const quotaLine = (q: Quota) =>
 const promptLine = (p: Prompt) =>
   [p.id, p.session, p.status, p.sentCount, p.sentAt, p.deliveredAt, p.error].map(cell).join('\t')
 
+/** Someone else's text on the owner's terminal: one line, control characters (C1 too) gone, cut. */
+const oneLine = (value: unknown, max = 160): string => {
+  const text = typeof value === 'string' ? value : (JSON.stringify(value) ?? '')
+  // oxlint-disable-next-line no-control-regex -- exactly what is removed
+  const clean = text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim()
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean
+}
+
+const lastSegment = (path: string) => path.replace(/\/+$/, '').split('/').pop() || path
+
+/** One open Issue on one line: id, state, repo, lead, last phase, then only what is the case. */
+const statusIssueLine = (i: StatusIssue) =>
+  [
+    `#${i.id}`,
+    i.state,
+    lastSegment(i.repo),
+    i.lead ?? '-',
+    i.phase ? `phase ${oneLine(i.phase, 40)}` : 'phase -',
+    i.waiting ? `waiting ${i.waiting}` : '',
+    i.missing.length > 0 ? `evidence missing ${i.missing.join(',')}` : '',
+    i.decisions > 0 ? `${i.decisions} open ${i.decisions === 1 ? 'question' : 'questions'}` : '',
+    i.finalizeError ? `finalize failed: ${oneLine(i.finalizeError, 80)}` : '',
+    oneLine(i.title, 60),
+  ]
+    .filter(Boolean)
+    .join('\t')
+
 /** The status screen: attention first, then each section a header and tab-separated rows. */
 export function statusScreen(s: Status): string {
   const section = (title: string, rows: string[]) => [title, ...(rows.length ? rows.map((r) => `  ${r}`) : ['  -'])]
   return [
     ...section('ATTENTION', s.attention),
+    ...section('ISSUES', [
+      ...s.issues.map(statusIssueLine),
+      ...(s.issuesMore > 0 ? [`... ${s.issuesMore} more not shown`] : []),
+    ]),
     ...section(
       'SESSIONS',
       s.sessions.map((x) =>
@@ -274,6 +315,56 @@ const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
 const issueLine = (i: IssueSummary) =>
   [i.id, i.state, i.reason ?? i.outcome, i.source, i.repo, i.title].map(cell).join('\t')
+
+/**
+ * What an entry's payload says, for a screen: `key=value` with each value cut, so a long free text cannot push the rest off the line. Data,
+ * as filed; without `attempt` (the line's neighbours say it) and the commits `ship` derived (the verb's own fields have them).
+ */
+const payloadSummary = (payload: unknown): string => {
+  if (payload === null || payload === undefined) return ''
+  if (typeof payload !== 'object' || Array.isArray(payload)) return oneLine(payload)
+  return Object.entries(payload as Record<string, unknown>)
+    .filter(([name]) => name !== 'derived' && name !== 'attempt')
+    .map(([name, value]) => `${name}=${oneLine(value, 60)}`)
+    .join(' ')
+}
+
+const timelineLine = (t: TimelineEntry) =>
+  [
+    t.at,
+    t.source === 'inbox' ? `${t.kind} (${t.result ?? 'not handled yet'})` : t.kind,
+    t.from || t.to ? `${t.from ?? '-'}→${t.to ?? '-'}` : '',
+    t.session ?? '',
+    t.detail ? oneLine(t.detail) : payloadSummary(t.payload),
+  ]
+    .map((part, i) => (i < 2 ? part : part || '-'))
+    .join('\t')
+
+/** One Issue for a terminal: its row, its facts as one cut line of data, its evidence, its questions, then the story, oldest first. */
+export function issueViewScreen(v: IssueView): string {
+  return [
+    issueLine(v),
+    `facts\t${oneLine(v.facts, 400)}`,
+    ...v.evidence.map((e) =>
+      ['evidence', e.at, e.kind, e.author, `attempt ${e.attempt ?? '-'}`, e.link ?? payloadSummary(e.payload)].join(
+        '\t',
+      ),
+    ),
+    ...v.decisions.map((d) =>
+      [
+        'question',
+        d.id,
+        d.answeredAt ? `answered by ${d.answeredBy ?? '-'}` : 'open',
+        oneLine(d.question),
+        d.answer ? `answer: ${oneLine(d.answer)}` : d.default ? `default ${oneLine(d.default, 60)}` : '',
+      ]
+        .filter((part) => part !== '')
+        .join('\t'),
+    ),
+    ...(v.timelineCut > 0 ? [`... ${v.timelineCut} earlier entries not shown`] : []),
+    ...v.timeline.map(timelineLine),
+  ].join('\n')
+}
 
 const routeLine = (r: DoorRoute) => [r.source, r.monitor, r.repo, r.quiet, r.lastQuietAt].map(cell).join('\t')
 
@@ -639,12 +730,31 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   if (words[0] === 'issue' && words[1] === 'show') {
     const target = words[2]
     if (!target || words.length > 3) throw usage('usage: issue show <id>')
-    const { body } = await call(io, `/issues/${encodeURIComponent(target)}`, {
+    const { body } = await call(io, `/issues/${encodeURIComponent(target)}/timeline`, {
       auth: true,
       socket: 'fallback',
-      schema: Issue,
+      schema: IssueView,
     })
-    return print(body, issueLine(body))
+    return print(body, issueViewScreen(body))
+  }
+
+  if (words[0] === 'issue' && words[1] === 'note') {
+    const target = words[2]
+    const text = words.slice(3).join(' ')
+    if (!target || !/^[1-9][0-9]{0,9}$/.test(target) || !text)
+      throw usage('usage: issue note <id> <text> [--id <call id>]')
+    if (!io.env.FACTORY_TOKEN) {
+      throw new FactoryError('auth', "issue note needs FACTORY_TOKEN: it is the owner's note, a pane has none", {
+        hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+      })
+    }
+    const { body } = await call(io, `/issues/${target}/note`, {
+      method: 'POST',
+      auth: true,
+      schema: IssueNoteAck,
+      body: { text, ...(flags.id ? { id: flags.id } : {}) },
+    })
+    return print(body, [body.issue, 'note', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
   }
 
   if (words[0] === 'issue' && words[1] === 'answer') {

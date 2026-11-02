@@ -2,6 +2,7 @@ import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
 import { issueAttention } from './issues/attention.ts'
+import { statusIssues } from './issues/follow.ts'
 import { notificationAttention } from './notify/outbox.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
@@ -46,7 +47,7 @@ function attention(
   return lines
 }
 
-/** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, pending notes. */
+/** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, the open Issues, pending notes. */
 export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: boolean } = {}): Promise<Status> {
   const loaded = (await loadSessions(sql, now)).filter((s) => s.view.state !== 'dead')
   loaded.sort(
@@ -60,6 +61,7 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
   const spawns = (await listSpawns(sql, now))
     .filter((s) => s.status !== 'started' && s.status !== 'ended')
     .sort((a, b) => Number(a.status === 'failed') - Number(b.status === 'failed'))
+  const issues = await statusIssues(sql, now)
   return {
     now: now.toISOString(),
     attention: [
@@ -70,6 +72,8 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
     accounts: (await latestReadings(sql)).map((r) => toQuota(r, now)),
+    issues: issues.issues,
+    issuesMore: issues.more,
     notes,
     notesMore,
   }

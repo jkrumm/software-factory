@@ -1,6 +1,7 @@
 import type {
   IssueAnswerBody,
   IssueEvidenceInput,
+  IssueNoteBody,
   IssueState,
   IssueVerb,
   IssueVerbBody,
@@ -154,4 +155,34 @@ export async function fileEvidence(
     author: body.session ?? 'owner',
   })
   return { ok: true, key, duplicate, at: now }
+}
+
+/**
+ * `factory issue note`: the owner's text for the Issue's lead, one inbox row keyed `<issue>:note:<call id>`. The lifecycle takes it from
+ * there: a lead in its pane is typed it through the session notes of §3 under the prompt id `issue:<issue>:note:<call id>` (`note_lead`),
+ * so a repeated id is one note; an Issue with no lead running keeps the row, and the next brief carries it. A call made before is
+ * answered as it was, whatever became of the Issue since; a closed Issue takes none (the owner reopens it first).
+ */
+export async function fileNote(
+  sql: SQL,
+  input: { issueId: number; body: IssueNoteBody; now: Date },
+): Promise<
+  { ok: true; key: string; duplicate: boolean; state: IssueState } | { ok: false; problem: 'unknown_issue' | 'closed' }
+> {
+  const { issueId, now } = input
+  const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+  if (!issue) return { ok: false, problem: 'unknown_issue' }
+  const call = input.body.id ?? crypto.randomUUID()
+  const key = `${issueId}:note:${call}`
+  const [filedBefore] = await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key}`
+  if (filedBefore) return { ok: true, key, duplicate: true, state: issue.state }
+  if (issue.state === 'closed') return { ok: false, problem: 'closed' }
+  const { duplicate } = await enqueue(sql, {
+    issueId,
+    key,
+    kind: 'note',
+    at: now,
+    payload: { text: input.body.text, call, who: 'owner' },
+  })
+  return { ok: true, key, duplicate, state: issue.state }
 }

@@ -102,6 +102,39 @@ const STATUS = {
   sessions: [{ ...SESSION, id: 'sess-2', state: 'blocked', role: 'wave', account: 'me' }, SESSION],
   queue: { effective: 'pace', spawns: [{ ...SPAWNS[1], hold: 'pace' }] },
   accounts: [QUOTA],
+  issues: [
+    {
+      id: 7,
+      state: 'waiting',
+      repo: '/work/repo',
+      title: 'the forecast is wrong',
+      attempt: 1,
+      lead: 'lead-7-1',
+      phase: 'build',
+      waiting: 'decision',
+      wakeAt: null,
+      missing: ['service', 'ui'],
+      decisions: 1,
+      finalizeError: null,
+      since: '2026-10-30T12:00:00.000Z',
+    },
+    {
+      id: 8,
+      state: 'queued',
+      repo: '/work/other',
+      title: 'two\u001b[31m lines',
+      attempt: 0,
+      lead: null,
+      phase: null,
+      waiting: 'claim',
+      wakeAt: null,
+      missing: [],
+      decisions: 0,
+      finalizeError: null,
+      since: '2026-10-30T12:01:00.000Z',
+    },
+  ],
+  issuesMore: 2,
   notes: [PROMPT],
   notesMore: 4,
 }
@@ -549,12 +582,18 @@ describe('factory status', () => {
     const lines = r.stdout.trimEnd().split('\n')
     expect(lines.filter((l) => !l.startsWith(' '))).toEqual([
       'ATTENTION',
+      'ISSUES',
       'SESSIONS',
       'QUEUE (pace)',
       'ACCOUNTS',
       'NOTES',
     ])
     expect(lines[1]).toBe('  blocked sess-2 for 3 min: Dangerous rm')
+    expect(lines).toContain(
+      '  #7\twaiting\trepo\tlead-7-1\tphase build\twaiting decision\tevidence missing service,ui\t1 open question\tthe forecast is wrong',
+    )
+    expect(lines).toContain('  #8\tqueued\tother\t-\tphase -\twaiting claim\ttwo [31m lines')
+    expect(lines).toContain('  ... 2 more not shown')
     expect(lines).toContain('  blocked\t2026-10-30T11:59:00.000Z\tsess-2\twave\tme\tturn 3')
     expect(lines).toContain('  a\twaiting\thold pace\t-\tat 2026-10-30T14:00:00.000Z')
     expect(lines.some((l) => l.startsWith('  me\t23\t45'))).toBe(true)
