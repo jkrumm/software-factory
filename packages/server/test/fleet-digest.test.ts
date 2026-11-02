@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, 
 import { join } from 'node:path'
 import type { Fleet } from '@software-factory/contract'
 import { fleetScreen } from '../../cli/src/run.ts'
-import { Digest, HANG_GUARD_MS, MAX_ITEMS, type DigestFeed } from '../src/fleet/digest.ts'
+import { Digest, HANG_GUARD_MS, MAX_ITEMS, PENDING_MAX_MS, type DigestFeed } from '../src/fleet/digest.ts'
 import { FleetBuilder } from '../src/fleet/index.ts'
 import { applyDigest } from '../src/fleet/digest-model.ts'
 import { head, tail, wellFormed } from '../src/fleet/digest.ts'
@@ -21,7 +21,7 @@ const EVERY = 5 * 60_000
 
 /**
  * A stand-in for `agw digest` on PATH: it logs the items it was given (`calls.jsonl`) and answers by kind. The `mode` file
- * (`ok`, `fail`, `slow`, `pending`, `break`: fails when an item says BREAKS-CALL) says how, the `wait` file how `agw run wait` answers; a text with POISON in it comes back as an error; a reply with "Shall I" asks.
+ * (`ok`, `fail`, `slow`, `pending`, `break`: fails when an item says BREAKS-CALL) says how, the `wait` file how `agw run wait` answers (`ok`, `pending`, `fail` = the run failed, `blip` = the CLI failed, `slow`); a text with POISON in it comes back as an error; a reply with "Shall I" asks.
  */
 const FAKE_AGW = `
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
@@ -52,7 +52,9 @@ if (args[0] === 'run' && args[1] === 'wait') {
   appendFileSync(file('waits.jsonl'), JSON.stringify({ args }) + '\\n')
   const wait = read('wait', 'ok')
   if (wait === 'pending') { console.log(JSON.stringify({ runId: args[2], status: 'running' })); process.exit(10) }
-  if (wait === 'fail') process.exit(1)
+  if (wait === 'fail') { console.log(JSON.stringify({ runId: args[2], status: 'failed', error: { message: 'x' } })); process.exit(1) }
+  if (wait === 'blip') process.exit(1)
+  if (wait === 'slow') await Bun.sleep(5000)
   // the run that was started: the items of the last digest call
   const last = readFileSync(file('calls.jsonl'), 'utf8').trim().split('\\n').map((l) => JSON.parse(l)).at(-1)
   done(last.items)
@@ -605,7 +607,7 @@ describe('the digest in the model', () => {
 
 // --- the call lifecycle ------------------------------------------------------------------------------------------
 
-const fresh = (options: { replies?: ReplyReader } = {}): Digest =>
+const fresh = (options: { replies?: ReplyReader; hangGuardMs?: number } = {}): Digest =>
   (digest = new Digest({ sql: db.sql, now: () => clock.now(), bin: 'agw', everyMs: EVERY, ...options }))
 const feedOf = (...headings: string[]): DigestFeed => ({ headings, sessions: [], complete: true })
 const waits = (): { args: string[] }[] => {
@@ -667,6 +669,56 @@ describe('the call lifecycle', () => {
       [1, 2],
     ])
     expect((await runRows())[0]).toMatchObject({ ok: false, items: 2, error: 'agw run exited 1' })
+  })
+
+  test('a wait that does not get through (a blip, a hung process) keeps the run; one that is a day old is let go', async () => {
+    mode('pending')
+    writeFileSync(join(agwDir, 'wait'), 'pending')
+    const feed = feedOf('One heading', 'Two heading')
+    await digest.pass(feed)
+    const kept = async () => (await db.sql`SELECT run_id FROM factory.fleet_digest_pending`).length
+    // the CLI fails without saying the run failed
+    writeFileSync(join(agwDir, 'wait'), 'blip')
+    expect(await digest.pass(feed)).toMatchObject({ called: false, pending: true, error: 'agw run exited 1' })
+    expect(await kept()).toBe(1)
+    // the process hangs past its guard
+    fresh({ hangGuardMs: 300 })
+    writeFileSync(join(agwDir, 'wait'), 'slow')
+    expect(await digest.pass(feed)).toMatchObject({ called: false, pending: true })
+    expect(await kept()).toBe(1)
+    expect(await runRows()).toEqual([])
+    expect(await backoffRows()).toEqual([])
+    // the run ends: it is still the same run and the same batch
+    writeFileSync(join(agwDir, 'wait'), 'ok')
+    expect(await digest.pass(feed)).toMatchObject({ called: true, stored: 2 })
+    expect(calls()).toHaveLength(1)
+
+    // a run that never ends is let go after a day, its batch backed off, and the digest goes on
+    mode('pending')
+    writeFileSync(join(agwDir, 'wait'), 'pending')
+    const next = feedOf('Three heading')
+    await digest.pass(next)
+    clock.advance(PENDING_MAX_MS + 1_000)
+    expect(await digest.pass(next)).toMatchObject({
+      called: true,
+      error: expect.stringContaining('did not end in a day'),
+    })
+    expect(await kept()).toBe(0)
+    mode('ok')
+    clock.advance(5 * 60_000)
+    expect(await digest.pass(next)).toMatchObject({ called: true, stored: 1 })
+  })
+
+  test('a failure with a NUL in its words is still journalled and still backs the items off', async () => {
+    const run = async () => {
+      throw new Error('boom\0 \uD83D here')
+    }
+    const failing = new Digest({ sql: db.sql, now: () => clock.now(), bin: 'agw', everyMs: EVERY, run })
+    const result = await failing.pass(feedOf('A heading'))
+    expect(result.error).toContain('boom')
+    expect((await runRows())[0]).toMatchObject({ ok: false })
+    expect((await runRows())[0]?.error?.includes('\0')).toBe(false)
+    expect((await backoffRows()).map((r) => r.failures)).toEqual([1])
   })
 
   test('a failed call backs its items off, doubling, persisted; a failed run is not replayed to its retry', async () => {
