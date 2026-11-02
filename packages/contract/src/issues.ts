@@ -6,7 +6,16 @@ export const IssueState = z.enum(['settling', 'queued', 'working', 'waiting', 'w
 export type IssueState = z.infer<typeof IssueState>
 
 /** Why a `waiting` Issue waits. */
-export const WaitReason = z.enum(['wait', 'blocked', 'decision', 'wall', 'dependency', 'parked', 'unreported'])
+export const WaitReason = z.enum([
+  'wait',
+  'blocked',
+  'decision',
+  'wall',
+  'dependency',
+  'parked',
+  'unreported',
+  'lead_gone',
+])
 export type WaitReason = z.infer<typeof WaitReason>
 
 /** How a `closed` Issue ended. */
