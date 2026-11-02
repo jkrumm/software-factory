@@ -1088,13 +1088,18 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   | `notify:failed:<start_lead\|finalize>:<effect key>` | an effect failed 3 times and is still open | |
   | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
   | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |
-  | `notify:digest:<date>` | 07:30 local | below |
+  | `notify:digest:<date>` | 07:30 local | the morning reading, below |
   | `notify:test:...` | `factory notify test` | |
 
-- **The digest** is a pure function (`renderDigest`) of what the database held: Issues closed in 24 h, shipped and watching, parked, decisions
-  open, failed spawns, quota per account, and what ran (spawns, session events, Issue events of the last 24 h). Plain text under 3000
-  characters (a list is cut at six items and 450 characters). It is due from `FACTORY_DIGEST_AT` (`07:30`, before noon, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon
-  local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
+- **The away rule (FV Wave 4)** is decided at send time, in the claim's transaction, from presence ("Away and back" below): `notify:ask:*` (a decision, the `yours` tier)
+  goes out unless the desk is present; `notify:digest:*` and `notify:test:*` always go out; every other message (`parked`, `failed`, `regression`) goes out only while the phone
+  is present and the desk is not. Any other message is **`folded`** (`folded_at`, `folded_reason`; `status: folded` in `factory notify list`): it is never sent later, its
+  facts are in the since reading, and its `next_at` is `infinity`, so a release that does not know the column never finds it due. Before the board reports presence the owner is always away,
+  so only decisions and the morning reading reach Slack: intended. The rule reads the clock when the row is claimed, not when it was recorded.
+- **The morning reading** (`renderMorning`, the 07:30 message) is the since reading's groups (below) for the window from `seen_at`, at most 24 h back, as plain text under 3000 characters (a list is cut at six
+  items and 450 characters): Needs you, Shipped, Went wrong then recovered, Handled for you (counts), Still running (ids), Spend, and a count of the read-only area. A message is a template filled with facts (SF2):
+  **no model text** (the headline paragraph stays on the board, and a reply ask's `short` is not used), agent words are cut, quoted and scrubbed (`notify/text.ts`), and an IuRoot item is a count only.
+  It is due from `FACTORY_DIGEST_AT` (`07:30`, before noon, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
   three in the afternoon.
 - **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`) files an `answer`
   event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the
@@ -1234,6 +1239,29 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
 - **A queue write whose record failed converges.** `ask-human.sh resolve` exits 2 for every refusal; the adapter then reads `ask-human.sh status <id>` and, when the request shows a result (an earlier call, the owner's own), the act is
   recorded as the result it shows (`resolvedAs` done → `resolve`; denied or superseded → `deny`) instead of failing for good. A spawn's repo is also checked on its real path against IuRoot and `FACTORY_VISIBLE_ROOTS`, independent of the snapshot's flag.
 - **Not done:** the digest does not rank within a tier (asks stay oldest first); a hand-off's result is the ended worker, not its last message, and is looked for one day.
+
+**Away and back (FV Wave 4).** `src/fleet/presence.ts` (acts, the clock, the cursor), `away.ts` (the routes' logic), `since.ts` (the groups), `window.ts` (the headline paragraph); `notify/outbox.ts` (the away rule), `notify/digest.ts`
+(the morning reading). Migration `025`: `fleet_presence_acts`, `fleet_seen`, `fleet_windows`, and `folded_at`/`folded_reason` on `notifications`. Token API only, like `/fleet`: the groups hold IuRoot's text.
+
+- **Presence from human acts only.** `POST /fleet/presence {place: desk|phone, act}`; `act` is `focus`, `looked`, `board_click`, `unlock`, `memo`, `foreground` or `caught_up` (`memo` and `foreground` only for the phone: a voice memo comes from the couch or the road, so it
+  says nothing of the desk). Each act is a row (kept 30 days). **Derived by the clock, never stored:** the desk is present while its last act is under 45 min old, the phone under 10 min; `away` is neither (also before the first act), `awaySince` the later of the two expiries.
+  `GET /fleet` carries `presence { desk {at, present}, phone {at, present}, away, awaySince, seenAt }` from the read, never from the snapshot (so it is not in the fingerprint). Nothing else moves presence: no hook event, prompt, note, `rd say` or HID idle
+  (those routes do not reach this module; a test pins a note and an event leaving it at `away`).
+- **`seen_at`, one owner-wide cursor** (`fleet_seen`, one row), moves to now and never backwards: on `caught_up` from any place, and on an act (`POST /fleet/asks/:id/act`, which also records a presence act for the place it names, `place` default `desk`: `board_click` for the desk,
+  `foreground` for the phone) when that act leaves no other ask of the open window (raised since the cursor, at most 7 days back) in Needs you. A repeat of an act records nothing.
+- **`GET /fleet/since?t=<iso>`** answers from the stored snapshot and recorded facts, **never from git and never from agw**. `t` defaults to `seen_at` (24 h back when the owner has never caught up), is cut to 7 days back (`clamped`), and a later or malformed `t` is 400. Groups:
+  *Needs you* (asks with `at` in the window, `yours` first, whole `FleetAsk` with tier, suggestion and actions); *Shipped* (Issues closed `done`, commits of each repo's default branch, plan waves with a dated `done` in the window); *Went wrong, then recovered*
+  (one collapsed line: a spawn that started on a later try, an Issue effect or a message that went through on a later try, a digest that failed and then ran; the headline's own calls are left out, they would change the facts they are made from); *Handled for you* (the triage log's rows of the window, with the
+  undo id while not undone, and the owner's acts); *Still running* (the snapshot's sessions, with how long the factory's own have run); *Spend* (per account the weekly share at the window's start, the nearest reading at or before `t`, and now; the digest's own cost in the window).
+  **Every line has a `source`**: `table:key` (`issues:12`, `spawns:<key>`, `issue_effects:<key>`, `notifications:<key>`, `fleet_triage_log:<id>`, `fleet_acts:<id>`, `fleet_digest_runs:<first>..<last>`, `quota_readings:<from>..<to>`, `events:<session>`,
+  `fleet_snapshot:<ask id>`), `git:<repo>@<sha>` or `plan:<repo>/<path>#wave-<n>`, so the gate can trace it. `visible` marks an item of the read-only area; one that nothing places (a queue request, an unplaced session, a triage row it cannot tie to an ordinary plan or ask) counts as visible.
+- **Commits** are the snapshot builder's: `FleetGit.recent` is the last 20 first-parent commits of the default branch (the first of `origin/main`, `origin/master`, `main`, `master` that resolves; sha, subject, committer date), read with the other bounded git in the build, off the tick and off the request path.
+- **The headline paragraph** is the only model text: one `agw digest` call of kind `window` per distinct window (`{id, paragraph}`, at most 60 words), its input the groups' **non-IuRoot** facts as a template (an IuRoot item is a count, never its text: the same `Places` as `scopeOf` decide; the triage and the owner's acts are counts by kind; nothing that moves with the clock is in it, so
+  equal facts are one call), cut to 6,000 characters, cached by the facts' hash in `fleet_windows`. `GET /fleet/since` answers `headline {state: ready|pending|failed|none, text}`: a missing window is queued and answered `pending` (`none`: nothing ordinary to say, or `FACTORY_DIGEST_EVERY=off`). The tick starts a pass when a window waits
+  and none runs: one run in flight (a run agw has not finished is only waited for, `agw run wait`, and let go after three waits that fail without a word on it), the idempotency key is the facts' hash and the count of that window's runs agw ended for good, a failure backs the window off 15 min doubled at most to 6 h,
+  and at most 48 window calls per 24 h. The calls are journalled in `fleet_digest_runs` (`batch_hash` `window:<hash>`) with their cost, so the digest's spend per day counts them. The first desk act after the desk was away queues its window at once and starts the pass, so the board's card has its paragraph by the time it is read.
+- **CLI.** `factory fleet presence <desk|phone> <act>`, `factory fleet since [--t <iso>]`, `factory fleet seen [--place desk|phone]` (caught up); `--format json|plain`; token only (exit 3 without `FACTORY_TOKEN`). `factory fleet` prints the presence line.
+- **Not done:** the board's card and Iris' use of the routes (dotfiles, Iris); presence is not pushed over `NOTIFY` (the board reads it with `/fleet`); the Kuma and deploy-gate facts the proposal lists are not yet in the groups (a failed deploy gate is a queue ask, so it shows under Needs you).
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
