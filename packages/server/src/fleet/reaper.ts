@@ -1,11 +1,5 @@
 import { basename } from 'node:path'
-import {
-  type FleetReaper,
-  NO_REAPER,
-  type ReaperClosed,
-  type ReaperKept,
-  type ReaperMode,
-} from '@software-factory/contract'
+import { type FleetReaper, type ReaperClosed, type ReaperKept, type ReaperMode } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { real } from '../runner.ts'
 import { enclosingRepo } from '../projects/sync.ts'
@@ -16,16 +10,16 @@ import { type HcCloser, NotClosed } from './sources.ts'
 import { type ClosingRow, closingReaped, insertLog, type NewLogRow, settleReaped } from './triage-store.ts'
 
 /** A session is idle for this long (no turn, no hook event, hc not working) before it is looked at. */
-export const REAPER_IDLE_MS = 2 * 3_600_000
+const REAPER_IDLE_MS = 2 * 3_600_000
 /** Closes tried per pass; the rest wait for the next build. */
-export const REAPER_MAX_CLOSES = 5
+const REAPER_MAX_CLOSES = 5
 /** How long git's answer for a worktree stands, kept or not: git is not asked about the same worktree on every build (the close asks again). */
 const VERDICT_TTL_MS = 120_000
 /** No new step of a pass starts after this long: the closes run after the snapshot is stored, and a slow hc must not hold the next build. */
-export const REAPER_ACT_BUDGET_MS = 60_000
+const REAPER_ACT_BUDGET_MS = 60_000
 /** A close that was started and never confirmed shows in `closed` as unsettled once it is this old. */
 const UNSETTLED_AFTER_MS = 3_600_000
-/** A terminal that still runs, found so for a close that was started, is taken back only after this long (two reads apart, not one slow answer). */
+/** A terminal that still runs, found so for a close that was started, has its row taken back only once the row is this old. */
 const LIVE_GRACE_MS = 10 * 60_000
 /** `closed` shows the last day. */
 const CLOSED_WINDOW_MS = 24 * 3_600_000
@@ -65,8 +59,6 @@ export interface ReaperPlan {
   /** in the order they are closed; only in `on`, when hc and the database answered */
   close: readonly Eligible[]
 }
-
-const NO_PLAN: ReaperPlan = { reconcile: false, close: [] }
 
 /** What the guards found for one idle worktree session. */
 export interface Eligible {
@@ -246,7 +238,7 @@ export class Reaper {
     const spent = () => now().getTime() >= deadline
     const errors: string[] = []
     try {
-      if (plan.reconcile) await this.reconcile(closer, errors, spent, closed)
+      if (plan.reconcile) await this.reconcile(closer, errors, spent, closed, now())
       for (const e of plan.close) {
         if (spent()) {
           errors.push(`reaper: the time of this pass is spent; ${e.id} and the sessions behind it wait for the next`)
@@ -301,7 +293,8 @@ export class Reaper {
     nowMs: number,
   ): { found: Found } | { keep: ReaperKept } | undefined {
     const term = m.hc
-    if (!term?.claude || !term.cwd) return undefined
+    // The close's own test gates the judge, so it never plans a close the closer refuses.
+    if (!term?.claude || term.closable === false || !term.cwd) return undefined
     const hcCwd = real(term.cwd)
     const here = worktreeOf(hcCwd)
     const recorded = m.cwd ? worktreeOf(m.cwd) : undefined
@@ -467,9 +460,15 @@ export class Reaper {
 
   /**
    * Rows left `closing` by a crash or an uncertain failure: a terminal that is gone is closed; one that still runs was probably never
-   * touched, and its row is taken back only once it is old enough to have been read twice (before that it stays `closing`).
+   * touched, and its row is taken back only once the row is 10 min old (before that it stays `closing`).
    */
-  private async reconcile(closer: HcCloser, errors: string[], spent: () => boolean, gone: Set<string>): Promise<void> {
+  private async reconcile(
+    closer: HcCloser,
+    errors: string[],
+    spent: () => boolean,
+    gone: Set<string>,
+    at: Date,
+  ): Promise<void> {
     let pending: ClosingRow[]
     try {
       pending = await closingReaped(this.deps.sql)
@@ -489,7 +488,7 @@ export class Reaper {
         if (state === 'gone') {
           gone.add(row.address)
           await this.settle(row, 'closed', errors)
-        } else if (this.deps.now().getTime() - row.at.getTime() >= LIVE_GRACE_MS) {
+        } else if (at.getTime() - row.at.getTime() >= LIVE_GRACE_MS) {
           await this.settle(row, 'untouched', errors)
         }
       } catch (error) {
