@@ -369,7 +369,7 @@ export const SinceSpend = z.strictObject({
 })
 export type SinceSpend = z.infer<typeof SinceSpend>
 
-/** `none`: nothing to say or no digest; `pending`: queued, in flight or waiting; `failed`: its last call failed (the groups stand without it). */
+/** `none`: nothing to say, no digest, or a reading with an explicit `t` and no paragraph made for it (it asks for none); `pending`: queued, in flight or waiting; `failed`: its last call failed (the groups stand without it). */
 export const HeadlineState = z.enum(['ready', 'pending', 'failed', 'none'])
 export type HeadlineState = z.infer<typeof HeadlineState>
 

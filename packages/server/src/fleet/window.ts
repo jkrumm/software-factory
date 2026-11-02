@@ -196,7 +196,8 @@ export class WindowDigest {
         await tx`
           INSERT INTO factory.fleet_windows (hash, facts, context, state, requested_at, updated_at)
           VALUES (${facts.hash}, ${facts.text}, ${facts.context}, 'queued', ${at}, ${at})
-          ON CONFLICT (hash) DO UPDATE SET state = 'queued', context = EXCLUDED.context, requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at`
+          ON CONFLICT (hash) DO UPDATE SET state = 'queued', context = EXCLUDED.context, requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at,
+            retry_at = NULL, failures = 0, waits_failed = 0`
       }
       // The newest request is the one about to be read: every other window still waiting is let go and never started.
       if (waiting) {
@@ -286,7 +287,13 @@ export class WindowDigest {
   }
 
   private async resume(row: Row): Promise<{ called: boolean; error?: string }> {
-    if (!row.run_id) return this.fail(row, 'a pending window has no run id', false)
+    if (!row.run_id) {
+      // Claimed and not heard of since (a crash between the claim and the run's id): back in the queue as it was, no failure to count.
+      // The idempotency key is the same, so agw hands back the run if it started one.
+      await this.deps
+        .sql`UPDATE factory.fleet_windows SET state = 'queued', updated_at = ${this.deps.now()} WHERE hash = ${row.hash}`
+      return { called: false }
+    }
     // A run that never ends must not hold the queue for good.
     if (this.deps.now().getTime() - row.updated_at.getTime() > PENDING_MAX_MS) {
       return this.fail(row, 'the run was still pending after two hours', true)
@@ -347,6 +354,8 @@ export class WindowDigest {
     const failures = row.failures + 1
     const wait = Math.min(BACKOFF_BASE_MS * 2 ** (failures - 1), BACKOFF_MAX_MS)
     await this.deps.sql.begin(async (tx) => {
+      // The same lock a request holds: whether a newer window exists is decided with it, not beside it.
+      await tx`SELECT pg_advisory_xact_lock(${LOCKS.windows})`
       await tx`
         UPDATE factory.fleet_windows
         SET state = CASE WHEN EXISTS (

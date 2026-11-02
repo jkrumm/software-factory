@@ -289,6 +289,7 @@ describe('seen_at, the owner-wide cursor', () => {
     await moveSeen(db.sql, new Date(NOW.getTime() - HOUR))
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
     clock.advance(HOUR)
+    await builder.refreshNow() // the model is rebuilt: the cursor reaches only what it was built at
     await presence('desk', 'caught_up')
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(new Date(NOW.getTime() + HOUR).toISOString())
   })
@@ -339,6 +340,15 @@ describe('seen_at, the owner-wide cursor', () => {
     await presence('desk', 'caught_up', seen.until)
     await builder.refreshNow()
     expect((await since()).needsYou.map((n) => n.ask.id)).toEqual(['queue:q-new'])
+  })
+
+  test('the server cuts the cursor at the snapshot’s build too: a client’s until=now skips nothing', async () => {
+    terminals = []
+    requests = []
+    await builder.refreshNow() // built at NOW
+    clock.advance(10 * MIN)
+    await presence('desk', 'caught_up', clock.now().toISOString())
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
   })
 
   test('caught_up needs its until, and no other act takes one', async () => {
@@ -779,6 +789,51 @@ describe('GET /fleet/since', () => {
     expect(await db.sql`SELECT hash, state FROM factory.fleet_windows ORDER BY hash`).toEqual([
       { hash: 'h1', state: 'superseded' },
       { hash: 'h2', state: 'ready' },
+    ])
+  })
+
+  test('a pending row with no run id (a crash after the claim) is queued again, with no failure to count', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    await db.sql`UPDATE factory.fleet_windows SET state = 'pending' WHERE hash = 'h1'`
+    expect(await windows.pass()).toEqual({ called: false })
+    expect(await db.sql`SELECT state, failures, retry_at FROM factory.fleet_windows`).toEqual([
+      { state: 'queued', failures: 0, retry_at: null },
+    ])
+    expect(await db.sql`SELECT 1 FROM factory.fleet_digest_runs`).toHaveLength(0)
+    await windows.pass()
+    expect(agw).toHaveLength(1)
+  })
+
+  test('asking again for a window that was let go while it backed off starts it at once', async () => {
+    agwAnswer = () => ({ exitCode: 1, stdout: '' })
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    await windows.pass() // fails: backing off
+    await windows.request({ text: 'facts 2', hash: 'h2', context: '' }) // h1 is let go
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' }) // and asked for again
+    expect(await db.sql`SELECT hash, state, failures, retry_at FROM factory.fleet_windows WHERE hash = 'h1'`).toEqual([
+      { hash: 'h1', state: 'queued', failures: 0, retry_at: null },
+    ])
+    agwAnswer = () => answerWith(PARAGRAPH)
+    await windows.pass()
+    expect(JSON.parse(agw.at(-1)?.stdin ?? '[]')[0].text).toBe('facts 1')
+  })
+
+  test('a call that fails while a newer request is being made leaves the older window superseded and the newer queued', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    const run: typeof runProcess = async (cmd, _t, _e, stdin) => {
+      agw.push({ cmd: [...cmd], stdin })
+      // The newer request is in flight (its lock held) while the call comes back failed.
+      const newer = windows.request({ text: 'facts 2', hash: 'h2', context: '' })
+      await Bun.sleep(30)
+      void newer
+      return { exitCode: 1, stdout: '', stderr: '', timedOut: false } as Awaited<ReturnType<typeof runProcess>>
+    }
+    const racing = new WindowDigest({ sql: db.sql, now: () => clock.now(), bin: 'agw', run })
+    await racing.pass()
+    await Bun.sleep(100)
+    expect(await db.sql`SELECT hash, state FROM factory.fleet_windows ORDER BY hash`).toEqual([
+      { hash: 'h1', state: 'superseded' },
+      { hash: 'h2', state: 'queued' },
     ])
   })
 
