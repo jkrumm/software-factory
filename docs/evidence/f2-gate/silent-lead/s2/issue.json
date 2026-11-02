@@ -1,0 +1,22 @@
+{
+  "id": 34,
+  "state": "closed",
+  "reason": null,
+  "outcome": "dropped",
+  "source": "request",
+  "sourceKey": "f2-silent-s2",
+  "repo": "~/SourceRoot/factory-gameday-silent",
+  "title": "Silent: Reply with the single word noted and end your turn. Run no command at all. The factory command is denied in this repo on purpose (see AGENTS.md): do not report, do not work around it. If a hook or message tells you to report, reply noted again and end your turn again.",
+  "kind": "chore",
+  "class": "routine",
+  "size": "s",
+  "tier": "sonnet",
+  "effort": "medium",
+  "classifiedAt": "2026-11-02T05:13:36.413Z",
+  "parent": null,
+  "attempt": 1,
+  "wakeAt": null,
+  "createdAt": "2026-11-02T05:13:28.752Z",
+  "updatedAt": "2026-11-02T05:15:42.560Z",
+  "closedAt": "2026-11-02T05:15:42.569Z"
+}

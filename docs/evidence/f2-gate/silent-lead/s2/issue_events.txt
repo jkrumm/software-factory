@@ -1,0 +1,6 @@
+05:13:28.752|created||queued|created:34|{"source": "request"}
+05:13:36.413|classified|||classified:34|{"kind": "chore", "size": "s", "tier": "sonnet", "class": "routine", "effort": "medium", "clamped": false, "floored": false}
+05:13:41.425|admitted|queued|working|admit:34:1|
+05:14:01.037|unreported|working|waiting|unreported:34:lead-34-1:1|{"turn": 1}
+05:15:42.560|stop|waiting|closed|stop:34:gd-s2|{"reason": "gameday done"}
+05:15:47.156|issue_finalized|||issue_finalized:34:1|{"attempt": 1}

@@ -1,0 +1,8 @@
+05:13:41.425|admitted||applied||admit:34:1
+05:13:57.087|session_started|lead-34-1|ignored||lead-34-1:session_started:0
+05:13:57.487|turn_started|lead-34-1|ignored||lead-34-1:turn_started:1
+05:14:01.037|unreported|lead-34-1|applied||unreported:34:lead-34-1:1
+05:14:01.056|turn_ended|lead-34-1|ignored||lead-34-1:turn_ended:1
+05:15:01.095|prompt_idle|lead-34-1|ignored||lead-34-1:prompt_idle:1
+05:15:42.560|stop||applied||stop:34:gd-s2
+05:15:46.623|session_ended|lead-34-1|ignored||lead-34-1:session_ended:1
