@@ -16,6 +16,7 @@ import { RepoRefused, resolveRepo } from '../repos.ts'
 import { createSpawn } from '../spawns.ts'
 import { readSnapshot } from './store.ts'
 import { QueueUnavailable, type QueueActor, type QueueReader } from './sources.ts'
+import { recordAskAct } from './away.ts'
 import { Places } from './place.ts'
 import { getAct, readOccurrences, recordAct } from './triage-store.ts'
 
@@ -154,6 +155,10 @@ export class FleetActions {
     }
     // The next read shows it; a build that fails leaves the act done.
     await this.deps.refresh().catch((error: unknown) => console.error('fleet refresh after an act failed', error))
+    // An act is a person's: presence at the place it names (default the desk), and the cursor when nothing else of the window is open.
+    await recordAskAct(sql, { place: body.place ?? 'desk', ask: askId, now }).catch((error: unknown) =>
+      console.error('fleet presence after an act failed', error),
+    )
     return { ok: true, created: true, result: { ...result, duplicate: false } }
   }
 

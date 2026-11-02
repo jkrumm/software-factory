@@ -5,8 +5,8 @@ export const NOTIFICATION_KINDS = ['ask', 'parked', 'failed', 'regression', 'dig
 export const NotificationKind = z.enum(NOTIFICATION_KINDS)
 export type NotificationKind = z.infer<typeof NotificationKind>
 
-/** `pending` is unsent and still retried, `failed` has spent its attempts. */
-export const NotificationStatus = z.enum(['pending', 'sent', 'failed'])
+/** `pending` is unsent and still retried, `failed` has spent its attempts, `folded` was not worth a push by the away rule (never sent; its facts are in the since reading). */
+export const NotificationStatus = z.enum(['pending', 'sent', 'failed', 'folded'])
 export type NotificationStatus = z.infer<typeof NotificationStatus>
 
 export const Notification = z.object({
@@ -19,6 +19,8 @@ export const Notification = z.object({
   sentAt: z.string().nullable(),
   attempts: z.number().int(),
   error: z.string().nullable(),
+  /** why a `folded` message was not sent */
+  foldedReason: z.string().nullable().default(null),
 })
 export type Notification = z.infer<typeof Notification>
 

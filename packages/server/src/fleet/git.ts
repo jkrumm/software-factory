@@ -1,8 +1,13 @@
 import { stat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
-import type { FleetGit } from '@software-factory/contract'
+import type { FleetCommit, FleetGit } from '@software-factory/contract'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { GIT_TIMEOUT_MS } from './sources.ts'
+
+/** The default branch, in the order `newerThan` looks: the first that resolves. */
+const DEFAULT_REFS = ['origin/main', 'origin/master', 'main', 'master']
+/** Commits kept per repo for the since reading's Shipped group. */
+export const RECENT_COMMITS = 20
 
 /** Bounded, read-only git for the fleet builder: every call has a timeout, none writes (`--no-optional-locks`), none runs in a transaction. */
 export class GitReader {
@@ -32,7 +37,36 @@ export class GitReader {
     }
     const log = await this.git(repo, ['log', '-1', '--format=%H%x1f%cI%x1f%s']).catch(() => '')
     const [sha, at, subject] = log.trim().split('\x1f')
-    return { branch, dirty, lastCommit: sha && at ? { sha: sha.slice(0, 12), at, subject: subject ?? '' } : null }
+    const recent = await this.recent(repo).catch(() => [])
+    return {
+      branch,
+      dirty,
+      lastCommit: sha && at ? { sha: sha.slice(0, 12), at, subject: subject ?? '' } : null,
+      recent,
+    }
+  }
+
+  /**
+   * The last `limit` commits of the default branch, first-parent (a merge is one line, the commits it brought are not), newest first. The
+   * first of `origin/main`, `origin/master`, `main`, `master` that resolves; none is an empty list. Read-only, bounded, off the request path.
+   */
+  async recent(repo: string, limit = RECENT_COMMITS): Promise<FleetCommit[]> {
+    for (const ref of DEFAULT_REFS) {
+      const head = (
+        await this.git(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).catch(() => '')
+      ).trim()
+      if (!head) continue
+      const log = await this.git(repo, ['log', '--first-parent', `-${limit}`, '--format=%H%x1f%cI%x1f%s%x1e', head])
+      return log
+        .split('\x1e')
+        .map((record) => record.trim())
+        .filter(Boolean)
+        .flatMap((record) => {
+          const [sha, at, subject] = record.split('\x1f')
+          return sha && at ? [{ sha: sha.slice(0, 12), at, subject: subject ?? '' }] : []
+        })
+    }
+    return []
   }
 
   /** The time of the file's last commit; the file's mtime for one that has none (untracked, or outside any repo). */

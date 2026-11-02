@@ -68,10 +68,15 @@ export const FleetSession = z.strictObject({
 })
 export type FleetSession = z.infer<typeof FleetSession>
 
+export const FleetCommit = z.strictObject({ sha: z.string(), subject: z.string(), at: z.string() })
+export type FleetCommit = z.infer<typeof FleetCommit>
+
 export const FleetGit = z.strictObject({
   branch: z.string().nullable(),
   dirty: z.boolean(),
-  lastCommit: z.strictObject({ sha: z.string(), subject: z.string(), at: z.string() }).nullable(),
+  lastCommit: FleetCommit.nullable(),
+  /** the last 20 commits of the default branch, first-parent, newest first (FV Wave 4: what `GET /fleet/since` calls shipped); a snapshot an older release stored has none */
+  recent: z.array(FleetCommit).default([]),
 })
 export type FleetGit = z.infer<typeof FleetGit>
 
@@ -158,8 +163,46 @@ export const FleetSummary = z.strictObject({
 })
 export type FleetSummary = z.infer<typeof FleetSummary>
 
+/** Where the owner is: the Herdr app on the MacBook, or Iris on the phone. */
+export const PresencePlace = z.enum(['desk', 'phone'])
+export type PresencePlace = z.infer<typeof PresencePlace>
+
+/** What only a person does (FV Wave 4); never a hook event, a prompt, a note, `rd say` or HID idle. `memo` and `foreground` are the phone's only. */
+export const PRESENCE_ACTS = ['focus', 'looked', 'board_click', 'unlock', 'memo', 'foreground', 'caught_up'] as const
+export const PresenceAct = z.enum(PRESENCE_ACTS)
+export type PresenceAct = z.infer<typeof PresenceAct>
+
+export const PresenceBody = z
+  .strictObject({ place: PresencePlace, act: PresenceAct })
+  .refine((b) => b.place === 'phone' || (b.act !== 'memo' && b.act !== 'foreground'), {
+    message: 'memo and foreground are the phone only',
+  })
+export type PresenceBody = z.infer<typeof PresenceBody>
+
+export const PlacePresence = z.strictObject({
+  /** the newest act at this place; null before the first */
+  at: z.string().nullable(),
+  /** derived by the clock, never stored: the desk while its last act is under 45 min old, the phone under 10 min */
+  present: z.boolean(),
+})
+export type PlacePresence = z.infer<typeof PlacePresence>
+
+export const Presence = z.strictObject({
+  desk: PlacePresence,
+  phone: PlacePresence,
+  /** neither place is present (also before any act: until the board reports, the owner is away) */
+  away: z.boolean(),
+  /** when presence ran out; null while present and before any act */
+  awaySince: z.string().nullable(),
+  /** the owner-wide cursor: moves on `caught_up` and on the act that leaves nothing else open; never backwards */
+  seenAt: z.string().nullable(),
+})
+export type Presence = z.infer<typeof Presence>
+
 export const ActBody = z.strictObject({
   intent: ActIntent,
+  /** where the owner acts from (a presence act is recorded for it); default `desk` */
+  place: PresencePlace.optional(),
   /** the owner's words: goes to the queue's `--note`, a decision's denial, the hand-off's brief */
   note: z.string().trim().min(1).max(2000).optional(),
   /** `later`: when the ask comes back (an ISO time, at most 30 days ahead); default 24 h */
@@ -248,3 +291,93 @@ export const FleetBody = z.strictObject({
   digest: FleetDigest.default(NO_DIGEST),
 })
 export type FleetBody = z.infer<typeof FleetBody>
+
+// --- GET /fleet/since (FV Wave 4) ------------------------------------------------------------------------------------
+
+/**
+ * Every line of the since reading names the fact it comes from (`source`: `table:key`, or `git:<repo>@<sha>`), so the gate can trace it.
+ * `visible` marks an IuRoot (read-only, never leaves the mini) item: its text is shown here, on the token API, and is only ever a count
+ * in the headline's input and in the morning message.
+ */
+const lineBase = {
+  text: z.string(),
+  at: z.string().nullable(),
+  repo: z.string().nullable(),
+  visible: z.boolean(),
+  source: z.string(),
+}
+
+export const SinceAsk = z.strictObject({
+  ask: FleetAsk,
+  /** the `yours` tier: listed first */
+  yours: z.boolean(),
+  visible: z.boolean(),
+  source: z.string(),
+})
+export type SinceAsk = z.infer<typeof SinceAsk>
+
+export const SinceShipped = z.strictObject({ kind: z.enum(['issue', 'commit', 'wave']), ...lineBase })
+export type SinceShipped = z.infer<typeof SinceShipped>
+
+export const SinceRecovered = z.strictObject({
+  kind: z.enum(['spawn', 'effect', 'notification', 'digest']),
+  ...lineBase,
+})
+export type SinceRecovered = z.infer<typeof SinceRecovered>
+
+export const SinceHandled = z.strictObject({
+  kind: z.enum(['triage', 'act']),
+  ...lineBase,
+  /** a triage row that is not undone yet: `POST /fleet/triage/:id/undo` */
+  undoId: z.number().int().nullable(),
+})
+export type SinceHandled = z.infer<typeof SinceHandled>
+
+export const SinceRunning = z.strictObject({
+  kind: z.literal('session'),
+  ...lineBase,
+  id: z.string(),
+  headline: z.string().nullable(),
+  /** since its `session_started` event; null for a terminal only hc knows */
+  ranForMs: z.number().int().nullable(),
+})
+export type SinceRunning = z.infer<typeof SinceRunning>
+
+export const SinceSpend = z.strictObject({
+  accounts: z.array(
+    z.strictObject({
+      account: z.string(),
+      /** the weekly share used at the window's start: the nearest reading at or before it */
+      weeklyAtStart: z.number().nullable(),
+      weeklyNow: z.number().nullable(),
+      source: z.string(),
+    }),
+  ),
+  /** what the digest's own `agw` calls cost in the window */
+  digestUsd: z.number(),
+  digestSource: z.string(),
+})
+export type SinceSpend = z.infer<typeof SinceSpend>
+
+/** `none`: nothing to say or no digest; `pending`: queued, in flight or waiting; `failed`: its last call failed (the groups stand without it). */
+export const HeadlineState = z.enum(['ready', 'pending', 'failed', 'none'])
+export type HeadlineState = z.infer<typeof HeadlineState>
+
+export const SinceHeadline = z.strictObject({ state: HeadlineState, text: z.string().nullable() })
+export type SinceHeadline = z.infer<typeof SinceHeadline>
+
+export const Since = z.strictObject({
+  /** the window's start as used (a request's `t` older than 7 days is cut to 7 days) */
+  t: z.string(),
+  until: z.string(),
+  clamped: z.boolean(),
+  seenAt: z.string().nullable(),
+  headline: SinceHeadline,
+  needsYou: z.array(SinceAsk),
+  shipped: z.array(SinceShipped),
+  recovered: z.array(SinceRecovered),
+  handled: z.array(SinceHandled),
+  running: z.array(SinceRunning),
+  spend: SinceSpend,
+})
+export type Since = z.infer<typeof Since>

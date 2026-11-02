@@ -34,6 +34,8 @@ import {
   ProjectList,
   ProjectName,
   ProjectSyncResult,
+  Presence,
+  PresenceBody,
   Prompt,
   Quota,
   QuotaList,
@@ -41,6 +43,7 @@ import {
   type RoleTable,
   Session,
   SessionList,
+  Since,
   Slot,
   SlotRelease,
   ErrorBody,
@@ -56,6 +59,9 @@ import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import type { FleetActions } from './fleet/act.ts'
+import { reportPresence } from './fleet/away.ts'
+import { readPresence } from './fleet/presence.ts'
+import { readSince, type SinceReader } from './fleet/since.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
 import { listEntries, undoEntry } from './fleet/triage-store.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
@@ -123,6 +129,8 @@ export interface AppDeps {
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   /** the owner's intents on the fleet's asks (`POST /fleet/asks/:id/act`); without it that route is 503 */
   fleetActions?: Pick<FleetActions, 'act'>
+  /** presence and the since reading (`POST /fleet/presence`, `GET /fleet/since`); without it those routes are 503 */
+  since?: SinceReader
 }
 
 /** Largest request body the server reads. */
@@ -588,17 +596,18 @@ const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => (
  * never on the socket**: the model holds the text of IuRoot's repos, sessions and plans, and what a pane reads goes to its model; no
  * filter over free text can be made tight, so the whole route stays behind the token.
  */
-const fleetGetHandler = (sql: SQL) => async () => {
+const fleetGetHandler = (sql: SQL, clock: Clock) => async () => {
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
-  return respond(Fleet, snapshot)
+  // Presence is derived by the clock at the read, never stored in the snapshot.
+  return respond(Fleet, { ...snapshot, presence: await readPresence(sql, clock.now()) })
 }
 
 /** `POST /fleet/refresh`: a build now, answered with its model. */
-const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
+const fleetRefreshHandler = (sql: SQL, clock: Clock, fleet: AppDeps['fleet']) => async () => {
   if (!fleet) return json({ error: 'the fleet builder is not running', code: 'not_ready' }, 503)
   try {
-    return respond(Fleet, await fleet.refreshNow())
+    return respond(Fleet, { ...(await fleet.refreshNow()), presence: await readPresence(sql, clock.now()) })
   } catch (error) {
     console.error('fleet refresh failed', error)
     return json({ error: 'the fleet model could not be built; see the server log', code: 'build_failed' }, 503)
@@ -627,6 +636,39 @@ function decodeId(id: string): string {
     return id
   }
 }
+
+/**
+ * `POST /fleet/presence {place, act}`: one act of a person at a place (FV Wave 4). Token API only. `act` is a short enum; `memo` and
+ * `foreground` are the phone's only. Answers the presence as the clock derives it. Nothing else moves presence.
+ */
+const fleetPresenceHandler =
+  (since: AppDeps['since']) =>
+  async (req: Request): Promise<Response> => {
+    const body = await parseBody(req, PresenceBody)
+    if (!since) return json({ error: 'presence is not running', code: 'not_ready' }, 503)
+    return respond(Presence, await reportPresence(since, body), 201)
+  }
+
+/**
+ * `GET /fleet/since?t=<iso>`: what happened in the window, grouped, from recorded facts (FV Wave 4). `t` defaults to the cursor, is cut to
+ * 7 days back, and a later or malformed one is 400. Never waits on agw: the headline is `ready`, `pending` (queued for the digest pass),
+ * `failed` or `none`. Token API only.
+ */
+const fleetSinceHandler =
+  (since: AppDeps['since'], clock: Clock) =>
+  async (req: Request): Promise<Response> => {
+    const raw = new URL(req.url).searchParams.get('t')
+    let t: Date | null = null
+    if (raw !== null) {
+      if (!z.iso.datetime({ offset: true }).safeParse(raw).success) throw new BadRequest('t must be an ISO 8601 time')
+      t = new Date(raw)
+      if (t.getTime() > clock.now().getTime()) throw new BadRequest('t is in the future')
+    }
+    if (!since) return json({ error: 'the since reading is not running', code: 'not_ready' }, 503)
+    const reading = await readSince(since, { t })
+    if (!reading) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
+    return respond(Since, reading)
+  }
 
 /** `GET /fleet/triage`: what the triage did on its own, newest first. */
 const fleetTriageListHandler = (sql: SQL) => async () => respond(TriageList, { entries: await listEntries(sql) })
@@ -677,6 +719,7 @@ export function routes({
   commits = new GitCommits(),
   fleet,
   fleetActions,
+  since,
 }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
@@ -710,8 +753,10 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
-    '/fleet': { GET: route(fleetGetHandler(sql)) },
-    '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
+    '/fleet': { GET: route(fleetGetHandler(sql, clock)) },
+    '/fleet/refresh': { POST: route(fleetRefreshHandler(sql, clock, fleet)) },
+    '/fleet/presence': { POST: route(fleetPresenceHandler(since)) },
+    '/fleet/since': { GET: route(fleetSinceHandler(since, clock)) },
     '/fleet/asks/:id/act': { POST: route(fleetActHandler(fleetActions)) },
     '/fleet/triage': { GET: route(fleetTriageListHandler(sql)) },
     '/fleet/triage/:id/undo': { POST: route(fleetTriageUndoHandler(sql, clock, fleet)) },
@@ -868,7 +913,7 @@ export function serveHooks(deps: {
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
-      // Not here, on purpose: `/fleet`, `/fleet/refresh`, the asks' acts and the triage. The model holds IuRoot's text and what a pane reads goes to its model.
+      // Not here, on purpose: `/fleet`, `/fleet/refresh`, `/fleet/presence`, `/fleet/since`, the asks' acts and the triage. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },
