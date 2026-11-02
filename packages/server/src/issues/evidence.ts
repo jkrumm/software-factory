@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import {
   DEFAULT_HOLD_MS,
@@ -210,12 +211,17 @@ export async function gateShip(context: Context): Promise<string | undefined> {
   if (derived.problem) return derived.problem
   if (derived.commits.length === 0) return 'ship names no merged commit'
   const inline = (row.payload?.evidence ?? []) as InlineEvidence[]
-  // Keyed by the call, not the row: a retry after a refusal is a row of its own, and the same call adds nothing twice.
+  // Keyed by the call and the item's content, not the row: a retry after a refusal is a row of its own, and the same item adds nothing
+  // twice, while one the retry changed is a new item.
   const call = row.key.replace(/:retry:\d+$/, '')
-  for (const [i, item] of inline.entries()) {
+  for (const item of inline) {
+    const content = createHash('sha256')
+      .update(JSON.stringify([item.kind, item.link ?? null, item.note ?? null]))
+      .digest('hex')
+      .slice(0, 16)
     await storeEvidence(tx, {
       issueId: issue.id,
-      key: `${call}:${i}`,
+      key: `${call}:${content}`,
       attempt: issue.attempt,
       kind: item.kind,
       link: item.link,

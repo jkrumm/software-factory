@@ -1029,26 +1029,52 @@ describe('effects', () => {
     expect(done).toEqual([healthy])
   })
 
-  test('a check is not starved by Issues whose note keeps waiting or failing', async () => {
-    const waiting: number[] = []
-    for (let i = 0; i < 20; i++) waiting.push((await file()).id)
-    const checked = (await file()).id
-    for (const id of waiting) {
-      await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${id}, ${`note_lead:w${id}`}, 'note_lead', ${now()})`
+  describe('a check among many notes', () => {
+    async function crowded(): Promise<{ checked: number; notes: number[] }> {
+      const notes: number[] = []
+      for (let i = 0; i < 25; i++) notes.push((await file()).id)
+      const checked = (await file()).id
+      for (const id of notes) {
+        await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${id}, ${`note_lead:w${id}`}, 'note_lead', ${now()})`
+      }
+      await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${checked}, ${`verify:v${checked}`}, 'verify', ${now()})`
+      return { checked, notes }
     }
-    await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${checked}, ${`verify:v${checked}`}, 'verify', ${now()})`
-    const ran: string[] = []
-    await runEffects(
-      db.sql,
-      {
-        note_lead: async () => {
-          throw new Waiting('not yet')
+
+    test('is not starved by Issues whose note keeps failing', async () => {
+      const { checked } = await crowded()
+      const ran: string[] = []
+      await runEffects(
+        db.sql,
+        {
+          note_lead: async () => {
+            throw new Error('down')
+          },
+          verify: async (effect) => void ran.push(effect.key),
         },
-        verify: async (effect) => void ran.push(effect.key),
-      },
-      now,
-    )
-    expect(ran).toEqual([`verify:v${checked}`])
+        now,
+      )
+      expect(ran).toEqual([`verify:v${checked}`])
+    })
+
+    test('is not starved by Issues whose note keeps waiting, which cost the batch nothing', async () => {
+      const { checked, notes } = await crowded()
+      const ran: string[] = []
+      let waited = 0
+      await runEffects(
+        db.sql,
+        {
+          note_lead: async () => {
+            waited++
+            throw new Waiting('not yet')
+          },
+          verify: async (effect) => void ran.push(effect.key),
+        },
+        now,
+      )
+      expect(ran).toEqual([`verify:v${checked}`])
+      expect(waited).toBe(notes.length)
+    })
   })
 
   test('an effect with no port yet stays recorded and runs when one comes', async () => {
