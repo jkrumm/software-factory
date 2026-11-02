@@ -89,9 +89,15 @@ Iris and Argo map the same three states onto their own design systems.
 At the MacBook the owner triages as things arrive. After a night or a long absence the same stream is a pile, so the
 fleet model has a second reading: **what happened since you last looked**.
 
-- **One cursor, server-side.** `owner_seen_at` lives in the factory, not in a surface: catching up on the phone (Iris)
-  clears the board too. A surface reports presence (`POST /presence`: the Herdr window active with input, Iris in the
-  foreground); a gap of 45 min or more opens an away window.
+- **Presence is the last human act, never input idle.** A mouse jiggler, a caffeinated MacBook or a long job make
+  HID idle time and screen state lie, so neither counts. A human act is: a prompt the owner typed into a session (hook
+  events; turns the factory typed itself are subtracted, it records those sends), an action on an ask, opening the board
+  or jumping to an agent, a Touch ID unlock or `op` approval, Iris in the foreground. A voice memo marks the owner present
+  but not caught up. No human act for 45 min opens an away window; the first one after it shows the digest. A wrong
+  guess costs one dismissed card, so trust beats coverage.
+- **Two cursors, server-side.** `owner_present_at` (the last human act) decides interruptions; `owner_seen_at` moves only
+  on "Caught up" or acting on asks, and drives the digest. Both live in the factory, not a surface: catching up in Iris
+  clears the board too.
 - **`GET /fleet/since?t=<cursor>`** answers from facts already recorded (factory events, spawns and notes, the hc events log,
   human-queue `askedAt`, each repo's git log, deploy gates, Kuma changes) grouped as:
 
