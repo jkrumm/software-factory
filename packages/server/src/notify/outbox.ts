@@ -85,8 +85,9 @@ export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed
 }
 
 /**
- * Phase 3: the result, in a statement of its own. A delivery is recorded whatever happened meanwhile (unless the message was given
- * up on; a row a later claim folded while the send was in flight is sent after all: the fold is undone); a failure only for the attempt it belongs to, so a send that outlived its lease cannot undo a newer attempt's result.
+ * Phase 3: the result, in a statement of its own. A delivery is always recorded (unless the message was given up on), and it undoes a
+ * fold made while the send was in flight; a failure only for the attempt it belongs to, so a send that outlived its lease cannot undo
+ * a newer attempt's result.
  */
 async function recordResult(
   sql: SQL,

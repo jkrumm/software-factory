@@ -84,15 +84,17 @@ commands:
   fleet triage [--undo <id>]
                   what the triage did on its own (a stale plan marked, an ask folded under a newer one, an expired note dismissed), newest first;
                   --undo takes one back. It never runs a command and never denies
-  fleet presence <place> <act>
-                  one act of a person (token only): place desk|phone, act focus|looked|board_click|unlock|memo|foreground|caught_up (memo and
-                  foreground are the phone's; caught_up takes --until, see fleet seen). Presence is derived: the desk is present 45 min after its last act, the phone 10 min; neither is away
+  fleet presence <place> <act> [--until <iso>]
+                  one act of a person (token only). place: desk|phone. act: focus, looked, board_click, unlock, memo, foreground, caught_up
+                  (memo and foreground are the phone's). caught_up needs --until, the until of the reading that was seen, and no other act takes
+                  one. The desk is present 45 min after its last act, the phone 10 min; neither is away
   fleet since [--t <iso>]
-                  what happened since --t (default: the cursor, at most 7 days back; a later or malformed one is exit 2), grouped: Needs you, Shipped,
-                  Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending, failed or none)
+                  what happened since --t (default: the cursor; at most 7 days back; a later or malformed --t is exit 2), grouped: Needs you,
+                  Shipped, Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending,
+                  failed or none). Only the default reading asks for a headline; --t shows one already made, or none
   fleet seen [--place desk|phone] [--until <iso>]
-                  caught up (default desk): moves the owner-wide cursor to the end of the reading just read (or --until, the one that was seen),
-                  never past now, on every surface; what landed after it is in the next window
+                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, else to where the model was built (read
+                  from /fleet), never past now; what landed after it is in the next window
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -880,8 +882,9 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       if (!place.success) throw usage(`--place is one of ${PresencePlace.options.join(', ')}`)
       if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
         throw usage('--until takes an ISO 8601 time with a Z or an offset')
-      // Caught up with what was seen: the cursor goes to the end of the reading read now (or the one --until names), not to the click.
-      const until = flags.until ?? (await call(io, '/fleet/since', { auth: true, schema: Since })).body.until
+      // Caught up with what was seen: the cursor goes to where the model was built (or to the --until named), not to the click. This reads
+      // /fleet, not a since reading, so it asks for no headline and displaces no window.
+      const until = flags.until ?? (await call(io, '/fleet', { auth: true, schema: Fleet })).body.builtAt
       const { body } = await call(io, '/fleet/presence', {
         method: 'POST',
         auth: true,

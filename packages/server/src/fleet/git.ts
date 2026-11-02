@@ -37,6 +37,7 @@ export class GitReader {
     }
     const log = await this.git(repo, ['log', '-1', '--format=%H%x1f%cI%x1f%s']).catch(() => '')
     const [sha, at, subject] = log.trim().split('\x1f')
+    // A git that does not answer gives no commits this build, never an older ref's.
     const recent = await this.recent(repo).catch(() => [])
     return {
       branch,
@@ -47,8 +48,8 @@ export class GitReader {
   }
 
   /**
-   * The last `limit` commits of the default branch, first-parent (a merge is one line, the commits it brought are not), newest first. The
-   * first of `origin/main`, `origin/master`, `main`, `master` that resolves; none is an empty list. Read-only, bounded, off the request path.
+   * The last `limit` commits of the default branch (`defaultHead`), first-parent (a merge is one line, not the commits it brought), newest
+   * first; no default branch is an empty list. Throws when git does not answer in time. Read-only, bounded, off the request path.
    */
   async recent(repo: string, limit = RECENT_COMMITS): Promise<FleetCommit[]> {
     const head = await this.defaultHead(repo)
@@ -65,8 +66,8 @@ export class GitReader {
   }
 
   /**
-   * The tip of the repo's default branch: the first of `origin/main`, `origin/master`, `main`, `master` that exists, from one
-   * `for-each-ref` call. `undefined` when none does. A git that does not answer in time throws: it is no reason to read an older ref.
+   * The tip of the default branch: the first of `origin/main`, `origin/master`, `main`, `master` that exists, from one `for-each-ref`
+   * call; `undefined` when none does. Throws when git does not answer in time: that is no reason to read an older ref.
    */
   async defaultHead(repo: string): Promise<string | undefined> {
     const out = await this.git(repo, ['for-each-ref', '--format=%(refname)%1f%(objectname)', ...DEFAULT_REFS])
@@ -91,14 +92,13 @@ export class GitReader {
   }
 
   /**
-   * Whether the repo's default branch has moved past `sha`: the default branch (`defaultHead`) is a descendant of the commit (and not the commit). `undefined` when git cannot say (no such commit here, no default
-   * branch, a history that does not contain it). Read-only.
+   * Whether the default branch (`defaultHead`) has moved past `sha`: it is a descendant of the commit, and not the commit. `undefined` when
+   * git cannot say (no such commit here, no default branch, a history that does not contain it, a git that timed out). Read-only.
    */
   async newerThan(repo: string, sha: string): Promise<{ head: string } | false | undefined> {
     if (!/^[0-9a-f]{7,40}$/.test(sha)) return undefined
     const commit = await this.git(repo, ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`]).catch(() => '')
     if (!commit.trim()) return undefined
-    // One answer for the default branch; a git that times out says nothing (not a look at an older ref).
     const head = await this.defaultHead(repo).catch(() => undefined)
     if (!head) return undefined
     if (head === commit.trim()) return false

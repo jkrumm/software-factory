@@ -323,10 +323,12 @@ export interface SinceReader {
 }
 
 /**
- * The reading `GET /fleet/since` answers: the groups from the stored snapshot and the database, and the headline as the window's row says
- * (a missing one is queued for the pass and the answer is `pending`; `queue: 'now'` also starts the pass). Never waits on agw. It ends at
- * `min(now, the snapshot's build)`: that is its `until`. `undefined`
- * before the first fleet build.
+ * The reading `GET /fleet/since` answers: the groups from the stored snapshot and the database, and the headline. Never waits on agw. It
+ * ends at `min(now, the snapshot's build)`: that is its `until`, and an explicit `t` later than it is cut to it (an empty reading).
+ *
+ * Only the default reading (no `t`, from the cursor) is the window the board shows: it queues its headline (a missing one is `pending`;
+ * `queue: 'now'` also starts the pass) and supersedes the others. A reading with an explicit `t` shows a paragraph that was already made,
+ * or `none`, and writes nothing, so a one-off look never displaces the board's window. `undefined` before the first fleet build.
  */
 export async function readSince(
   reader: SinceReader,
@@ -337,15 +339,26 @@ export async function readSince(
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return undefined
   const seenAt = await readSeenAt(sql)
-  const { t, clamped } = windowStart({ t: options.t, seenAt, now })
+  const start = windowStart({ t: options.t, seenAt, now })
   // The reading ends where its snapshot does: an ask raised after the last build is in neither this reading nor, once the owner has caught
   // up to its `until`, a window that would never show it.
   const builtAt = new Date(snapshot.builtAt)
   const until = builtAt < now ? builtAt : now
-  const groups = await buildSince(sql, { snapshot, now: until, t, clamped, seenAt, isVisible: await reader.visible() })
+  const t = start.t > until ? until : start.t
+  const groups = await buildSince(sql, {
+    snapshot,
+    now: until,
+    t,
+    clamped: start.clamped,
+    seenAt,
+    isVisible: await reader.visible(),
+  })
   const facts = windowFacts(groups)
-  const headline = reader.windows
-    ? await reader.windows.request(facts, { now: options.queue === 'now' })
-    : ({ state: 'none', text: null } as const)
+  const none = { state: 'none', text: null } as const
+  const headline = !reader.windows
+    ? none
+    : options.t
+      ? await reader.windows.cached(facts)
+      : await reader.windows.request(facts, { now: options.queue === 'now' })
   return { ...groups, headline }
 }
