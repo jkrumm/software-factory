@@ -2,7 +2,8 @@ import { basename } from 'node:path'
 import { defaultManifest, type IssueState, type RoleTable, type Tier, type Effort } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from '../clock.ts'
-import { projectOfPath } from '../projects/claims.ts'
+import { lockCapacity } from '../capacity.ts'
+import { projectOfPath, releaseClaim } from '../projects/claims.ts'
 import { getProject } from '../projects/store.ts'
 import { recordPrompt } from '../prompts.ts'
 import { RepoRefused, resolveRepo } from '../repos.ts'
@@ -78,10 +79,15 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   if (tree.status === 'failed') {
     await enqueue(sql, {
       issueId: issue.id,
-      key: `lead_gone:${issue.id}:${attempt}`,
+      key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
       payload: { detail: `the worktree could not be made after ${tree.tries} tries: ${tree.error ?? 'unknown'}` },
+    })
+    // No spawn will ever exist for the failed-spawn sweep to release the claim by: an abandoned attempt gives its place back.
+    await sql.begin(async (tx) => {
+      await lockCapacity(tx)
+      await releaseClaim(tx, issue.id)
     })
     return
   }
@@ -176,10 +182,14 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const spawn = await getSpawn(sql, key, clock.now())
   if (spawn?.status === 'failed' || spawn?.status === 'ended') {
     // Nobody is left to tell. The Issue would sit `working` with its claim held and no lead, unseen: it parks, with a line for the owner.
+    // Only an Issue that is working parks: one that waits or watches keeps its wait or hold, and the wake that ends it asks again.
+    const [issue] = await sql`SELECT state FROM factory.issues WHERE id = ${effect.issueId}`
+    if (issue?.state !== 'working') return
     const detail = `spawn ${key} ${spawn.status}${spawn.error ? `: ${spawn.error}` : ''}`
     await enqueue(sql, {
       issueId: effect.issueId,
-      key: `lead_gone:${effect.issueId}:${attemptOf(effect)}`,
+      // One per effect, not per attempt: a lead_gone Issue woken with its spawn still gone parks again.
+      key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
       payload: { detail },
@@ -193,6 +203,21 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
     { id: effect.key, session: key, source: 'note', text: noteText(effect.issueId, effect.payload) },
     clock.now(),
   )
+}
+
+/**
+ * A working Issue whose lead's spawn failed before it ever reported is found here, without waiting for a note to find it: it parks as
+ * `lead_gone`. One event per Issue revision, so a woken Issue whose spawn is still failed parks again. (A spawn that ended is found
+ * only by a note, for now.)
+ */
+export async function parkGoneLeads(sql: SQL, now: Date): Promise<void> {
+  await sql`
+    INSERT INTO factory.issue_inbox (issue_id, key, kind, at, payload)
+    SELECT i.id, 'lead_gone:sweep:' || i.id || ':' || i.revision, 'lead_gone', ${now},
+           jsonb_build_object('detail', 'spawn ' || s.key || ' failed' || COALESCE(': ' || s.error, ''))
+    FROM factory.issues i JOIN factory.spawns s ON s.key = 'lead-' || i.id || '-' || i.attempt
+    WHERE i.state = 'working' AND s.status = 'failed'
+    ON CONFLICT (key) DO NOTHING`
 }
 
 /** The lead's ports: it starts, and it hears. */

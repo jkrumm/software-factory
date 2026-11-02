@@ -343,7 +343,7 @@ describe('classify, then admission', () => {
         attention.some((line) => line.startsWith(`Issue ${id} parked: its lead is gone (spawn ${key} ${how}`)),
       ).toBe(true)
       expect(await db.sql`SELECT 1 FROM factory.prompts WHERE source = 'note' AND session = ${key}`).toHaveLength(0)
-      // The owner can send it back to work.
+      // The owner wakes it with the lead still gone: it parks again, and does not sit working with nobody to work.
       await enqueue(db.sql, {
         issueId: id,
         key: `wake:${id}:lg`,
@@ -351,9 +351,39 @@ describe('classify, then admission', () => {
         at: clock.now(),
         payload: { for: 'lead_gone' },
       })
-      await drive(2)
-      expect((await issue(id)).state).toBe('working')
+      await drive(3)
+      expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
     }
+  })
+
+  test('a lead whose spawn failed parks the Issue without a note to find it, and again when woken with it still failed', async () => {
+    const { id, key } = await lead()
+    await db.sql`UPDATE factory.spawns SET status = 'failed', error = 'the runner refused' WHERE key = ${key}`
+    await pass()
+    await pass()
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `wake:${id}:lg`,
+      kind: 'wake',
+      at: clock.now(),
+      payload: { for: 'lead_gone' },
+    })
+    await drive(3)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
+  })
+
+  test('a note to a lead that is gone does not disturb an Issue that waits', async () => {
+    const { id, key } = await lead()
+    const until = new Date(clock.now().getTime() + 3_600_000).toISOString()
+    await post(id, 'wait', { until, session: key })
+    await pass()
+    // The spawn ended (not failed, so the sweep leaves it), and the owner sends a note into the waiting Issue.
+    await db.sql`UPDATE factory.sessions SET pane = 'w9:p9' WHERE id = ${key}`
+    await enqueue(db.sql, { issueId: id, key: `note:${id}:o`, kind: 'note', at: clock.now(), payload: { text: 'fyi' } })
+    await drive(3)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'lead_gone'`).toHaveLength(0)
   })
 
   test('the brief is recorded with the spawn: a create that fails leaves no prompt behind', async () => {
@@ -451,6 +481,8 @@ describe('classify, then admission', () => {
     await drive(3)
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
     expect(await spawns()).toEqual([])
+    // The abandoned attempt gave its place on the project back.
+    expect(await db.sql`SELECT 1 FROM factory.claims`).toHaveLength(0)
     expect(
       (await statusOf()).attention.some((line) =>
         line.includes('its lead is gone (the worktree could not be made after'),
