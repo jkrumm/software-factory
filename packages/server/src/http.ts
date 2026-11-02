@@ -52,7 +52,6 @@ import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
-import { redactVisible } from './fleet/redact.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
@@ -577,13 +576,14 @@ const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => (
 })
 
 /**
- * `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). On the socket
- * (`redact`) every visible repo keeps only its deterministic fields: a pane's model must not read IuRoot's text.
+ * `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). **Token API only,
+ * never on the socket**: the model holds the text of IuRoot's repos, sessions and plans, and what a pane reads goes to its model; no
+ * filter over free text can be made tight, so the whole route stays behind the token.
  */
-const fleetGetHandler = (sql: SQL, options: { redact: boolean }) => async () => {
+const fleetGetHandler = (sql: SQL) => async () => {
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
-  return respond(Fleet, options.redact ? redactVisible(snapshot) : snapshot)
+  return respond(Fleet, snapshot)
 }
 
 /** `POST /fleet/refresh`: a build now, answered with its model. */
@@ -663,7 +663,7 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
-    '/fleet': { GET: route(fleetGetHandler(sql, { redact: false })) },
+    '/fleet': { GET: route(fleetGetHandler(sql)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
@@ -767,7 +767,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), `GET /fleet` and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -802,7 +802,6 @@ export function serveHooks(deps: {
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
-      '/fleet': { GET: viaSocket(fleetGetHandler(deps.sql, { redact: true })) },
       '/issues': {
         GET: viaSocket(issueListHandler(deps.sql)),
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),

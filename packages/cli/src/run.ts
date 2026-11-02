@@ -66,7 +66,8 @@ commands:
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
                   the fleet read model (plain: asks first, then the repos with a running plan; --format json: all of it).
-                  --refresh builds it now instead of reading the last build (token or socket for the read, token for a refresh)
+                  --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
+                  IuRoot's text, which a pane's model must not read, so the socket does not serve it
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -329,20 +330,13 @@ export function statusScreen(s: Status): string {
 export function fleetScreen(f: Fleet): string {
   const out: string[] = []
   const s = f.summary
-  if (f.redacted) {
-    out.push(
-      'VIEW\tsocket: the text of IuRoot repos, sessions and their asks is withheld (the token API has the full model)',
-    )
-  }
   out.push(
     `FLEET\t${s.working} working\t${s.idle} idle\t${s.done} done\t${s.asks} asks (${s.staleAsks} older than 24 h)`,
   )
   out.push('ASKS')
   if (f.asks.length === 0) out.push('  -')
   for (const a of f.asks) {
-    out.push(
-      `  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${a.text === null ? '(withheld)' : oneLine(a.text, 100)}`,
-    )
+    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.text, 100)}`)
   }
   out.push('REPOS')
   const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))
@@ -352,7 +346,7 @@ export function fleetScreen(f: Fleet): string {
     const active = plan?.waves.find((w) => w.status === 'active')
     const git = r.git ? `${r.git.branch ?? 'detached'}${r.git.dirty ? '*' : ''}` : '-'
     out.push(
-      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${plan?.title === null ? '(withheld)' : oneLine(plan?.title ?? '-', 50)}${active ? `\twave ${active.n}${(active.short ?? active.title) ? ` ${oneLine(active.short ?? active.title, 40)}` : ''}` : ''}`,
+      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${oneLine(plan?.title ?? '-', 50)}${active ? `\twave ${active.n}${(active.short ?? active.title) ? ` ${oneLine(active.short ?? active.title, 40)}` : ''}` : ''}`,
     )
     for (const x of r.sessions) {
       out.push(`    ${x.state}\t${x.id}\t${x.role ?? '-'}\t${oneLine(x.title ?? '-', 50)}`)
@@ -705,7 +699,6 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {
       method: refresh ? 'POST' : 'GET',
       auth: true,
-      socket: refresh ? false : 'fallback',
       timeoutMs: refresh ? 60_000 : undefined,
       schema: Fleet,
     })

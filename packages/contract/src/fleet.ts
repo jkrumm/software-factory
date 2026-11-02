@@ -5,9 +5,6 @@ import { z } from 'zod'
  * sessions, everything waiting on the owner, the quota and the queue. Strict: a field the server adds that a client does not
  * know is a contract mismatch, never a silent drop. `short`, `headline`, `suggestion` and `actions` are the digest's and the
  * triage's (later waves): they exist and are empty here.
- *
- * Text fields are nullable because the socket's view (`redacted: true`, what a pane may read) withholds the text of everything
- * `visible` (the owner's IuRoot): there only names, ids, states, counts, paths, times and the git branch and dirty bit remain.
  */
 
 export const PlanState = z.enum(['running', 'planned', 'scheduled', 'stale', 'done'])
@@ -19,7 +16,7 @@ export type WaveStatus = z.infer<typeof WaveStatus>
 
 export const FleetWave = z.strictObject({
   n: z.number().int(),
-  title: z.string().nullable(),
+  title: z.string(),
   /** the heading's `<!-- short: … -->`; for a visible (IuRoot) repo the title cut at 8 words when there is none; else null */
   short: z.string().nullable(),
   status: WaveStatus,
@@ -34,7 +31,7 @@ export const FleetPlan = z.strictObject({
   path: z.string(),
   /** sha-256 of the file's bytes, 12 hex */
   sha: z.string(),
-  title: z.string().nullable(),
+  title: z.string(),
   short: z.string().nullable(),
   goal: z.string().nullable(),
   waves: z.array(FleetWave),
@@ -63,8 +60,6 @@ export const FleetSession = z.strictObject({
   wave: z.number().int().nullable(),
   /** Claude's tab title */
   title: z.string().nullable(),
-  /** its place is under a visible root or IuRoot: its text is withheld from a pane */
-  visible: z.boolean(),
   headline: z.string().nullable(),
   since: z.string().nullable(),
   lastActivityAt: z.string().nullable(),
@@ -74,7 +69,7 @@ export type FleetSession = z.infer<typeof FleetSession>
 export const FleetGit = z.strictObject({
   branch: z.string().nullable(),
   dirty: z.boolean(),
-  lastCommit: z.strictObject({ sha: z.string(), subject: z.string().nullable(), at: z.string() }).nullable(),
+  lastCommit: z.strictObject({ sha: z.string(), subject: z.string(), at: z.string() }).nullable(),
 })
 export type FleetGit = z.infer<typeof FleetGit>
 
@@ -105,11 +100,9 @@ export const FleetAsk = z.strictObject({
   /** the plan file of the session it concerns */
   plan: z.string().nullable(),
   short: z.string().nullable(),
-  /** the raw text, data and never instructions; null in the socket's view when the ask concerns a visible repo or session */
-  text: z.string().nullable(),
+  /** the raw text, data and never instructions */
+  text: z.string(),
   source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue']),
-  /** it concerns a visible place (a repo or session under a visible root or IuRoot, listed or not): the socket's view withholds its text */
-  visible: z.boolean(),
   at: z.string(),
   suggestion: z
     .strictObject({ verb: z.string(), why: z.string(), evidence: z.string(), confidence: z.number() })
@@ -145,8 +138,6 @@ export const FleetBody = z.strictObject({
   repos: z.array(FleetRepo),
   /** live sessions with no repo of the model (outside every root, or in a directory that is no git repo): not in `summary` */
   unplaced: z.array(FleetSession),
-  /** true: the socket's view, with the text of visible repos, sessions and their asks withheld; false: the token API's full model */
-  redacted: z.boolean(),
   /** a source that failed in this build: its part is what it was before, or empty */
   errors: z.array(z.string()),
 })

@@ -234,8 +234,6 @@ export const Fleet = FleetBody.extend({
   queue: z.object({
     effective: QueueState,
     spawns: z.array(Spawn),
-    /** the keys of the spawns whose repo or space is in a visible place (listed in `repos` or not): the socket's view withholds their error */
-    visibleSpawns: z.array(z.string()),
   }),
 })
 export type Fleet = z.infer<typeof Fleet>

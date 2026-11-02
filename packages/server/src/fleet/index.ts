@@ -213,7 +213,6 @@ export class FleetBuilder {
       roots,
       knownSince: this.since,
       real: (path) => real.get(path) ?? path,
-      isVisible: (path) => places.isVisible(path),
     })
     const planOf = new Map<string, { plan: string | null; wave: number | null }>()
     const repoPaths = new Set<string>()
@@ -450,8 +449,6 @@ export interface MergeInput {
   knownSince?: ReadonlyMap<string, string>
   /** a path after realpath: a session's directory is matched against the roots the way the roots are */
   real: (path: string) => string
-  /** a session is visible when any place it is in (its spawn's repo, its directory, its terminal's) is */
-  isVisible: (path: string) => boolean
 }
 
 /**
@@ -460,16 +457,11 @@ export interface MergeInput {
  * its own entry (IuRoot's, `rd`'s). One outside every root, or in no repo, has no `repo` and is listed as unplaced.
  */
 export function mergeSessions(input: MergeInput): MergedSession[] {
-  const { sessions, spawns, terminals, roots, real, isVisible, knownSince = new Map() } = input
+  const { sessions, spawns, terminals, roots, real, knownSince = new Map() } = input
   const placeOf = (...paths: (string | null | undefined)[]) => {
     const [first] = paths.filter((p): p is string => Boolean(p)).map(real)
     const where = first ?? null
-    return {
-      where,
-      repo: where ? enclosingRepo(where, roots) : undefined,
-      // No place known at all: visible, so nothing is shown that cannot be placed.
-      visible: !paths.some(Boolean) || paths.some((p) => (p ? isVisible(real(p)) : false)),
-    }
+    return { where, repo: where ? enclosingRepo(where, roots) : undefined }
   }
   const used = new Set<string>()
   const merged: MergedSession[] = []
@@ -497,7 +489,6 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
         account: s.account,
         terminal: term?.address ?? s.pane,
         title: term?.title ?? null,
-        visible: place.visible,
         headline: null,
         since: s.since,
         lastActivityAt: times.sort().at(-1) ?? null,
@@ -528,7 +519,6 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
         account: t.account,
         terminal: t.address,
         title: t.title,
-        visible: place.visible,
         headline: null,
         since: knownSince.get(`${t.name ?? t.address}\0${stateOfHc(t.status)}`) ?? t.statusAt,
         lastActivityAt: t.statusAt,

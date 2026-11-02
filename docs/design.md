@@ -1112,12 +1112,12 @@ One read model of the fleet that every surface reads instead of building its own
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `repos[]` (`name`, `space`, `visible`, `git`, `plan`, `morePlans`, `sessions[]`), `unplaced[]` (live sessions with no repo of
   the model: outside every root, or in a directory that is no git repo), `quota` and `queue` as `factory status` has them, `errors[]`,
-  `builtAt`, `fingerprint`, `redacted`. The counts are of the sessions listed under a repo (not `unplaced`): `working` counts `working` and `starting`, `done` the others hc reports `done`
+  `builtAt`, `fingerprint`. The counts are of the sessions listed under a repo (not `unplaced`): `working` counts `working` and `starting`, `done` the others hc reports `done`
   (the turn ended unseen), `idle` the rest alive (the three do not overlap); `staleAsks` are asks older than 24 h.
 - **A snapshot, never built inline.** `FleetBuilder` (`src/fleet/index.ts`) builds off the tick: `tick()` calls `kick()`, which starts a
   build behind its back when 30 s have passed and none runs; `POST /fleet/refresh` (`factory fleet --refresh`, token only) builds now
   and waits. The model is one row, `factory.fleet_snapshot` (migration `021`: JSON, fingerprint, `built_at`), written by a short
-  transaction of its own; `GET /fleet` (token API and socket) reads that row, 503 `not_ready` before the first build. Every read is
+  transaction of its own; `GET /fleet` (token API only) reads that row, 503 `not_ready` before the first build. Every read is
   bounded (`git` 5 s, `hc` and the queue script 10 s, plan files 256 KiB) and none runs in a transaction.
 - **Failure is local.** A source that fails (hc, the human queue, a repo's `git`, a plan file) leaves its part as the last build had it
   (memory; empty after a restart) and adds a line to `errors[]` (a root that cannot be listed too; each repo's lines are merged in path order, so the fingerprint is stable); the rest of the model stands. Only the database part has no
@@ -1130,20 +1130,16 @@ One read model of the fleet that every surface reads instead of building its own
   that has a `docs/waves/PLAN.md` or a live session; a session's repo is the one enclosing its spawn's repo, or its directory, both
   after `realpath`. `visible` is true for a repo under a visible root **or anywhere in IuRoot by place** (a path with an `IuRoot`
   segment, or under the real `$HOME/IuRoot`: the places the Issue refusal of an IuRoot alert checks), so `FACTORY_VISIBLE_ROOTS=off`
-  does not make IuRoot's repos read as ordinary; sessions carry `visible` the same way. It is the owner's read-only IuRoot view, never
+  does not make IuRoot's repos read as ordinary. It is the owner's read-only IuRoot view, never
   a spawn or Issue target of this model, and its text stays on the mini (no `agw` call anywhere in this wave; the digest of Wave 2
   skips `visible`).
-- **Two views.** The token API's `GET /fleet` is the full model (`redacted: false`). **The socket's is `redacted: true`**: a pane may
-  read it and what it reads goes to its model, so every visible repo keeps only name, path, branch, dirty bit, plan path and sha,
-  states, dates, wave numbers and statuses, and its sessions' ids, states and times; plan titles, goals, shorts, wave titles and status
-  texts, commit subjects and Claude's titles are null, and an ask about a visible repo or session keeps its id, kind and time and
-  loses its text (an ask is `visible` by the place of its repo or session, or of the spawn or Issue it names, listed in the model or not; a
-  spawn's `error` goes the same way, by `queue.visibleSpawns`; an `errors[]` line that names a visible repo keeps only its kind; a
-  session whose place is unknown counts as visible). The redaction builds each visible shape from an allow-list, so a field added to the contract is a compile error there until
-  decided. A session is visible when any place it is in is (its spawn's repo, its directory, its terminal's). `factory fleet` says
-  which view it got (a `VIEW` line in plain). Not covered: a human-queue request names no repo, so its text is shown on the socket
-  whatever it is about; quota holds numbers and account names only. The spawn and Issue checks of
-  `FACTORY_REPO_ROOTS` are unchanged: with the default roots, IuRoot is in both lists.
+- **Token only, never on the socket.** The model holds the text of IuRoot's repos, sessions and plans (titles, goals, commit subjects,
+  hc messages, Claude's tab titles, branch names, attention lines, decisions, queue requests), and what a pane reads goes to its
+  model. A filter over free text cannot be made tight (a first redacted view for the socket leaked through attention lines of closed
+  Issues, decisions outside the roots, queue text with no place, error lines, symlinked spawns, notes to ended sessions and ticket-slug
+  branch names), so `GET /fleet` and `POST /fleet/refresh` are on the token API only and the socket answers 404. `factory fleet`
+  needs `FACTORY_TOKEN` and says so without one (exit 3, as `issue answer`). A consumer in a pane gets the fleet through an agent
+  that holds the token, not through the socket. `visible` on a repo stays: Wave 2's digest skips those repos.
 - **Plans.** A session's plan is, in order: the `docs/waves/*.md` path its start text names (the spawn's prompt, or the longest argument
   of a terminal; the path named most often, ignoring what follows a `Never` on a line; relative to the spawn's repo or a root, `~/` to
   the home), else the `docs/waves/PLAN.md` found walking up from its directory to its repo (a worktree counts as its main checkout),
@@ -1154,15 +1150,15 @@ One read model of the fleet that every surface reads instead of building its own
   `scheduled` or `later [until <date>]`; no status is `pending`, another word `unknown`). `lastTouched` is the file's last commit (its
   mtime when git has none). States: `running` (a live session works it), `done` (every wave), `stale` (an active wave, untouched
   3 d), `scheduled` (nothing active and the next wave owner-timed, undated or dated ahead), else `planned`. For a visible repo a missing
-  `short` is the title cut at 8 words. A line that starts `## Wave` and has no wave number is an `errors[]` line with its line number
-  (never its text); headings may use `—`, `–`, `-`, `:`, `.` or nothing after the number, and files may be CRLF.
+  `short` is the title cut at 8 words. Only `## Wave <n>` headings are waves; any other `## Wave …` heading is ignored, silently. Headings may use `—`, `–`, `-`, `:`, `.` or nothing after the number, and files may be CRLF.
 - **Sessions** are the factory's (`buildStatus`) and hc's Claude Code terminals (`terminal.list`, the RPC behind `hc ls --json`),
   merged when the terminal's address is the session's pane or its name or `factory.key` label is the session's id; a terminal the
   factory does not know (an `rd` session, IuRoot's) is its own entry, its state from hc's status, its parent through the parent
   terminal's name. A session outside every root is left out. `wave` is the `Wave <n>` its start text names, when its plan has it.
 - **Asks** (deterministic sources only; `id` is `<source>:<key>`): `hc:<session>` (hc `blocked` for 2 min from hc's own status time, kind `permission`),
-  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>` (a `factory status` attention line keyed by what it is about: `stuck:<session>`, `note:<id>`, `spawn:<key>`,
-  `notification:<key>`, `issue:<id>:<kind>`; never by its counters or text), `decision:<key>` (an open decision of an open Issue,
+  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>:<verb>:<hash>` (a `factory status` attention line keyed by what it is about, `stuck:<session>`, `note:<id>`,
+  `spawn:<key>`, `notification:<key>` or `issue:<id>:<kind>`, plus a short hash of the line with its digits removed: a counter such as
+  `for 5 min` does not change the id, two different lines of one subject do not collapse), `decision:<key>` (an open decision of an open Issue,
   `question`) and `queue:<id>` (the human queue through `ask-human.sh list --json`, `human`; the script is dotfiles', at
   `FACTORY_ASK_HUMAN`; a script that does not print the JSON array yet is an `errors[]` line). An ask with no time of its own (hc, a wait, an attention line) has the time of the first build that saw it, kept across builds and
   restarts. Oldest first.
