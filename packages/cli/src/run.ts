@@ -10,6 +10,8 @@ import {
   Issue,
   IssueList,
   type IssueSummary,
+  IssueVerb,
+  IssueVerbAck,
   loadRoleTable,
   Project,
   ProjectList,
@@ -67,6 +69,16 @@ commands:
                   (token or socket, as spawn create)
   issue list      the Issues, newest first (token or socket)
   issue show <id> one Issue with its facts (token or socket)
+  issue phase|wait|ship|close|block|ask|drop <id> [--id <call id>] [verb flags]
+                  a lead's report on its Issue (token, or the socket from a lead's pane: $FACTORY_SESSION says which lead,
+                  and it may only report on the Issue it works). One event per call; --id makes a repeated call one event.
+                    phase  --phase <name> [--note <text>]
+                    wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
+                    ship   --summary <text> [--evidence kind=<k>[,link=<url>][,note=<text>] …]
+                    close  --summary <text>                             done, nothing deployed
+                    block  --reason <text>                              it cannot go on and nobody can answer
+                    ask    --question <text> [--option <text> …] [--default <option>] [--expires <ISO time>]
+                    drop   --reason <text>                              it should not be done
   project list    the projects: manifest or defaults, leads, who holds the claim and who waits, broken manifests (token or socket)
   project show <name>
                   one project: the manifest in force, the make contract (which of check, test, deploy, verify, restart, quality, logs,
@@ -110,13 +122,14 @@ commands:
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
 --title, --facts, --key, --source  issue new
 --rotate         door token new: replace the source's token
+--phase, --note, --until, --why, --summary, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
 FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
-                 spawn create|get, session get, queue get and issue new|list|show fall back to the socket without it)
+                 spawn create|get, session get, queue get and issue new|list|show|<verb> fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file
@@ -259,6 +272,17 @@ interface Flags {
   key?: string
   source?: string
   rotate?: boolean
+  phase?: string
+  note?: string
+  until?: string
+  why?: string
+  summary?: string
+  evidence?: string[]
+  reason?: string
+  question?: string
+  option?: string[]
+  default?: string
+  expires?: string
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -338,6 +362,55 @@ async function door(words: string[], format: Format, flags: Flags, io: Io): Prom
   throw usage(
     'usage: door route set <source> <monitor> <repo> | door route rm <source> <monitor> | door route list | door unrouted | door token new <source>',
   )
+}
+
+const EVIDENCE = /^kind=([^,]+)(?:,link=([^,]+))?(?:,note=(.*))?$/s
+
+/** `kind=screenshot,link=https://…,note=phone width` → the evidence the server stores. */
+function parseEvidence(text: string): { kind: string; link?: string; note?: string } {
+  const match = EVIDENCE.exec(text)
+  if (!match?.[1]) throw usage('--evidence is kind=<kind>[,link=<url>][,note=<text>]')
+  return { kind: match[1], ...(match[2] ? { link: match[2] } : {}), ...(match[3] ? { note: match[3] } : {}) }
+}
+
+/** The body of a lead's verb from its flags; the server checks every value again. */
+function verbBody(verb: IssueVerb, flags: Flags, io: Io): Record<string, unknown> {
+  const need = (name: keyof Flags): string => {
+    const value = flags[name]
+    if (typeof value !== 'string' || !value) throw usage(`issue ${verb} needs --${name}`)
+    return value
+  }
+  const session = flags.session ?? io.env.FACTORY_SESSION
+  const common = { ...(flags.id ? { id: flags.id } : {}), ...(session ? { session } : {}) }
+  const optional = (name: keyof Flags, field: string = name): Record<string, string> => {
+    const value = flags[name]
+    return typeof value === 'string' && value ? { [field]: value } : {}
+  }
+  switch (verb) {
+    case 'phase':
+      return { ...common, phase: need('phase'), ...optional('note') }
+    case 'wait':
+      return { ...common, until: need('until'), ...optional('why') }
+    case 'ship':
+      return {
+        ...common,
+        summary: need('summary'),
+        ...(flags.evidence?.length ? { evidence: flags.evidence.map(parseEvidence) } : {}),
+      }
+    case 'close':
+      return { ...common, summary: need('summary') }
+    case 'block':
+    case 'drop':
+      return { ...common, reason: need('reason') }
+    case 'ask':
+      return {
+        ...common,
+        question: need('question'),
+        ...(flags.option?.length ? { options: flags.option } : {}),
+        ...optional('default'),
+        ...optional('expires', 'expiresAt'),
+      }
+  }
 }
 
 async function execute(words: string[], format: Format, flags: Flags, io: Io): Promise<void> {
@@ -507,6 +580,21 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, issueLine(body))
   }
 
+  const verb = words[0] === 'issue' ? IssueVerb.safeParse(words[1]) : undefined
+  if (verb?.success) {
+    const target = words[2]
+    if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target))
+      throw usage(`usage: issue ${verb.data} <id> [flags]`)
+    const { body } = await call(io, `/issues/${target}/${verb.data}`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: IssueVerbAck,
+      body: verbBody(verb.data, flags, io),
+    })
+    return print(body, [body.issue, body.verb, body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
+  }
+
   if (key === 'project list') {
     const { body } = await call(io, '/projects', { auth: true, socket: 'fallback', schema: ProjectList })
     const lines = body.projects.map(projectLine)
@@ -647,5 +735,16 @@ const OPTIONS = {
   key: { type: 'string' },
   source: { type: 'string' },
   rotate: { type: 'boolean' },
+  phase: { type: 'string' },
+  note: { type: 'string' },
+  until: { type: 'string' },
+  why: { type: 'string' },
+  summary: { type: 'string' },
+  evidence: { type: 'string', multiple: true },
+  reason: { type: 'string' },
+  question: { type: 'string' },
+  option: { type: 'string', multiple: true },
+  default: { type: 'string' },
+  expires: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

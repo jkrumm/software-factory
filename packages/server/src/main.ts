@@ -7,6 +7,9 @@ import { loadConfig } from './config.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
+import { AgwClassifier, Classification } from './issues/classify.ts'
+import { leadPorts } from './issues/lead.ts'
+import { GitWorktrees } from './issues/worktree.ts'
 import { ProjectSync } from './projects/sync.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { HcClient } from './hc.ts'
@@ -79,6 +82,7 @@ const server = serve({
   roles,
   quota,
   projects,
+  alertLeads: config.alertLeads,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -104,8 +108,26 @@ try {
 chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
+const issuePorts = leadPorts({ sql, clock, roles, repoRoots: config.repoRoots, worktrees: new GitWorktrees() })
+const classification = new Classification({
+  sql,
+  classifier: new AgwClassifier({ bin: config.agwBin }),
+  roles,
+  now: () => clock.now(),
+})
 const ticker = startTicker(
-  { sql, runner, clock, retryBudgetMs: config.retryBudgetMs, spool, quota, projects },
+  {
+    sql,
+    runner,
+    clock,
+    retryBudgetMs: config.retryBudgetMs,
+    spool,
+    quota,
+    projects,
+    issuePorts,
+    classification,
+    alertLeads: config.alertLeads,
+  },
   TICK_INTERVAL_MS,
   monitor,
 )

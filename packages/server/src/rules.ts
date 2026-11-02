@@ -1,6 +1,7 @@
 import type { StopCheck } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
+import { issueStop } from './issues/sendback.ts'
 import { type NewPrompt, recordPrompt, settleDelivered } from './prompts.ts'
 import {
   type Fact,
@@ -291,7 +292,9 @@ export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
  * The `Stop` hook asks: may this session end its turn? Not when it has live child sessions the factory knows (workers it
  * started, as their spawns' parent), no open wait, and the stop is not already a send-back (`stop_hook_active`) or a
  * limit (a walled session has nothing to do about it). Answered once per turn: the effect `sendback:<session>:<turn>` is
- * recorded with the answer, so a second ask in the same turn is let through.
+ * recorded with the answer, so a second ask in the same turn is let through. A session of an Issue is asked a second thing
+ * after that (`issueStop`): whether it reported; it alone is also asked inside a send-back, to park an Issue whose lead
+ * stopped twice unreported.
  */
 export async function stopCheck(
   sql: SQL,
@@ -300,20 +303,21 @@ export async function stopCheck(
   now: Date,
 ): Promise<StopCheck> {
   const letThrough: StopCheck = { sendBack: false, message: null }
-  if (input.stopHookActive) return letThrough
   // A woken turn can end before the tick settles its wake: settle this session's first, so a delivered wake has ended its wait.
   await settleDelivered(sql, now, id)
   const session = await getSession(sql, id, now)
   if (!session || session.state === 'walled' || session.state === 'dead' || session.wait !== null) return letThrough
+  const lead = async (): Promise<StopCheck> => (await issueStop(sql, session, input, now)) ?? letThrough
+  if (input.stopHookActive) return lead()
 
   const children = (await loadChildren(sql, id, now)).filter((c) => c.view.state !== 'dead')
-  if (children.length === 0) return letThrough
+  if (children.length === 0) return lead()
 
   const rows = await sql`
     INSERT INTO factory.effects (key, rule, session, at, detail)
     VALUES (${`sendback:${id}:${session.turn}`}, 'sendback', ${id}, ${now}, ${{ workers: children.map((c) => c.view.id) }})
     ON CONFLICT (key) DO NOTHING RETURNING key`
-  if (rows.length === 0) return letThrough
+  if (rows.length === 0) return lead()
   const n = children.length
   return {
     sendBack: true,

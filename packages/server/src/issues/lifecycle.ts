@@ -85,7 +85,10 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     },
   },
   block: { working: { to: 'waiting', reason: 'blocked' } },
+  // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
+  unreported: { working: { to: 'waiting', reason: 'unreported' } },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
+  // Wave 4: the evidence the manifest derives is checked here (`refuse`), for `ship` and for a `close` that touched deployable paths.
   ship: { working: { to: 'watching', hold: true } },
   close: { working: { to: 'closed', outcome: 'done' } },
   drop: { working: { to: 'closed', outcome: 'dropped' } },
@@ -113,6 +116,8 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   hold_over: { watching: { effects: ['verify'], refuse: thisHold } },
   verified: { watching: { to: 'closed', outcome: 'done', refuse: thisHold } },
   wake: { waiting: { to: 'working', effects: ['note_lead'], apply: wakeIsDue } },
+  // A question past its expiry with no default: it stays open (an answer is still taken), and the line is for the owner.
+  lapsed: { waiting: { only: 'decision' } },
   // the owner or the orchestrator
   note: { queued: recorded, working: noted, waiting: noted, watching: noted },
   answer: { waiting: { to: 'working', only: 'decision', effects: ['note_lead'], apply: answerDecision } },
@@ -160,7 +165,13 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   const attempt = step.newAttempt ? issue.attempt + 1 : issue.attempt
   const hold = step.hold ? issue.hold + 1 : issue.hold
   const waits = step.reason === 'wait' ? issue.waits + 1 : issue.waits
-  const until = step.reason === 'wait' ? time(cause.payload, 'until') : null
+  // A timed wait wakes at `until`; a question with an expiry is looked at again then (the default is taken, or the owner is told).
+  const until =
+    step.reason === 'wait'
+      ? time(cause.payload, 'until')
+      : step.reason === 'decision'
+        ? time(cause.payload, 'expiresAt')
+        : null
   const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues

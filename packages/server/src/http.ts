@@ -13,6 +13,9 @@ import {
   IssueId,
   IssueInput,
   IssueList,
+  IssueVerb,
+  IssueVerbAck,
+  IssueVerbBody,
   Project,
   ProjectList,
   ProjectName,
@@ -39,6 +42,7 @@ import type { Clock } from './clock.ts'
 import { createIssue } from './issues/create.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
 import { getIssue, listIssues } from './issues/read.ts'
+import { fileVerb } from './issues/verbs.ts'
 import { getProject, listProjects } from './projects/store.ts'
 import type { ProjectSync } from './projects/sync.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
@@ -81,6 +85,8 @@ export interface AppDeps {
   quota: QuotaPoller
   /** reads the projects' manifests on demand (`POST /projects/sync`) */
   projects: Pick<ProjectSync, 'syncNow'>
+  /** `FACTORY_ALERT_LEADS`: `factory status` says why an alert Issue starts no lead */
+  alertLeads?: boolean
 }
 
 /** Largest request body the server reads. */
@@ -320,6 +326,26 @@ const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>)
   return issue ? respond(Issue, issue) : json({ error: 'unknown issue' }, 404)
 }
 
+/**
+ * `POST /issues/:id/:verb`, on the port and on the socket: a lead reports with one of its verbs. One inbox row keyed
+ * `<issue>:<verb>:<call id>`; the same call again is 200 `duplicate`, the first 201. A `session` must work this Issue (409).
+ */
+const issueVerbHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/issues/:id/:verb'>): Promise<Response> => {
+    const issueId = parseParam(IssueId, req.params.id)
+    const verb = parseParam(IssueVerb, req.params.verb)
+    const body = await parseBody(req, IssueVerbBody[verb])
+    const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now() })
+    if (!filed.ok) {
+      return filed.problem === 'unknown_issue'
+        ? json({ error: 'unknown issue' }, 404)
+        : json({ error: 'that session does not work this Issue' }, 409)
+    }
+    const ack = { issue: issueId, verb, key: filed.key, duplicate: filed.duplicate, state: filed.state }
+    return respond(IssueVerbAck, ack, filed.duplicate ? 200 : 201)
+  }
+
 /** `GET /projects`: every project, by name. */
 const projectListHandler = (sql: SQL) => async () => respond(ProjectList, { projects: await listProjects(sql) })
 
@@ -380,7 +406,18 @@ const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
 })
 
 /** The route table for `Bun.serve`. */
-export function routes({ sql, clock, version, token, monitor, repoRoots, roles, quota, projects }: AppDeps) {
+export function routes({
+  sql,
+  clock,
+  version,
+  token,
+  monitor,
+  repoRoots,
+  roles,
+  quota,
+  projects,
+  alertLeads,
+}: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
   return {
@@ -412,7 +449,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
     },
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
-    '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now()))) },
+    '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots)),
@@ -433,6 +470,7 @@ export function routes({ sql, clock, version, token, monitor, repoRoots, roles, 
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
+    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock)) },
     '/projects': { GET: route(projectListHandler(sql)) },
     '/projects/sync': { POST: route(async () => respond(ProjectSyncResult, await projects.syncNow())) },
     '/projects/:name': { GET: route(projectGetHandler(sql)) },
@@ -504,7 +542,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), a lead's verbs (`POST /issues/:id/:verb`), the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -541,6 +579,7 @@ export function serveHooks(deps: {
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
+      '/issues/:id/:verb': { POST: viaSocket(issueVerbHandler(deps.sql, deps.clock)) },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
