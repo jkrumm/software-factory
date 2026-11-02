@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mergeSessions } from '../src/fleet/index.ts'
 import { lineKey } from '../src/fleet/model.ts'
+import { redactVisible } from '../src/fleet/redact.ts'
 import { type HcTerminal, HcTerminals } from '../src/fleet/sources.ts'
 import { cutWords, namedPlanPaths, namedWave, parsePlan, planState, STALE_AFTER_MS } from '../src/fleet/plans.ts'
 import type { Session } from '@software-factory/contract'
@@ -161,6 +162,41 @@ describe('mergeSessions', () => {
     })
     expect(merged?.repo).toBe('/real/SourceRoot/repo')
     expect(merged?.cwd).toBe('/real/SourceRoot/repo')
+  })
+})
+
+describe('redactVisible: error lines', () => {
+  const base = { name: 'prometheus-epx', space: '/home/o/IuRoot/prometheus-epx' }
+  const fleetWith = (errors: string[]) =>
+    ({
+      redacted: false,
+      repos: [{ ...base, visible: true, git: null, plan: null, morePlans: [], sessions: [] }],
+      unplaced: [],
+      asks: [],
+      errors,
+      queue: { effective: 'run', spawns: [], visibleSpawns: [] },
+    }) as unknown as Parameters<typeof redactVisible>[0]
+
+  test('a line that names a visible repo in any shape keeps only a kind from the factory’s own words', () => {
+    const view = redactVisible(
+      fleetWith([
+        'git prometheus-epx: git status failed (exit 128)',
+        'plan prometheus-epx/docs/waves/PLAN.md: line 4 starts with "## Wave" but has no wave number',
+        '/home/o/IuRoot/prometheus-epx: failed',
+        'scan: prometheus-epx: odd',
+        'git other: git status failed (exit 128)',
+        'human queue: ask-human.sh list --json did not print JSON',
+      ]),
+    )
+    expect(view.errors).toEqual([
+      'git: an error in a visible repo (withheld)',
+      'plan: an error in a visible repo (withheld)',
+      'error: an error in a visible repo (withheld)',
+      'error: an error in a visible repo (withheld)',
+      'git other: git status failed (exit 128)',
+      'human queue: ask-human.sh list --json did not print JSON',
+    ])
+    expect(JSON.stringify(view.errors)).not.toContain('IuRoot')
   })
 })
 
