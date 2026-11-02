@@ -313,6 +313,26 @@ describe('seen_at, the owner-wide cursor', () => {
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(clock.now().toISOString())
   })
 
+  test('the reading ends where its snapshot does: an ask raised after the last build is not lost by catching up', async () => {
+    terminals = []
+    requests = []
+    await builder.refreshNow() // built at NOW
+    clock.advance(5 * MIN)
+    const seen = await since()
+    expect(seen.until).toBe(NOW.toISOString()) // not the clock: the snapshot knows nothing newer
+    requests = [
+      {
+        id: 'q-new',
+        text: 'Raised after the build',
+        askedAt: new Date(NOW.getTime() + MIN).toISOString(),
+        state: 'pending',
+      },
+    ]
+    await presence('desk', 'caught_up', seen.until)
+    await builder.refreshNow()
+    expect((await since()).needsYou.map((n) => n.ask.id)).toEqual(['queue:q-new'])
+  })
+
   test('caught_up needs its until, and no other act takes one', async () => {
     const bare = await app.send('POST', '/fleet/presence', { place: 'desk', act: 'caught_up' })
     expect(bare.status).toBe(400)
@@ -651,6 +671,30 @@ describe('GET /fleet/since', () => {
     await windows.pass()
     expect(agw).toHaveLength(2)
     expect(JSON.parse(agw[1]?.stdin ?? '[]')[0].text).toBe('facts 1')
+  })
+
+  test('two requests at once leave one window queued', async () => {
+    await Promise.all([
+      windows.request({ text: 'facts 1', hash: 'h1' }),
+      windows.request({ text: 'facts 2', hash: 'h2' }),
+    ])
+    const states = await db.sql`SELECT state FROM factory.fleet_windows`
+    expect(states.filter((r: { state: string }) => r.state === 'queued')).toHaveLength(1)
+  })
+
+  test('a request that lands during a call leaves the window superseded when the call fails', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1' })
+    const run: typeof runProcess = async (cmd, _t, _e, stdin) => {
+      agw.push({ cmd: [...cmd], stdin })
+      await windows.request({ text: 'facts 2', hash: 'h2' }) // a newer reading, while h1 is being asked
+      return { exitCode: 1, stdout: '', stderr: '', timedOut: false } as Awaited<ReturnType<typeof runProcess>>
+    }
+    const racing = new WindowDigest({ sql: db.sql, now: () => clock.now(), bin: 'agw', run })
+    await racing.pass()
+    expect(await db.sql`SELECT hash, state FROM factory.fleet_windows ORDER BY hash`).toEqual([
+      { hash: 'h1', state: 'superseded' },
+      { hash: 'h2', state: 'queued' },
+    ])
   })
 
   test('a session’s headline is not in the facts: a new turn is not a new window', async () => {

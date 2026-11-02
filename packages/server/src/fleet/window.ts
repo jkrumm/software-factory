@@ -119,7 +119,7 @@ export interface WindowDeps {
 interface Row {
   hash: string
   facts: string
-  state: 'queued' | 'pending' | 'ready' | 'failed'
+  state: 'queued' | 'pending' | 'ready' | 'failed' | 'superseded'
   paragraph: string | null
   run_id: string | null
   failures: number
@@ -159,15 +159,20 @@ export class WindowDigest {
     if (!facts) return { state: 'none', text: null }
     const { sql } = this.deps
     const at = this.deps.now()
-    await sql`
-      INSERT INTO factory.fleet_windows (hash, facts, state, requested_at, updated_at)
-      VALUES (${facts.hash}, ${facts.text}, 'queued', ${at}, ${at})
-      ON CONFLICT (hash) DO UPDATE SET state = 'queued', requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at
-      WHERE factory.fleet_windows.state = 'superseded'`
-    // The newest request is the one about to be read: every older window still waiting is let go and never started.
-    await sql`
-      UPDATE factory.fleet_windows SET state = 'superseded', updated_at = ${at}
-      WHERE state IN ('queued', 'failed') AND hash <> ${facts.hash}`
+    await sql.begin(async (tx) => {
+      // Requests take turns: two at once would each miss the other's uncommitted row and leave both queued.
+      await tx`LOCK TABLE factory.fleet_windows IN SHARE ROW EXCLUSIVE MODE`
+      await tx`
+        INSERT INTO factory.fleet_windows (hash, facts, state, requested_at, updated_at)
+        VALUES (${facts.hash}, ${facts.text}, 'queued', ${at}, ${at})
+        ON CONFLICT (hash) DO UPDATE SET state = 'queued', requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at
+        WHERE factory.fleet_windows.state = 'superseded'`
+      // The newest request is the one about to be read: every older window still waiting is let go and never started. The lock makes
+      // requests take turns, so the one that arrives last is the newest and two at once leave one.
+      await tx`
+        UPDATE factory.fleet_windows SET state = 'superseded', updated_at = ${at}
+        WHERE state IN ('queued', 'failed') AND hash <> ${facts.hash}`
+    })
     if (options.now) this.kick(true)
     return this.headline(facts)
   }
@@ -235,7 +240,7 @@ export class WindowDigest {
       if (!reply.runId) return this.fail(row, 'agw says the run is pending but names no run id', false)
       await sql`
         UPDATE factory.fleet_windows SET state = 'pending', run_id = ${reply.runId}, waits_failed = 0, updated_at = ${this.deps.now()}
-        WHERE hash = ${row.hash}`
+        WHERE hash = ${row.hash} AND state <> 'superseded'`
       return { called: true }
     }
     return this.finish(row, reply)
@@ -305,7 +310,7 @@ export class WindowDigest {
     await this.deps.sql.begin(async (tx) => {
       await tx`
         UPDATE factory.fleet_windows
-        SET state = 'failed', run_id = NULL, failures = ${failures}, waits_failed = 0, retry_at = ${new Date(now.getTime() + wait)},
+        SET state = CASE WHEN state = 'superseded' THEN state ELSE 'failed' END, run_id = NULL, failures = ${failures}, waits_failed = 0, retry_at = ${new Date(now.getTime() + wait)},
             error = ${reasonText(reason)}, updated_at = ${now}
         WHERE hash = ${row.hash}`
       await this.journal(tx, row, { ok: false, cost, error: reason, terminal })
@@ -358,9 +363,9 @@ export class WindowDigest {
   }
 }
 
-const toHeadline = (row: Pick<Row, 'state' | 'paragraph'>): SinceHeadline =>
-  row.state === 'ready' && row.paragraph
-    ? { state: 'ready', text: row.paragraph }
-    : row.state === 'failed'
-      ? { state: 'failed', text: null }
-      : { state: 'pending', text: null }
+/** `superseded` reads as `pending`: a newer window took its place, and asking for this one again queues it. */
+const toHeadline = (row: Pick<Row, 'state' | 'paragraph'>): SinceHeadline => {
+  if (row.state === 'ready' && row.paragraph) return { state: 'ready', text: row.paragraph }
+  if (row.state === 'failed') return { state: 'failed', text: null }
+  return { state: 'pending', text: null }
+}
