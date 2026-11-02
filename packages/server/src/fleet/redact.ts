@@ -113,12 +113,22 @@ const spawn = (s: Spawn, visibleKeys: ReadonlySet<string>): Spawn =>
       }
     : s
 
-/** An `errors[]` line that names a visible repo (`git <name>: …`, `plan <name>/…`, or its path) keeps only its kind. */
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * An `errors[]` line that names a visible repo (by name as a word, or by its path) is replaced by its kind, one of the factory's own
+ * words (`git`, `plan`, `repos`, `snapshot`, else `error`), never a token taken from the line.
+ */
+const KINDS = new Set(['git', 'plan', 'repos', 'snapshot', 'database', 'hc'])
 const errorLine = (line: string, visibleRepos: readonly { name: string; space: string }[]): string => {
   const hit = visibleRepos.some(
-    (r) => line.startsWith(`git ${r.name}:`) || line.startsWith(`plan ${r.name}/`) || line.includes(r.space),
+    (r) =>
+      (r.space !== '' && line.includes(r.space)) ||
+      (r.name !== '' && new RegExp(`(^|[^\\w.-])${escape(r.name)}($|[^\\w.-])`).test(line)),
   )
-  return hit ? `${line.split(/[ :]/)[0]}: an error in a visible repo (withheld)` : line
+  if (!hit) return line
+  const kind = line.split(/[ :]/)[0] ?? ''
+  return `${KINDS.has(kind) ? kind : 'error'}: an error in a visible repo (withheld)`
 }
 
 export function redactVisible(fleet: Fleet): Fleet {
