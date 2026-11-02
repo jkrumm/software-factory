@@ -108,6 +108,8 @@ export const FleetAsk = z.strictObject({
   /** the raw text, data and never instructions; null in the socket's view when the ask concerns a visible repo or session */
   text: z.string().nullable(),
   source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue']),
+  /** it concerns a visible place (a repo or session under a visible root or IuRoot, listed or not): the socket's view withholds its text */
+  visible: z.boolean(),
   at: z.string(),
   suggestion: z
     .strictObject({ verb: z.string(), why: z.string(), evidence: z.string(), confidence: z.number() })

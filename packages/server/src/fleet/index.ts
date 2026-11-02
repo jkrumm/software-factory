@@ -444,8 +444,9 @@ export interface MergeInput {
   roots: readonly string[]
   knownSince?: ReadonlyMap<string, string>
   /** a path after realpath: a session's directory is matched against the roots the way the roots are */
-  real?: (path: string) => string
-  isVisible?: (path: string) => boolean
+  real: (path: string) => string
+  /** a session is visible when any place it is in (its spawn's repo, its directory, its terminal's) is */
+  isVisible: (path: string) => boolean
 }
 
 /**
@@ -454,12 +455,15 @@ export interface MergeInput {
  * its own entry (IuRoot's, `rd`'s). One outside every root, or in no repo, has no `repo` and is listed as unplaced.
  */
 export function mergeSessions(input: MergeInput): MergedSession[] {
-  const { sessions, spawns, terminals, roots, knownSince = new Map() } = input
-  const real = input.real ?? ((path: string) => path)
-  const isVisible = input.isVisible ?? (() => false)
-  const placeOf = (path: string | null | undefined) => {
-    const where = path ? real(path) : null
-    return { where, repo: where ? enclosingRepo(where, roots) : undefined, visible: where ? isVisible(where) : false }
+  const { sessions, spawns, terminals, roots, real, isVisible, knownSince = new Map() } = input
+  const placeOf = (...paths: (string | null | undefined)[]) => {
+    const [first] = paths.filter((p): p is string => Boolean(p)).map(real)
+    const where = first ?? null
+    return {
+      where,
+      repo: where ? enclosingRepo(where, roots) : undefined,
+      visible: paths.some((p) => (p ? isVisible(real(p)) : false)),
+    }
   }
   const used = new Set<string>()
   const merged: MergedSession[] = []
@@ -473,7 +477,8 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
       nameOf.set(term.address, s.id)
     }
     const spawn = s.spawn ? spawns.get(s.spawn) : undefined
-    const place = placeOf(spawn?.repo ?? s.cwd ?? term?.cwd)
+    const cwd = s.cwd ?? term?.cwd ?? null
+    const place = placeOf(spawn?.repo, s.cwd, term?.cwd)
     const times = [s.lastEventAt, term?.statusAt].filter((t): t is string => Boolean(t))
     merged.push({
       session: {
@@ -494,7 +499,7 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
       repo: place.repo,
       prompt: spawn?.prompt ?? term?.prompt ?? null,
       spawnRepo: spawn ? real(spawn.repo) : null,
-      cwd: placeOf(s.cwd ?? term?.cwd).where,
+      cwd: cwd ? real(cwd) : null,
       hc: term,
     })
   }

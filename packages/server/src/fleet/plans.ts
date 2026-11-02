@@ -7,7 +7,7 @@ export const MAX_PLAN_BYTES = 256 * 1024
 export const STALE_AFTER_MS = 3 * 24 * 3_600_000
 
 /** `## Wave 3 — Title`, with `–`, `-`, `:` or `.` as the separator, or none (`## Wave 3 Title`). */
-const HEADING = /^##\s+Wave\s+(\d+)\b\s*(?:[—–:.-]+\s*)?(.*)$/
+const HEADING = /^##\s+Wave\s+(\d+)(?!\.\d)\b\s*(?:[—–:.-]+\s*)?(.*)$/i
 const WAVE_LIKE = /^##\s+Wave\b/i
 const COMMENT = /<!--\s*(status|short)\s*:\s*(.*?)\s*-->/g
 const DATE = /^\d{4}-\d{2}-\d{2}$/

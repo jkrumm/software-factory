@@ -1137,8 +1137,11 @@ One read model of the fleet that every surface reads instead of building its own
   read it and what it reads goes to its model, so every visible repo keeps only name, path, branch, dirty bit, plan path and sha,
   states, dates, wave numbers and statuses, and its sessions' ids, states and times; plan titles, goals, shorts, wave titles and status
   texts, commit subjects and Claude's titles are null, and an ask about a visible repo or session keeps its id, kind and time and
-  loses its text. `factory fleet` says which it got (a `VIEW` line in plain). Not covered: a human-queue request names no repo, so its
-  text is shown on the socket whatever it is about. The spawn and Issue checks of
+  loses its text (an ask is `visible` by the place of its repo or session, listed in the model or not; a spawn's `error` goes the same
+  way). The redaction builds each visible shape from an allow-list, so a field added to the contract is a compile error there until
+  decided. A session is visible when any place it is in is (its spawn's repo, its directory, its terminal's). `factory fleet` says
+  which view it got (a `VIEW` line in plain). Not covered: a human-queue request names no repo, so its text is shown on the socket
+  whatever it is about; `errors[]` lines are the factory's own words with a repo name or path. The spawn and Issue checks of
   `FACTORY_REPO_ROOTS` are unchanged: with the default roots, IuRoot is in both lists.
 - **Plans.** A session's plan is, in order: the `docs/waves/*.md` path its start text names (the spawn's prompt, or the longest argument
   of a terminal; the path named most often, ignoring what follows a `Never` on a line; relative to the spawn's repo or a root, `~/` to

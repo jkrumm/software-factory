@@ -11,7 +11,7 @@ import { AskHumanQueue, type HcLister, type HcTerminal, type QueueReader } from 
 import { serveHooks } from '../src/http.ts'
 import { startApp, TEST_ROLES, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { buildEstate, type Estate, estateTerminals } from './support/fleet-estate.ts'
+import { buildEstate, type Estate, estateTerminals, makeRepo } from './support/fleet-estate.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { world } from './support/world.ts'
 
@@ -651,6 +651,43 @@ describe('the lead’s review', () => {
     )
   })
 
+  test('A2: an ask about an IuRoot repo that has no plan and no session is redacted too, and so is a spawn’s error', async () => {
+    const quiet = makeRepo(estate.iu, 'quiet-repo', { 'README.md': 'nothing here\n' }, 1, NOW)
+    const { issue } = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'iu1', repo: quiet, title: 'Secret IuRoot title', facts: {} },
+      { repoRoots: [estate.src, estate.iu], now: clock.now() },
+    )
+    await db.sql`
+      INSERT INTO factory.decisions (issue_id, key, question, created_at)
+      VALUES (${issue.id}, 'iu1:dec', 'Ship the secret IuRoot migration?', ${w.at(30)})`
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at)
+      VALUES ('iu-fix', ${quiet}, 'p', 'worker', 'sonnet', 'high', 'failed', 'secret IuRoot failure detail', ${w.at(20)})`
+    const wide = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src, estate.iu],
+      visibleRoots: [],
+      home: '/nonexistent-home',
+      hc,
+      queue,
+    })
+    await wide.refreshNow()
+    const full = await get()
+    expect(full.repos.map((r) => r.name)).not.toContain('quiet-repo')
+    expect(full.asks.find((a) => a.id === 'decision:iu1:dec')).toMatchObject({ visible: true, repo: quiet })
+    await withSocket(async (socketPath) => {
+      const view = await viaSocket(socketPath)
+      expect(view.asks.find((a) => a.id === 'decision:iu1:dec')).toMatchObject({ kind: 'question', text: null })
+      expect(view.asks.find((a) => a.id === 'factory:spawn:iu-fix')).toMatchObject({ text: null })
+      expect(view.queue.spawns.find((x) => x.key === 'iu-fix')).toMatchObject({ status: 'failed', error: null })
+      expect(JSON.stringify(view)).not.toContain('secret IuRoot')
+      // an ordinary repo's ask is whole
+      expect(view.asks.find((a) => a.id === 'queue:20261027T230130-2786')?.text).toContain('LoA')
+    })
+  })
+
   test('B: IuRoot is visible by place, whatever FACTORY_VISIBLE_ROOTS says', async () => {
     await factoryRows()
     const off = new FleetBuilder({
@@ -690,6 +727,15 @@ describe('the lead’s review', () => {
     expect(ask?.at).not.toBe(later.repos.flatMap((r) => r.sessions).find((x) => x.id === 'software-factory-w6')?.since)
     // and it stays put
     clock.advance(10 * 60_000)
+    expect((await builder.refreshNow()).asks.find((a) => a.id === 'hc:software-factory-w6')?.at).toBe(ask?.at)
+  })
+
+  test('1b: an hc blocked ask with no usable time from hc is raised at once, at the first build that saw it', async () => {
+    terminals = terminals.map((t) => (t.address === 't4h' ? { ...t, status: 'blocked', statusAt: 'not a time' } : t))
+    const first = await builder.refreshNow()
+    const ask = first.asks.find((a) => a.id === 'hc:software-factory-w6')
+    expect(ask?.at).toBe(clock.now().toISOString())
+    clock.advance(20 * 60_000)
     expect((await builder.refreshNow()).asks.find((a) => a.id === 'hc:software-factory-w6')?.at).toBe(ask?.at)
   })
 
