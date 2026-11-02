@@ -331,12 +331,12 @@ const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>)
  * `<issue>:<verb>:<call id>`; the same call again is 200 `duplicate`, the first 201. A `session` must work this Issue (409).
  */
 const issueVerbHandler =
-  (sql: SQL, clock: Clock) =>
+  (sql: SQL, clock: Clock, options: { requireSession: boolean }) =>
   async (req: Bun.BunRequest<'/issues/:id/:verb'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     const verb = parseParam(IssueVerb, req.params.verb)
     const body = await parseBody(req, IssueVerbBody[verb])
-    const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now() })
+    const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now(), ...options })
     if (!filed.ok) {
       return filed.problem === 'unknown_issue'
         ? json({ error: 'unknown issue' }, 404)
@@ -470,7 +470,7 @@ export function routes({
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
-    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock)) },
+    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, { requireSession: false })) },
     '/projects': { GET: route(projectListHandler(sql)) },
     '/projects/sync': { POST: route(async () => respond(ProjectSyncResult, await projects.syncNow())) },
     '/projects/:name': { GET: route(projectGetHandler(sql)) },
@@ -579,7 +579,7 @@ export function serveHooks(deps: {
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
-      '/issues/:id/:verb': { POST: viaSocket(issueVerbHandler(deps.sql, deps.clock)) },
+      '/issues/:id/:verb': { POST: viaSocket(issueVerbHandler(deps.sql, deps.clock, { requireSession: true })) },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database

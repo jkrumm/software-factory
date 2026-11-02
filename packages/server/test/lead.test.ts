@@ -525,6 +525,144 @@ describe('the lead’s verbs', () => {
   })
 })
 
+describe('what the review found', () => {
+  test('a regression reaches the lead as a regression, not as generic news', async () => {
+    const { id, key } = await lead()
+    await emit(key, 'session_started', clock.now(), { claudeSessionId: 'c1' })
+    await post(id, 'ship', { summary: 'shipped', session: key })
+    await pass()
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `sig:${id}`,
+      kind: 'signal',
+      at: clock.now(),
+      payload: { regression: true, summary: '500s on /login' },
+    })
+    await drive(2)
+    expect((await issue(id)).state).toBe('working')
+    const [note] = await db.sql`SELECT text FROM factory.prompts WHERE source = 'note' AND session = ${key}`
+    expect(note?.text).toContain('a regression was reported after your ship: 500s on /login')
+  })
+
+  test('an expiry answers the question it was set for, not one asked since', async () => {
+    const { id, key } = await lead()
+    const expiresAt = new Date(clock.now().getTime() + 600_000).toISOString()
+    await post(id, 'ask', { id: 'old', question: 'old?', default: 'x', expiresAt, session: key })
+    await pass()
+    const [old] = await db.sql`SELECT id FROM factory.decisions`
+    // The owner answers, the lead asks again, and only then does the old expiry's answer come up.
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `answer:${id}:o`,
+      kind: 'answer',
+      at: clock.now(),
+      payload: { answer: 'yes' },
+    })
+    await pass()
+    await post(id, 'ask', { id: 'new', question: 'new?', session: key })
+    await pass()
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `answer:${id}:late`,
+      kind: 'answer',
+      at: clock.now(),
+      payload: { answer: 'x', who: 'default', decision: Number(old?.id) },
+    })
+    await pass()
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'decision' })
+    expect(await db.sql`SELECT 1 FROM factory.issue_events WHERE issue_id = ${id} AND kind = 'refused'`).toHaveLength(1)
+    expect(await db.sql`SELECT 1 FROM factory.decisions WHERE answered_at IS NULL`).toHaveLength(1)
+  })
+
+  test('a business question never takes its default', async () => {
+    classifier.answer = { project: null, kind: 'bug', class: 'business', size: 's', tier: 'sonnet', effort: 'medium' }
+    const { id, key } = await lead()
+    const expiresAt = new Date(clock.now().getTime() + 600_000).toISOString()
+    await post(id, 'ask', {
+      question: 'Raise the price?',
+      options: ['yes', 'no'],
+      default: 'yes',
+      expiresAt,
+      session: key,
+    })
+    await pass()
+    clock.advance(700_000)
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'decision' })
+    expect(await trail(id)).toContain('lapsed')
+  })
+
+  test('Issues the claim cannot take do not starve the ones behind them', async () => {
+    const held = newRepo()
+    for (let i = 0; i < 22; i++) await file(held, 'alert')
+    // They are classified already, so only admission stands between them and a lead.
+    await db.sql`UPDATE factory.issues SET classified_at = ${clock.now()}, lead_tier = 'opus', lead_effort = 'high'`
+    const other = newRepo()
+    const request = await file(other)
+    await drive(4)
+    expect((await issue(request)).state).toBe('working')
+  })
+
+  test('a classify keeps the kind and class an Issue already has, urgent included', async () => {
+    const id = await file(newRepo())
+    await db.sql`UPDATE factory.issues SET class = 'urgent', kind = 'incident' WHERE id = ${id}`
+    await drive(1)
+    expect(await issue(id)).toMatchObject({ class: 'urgent', kind: 'incident', size: 's' })
+  })
+
+  test('a lead’s name is reserved, and a spawn of that name that is not the Issue’s lead is not attached to', async () => {
+    const id = await file(newRepo())
+    const taken = await app.send('POST', '/spawns', { key: `lead-${id}-1`, repo: fixture.root, prompt: 'x' })
+    expect(taken.status).toBe(400)
+    await createSpawn(
+      db.sql,
+      { key: `lead-${id}-1`, repo: fixture.root, prompt: 'x', role: 'worker', tier: 'sonnet', effort: 'high' },
+      clock.now(),
+    )
+    await drive(4)
+    expect(runner.started.some((start) => start.prompt.includes('# Standing orders'))).toBe(false)
+    const status = await statusOf()
+    expect(status.attention.some((line) => line.includes("is not this Issue's lead"))).toBe(true)
+  })
+
+  test('on the socket a verb needs a session that works the Issue; the port does not', async () => {
+    const dir = mkdtempSync('/tmp/factory-lead-sock-')
+    const socketPath = join(dir, 'h.sock')
+    const hooks = serveHooks({
+      sql: db.sql,
+      clock,
+      token: TEST_TOKEN,
+      socketPath,
+      repoRoots: [fixture.root],
+      roles: TEST_ROLES,
+      slots: 2,
+    })
+    try {
+      const { id, key } = await lead()
+      const send = (body: Record<string, unknown>) =>
+        fetch(`http://localhost/issues/${id}/phase`, {
+          unix: socketPath,
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      expect((await send({ phase: 'x' })).status).toBe(409)
+      expect((await send({ phase: 'x', session: 'someone-else' })).status).toBe(409)
+      expect((await send({ phase: 'x', session: key })).status).toBe(201)
+      expect((await post(id, 'phase', { phase: 'x' })).status).toBe(201)
+    } finally {
+      await hooks.stop(true)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('a time before 1970 is refused at the door', async () => {
+    const { id } = await lead()
+    expect((await post(id, 'wait', { until: '1969-12-31T00:00:00Z' })).status).toBe(400)
+    expect((await post(id, 'ask', { question: 'q', expiresAt: '0001-01-01T00:00:00Z' })).status).toBe(400)
+  })
+})
+
 describe('factory issue <verb>', () => {
   const CLI = join(import.meta.dir, '..', '..', 'cli', 'bin', 'factory.ts')
   async function factory(env: Record<string, string>, ...args: string[]) {

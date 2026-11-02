@@ -4,7 +4,7 @@ import { projectOfPath, tryClaim } from '../projects/claims.ts'
 import { effectiveState, loadQueueStates } from '../queue.ts'
 import { enqueue } from './inbox.ts'
 
-/** Most Issues one pass admits; the rest wait for the next. */
+/** Most Issues one pass admits; the rest wait for the next. Ineligible ones are skipped, not counted, so they starve nobody. */
 const BATCH = 20
 
 export interface AdmitOptions {
@@ -36,11 +36,12 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
     const queued: Waiting[] = await tx`
       SELECT id, repo, source, attempt FROM factory.issues
       WHERE state = 'queued' AND classified_at IS NOT NULL
-      ORDER BY (class = 'urgent') DESC NULLS LAST, id LIMIT ${BATCH}`
+      ORDER BY (class = 'urgent') DESC NULLS LAST, id`
     if (queued.length === 0) return 0
     const states = await loadQueueStates(tx)
     let admitted = 0
     for (const issue of queued) {
+      if (admitted >= BATCH) break
       if (issue.source === 'alert' && !options.alertLeads) continue
       if (effectiveState(states, issue.repo) === 'drain') continue
       const owner = await projectOfPath(tx, issue.repo)

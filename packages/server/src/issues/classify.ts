@@ -179,7 +179,7 @@ export async function classifyIssue(deps: ClassifyDeps, issue: ToClassify): Prom
   await sql.begin(async (tx) => {
     const rows = await tx`
       UPDATE factory.issues
-      SET kind = ${answer?.kind ?? null}, class = ${answer?.class ?? null}, size = ${answer?.size ?? null},
+      SET kind = COALESCE(kind, ${answer?.kind ?? null}), class = COALESCE(class, ${answer?.class ?? null}), size = ${answer?.size ?? null},
           lead_tier = ${lead.tier}, lead_effort = ${lead.effort}, classify = ${stored}, classified_at = ${now}
       WHERE id = ${issue.id} AND classified_at IS NULL
       RETURNING id`

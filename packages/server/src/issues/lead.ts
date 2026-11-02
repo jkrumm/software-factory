@@ -55,7 +55,13 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const { sql, clock, roles } = deps
   const attempt = attemptOf(effect)
   const key = leadKey(effect.issueId, attempt)
-  if (await getSpawn(sql, key, clock.now())) return
+  const existing = await getSpawn(sql, key, clock.now())
+  if (existing) {
+    // The attach is to the lead of this Issue; a spawn of that name made by anyone else is not it.
+    const [owner] = await sql`SELECT issue_id FROM factory.spawns WHERE key = ${key}`
+    if (owner?.issue_id !== effect.issueId) throw new Error(`spawn ${key} exists and is not this Issue's lead`)
+    return
+  }
 
   const [issue]: LeadIssue[] = await sql`
     SELECT id, state, repo, title, source, facts, kind, class, lead_tier, lead_effort FROM factory.issues WHERE id = ${effect.issueId}`

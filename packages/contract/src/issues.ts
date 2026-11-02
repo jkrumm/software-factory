@@ -126,7 +126,11 @@ export type IssueVerb = z.infer<typeof IssueVerb>
 /** The call id is part of the inbox key (`<issue>:<verb>:<call id>`), so a repeated call is one event. */
 const CallId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'not a valid call id')
 const Words = (max: number) => z.string().trim().min(1).max(max)
-const At = z.iso.datetime({ offset: true })
+/** A time Postgres stores: the lifecycle refuses the rest after the call was acknowledged, so the door does it first. */
+const At = z.iso.datetime({ offset: true }).refine((text) => {
+  const ms = Date.parse(text)
+  return ms >= 0 && ms <= 253_402_300_799_000
+}, 'not a time between 1970 and 9999')
 
 const common = { id: CallId.optional(), session: z.string().min(1).max(256).optional() }
 

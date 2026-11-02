@@ -11,6 +11,7 @@ let socket: string
 let received: unknown[]
 let delayMs = 0
 let stopChecks: string[]
+let stopBodies: unknown[]
 let stopAnswer: unknown
 let server: ReturnType<typeof Bun.serve>
 
@@ -23,6 +24,7 @@ beforeAll(() => {
       if (delayMs) await Bun.sleep(delayMs)
       if (new URL(req.url).pathname.endsWith('/stop-check')) {
         stopChecks.push(new URL(req.url).pathname)
+        stopBodies.push(await req.json())
         return Response.json(stopAnswer)
       }
       received.push(await req.json())
@@ -37,6 +39,7 @@ afterAll(async () => {
 beforeEach(() => {
   received = []
   stopChecks = []
+  stopBodies = []
   stopAnswer = { sendBack: false, message: null }
   delayMs = 0
   rmSync(join(dir, 'spool'), { recursive: true, force: true })
@@ -388,10 +391,14 @@ describe('send-back (FL5)', () => {
     expect(received).toHaveLength(1)
   })
 
-  test('is not asked when the stop is already a send-back, and other events never ask', async () => {
-    stopAnswer = { sendBack: true, message: line }
+  test('a stop that is already a send-back is asked too, with the flag, and the server decides; other events never ask', async () => {
+    stopAnswer = { sendBack: false, message: null }
     expect(await stop({ stop_hook_active: true })).toEqual({ code: 0, err: [] })
+    expect(stopChecks).toEqual(['/sessions/s/stop-check'])
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: true })
+    stopAnswer = { sendBack: true, message: line }
     expect(await stop({})).toMatchObject({ code: 2 })
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: false })
     stopChecks.length = 0
     for (const event of ['user-prompt-submit', 'session-start', 'session-end']) {
       expect(

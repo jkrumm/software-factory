@@ -38,7 +38,11 @@ export const EventInput = z
 export type EventInput = z.infer<typeof EventInput>
 
 /** The key becomes a terminal name and a label: a token that cannot read as a flag. */
-const SpawnKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, 'not a valid spawn key')
+const SpawnKey = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, 'not a valid spawn key')
+  // The factory names an Issue's lead `lead-<issue>-<attempt>`: no caller takes that name first.
+  .refine((key) => !/^lead-\d+-\d+$/.test(key), 'that key is reserved for an Issue’s lead')
 /** The repo becomes `--cwd`: an absolute path. */
 const RepoPath = z
   .string()

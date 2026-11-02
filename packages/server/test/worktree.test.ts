@@ -57,6 +57,15 @@ describe('GitWorktrees', () => {
     )
   })
 
+  test('a repo with a .wtp.yml and no wtp is refused: plain git would skip its setup', async () => {
+    const { clone } = cloneOf('wtp')
+    await Bun.write(join(clone, '.wtp.yml'), 'version: "1.0"\n')
+    // An empty `wtp` is a host without it.
+    await expect(new GitWorktrees({ wtp: '' }).create({ repo: clone, branch: 'factory/7-1' })).rejects.toThrow(
+      'install wtp',
+    )
+  })
+
   test('worktreeOf reads git’s listing', () => {
     const listing =
       'worktree /a\nHEAD abc\nbranch refs/heads/master\n\nworktree /a/.claude/worktrees/x\nHEAD def\nbranch refs/heads/factory/1-1\n'
