@@ -146,5 +146,8 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
   fix rounds twice built new bugs (a cursor pin on the oldest git read froze the cursor), so the fourth round was a simplification the lead read
   himself. Live: `/fleet` carries presence (away, no act yet), `fleet since` over 24 h: 5 needs you, 266 shipped, 1 recovered, 6 handled, 27 running,
   spend per account; the headline paragraph ready in one pass with IuRoot as a count only ("87 items in a read-only area were counted only").
+- [x] FV Wave 5, `agw agents`: agw's mother decided 2026-11-02: a client of `/fleet` (`factory fleet --format json` under secrets-run), keeping only its
+  recommendations and Max quota for Hermes, brain and Argo; its collectors go, agw's and dotfiles' `AGENTS.md` name the factory as the one producer in the
+  same change (agw PLAN Wave 8, after its Wave 17). A2 and IR read `/fleet` (`docs/program.md` track notes, `100c286`).
 - [ ] FV Waves 5–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
