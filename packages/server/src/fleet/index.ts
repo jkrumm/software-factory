@@ -162,7 +162,12 @@ export class FleetBuilder {
 
     const visibleRoots = await realRoots(this.deps.visibleRoots)
     const roots = [...new Set([...(await realRoots(this.deps.roots)), ...visibleRoots])]
-    const places = await Places.of({ visibleRoots, configured: roots, home: this.deps.home })
+    // Both forms of a root, as configured and after realpath: a stored path may be either.
+    const places = await Places.of({
+      visibleRoots: [...this.deps.visibleRoots, ...visibleRoots],
+      configured: [...this.deps.roots, ...roots],
+      home: this.deps.home,
+    })
 
     const db = await this.fallback(
       errors,
@@ -462,7 +467,8 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
     return {
       where,
       repo: where ? enclosingRepo(where, roots) : undefined,
-      visible: paths.some((p) => (p ? isVisible(real(p)) : false)),
+      // No place known at all: visible, so nothing is shown that cannot be placed.
+      visible: !paths.some(Boolean) || paths.some((p) => (p ? isVisible(real(p)) : false)),
     }
   }
   const used = new Set<string>()
