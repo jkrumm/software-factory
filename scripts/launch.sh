@@ -18,6 +18,12 @@ TPL="$DIR/.env.tpl"
 [[ -f "$TPL" ]] || { echo "software-factory: $TPL missing" >&2; exit 78; }
 command -v bun >/dev/null 2>&1 || { echo "software-factory: bun not on PATH" >&2; exit 78; }
 
+# The factory's own non-secret settings (FACTORY_PROBE_HOSTS): ~/.config/factory/env (FACTORY_ENV_FILE), see env-file.sh. Applied here, so the
+# secrets-run child inherits them; a file that is not mode 0600 and the user's refuses the start.
+# shellcheck source=scripts/env-file.sh
+source "$DIR/scripts/env-file.sh"
+load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" "$TPL" || exit 78
+
 # A hung secrets-run must not hang the launch; `timeout` is a Homebrew coreutils binary, so it is optional.
 # macOS /bin/bash is 3.2: under `set -u` an empty array must be expanded as ${limit[@]+"${limit[@]}"}.
 limit=()

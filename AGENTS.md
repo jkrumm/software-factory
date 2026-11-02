@@ -88,7 +88,7 @@ state, roles, process/health/contract/schema/API.
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|requeue`, `session
   list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show` (`show` is the Issue with its timeline, evidence and questions), `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `issue evidence|reopen|stop|resume <id>`, `issue answer <id> <text>` and `issue note <id> <text>` (the owner's, token only), `notify list|test`, `project list|show|sync`, `fleet [--refresh]`, `fleet act <ask> <intent>`, `fleet triage [--undo <id>]`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
-  `verify.sh`, the LaunchAgent plist template).
+  `verify.sh`, the LaunchAgent plist template). `launch.sh` also applies `~/.config/factory/env` (`FACTORY_ENV_FILE`; `env-file.sh`): `KEY=VALUE` lines only, mode 0600 and the user's or the start is refused, no secret (those stay in `.env.tpl`), e.g. `FACTORY_PROBE_HOSTS`.
 - `scripts/gameday/` — the F1 kill gamedays: `run.sh <claimed|working>` `kill -9`s the server at a chosen moment and counts what survives; `setup.sh`, `collect.sh`, `teardown.sh`, `kill-server.sh`, `template/` the scratch repo. Evidence in `docs/evidence/f1-gamedays/`.
 - `scripts/gameday/f2/` — the F2 gamedays, live against the deployed factory with real leads: `run.sh <silent-lead|seeded-bug|seeded-bug-regress> [run-id]`, a `report.md` per run in `docs/evidence/f2-gate/`.
 
