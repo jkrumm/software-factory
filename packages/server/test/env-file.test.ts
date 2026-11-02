@@ -1,31 +1,34 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const SCRIPT = join(import.meta.dir, '..', '..', '..', 'scripts', 'env-file.sh')
 let dir: string
-let tpl: string
+let marker: string
 
 beforeAll(() => {
   dir = mkdtempSync('/tmp/factory-envfile-')
-  tpl = join(dir, '.env.tpl')
-  writeFileSync(tpl, 'FACTORY_TOKEN=op://x/y/z\nFACTORY_DB_PASSWORD=op://x/y/w\n')
+  marker = join(dir, 'ran')
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 /** load_env_file in a fresh bash, then print what it left in the environment. */
-function load(content: string | undefined, mode = 0o600, name = 'env') {
-  const file = join(dir, name)
+function load(content: string | undefined, mode = 0o600) {
+  const file = join(dir, 'env')
   rmSync(file, { force: true })
   if (content !== undefined) {
     writeFileSync(file, content)
     chmodSync(file, mode)
   }
+  return loadPath(file)
+}
+
+function loadPath(file: string) {
   const run = Bun.spawnSync(
     [
       'bash',
       '-c',
-      `source "${SCRIPT}"; load_env_file "${file}" "${tpl}"; code=$?; echo "code=$code probe=\${FACTORY_PROBE_HOSTS-} other=\${OTHER-}"`,
+      `source "${SCRIPT}"; load_env_file "${file}"; code=$?; echo "code=$code probe=\${FACTORY_PROBE_HOSTS-} every=\${FACTORY_DIGEST_EVERY-}"`,
     ],
     { env: { PATH: process.env.PATH ?? '', HOME: dir }, stdout: 'pipe', stderr: 'pipe' },
   )
@@ -34,14 +37,17 @@ function load(content: string | undefined, mode = 0o600, name = 'env') {
 
 describe('scripts/env-file.sh', () => {
   test('no file is no settings', () => {
-    expect(load(undefined).out).toBe('code=0 probe= other=')
+    expect(load(undefined).out).toBe('code=0 probe= every=')
   })
 
   test('KEY=VALUE lines, comments and blank lines are applied as they are, nothing evaluated', () => {
     const { out } = load(
-      '# the machines a probe may look at\n\nFACTORY_PROBE_HOSTS=macbook=mac,mini=local\nOTHER=$(touch /tmp/never) `x` $HOME\n',
+      `# the machines a probe may look at\n\nFACTORY_PROBE_HOSTS=box-a=alias-a,box-b=local\nFACTORY_DIGEST_EVERY=$(touch ${marker}) \`touch ${marker}\` $HOME\n`,
     )
-    expect(out).toBe('code=0 probe=macbook=mac,mini=local other=$(touch /tmp/never) `x` $HOME')
+    expect(out).toBe(
+      'code=0 probe=box-a=alias-a,box-b=local every=$(touch ' + marker + ') `touch ' + marker + '` $HOME',
+    )
+    expect(existsSync(marker)).toBe(false)
   })
 
   test('a mode other than 0600 refuses', () => {
@@ -50,34 +56,67 @@ describe('scripts/env-file.sh', () => {
     expect(err).toContain('mode 0600')
   })
 
-  test('a line that is not KEY=VALUE refuses, naming the line and not its text', () => {
-    const { out, err } = load('FACTORY_PROBE_HOSTS=a=b\nexport OTHER=1\n')
-    expect(out).toStartWith('code=78')
-    expect(err).toContain('line 2')
-    expect(err).not.toContain('export OTHER')
-  })
-
-  test('a secret or a key .env.tpl owns refuses', () => {
-    for (const key of ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL']) {
-      const { out, err } = load(`${key}=x\n`)
-      expect(out).toStartWith('code=78')
-      expect(err).toContain(key)
+  test('a line that is not KEY=VALUE, or ends in a carriage return, refuses, naming the line and not its text', () => {
+    for (const bad of ['FACTORY_PROBE_HOSTS=a=b\nexport OTHER=1\n', 'FACTORY_PROBE_HOSTS=a=b\r\n']) {
+      const { out, err } = load(bad)
+      expect(out).toStartWith('code=78 probe= ') // nothing of the file was exported
+      expect(err).toMatch(/line [12] is not KEY=VALUE/)
+      expect(err).not.toContain('export OTHER')
     }
   })
 
-  test('a symlink is not the file', () => {
+  test('only the listed keys: a secret, the launcher’s own, a loader variable and a name that collides with the parser are refused', () => {
+    for (const key of [
+      'FACTORY_TOKEN',
+      'FACTORY_DB_PASSWORD',
+      'DATABASE_URL',
+      'PORT',
+      'PATH',
+      'BASH_ENV',
+      'FACTORY_VERSION',
+      'reserved',
+      'lineno',
+      'ef_n',
+    ]) {
+      const { out, err } = load(`FACTORY_PROBE_HOSTS=ok\n${key}=x\n`)
+      expect(out).toStartWith('code=78 probe= ')
+      expect(err).toContain(key)
+    }
+    // The collision that used to run code: nothing is evaluated, nothing is exported.
+    const { out } = load(`lineno=a[$(touch ${marker})0]\nFACTORY_PROBE_HOSTS=a=b\n`)
+    expect(out).toStartWith('code=78')
+    expect(existsSync(marker)).toBe(false)
+  })
+
+  test('a symlink, a dangling one included, is not the file', () => {
     const real = join(dir, 'real')
-    writeFileSync(real, 'OTHER=1\n')
+    writeFileSync(real, 'FACTORY_PROBE_HOSTS=a=b\n')
     chmodSync(real, 0o600)
     rmSync(join(dir, 'link'), { force: true })
     symlinkSync(real, join(dir, 'link'))
-    const run = Bun.spawnSync(
-      ['bash', '-c', `source "${SCRIPT}"; load_env_file "${join(dir, 'link')}" "${tpl}"; echo "code=$?"`],
-      {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
-    )
-    expect(run.stdout.toString().trim()).toBe('code=78')
+    expect(loadPath(join(dir, 'link')).out).toStartWith('code=78')
+    rmSync(join(dir, 'dangling'), { force: true })
+    symlinkSync(join(dir, 'nowhere'), join(dir, 'dangling'))
+    expect(loadPath(join(dir, 'dangling')).out).toStartWith('code=78')
+  })
+
+  test('launch.sh refuses the start with exit 78 on a bad file, before it asks for any secret', () => {
+    const bin = join(dir, '.local', 'bin')
+    mkdirSync(bin, { recursive: true })
+    const asked = join(dir, 'asked')
+    // A secrets-run that records it was called: it must not be.
+    writeFileSync(join(bin, 'secrets-run'), `#!/bin/sh\ntouch ${asked}\nexit 0\n`)
+    chmodSync(join(bin, 'secrets-run'), 0o755)
+    const file = join(dir, 'launch-env')
+    writeFileSync(file, 'FACTORY_TOKEN=x\n')
+    chmodSync(file, 0o600)
+    const run = Bun.spawnSync(['bash', join(SCRIPT, '..', 'launch.sh')], {
+      env: { PATH: process.env.PATH ?? '', HOME: dir, FACTORY_ENV_FILE: file },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(run.exitCode).toBe(78)
+    expect(run.stderr.toString()).toContain('sets FACTORY_TOKEN, which this file does not take')
+    expect(existsSync(asked)).toBe(false)
   })
 })
