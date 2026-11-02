@@ -276,7 +276,8 @@ export async function trackSeen(
     WHERE present OR ask_id IN (SELECT jsonb_array_elements_text(${listed}::text::jsonb))`
   const byId = new Map(known.map((k) => [k.ask_id, k]))
   const occurrences = new Map<string, number>()
-  const writes: { ask_id: string; occurrence: number; first_seen: string }[] = []
+  // By ask id, the last one wins: one statement cannot upsert a row twice.
+  const writes = new Map<string, { ask_id: string; occurrence: number; first_seen: string }>()
   for (const ask of asks) {
     const row = byId.get(ask.id)
     if (row?.present) {
@@ -285,13 +286,13 @@ export async function trackSeen(
     }
     const occurrence = row ? row.occurrence + 1 : 1
     occurrences.set(ask.id, occurrence)
-    writes.push({ ask_id: ask.id, occurrence, first_seen: ask.at })
+    writes.set(ask.id, { ask_id: ask.id, occurrence, first_seen: ask.at })
   }
-  if (writes.length > 0) {
+  if (writes.size > 0) {
     await sql`
       INSERT INTO factory.fleet_ask_seen (ask_id, occurrence, first_seen, present, absent_at)
       SELECT x.ask_id, x.occurrence, x.first_seen::timestamptz, true, NULL
-      FROM jsonb_to_recordset(${JSON.stringify(writes)}::text::jsonb) AS x(ask_id text, occurrence int, first_seen text)
+      FROM jsonb_to_recordset(${JSON.stringify([...writes.values()])}::text::jsonb) AS x(ask_id text, occurrence int, first_seen text)
       ON CONFLICT (ask_id) DO UPDATE
         SET occurrence = EXCLUDED.occurrence, first_seen = EXCLUDED.first_seen, present = true, absent_at = NULL`
   }

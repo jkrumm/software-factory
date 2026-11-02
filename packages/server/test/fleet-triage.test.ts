@@ -1245,4 +1245,25 @@ describe('the lead’s review', () => {
     expect(ask(fleet, 'queue:q-a')).toBeDefined()
     expect(ask(fleet, 'queue:q-b')?.folded).toEqual([])
   })
+
+  test('r3: an ask listed twice in one build is one write (last wins), and one occurrence', async () => {
+    const { trackSeen } = await import('../src/fleet/triage-store.ts')
+    const dup = [
+      { id: 'queue:dup', at: iso(3) },
+      { id: 'queue:other', at: iso(2) },
+      { id: 'queue:dup', at: iso(1) },
+    ]
+    const first = await trackSeen(db.sql, dup, NOW, true)
+    expect(first.get('queue:dup')).toBe(1)
+    const [row] = await db.sql`SELECT occurrence, first_seen FROM factory.fleet_ask_seen WHERE ask_id = 'queue:dup'`
+    expect(row.occurrence).toBe(1)
+    expect(row.first_seen.toISOString()).toBe(iso(1))
+    // Gone for a build, back twice in the next: the next occurrence, once.
+    await trackSeen(db.sql, [], NOW, true)
+    const back = await trackSeen(db.sql, dup, NOW, true)
+    expect(back.get('queue:dup')).toBe(2)
+    expect((await db.sql`SELECT occurrence FROM factory.fleet_ask_seen WHERE ask_id = 'queue:dup'`)[0].occurrence).toBe(
+      2,
+    )
+  })
 })
