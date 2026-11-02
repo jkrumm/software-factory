@@ -29,10 +29,13 @@ proposals with their numbers are `docs/evidence/night-2026-11-01.md` (Morning se
   `GET /fleet` is **token-only** (a redacted socket view leaked seven ways under review). The board reads it with the token.
 - **software-factory#31** shipped as Issue 41; the gate's re-run took two more real requests (42, 43).
 
-## Open, for the owner or the next lead
+## Open, for the next lead (the owner: "decide these yourself")
 
-- The defects listed in the evidence page's Morning section: file as factory Issues now, or fold into F3/F4's plans (owner's call).
-- Seed the door tokens (`~/.config/factory/door-tokens.json`) into 1Password.
+- Issues 48–56 run by themselves: 48 weatherorb's watchdog push, 49–50 homelab-private's KoInsight and Wishlist pushes (Kuma, down since
+  11-01), 51–55 the night's defects in this repo, 56 dotfiles' map check. Watch them with `factory status`; a parked one needs a look.
+- The door tokens: a MacBook dialog to store them as a 1Password document (vault `mini`) was pushed 17:50 (`ask-human.sh status
+  20261102T175038-6911`).
+- `FACTORY_PROBE_HOSTS` lives in `~/.config/factory/env` (0600, untracked); FV Wave 3 makes `launch.sh` read it.
 - dotfiles' `make verify` is the whole machine's doctor: a new LaunchAgent from any session turns every dotfiles hold red until it is
   mapped in `docs/architecture.md` (happened twice on 2026-11-02).
 - FV Waves 3–6 and the board's waves (dotfiles `docs/waves/fv-board.md`) after Wave 2.

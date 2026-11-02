@@ -71,6 +71,8 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
 - [ ] Hermes answers "what needs me?" from `asks`. `agw agents` becomes a client of `/fleet` or retires (agw and dotfiles
   `AGENTS.md` change with it; agw's mother decides which).
 - [ ] A2 and IR plans are rewritten to read `/fleet` (their own collectors dropped); `docs/program.md` reorders them after FV.
+- [ ] The reaper (owner remark 2026-11-02): a session idle 2 h whose worktree is clean, whose branch is merged or gone and whose parent
+  waits on nothing of it is closed (`hc kill`, `hc rm`, the app's `tab.settle`), one line in the digest; unmerged work is listed, never closed.
 - [ ] `docs/design.md` gains §11 "The fleet view" as built; `AGENTS.md` pointers.
 
 ## Wave 6 — The gate            <!-- status: pending -->
