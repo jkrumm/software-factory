@@ -976,6 +976,21 @@ describe('the deployed version', () => {
     expect((await run(unknown.repo, [unknown.c2]))[0]?.detail).toContain('is not in')
   })
 
+  test('a git that does not answer is a red check, not an error, so the hold files its answer', async () => {
+    const { repo, c2, deployed } = deployable('versions-git-hangs')
+    deployed(c2)
+    const real = (await import('../src/exec.ts')).runProcess
+    const proof = new MakeAndProbes({
+      run: (cmd, ...rest) => (cmd[0] === 'git' ? Promise.resolve({ exitCode: -1, stdout: '' }) : real(cmd, ...rest)),
+    })
+    const checks = await proof.run({ repo, makeVerify: true, version: { shipped: [c2] }, probes: [] })
+    expect(checks.map((c) => [c.name, c.ok])).toEqual([
+      ['deployed version', false],
+      ['make verify', true],
+    ])
+    expect(checks[0]?.detail).toContain('did not finish in time')
+  })
+
   test('no shipped commit on record is red, never skipped', async () => {
     const { repo, deployed, c2 } = deployable('versions-none')
     deployed(c2)
@@ -1002,7 +1017,7 @@ describe('the deployed version', () => {
     expect(checks[0]).toMatchObject({ name: 'deployed version', ok: false })
   })
 
-  async function holdOver(repo: string, sha: string, reported = true) {
+  async function holdOver(repo: string, sha: string) {
     commits.resolves[SHA] = sha
     const issuePorts = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
     const { id, key } = await lead(repo)
@@ -1018,7 +1033,7 @@ describe('the deployed version', () => {
       await offTick.settled()
       clock.advance(5_000)
     }
-    return { id, key, reported }
+    return { id, key }
   }
 
   test('through the hold: a deployed version behind the ship is a regression to the lead, at it the Issue closes verified', async () => {
