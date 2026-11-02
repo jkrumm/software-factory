@@ -61,6 +61,14 @@ interface DbPart {
   decisions: DecisionRow[]
 }
 
+/**
+ * Whether every source an ask comes from answered in this build (hc, the database, the human queue, the digest's reply asks, the stored
+ * snapshot it restarts from): only then does an ask that is not listed have left, and its occurrence end. A plan or a repo that could not be
+ * read changes no ask's existence.
+ */
+const askSourcesAnswered = (errors: readonly string[]): boolean =>
+  !errors.some((e) => /^(hc|database|human queue|digest|snapshot)/.test(e))
+
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 const isFile = (path: string) =>
@@ -169,12 +177,13 @@ export class FleetBuilder {
     if (!this.seeded) {
       try {
         const stored = await readSnapshot(sql)
+        // The table has every ask the builds listed, also the ones the triage folded or the owner snoozed (the snapshot has not): a
+        // restart must not make an old ask look new, or a fold would be decided the other way round. Read before `seeded` is set, so a
+        // read that fails is tried again.
+        const seen = await readSeen(sql)
         this.seeded = true
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
-        // The table has every ask the builds listed, also the ones the triage folded or the owner snoozed (the snapshot has not): a
-        // restart must not make an old ask look new, or a fold would be decided the other way round.
-        for (const [id, at] of await readSeen(sql))
-          if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
+        for (const [id, at] of seen) if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
         for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
           if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
         }
@@ -314,7 +323,7 @@ export class FleetBuilder {
         queue,
         firstSeen: this.firstSeen,
         roots,
-        complete: !errors.some((e) => /^(hc|database|human queue|snapshot)/.test(e)),
+        complete: askSourcesAnswered(errors),
       })
       model = triaged.model
       timed = triaged.timed
@@ -333,7 +342,9 @@ export class FleetBuilder {
     )
     const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
     // Every ask the sources raised, also one the triage folded or the owner snoozed: it keeps its time for when it comes back.
-    this.firstSeen = new Map(timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at]))
+    // A build that could not read a source leaves what it knew of that source's asks (they did not leave, they were not listed).
+    const listed = timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const)
+    this.firstSeen = askSourcesAnswered(errors) ? new Map(listed) : new Map([...this.firstSeen, ...listed])
     this.since = new Map(
       [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>
         x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [],
