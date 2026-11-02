@@ -54,6 +54,7 @@ scratch_up() {
   local name=$1 template=$2
   local repo=$SOURCE_ROOT/$name remote=$REMOTES/$name.git
   [[ ! -e $repo && ! -e $remote ]] || { echo "scratch: $repo or $remote exists; run teardown first" >&2; return 1; }
+  SCRATCH=$name # from here on this run owns the paths, and an early exit takes them down
   mkdir -p "$REMOTES"
   # The marker goes in as each resource is made, so a setup that fails halfway can still be torn down.
   git init --quiet --bare --initial-branch=master "$remote" && : >"$remote/factory-gameday"
@@ -86,12 +87,20 @@ YAML
 }
 
 # `scratch_down <repo name>`: F1's teardown, which closes the repo's terminals and removes it only with its markers.
-scratch_down() { GAMEDAY_REPO=$1 "$GAMEDAY_DIR/teardown.sh" 2>&1 | scrub; }
+scratch_down() {
+  GAMEDAY_REPO=$1 "$GAMEDAY_DIR/teardown.sh" 2>&1 | scrub
+  # teardown.sh leaves what has no marker; a path still there is a leftover, not a success.
+  [[ ! -e $SOURCE_ROOT/$1 && ! -e $REMOTES/$1.git ]] || { echo "scratch: $1 is still there after teardown" >&2; return 1; }
+}
 
 # `finish_run <repo name> [issue id]`: the end of a run, whatever way it ended. An Issue still open is stopped and its finalize awaited; the
 # scratch repo goes only once the Issue is finalized (its lead may be working in it until then). Returns 1 when something was left behind.
 finish_run() {
-  local name=$1 issue=${2:-} i
+  local name=$1 issue=${2:-} i rc=0
+  if [[ -z $issue && -n ${SOURCE_KEY:-} ]]; then
+    # The create may have succeeded with its answer lost: find the Issue by the key this run filed it under.
+    issue=$(sqlq "SELECT id FROM factory.issues WHERE source_key = '$SOURCE_KEY' LIMIT 1" 2>/dev/null || true)
+  fi
   if [[ -n $issue ]]; then
     if [[ $(issue_col "$issue" state) != closed ]]; then
       for i in 1 2 3 4 5; do
@@ -104,18 +113,19 @@ finish_run() {
       return 1
     fi
   fi
-  if declare -F extra_cleanup >/dev/null; then extra_cleanup; fi
-  scratch_down "$name" | tee -a "${TIMELINE:-$EVIDENCE/log.txt}" >/dev/null
+  if declare -F extra_cleanup >/dev/null; then extra_cleanup || rc=1; fi
+  scratch_down "$name" | tee -a "${TIMELINE:-$EVIDENCE/log.txt}" >/dev/null || rc=1
+  return "$rc"
 }
 
 # The scripts set SCRATCH and `issue` as they make them and FINISHED=1 when their own end ran; an exit before that (an error under
 # `set -e`, SIGINT, SIGTERM) stops the Issue and takes the scratch repo down, then the lock is released.
-FINISHED=0 HAVE_LOCK=0 SCRATCH="" issue=""
+FINISHED=0 HAVE_LOCK=0 SCRATCH="" SOURCE_KEY="" issue=""
 on_exit() {
   local rc=$?
   trap - EXIT
   if ((FINISHED == 0)) && [[ -n $SCRATCH ]]; then
-    log "run ended early (exit $rc): cleaning up"
+    { log "run ended early (exit $rc): cleaning up"; } || true
     finish_run "$SCRATCH" "$issue" || true
   fi
   ((HAVE_LOCK == 0)) || rmdir "$LOCK" 2>/dev/null || true

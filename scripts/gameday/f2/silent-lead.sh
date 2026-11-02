@@ -21,11 +21,11 @@ repo=$SOURCE_ROOT/$name remote=$REMOTES/$name.git
 healthy || { echo "silent-lead: the factory is not healthy" >&2; exit 1; }
 
 log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut -c1-12), base commit $(git -C "$ROOT" rev-parse --short HEAD)"
-SCRATCH=$name
 scratch_up "$name" "$F2_DIR/templates/silent"
 base_commits=$(git --git-dir="$remote" rev-list --count master)
 
 ask="Reply with the single word noted and end your turn. Run no command at all. The factory command is denied in this repo on purpose (see AGENTS.md): do not report, do not work around it. If a hook or message tells you to report, reply noted again and end your turn again."
+SOURCE_KEY=f2-silent-$run
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 silent lead"}')
 filed=$(fx issue new --repo "$repo" --title "Silent: $ask" --facts - --key "f2-silent-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
 [[ $filed =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
