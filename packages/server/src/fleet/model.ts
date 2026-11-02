@@ -76,14 +76,16 @@ const STATE_ORDER = ['walled', 'blocked', 'stuck', 'working', 'waiting', 'starti
 
 const hash = (text: string, length = 12): string => createHash('sha256').update(text).digest('hex').slice(0, length)
 
-/** The text of an attention line without what changes every minute, so the same condition keeps the same key. */
-const stable = (line: string): string => line.replace(/\b\d+ min\b/g, 'N min')
-
 /**
  * What an attention line is about, as the key of its ask: the session and the verb, the note, the spawn, the notification, the
- * Issue and what is wrong with it. Never the line's counters (`for 5 min`) or its free text, so the same condition keeps its id.
+ * Issue and what is wrong with it, then a short hash of the line with its digits removed: two different lines of one subject do not
+ * collapse, and a counter (`for 5 min`) does not change the id.
  */
 export function lineKey(line: string): string {
+  return `${subjectKey(line)}:${hash(line.replace(/\d+/g, ''), 6)}`
+}
+
+function subjectKey(line: string): string {
   const session = /^(blocked|stuck|walled) (\S+?):?(?: |$)/.exec(line)
   if (session) return `${session[1]}:${session[2]}`
   const note = /^note (\S+) to /.exec(line)
@@ -108,9 +110,9 @@ export function lineKey(line: string): string {
       [/^: its worktree was kept/, 'worktree-kept'],
     ]
     const kind = kinds.find(([pattern]) => pattern.test(rest))?.[1]
-    return `issue:${issue[1]}:${kind ?? hash(stable(rest), 8)}`
+    return `issue:${issue[1]}:${kind ?? 'other'}`
   }
-  return `line:${hash(stable(line))}`
+  return 'line'
 }
 
 /** The session or spawn or Issue an attention line names, for the repo and the session of its ask. */
@@ -153,20 +155,13 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   const repoOf = (path: string | undefined) => (path ? enclosingRepo(path, input.roots) : undefined)
   const spawnRepo = new Map(status.queue.spawns.map((s) => [s.key, repoOf(s.repo)]))
   const issueRepo = new Map(status.issues.map((i) => [i.id, repoOf(i.repo)]))
-  const spawnVisible = new Set(
-    status.queue.spawns.filter((x) => input.isVisible(x.repo) || input.isVisible(x.space)).map((x) => x.key),
-  )
-  const issueVisible = new Set(status.issues.filter((i) => input.isVisible(i.repo)).map((i) => i.id))
 
   const repos: FleetRepo[] = []
-  const planErrors: string[] = []
   const listed = new Set(input.repos.map((r) => r.path))
   for (const facts of input.repos) {
     const isVisible = input.isVisible(facts.path)
     const plans: FleetPlan[] = facts.plans.map((file) => {
-      const { plan: parsed, problems } = parsePlan(file.text, { visible: isVisible })
-      for (const problem of problems)
-        planErrors.push(`plan ${basename(facts.path)}/${file.path.slice(facts.path.length + 1)}: ${problem}`)
+      const parsed = parsePlan(file.text, { visible: isVisible })
       return {
         path: file.path,
         ...parsed,
@@ -207,28 +202,10 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     .sort(sessionOrder)
 
   const asks: FleetAsk[] = []
-  const ask = (
-    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'visible'> & {
-      plan?: string | null
-      /** a place the ask is known to be in besides its repo and session (the spawn's or the Issue's own path) */
-      visibleBy?: boolean
-    },
-  ) => {
+  const ask = (a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan'> & { plan?: string | null }) => {
     const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
-    // Visible by its place, listed or not: an Issue's decision in an IuRoot repo with no plan and no session is still IuRoot's.
-    const visible =
-      (a.repo !== null && input.isVisible(a.repo)) || (a.session !== null && visibleSessions.has(a.session))
-    const { visibleBy, ...rest } = a
-    asks.push({
-      short: null,
-      suggestion: null,
-      actions: [],
-      ...rest,
-      plan: a.plan ?? planOf,
-      visible: visible || visibleBy === true,
-    })
+    asks.push({ short: null, suggestion: null, actions: [], ...a, plan: a.plan ?? planOf })
   }
-  const visibleSessions = new Set(input.sessions.filter((m) => m.session.visible).map((m) => m.session.id))
 
   // The time of an ask that has none of its own: the first build that saw it (kept by the builder), never this build's.
   const seen = (id: string) => input.firstSeen.get(id) ?? now.toISOString()
@@ -291,9 +268,6 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
       text: line,
       source: 'factory',
       at: seen(id),
-      visibleBy:
-        (subject.spawn !== undefined && spawnVisible.has(subject.spawn)) ||
-        (subject.issue !== undefined && issueVisible.has(subject.issue)),
     })
   }
 
@@ -331,10 +305,9 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     asks,
     repos,
     unplaced,
-    redacted: false,
     quota: status.accounts,
-    queue: { ...status.queue, visibleSpawns: [...spawnVisible] },
-    errors: [...input.errors, ...planErrors],
+    queue: status.queue,
+    errors: input.errors,
   }
 }
 

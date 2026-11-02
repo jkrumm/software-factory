@@ -11,7 +11,7 @@ import { AskHumanQueue, type HcLister, type HcTerminal, type QueueReader } from 
 import { serveHooks } from '../src/http.ts'
 import { startApp, TEST_ROLES, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
-import { buildEstate, type Estate, estateTerminals, makeRepo } from './support/fleet-estate.ts'
+import { buildEstate, type Estate, estateTerminals } from './support/fleet-estate.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
 import { world } from './support/world.ts'
 
@@ -304,7 +304,10 @@ describe('the estate', () => {
       at: '2026-11-01T21:26:07.000Z',
     })
     const factory = fleet.asks.filter((a) => a.source === 'factory')
-    expect(factory.map((a) => a.id).sort()).toEqual(['factory:notification:notify:failed:x', 'factory:spawn:lw-fix'])
+    expect(factory.map((a) => a.id.replace(/:[0-9a-f]{6}$/, '')).sort()).toEqual([
+      'factory:notification:notify:failed:x',
+      'factory:spawn:lw-fix',
+    ])
     expect(factory.map((a) => a.text).sort()).toEqual([
       'notification notify:failed:x was not delivered: Hermes did not answer',
       'spawn lw-fix failed: the pane never came up',
@@ -581,9 +584,6 @@ async function factory(args: string[], env: Record<string, string> = {}) {
 }
 
 describe('the lead’s review', () => {
-  const viaSocket = async (socketPath: string) =>
-    Fleet.parse(await (await fetch('http://localhost/fleet', { unix: socketPath })).json())
-
   async function withSocket<T>(run: (socketPath: string) => Promise<T>): Promise<T> {
     const dir = mkdtempSync('/tmp/factory-fleet-sock-')
     const socketPath = join(dir, 'h.sock')
@@ -604,141 +604,26 @@ describe('the lead’s review', () => {
     }
   }
 
-  test('A: the socket’s view keeps only deterministic fields of a visible repo; the token API has everything', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    const full = await get()
-    expect(full.redacted).toBe(false)
-    const teamchat = full.repos.find((r) => r.name === 'prometheus-scripts')
-    expect(teamchat?.plan?.title).toBe('Teamchat: Wave 62 and on')
-
-    await withSocket(async (socketPath) => {
-      const view = await viaSocket(socketPath)
-      expect(view.redacted).toBe(true)
-      const iu = view.repos.find((r) => r.name === 'prometheus-scripts')
-      expect(iu).toMatchObject({
-        visible: true,
-        git: { branch: 'master', dirty: false, lastCommit: { subject: null } },
-        plan: { state: 'running', title: null, short: null, goal: null, sha: teamchat?.plan?.sha },
-        sessions: [{ id: 'athena-orchestrator', state: 'working', title: null, headline: null, visible: true }],
-      })
-      expect(iu?.plan?.waves[0]).toMatchObject({ n: 62, title: null, short: null, statusText: null, status: 'active' })
-      expect(iu?.git?.lastCommit?.sha).toBeTruthy()
-      // an ask about a visible session: id, kind and time stay, the text goes
-      expect(view.asks.find((a) => a.id === 'hc:prometheus-epx-w1')).toMatchObject({ kind: 'permission', text: null })
-      // everything else is whole
-      expect(view.repos.find((r) => r.name === 'software-factory')?.plan?.title).toBe(
-        'Software factory: the program plan',
-      )
-      expect(view.asks.find((a) => a.id === 'queue:20261027T230130-2786')?.text).toContain('LoA status')
-      expect(JSON.stringify(view)).not.toContain('Teamchat')
-      expect(JSON.stringify(view)).not.toContain('Channel pinning')
-      expect(JSON.stringify(view)).not.toContain('rm -rf node_modules')
-      expect(JSON.stringify(view)).not.toContain('EPX Wave 1')
-      expect(view.summary).toEqual(full.summary)
-      expect(view.fingerprint).toBe(full.fingerprint)
-
-      // the CLI says which one it got
-      const out = await factory(['fleet', '--format', 'plain'], { FACTORY_TOKEN: '', FACTORY_SOCKET: socketPath })
-      expect(out.stdout.split('\n')[0]).toStartWith('VIEW\tsocket')
-      expect(
-        JSON.parse((await factory(['fleet'], { FACTORY_TOKEN: '', FACTORY_SOCKET: socketPath })).stdout).redacted,
-      ).toBe(true)
-    })
-    // the stored model is untouched
-    expect((await get()).repos.find((r) => r.name === 'prometheus-scripts')?.plan?.title).toBe(
-      'Teamchat: Wave 62 and on',
-    )
-  })
-
-  test('A2: an ask about an IuRoot repo that has no plan and no session is redacted too, and so is a spawn’s error', async () => {
-    const quiet = makeRepo(estate.iu, 'quiet-repo', { 'README.md': 'nothing here\n' }, 1, NOW)
-    const { issue } = await createIssue(
-      db.sql,
-      { source: 'request', sourceKey: 'iu1', repo: quiet, title: 'Secret IuRoot title', facts: {} },
-      { repoRoots: [estate.src, estate.iu], now: clock.now() },
-    )
-    await db.sql`
-      INSERT INTO factory.decisions (issue_id, key, question, created_at)
-      VALUES (${issue.id}, 'iu1:dec', 'Ship the secret IuRoot migration?', ${w.at(30)})`
-    await db.sql`
-      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at)
-      VALUES ('iu-fix', ${quiet}, 'p', 'worker', 'sonnet', 'high', 'failed', 'secret IuRoot failure detail', ${w.at(20)})`
-    const wide = new FleetBuilder({
-      sql: db.sql,
-      now: () => clock.now(),
-      roots: [estate.src, estate.iu],
-      visibleRoots: [],
-      home: '/nonexistent-home',
-      hc,
-      queue,
-    })
-    await wide.refreshNow()
-    const full = await get()
-    expect(full.repos.map((r) => r.name)).not.toContain('quiet-repo')
-    expect(full.asks.find((a) => a.id === 'decision:iu1:dec')).toMatchObject({ visible: true, repo: quiet })
-    await withSocket(async (socketPath) => {
-      const view = await viaSocket(socketPath)
-      expect(view.asks.find((a) => a.id === 'decision:iu1:dec')).toMatchObject({ kind: 'question', text: null })
-      expect(view.asks.find((a) => a.id === 'factory:spawn:iu-fix')).toMatchObject({ text: null })
-      expect(view.queue.spawns.find((x) => x.key === 'iu-fix')).toMatchObject({ status: 'failed', error: null })
-      for (const seeded of ['Secret IuRoot title', 'Ship the secret IuRoot migration?', 'secret IuRoot failure detail'])
-        expect(JSON.stringify(view)).not.toContain(seeded)
-      // an ordinary repo's ask is whole
-      expect(view.asks.find((a) => a.id === 'queue:20261027T230130-2786')?.text).toContain('LoA')
-    })
-  })
-
-  test('A3: a spawn in a custom visible root, or one whose space is in IuRoot, loses its error; an error line naming a visible repo is withheld', async () => {
-    const custom = mkdtempSync('/tmp/factory-fleet-custom-')
-    try {
-      const quiet = makeRepo(custom, 'quiet-custom', { 'README.md': 'x\n' }, 1, NOW)
-      await db.sql`
-        INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at)
-        VALUES ('custom-fix', ${quiet}, 'p', 'worker', 'sonnet', 'high', 'failed', 'Custom Root Failure Detail', ${w.at(20)})`
-      await db.sql`
-        INSERT INTO factory.spawns (key, repo, space, prompt, role, tier, effort, status, error, created_at)
-        VALUES ('space-fix', ${join(estate.src, 'rb')}, ${join(estate.iu, 'prometheus-epx')}, 'p', 'worker', 'sonnet', 'high', 'failed', 'Space Failure Detail', ${w.at(20)})`
-      const failEpx: typeof runProcess = async (cmd) =>
-        cmd.some((part) => part.endsWith('prometheus-epx')) ? { exitCode: 128, stdout: '' } : runProcess(cmd, 5_000)
-      const wide = new FleetBuilder({
-        sql: db.sql,
-        now: () => clock.now(),
-        roots: [estate.src, custom],
-        visibleRoots: [custom, estate.iu],
-        home: '/nonexistent-home',
-        hc,
-        queue,
-        git: new GitReader(failEpx),
-      })
-      const built = await wide.refreshNow()
-      expect(built.errors.some((e) => e.startsWith('git prometheus-epx:'))).toBe(true)
-      await withSocket(async (socketPath) => {
-        const view = await viaSocket(socketPath)
-        expect(view.queue.spawns.find((x) => x.key === 'custom-fix')?.error).toBeNull()
-        expect(view.queue.spawns.find((x) => x.key === 'space-fix')?.error).toBeNull()
-        expect(view.asks.find((a) => a.id === 'factory:spawn:custom-fix')?.text).toBeNull()
-        expect(view.errors.some((e) => e.includes('prometheus-epx'))).toBe(false)
-        expect(view.errors).toContain('git: an error in a visible repo (withheld)')
-        for (const seeded of ['Custom Root Failure Detail', 'Space Failure Detail'])
-          expect(JSON.stringify(view)).not.toContain(seeded)
-      })
-      // the token API's model has all of it
-      const full = await get()
-      expect(full.queue.spawns.find((x) => x.key === 'custom-fix')?.error).toBe('Custom Root Failure Detail')
-      expect(full.queue.visibleSpawns.sort()).toEqual(['custom-fix', 'space-fix'])
-    } finally {
-      rmSync(custom, { recursive: true, force: true })
-    }
-  })
-
   test('a snapshot an older release wrote is not ready, not a 500', async () => {
     await db.sql`
       INSERT INTO factory.fleet_snapshot (id, model, fingerprint, built_at)
       VALUES (1, '{"builtAt":"2026-11-01T00:00:00.000Z","summary":{}}'::jsonb, 'old', ${w.at(10)})`
     expect((await app.get('/fleet')).status).toBe(503)
+  })
+
+  test('the socket serves no /fleet: the model holds IuRoot’s text, and what a pane reads goes to its model', async () => {
+    await factoryRows()
+    await builder.refreshNow()
     await withSocket(async (socketPath) => {
-      expect((await fetch('http://localhost/fleet', { unix: socketPath })).status).toBe(503)
+      for (const [method, path] of [
+        ['GET', '/fleet'],
+        ['POST', '/fleet/refresh'],
+        ['GET', '/fleet/refresh'],
+      ] as const) {
+        const res = await fetch(`http://localhost${path}`, { method, unix: socketPath })
+        expect(res.status).toBe(404)
+        expect(await res.text()).not.toContain('Teamchat')
+      }
     })
   })
 
@@ -756,7 +641,6 @@ describe('the lead’s review', () => {
     const fleet = await off.refreshNow()
     expect(fleet.repos.filter((r) => r.visible).map((r) => r.name)).toEqual(['prometheus-epx', 'prometheus-scripts'])
     expect(fleet.repos.find((r) => r.name === 'software-factory')?.visible).toBe(false)
-    expect(fleet.repos.flatMap((r) => r.sessions).find((x) => x.id === 'athena-orchestrator')?.visible).toBe(true)
   })
 
   test('1: an hc blocked ask is timed by hc’s status, not the factory session’s state, and waits two minutes', async () => {
@@ -906,16 +790,13 @@ describe('the lead’s review', () => {
     expect(factoryAt(second)).toEqual(factoryAt(first))
   })
 
-  test('9: a plan heading that does not parse is an errors line with its line number', async () => {
+  test('9: only "## Wave <n>" headings are waves; any other "## Wave …" heading is ignored, with no errors line', async () => {
     const path = join(estate.src, 'modelpick/docs/waves/PLAN.md')
     const original = await Bun.file(path).text()
-    writeFileSync(path, `${original}\r\n## Wave — nothing numbered\r\n`)
+    writeFileSync(path, `${original}\r\n## Wave — nothing numbered\r\n## Wave overview\r\n## Wave 3.5 Half\r\n`)
     try {
       const fleet = await builder.refreshNow()
-      const lines = original.split('\n').length + 1
-      expect(fleet.errors).toContain(
-        `plan modelpick/docs/waves/PLAN.md: line ${lines} starts with "## Wave" but has no wave number`,
-      )
+      expect(fleet.errors).toEqual([])
       expect(fleet.repos.find((r) => r.name === 'modelpick')?.plan?.waves).toHaveLength(1)
     } finally {
       writeFileSync(path, original)
@@ -1066,25 +947,17 @@ describe('factory fleet', () => {
     expect(Fleet.parse(JSON.parse(refreshed.stdout)).repos.length).toBeGreaterThan(0)
   })
 
-  test('through the socket, as a session reads it', async () => {
+  test('needs the token: without one it says so and exits 3, also with the socket set', async () => {
     await builder.refreshNow()
     const dir = mkdtempSync('/tmp/factory-fleet-sock-')
-    const socketPath = join(dir, 'h.sock')
-    const hooks = serveHooks({
-      sql: db.sql,
-      clock,
-      token: TEST_TOKEN,
-      socketPath,
-      repoRoots: [estate.src],
-      roles: TEST_ROLES,
-      slots: 2,
-    })
     try {
-      const out = await factory(['fleet'], { FACTORY_TOKEN: '', FACTORY_SOCKET: socketPath })
-      expect(out.code).toBe(0)
-      expect(Fleet.parse(JSON.parse(out.stdout)).summary.asks).toBeGreaterThan(0)
+      for (const args of [['fleet'], ['fleet', '--refresh']]) {
+        const out = await factory(args, { FACTORY_TOKEN: '', FACTORY_SOCKET: join(dir, 'h.sock') })
+        expect(out.code).toBe(3)
+        expect(out.stdout).toBe('')
+        expect(out.stderr).toContain('FACTORY_TOKEN')
+      }
     } finally {
-      await hooks.stop(true)
       rmSync(dir, { recursive: true, force: true })
     }
   })
