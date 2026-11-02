@@ -70,10 +70,13 @@ class FakeCommits implements Commits {
   branch: string[] = []
   failure?: Error
   calls = 0
+  /** what a short sha or a name resolves to, as git does */
+  resolves: Record<string, string> = {}
   async read({ reported }: { reported: readonly string[] }): Promise<CommitRead> {
     this.calls++
     if (this.failure) throw this.failure
-    return { commits: [...reported, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
+    const full = reported.map((sha) => this.resolves[sha] ?? sha)
+    return { commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
   }
 }
 
@@ -917,12 +920,13 @@ describe('finalize', () => {
     const { id, key } = await lead()
     await prove(id, key, 'service')
     const resolved = 'f'.repeat(40)
+    commits.resolves = { abc1234: 'e'.repeat(40) }
     commits.branch = [resolved]
     expect((await post(id, 'ship', { summary: 'shipped', commits: ['abc1234'], session: key })).status).toBe(201)
     await holdEnds(id)
     await drive(4)
     expect(worktrees.removed).toHaveLength(1)
-    expect(worktrees.removed[0]?.reported).toEqual(['abc1234', resolved])
+    expect(worktrees.removed[0]?.reported).toEqual(['e'.repeat(40), resolved])
   })
 
   test('a queued Issue that is stopped never had a lead: only its place goes', async () => {

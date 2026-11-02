@@ -40,7 +40,10 @@ async function resolved(path: string): Promise<string | undefined> {
 export class FileTranscripts implements TranscriptStore {
   async copy(input: { from: string; to: string; root: string | undefined }): Promise<boolean> {
     // Whatever goes wrong with one transcript (a permission, a path that is no directory, a full disk) is a transcript not archived.
-    return this.copyInside(input).catch(() => false)
+    return this.copyInside(input).catch(async () => {
+      await rm(`${input.to}.part`, { force: true }).catch(() => undefined)
+      return false
+    })
   }
 
   private async copyInside({
@@ -105,7 +108,9 @@ export async function archiveAttempt(
   const rootOf = (account: string | null) => {
     let root = roots.get(account)
     if (!root) {
-      root = deps.projectsDir(account).catch(() => undefined)
+      root = Promise.resolve()
+        .then(() => deps.projectsDir(account))
+        .catch(() => undefined)
       roots.set(account, root)
     }
     return root
