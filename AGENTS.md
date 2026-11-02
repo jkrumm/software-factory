@@ -84,6 +84,7 @@ state, roles, process/health/contract/schema/API.
   list|get|wait|note`, `slot run`, `queue get|set`, `quota get|refresh`, `role list|get`, `issue new|list|show`, `issue phase|wait|ship|close|block|ask|drop <id>` (a lead's report), `project list|show|sync`, `door route|unrouted|token`, `hook <event>` (`src/hook.ts`). Exit codes are agw's table, copied in `src/exit.ts`.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
+- `scripts/gameday/` — the F1 kill gamedays: `run.sh <claimed|working>` `kill -9`s the server at a chosen moment and counts what survives; `setup.sh`, `collect.sh`, `teardown.sh`, `kill-server.sh`, `template/` the scratch repo. Evidence in `docs/evidence/f1-gamedays/`.
 
 ## Validate
 
