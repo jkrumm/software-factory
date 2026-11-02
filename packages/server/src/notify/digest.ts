@@ -99,6 +99,8 @@ export function renderMorning(groups: SinceGroups, date: string, reserve = 0): s
             '; ',
           )}${accounts.length > QUOTA_SHOWN ? ` (+${accounts.length - QUOTA_SHOWN} more)` : ''}; digest $${groups.spend.digestUsd.toFixed(2)}`,
   )
+  if (groups.incomplete.length > 0)
+    lines.push(`Shipped may miss commits in ${groups.incomplete.length} repos (git did not answer)`)
   if (hidden > 0) lines.push(`Read-only area: ${hidden} items, counted only`)
   const text = lines.join('\n')
   const max = DIGEST_MAX_CHARS - reserve

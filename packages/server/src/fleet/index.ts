@@ -278,9 +278,7 @@ export class FleetBuilder {
     const facts: RepoFacts[] = []
     const list = [...repoPaths].sort()
     for (let i = 0; i < list.length; i += CONCURRENCY) {
-      const read = await Promise.all(
-        list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf, now)),
-      )
+      const read = await Promise.all(list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf)))
       for (const found of read) {
         if (!found) continue
         facts.push(found.facts)
@@ -429,14 +427,19 @@ export class FleetBuilder {
     path: string,
     roots: readonly string[],
     planOf: ReadonlyMap<string, { plan: string | null }>,
-    now: Date,
   ): Promise<{ facts: RepoFacts; errors: string[] } | undefined> {
     const errors: string[] = []
     if (!(await exists(join(path, '.git')))) return undefined
     const name = path.split('/').at(-1) ?? path
     let git: FleetGit | null = null
     try {
-      git = { ...(await this.git.state(path)), recentAt: now.toISOString() }
+      const { recentError, ...state } = await this.git.state(path)
+      git = state
+      if (recentError !== undefined) {
+        // The commits could not be read: the previous build's stand in, and the since reading lists the repo as incomplete.
+        errors.push(`git ${name}: ${recentError}`)
+        git = { ...state, recent: this.last.git.get(path)?.recent ?? [] }
+      }
       this.last.git.set(path, git)
     } catch (error) {
       errors.push(`git ${name}: ${message(error)}`)

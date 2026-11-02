@@ -327,7 +327,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
 }
 
 /** Keys that move with the clock or with every tool call, and the digest's own spend: a model that differs only there has not changed. */
-const VOLATILE = new Set(['builtAt', 'lastActivityAt', 'readAt', 'sampledAt', 'recentAt', 'digest'])
+const VOLATILE = new Set(['builtAt', 'lastActivityAt', 'readAt', 'sampledAt', 'digest'])
 
 /** sha-256 (16 hex) of the model without its volatile fields; what `NOTIFY fleet` carries. */
 export function fingerprintOf(model: Omit<Fleet, 'fingerprint'>): string {

@@ -79,6 +79,8 @@ export async function buildSince(sql: SQL, input: SinceInput): Promise<SinceGrou
     until: now.toISOString(),
     clamped: input.clamped,
     seenAt: iso(input.seenAt),
+    // The builder says it in `errors` (`git <repo>: …`) when a repo's commits could not be read and the previous build's stand in.
+    incomplete: (snapshot?.errors ?? []).flatMap((e) => /^git ([^:]+): /.exec(e)?.[1] ?? []),
     needsYou,
     shipped: await shipped(sql, input, repoVisible),
     recovered: await recovered(sql, input, repoVisible),
@@ -342,7 +344,7 @@ export async function readSince(
   const start = windowStart({ t: options.t, seenAt, now })
   // The reading ends where its snapshot does: an ask raised after the last build is in neither this reading nor, once the owner has caught
   // up to its `until`, a window that would never show it.
-  const until = readingEnd(now, snapshot)
+  const until = readingEnd(now, new Date(snapshot.builtAt))
   const t = start.t > until ? until : start.t
   const groups = await buildSince(sql, {
     snapshot,
