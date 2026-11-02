@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { parseRoleTable } from '@software-factory/contract'
 import { CannotExecute, EXIT_TIMEOUT, type ProcessResult } from '../src/exec.ts'
 import { AgwClassifier, Classification, clampLead, ClassifyFailed, classifyIssue } from '../src/issues/classify.ts'
-import { createIssue } from '../src/issues/intake.ts'
+import { createIssue } from '../src/issues/create.ts'
 import { TEST_REPO, TEST_ROLES, TEST_ROOT } from './support/app.ts'
 import { FakeClassifier } from './support/classifier.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'

@@ -581,7 +581,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
   transition table, a test pins its edges to this diagram, and the same transaction writes an `issue_events` row for every event
-  it applies. What is not the table lives beside it: `intake.ts` (a create, always `queued`), `deps.ts`, `decisions.ts`, `timers.ts`, `shared.ts`.
+  it applies. What is not the table lives beside it: `create.ts` (a create, always `queued`), `deps.ts`, `decisions.ts`, `timers.ts`, `shared.ts`.
   The reversal bound measures the table's module (about 250 lines in Wave 3). An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
   line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
