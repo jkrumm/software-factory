@@ -78,7 +78,10 @@ export class GitWorktrees implements Worktrees {
 
     let path: string
     const wtp = this.options.wtp ?? Bun.which('wtp')
-    if (wtp && existsSync(`${repo}/.wtp.yml`)) {
+    const wantsWtp = existsSync(`${repo}/.wtp.yml`)
+    // Plain git would skip the repo's setup hooks (dependencies, env files): a lead in such a tree is worse than none.
+    if (wantsWtp && !wtp) throw new WorktreeFailed(`${repo} has a .wtp.yml and wtp is not on PATH: install wtp`)
+    if (wtp && wantsWtp) {
       const out = await this.run([wtp, 'add', '-b', branch, base, '--quiet'], WTP_TIMEOUT_MS, 'wtp add', repo)
       path = out.split('\n').pop()?.trim() ?? ''
     } else {

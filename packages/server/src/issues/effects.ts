@@ -31,7 +31,7 @@ const BATCH = 20
 
 /**
  * Runs recorded effects: of each Issue only the oldest open one, whatever its kind, so an effect never overtakes an earlier one
- * that has no port yet (but for `verify`, which holds nothing back until its port exists); a close cancels what it makes pointless, so `finalize` waits behind nothing. The least tried go first, so Issues whose port keeps failing leave room for the rest. Never inside a
+ * that has no port yet (but for `verify` and `finalize`, which hold nothing back until their ports exist); a close cancels what it makes pointless, so `finalize` waits behind nothing. The least tried go first, so Issues whose port keeps failing leave room for the rest. Never inside a
  * transaction: the attempt is committed, the port is called, the result goes in a new statement. A crash between the two leaves
  * the row open, and the next pass calls the port again under the same key. A port that fails ends its Issue's turn for this pass.
  * One caller at a time: the tick, which the one server never overlaps.
@@ -39,8 +39,9 @@ const BATCH = 20
 export async function runEffects(sql: SQL, ports: EffectPorts, now: () => Date): Promise<string[]> {
   const kinds = Object.keys(ports)
   if (kinds.length === 0) return []
-  // A check (W4) with no port yet holds nobody back: the lead is still told of an answer or a regression meanwhile.
-  const unported = (['verify'] as const).filter((kind) => !(kind in ports))
+  // A check or a cleanup (W4) with no port yet holds nobody back: the lead is still told of an answer or a regression, and a
+  // reopened Issue still gets its next lead, meanwhile.
+  const unported = (['verify', 'finalize'] as const).filter((kind) => !(kind in ports))
   const errors: string[] = []
   const stopped = new Set<number>()
   let budget = BATCH

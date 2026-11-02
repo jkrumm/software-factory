@@ -132,13 +132,13 @@ export const STOP_CHECK_TIMEOUT_MS = 300
  * Whether the server wants this stop turned back (FL5): the line to print, or nothing. Any failure, a slow answer or a
  * body that is not the expected one is nothing: a session is never held by a server that cannot say why.
  */
-async function askStopCheck(socket: string, session: string): Promise<string | undefined> {
+async function askStopCheck(socket: string, session: string, stopHookActive: boolean): Promise<string | undefined> {
   try {
     const response = await fetch(`http://localhost/sessions/${encodeURIComponent(session)}/stop-check`, {
       unix: socket,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ stopHookActive: false }),
+      body: JSON.stringify({ stopHookActive }),
       signal: AbortSignal.timeout(STOP_CHECK_TIMEOUT_MS),
     })
     if (!response.ok) {
@@ -173,10 +173,11 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
   const home = io.env.HOME
   const socket = io.env.FACTORY_SOCKET || (home ? defaultHookSocket(home) : '')
   // A stop is asked about before it is recorded: a stop that is sent back is not an end, the turn goes on, and an
-  // event that said it ended would show the session idle while it works. `stop_hook_active` is the loop guard: that
-  // stop is let through, and recorded. A server that cannot answer lets the stop through too.
-  if (event === 'stop' && input.stop_hook_active !== true && socket) {
-    const sendBack = await askStopCheck(socket, session)
+  // event that said it ended would show the session idle while it works. `stop_hook_active` is the loop guard: it is
+  // passed on, and the server never sends a worker rule's stop back twice in a turn; an Issue's lead stopping a second time
+  // unreported is parked there (and let through). A server that cannot answer lets the stop through too.
+  if (event === 'stop' && socket) {
+    const sendBack = await askStopCheck(socket, session, input.stop_hook_active === true)
     if (sendBack) return sendBack
   }
 

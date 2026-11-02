@@ -16,8 +16,12 @@ export async function recordDecision({ tx, issue, row, now }: Context): Promise<
 export async function answerDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
   const answer = text(row.payload, 'answer')
   if (!answer) return 'an answer needs its text'
-  await tx`
+  // An answer that names its question (an expiry's default) applies to that one only: a question asked since is not its.
+  const named = typeof row.payload?.decision === 'number' ? row.payload.decision : null
+  const answered = await tx`
     UPDATE factory.decisions SET answer = ${answer}, answered_by = ${text(row.payload, 'who') ?? 'owner'}, answered_at = ${now}
-    WHERE issue_id = ${issue.id} AND answered_at IS NULL`
+    WHERE issue_id = ${issue.id} AND answered_at IS NULL AND (${named}::bigint IS NULL OR id = ${named})
+    RETURNING id`
+  if (named !== null && answered.length === 0) return `question ${named} is answered already`
   return undefined
 }

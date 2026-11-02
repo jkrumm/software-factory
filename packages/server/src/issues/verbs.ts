@@ -20,12 +20,14 @@ export type Filed =
  */
 export async function fileVerb(
   sql: SQL,
-  input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date },
+  input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date; requireSession?: boolean },
 ): Promise<Filed> {
   const { issueId, verb, now } = input
   const { id, session, ...payload } = input.body
   const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
   if (!issue) return { ok: false, problem: 'unknown_issue' }
+  // On the socket, which has no token, a caller is a session: one that names itself, and works this Issue.
+  if (input.requireSession && session === undefined) return { ok: false, problem: 'foreign_session' }
   if (session !== undefined) {
     const [works] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${session} AND issue_id = ${issueId}`
     if (!works) return { ok: false, problem: 'foreign_session' }

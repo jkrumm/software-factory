@@ -183,8 +183,15 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
   return row
 }
 
-async function planEffect(tx: SQL, issue: IssueRow, kind: EffectKind, row: InboxRow, now: Date): Promise<void> {
-  const payload = { ...row.payload, attempt: issue.attempt, hold: issue.hold, cause: row.kind }
+async function planEffect(
+  tx: SQL,
+  issue: IssueRow,
+  kind: EffectKind,
+  row: InboxRow,
+  cause: string,
+  now: Date,
+): Promise<void> {
+  const payload = { ...row.payload, attempt: issue.attempt, hold: issue.hold, cause }
   await tx`
     INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
     VALUES (${issue.id}, ${`${kind}:${row.key}`}, ${kind}, ${payload}, ${now})
@@ -245,7 +252,7 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
       WHERE issue_id = ${issue.id} AND done_at IS NULL AND cancelled_at IS NULL AND kind <> 'finalize'`
   }
   for (const effect of [...(step.effects ?? []), ...(step.to === 'closed' ? (['finalize'] as const) : [])]) {
-    await planEffect(tx, moved, effect, row, now)
+    await planEffect(tx, moved, effect, row, kind, now)
   }
   if (step.to === 'closed') {
     await releaseDependents(tx, issue.id, row, now)

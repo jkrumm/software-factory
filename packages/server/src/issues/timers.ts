@@ -40,10 +40,12 @@ export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<numbe
  * and tells it); without, a `lapsed` line for the owner. Keyed by the decision, so a timer that fires twice is one event.
  */
 async function expireDecision(tx: SQL, issueId: number, now: Date): Promise<void> {
+  // A business question is the owner's: whatever default the lead named, the expiry only tells the owner.
   const [decision]: { id: string; default_option: string | null }[] = await tx`
-    SELECT id, default_option FROM factory.decisions
-    WHERE issue_id = ${issueId} AND answered_at IS NULL AND expires_at <= ${now}
-    ORDER BY id DESC LIMIT 1`
+    SELECT d.id, CASE WHEN i.class = 'business' THEN NULL ELSE d.default_option END AS default_option
+    FROM factory.decisions d JOIN factory.issues i ON i.id = d.issue_id
+    WHERE d.issue_id = ${issueId} AND d.answered_at IS NULL AND d.expires_at <= ${now}
+    ORDER BY d.id DESC LIMIT 1`
   if (!decision) return
   if (decision.default_option === null) {
     await enqueue(tx, {
