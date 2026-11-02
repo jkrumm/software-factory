@@ -31,7 +31,8 @@ export function boundReply(text: string): string {
 }
 
 /** Characters that make a line read other than it is written: bidi overrides and isolates, and the zero-width spaces. */
-const SPOOFING = /[​⁠﻿‎‏؜‪-‮⁦-⁩]/g
+// oxlint-disable-next-line prefer-regex-literals -- the formatter rewrites \uXXXX escapes of invisible characters in a regex literal into the characters themselves, which no reviewer can read
+const SPOOFING = new RegExp(String.raw`[\u200B\u2060\uFEFF\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]`, 'g')
 /** A control character that is not whitespace: removed (the whitespace ones become one space with the rest of the whitespace). */
 const dropControl = (c: string): string => (/\s/.test(c) ? c : '')
 

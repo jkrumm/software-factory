@@ -738,6 +738,21 @@ describe('the call lifecycle', () => {
     expect(keyOf(1)).toBe(keyOf(0))
   })
 
+  test('the journal forgets old calls but not the runs agw ended for good: they are the attempt in the key', async () => {
+    mode('terminal')
+    const feed = feedOf('One heading')
+    await digest.pass(feed)
+    await db.sql`UPDATE factory.fleet_digest_runs SET at = at - interval '30 days'`
+    await db.sql`INSERT INTO factory.fleet_digest_runs (at, ok, items) VALUES (now() - interval '30 days', true, 1)`
+    mode('ok')
+    clock.advance(CALL_RETRY_MS)
+    await digest.pass(feed)
+    expect((await runRows()).filter((r) => r.terminal)).toHaveLength(1)
+    // the old ordinary row is gone, the terminal one and the new call are left
+    expect(await runRows()).toHaveLength(2)
+    expect(keyOf(1)).toMatch(/-1$/)
+  })
+
   test('a run agw does not know ends the wait at once', async () => {
     mode('pending')
     writeFileSync(join(agwDir, 'wait'), 'unknown')
