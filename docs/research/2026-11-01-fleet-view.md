@@ -77,6 +77,40 @@ Deterministic first, the model only for the rest:
 Consistent with the human-queue policy already in use: an old request is denied, never run with a stale command.
 Actions are intents through the API (design §2: writes from any surface are intents, never direct table writes).
 
+## Colour
+
+The board draws only with the Herdr app's `theme()` tokens (`working`, `blocked`, `done`, `idle`, `foreground`, `muted`,
+`dim`, `selected`), never its own hex: it follows the light/dark switch and matches the left sidebar's dots. Colour earns its
+place by carrying state: `working` and `blocked` are the only hues; progress, plans, asks and actions are grey weight.
+Iris and Argo map the same three states onto their own design systems.
+
+## Away and back
+
+At the MacBook the owner triages as things arrive. After a night or a long absence the same stream is a pile, so the
+fleet model has a second reading: **what happened since you last looked**.
+
+- **One cursor, server-side.** `owner_seen_at` lives in the factory, not in a surface: catching up on the phone (Iris)
+  clears the board too. A surface reports presence (`POST /presence`: the Herdr window active with input, Iris in the
+  foreground); a gap of 45 min or more opens an away window.
+- **`GET /fleet/since?t=<cursor>`** answers from facts already recorded (factory events, spawns and notes, the hc events log,
+  human-queue `askedAt`, each repo's git log, deploy gates, Kuma changes) grouped as:
+
+  | Group | Content |
+  |-|-|
+  | Needs you | asks raised in the window, ranked, with the triage suggestion and actions |
+  | Shipped | merges, deploys, releases, waves closed: one line each with the commit |
+  | Went wrong, then recovered | a failure followed by its fix (a failed deploy retried green): collapsed, one line |
+  | Handled for you | the triage log: what was resolved, denied or folded, each undoable |
+  | Still running | sessions alive now, with headline and how long they have run |
+  | Spend | quota used per account in the window |
+
+- **A headline paragraph** at the top, written by the digest from those groups ("Overnight: teamchat Wave 62 shipped,
+  agent-workflows Gateway landed, one deploy needs you"). The groups are deterministic; only the paragraph is model text.
+- **The board** shows it as a card above Needs you when the window opens: "While you were away · 9h", the paragraph, the
+  counts per group, "Caught up" moves the cursor. Asks acted on one by one also move it.
+- **While away, interrupt less.** Hermes and Iris push only the *Yours* tier at once; everything else waits for the digest,
+  so a night of small events is one read in the morning instead of forty notifications.
+
 ## Consumers
 
 | Surface | Reads |
