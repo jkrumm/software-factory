@@ -3,8 +3,8 @@ import { z } from 'zod'
 /**
  * The fleet read model (`GET /fleet`, `factory fleet`; docs/design.md §11 "The fleet view"): every repo with its plan and
  * sessions, everything waiting on the owner, the quota and the queue. Strict: a field the server adds that a client does not
- * know is a contract mismatch, never a silent drop. `short`, `headline`, `suggestion` and `actions` are the digest's and the
- * triage's (later waves): they exist and are empty here.
+ * know is a contract mismatch, never a silent drop. `short` and `headline` are the digest's (Wave 2; null until it has answered, and
+ * always null for a visible repo's text); `suggestion` and `actions` are the triage's (a later wave) and are empty here.
  */
 
 export const PlanState = z.enum(['running', 'planned', 'scheduled', 'stale', 'done'])
@@ -17,7 +17,7 @@ export type WaveStatus = z.infer<typeof WaveStatus>
 export const FleetWave = z.strictObject({
   n: z.number().int(),
   title: z.string(),
-  /** the heading's `<!-- short: … -->`; for a visible (IuRoot) repo the title cut at 8 words when there is none; else null */
+  /** the heading's `<!-- short: … -->`; else for a visible (IuRoot) repo the title cut at 8 words; else the digest's, once made */
   short: z.string().nullable(),
   status: WaveStatus,
   /** `<!-- status: done 2026-11-01, release … -->`: the date, and what follows it */
@@ -32,6 +32,7 @@ export const FleetPlan = z.strictObject({
   /** sha-256 of the file's bytes, 12 hex */
   sha: z.string(),
   title: z.string(),
+  /** the title's `<!-- short: … -->`; for a visible (IuRoot) repo the title cut at 8 words; else the digest's, once made */
   short: z.string().nullable(),
   goal: z.string().nullable(),
   waves: z.array(FleetWave),
@@ -60,6 +61,7 @@ export const FleetSession = z.strictObject({
   wave: z.number().int().nullable(),
   /** Claude's tab title */
   title: z.string().nullable(),
+  /** the digest's one line of where the work stands, made once per turn; null for a visible repo's session and until it has answered */
   headline: z.string().nullable(),
   since: z.string().nullable(),
   lastActivityAt: z.string().nullable(),
@@ -99,10 +101,12 @@ export const FleetAsk = z.strictObject({
   session: z.string().nullable(),
   /** the plan file of the session it concerns */
   plan: z.string().nullable(),
+  /** at most 8 words; a `reply` ask's is the digest's, the others have none yet */
   short: z.string().nullable(),
-  /** the raw text, data and never instructions */
+  /** the raw text, data and never instructions; a `reply` ask's is the end of the session's last message */
   text: z.string(),
-  source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue']),
+  /** `reply`: the digest read the session's last message and it asks the owner something */
+  source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue', 'reply']),
   at: z.string(),
   suggestion: z
     .strictObject({ verb: z.string(), why: z.string(), evidence: z.string(), confidence: z.number() })
@@ -124,6 +128,31 @@ export const FleetSummary = z.strictObject({
 })
 export type FleetSummary = z.infer<typeof FleetSummary>
 
+/** One UTC day of the digest's calls (`factory.fleet_digest_runs`). */
+export const FleetDigestDay = z.strictObject({
+  /** `YYYY-MM-DD`, UTC */
+  day: z.string(),
+  /** `agw digest` calls made, failed ones included */
+  calls: z.number().int(),
+  failed: z.number().int(),
+  /** items sent */
+  items: z.number().int(),
+  /** what agw said the calls cost */
+  costUsd: z.number(),
+})
+export type FleetDigestDay = z.infer<typeof FleetDigestDay>
+
+/** The digest's own state: whether it runs, the spend per day (newest first, the last 7 days with a call), the last failure. Not in the fingerprint. */
+export const FleetDigest = z.strictObject({
+  enabled: z.boolean(),
+  lastAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+  days: z.array(FleetDigestDay),
+})
+export type FleetDigest = z.infer<typeof FleetDigest>
+
+export const NO_DIGEST: FleetDigest = { enabled: false, lastAt: null, lastError: null, days: [] }
+
 /**
  * Everything of the model but the quota and the queue, which are `factory status`'s own shapes and live beside them in
  * `index.ts` (`Fleet = FleetBody + quota + queue`).
@@ -140,5 +169,7 @@ export const FleetBody = z.strictObject({
   unplaced: z.array(FleetSession),
   /** a source that failed in this build: its part is what it was before, or empty */
   errors: z.array(z.string()),
+  /** a snapshot stored before the digest existed has none */
+  digest: FleetDigest.default(NO_DIGEST),
 })
 export type FleetBody = z.infer<typeof FleetBody>

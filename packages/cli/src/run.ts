@@ -65,7 +65,7 @@ commands:
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
-                  the fleet read model (plain: asks first, then the repos with a running plan; --format json: all of it).
+                  the fleet read model (plain: asks first, then the repos with a running plan, then the digest; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
@@ -336,7 +336,7 @@ export function fleetScreen(f: Fleet): string {
   out.push('ASKS')
   if (f.asks.length === 0) out.push('  -')
   for (const a of f.asks) {
-    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.text, 100)}`)
+    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.short ?? a.text, 100)}`)
   }
   out.push('REPOS')
   const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))
@@ -346,12 +346,19 @@ export function fleetScreen(f: Fleet): string {
     const active = plan?.waves.find((w) => w.status === 'active')
     const git = r.git ? `${r.git.branch ?? 'detached'}${r.git.dirty ? '*' : ''}` : '-'
     out.push(
-      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${oneLine(plan?.title ?? '-', 50)}${active ? `\twave ${active.n}${(active.short ?? active.title) ? ` ${oneLine(active.short ?? active.title, 40)}` : ''}` : ''}`,
+      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${oneLine(plan?.short ?? plan?.title ?? '-', 50)}${active ? `\twave ${active.n}${(active.short ?? active.title) ? ` ${oneLine(active.short ?? active.title, 40)}` : ''}` : ''}`,
     )
     for (const x of r.sessions) {
-      out.push(`    ${x.state}\t${x.id}\t${x.role ?? '-'}\t${oneLine(x.title ?? '-', 50)}`)
+      out.push(`    ${x.state}\t${x.id}\t${x.role ?? '-'}\t${oneLine(x.headline ?? x.title ?? '-', 60)}`)
     }
   }
+  const d = f.digest
+  const today = d.days[0]
+  out.push(
+    d.enabled
+      ? `DIGEST\ton\t${today ? `${today.day}: ${today.calls} calls, ${today.failed} failed, $${today.costUsd.toFixed(4)}` : 'no call yet'}${d.lastError ? `\tlast pass failed: ${oneLine(d.lastError, 100)}` : ''}`
+      : 'DIGEST\toff',
+  )
   if (f.errors.length > 0) {
     out.push('ERRORS')
     for (const e of f.errors) out.push(`  ${oneLine(e, 200)}`)

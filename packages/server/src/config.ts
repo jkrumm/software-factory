@@ -42,6 +42,8 @@ export interface Config {
   /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
   digestAt: string | null
   digestTz: string
+  /** `FACTORY_DIGEST_EVERY` (`5m`, `90s`, `1h`, or `off`): how often the fleet digest asks `agw digest` about what changed; null is off (not the owner's morning line above) */
+  fleetDigestEveryMs: number | null
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
 }
@@ -92,6 +94,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     hermesBin: env.HERMES_BIN || `${required('HOME')}/.local/bin/hermes`,
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
+    fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
   }
 }
 
@@ -99,6 +102,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 export const DEFAULT_NOTIFY_TARGET = 'slack:#agents'
 export const DEFAULT_DIGEST_AT = '07:30'
 export const DEFAULT_DIGEST_TZ = 'Europe/Berlin'
+export const DEFAULT_FLEET_DIGEST_EVERY_MS = 5 * 60_000
 
 function digestAt(value: string | undefined): string | null {
   if (value === undefined || value === '') return DEFAULT_DIGEST_AT
@@ -108,6 +112,20 @@ function digestAt(value: string | undefined): string | null {
   // The digest is sent from this time until noon (a server that was down catches up before then): a later time could never be due.
   if (value >= '12:00') throw new Error(`FACTORY_DIGEST_AT must be before 12:00, got: ${value}`)
   return value
+}
+
+const DURATION_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000 } as const
+
+/** `5m`, `90s`, `1h`; `off` for none; unset is five minutes. Between 30 s and 24 h: a shorter spacing is spend, a longer one is a stale board. */
+function fleetDigestEvery(value: string | undefined): number | null {
+  if (value === undefined || value === '') return DEFAULT_FLEET_DIGEST_EVERY_MS
+  if (value === 'off') return null
+  const found = /^(\d+)([smh])$/.exec(value)
+  const ms = found ? Number(found[1]) * DURATION_UNIT_MS[found[2] as 's' | 'm' | 'h'] : Number.NaN
+  if (!(ms >= 30_000 && ms <= 24 * 3_600_000)) {
+    throw new Error(`FACTORY_DIGEST_EVERY must be a duration of 30s to 24h (5m, 90s, 1h) or off, got: ${value}`)
+  }
+  return ms
 }
 
 function digestTz(value: string | undefined): string {

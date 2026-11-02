@@ -1107,7 +1107,8 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 ### The fleet view (FV Wave 1, 2026-11-02)
 
 One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
-`docs/waves/fv.md`). Wave 1 is the deterministic half: no model text, `short`, `headline`, `suggestion` and `actions` are null or empty.
+`docs/waves/fv.md`). Wave 1 is the deterministic half; Wave 2 (below, "The digest") adds the model text: `short`, `headline` and the asks found
+in a session's last message. `suggestion` and `actions` stay null or empty until Wave 3.
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `repos[]` (`name`, `space`, `visible`, `git`, `plan`, `morePlans`, `sessions[]`), `unplaced[]` (live sessions with no repo of
@@ -1131,8 +1132,7 @@ One read model of the fleet that every surface reads instead of building its own
   after `realpath`. `visible` is true for a repo under a visible root **or anywhere in IuRoot by place** (a path with an `IuRoot`
   segment, or under the real `$HOME/IuRoot`: the places the Issue refusal of an IuRoot alert checks), so `FACTORY_VISIBLE_ROOTS=off`
   does not make IuRoot's repos read as ordinary. It is the owner's read-only IuRoot view, never
-  a spawn or Issue target of this model, and its text stays on the mini (no `agw` call anywhere in this wave; the digest of Wave 2
-  skips `visible`).
+  a spawn or Issue target of this model, and its text stays on the mini (the digest skips it, see "The digest").
 - **Token only, never on the socket.** The model holds the text of IuRoot's repos, sessions and plans (titles, goals, commit subjects,
   hc messages, Claude's tab titles, branch names, attention lines, decisions, queue requests), and what a pane reads goes to its
   model. A filter over free text cannot be made tight (a first redacted view for the socket leaked through attention lines of closed
@@ -1166,6 +1166,38 @@ One read model of the fleet that every surface reads instead of building its own
   restarts. Oldest first.
 - **CLI.** `factory fleet [--format json|plain] [--refresh]`: plain is the summary line, the asks, then the repos with a running plan
   and their sessions, then the errors.
+
+**The digest (FV Wave 2).** `src/fleet/digest.ts` (the pass, the cache, the one `agw digest` call), `digest-model.ts` (what the digest may read, and what its
+cache adds to the model), `transcript.ts` (the last reply of a session). The factory never calls a model (SF2): a pass is one `agw digest`
+call, like Classify's `agw factory-classify`, off the tick and outside any transaction.
+
+- **A pass** starts after a snapshot build when `FACTORY_DIGEST_EVERY` (default `5m`, `30s` to `24h`, `off`) has passed since the last. The
+  items: a plan or wave heading with no `<!-- short: … -->` (kind `heading`; one item per heading text, whichever plan has it), a live
+  session (`session`: its tab title, role, repo, plan, wave and the end of its last message; a headline and a short), and the last assistant message of
+  a session whose turn has ended (`reply`: "does it ask the owner something?"). An item's fingerprint is the content it would send; one equal to
+  its cached answer costs nothing. The changed ones go in **one** call, at most 64 items and 120,000 characters (agw's limits; more is refused, never cut),
+  oldest answers first; the rest wait for the next pass. `agw digest --format json --idempotency-key factory-digest-<batch hash>-<hour>` with the items
+  on stdin; the key lets a slow run be found again by the next pass with the same batch, and an hour later a failed run is not replayed.
+- **Once per turn.** A session's headline and reply are made when its turn count has moved *and* its turn has ended (`idle` or `waiting`); a turn that is still running keeps the
+  last headline and has no reply ask. The same words in a later turn move the cached turn without a call. A terminal only hc knows (no turn count,
+  no transcript on record) gets a headline from its title, role and wave, once per change of those.
+- **The cache** is `factory.fleet_digest (key, fingerprint, answer, at)` (migration `022`), keys `heading:<hash of the text>`, `session:<id>` and
+  `reply:<id>`; every build reads it, so the text is in `/fleet` from the build after the pass. It survives a restart. A row nobody wants is dropped after 7 days.
+  `factory.fleet_digest_runs` journals each call (when, ok, items, failed items, cost as agw reported it).
+- **The reply extract.** The transcript (`transcript_path`, only a Claude Code file `…/.claude*/projects/<project>/<session>.jsonl` after `realpath`) is read from its last
+  512 KiB as data: the last `text` block of an `assistant` line after the last prompt, no tool call, no thinking, at most 4,000 characters (start and end when longer). An answer with
+  `asks: true` and confidence `high` or `medium` joins `asks` as `reply:<session>:<turn>` (`source: reply`, its `kind`, `short`, and the end of the message as `text`, `at` the time the
+  session went idle); a newer turn drops it at once, before the digest has read that turn.
+- **IuRoot never goes.** The feed is built by `scopeOf` and nothing else: no heading of a visible repo or plan, no session whose repo, spawn repo, directory,
+  terminal directory or plan is visible (a session in an ordinary repo that works an IuRoot plan is IuRoot's), no session outside every repo. Their `short` stays the plan's
+  own comment or the heading cut at 8 words, their `headline` null, and the cache holds nothing of them.
+- **Failure is quiet.** A failed, slow (60 s process timeout; `agw` itself answers "pending", exit 10, at 50 s) or unparseable call stores nothing, the model keeps the cached text, and the pass is journalled
+  as failed. An item that comes back as `{id, error}` is not stored and not asked again for an hour. `factory status` shows `digest: N failed passes in the last 24 h` in
+  its attention (only when N > 0; the fleet model leaves that line out of the asks). `factory fleet --format json` has `digest { enabled, lastAt, lastError, days[] }`, the
+  days UTC, newest first, each with calls, failed calls, items and `costUsd`; `digest` is not in the fingerprint, so a call that changes no text does not `NOTIFY`.
+  The 60 s ceiling is the brief's and departs from `rules/agent-limits.md` (a single non-agentic request: a hang guard of 30 minutes or more); the cost of a
+  slow call here is one pass, never a stuck Issue.
+- **Not done:** the `visible` marker still filters nothing in the (token-only) model; a reply of an hc-only terminal is not read (it has no transcript on record).
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.

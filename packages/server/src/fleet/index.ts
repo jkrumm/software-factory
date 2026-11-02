@@ -1,9 +1,11 @@
 import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { Fleet, FleetGit, Session, Status } from '@software-factory/contract'
+import { type Fleet, type FleetGit, NO_DIGEST, type Session, type Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
 import { enclosingRepo } from '../projects/sync.ts'
+import { type Digest, DigestView } from './digest.ts'
+import { applyDigest, scopeOf } from './digest-model.ts'
 import { GitReader } from './git.ts'
 import { Places } from './place.ts'
 import {
@@ -40,6 +42,8 @@ export interface FleetDeps {
   hc: HcLister
   queue: QueueReader
   git?: GitReader
+  /** the digest (`digest.ts`): its cache is read into every build and a pass is kicked after it; without it the model has no digest text */
+  digest?: Digest
   alertLeads?: boolean
   intervalMs?: number
 }
@@ -72,7 +76,8 @@ const mainCheckout = (path: string): string => path.replace(/\/\.claude\/worktre
 /**
  * Builds the fleet read model off the tick and keeps the newest in one row (`factory.fleet_snapshot`), `NOTIFY fleet` when it
  * changes. `kick` is the tick's call: a build starts behind its back when one is due and none is running; `refreshNow` builds
- * at once and waits (`POST /fleet/refresh`). Every read is bounded, nothing runs in a transaction, and no source calls a model.
+ * at once and waits (`POST /fleet/refresh`). Every read is bounded, nothing runs in a transaction, and no source calls a model:
+ * the digest's text is read from its cache (`factory.fleet_digest`), and a digest pass is started behind the build's back.
  * A source that fails leaves its part as the last build had it (memory) with a line in `errors`; a build whose database part
  * fails with nothing to fall back on fails as a whole, and the stored snapshot stays.
  */
@@ -92,6 +97,7 @@ export class FleetBuilder {
     queue?: QueueRequest[]
     git: Map<string, FleetGit>
     plans: Map<string, PlanFile>
+    digest?: DigestView
   } = { git: new Map(), plans: new Map() }
 
   constructor(private readonly deps: FleetDeps) {
@@ -122,14 +128,14 @@ export class FleetBuilder {
     return queued
   }
 
-  /** Waits for every build in flight or queued (the tick's and a refresh's), at most `timeoutMs`: shutdown and the tests. */
+  /** Waits for every build in flight or queued (the tick's and a refresh's) and the digest pass, at most `timeoutMs`: shutdown and the tests. */
   async settled(timeoutMs = 20_000): Promise<void> {
     let timer: Timer | undefined
     const bound = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, timeoutMs)
     })
     try {
-      await Promise.race([this.chain, bound])
+      await Promise.race([Promise.all([this.chain, this.deps.digest?.settled()]), bound])
     } finally {
       clearTimeout(timer)
     }
@@ -195,6 +201,17 @@ export class FleetBuilder {
         (v) => (this.last.queue = v),
       )) ?? []
 
+    const digest = this.deps.digest
+    const view = digest
+      ? ((await this.fallback(
+          errors,
+          'digest',
+          () => digest.view(),
+          this.last.digest,
+          (v) => (this.last.digest = v),
+        )) ?? new DigestView(new Map(), { ...NO_DIGEST, enabled: true }))
+      : new DigestView()
+
     // Session paths are matched after realpath, like the roots (a link in a cwd or a spawn's repo is the same place).
     const real = new Map<string, string>()
     const wanted = new Set<string>()
@@ -249,7 +266,7 @@ export class FleetBuilder {
       }
     }
 
-    const model = assemble({
+    const base = assemble({
       now,
       roots,
       isVisible: (path) => places.isVisible(path),
@@ -262,6 +279,14 @@ export class FleetBuilder {
       firstSeen: this.firstSeen,
       errors,
     })
+    // The digest's text comes from its cache, for the repos and sessions it may read (IuRoot's stay as the plan wrote them).
+    const scope = scopeOf({
+      model: base,
+      merged: sessions,
+      sessions: db.status.sessions,
+      isVisible: (path) => places.isVisible(path),
+    })
+    const model = applyDigest(base, view, scope, now)
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
       JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),
@@ -274,6 +299,7 @@ export class FleetBuilder {
       ),
     )
     await writeSnapshot(sql, fleet)
+    digest?.kick(scope.feed)
     return fleet
   }
 
