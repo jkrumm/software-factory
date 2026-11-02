@@ -10,7 +10,7 @@ import { serve, serveHooks } from './http.ts'
 import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
 import { finalizePorts } from './issues/finalize.ts'
-import { holdPorts, MakeAndProbes } from './issues/hold.ts'
+import { holdPorts, MakeAndProbes, VERIFY_SETTLE_MS } from './issues/hold.ts'
 import { leadPorts } from './issues/lead.ts'
 import { WorktreeMaker } from './issues/leadtree.ts'
 import { OffTick } from './issues/offtick.ts'
@@ -127,7 +127,13 @@ const leadWorktrees = new WorktreeMaker({
 const offTick = new OffTick()
 const issuePorts = {
   ...leadPorts({ sql, clock, roles, repoRoots: config.repoRoots }),
-  ...holdPorts({ sql, clock, proof: new MakeAndProbes(), offTick }),
+  ...holdPorts({
+    sql,
+    clock,
+    proof: new MakeAndProbes(),
+    offTick,
+    settledAt: new Date(clock.now().getTime() + VERIFY_SETTLE_MS),
+  }),
   ...finalizePorts({
     sql,
     clock,

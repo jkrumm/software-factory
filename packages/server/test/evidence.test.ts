@@ -11,7 +11,7 @@ import { createIssue } from '../src/issues/create.ts'
 import { type Effect, type EffectPorts } from '../src/issues/effects.ts'
 import { kindOfPath, requiredEvidence } from '../src/issues/evidence.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
-import { type HoldCheck, holdPorts, MakeAndProbes, type Proof } from '../src/issues/hold.ts'
+import { type HoldCheck, holdPorts, MakeAndProbes, type Proof, VERIFY_SETTLE_MS } from '../src/issues/hold.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { leadPorts } from '../src/issues/lead.ts'
 import { WorktreeMaker } from '../src/issues/leadtree.ts'
@@ -19,6 +19,7 @@ import { DEFAULT_HOLD_MS, REOPEN_WINDOW_MS } from '../src/issues/lifecycle.ts'
 import { leadKey, regressionPromptId } from '../src/issues/names.ts'
 import { OffTick } from '../src/issues/offtick.ts'
 import { issuePass } from '../src/issues/worker.ts'
+import { notifyFailures } from '../src/notify/rules.ts'
 import { ProjectSync } from '../src/projects/sync.ts'
 import { QuotaPoller } from '../src/quota.ts'
 import type { StartInput, StartResult } from '../src/runner.ts'
@@ -989,6 +990,134 @@ describe('stop', () => {
   })
 })
 
+describe('the owner’s line', () => {
+  const sent = async (id: number): Promise<string[]> =>
+    (await db.sql`SELECT key FROM factory.notifications WHERE issue_id = ${id} ORDER BY key`).map(
+      (row: { key: string }) => row.key,
+    )
+
+  test('a regression from the hold is one message, naming what failed; a green hold is none', async () => {
+    const { id, key } = await shipped()
+    proof.checks = [
+      { name: 'make verify', ok: true, detail: 'exit 0' },
+      { name: 'home', ok: false, detail: 'HTTP 500' },
+    ]
+    await holdEnds(id)
+    await drive(3)
+    expect(await sent(id)).toEqual([`notify:regression:${id}:1`])
+    const [row] = await db.sql`SELECT text FROM factory.notifications WHERE issue_id = ${id}`
+    expect(row?.text).toContain('home failed')
+
+    proof.checks = [{ name: 'home', ok: true, detail: 'HTTP 200' }]
+    await prove(id, key, 'service')
+    await ship(id, key)
+    await holdEnds(id)
+    expect((await issue(id)).state).toBe('closed')
+    expect(await sent(id)).toEqual([`notify:regression:${id}:1`])
+  }, 20_000)
+
+  test('issue stop sends nothing, with a lead or without one, and neither does its finalize', async () => {
+    const queued = await file(newRepo(SERVICE))
+    const running = await lead()
+    const before = await db.sql`SELECT key FROM factory.notifications`
+    await post(queued, 'stop', { reason: 'a door proof' })
+    await post(running.id, 'stop', { reason: 'not needed' })
+    await drive(3)
+    await notifyFailures(db.sql, clock.now())
+    expect(await trail(running.id)).toContain('issue_finalized')
+    expect(await db.sql`SELECT key FROM factory.notifications`).toEqual(before)
+  })
+
+  test('a finalize that keeps failing reaches the failed sweep once, as a failure and not a wait', async () => {
+    const { id, key } = await lead()
+    runner.failure = new Error('hc is down')
+    await post(id, 'drop', { reason: 'no', session: key })
+    for (let i = 0; i < 8; i++) await pass()
+    await notifyFailures(db.sql, clock.now())
+    await notifyFailures(db.sql, clock.now())
+    const [effect] = await db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'finalize' AND issue_id = ${id}`
+    expect(await sent(id)).toEqual([`notify:failed:finalize:${effect?.key}`])
+    const [row] = await db.sql`SELECT text FROM factory.notifications WHERE issue_id = ${id}`
+    expect(row?.text).toContain('hc is down')
+  })
+
+  test('one failed finalize is unlucky, however long it waited before: nothing is sent', async () => {
+    const { id, key } = await lead()
+    offTick = new OffTick(0)
+    await post(id, 'drop', { reason: 'no', session: key })
+    for (let i = 0; i < 6; i++) await pass()
+    const [waited] =
+      await db.sql`SELECT attempts FROM factory.issue_effects WHERE kind = 'finalize' AND issue_id = ${id}`
+    expect(waited?.attempts).toBe(0)
+    offTick = new OffTick()
+    runner.failure = new Error('hc blinked')
+    for (let i = 0; i < 2; i++) await pass()
+    await notifyFailures(db.sql, clock.now())
+    runner.failure = undefined
+    await drive(3)
+    await notifyFailures(db.sql, clock.now())
+    expect(await sent(id)).toEqual([])
+    expect(await trail(id)).toContain('issue_finalized')
+  })
+})
+
+describe('an Issue watching since before this code', () => {
+  /** As the live row stands: shipped without a gate, `hold_over` handled, and its `verify` waiting for the port this wave brings. */
+  async function legacy() {
+    const made = await lead()
+    await db.sql`UPDATE factory.issues SET state = 'watching', hold = 1, wake_at = NULL WHERE id = ${made.id}`
+    await db.sql`
+      INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
+      VALUES (${made.id}, ${`verify:hold:${made.id}:1:1`}, 'verify', ${{ hold: 1, cause: 'hold_over', attempt: 1 }}, ${clock.now()})`
+    return made
+  }
+
+  test('its waiting check runs once, on its old ship, and green closes and finalizes it', async () => {
+    const { id, key, repo } = await legacy()
+    await drive(4)
+    expect(proof.runs).toBe(1)
+    expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done' })
+    expect((await evidence(id)).map((e) => e.kind)).toContain('hold')
+    expect(await trail(id)).toContain('issue_finalized')
+    expect(runner.closed).toEqual([key])
+    expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1` }])
+    expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
+  })
+
+  test('red goes back to its lead as one note and one message, with no ship gate in the way', async () => {
+    const { id, key } = await legacy()
+    proof.checks = [{ name: 'make verify', ok: false, detail: 'exit 2' }]
+    await drive(4)
+    expect(await issue(id)).toMatchObject({ state: 'working', hold: 1 })
+    expect((await notes(key)).map((note) => note.id)).toEqual([regressionPromptId(id, 1)])
+    const rows = await db.sql`SELECT key FROM factory.notifications WHERE issue_id = ${id}`
+    expect(rows).toEqual([{ key: `notify:regression:${id}:1` }])
+  })
+
+  test('no check runs while a deploy is still finishing: it waits out the settling, holds nothing, and fails nothing', async () => {
+    const { id } = await legacy()
+    const settling = holdPorts({
+      sql: db.sql,
+      clock,
+      proof,
+      offTick,
+      settledAt: new Date(clock.now().getTime() + VERIFY_SETTLE_MS),
+    })
+    const round = () => issuePass(db.sql, { now: () => clock.now(), ports: settling })
+    expect(await round()).toEqual([])
+    await offTick.settled()
+    expect(proof.runs).toBe(0)
+    expect((await issue(id)).state).toBe('watching')
+    clock.advance(VERIFY_SETTLE_MS)
+    for (let i = 0; i < 3; i++) {
+      await round()
+      await offTick.settled()
+    }
+    expect(proof.runs).toBe(1)
+    expect((await issue(id)).state).toBe('closed')
+  })
+})
+
 describe('resume', () => {
   test('forks the archived session in a spawn of its own, which is no lead of the Issue', async () => {
     const { id, key, repo } = await lead()
@@ -1189,6 +1318,9 @@ describe('the replay test: a crash after every effect of the hold and finalize',
       await db.sql`SELECT key, result FROM factory.issue_inbox WHERE issue_id = ${id} AND session IS DISTINCT FROM ${leadKey(id, 1)} ORDER BY key`
     ).map((r: { key: string; result: string | null }) => `${r.key}:${r.result}`),
     notes: (await notes(leadKey(id, 1))).map((note) => note.id),
+    notifications: (await db.sql`SELECT key FROM factory.notifications ORDER BY key`).map(
+      (row: { key: string }) => row.key,
+    ),
     evidence: (await evidence(id)).map((e) => `${e.kind}:${e.link}`).sort(),
     claims: (await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).length,
   })
@@ -1217,6 +1349,7 @@ describe('the replay test: a crash after every effect of the hold and finalize',
     const expected = await snapshot(id)
     expect(expected).toMatchObject({ state: 'closed', outcome: 'done', hold: 2, claims: 0 })
     expect(expected.notes).toEqual([regressionPromptId(id, 1)])
+    expect(expected.notifications).toEqual([`notify:regression:${id}:1`])
     expect(expected.events.filter((e) => e === 'issue_finalized')).toHaveLength(1)
     expect(expected.evidence).toHaveLength(2)
     expect(clean.proofs).toBe(2)

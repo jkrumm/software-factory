@@ -31,14 +31,12 @@ interface CallOptions<S extends z.ZodType> {
    * a fixed set of routes (AGENTS.md lists them).
    */
   socket?: boolean | 'fallback'
-  /** longer than the default 10 s, for a call that waits on something slow (a test message through Hermes) */
+  /** longer than the default 10 s, for a call that waits on something slow (a test message through Hermes, a `git fetch`) */
   timeoutMs?: number
   /** the schema every answer in `accept` must satisfy */
   schema: S
   /** statuses that carry the schema's body besides 2xx */
   also?: number[]
-  /** longer than the default for a call that waits for git */
-  timeoutMs?: number
 }
 
 /**

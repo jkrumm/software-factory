@@ -77,6 +77,12 @@ async function working(): Promise<number> {
 const rows = () => listNotifications(db.sql)
 const keys = async () => (await rows()).map((r) => r.key).sort()
 
+/** What the server finds of a `ship` or a `close` whose commits require nothing: the bar is `evidence.test.ts`'s. */
+const MERGED = {
+  commits: ['a'.repeat(40)],
+  derived: { commits: ['a'.repeat(40)], paths: [], required: [], mergedAt: null, holdMs: 1_800_000, problem: null },
+}
+
 describe('what goes out, each kind once', () => {
   test('an ask: one line with the Issue, the repo, the question as a quote and the way back', async () => {
     const id = await working()
@@ -128,7 +134,7 @@ describe('what goes out, each kind once', () => {
 
   test('the hold: a regression sent back to a lead, once per hold', async () => {
     const id = await working()
-    await step(id, 'ship', { summary: 'done' })
+    await step(id, 'ship', { summary: 'done', ...MERGED })
     await step(id, 'signal', { regression: true, title: 'Forecast is down' })
     const [row, ...rest] = await rows()
     expect(rest).toEqual([])
@@ -136,7 +142,7 @@ describe('what goes out, each kind once', () => {
     expect(row?.text).toBe(
       `Issue ${id} (repo) regressed after its ship (hold 1) and went back to its lead: “Forecast is down”`,
     )
-    await step(id, 'ship', { summary: 'fixed' })
+    await step(id, 'ship', { summary: 'fixed', ...MERGED })
     await step(id, 'signal', { regression: true, title: 'down again' })
     expect(await keys()).toEqual([`notify:regression:${id}:1`, `notify:regression:${id}:2`])
   })
@@ -185,7 +191,7 @@ describe('what goes out, each kind once', () => {
   test('a lead spawn that failed long after it was made is told, unless its Issue is closed', async () => {
     const id = await working()
     const closed = await working()
-    await step(closed, 'close', { summary: 'ok' })
+    await step(closed, 'close', { summary: 'ok', ...MERGED })
     const old = new Date(now().getTime() - 3 * 24 * 3600_000)
     await db.sql`
       INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at, issue_id)
@@ -562,7 +568,7 @@ describe('the digest', () => {
     const id = await working()
     await step(id, 'ask', { question: 'ship?' })
     const done = await working()
-    await step(done, 'close', { summary: 'ok' })
+    await step(done, 'close', { summary: 'ok', ...MERGED })
     await db.sql`INSERT INTO factory.quota_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used) VALUES ('main', ${now()}, true, true, 10, 20)`
     const loaded = await loadDigest(db.sql, now(), '2026-11-02')
     expect(loaded.closed).toEqual([{ id: done, outcome: 'done', title: 'a title' }])

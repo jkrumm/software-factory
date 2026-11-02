@@ -618,7 +618,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   call calls it again under the same key, so a port must find its own work by that key. The ports are `issues/lead.ts`
   (`start_lead`, `note_lead`), `issues/hold.ts` (`verify`) and `issues/finalize.ts` (`finalize`), wired in `TickDeps.issuePorts`. `verify`
   and `finalize` take minutes, so they run **off the tick** (`issues/offtick.ts`): the port's first ask starts the work and throws
-  `Waiting`, and the ask after it ended returns or throws what it did. At most four run at once, and nothing of it outlives the process:
+  `Waiting` (no try: `attempts`, which the notifier's failed sweep counts, stays as it was), and the ask after it ended returns or throws what it did. At most four run at once, and nothing of it outlives the process:
   a restart asks again, and the work finds what it already did by its keys. `hold_over` asks for `verify` and closes nothing: the
   check's `verified` or `regression` moves the Issue.
 - **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
@@ -684,10 +684,10 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   `factory issue evidence <id> --kind ui|service|infra|data` (`--link`, `--file`, `--stdin`; at most 32 KiB) is a row in `evidence` keyed
   `evidence:<issue>:<attempt>:<call id>`, by the lead or the owner, under the same rules as a verb, and takes nothing for a closed Issue.
 - **The hold.** `ship` moves it to `watching` with `wake_at` at now plus the manifest's `hold`. A passed `wake_at` is `hold_over`, which plans `verify`:
-  off the tick, `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
+  no check for two minutes after the server starts (`make deploy` writes what `make verify` compares only once `/health` answers, so a hold ending in a deploy would read as a regression), then off the tick, `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
   an HTTP GET per probe (15 s, redirects are answers), pass or fail, never averaged. No check at all is green. Green files `verified`: closed, the
   results in `evidence` (kind `hold`, author `factory`). Red files `regression` naming the hold: back to `working`, one note to the same lead under
-  `issue:<id>:regression:<hold>` with the results as JSON on one line, data. A check whose hold ended meanwhile files nothing, and one whose answer is filed
+  `issue:<id>:regression:<hold>` with the results as JSON on one line, data, and `notify:regression:<issue>:<hold>` on the owner's line. A check whose hold ended meanwhile files nothing, and one whose answer is filed
   runs nothing.
 - **Finalize once,** from every exit path (`issues/finalize.ts`), in this order: on the tick, so no check can hold a project's place, the claim is given back, a lead's spawn that never started fails, and
   whoever waited for the place is looked at now; off it, the terminals of the lead and the workers it spawned are killed and removed (`Runner.close`, by their label); the attempt's transcripts, the

@@ -79,6 +79,8 @@ export async function runEffects(sql: SQL, ports: EffectPorts, now: () => Date):
         await sql`UPDATE factory.issue_effects SET done_at = ${now()}, error = NULL WHERE id = ${row.id}`
       } catch (error) {
         if (error instanceof Waiting) {
+          // Not a try: `attempts` is what the owner's line counts failures by, and a check that runs for minutes would read as stuck.
+          await sql`UPDATE factory.issue_effects SET attempts = ${row.attempts} WHERE id = ${row.id}`
           stopped.add(row.issue_id)
           continue
         }
