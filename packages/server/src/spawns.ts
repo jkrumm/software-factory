@@ -110,6 +110,8 @@ export interface NewSpawn {
   placement?: Placement
   /** the Issue this spawn works: it waits on the Issue's claim on the project. A fleet spawn (a wave, a fan worker, `rd`) has none. */
   issueId?: number
+  /** rows that go with a spawn that is made, in its transaction: they are written with it or not at all */
+  withSpawn?: (tx: SQL) => Promise<void>
 }
 
 /**
@@ -153,6 +155,7 @@ export async function createSpawn(
               ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false}, ${input.placement ?? null}, ${input.issueId ?? null})
       RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
+    await input.withSpawn?.(tx)
     return { spawn: toView(row), created: true }
   })
 }

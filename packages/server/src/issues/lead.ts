@@ -100,12 +100,6 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
     },
   })
   const now = clock.now()
-  // Recorded before the spawn can type it. Its text is the spawn's argument, so it is `delivered` from the start: the prompt
-  // loop never types it again, and the send-back reads it to tell the lead's own first turn from one the owner typed.
-  await sql`
-    INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count)
-    VALUES (${briefPromptId(issue.id, attempt)}, ${key}, 'brief', 'type', ${prompt}, 'delivered', ${now}, ${now}, 1)
-    ON CONFLICT (id) DO NOTHING`
   try {
     await createSpawn(
       sql,
@@ -118,6 +112,15 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
         tier: level.tier,
         effort: level.effort,
         issueId: issue.id,
+        // Recorded with the spawn, before it can type the brief: a create that fails leaves no prompt behind, and a retry records
+        // its own text. The brief is the spawn's argument, so it is `delivered` from the start: the prompt loop never types it
+        // again, and the send-back reads it to tell the lead's own first turn from one the owner typed.
+        withSpawn: async (tx) => {
+          await tx`
+            INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count)
+            VALUES (${briefPromptId(issue.id, attempt)}, ${key}, 'brief', 'type', ${prompt}, 'delivered', ${now}, ${now}, 1)
+            ON CONFLICT (id) DO UPDATE SET text = EXCLUDED.text`
+        },
       },
       now,
     )
