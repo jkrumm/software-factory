@@ -818,6 +818,7 @@ export function serveHooks(deps: {
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
+      // Not here, on purpose: `/fleet` and `/fleet/refresh`. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },

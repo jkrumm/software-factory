@@ -695,6 +695,15 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   }
 
   if (key === 'fleet') {
+    if (!io.env.FACTORY_TOKEN) {
+      throw new FactoryError(
+        'auth',
+        "fleet needs FACTORY_TOKEN: the model holds IuRoot's text, which a pane's model must not read",
+        {
+          hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+        },
+      )
+    }
     const refresh = flags.refresh === true
     const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {
       method: refresh ? 'POST' : 'GET',
