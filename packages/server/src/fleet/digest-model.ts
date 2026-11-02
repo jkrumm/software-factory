@@ -134,6 +134,7 @@ export function applyDigest(
           suggestion: null,
           actions: [],
           folded: [],
+          occurrence: 1,
         })
       }
       return { ...s, headline: view.headline(s.id) }

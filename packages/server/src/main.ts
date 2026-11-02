@@ -95,6 +95,8 @@ const fleetActions = new FleetActions({
   queue: askHuman,
   roles,
   repoRoots: config.repoRoots,
+  visibleRoots: config.visibleRoots,
+  home: process.env.HOME ?? '',
   refresh: () => fleet.refreshNow(),
 })
 const runner = new HcRunner({

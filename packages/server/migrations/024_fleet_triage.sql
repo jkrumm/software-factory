@@ -19,17 +19,32 @@ CREATE TABLE factory.fleet_triage_log (
 CREATE INDEX fleet_triage_log_effect_idx ON factory.fleet_triage_log (id)
   WHERE (kind IN ('fold', 'dismiss_note') AND undone_at IS NULL) OR (kind = 'plan_stale' AND undone_at IS NOT NULL);
 
--- What the owner did with an ask, through POST /fleet/asks/:id/act. An ask is closed once (resolve, deny or hand_off: one of them,
--- ever), a plan is archived once per ask; a repeated act answers with the first. `later` is a timer, the latest `until` wins.
-CREATE TABLE factory.fleet_acts (
-  id     bigserial PRIMARY KEY,
-  ask_id text NOT NULL,
-  intent text NOT NULL CHECK (intent IN ('resolve', 'deny', 'later', 'archive_plan', 'hand_off')),
-  note   text,
-  at     timestamptz NOT NULL,
-  until  timestamptz,
-  result jsonb NOT NULL
+-- Which asks the builds have seen. An ask is one occurrence while it is listed by its source; when a build does not list it the
+-- occurrence ends, and a return is the next one with a new first-seen time. What the owner did with an ask is of one occurrence.
+-- first_seen is also what the builder restarts with, so a restart does not re-time an ask (and reverse a fold by ordering).
+CREATE TABLE factory.fleet_ask_seen (
+  ask_id     text PRIMARY KEY,
+  occurrence integer NOT NULL CHECK (occurrence > 0),
+  first_seen timestamptz NOT NULL,
+  present    boolean NOT NULL DEFAULT true,
+  absent_at  timestamptz
 );
-CREATE UNIQUE INDEX fleet_acts_closed_once ON factory.fleet_acts (ask_id) WHERE intent IN ('resolve', 'deny', 'hand_off');
-CREATE UNIQUE INDEX fleet_acts_archive_once ON factory.fleet_acts (ask_id) WHERE intent = 'archive_plan';
+
+-- What the owner did with an ask, through POST /fleet/asks/:id/act. An occurrence of an ask is closed once (resolve, deny or
+-- hand_off: one of them), a plan is archived once per occurrence; a repeated act answers with the first. `later` is a timer, one
+-- row per occurrence, the latest `until` wins.
+CREATE TABLE factory.fleet_acts (
+  id         bigserial PRIMARY KEY,
+  ask_id     text NOT NULL,
+  occurrence integer NOT NULL DEFAULT 1 CHECK (occurrence > 0),
+  intent     text NOT NULL CHECK (intent IN ('resolve', 'deny', 'later', 'archive_plan', 'hand_off')),
+  note       text,
+  at         timestamptz NOT NULL,
+  until      timestamptz,
+  result     jsonb NOT NULL
+);
+CREATE UNIQUE INDEX fleet_acts_closed_once ON factory.fleet_acts (ask_id, occurrence) WHERE intent IN ('resolve', 'deny', 'hand_off');
+CREATE UNIQUE INDEX fleet_acts_archive_once ON factory.fleet_acts (ask_id, occurrence) WHERE intent = 'archive_plan';
+CREATE UNIQUE INDEX fleet_acts_later_once ON factory.fleet_acts (ask_id, occurrence) WHERE intent = 'later';
 CREATE INDEX fleet_acts_ask_idx ON factory.fleet_acts (ask_id);
+CREATE INDEX fleet_acts_handoff_idx ON factory.fleet_acts (at) WHERE intent = 'hand_off';

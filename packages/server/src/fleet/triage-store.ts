@@ -65,18 +65,19 @@ export async function readLog(sql: SQL): Promise<LogRow[]> {
   return rows.map(toRow)
 }
 
-/** New decisions; one that exists (made before, undone or not) is left as it is. Returns the rows that were made. */
-export async function insertLog(sql: SQL, rows: readonly NewLogRow[], at: Date): Promise<LogRow[]> {
-  const made: LogRow[] = []
-  for (const r of rows) {
-    const inserted: RawLog[] = await sql`
-      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
-      VALUES (${r.kind}, ${r.subject}, ${r.fingerprint}, ${r.what}, ${r.why}, ${r.evidence}, ${JSON.stringify(r.payload)}::text::jsonb, ${at})
-      ON CONFLICT (kind, subject, fingerprint) DO NOTHING
-      RETURNING id, kind, subject, fingerprint, what, why, evidence, payload, at, undone_at`
-    for (const row of inserted) made.push(toRow(row))
-  }
-  return made
+/** New decisions in one statement; one that exists (made before, undone or not) is left as it is. */
+export async function insertLog(sql: SQL, rows: readonly NewLogRow[], at: Date): Promise<void> {
+  if (rows.length === 0) return
+  const payload = JSON.stringify(
+    rows.map((r) => ({ ...r, payload: r.payload })),
+    (_k, v: unknown) => (typeof v === 'string' ? v.replaceAll('\0', '') : v),
+  )
+  await sql`
+    INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+    SELECT x.kind, x.subject, x.fingerprint, x.what, x.why, x.evidence, x.payload, ${at}
+    FROM jsonb_to_recordset(${payload}::text::jsonb)
+      AS x(kind text, subject text, fingerprint text, what text, why text, evidence text, payload jsonb)
+    ON CONFLICT (kind, subject, fingerprint) DO NOTHING`
 }
 
 export const toEntry = (r: LogRow): TriageEntry => ({
@@ -114,64 +115,116 @@ export async function undoEntry(
   return existing ? { entry: toEntry(toRow(existing)), duplicate: true } : undefined
 }
 
+/** An ask's occurrence: what the owner did is of one occurrence (`fleet_ask_seen`). */
+export const occKey = (id: string, occurrence: number): string => `${id}#${occurrence}`
+
 /** What the owner did, for the build: which asks are done with, which wait, and the hand-offs whose result is to come back. */
 export interface ActState {
-  /** asks the owner resolved, denied or handed off: gone for good (an id is one occurrence) */
+  /** occurrences the owner resolved, denied or handed off: gone */
   closed: ReadonlySet<string>
-  /** every intent but `later` that was acted, by ask */
+  /** every intent but `later` that was acted, by occurrence */
   acted: ReadonlyMap<string, ReadonlySet<ActIntent>>
-  /** ask → when it comes back */
+  /** occurrence → when it comes back */
   later: ReadonlyMap<string, Date>
-  /** hand-offs: the spawn key and the ask it was for */
+  /** hand-offs younger than a day: the spawn key and the ask it was for */
   handoffs: readonly { ask: string; spawn: string; at: string }[]
+  /** any occurrence of an ask was closed / snoozed: for the fallback that does not know the occurrences */
+  closedAny(id: string): boolean
+  laterAny(id: string): boolean
 }
 
-export async function readActs(sql: SQL, now: Date): Promise<ActState> {
-  const rows: { ask_id: string; intent: ActIntent; until: Date | null; at: Date; result: { spawn?: string | null } }[] =
-    await sql`SELECT ask_id, intent, until, at, result FROM factory.fleet_acts ORDER BY id`
+/** A hand-off's result is looked for this long. */
+export const HANDOFF_WINDOW_MS = 24 * 3_600_000
+
+/**
+ * The acts that matter to a build, in one read: those of the asks listed (every occurrence), those of hand-off result asks, and the
+ * hand-offs of the last day (whose workers are looked at for their end).
+ */
+export async function readActs(sql: SQL, now: Date, askIds: readonly string[]): Promise<ActState> {
+  const ids = JSON.stringify(askIds)
+  const since = new Date(now.getTime() - HANDOFF_WINDOW_MS)
+  const rows: {
+    ask_id: string
+    occurrence: number
+    intent: ActIntent
+    until: Date | null
+    at: Date
+    result: { spawn?: string | null }
+  }[] = await sql`
+    SELECT ask_id, occurrence, intent, until, at, result FROM factory.fleet_acts
+    WHERE ask_id IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))
+       OR ask_id LIKE 'handoff:%'
+       OR (intent = 'hand_off' AND at > ${since})
+    ORDER BY id`
   const closed = new Set<string>()
   const acted = new Map<string, Set<ActIntent>>()
   const later = new Map<string, Date>()
   const handoffs: { ask: string; spawn: string; at: string }[] = []
   for (const r of rows) {
+    const key = occKey(r.ask_id, r.occurrence)
     if (r.intent === 'later') {
-      if (r.until && r.until > now) later.set(r.ask_id, r.until)
-      else later.delete(r.ask_id)
+      if (r.until && r.until > now) later.set(key, r.until)
+      else later.delete(key)
       continue
     }
-    const set = acted.get(r.ask_id) ?? new Set<ActIntent>()
+    const set = acted.get(key) ?? new Set<ActIntent>()
     set.add(r.intent)
-    acted.set(r.ask_id, set)
-    if (r.intent === 'resolve' || r.intent === 'deny' || r.intent === 'hand_off') closed.add(r.ask_id)
-    if (r.intent === 'hand_off' && r.result.spawn)
+    acted.set(key, set)
+    if (r.intent === 'resolve' || r.intent === 'deny' || r.intent === 'hand_off') closed.add(key)
+    if (r.intent === 'hand_off' && r.result.spawn && r.at > since)
       handoffs.push({ ask: r.ask_id, spawn: r.result.spawn, at: r.at.toISOString() })
   }
-  return { closed, acted, later, handoffs }
+  const anyOf = (keys: Iterable<string>) => {
+    const ids = new Set([...keys].map((k) => k.slice(0, k.lastIndexOf('#'))))
+    return (id: string) => ids.has(id)
+  }
+  return { closed, acted, later, handoffs, closedAny: anyOf(closed), laterAny: anyOf(later.keys()) }
 }
 
 /**
- * What was done with the ask before: the same intent again is the first one's result; an ask closed by another intent
- * (`resolve`, `deny` or `hand_off` are one of each ask) is `closed` with what closed it.
+ * What was done with the occurrence before: the same intent again is the first one's result; an occurrence closed by another intent
+ * (`resolve`, `deny` or `hand_off` are one of each) is `closedBy` what closed it.
  */
 export async function getAct(
   sql: SQL,
   ask: string,
+  occurrence: number,
   intent: ActIntent,
 ): Promise<{ same: ActResult } | { closedBy: ActIntent } | undefined> {
   if (intent === 'later') return undefined
-  const rows: { intent: ActIntent; result: Omit<ActResult, 'duplicate'> }[] =
-    await sql`SELECT intent, result FROM factory.fleet_acts WHERE ask_id = ${ask} AND intent <> 'later'`
+  const rows: { intent: ActIntent; result: Omit<ActResult, 'duplicate'> }[] = await sql`
+    SELECT intent, result FROM factory.fleet_acts WHERE ask_id = ${ask} AND occurrence = ${occurrence} AND intent <> 'later'`
   const same = rows.find((r) => r.intent === intent)
   if (same) return { same: { ...same.result, duplicate: true } }
   const closing = intent === 'archive_plan' ? undefined : rows.find((r) => r.intent !== 'archive_plan')
   return closing ? { closedBy: closing.intent } : undefined
 }
 
-/** Records an act; `false` when it closes an ask already closed, or archives twice: the first stands. */
+/** The newest act of this intent on the ask, whichever occurrence: the answer to a repeat after the ask has left the model. */
+export async function getLatestAct(sql: SQL, ask: string, intent: ActIntent): Promise<ActResult | undefined> {
+  if (intent === 'later') return undefined
+  const [row]: { result: Omit<ActResult, 'duplicate'> }[] = await sql`
+    SELECT result FROM factory.fleet_acts WHERE ask_id = ${ask} AND intent = ${intent} ORDER BY id DESC LIMIT 1`
+  return row ? { ...row.result, duplicate: true } : undefined
+}
+
+/** What closed the ask, in any occurrence of it (the answer to a closing intent on an ask that has left the model). */
+export async function getLatestClosing(sql: SQL, ask: string): Promise<ActIntent | undefined> {
+  const [row]: { intent: ActIntent }[] = await sql`
+    SELECT intent FROM factory.fleet_acts
+    WHERE ask_id = ${ask} AND intent IN ('resolve', 'deny', 'hand_off') ORDER BY id DESC LIMIT 1`
+  return row?.intent
+}
+
+/**
+ * Records an act; `false` when it closes an occurrence already closed, or archives twice: the first stands. `later` is one row per
+ * occurrence (a second `later` moves the time).
+ */
 export async function recordAct(
   sql: SQL,
   input: {
     ask: string
+    occurrence: number
     intent: ActIntent
     note: string | null
     at: Date
@@ -179,9 +232,80 @@ export async function recordAct(
     result: Omit<ActResult, 'duplicate'>
   },
 ): Promise<boolean> {
+  const result = JSON.stringify(input.result)
+  if (input.intent === 'later') {
+    await sql`
+      INSERT INTO factory.fleet_acts (ask_id, occurrence, intent, note, at, until, result)
+      VALUES (${input.ask}, ${input.occurrence}, 'later', ${input.note}, ${input.at}, ${input.until}, ${result}::text::jsonb)
+      ON CONFLICT (ask_id, occurrence) WHERE intent = 'later'
+      DO UPDATE SET note = EXCLUDED.note, at = EXCLUDED.at, until = EXCLUDED.until, result = EXCLUDED.result`
+    return true
+  }
   const stored = await sql`
-    INSERT INTO factory.fleet_acts (ask_id, intent, note, at, until, result)
-    VALUES (${input.ask}, ${input.intent}, ${input.note}, ${input.at}, ${input.until}, ${JSON.stringify(input.result)}::text::jsonb)
+    INSERT INTO factory.fleet_acts (ask_id, occurrence, intent, note, at, until, result)
+    VALUES (${input.ask}, ${input.occurrence}, ${input.intent}, ${input.note}, ${input.at}, ${input.until}, ${result}::text::jsonb)
     ON CONFLICT DO NOTHING RETURNING id`
   return stored.length > 0
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Occurrences: when each ask was first seen, and when it left.
+
+/** Absent this long, with nothing the owner did about it, a row is forgotten. */
+const SEEN_FORGET_MS = 90 * 24 * 3_600_000
+
+/** The first-seen time of every ask that is listed now (the builder restarts with these). */
+export async function readSeen(sql: SQL): Promise<Map<string, string>> {
+  const rows: { ask_id: string; first_seen: Date }[] =
+    await sql`SELECT ask_id, first_seen FROM factory.fleet_ask_seen WHERE present`
+  return new Map(rows.map((r) => [r.ask_id, r.first_seen.toISOString()]))
+}
+
+/**
+ * Notes the asks this build listed. An ask new to the table is occurrence 1; one that was absent in an earlier build and is back is
+ * the next occurrence with its own first-seen time; one that is listed stays. With `mayEnd` (every source answered), the asks that
+ * are not listed are marked absent. Returns the occurrence of each listed ask.
+ */
+export async function trackSeen(
+  sql: SQL,
+  asks: readonly { id: string; at: string }[],
+  now: Date,
+  mayEnd: boolean,
+): Promise<Map<string, number>> {
+  const ids = JSON.stringify(asks.map((a) => a.id))
+  const known: { ask_id: string; occurrence: number; present: boolean }[] = await sql`
+    SELECT ask_id, occurrence, present FROM factory.fleet_ask_seen
+    WHERE present OR ask_id IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))`
+  const byId = new Map(known.map((k) => [k.ask_id, k]))
+  const occurrences = new Map<string, number>()
+  const writes: { ask_id: string; occurrence: number; first_seen: string }[] = []
+  for (const ask of asks) {
+    const row = byId.get(ask.id)
+    if (row?.present) {
+      occurrences.set(ask.id, row.occurrence)
+      continue
+    }
+    const occurrence = row ? row.occurrence + 1 : 1
+    occurrences.set(ask.id, occurrence)
+    writes.push({ ask_id: ask.id, occurrence, first_seen: ask.at })
+  }
+  if (writes.length > 0) {
+    await sql`
+      INSERT INTO factory.fleet_ask_seen (ask_id, occurrence, first_seen, present, absent_at)
+      SELECT x.ask_id, x.occurrence, x.first_seen::timestamptz, true, NULL
+      FROM jsonb_to_recordset(${JSON.stringify(writes)}::text::jsonb) AS x(ask_id text, occurrence int, first_seen text)
+      ON CONFLICT (ask_id) DO UPDATE
+        SET occurrence = EXCLUDED.occurrence, first_seen = EXCLUDED.first_seen, present = true, absent_at = NULL`
+  }
+  if (mayEnd) {
+    await sql`
+      UPDATE factory.fleet_ask_seen SET present = false, absent_at = ${now}
+      WHERE present AND ask_id NOT IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))`
+    const forget = new Date(now.getTime() - SEEN_FORGET_MS)
+    await sql`
+      DELETE FROM factory.fleet_ask_seen s
+      WHERE NOT s.present AND s.absent_at < ${forget}
+        AND NOT EXISTS (SELECT 1 FROM factory.fleet_acts a WHERE a.ask_id = s.ask_id)`
+  }
+  return occurrences
 }

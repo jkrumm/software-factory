@@ -114,9 +114,15 @@ export type QueueOutcome = 'done' | 'denied' | 'superseded'
 /** The queue refused or could not take an answer: `reason` is what the owner is told (503). */
 export class QueueUnavailable extends Error {}
 
+/**
+ * What `resolve` did: wrote the result, or found the request already had one (an earlier call whose record here failed, a human's
+ * answer) and says what it shows. `status` is the queue's word (`done`, `denied`, `failed`), `resolvedAs` the outcome a `resolve` gave it.
+ */
+export type QueueResolved = { written: true } | { written: false; status: string; resolvedAs: QueueOutcome | null }
+
 /** Writes a result into the human queue. It never runs the request's command: `resolve` only records how the request ended. */
 export interface QueueActor {
-  resolve(id: string, as: QueueOutcome, note?: string): Promise<void>
+  resolve(id: string, as: QueueOutcome, note?: string): Promise<QueueResolved>
 }
 
 const QueueList = z.array(
@@ -175,7 +181,7 @@ export class AskHumanQueue implements QueueReader, QueueActor {
    * has it, the answer is `QueueUnavailable` with the reason: the help text is read first, so a script without the subcommand is
    * never asked to run an unknown one. The id is the queue's own (`list --json`), checked against its shape before it reaches argv.
    */
-  async resolve(id: string, as: QueueOutcome, note?: string): Promise<void> {
+  async resolve(id: string, as: QueueOutcome, note?: string): Promise<QueueResolved> {
     if (!/^\w[\w.-]*$/.test(id)) throw new QueueUnavailable(`queue id ${id} is not a queue id`)
     if (
       !(await stat(this.bin).then(
@@ -192,6 +198,32 @@ export class AskHumanQueue implements QueueReader, QueueActor {
     const args = [this.bin, 'resolve', id, '--as', as, ...(note ? ['--note', note] : [])]
     const done = await this.run(args, SOURCE_TIMEOUT_MS, childEnv())
     if (done.exitCode === EXIT_TIMEOUT) throw new QueueUnavailable('ask-human.sh resolve did not answer in time')
-    if (done.exitCode !== 0) throw new QueueUnavailable(`ask-human.sh resolve exited ${done.exitCode}`)
+    if (done.exitCode === 0) return { written: true }
+    // Exit 2 is every refusal, "already has a result" among them (its line is on stderr, which is not read): ask the queue what the
+    // request shows, so an answer written by an earlier call whose record failed here converges instead of failing for good.
+    if (done.exitCode === 2) {
+      const shown = await this.result(id)
+      if (shown) return { written: false, ...shown }
+    }
+    throw new QueueUnavailable(`ask-human.sh resolve exited ${done.exitCode}`)
+  }
+
+  /** The result a request shows in `ask-human.sh status <id>` (the request's JSON, then its result's): its status and how it was resolved. */
+  private async result(id: string): Promise<{ status: string; resolvedAs: QueueOutcome | null } | undefined> {
+    const done = await this.run([this.bin, 'status', id], SOURCE_TIMEOUT_MS, childEnv())
+    if (done.exitCode !== 0) return undefined
+    for (const line of done.stdout.split('\n').reverse()) {
+      if (!line.trim().startsWith('{')) continue
+      try {
+        const parsed = z
+          .object({ status: z.string(), resolvedAs: z.enum(['done', 'denied', 'superseded']).nullish() })
+          .loose()
+          .safeParse(JSON.parse(line))
+        if (parsed.success) return { status: parsed.data.status, resolvedAs: parsed.data.resolvedAs ?? null }
+      } catch {
+        // not a result line
+      }
+    }
+    return undefined
   }
 }
