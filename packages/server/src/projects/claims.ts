@@ -28,7 +28,7 @@ export async function issueIsClosed(tx: SQL, issueId: number): Promise<boolean> 
 
 /**
  * Takes the Issue's claim on its project if there is room, else queues the Issue for it. A project admits `leads` leads (the
- * manifest's, one by default) and one more for an urgent Issue (`class = 'urgent'`): ordinary holders are at most `leads`, all holders
+ * manifest's, one by default) and one more for an urgent Issue (`class = 'urgent'` or `kind = 'incident'`): ordinary holders are at most `leads`, all holders
  * at most `leads + 1`, so an urgent holder never uses up an ordinary place. When a place frees, the oldest queued Issue goes
  * first (by Issue id: its age), urgent ones before the rest; only an Issue with a spawn still waiting counts as queued, so one
  * whose spawn failed holds nobody up. A repo whose project is not synced yet is queued without a row: the tick syncs a named
@@ -36,14 +36,15 @@ export async function issueIsClosed(tx: SQL, issueId: number): Promise<boolean> 
  * callers hold the capacity lock, which makes the count of holders and the insert one step.
  */
 export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<ClaimResult> {
-  const [issue]: { id: number; repo: string; state: string; class: string | null }[] = await tx`
-    SELECT id, repo, state, class FROM factory.issues WHERE id = ${issueId}`
+  const [issue]: { id: number; repo: string; state: string; class: string | null; kind: string | null }[] = await tx`
+    SELECT id, repo, state, class, kind FROM factory.issues WHERE id = ${issueId}`
   if (!issue || issue.state === 'closed') return 'queued'
   const project = await projectOfPath(tx, issue.repo)
   if (!project) return 'queued'
 
   const key = claimKey(project.name)
-  const urgent = issue.class === 'urgent'
+  // Classify never answers `urgent`, so an incident is what takes the extra place; the owner's `urgent` class does too.
+  const urgent = issue.class === 'urgent' || issue.kind === 'incident'
   const rows: { issue_id: number; urgent: boolean; held: boolean; pending: boolean }[] = await tx`
     SELECT c.issue_id, c.urgent, c.held_at IS NOT NULL AS held,
       EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status IN ('queued', 'waiting', 'starting')) AS pending

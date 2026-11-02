@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
-import { projectOfPath, tryClaim } from '../projects/claims.ts'
+import { tryClaim } from '../projects/claims.ts'
 import { effectiveState, loadQueueStates } from '../queue.ts'
 import { enqueue } from './inbox.ts'
 
@@ -19,35 +19,42 @@ export interface AdmitOptions {
 interface Waiting {
   id: number
   repo: string
-  source: string
   attempt: number
 }
 
 /**
- * Admission for Issues: each classified, `queued` Issue the project's claim has room for gets the `admitted` event (key
- * `admit:<issue>:<attempt>`, so a second admission is the same row) and holds the claim from then on. The lead's spawn is made by the
- * `start_lead` effect that event plans, and finds its claim held. The oldest Issue goes first and an urgent one before the rest, which
- * is the order the claim hands out its places in. Held back, and still `queued`: `drain` (for the repo or globally), a paused project, a
- * project not synced yet, an alert while its switch is off, and a full claim. Under the capacity lock like every admission.
+ * Admission for Issues: of the classified, `queued` Issues, each project's oldest and any urgent one (an incident, or the owner's
+ * `urgent` class) are looked at, and the claim hands out its places in that order: the project's claim has room, the Issue holds
+ * it and gets `admitted` (key `admit:<issue>:<attempt>`, so a second admission is the same row). The lead's spawn is made by the
+ * `start_lead` effect that event plans, and finds its claim held. The others of a project cannot be admitted before the oldest, so
+ * they are not read. Held back, and still `queued`: `drain` (for the repo or globally), a paused project, a project not synced yet,
+ * a full claim, and an `alert` while its switch is off (left out of the reading, so it does not stand in front of a request behind
+ * it). Under the capacity lock like every admission.
  */
 export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<number> {
   return sql.begin(async (tx) => {
     await lockCapacity(tx)
     const queued: Waiting[] = await tx`
-      SELECT id, repo, source, attempt FROM factory.issues
-      WHERE state = 'queued' AND classified_at IS NOT NULL
-      ORDER BY (class = 'urgent') DESC NULLS LAST, id`
+      WITH q AS (
+        SELECT i.id, i.repo, i.attempt, p.name AS project, COALESCE(i.class = 'urgent' OR i.kind = 'incident', false) AS urgent
+        FROM factory.issues i
+        CROSS JOIN LATERAL (
+          SELECT name, paused FROM factory.projects
+          WHERE i.repo = repo OR starts_with(i.repo, repo || '/')
+          ORDER BY length(repo) DESC LIMIT 1
+        ) p
+        WHERE i.state = 'queued' AND i.classified_at IS NOT NULL AND NOT p.paused
+          AND (i.source <> 'alert' OR ${options.alertLeads})
+      )
+      SELECT id, repo, attempt FROM q
+      WHERE urgent OR id = (SELECT min(o.id) FROM q o WHERE o.project = q.project AND NOT o.urgent)
+      ORDER BY urgent DESC, id`
     if (queued.length === 0) return 0
     const states = await loadQueueStates(tx)
     let admitted = 0
     for (const issue of queued) {
       if (admitted >= BATCH) break
-      if (issue.source === 'alert' && !options.alertLeads) continue
       if (effectiveState(states, issue.repo) === 'drain') continue
-      const owner = await projectOfPath(tx, issue.repo)
-      if (!owner) continue
-      const [project]: { paused: boolean }[] = await tx`SELECT paused FROM factory.projects WHERE name = ${owner.name}`
-      if (project?.paused) continue
       if ((await tryClaim(tx, issue.id, options.now)) !== 'held') continue
       await enqueue(tx, {
         issueId: issue.id,
