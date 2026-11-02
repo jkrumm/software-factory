@@ -128,9 +128,8 @@ export interface ActState {
   later: ReadonlyMap<string, Date>
   /** hand-offs younger than a day: the spawn key and the ask it was for */
   handoffs: readonly { ask: string; spawn: string; at: string }[]
-  /** any occurrence of an ask was closed / snoozed: for the fallback that does not know the occurrences */
+  /** a hand-off result ask (`handoff:<spawn>`) was closed in any occurrence: its worker is not looked at again */
   closedAny(id: string): boolean
-  laterAny(id: string): boolean
 }
 
 /** A hand-off's result is looked for this long. */
@@ -141,7 +140,7 @@ export const HANDOFF_WINDOW_MS = 24 * 3_600_000
  * hand-offs of the last day (whose workers are looked at for their end).
  */
 export async function readActs(sql: SQL, now: Date, askIds: readonly string[]): Promise<ActState> {
-  const ids = JSON.stringify(askIds)
+  const listed = JSON.stringify(askIds)
   const since = new Date(now.getTime() - HANDOFF_WINDOW_MS)
   const rows: {
     ask_id: string
@@ -152,8 +151,8 @@ export async function readActs(sql: SQL, now: Date, askIds: readonly string[]): 
     result: { spawn?: string | null }
   }[] = await sql`
     SELECT ask_id, occurrence, intent, until, at, result FROM factory.fleet_acts
-    WHERE ask_id IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))
-       OR ask_id LIKE 'handoff:%'
+    WHERE ask_id IN (SELECT jsonb_array_elements_text(${listed}::text::jsonb))
+       OR ask_id IN (SELECT 'handoff:' || (result->>'spawn') FROM factory.fleet_acts WHERE intent = 'hand_off' AND at > ${since})
        OR (intent = 'hand_off' AND at > ${since})
     ORDER BY id`
   const closed = new Set<string>()
@@ -174,11 +173,8 @@ export async function readActs(sql: SQL, now: Date, askIds: readonly string[]): 
     if (r.intent === 'hand_off' && r.result.spawn && r.at > since)
       handoffs.push({ ask: r.ask_id, spawn: r.result.spawn, at: r.at.toISOString() })
   }
-  const anyOf = (keys: Iterable<string>) => {
-    const ids = new Set([...keys].map((k) => k.slice(0, k.lastIndexOf('#'))))
-    return (id: string) => ids.has(id)
-  }
-  return { closed, acted, later, handoffs, closedAny: anyOf(closed), laterAny: anyOf(later.keys()) }
+  const closedIds = new Set([...closed].map((k) => k.slice(0, k.lastIndexOf('#'))))
+  return { closed, acted, later, handoffs, closedAny: (id) => closedIds.has(id) }
 }
 
 /**
@@ -198,22 +194,6 @@ export async function getAct(
   if (same) return { same: { ...same.result, duplicate: true } }
   const closing = intent === 'archive_plan' ? undefined : rows.find((r) => r.intent !== 'archive_plan')
   return closing ? { closedBy: closing.intent } : undefined
-}
-
-/** The newest act of this intent on the ask, whichever occurrence: the answer to a repeat after the ask has left the model. */
-export async function getLatestAct(sql: SQL, ask: string, intent: ActIntent): Promise<ActResult | undefined> {
-  if (intent === 'later') return undefined
-  const [row]: { result: Omit<ActResult, 'duplicate'> }[] = await sql`
-    SELECT result FROM factory.fleet_acts WHERE ask_id = ${ask} AND intent = ${intent} ORDER BY id DESC LIMIT 1`
-  return row ? { ...row.result, duplicate: true } : undefined
-}
-
-/** What closed the ask, in any occurrence of it (the answer to a closing intent on an ask that has left the model). */
-export async function getLatestClosing(sql: SQL, ask: string): Promise<ActIntent | undefined> {
-  const [row]: { intent: ActIntent }[] = await sql`
-    SELECT intent FROM factory.fleet_acts
-    WHERE ask_id = ${ask} AND intent IN ('resolve', 'deny', 'hand_off') ORDER BY id DESC LIMIT 1`
-  return row?.intent
 }
 
 /**
@@ -254,6 +234,14 @@ export async function recordAct(
 /** Absent this long, with nothing the owner did about it, a row is forgotten. */
 const SEEN_FORGET_MS = 90 * 24 * 3_600_000
 
+/** The occurrence each of these asks is on as the table stands (the last one, also when it has left): a repeat of an act lands on it. */
+export async function readOccurrences(sql: SQL, askIds: readonly string[]): Promise<Map<string, number>> {
+  const rows: { ask_id: string; occurrence: number }[] = await sql`
+    SELECT ask_id, occurrence FROM factory.fleet_ask_seen
+    WHERE ask_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(askIds)}::text::jsonb))`
+  return new Map(rows.map((r) => [r.ask_id, r.occurrence]))
+}
+
 /** The first-seen time of every ask that is listed now (the builder restarts with these). */
 export async function readSeen(sql: SQL): Promise<Map<string, string>> {
   const rows: { ask_id: string; first_seen: Date }[] =
@@ -272,10 +260,10 @@ export async function trackSeen(
   now: Date,
   mayEnd: boolean,
 ): Promise<Map<string, number>> {
-  const ids = JSON.stringify(asks.map((a) => a.id))
+  const listed = JSON.stringify(asks.map((a) => a.id))
   const known: { ask_id: string; occurrence: number; present: boolean }[] = await sql`
     SELECT ask_id, occurrence, present FROM factory.fleet_ask_seen
-    WHERE present OR ask_id IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))`
+    WHERE present OR ask_id IN (SELECT jsonb_array_elements_text(${listed}::text::jsonb))`
   const byId = new Map(known.map((k) => [k.ask_id, k]))
   const occurrences = new Map<string, number>()
   const writes: { ask_id: string; occurrence: number; first_seen: string }[] = []
@@ -300,7 +288,7 @@ export async function trackSeen(
   if (mayEnd) {
     await sql`
       UPDATE factory.fleet_ask_seen SET present = false, absent_at = ${now}
-      WHERE present AND ask_id NOT IN (SELECT jsonb_array_elements_text(${ids}::text::jsonb))`
+      WHERE present AND ask_id NOT IN (SELECT jsonb_array_elements_text(${listed}::text::jsonb))`
     const forget = new Date(now.getTime() - SEEN_FORGET_MS)
     await sql`
       DELETE FROM factory.fleet_ask_seen s

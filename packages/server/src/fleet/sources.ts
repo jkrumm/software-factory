@@ -219,7 +219,9 @@ export class AskHumanQueue implements QueueReader, QueueActor {
           .object({ status: z.string(), resolvedAs: z.enum(['done', 'denied', 'superseded']).nullish() })
           .loose()
           .safeParse(JSON.parse(line))
-        if (parsed.success) return { status: parsed.data.status, resolvedAs: parsed.data.resolvedAs ?? null }
+        // Only a result the queue has written is one: an open or pending request is a refusal for another reason.
+        if (parsed.success && ['done', 'denied', 'failed', 'superseded'].includes(parsed.data.status))
+          return { status: parsed.data.status, resolvedAs: parsed.data.resolvedAs ?? null }
       } catch {
         // not a result line
       }

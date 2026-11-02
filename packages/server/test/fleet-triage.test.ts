@@ -46,7 +46,13 @@ let sentinel: string
 let present: Set<string>
 const probed: string[] = []
 
-const hc: HcLister = { list: async () => terminals }
+let hcFailsNow = false
+const hc: HcLister = {
+  list: async () => {
+    if (hcFailsNow) throw new Error('hc is down')
+    return terminals
+  },
+}
 const queue: QueueReader & QueueActor = {
   list: async () => requests,
   resolve: async (id, as, note) => {
@@ -88,6 +94,7 @@ beforeEach(async () => {
   resolved = []
   resolveFails = undefined
   existing = new Map()
+  hcFailsNow = false
   probed.length = 0
   present = new Set()
   sentinel = join(mkdtempSync('/tmp/factory-sentinel-'), 'ran')
@@ -1145,5 +1152,99 @@ describe('the lead’s review', () => {
     expect(ask(await build(), `handoff:${result.spawn}`)).toBeDefined()
     clock.advance(25 * 3_600_000)
     expect(ask(await build(), `handoff:${result.spawn}`)).toBeUndefined()
+  })
+
+  test('r2-1: a build that could not read hc, the queue or the digest ends no occurrence', async () => {
+    const id = 'hc:prometheus-epx-w1'
+    let fleet = await build()
+    expect(ask(fleet, id)?.occurrence).toBe(1)
+    await act(id, 'later')
+    // A new process whose hc is down: the ask is not listed, and that is not "it left".
+    hcFailsNow = true
+    const restarted = newBuilder()
+    await restarted.refreshNow()
+    hcFailsNow = false
+    fleet = await restarted.refreshNow()
+    expect(
+      (await db.sql`SELECT occurrence, present FROM factory.fleet_ask_seen WHERE ask_id = ${id}`)[0],
+    ).toMatchObject({
+      occurrence: 1,
+      present: true,
+    })
+    // Still snoozed: the snooze was of occurrence 1.
+    expect(ask(fleet, id)).toBeUndefined()
+  })
+
+  test('r2-2: when the triage fails, the fallback keeps each ask on the occurrence the table has', async () => {
+    requests = [stale('q-a', 'Restart the sync container', 2)]
+    await build()
+    await act('queue:q-a', 'deny')
+    await build()
+    requests = [stale('q-a', 'Restart the sync container', 2)]
+    await build() // occurrence 2
+    // A probe that throws takes the triage down (an old request with a command is probed).
+    requests = [
+      stale('q-a', 'Restart the sync container', 2),
+      stale('q-p', 'MacBook: remove the shell', 9, 'trash /Applications/Herdr.app'),
+    ]
+    const broken: Probes = {
+      exists: async () => {
+        throw new Error('the probe broke')
+      },
+      newerDeploy: async () => undefined,
+    }
+    const failing = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      triage: { hosts: new Map([['macbook', 'mac']]), queueMachine: 'macbook', probes: broken },
+    })
+    const fleet = await failing.refreshNow()
+    expect(fleet.errors.some((e) => e.startsWith('triage:'))).toBe(true)
+    // Occurrence 1 was denied; the ask is on occurrence 2 and is listed, as such.
+    expect(ask(fleet, 'queue:q-a')?.occurrence).toBe(2)
+  })
+
+  test('r2-3: what was done to an earlier occurrence is not the answer for the one the ask is on', async () => {
+    requests = [stale('q-a', 'Restart the sync container', 2)]
+    await build()
+    await act('queue:q-a', 'deny')
+    await build()
+    requests = [stale('q-a', 'Restart the sync container', 2)]
+    await build() // occurrence 2
+    await act('queue:q-a', 'later')
+    expect(ask(await get(), 'queue:q-a')).toBeUndefined()
+    const res = await act('queue:q-a', 'deny')
+    expect(res.status).toBe(404)
+    expect(resolved).toHaveLength(1)
+  })
+
+  test('r2-4: a refusal from the queue that shows no result is unavailable, not "already closed"', async () => {
+    const dir = mkdtempSync('/tmp/factory-askhuman-open-')
+    try {
+      const path = join(dir, 'open.sh')
+      writeFileSync(
+        path,
+        `#!/bin/sh\n[ "$1" = help ] && { echo "ask-human.sh resolve <id>"; exit 0; }\n[ "$1" = resolve ] && exit 2\n[ "$1" = status ] && { echo '{"id":"x","status":"pending"}'; exit 0; }\n`,
+      )
+      chmodSync(path, 0o755)
+      await expect(new AskHumanQueue(path).resolve('20261101T100000-1', 'done')).rejects.toThrow('exited 2')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('r2-5: a command is compared as it is, a quoted argument’s spaces included', async () => {
+    requests = [
+      stale('q-a', 'MacBook: print it', 3, "printf 'a  b'"),
+      stale('q-b', 'MacBook: print it', 1, "printf 'a b'"),
+    ]
+    const fleet = await build()
+    expect(ask(fleet, 'queue:q-a')).toBeDefined()
+    expect(ask(fleet, 'queue:q-b')?.folded).toEqual([])
   })
 })

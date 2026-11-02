@@ -1,4 +1,4 @@
--- FV Wave 3: the fleet triage (docs/design.md §11 "The fleet view"). Additive: a rollback ignores both tables.
+-- FV Wave 3: the fleet triage (docs/design.md §11 "The fleet view"). Additive: three new tables; a rollback to the previous release ignores them.
 -- What the triage did on its own (bookkeeping only: it never runs a command and never denies). One row per decision; the
 -- unique key is what it was about, so a decision the owner undid is not made again for the same fact.
 CREATE TABLE factory.fleet_triage_log (

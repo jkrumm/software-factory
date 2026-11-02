@@ -17,7 +17,7 @@ import { createSpawn } from '../spawns.ts'
 import { readSnapshot } from './store.ts'
 import { QueueUnavailable, type QueueActor, type QueueReader } from './sources.ts'
 import { Places } from './place.ts'
-import { getAct, getLatestAct, getLatestClosing, recordAct } from './triage-store.ts'
+import { getAct, readOccurrences, recordAct } from './triage-store.ts'
 
 /**
  * `POST /fleet/asks/:id/act` (docs/design.md §11 "The fleet view", Wave 3): the owner's intent on an ask, from any surface. An act is
@@ -92,13 +92,12 @@ export class FleetActions {
     if (!snapshot) return refuse(503, 'not_ready', 'the fleet model is not built yet')
     const ask = snapshot.asks.find((a) => a.id === askId)
     if (!ask) {
-      // A repeat after the ask has left the model answers with what was done; anything else has no ask to act on.
-      const done = await getLatestAct(sql, askId, body.intent)
-      if (done) return { ok: true, created: false, result: done }
-      const closedBy = ['resolve', 'deny', 'hand_off'].includes(body.intent)
-        ? await getLatestClosing(sql, askId)
-        : undefined
-      if (closedBy) return refuse(409, 'already_closed', `${askId} was closed by ${closedBy} already`)
+      // The ask is not in the model (done with, snoozed, folded). A repeat answers with what was done on the occurrence it is on, and
+      // nothing is answered from an earlier one: a closed occurrence 1 does not cover an occurrence 2.
+      const occurrence = (await readOccurrences(sql, [askId])).get(askId)
+      const done = occurrence === undefined ? undefined : await getAct(sql, askId, occurrence, body.intent)
+      if (done && 'same' in done) return { ok: true, created: false, result: done.same }
+      if (done) return refuse(409, 'already_closed', `${askId} was closed by ${done.closedBy} already`)
       return refuse(404, 'unknown_ask', `no ask ${askId} (it may be resolved already)`)
     }
     const before = await getAct(sql, askId, ask.occurrence, body.intent)

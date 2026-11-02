@@ -6,7 +6,16 @@ import { getSpawn, type SpawnView } from '../spawns.ts'
 import { STALE_ASK_MS } from './model.ts'
 import { SAFE_PATH, type Probes } from './probes.ts'
 import type { QueueRequest } from './sources.ts'
-import { insertLog, type LogRow, type NewLogRow, occKey, readActs, readLog, trackSeen } from './triage-store.ts'
+import {
+  insertLog,
+  type LogRow,
+  type NewLogRow,
+  occKey,
+  readActs,
+  readLog,
+  readOccurrences,
+  trackSeen,
+} from './triage-store.ts'
 
 /**
  * The triage (docs/design.md §11 "The fleet view", Wave 3): a tier, a suggestion with evidence and the offered actions for every ask,
@@ -113,26 +122,22 @@ export function targetsOf(
     return true
   }
 
-  {
-    // Only `&&`, `||`, `;` and newlines join commands; a pipe, a redirect, a substitution, a quote, a glob or a variable means more than a probe sees.
-    if (/[|<>$`(){}&\\"'*?[\]!#]/.test(request.cmd.replace(/&&|\|\||;/g, ' '))) return []
-    for (const segment of request.cmd.split(/&&|\|\||;|\n/)) {
-      const words = segment.trim().split(/\s+/).filter(Boolean)
-      let at = 0
-      while (words[at] === 'sudo') at++
-      const verb = words[at]
-      if (!verb) continue
-      if (REMOVES.has(verb) || CREATES.has(verb)) {
-        const args = words.slice(at + 1).filter((w) => !w.startsWith('-'))
-        if (args.length === 0) return []
-        for (const arg of args) if (!add(arg, REMOVES.has(verb) ? 'absent' : 'present')) return []
-      } else if (!HARMLESS.has(verb)) return []
-    }
-    return targets.size > 0 && targets.size <= MAX_TARGETS ? [...targets.values()] : []
+  // Only `&&`, `||`, `;` and newlines join commands; a pipe, a redirect, a substitution, a quote, a glob or a variable means more than a probe sees.
+  // (Free text is not read for "done": prose has negations, conditions and other things in it. No command, no verdict.)
+  if (/[|<>$`(){}&\\"'*?[\]!#]/.test(request.cmd.replace(/&&|\|\||;/g, ' '))) return []
+  for (const segment of request.cmd.split(/&&|\|\||;|\n/)) {
+    const words = segment.trim().split(/\s+/).filter(Boolean)
+    let at = 0
+    while (words[at] === 'sudo') at++
+    const verb = words[at]
+    if (!verb) continue
+    if (REMOVES.has(verb) || CREATES.has(verb)) {
+      const args = words.slice(at + 1).filter((w) => !w.startsWith('-'))
+      if (args.length === 0) return []
+      for (const arg of args) if (!add(arg, REMOVES.has(verb) ? 'absent' : 'present')) return []
+    } else if (!HARMLESS.has(verb)) return []
   }
-
-  // Free text is not read for "done": an install or a removal in prose has negations, conditions and other things in it. No command, no verdict.
-  return []
+  return targets.size > 0 && targets.size <= MAX_TARGETS ? [...targets.values()] : []
 }
 
 /** `Deploy gate [<repo>] deploy of origin/main <sha> FAILED`: the repo and the commit the gate was about. */
@@ -154,8 +159,8 @@ function supersessionKey(ask: FleetAsk, cmds: ReadonlyMap<string, string | null>
   }
   // Two requests are the same only when what they say and what they would run are both the same.
   if (ask.source === 'queue') {
-    const squash = (t: string) => t.replace(/\s+/g, ' ').trim()
-    return `queue\0${squash(ask.text).toLowerCase()}\0${squash(cmds.get(ask.id) ?? '')}`
+    // The text may differ in case and spacing; the command is compared as it is (a quoted argument's spaces mean something).
+    return `queue\0${ask.text.replace(/\s+/g, ' ').trim().toLowerCase()}\0${(cmds.get(ask.id) ?? '').trim()}`
   }
   return undefined
 }
@@ -539,18 +544,20 @@ export class Triage {
 
   constructor(private readonly deps: TriageDeps) {}
 
-  /** Only what the owner closed or snoozed leaves the list: what the build falls back to when the rest of the triage fails (no occurrences known: any occurrence counts). */
+  /**
+   * Only what the owner closed or snoozed leaves the list: what the build falls back to when the rest of the triage fails. The
+   * occurrences are the table's as they stand (not advanced), so an act on the snapshot lands on the occurrence it shows.
+   */
   async hide(model: Model, now: Date): Promise<Model> {
-    const acts = await readActs(
-      this.deps.sql,
-      now,
-      model.asks.map((a) => a.id),
-    )
-    return recount(
-      model,
-      model.asks.filter((a) => !acts.closedAny(a.id) && !acts.laterAny(a.id)),
-      now,
-    )
+    const ids = model.asks.map((a) => a.id)
+    const [acts, occurrences] = await Promise.all([
+      readActs(this.deps.sql, now, ids),
+      readOccurrences(this.deps.sql, ids),
+    ])
+    const asks = model.asks
+      .map((a) => ({ ...a, occurrence: occurrences.get(a.id) ?? 1 }))
+      .filter((a) => !acts.closed.has(occKey(a.id, a.occurrence)) && !acts.later.has(occKey(a.id, a.occurrence)))
+    return recount(model, asks, now)
   }
 
   /**
