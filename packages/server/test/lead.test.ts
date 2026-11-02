@@ -592,6 +592,42 @@ describe('what the review found', () => {
     expect(await trail(id)).toContain('lapsed')
   })
 
+  test('an urgent Issue’s business classification still keeps its questions the owner’s', async () => {
+    classifier.answer = { project: null, kind: 'bug', class: 'business', size: 's', tier: 'sonnet', effort: 'medium' }
+    const id = await file(newRepo())
+    await db.sql`UPDATE factory.issues SET class = 'urgent' WHERE id = ${id}`
+    await drive(4)
+    const key = leadKey(id, 1)
+    const expiresAt = new Date(clock.now().getTime() + 600_000).toISOString()
+    await post(id, 'ask', { question: 'Raise the price?', default: 'yes', expiresAt, session: key })
+    await pass()
+    clock.advance(700_000)
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'decision', class: 'urgent' })
+  })
+
+  test('a stop that a later turn has overtaken parks nothing', async () => {
+    const { id, key } = await lead()
+    await emit(key, 'session_started', clock.now(), { claudeSessionId: 'c1' })
+    clock.advance(1_000)
+    await emit(key, 'turn_started')
+    clock.advance(1_000)
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `unreported:${id}:${key}:1`,
+      kind: 'unreported',
+      at: clock.now(),
+      session: key,
+      payload: { turn: 1 },
+    })
+    clock.advance(1_000)
+    // The lead began another turn before the tick got to the stop.
+    await emit(key, 'turn_started')
+    await pass()
+    expect((await issue(id)).state).toBe('working')
+    expect(await trail(id)).toContain('refused')
+  })
+
   test('Issues the claim cannot take do not starve the ones behind them', async () => {
     const held = newRepo()
     for (let i = 0; i < 22; i++) await file(held, 'alert')

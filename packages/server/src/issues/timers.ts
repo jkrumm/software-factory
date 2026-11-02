@@ -42,7 +42,7 @@ export async function fireTimers(sql: SQL, now: Date, batch = 50): Promise<numbe
 async function expireDecision(tx: SQL, issueId: number, now: Date): Promise<void> {
   // A business question is the owner's: whatever default the lead named, the expiry only tells the owner.
   const [decision]: { id: string; default_option: string | null }[] = await tx`
-    SELECT d.id, CASE WHEN i.class = 'business' THEN NULL ELSE d.default_option END AS default_option
+    SELECT d.id, CASE WHEN i.class = 'business' OR i.classify->>'class' = 'business' THEN NULL ELSE d.default_option END AS default_option
     FROM factory.decisions d JOIN factory.issues i ON i.id = d.issue_id
     WHERE d.issue_id = ${issueId} AND d.answered_at IS NULL AND d.expires_at <= ${now}
     ORDER BY d.id DESC LIMIT 1`

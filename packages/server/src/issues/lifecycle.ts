@@ -36,6 +36,16 @@ interface Step {
 /** The event happened before the one that put the Issue where it is: it says nothing about now. */
 const older = (row: InboxRow, issue: IssueRow): boolean => row.at < issue.updated_at
 
+/** A stop is over once its session has started another turn: the Issue is not parked for a turn that is behind it. */
+async function stopIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
+  if (older(row, issue)) return 'this stop is older than the state it would end'
+  const [later] = await tx`
+    SELECT 1 FROM factory.issue_inbox
+    WHERE issue_id = ${issue.id} AND session = ${row.session} AND kind = 'turn_started' AND at > ${row.at}
+    LIMIT 1`
+  return later ? 'a turn has started since this stop' : undefined
+}
+
 /** A wall that happened before the Issue last moved, or before a turn already seen, is over. A late spool line can be either. */
 async function wallIsNews({ tx, issue, row }: Context): Promise<string | undefined> {
   if (older(row, issue)) return 'this wall is older than the state it would end'
@@ -86,7 +96,7 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   },
   block: { working: { to: 'waiting', reason: 'blocked' } },
   // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
-  unreported: { working: { to: 'waiting', reason: 'unreported' } },
+  unreported: { working: { to: 'waiting', reason: 'unreported', apply: stopIsNews } },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
   // Wave 4: the evidence the manifest derives is checked here (`refuse`), for `ship` and for a `close` that touched deployable paths.
   ship: { working: { to: 'watching', hold: true } },
