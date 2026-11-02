@@ -234,7 +234,8 @@ export const ActResult = z.strictObject({
 })
 export type ActResult = z.infer<typeof ActResult>
 
-export const TriageKind = z.enum(['plan_stale', 'fold', 'dismiss_note'])
+/** `reaped` (Wave 5): a finished worker session the reaper closed; the one kind that is not undoable. */
+export const TriageKind = z.enum(['plan_stale', 'fold', 'dismiss_note', 'reaped'])
 export type TriageKind = z.infer<typeof TriageKind>
 
 /** One row of `factory.fleet_triage_log`: bookkeeping the triage did on its own. It never runs a command and never denies. */
@@ -281,6 +282,37 @@ export type FleetDigest = z.infer<typeof FleetDigest>
 
 export const NO_DIGEST: FleetDigest = { enabled: false, pending: false, lastAt: null, lastError: null, days: [] }
 
+/** `FACTORY_REAPER`: `on` closes, `dry` lists what it would close, `off` reads nothing. */
+export const ReaperMode = z.enum(['on', 'dry', 'off'])
+export type ReaperMode = z.infer<typeof ReaperMode>
+
+/** A session the reaper closed (`dry`: would close, nothing was done). `at` is null for a dry entry; `logId` is its `fleet_triage_log` row. */
+export const ReaperClosed = z.strictObject({
+  session: z.string(),
+  repo: z.string(),
+  what: z.string(),
+  why: z.string(),
+  evidence: z.string(),
+  at: z.string().nullable(),
+  dry: z.boolean(),
+  logId: z.number().int().nullable(),
+})
+export type ReaperClosed = z.infer<typeof ReaperClosed>
+
+/** An idle session the reaper leaves alone because it holds something: an unmerged branch or a dirty worktree. Listed, never an ask, never pushed. */
+export const ReaperKept = z.strictObject({ session: z.string(), repo: z.string(), why: z.string() })
+export type ReaperKept = z.infer<typeof ReaperKept>
+
+/** The reaper's part of the model (Wave 5, docs/design.md §11 "The reaper"): `closed` the last 24 h, `kept` what it holds back right now. */
+export const FleetReaper = z.strictObject({
+  mode: ReaperMode,
+  closed: z.array(ReaperClosed),
+  kept: z.array(ReaperKept),
+})
+export type FleetReaper = z.infer<typeof FleetReaper>
+
+export const NO_REAPER: FleetReaper = { mode: 'off', closed: [], kept: [] }
+
 /**
  * Everything of the model but the quota and the queue, which are `factory status`'s own shapes and live beside them in
  * `index.ts` (`Fleet = FleetBody + quota + queue`).
@@ -299,6 +331,8 @@ export const FleetBody = z.strictObject({
   errors: z.array(z.string()),
   /** a snapshot stored before the digest existed has none */
   digest: FleetDigest.default(NO_DIGEST),
+  /** a snapshot stored before the reaper existed has none */
+  reaper: FleetReaper.default(NO_REAPER),
 })
 export type FleetBody = z.infer<typeof FleetBody>
 
@@ -336,7 +370,7 @@ export const SinceRecovered = z.strictObject({
 export type SinceRecovered = z.infer<typeof SinceRecovered>
 
 export const SinceHandled = z.strictObject({
-  kind: z.enum(['triage', 'act']),
+  kind: z.enum(['triage', 'act', 'reaped']),
   ...lineBase,
   /** a triage row that is not undone yet: `POST /fleet/triage/:id/undo` */
   undoId: z.number().int().nullable(),

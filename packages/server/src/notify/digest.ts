@@ -72,10 +72,16 @@ export function renderMorning(groups: SinceGroups, date: string, reserve = 0): s
   list('Shipped', groups.shipped, (s) => quote(s.text, 60))
   list('Went wrong, then recovered', groups.recovered, (r) => quote(r.text, 70))
   const triage = groups.handled.filter((h) => h.kind === 'triage')
+  const reaped = groups.handled.filter((h) => h.kind === 'reaped')
   const acts = groups.handled.filter((h) => h.kind === 'act')
   lines.push(
     `Handled for you: ${triage.length} by the triage (${triage.filter((h) => h.undoId !== null).length} undoable), ${acts.length} by you`,
   )
+  if (reaped.length > 0) {
+    lines.push(
+      `Closed for you: ${reaped.length} finished worker session${reaped.length === 1 ? '' : 's'} (the worktrees stay)`,
+    )
+  }
   lines.push(
     groups.running.length === 0
       ? 'Still running: none'

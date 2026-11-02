@@ -98,20 +98,24 @@ export async function listEntries(sql: SQL, limit = 100): Promise<TriageEntry[]>
   return rows.map((r) => toEntry(toRow(r)))
 }
 
-/** `unknown`: no such row. A row already undone answers `duplicate`, with its first undo time. */
+/**
+ * `undefined`: no such row. A row already undone answers `duplicate`, with its first undo time. `not_undoable`: a `reaped` row, whose
+ * terminal is gone for good.
+ */
 export async function undoEntry(
   sql: SQL,
   id: number,
   at: Date,
-): Promise<{ entry: TriageEntry; duplicate: boolean } | undefined> {
+): Promise<{ entry: TriageEntry; duplicate: boolean } | 'not_undoable' | undefined> {
   const done: RawLog[] = await sql`
-    UPDATE factory.fleet_triage_log SET undone_at = ${at} WHERE id = ${id} AND undone_at IS NULL
+    UPDATE factory.fleet_triage_log SET undone_at = ${at} WHERE id = ${id} AND undone_at IS NULL AND kind <> 'reaped'
     RETURNING id, kind, subject, fingerprint, what, why, evidence, payload, at, undone_at`
   const [first] = done
   if (first) return { entry: toEntry(toRow(first)), duplicate: false }
   const [existing]: RawLog[] = await sql`
     SELECT id, kind, subject, fingerprint, what, why, evidence, payload, at, undone_at
     FROM factory.fleet_triage_log WHERE id = ${id}`
+  if (existing?.kind === 'reaped') return 'not_undoable'
   return existing ? { entry: toEntry(toRow(existing)), duplicate: true } : undefined
 }
 

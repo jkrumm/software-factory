@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { z } from 'zod'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
-import type { HcClient } from '../hc.ts'
+import { HcError, type HcClient } from '../hc.ts'
 
 /** Every read of a source is bounded: a hung `git` or `hc` costs this long, never the build. */
 export const SOURCE_TIMEOUT_MS = 10_000
@@ -63,9 +63,46 @@ const envOf = (argv: readonly string[], name: string): string | null => {
   return found ? found.slice(prefix.length) || null : null
 }
 
+/**
+ * Ends one terminal for good (the reaper, FV Wave 5): `hc kill`, then `hc rm`. It looks again first and refuses when the agent is no longer
+ * where the build saw it: working or blocked, a different directory, or not Claude Code. A terminal that is gone is what was wanted.
+ * herdr-core has no call that settles the app's tab, so the app drops the tab when the terminal is removed.
+ */
+export interface HcCloser {
+  close(target: { address: string; cwd: string }): Promise<void>
+}
+
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
-export class HcTerminals implements HcLister {
+export class HcTerminals implements HcLister, HcCloser {
   constructor(private readonly client: HcClient) {}
+
+  async close({ address, cwd }: { address: string; cwd: string }): Promise<void> {
+    const gone = (error: unknown): boolean => error instanceof HcError && error.refusal?.kind === 'not_found'
+    let seen: z.output<typeof Record_>
+    try {
+      seen = await this.client.call('terminal.get', { terminal: address }, Record_, SOURCE_TIMEOUT_MS)
+    } catch (error) {
+      if (gone(error)) return
+      throw error
+    }
+    if (seen.state === 'live') {
+      const state = seen.status?.state
+      if (state !== 'idle' && state !== 'done')
+        throw new Error(`${address} is ${state ?? 'not reporting'} again; not closed`)
+      if (seen.cwd !== cwd) throw new Error(`${address} is in ${seen.cwd ?? 'no directory'} now; not closed`)
+      try {
+        await this.client.call('terminal.kill', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
+      } catch (error) {
+        // Already finished or gone is what was wanted; a timeout or a dead process says nothing, and the rm below tells.
+        if (!(error instanceof HcError && error.refusal)) throw error
+      }
+    }
+    try {
+      await this.client.call('terminal.rm', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
+    } catch (error) {
+      if (!gone(error)) throw error
+    }
+  }
 
   async list(): Promise<HcTerminal[]> {
     const { terminals } = await this.client.call('terminal.list', {}, TerminalList, SOURCE_TIMEOUT_MS)

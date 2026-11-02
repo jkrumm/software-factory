@@ -76,13 +76,15 @@ const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bi
 const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now(), fetch: true })
 const hcClient = new HcClient({ bin: config.hcBin, session: config.hcSession })
 const askHuman = new AskHumanQueue(config.askHumanBin)
+const hcTerminals = new HcTerminals(hcClient)
 const fleet = new FleetBuilder({
   sql,
   now: () => clock.now(),
   roots: config.repoRoots,
   visibleRoots: config.visibleRoots,
   home: process.env.HOME ?? '',
-  hc: new HcTerminals(hcClient),
+  hc: hcTerminals,
+  reaper: { mode: config.reaper, closer: hcTerminals },
   queue: askHuman,
   // The queue's commands run on the machine named `macbook`; a probe on a machine not listed says nothing.
   triage: { hosts: config.probeHosts, queueMachine: config.probeHosts.has('macbook') ? 'macbook' : undefined },

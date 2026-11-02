@@ -74,7 +74,7 @@ commands:
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
-                  the fleet read model (plain: asks first, then the repos with a running plan, then the digest; --format json: all of it, the digest's spend per day under "digest").
+                  the fleet read model (plain: asks first, then the repos with a running plan, then the presence, the digest and the reaper; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
   fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]
@@ -397,6 +397,13 @@ export function fleetScreen(f: Fleet): string {
       ? `DIGEST\ton${d.pending ? ' (waiting for a run)' : ''}\t${today ? `${today.day}: ${today.calls} calls, ${today.failed} failed, $${today.costUsd.toFixed(4)}` : 'no call yet'}${d.lastError ? `\tlast pass failed: ${oneLine(d.lastError, 100)}` : ''}`
       : 'DIGEST\toff',
   )
+  const r = f.reaper
+  if (r.mode !== 'off') {
+    out.push(`REAPER\t${r.mode}\t${r.closed.length} closed (24 h)\t${r.kept.length} kept`)
+    for (const c of r.closed)
+      out.push(`  ${c.dry ? 'would close' : 'closed'}\t${c.session}\t${c.repo}\t${oneLine(c.evidence, 160)}`)
+    for (const k of r.kept) out.push(`  kept\t${k.session}\t${k.repo}\t${oneLine(k.why, 160)}`)
+  } else out.push('REAPER\toff')
   if (f.errors.length > 0) {
     out.push('ERRORS')
     for (const e of f.errors) out.push(`  ${oneLine(e, 200)}`)

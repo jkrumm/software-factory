@@ -10,6 +10,7 @@ import type {
   FleetSummary,
   Status,
 } from '@software-factory/contract'
+import { NO_REAPER } from '@software-factory/contract'
 import { BLOCKED_AFTER_MS } from '../rules.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import { parsePlan, planState } from './plans.ts'
@@ -323,6 +324,8 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     quota: status.accounts,
     queue: status.queue,
     errors: input.errors,
+    // The reaper's part is the builder's, put in after the triage.
+    reaper: NO_REAPER,
   }
 }
 
