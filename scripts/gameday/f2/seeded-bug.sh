@@ -27,6 +27,15 @@ log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut
 rm -rf "${deployed:?}" # a previous run's production, under the gameday's own directory
 scratch_up "$name" "$F2_DIR/templates/bug"
 log "make check on the scratch repo: $(make -s -C "$repo" check | tail -1)"
+# The seed is armed before the Issue is filed: the CR is in origin/master's production config, `make check` is green, and the deployed
+# copy's self test fails. A run whose seed is not armed would test nothing.
+cr=$(git --git-dir="$remote" show master:deploy/limits.conf | grep -c $'\r' || true)
+[[ $cr -eq 1 ]] || { log "seed NOT armed: deploy/limits.conf on origin/master has $cr CR lines"; exit 1; }
+make -s -C "$repo" deploy >/dev/null
+armed=$("$deployed/bin/wordstat" --self-test 2>&1 || true)
+rm -rf "${deployed:?}"
+log "seed armed: the deployed copy before the Issue says: $(tr '\n' ' ' <<<"$armed")"
+[[ $armed == *"is not a number"* ]] || { log "seed NOT armed"; exit 1; }
 
 ask="Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it."
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 seeded bug"}')
