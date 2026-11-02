@@ -1,0 +1,17 @@
+PASS	the Issue ran to its close without the owner (not stuck, not idle)	expected 1	got 1
+PASS	Issue after the run: closed/done, attempt 1	expected closed|done|1	got closed|done|1
+PASS	ships (watching entered)	expected at least 1	got 1
+PASS	evidence rows by the lead (not the factory) before the first ship	expected at least 1	got 3
+PASS	the Issue was watching (hold_over events)	expected at least 1	got 1
+NOTE	no regression: the bug has to have bitten the lead's own production check before the ship, or the gameday did not happen
+PASS	ships	expected 1	got 1
+PASS	verified holds	expected verified:37:1	got verified:37:1
+PASS	tool results in the lead's transcript with the deployed copy's verify failure (only the real output has this text)	expected at least 1	got 10
+PASS	production now: the deployed copy's self test	expected selftest: ok words=9 lines=2	got selftest: ok words=9 lines=2
+PASS	the change is on origin/master (--longest in bin/wordstat)	expected yes	got yes
+PASS	finalize ran once (issue_finalized events)	expected 1	got 1
+PASS	claim rows after finalize	expected 0	got 0
+PASS	live terminals of the lead after finalize (tab closed)	expected 0	got 0
+PASS	the lead's worktree directory after finalize	expected no	got no
+PASS	transcripts in the archive for the attempt	expected at least 1	got 1
+PASS	evidence rows of kind transcript	expected at least 1	got 1

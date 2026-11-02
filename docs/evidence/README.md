@@ -61,3 +61,4 @@ that keeps `lib/` and `signals/topology.out.json` as siblings of `golden/`.
 | `golden/` | ≥ 400 labelled warden events (entity-centric sample) and the backtest over them |
 | `interventions/` | the twenty latest owner interventions, raw signal to closure |
 | `lib/` | `redact.py`, the public-repo gate |
+| `f2-gate/` | do the two F2 gamedays pass live: a silent lead, a bug only production shows (`scripts/gameday/f2/`, a `report.md` per run) |

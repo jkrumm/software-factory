@@ -1,0 +1,9 @@
+05:20:34.966|created||queued|created:37|{"source": "request"}
+05:20:38.797|classified|||classified:37|{"kind": "feature", "size": "s", "tier": "sonnet", "class": "routine", "effort": "medium", "clamped": false, "floored": false}
+05:20:41.563|admitted|queued|working|admit:37:1|
+05:21:00.006|phase|working||37:1:phase:f73bda7e-1cf8-493f-8946-77266795ac2e|{"phase": "investigate", "attempt": 1}
+05:21:21.515|refused|working||37:1:ship:d8fa1f20-4e59-46ab-b773-b2054e8652f9|{"event": "ship", "detail": "ship refused, evidence missing recorded after the merged commit (2026-11-02T05:21:17.000Z): infra (the service's status and logs after the change). File each with `factory issue evidence 37 --kind <kind> --link 
+05:21:26.335|ship|working|watching|37:1:ship:83e3f450-7295-4ec6-9f20-e93217ca00f4|{"attempt": 1, "commits": ["b24b6f3e6ab5e6217e6dc33a2b624564bf1be281", "43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b"], "derived": {"paths": ["bin/wordstat", "deploy/limits.conf", "test/run.sh"], "holdMs": 60000, "commits": ["b24b6f3e6ab5e6217e
+05:22:31.575|hold_over|watching||hold:37:1:1|{"hold": 1}
+05:22:31.700|verified|watching|closed|verified:37:1|{"hold": 1, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok 43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b (selftest: ok words=9 lines=2)"}]}
+05:22:37.306|issue_finalized|||issue_finalized:37:1|{"attempt": 1}
