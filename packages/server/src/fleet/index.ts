@@ -299,7 +299,8 @@ export class FleetBuilder {
       ),
     )
     await writeSnapshot(sql, fleet)
-    digest?.kick(scope.feed)
+    // A source the feed is made from that failed makes it partial (the queue and git are not in it).
+    digest?.kick({ ...scope.feed, complete: !errors.some((e) => /^(hc|database|repos |plan )/.test(e)) })
     return fleet
   }
 

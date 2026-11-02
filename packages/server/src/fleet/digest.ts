@@ -65,13 +65,27 @@ export interface DigestFeed {
   /** plan and wave headings with no `<!-- short: … -->`, of ordinary repos only */
   headings: string[]
   sessions: FeedSession[]
+  /** every source was read in the build that made this feed; a partial one (hc down, a plan unreadable) must not make the cache forget rows */
+  complete?: boolean
 }
 
 // --- the answers, as stored and as agw gives them ------------------------------------------------------------------
 
-const Short = z.string().trim().min(1)
+/** Model text that is stored and shown: one line, no control characters, a bounded length (an answer shaped by a transcript is data, not a document). */
+const line = (max: number) =>
+  z
+    .string()
+    .transform((t) =>
+      t
+        .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .pipe(z.string().min(1).max(max))
+const Short = line(120)
+const Headline = line(240)
 const HeadingAnswer = z.object({ short: Short })
-const SessionAnswer = z.object({ short: Short, headline: Short })
+const SessionAnswer = z.object({ short: Short, headline: Headline })
 const ReplyAnswer = z.object({
   asks: z.boolean(),
   kind: z.enum(['blocker', 'question', 'permission', 'note']),
@@ -164,6 +178,16 @@ const Envelope = z.object({
   cost: z.number().nullish(),
 })
 
+/** A call that failed; `sameRun`: the run may still be going, so the next pass asks for it again under the same key. */
+class CallFailed extends Error {
+  constructor(
+    message: string,
+    readonly sameRun = false,
+  ) {
+    super(message)
+  }
+}
+
 export interface DigestDeps {
   sql: SQL
   now: () => Date
@@ -202,6 +226,8 @@ export class Digest {
   private lastStart = 0
   /** `key\0fingerprint` → when its answer was an error */
   private readonly failed = new Map<string, number>()
+  /** calls that failed for good since the last good one: part of the key, so a failed run is not replayed by the retry */
+  private failedCalls = 0
   private readonly run: typeof runProcess
   private readonly replies: ReplyReader
 
@@ -267,7 +293,7 @@ export class Digest {
     for (const t of touches) {
       await sql`UPDATE factory.fleet_digest SET answer = answer || ${JSON.stringify(t.patch)}::text::jsonb WHERE key = ${t.key}`
     }
-    await this.prune(wanted, cached, now)
+    await this.prune(feed.complete === false ? undefined : wanted, cached, now)
     if (items.length === 0) return { called: false, sent: 0, stored: 0, failedItems: 0, waiting: 0 }
 
     // Oldest answers first (never answered, then by age); a batch is what one call takes, the rest waits for the next pass.
@@ -289,7 +315,8 @@ export class Digest {
       ;({ answers, cost } = await this.call(sent, now))
     } catch (error) {
       const reason = message(error)
-      await this.journal({ ok: false, items: batch.length, failedItems: 0, cost: null, error: reason })
+      if (!(error instanceof CallFailed && error.sameRun)) this.failedCalls++
+      await this.journal(sql, { ok: false, items: batch.length, failedItems: 0, cost: null, error: reason })
       return { called: true, sent: batch.length, stored: 0, failedItems: 0, waiting, error: reason }
     }
 
@@ -304,20 +331,24 @@ export class Digest {
       }
       rows.push({ key: item.key, fingerprint: item.fingerprint, answer })
     })
-    for (const row of rows) {
-      await sql`
-        INSERT INTO factory.fleet_digest (key, fingerprint, answer, at)
-        VALUES (${row.key}, ${row.fingerprint}, ${JSON.stringify(row.answer)}::text::jsonb, ${now})
-        ON CONFLICT (key) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, answer = EXCLUDED.answer, at = EXCLUDED.at`
-    }
     // A call whose every item failed answered nothing: it counts as a failed pass.
     const ok = rows.length > 0
-    await this.journal({
-      ok,
-      items: batch.length,
-      failedItems,
-      cost,
-      error: ok ? null : 'no item of the call was answered',
+    this.failedCalls = 0
+    // The answers and the journal row of a paid call are stored together or not at all (the call is over: this is the one short transaction).
+    await sql.begin(async (tx) => {
+      for (const row of rows) {
+        await tx`
+          INSERT INTO factory.fleet_digest (key, fingerprint, answer, at)
+          VALUES (${row.key}, ${row.fingerprint}, ${JSON.stringify(row.answer)}::text::jsonb, ${now})
+          ON CONFLICT (key) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, answer = EXCLUDED.answer, at = EXCLUDED.at`
+      }
+      await this.journal(tx, {
+        ok,
+        items: batch.length,
+        failedItems,
+        cost,
+        error: ok ? null : 'no item of the call was answered',
+      })
     })
     return {
       called: true,
@@ -351,6 +382,8 @@ export class Digest {
       const text = cleanHeading(raw)
       if (!text) continue
       const key = headingKey(text)
+      // One item per heading text, however many plans have it.
+      if (wanted.has(key)) continue
       wanted.add(key)
       offer({ key, kind: 'heading', text, fingerprint: hash(text), turn: null, at: null })
     }
@@ -399,17 +432,18 @@ export class Digest {
   ): Promise<{ answers: Map<string, Record<string, unknown>>; cost: number | null }> {
     const timeout = this.deps.callTimeoutMs ?? CALL_TIMEOUT_MS
     const stdin = JSON.stringify(items)
-    // The key is the batch's and the hour's: a slow call is found again by the next pass with the same batch, while a failed
-    // run is not replayed for longer than an hour.
-    const key = `factory-digest-${hash(stdin, 24)}-${Math.floor(now.getTime() / 3_600_000)}`
+    // The key is the batch's, the hour's and the count of failed calls: a slow call (a timeout, "pending") is found again by the next
+    // pass with the same batch, while a run that failed is never replayed to the retry.
+    const key = `factory-digest-${hash(stdin, 24)}-${Math.floor(now.getTime() / 3_600_000)}-${this.failedCalls}`
     const result = await this.run(
       [this.deps.bin, 'digest', '--format', 'json', '--idempotency-key', key],
       timeout,
       childEnv({ AGW_WAIT_BUDGET_S: AGW_WAIT_S }),
       stdin,
     )
-    if (result.exitCode === EXIT_TIMEOUT) throw new Error('agw digest did not answer in time')
-    if (result.exitCode === EXIT_PENDING) throw new Error('agw digest is still running (the next pass finds its run)')
+    if (result.exitCode === EXIT_TIMEOUT) throw new CallFailed('agw digest did not answer in time', true)
+    if (result.exitCode === EXIT_PENDING)
+      throw new CallFailed('agw digest is still running (the next pass finds its run)', true)
     if (result.exitCode !== 0) throw new Error(`agw digest exited ${result.exitCode}`)
     let body: unknown
     try {
@@ -428,25 +462,27 @@ export class Digest {
     return { answers, cost: parsed.data.cost ?? null }
   }
 
-  private async journal(run: {
-    ok: boolean
-    items: number
-    failedItems: number
-    cost: number | null
-    error: string | null
-  }): Promise<void> {
-    const { sql } = this.deps
+  private async journal(
+    sql: SQL,
+    run: { ok: boolean; items: number; failedItems: number; cost: number | null; error: string | null },
+  ): Promise<void> {
     await sql`
       INSERT INTO factory.fleet_digest_runs (at, ok, items, failed_items, cost_usd, error)
       VALUES (${this.deps.now()}, ${run.ok}, ${run.items}, ${run.failedItems}, ${run.cost}, ${run.error?.slice(0, 500) ?? null})`
   }
 
-  /** Rows no item wants any more (a heading rewritten, a session gone), once they have been unwanted for a week; old journal rows. */
-  private async prune(wanted: ReadonlySet<string>, cached: ReadonlyMap<string, CacheRow>, now: Date): Promise<void> {
+  /** Rows no item wants any more (a heading rewritten, a session gone), once they have been unwanted for a week (not on a partial feed); old journal rows. */
+  private async prune(
+    wanted: ReadonlySet<string> | undefined,
+    cached: ReadonlyMap<string, CacheRow>,
+    now: Date,
+  ): Promise<void> {
     const { sql } = this.deps
-    const stale = [...cached.entries()]
-      .filter(([key, row]) => !wanted.has(key) && now.getTime() - row.at.getTime() > KEEP_UNWANTED_MS)
-      .map(([key]) => key)
+    const stale = wanted
+      ? [...cached.entries()]
+          .filter(([key, row]) => !wanted.has(key) && now.getTime() - row.at.getTime() > KEEP_UNWANTED_MS)
+          .map(([key]) => key)
+      : []
     if (stale.length > 0) await sql`DELETE FROM factory.fleet_digest WHERE key IN ${sql(stale)}`
     await sql`DELETE FROM factory.fleet_digest_runs WHERE at < ${new Date(now.getTime() - KEEP_RUNS_MS)}`
     for (const [k, at] of this.failed) if (now.getTime() - at >= RETRY_ITEM_MS) this.failed.delete(k)
@@ -470,7 +506,7 @@ function parseAnswer(item: Item, raw: Record<string, unknown> | undefined): Reco
   return { ...parsed.data, turn: item.turn, at: item.at ?? '', text: item.text.slice(-1_000) }
 }
 
-/** `failed passes in the last 24 h`, for `factory status`; 0 for a database without the table yet. */
+/** The failed passes of the last 24 h, for `factory status` (the table exists once the migrations have run, which is before anything reads it). */
 export async function digestFailures(sql: SQL, now: Date): Promise<number> {
   const [row]: { n: number }[] = await sql`
     SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE NOT ok AND at >= ${new Date(now.getTime() - 24 * 3_600_000)}`
