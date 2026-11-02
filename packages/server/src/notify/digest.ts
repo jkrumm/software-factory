@@ -8,7 +8,10 @@ export const DIGEST_WINDOW_MS = 24 * 60 * 60_000
 export const DIGEST_LATEST = '12:00'
 /** Hard limit of a digest, in characters. */
 export const DIGEST_MAX_CHARS = 3000
-const SHOWN = 8
+const SHOWN = 6
+/** A list's line is cut here, so five lists, the quota and the activity line fit the 3000 whatever the titles are. */
+const LINE_MAX = 450
+const QUOTA_SHOWN = 8
 
 export interface DigestData {
   /** the local date it is for, `YYYY-MM-DD` */
@@ -53,21 +56,22 @@ const percent = (value: number | null): string => (value === null ? '?' : `${Mat
 export function renderDigest(data: DigestData): string {
   const lines = [`Factory digest ${data.date}`]
   const list = <T>(label: string, items: T[], show: (item: T) => string, none: string): void => {
-    lines.push(
+    const line =
       items.length === 0
         ? `${label}: ${none}`
-        : `${label}: ${items.length}: ${items.slice(0, SHOWN).map(show).join('; ')}${more(items.length)}`,
-    )
+        : `${label}: ${items.length}: ${items.slice(0, SHOWN).map(show).join('; ')}${more(items.length)}`
+    lines.push(line.length > LINE_MAX ? `${line.slice(0, LINE_MAX - 1)}…` : line)
   }
   list('Closed in 24 h', data.closed, (i) => `#${i.id} ${i.outcome} ${quote(i.title, 50)}`, 'none')
   list('Shipped and watching', data.watching, (i) => `#${i.id} ${quote(i.title, 50)}`, 'none')
   list('Parked', data.parked, (i) => `#${i.id} ${i.reason}`, 'none')
   list('Decisions open', data.decisions, (d) => `#${d.issueId} ${quote(d.question, 60)}`, 'none')
-  list('Failed spawns in 24 h', data.failedSpawns, (s) => `${s.key}${s.error ? ` ${quote(s.error, 60)}` : ''}`, 'none')
+  list('Failed spawns', data.failedSpawns, (s) => `${s.key}${s.error ? ` ${quote(s.error, 60)}` : ''}`, 'none')
   lines.push(
     data.quota.length === 0
       ? 'Quota: no reading'
       : `Quota: ${data.quota
+          .slice(0, QUOTA_SHOWN)
           .map(
             (q) =>
               `${q.account} 5h ${percent(q.fiveHourUsed)} week ${percent(q.weeklyUsed)}${q.fresh ? '' : ' (stale)'}`,
@@ -99,7 +103,8 @@ export async function loadDigest(sql: SQL, now: Date, date: string): Promise<Dig
     SELECT d.issue_id, d.question FROM factory.decisions d JOIN factory.issues i ON i.id = d.issue_id
     WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id`
   const failedSpawns: DigestData['failedSpawns'] = await sql`
-    SELECT key, error FROM factory.spawns WHERE status = 'failed' AND created_at > ${since} ORDER BY created_at, key`
+    SELECT s.key, s.error FROM factory.spawns s LEFT JOIN factory.issues i ON i.id = s.issue_id
+    WHERE s.status = 'failed' AND (s.created_at > ${since} OR i.state <> 'closed') ORDER BY s.created_at, s.key`
   const readings = await latestReadings(sql)
   const [spawns]: { total: string; started: string; failed: string }[] = await sql`
     SELECT count(*) AS total, count(*) FILTER (WHERE status = 'started') AS started, count(*) FILTER (WHERE status = 'failed') AS failed

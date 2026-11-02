@@ -17,4 +17,6 @@ CREATE TABLE factory.notifications (
   CHECK (sent_at IS NULL OR failed_at IS NULL)
 );
 CREATE INDEX notifications_due ON factory.notifications (next_at) WHERE sent_at IS NULL AND failed_at IS NULL;
+-- The failure sweep reads the failed spawns every tick.
+CREATE INDEX spawns_failed ON factory.spawns (issue_id) WHERE status = 'failed';
 CREATE INDEX notifications_recent ON factory.notifications (created_at DESC);

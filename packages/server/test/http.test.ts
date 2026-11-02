@@ -119,7 +119,7 @@ describe('config (finding 5)', () => {
       digestTz: 'UTC',
     })
     expect(loadConfig({ ...env, FACTORY_DIGEST_AT: 'off' }).digestAt).toBeNull()
-    for (const bad of ['7:30', '24:00', '07:60', 'morning'])
+    for (const bad of ['7:30', '24:00', '07:60', 'morning', '12:00', '18:30'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_AT: bad })).toThrow('FACTORY_DIGEST_AT')
     expect(() => loadConfig({ ...env, FACTORY_DIGEST_TZ: 'Mars/Olympus' })).toThrow('FACTORY_DIGEST_TZ')
   })

@@ -24,6 +24,7 @@ import {
   notificationAttention,
   record,
   sendDue,
+  sendNow,
 } from '../src/notify/outbox.ts'
 import { HermesNotifier, NullNotifier } from '../src/notify/port.ts'
 import { notifyDigest, notifyFailures } from '../src/notify/rules.ts'
@@ -181,6 +182,19 @@ describe('what goes out, each kind once', () => {
     expect((await rows()).filter((r) => r.key.startsWith('notify:failed:door:'))).toHaveLength(1)
   })
 
+  test('a lead spawn that failed long after it was made is told, unless its Issue is closed', async () => {
+    const id = await working()
+    const closed = await working()
+    await step(closed, 'close', { summary: 'ok' })
+    const old = new Date(now().getTime() - 3 * 24 * 3600_000)
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at, issue_id)
+      VALUES ('lead-1-1', ${TEST_REPO}, 'brief', 'lead', 'opus', 'high', 'failed', 'x', ${old}, ${id}),
+             ('lead-2-1', ${TEST_REPO}, 'brief', 'lead', 'opus', 'high', 'failed', 'x', ${old}, ${closed})`
+    await notifyFailures(db.sql, now())
+    expect(await keys()).toEqual(['notify:failed:spawn:lead-1-1'])
+  })
+
   test('a replay records nothing', async () => {
     const id = await working()
     await step(id, 'ask', { question: 'q' })
@@ -210,6 +224,15 @@ describe('the text', () => {
     expect(long.length).toBeLessThanOrEqual(200 + 3)
     expect(quote('a\n\nb\tc\u0000d')).toBe('“a b c d”')
     expect(quote('say “hi” and "bye"')).toBe("“say 'hi' and 'bye'”")
+  })
+
+  test('a link loses its query and fragment, a path on this machine keeps its last part', () => {
+    expect(redact('see https://example.com/pr/1?token=short-secret#frag and https://example.com/x')).toBe(
+      'see https://example.com/pr/1 and https://example.com/x',
+    )
+    expect(redact('outside the roots: /Users/someone/SourceRoot/repo/src, ~/IuRoot/work and /etc, src/a.ts')).toBe(
+      'outside the roots: …/src, …/work and /etc, src/a.ts',
+    )
   })
 
   test('no secrets and no hostnames', () => {
@@ -310,6 +333,42 @@ describe('the outbox', () => {
     expect((await rows())[0]).toMatchObject({ status: 'failed', error: 'the send did not report back' })
   })
 
+  test('a failure from a send that outlived its lease does not undo the newer attempt', async () => {
+    await record(db.sql, message, now())
+    const late = {
+      send: async () => {
+        // while this send hangs, its lease runs out and the next tick claims the row again
+        clock.advance(LEASE_MS + 1)
+        expect(await claim(db.sql, now(), 5)).toHaveLength(1)
+        return { ok: false as const, error: 'late failure' }
+      },
+    }
+    await sendDue(db.sql, { notifier: late, now })
+    expect((await rows())[0]).toMatchObject({ status: 'pending', attempts: 2, error: null })
+  })
+
+  test('sendNow is claimed from the start: the tick cannot send it beside the caller', async () => {
+    const slow = new FakeNotifier()
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const send = slow.send.bind(slow)
+    slow.send = async (text) => {
+      await gate
+      return send(text)
+    }
+    const pending = sendNow(db.sql, message, { notifier: slow, now })
+    await Bun.sleep(50)
+    expect((await sendDue(db.sql, { notifier, now })).sent).toEqual([])
+    release()
+    expect(await pending).toBe(true)
+    expect(slow.sent).toEqual(['hello'])
+    expect(notifier.calls).toBe(0)
+    expect((await rows())[0]).toMatchObject({ status: 'sent', attempts: 1 })
+    expect(await sendNow(db.sql, message, { notifier: slow, now })).toBe(false)
+  })
+
   test('two senders at once send a row once', async () => {
     await record(db.sql, message, now())
     await Promise.all([sendDue(db.sql, { notifier, now }), sendDue(db.sql, { notifier, now })])
@@ -400,7 +459,7 @@ describe('the digest', () => {
         'Shipped and watching: 1: #14 “Cache the tiles”',
         'Parked: 1: #15 unreported',
         'Decisions open: 1: #16 “Ship it now or wait for the weekend?”',
-        'Failed spawns in 24 h: 1: lead-17-1 “gave up: retry budget spent”',
+        'Failed spawns: 1: lead-17-1 “gave up: retry budget spent”',
         'Quota: main 5h 12% week 40%; second 5h ? week 72% (stale)',
         'Ran in 24 h: 9 spawns (7 started, 1 failed), 230 session events from 6 sessions, 41 Issue events',
       ].join('\n'),
@@ -423,7 +482,9 @@ describe('the digest', () => {
     const many = Array.from({ length: 500 }, (_, i) => ({ id: i, outcome: 'done', title: 'x'.repeat(300) }))
     const big = renderDigest({ ...data, closed: many, watching: many, parked: [], decisions: [], failedSpawns: [] })
     expect(big.length).toBeLessThan(DIGEST_MAX_CHARS)
-    expect(big).toContain('(+492 more)')
+    expect(big).toContain('(+494 more)')
+    expect(big).toContain('Quota:')
+    expect(big).toContain('Ran in 24 h:')
   })
 
   test('due from 07:30 local until noon, in the zone, across the day and the clock change', () => {

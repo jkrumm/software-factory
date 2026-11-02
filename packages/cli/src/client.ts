@@ -31,6 +31,8 @@ interface CallOptions<S extends z.ZodType> {
    * a fixed set of routes (AGENTS.md lists them).
    */
   socket?: boolean | 'fallback'
+  /** longer than the default 10 s, for a call that waits on something slow (a test message through Hermes) */
+  timeoutMs?: number
   /** the schema every answer in `accept` must satisfy */
   schema: S
   /** statuses that carry the schema's body besides 2xx */
@@ -66,7 +68,7 @@ export async function call<S extends z.ZodType>(
         ...(options.method && options.method !== 'GET' ? { 'content-type': 'application/json' } : {}),
       },
       body: options.method && options.method !== 'GET' ? JSON.stringify(options.body ?? {}) : undefined,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
       ...(viaSocket ? { unix: socket } : {}),
     })
     text = await response.text()
