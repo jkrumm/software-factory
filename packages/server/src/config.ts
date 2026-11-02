@@ -27,6 +27,10 @@ export interface Config {
   hookSocket: string
   /** how many test runs may hold a slot at once (`FACTORY_SLOTS`) */
   slots: number
+  /** the `agw` CLI Classify calls (`FACTORY_AGW_BIN`) */
+  agwBin: string
+  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Unset: no (decision 3, until Wave 4 is live) */
+  alertLeads: boolean
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -66,7 +70,16 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
     slots: slots(env.FACTORY_SLOTS),
+    agwBin: env.FACTORY_AGW_BIN || `${required('HOME')}/.local/bin/agw`,
+    alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS),
   }
+}
+
+/** A switch: unset or empty is off; `1`/`true`/`on` is on; anything else is a mistake that must not read as either. */
+function switchOn(name: string, value: string | undefined): boolean {
+  if (value === undefined || value === '' || ['0', 'false', 'off'].includes(value)) return false
+  if (['1', 'true', 'on'].includes(value)) return true
+  throw new Error(`${name} must be 1 or 0, got: ${value}`)
 }
 
 /** Test slots (FL7): two to start with, tuned from the load record. */
