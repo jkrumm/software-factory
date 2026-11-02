@@ -770,6 +770,18 @@ describe('factory issue note: what a brief carries', () => {
     expect(second).not.toContain('note number 20')
   })
 
+  test('a brief takes notes only up to a byte budget, and the rest come again', async () => {
+    const id = await file(newRepo(SERVICE))
+    const big = '漢'.repeat(3_000)
+    for (let i = 1; i <= 4; i++) await note(id, { id: `big${i}`, text: `${i}${big}` })
+    await drive(4)
+    const brief = runner.started[0]?.prompt ?? ''
+    expect(brief).toContain(`1${big}`)
+    expect(brief).not.toContain(`4${big}`)
+    expect(brief).toContain('2 more not shown')
+    expect(Buffer.byteLength(brief)).toBeLessThan(60_000)
+  })
+
   test('a payload key from a sender is cleaned like its value', async () => {
     const { id } = await lead()
     await db.sql`

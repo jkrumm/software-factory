@@ -151,7 +151,9 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
               INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count)
               VALUES (${notePromptId(issue.id, note.call)}, ${key}, 'note', 'type', ${note.text}, 'delivered', ${now}, ${now}, 1)
               ON CONFLICT (id) DO UPDATE
-                SET session = EXCLUDED.session, status = 'delivered', sent_count = 1, error = NULL, failed_at = NULL, claimed_at = NULL
+                SET session = EXCLUDED.session, text = EXCLUDED.text, status = 'delivered', sent_count = 1, error = NULL,
+                    failed_at = NULL, claimed_at = NULL, created_at = EXCLUDED.created_at, sent_at = EXCLUDED.created_at,
+                    delivered_at = EXCLUDED.created_at
                 WHERE factory.prompts.status NOT IN ('sent', 'delivered')
                   OR NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.id = factory.prompts.session)`
           }
@@ -183,13 +185,20 @@ async function unsentNotes(
         SELECT 1 FROM factory.prompts p JOIN factory.sessions s ON s.id = p.session
         WHERE p.id = 'issue:' || b.issue_id || ':note:' || (b.payload->>'call') AND p.status IN ('sent', 'delivered'))
     ORDER BY b.at, b.id LIMIT ${MAX_BRIEF_NOTES}`
-  return {
-    shown: rows.map(({ call, text }) => ({ call, text })),
-    more: Math.max(0, Number(rows[0]?.total ?? 0) - rows.length),
+  // The brief is one argument of one process: what does not fit the budget stays unsent and comes again.
+  let bytes = 0
+  const shown: { call: string; text: string }[] = []
+  for (const { call, text } of rows) {
+    bytes += Buffer.byteLength(text)
+    if (shown.length > 0 && bytes > MAX_BRIEF_NOTE_BYTES) break
+    shown.push({ call, text })
   }
+  return { shown, more: Math.max(0, Number(rows[0]?.total ?? 0) - shown.length) }
 }
 
 const MAX_BRIEF_NOTES = 20
+/** A note is up to 4,000 characters, which can be 12 KB: twenty would crowd a process argument. */
+const MAX_BRIEF_NOTE_BYTES = 24_000
 
 const clip = (text: string): string => (text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) : text)
 
