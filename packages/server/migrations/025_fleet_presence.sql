@@ -20,11 +20,11 @@ CREATE TABLE factory.fleet_seen (
 
 -- The headline paragraph of a since window (`agw digest` kind `window`), one row per distinct window: `hash` is the hash of the facts
 -- that were (or will be) sent, so equal facts are one call. `state`: queued (wanted), pending (an agw run not finished), ready, failed
--- (waits until `retry_at`), superseded (a newer request let it go; never started). One run in flight; the failure count drives the wait.
+-- (waits until `retry_at`). One run in flight; the failure count drives the wait.
 CREATE TABLE factory.fleet_windows (
   hash         text PRIMARY KEY,
   facts        text NOT NULL,
-  state        text NOT NULL CHECK (state IN ('queued', 'pending', 'ready', 'failed', 'superseded')),
+  state        text NOT NULL CHECK (state IN ('queued', 'pending', 'ready', 'failed')),
   paragraph    text,
   run_id       text,
   failures     integer NOT NULL DEFAULT 0,

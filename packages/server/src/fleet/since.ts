@@ -324,7 +324,8 @@ export interface SinceReader {
 
 /**
  * The reading `GET /fleet/since` answers: the groups from the stored snapshot and the database, and the headline as the window's row says
- * (a missing one is queued for the pass and the answer is `pending`; `queue: 'now'` also starts the pass). Never waits on agw. `undefined`
+ * (a missing one is queued for the pass and the answer is `pending`; `queue: 'now'` also starts the pass). Never waits on agw. It ends at
+ * `min(now, the snapshot's build)`: that is its `until`. `undefined`
  * before the first fleet build.
  */
 export async function readSince(
@@ -337,7 +338,11 @@ export async function readSince(
   if (!snapshot) return undefined
   const seenAt = await readSeenAt(sql)
   const { t, clamped } = windowStart({ t: options.t, seenAt, now })
-  const groups = await buildSince(sql, { snapshot, now, t, clamped, seenAt, isVisible: await reader.visible() })
+  // The reading ends where its snapshot does: an ask raised after the last build is in neither this reading nor, once the owner has caught
+  // up to its `until`, a window that would never show it.
+  const builtAt = new Date(snapshot.builtAt)
+  const until = builtAt < now ? builtAt : now
+  const groups = await buildSince(sql, { snapshot, now: until, t, clamped, seenAt, isVisible: await reader.visible() })
   const facts = windowFacts(groups)
   const headline = reader.windows
     ? await reader.windows.request(facts, { now: options.queue === 'now' })
