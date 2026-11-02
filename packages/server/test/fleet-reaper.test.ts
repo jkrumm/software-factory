@@ -1,7 +1,7 @@
 /* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { Fleet, Since, TriageList } from '@software-factory/contract'
 import { runProcess } from '../src/exec.ts'
 import { GitReader } from '../src/fleet/git.ts'
@@ -158,7 +158,7 @@ function terminal(
 
 let current: FleetBuilder
 
-async function setup(mode: 'on' | 'dry' | 'off'): Promise<FleetBuilder> {
+async function setup(mode: 'on' | 'dry' | 'off', actBudgetMs?: number): Promise<FleetBuilder> {
   await app?.stop()
   const run: typeof runProcess = async (cmd, ...rest) => {
     processes.push(cmd)
@@ -185,7 +185,7 @@ async function setup(mode: 'on' | 'dry' | 'off'): Promise<FleetBuilder> {
     hc,
     queue: { list: async () => [] },
     git: new GitReader(run),
-    reaper: { mode, closer },
+    reaper: { mode, closer, actBudgetMs },
   })
   app = startApp({ sql: db.sql, clock, fleet: current, repoRoots: [src], since: reader })
   return current
@@ -206,9 +206,18 @@ beforeEach(async () => {
 let sceneRepo = 0
 const freshRepo = (root = src) => repo(root, `proj${++sceneRepo}`)
 
+/** One pass: a build, and the closes that follow its snapshot. */
+async function pass(builder: FleetBuilder): Promise<Fleet> {
+  const model = Fleet.parse(await builder.refreshNow())
+  await builder.settled()
+  return model
+}
+
+/** Two passes in a mode: the first judges and closes (after its snapshot), the second is the model that shows it. */
 async function reap(mode: 'on' | 'dry' | 'off' = 'on'): Promise<Fleet> {
   const builder = await setup(mode)
-  return Fleet.parse(await builder.refreshNow())
+  await pass(builder)
+  return pass(builder)
 }
 
 const reapedRows = () => db.sql`SELECT * FROM factory.fleet_triage_log WHERE kind = 'reaped' ORDER BY id`
@@ -249,8 +258,8 @@ describe('the reaper closes', () => {
     const wt = worktree(freshRepo(), 'feat-once', 'merged')
     terminals = [terminal('feat-once', wt)]
     const builder = await setup('on')
-    await builder.refreshNow()
-    await builder.refreshNow()
+    await pass(builder)
+    await pass(builder)
     expect(closer.calls).toHaveLength(1)
     expect(await reapedRows()).toHaveLength(1)
 
@@ -261,20 +270,49 @@ describe('the reaper closes', () => {
     const wt2 = worktree(freshRepo(), 'feat-twice', 'merged')
     terminals = [terminal('feat-twice', wt2)]
     const again = await setup('on')
-    await again.refreshNow()
-    await again.refreshNow()
+    await pass(again)
+    await pass(again)
     expect((await reapedRows()).length).toBe(1)
+  })
+
+  test('the closes run after the snapshot: the build that judges still lists the session', async () => {
+    const wt = worktree(freshRepo(), 'feat-after', 'merged')
+    terminals = [terminal('feat-after', wt)]
+    const builder = await setup('on')
+    const first = Fleet.parse(await builder.refreshNow())
+    expect(first.repos.flatMap((r) => r.sessions).map((x) => x.id)).toContain('feat-after')
+    expect(first.reaper.closed).toHaveLength(0)
+    await builder.settled()
+    expect(closer.calls).toHaveLength(1)
   })
 
   test('hc failing in a build: nothing is closed from the last listing', async () => {
     const wt = worktree(freshRepo(), 'feat-late', 'merged')
-    const builder = await setup('dry')
     terminals = [terminal('feat-late', wt)]
-    await builder.refreshNow()
+    closer.failures = [new NotClosed('not now')]
+    const builder = await setup('on')
+    await pass(builder)
     hcFails = true
-    const model = Fleet.parse(await builder.refreshNow())
+    const model = await pass(builder)
     expect(model.errors.some((e) => e.startsWith('hc:'))).toBe(true)
+    expect(model.errors.some((e) => e.includes('nothing is closed'))).toBe(true)
     expect(closer.calls).toHaveLength(0)
+  })
+
+  test('the decisions cap is a note, not a stale read: the reaper goes on', async () => {
+    const main = freshRepo()
+    terminals = [terminal('feat-cap', worktree(main, 'feat-cap', 'merged'))]
+    const { issue } = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'cap', repo: main, title: 'Many questions', facts: {} },
+      { repoRoots: [src], now: clock.now() },
+    )
+    await db.sql`
+      INSERT INTO factory.decisions (issue_id, key, question, created_at)
+      SELECT ${issue.id}, 'k' || g, 'a question', now() FROM generate_series(1, 501) AS g`
+    const model = await reap('on')
+    expect(model.errors.some((e) => e.startsWith('database: more than 500'))).toBe(true)
+    expect(closer.calls).toHaveLength(1)
   })
 
   test('a parent that is not waiting on workers, or is gone, does not hold it', async () => {
@@ -305,10 +343,30 @@ describe('the reaper closes', () => {
       terminal(`many-${i}`, worktree(main, `many-${i}`), { idleHours: 3 + i }),
     )
     const builder = await setup('on')
-    await builder.refreshNow()
+    await pass(builder)
     expect(closer.calls).toHaveLength(5)
-    await builder.refreshNow()
+    await pass(builder)
     expect(closer.calls).toHaveLength(7)
+  })
+
+  test('a pass has a time budget: no new close starts after it, the rest waits', async () => {
+    const main = freshRepo()
+    terminals = Array.from({ length: 4 }, (_, i) =>
+      terminal(`slow-${i}`, worktree(main, `slow-${i}`), { idleHours: 3 + i }),
+    )
+    const slow = closer
+    const close = slow.close.bind(slow)
+    slow.close = async (target) => {
+      await close(target)
+      clock.advance(40_000)
+    }
+    const builder = await setup('on', 60_000)
+    await pass(builder)
+    expect(closer.calls).toHaveLength(2)
+    const next = await pass(builder)
+    expect(next.errors.some((e) => e.includes('the time of this pass is spent'))).toBe(true)
+    await pass(builder)
+    expect(closer.calls.length).toBeGreaterThanOrEqual(3)
   })
 
   test('a close that did nothing takes its row back and is tried again at the next pass', async () => {
@@ -316,15 +374,15 @@ describe('the reaper closes', () => {
     terminals = [terminal('feat-retry', wt)]
     closer.failures = [new NotClosed('refused')]
     const builder = await setup('on')
-    const first = Fleet.parse(await builder.refreshNow())
-    expect(first.errors.some((e) => e.includes('feat-retry') && e.includes('refused'))).toBe(true)
+    await pass(builder)
     expect(closer.calls).toHaveLength(0)
-    expect(first.reaper.closed).toHaveLength(0)
     expect(await reapedRows()).toHaveLength(0)
-    const second = Fleet.parse(await builder.refreshNow())
+    const second = await pass(builder)
+    expect(second.errors.some((e) => e.includes('feat-retry') && e.includes('refused'))).toBe(true)
     expect(closer.calls).toHaveLength(1)
-    expect(second.errors.some((e) => e.includes('reaper:'))).toBe(false)
     expect(await reapedRows()).toHaveLength(1)
+    const third = await pass(builder)
+    expect(third.errors.some((e) => e.includes('reaper:'))).toBe(false)
   })
 
   test('a close that failed on an unknown footing keeps its row unsettled; the next pass finds the terminal still running and takes it back', async () => {
@@ -332,17 +390,17 @@ describe('the reaper closes', () => {
     terminals = [terminal('feat-unsure', wt)]
     closer.failures = [new Error('hc timed out')]
     const builder = await setup('on')
-    const first = Fleet.parse(await builder.refreshNow())
-    expect(first.errors.some((e) => e.includes('hc timed out'))).toBe(true)
-    expect(first.reaper.closed).toHaveLength(0)
+    await pass(builder)
     expect((await reapedRows()).map((r: { payload: { state?: string } }) => r.payload.state)).toEqual(['closing'])
     expect(
       (await Since.parse(await (await app.get(`/fleet/since?t=${NOW.toISOString()}`)).json())).handled,
     ).toHaveLength(0)
-    const second = Fleet.parse(await builder.refreshNow())
+    const second = await pass(builder)
+    expect(second.errors.some((e) => e.includes('hc timed out'))).toBe(true)
     expect(closer.finished).toHaveLength(1)
     expect(closer.calls).toHaveLength(1)
-    expect(second.reaper.closed).toHaveLength(1)
+    const third = await pass(builder)
+    expect(third.reaper.closed).toHaveLength(1)
     const rows = await reapedRows()
     expect(rows).toHaveLength(1)
     expect(rows[0]?.payload.state).toBeUndefined()
@@ -353,30 +411,81 @@ describe('the reaper closes', () => {
     terminals = [terminal('feat-half', wt)]
     closer.failures = ['partial']
     const builder = await setup('on')
-    const first = Fleet.parse(await builder.refreshNow())
+    const first = await pass(builder)
     expect(first.reaper.closed).toHaveLength(0)
-    const second = Fleet.parse(await builder.refreshNow())
-    expect(second.reaper.closed).toHaveLength(1)
-    expect(second.reaper.closed[0]).toMatchObject({ session: 'feat-half', dry: false })
+    await pass(builder)
+    const third = await pass(builder)
+    expect(third.reaper.closed).toHaveLength(1)
+    expect(third.reaper.closed[0]).toMatchObject({ session: 'feat-half', dry: false, unsettled: false })
     const rows = await reapedRows()
     expect(rows).toHaveLength(1)
     expect(rows[0]?.payload.state).toBeUndefined()
     expect(closer.calls).toHaveLength(0)
   })
 
-  test('a row left by a crash before the close, with the terminal still running, is taken back and the close is made', async () => {
-    const wt = worktree(freshRepo(), 'feat-crash', 'merged')
-    const session = terminal('feat-crash', wt)
-    terminals = [session]
-    await db.sql`
-      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
-      VALUES ('reaped', ${wt}, 'stale-incarnation', 'Closed feat-crash', 'x', 'y',
-              ${JSON.stringify({ session: 'feat-crash', address: session.address, state: 'closing' })}::text::jsonb, ${clock.now()})`
+  test('a branch with no commit of its own is kept: nothing was done', async () => {
+    const main = freshRepo()
+    terminals = [terminal('feat-nothing', worktree(main, 'feat-nothing', 'none'))]
     const model = await reap('on')
-    expect(closer.finished).toEqual([session.address])
-    expect(closer.calls).toHaveLength(1)
-    expect(model.reaper.closed).toHaveLength(1)
-    expect(await reapedRows()).toHaveLength(1)
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept[0]?.why).toContain('nothing done')
+  })
+
+  test('a branch that is gone (a detached head), whose commits are on the default branch, is merged', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-gone', 'merged')
+    git(wt, ['checkout', '-q', '--detach'])
+    git(main, ['branch', '-D', 'feat-gone'])
+    terminals = [terminal('feat-gone', wt)]
+    const model = await reap('on')
+    expect(model.reaper.closed.map((c) => c.session)).toEqual(['feat-gone'])
+    expect(model.reaper.closed[0]?.evidence).toContain('is in master')
+  })
+
+  test('a branch that is gone, whose commits the default branch lacks, is kept', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-gone-open', 'unmerged')
+    git(wt, ['checkout', '-q', '--detach'])
+    git(main, ['branch', '-D', 'feat-gone-open'])
+    terminals = [terminal('feat-gone-open', wt)]
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept[0]?.why).toContain('the default branch lacks')
+  })
+
+  test('a head with no commit at all (its branch ref deleted under it) is kept', async () => {
+    const wt = worktree(freshRepo(), 'feat-unborn', 'merged')
+    git(wt, ['update-ref', '-d', 'refs/heads/feat-unborn'])
+    terminals = [terminal('feat-unborn', wt)]
+    await reap('on')
+    expect(closer.calls).toHaveLength(0)
+  })
+
+  test('git is asked once in a while: dry judges a worktree once, and the branch name only when it is unmerged', async () => {
+    const main = freshRepo()
+    terminals = [terminal('feat-cache', worktree(main, 'feat-cache', 'merged'))]
+    const builder = await setup('dry')
+    await pass(builder)
+    await pass(builder)
+    const asked = processes.filter((c) => c.includes('--porcelain') && c.join(' ').includes('feat-cache'))
+    expect(asked).toHaveLength(1)
+    expect(processes.some((c) => c.includes('symbolic-ref'))).toBe(false)
+  })
+
+  test('cwd moved: hc has the session in another worktree than the factory recorded', async () => {
+    const main = freshRepo()
+    const a = worktree(main, 'wt-a', 'merged')
+    const b = worktree(main, 'wt-b', 'merged')
+    await w.spawned('mover', { repo: a, startedMinutesAgo: 500 })
+    await w.emit('mover', 'session_started', w.at(499), { claudeSessionId: 'c-mover', cwd: a })
+    await w.emit('mover', 'turn_started', w.at(300))
+    await w.emit('mover', 'turn_ended', w.at(200))
+    terminals = [terminal('mover', b)]
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept).toEqual([
+      { session: 'mover', repo: basename(main), why: expect.stringContaining('cwd moved') },
+    ])
   })
 })
 
@@ -491,7 +600,7 @@ describe('each guard alone keeps a session', () => {
       terminals = [terminal('unmerged', worktree(freshRepo(), 'unmerged', 'unmerged'))]
     })
     expect(model.reaper.kept).toHaveLength(1)
-    expect(model.reaper.kept[0]?.why).toContain('is unmerged')
+    expect(model.reaper.kept[0]?.why).toContain('unmerged')
     expect(model.reaper.kept[0]?.why).toContain('2 commit(s) the default branch lacks')
   })
 
@@ -553,7 +662,51 @@ describe('the switch', () => {
   })
 })
 
+describe('unsettled closes', () => {
+  const closing = (subject: string, fingerprint: string, address: string, at: Date) => db.sql`
+    INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+    VALUES ('reaped', ${subject}, ${fingerprint}, ${`Closed ${subject}`}, 'x', 'y',
+            ${JSON.stringify({ session: subject, repo: '/r/proj', address, state: 'closing' })}::text::jsonb, ${at})`
+
+  test('dry finishes a close an earlier pass left open (nothing is killed)', async () => {
+    await closing('left-over', 'f1', 't-gone', new Date(NOW.getTime() - 600_000))
+    await reap('dry')
+    expect(closer.finished).toContain('t-gone')
+    expect(closer.calls).toHaveLength(0)
+    expect((await reapedRows())[0]?.payload.state).toBeUndefined()
+  })
+
+  test('off shows a close unsettled for over an hour, and hides a younger one', async () => {
+    await closing('old-one', 'f2', 't-a', new Date(NOW.getTime() - 2 * HOUR))
+    await closing('young-one', 'f3', 't-b', new Date(NOW.getTime() - 5 * 60_000))
+    const model = await reap('off')
+    expect(model.reaper.mode).toBe('off')
+    expect(model.reaper.closed.map((c) => [c.session, c.unsettled])).toEqual([['old-one', true]])
+    expect(closer.finished).toHaveLength(0)
+  })
+})
+
 describe('the log and the readings', () => {
+  test('reaped rows have a limit of their own: a night of closes does not push the undoable triage rows out', async () => {
+    const at = new Date(NOW.getTime() - 600_000)
+    await db.sql`
+      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+      VALUES ('dismiss_note', 'factory:note:1', 'f', 'a note dismissed', 'old', 'e', '{}'::jsonb, ${at})`
+    await db.sql`
+      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+      SELECT 'reaped', '/r/wt' || g, 'fp' || g, 'Closed s' || g, 'x', 'y', '{"session":"s","repo":"/r/proj"}'::jsonb, ${at}
+      FROM generate_series(1, 150) AS g`
+    await reap('off')
+    clock.advance(60_000)
+    const since = Since.parse(
+      await (
+        await app.get(`/fleet/since?t=${encodeURIComponent(new Date(NOW.getTime() - HOUR).toISOString())}`)
+      ).json(),
+    )
+    expect(since.handled.filter((h) => h.kind === 'triage')).toHaveLength(1)
+    expect(since.handled.filter((h) => h.kind === 'reaped')).toHaveLength(100)
+  })
+
   test('a close shows under Handled for you, not undoable, and in the morning reading as one line', async () => {
     const main = freshRepo()
     terminals = [terminal('feat-seen', worktree(main, 'feat-seen'))]
@@ -609,7 +762,15 @@ describe('HcTerminals.close', () => {
     }
     return { calls, closer: new HcTerminals(fake as unknown as HcClient) }
   }
-  const live = (status = 'idle', cwd = '/w') => ({ address: 't1', state: 'live', cwd, status: { state: status } })
+  const live = (status = 'idle', cwd = '/w') => ({
+    address: 't1',
+    state: 'live',
+    cwd,
+    argv: [],
+    labels: {},
+    foreground: null,
+    status: { state: status, app: 'claude-code' },
+  })
 
   test('kills and removes a terminal that is still where the build saw it', async () => {
     const { calls, closer } = client({
@@ -638,6 +799,13 @@ describe('HcTerminals.close', () => {
     const running = client({ 'terminal.get': { result: live() } })
     expect(await running.closer.finish('t1')).toBe('live')
     expect(running.calls).toEqual(['terminal.get'])
+  })
+
+  test('a terminal that does not run Claude Code (a shell in its place) is not touched', async () => {
+    const shell = { ...live(), status: null, argv: ['zsh'], foreground: { name: 'zsh', argv: ['zsh'] } }
+    const { calls, closer } = client({ 'terminal.get': { result: shell } })
+    await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('does not run Claude Code')
+    expect(calls).toEqual(['terminal.get'])
   })
 
   test('a kill the core refused leaves it running: no rm, an error', async () => {

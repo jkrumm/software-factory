@@ -223,7 +223,7 @@ async function handled(
   const out: SinceHandled[] = []
   const planRepo = (path: string): Fleet['repos'][number] | undefined =>
     snapshot?.repos.find((r) => path === r.space || path.startsWith(`${r.space}/`))
-  const rows: {
+  type Row = {
     id: string
     kind: string
     subject: string
@@ -231,10 +231,16 @@ async function handled(
     at: Date
     undone_at: Date | null
     payload: { repo?: string }
-  }[] = await sql`
+  }
+  // Each has its own limit: a night of reaped sessions must not push the undoable triage rows out of the reading.
+  const triaged: Row[] = await sql`
     SELECT id, kind, subject, what, at, undone_at, payload FROM factory.fleet_triage_log
-    WHERE at >= ${t} AND at <= ${now} AND payload->>'state' IS DISTINCT FROM 'closing' ORDER BY id DESC LIMIT ${LIMIT}`
-  for (const r of rows) {
+    WHERE at >= ${t} AND at <= ${now} AND kind <> 'reaped' ORDER BY id DESC LIMIT ${LIMIT}`
+  const reaped: Row[] = await sql`
+    SELECT id, kind, subject, what, at, undone_at, payload FROM factory.fleet_triage_log
+    WHERE at >= ${t} AND at <= ${now} AND kind = 'reaped' AND payload->>'state' IS DISTINCT FROM 'closing'
+    ORDER BY id DESC LIMIT ${LIMIT}`
+  for (const r of [...triaged, ...reaped]) {
     // The reaper acts on ordinary repos only (never IuRoot's), and its rows cannot be undone.
     if (r.kind === 'reaped') {
       out.push({
