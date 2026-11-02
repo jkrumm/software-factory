@@ -27,7 +27,11 @@ load_env_file() {
   while IFS= read -r ef_line || [[ -n "$ef_line" ]]; do
     ef_n=$((ef_n + 1))
     [[ -z "${ef_line//[[:space:]]/}" || "$ef_line" =~ ^[[:space:]]*# ]] && continue
-    if [[ ! "$ef_line" =~ ^[A-Za-z_][A-Za-z0-9_]*= || "$ef_line" == *$'\r'* ]]; then
+    if [[ "$ef_line" == *$'\r'* ]]; then
+      echo "software-factory: $ef_file line $ef_n has a carriage return (a CRLF file); refusing to start." >&2
+      return 78
+    fi
+    if [[ ! "$ef_line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
       echo "software-factory: $ef_file line $ef_n is not KEY=VALUE; refusing to start." >&2
       return 78
     fi
@@ -39,7 +43,8 @@ load_env_file() {
     ef_keys+=("$ef_key")
     ef_values+=("${ef_line#*=}")
   done <"$ef_file"
-  for ef_n in "${!ef_keys[@]}"; do
+  # A counter, not "${!ef_keys[@]}": an empty array under `set -u` is an error in macOS bash 3.2 (an env file of comments only is valid).
+  for ((ef_n = 0; ef_n < ${#ef_keys[@]}; ef_n++)); do
     export "${ef_keys[$ef_n]}=${ef_values[$ef_n]}"
   done
   return 0

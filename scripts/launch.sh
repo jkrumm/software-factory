@@ -22,6 +22,8 @@ command -v bun >/dev/null 2>&1 || { echo "software-factory: bun not on PATH" >&2
 # secrets-run child inherits them; a file that is not mode 0600 and the user's refuses the start.
 # shellcheck source=scripts/env-file.sh
 source "$DIR/scripts/env-file.sh"
+# A path set on purpose that is not there is a typo, not "no settings".
+[[ -z "${FACTORY_ENV_FILE:-}" || -e "$FACTORY_ENV_FILE" ]] || { echo "software-factory: FACTORY_ENV_FILE $FACTORY_ENV_FILE does not exist; refusing to start." >&2; exit 78; }
 load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 
 # A hung secrets-run must not hang the launch; `timeout` is a Homebrew coreutils binary, so it is optional.

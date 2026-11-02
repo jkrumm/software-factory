@@ -48,6 +48,19 @@ describe('scripts/env-file.sh', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
+  test('a file of comments only, or an empty one, is valid under set -u (macOS bash 3.2)', () => {
+    for (const content of ['# nothing yet\n', '', '\n\n']) {
+      const file = join(dir, 'env')
+      writeFileSync(file, content)
+      chmodSync(file, 0o600)
+      const run = Bun.spawnSync(['bash', '-c', `set -u; source "${SCRIPT}"; load_env_file "${file}"; echo "code=$?"`], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      expect(run.stdout.toString().trim()).toBe('code=0')
+    }
+  })
+
   test('a mode other than 0600 refuses', () => {
     const { out, err } = load('FACTORY_PROBE_HOSTS=a=b\n', 0o644)
     expect(out).toStartWith('code=78 probe=')
@@ -58,7 +71,7 @@ describe('scripts/env-file.sh', () => {
     for (const bad of ['FACTORY_PROBE_HOSTS=a=b\nexport OTHER=1\n', 'FACTORY_PROBE_HOSTS=a=b\r\n']) {
       const { out, err } = load(bad)
       expect(out).toStartWith('code=78 probe= ') // nothing of the file was exported
-      expect(err).toMatch(/line [12] is not KEY=VALUE/)
+      expect(err).toMatch(/line [12] (is not KEY=VALUE|has a carriage return)/)
       expect(err).not.toContain('export OTHER')
     }
   })
@@ -80,7 +93,7 @@ describe('scripts/env-file.sh', () => {
       expect(out).toStartWith('code=78 probe= ')
       expect(err).toContain(key)
     }
-    // The collision that used to run code: nothing is evaluated, nothing is exported.
+    // A key that is a name of the parser's own is refused as unlisted, before anything is evaluated.
     const { out } = load(`lineno=a[$(touch ${marker})0]\nFACTORY_PROBE_HOSTS=a=b\n`)
     expect(out).toStartWith('code=78')
     expect(existsSync(marker)).toBe(false)
@@ -116,5 +129,13 @@ describe('scripts/env-file.sh', () => {
     expect(run.exitCode).toBe(78)
     expect(run.stderr.toString()).toContain('sets FACTORY_TOKEN, which this file does not take')
     expect(existsSync(asked)).toBe(false)
+    // A path set on purpose that is not there refuses too.
+    const typo = Bun.spawnSync(['bash', join(SCRIPT, '..', 'launch.sh')], {
+      env: { PATH: process.env.PATH ?? '', HOME: dir, FACTORY_ENV_FILE: join(dir, 'nowhere') },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(typo.exitCode).toBe(78)
+    expect(typo.stderr.toString()).toContain('does not exist')
   })
 })
