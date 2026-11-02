@@ -866,6 +866,11 @@ describe('HcTerminals.close', () => {
     const { calls, closer } = client({ 'terminal.get': { result: shell } })
     await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('does not run Claude Code')
     expect(calls).toEqual(['terminal.get'])
+    // An editor with a file called claude in its arguments is not Claude Code.
+    const vim = { ...live(), foreground: { name: 'vim', argv: ['vim', '/home/me/bin/claude'] } }
+    const editor = client({ 'terminal.get': { result: vim } })
+    await expect(editor.closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('does not run Claude Code')
+    expect(editor.calls).toEqual(['terminal.get'])
     // `node …/claude` is Claude Code.
     const node = { ...live(), status: null, foreground: { name: 'node', argv: ['node', '/x/bin/claude'] } }
     const ok = client({
