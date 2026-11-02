@@ -1,0 +1,25 @@
+PASS	the Issue reached waiting/unreported on its own	expected 1	got 1
+PASS	Issue state after the second stop	expected waiting/unreported	got waiting/unreported
+PASS	the lead's first prompt is the brief, a delivered prompt row (the turn that was sent back)	expected issue:34:brief:1|brief|delivered	got issue:34:brief:1|brief|delivered
+PASS	send-back effects (issue-sendback:<session>:<turn>)	expected 1	got 1
+PASS	the send-back is of the brief's turn (turn 1)	expected 1	got 1
+PASS	unreported inbox rows, applied	expected 1|applied	got 1|applied
+PASS	the unreported row is of the same turn as the send-back	expected unreported:34:lead-34-1:1	got unreported:34:lead-34-1:1
+PASS	notify:parked rows in factory.notifications	expected 1	got 1
+NOTE	owner's line: sent - Issue 34 (factory-gameday-silent) parked: its lead stopped twice with nothing reported
+PASS	the claim repo:factory-gameday-silent is held while the Issue is parked	expected repo:factory-gameday-silent|true	got repo:factory-gameday-silent|true
+PASS	the lead's session is still alive	expected yes	got yes
+PASS	no lead verb reached the inbox	expected 0	got 0
+PASS	issue_events kinds: nothing besides the path to parked	expected created,classified,admitted,unreported	got created,classified,admitted,unreported
+PASS	prompts typed to the lead (the brief alone)	expected 1	got 1
+PASS	evidence rows	expected 0	got 0
+PASS	commits the lead added on the remote	expected 0	got 0
+PASS	the lead's worktree exists while parked	expected yes	got yes
+PASS	Issue after stop: closed/dropped	expected closed|dropped	got closed|dropped
+PASS	finalize ran once (issue_finalized events)	expected 1	got 1
+PASS	claim rows after finalize	expected 0	got 0
+PASS	live terminals of the lead after finalize (tab closed)	expected 0	got 0
+PASS	the lead's worktree directory after finalize	expected no	got no
+PASS	the lead's branch factory/34-1 after finalize	expected gone	got gone
+PASS	transcripts archived for the attempt (not a pass line of the brief)	expected at least 1	got 1
+NOTE	finalize reached: 1; the server's tick errors since the run began are not read here

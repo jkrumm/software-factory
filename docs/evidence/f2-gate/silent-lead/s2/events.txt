@@ -1,0 +1,5 @@
+05:13:57.087|session_started|lead-34-1|lead-34-1:session_started:0
+05:13:57.487|turn_started|lead-34-1|lead-34-1:turn_started:1
+05:14:01.056|turn_ended|lead-34-1|lead-34-1:turn_ended:1
+05:15:01.095|prompt_idle|lead-34-1|lead-34-1:prompt_idle:1
+05:15:46.623|session_ended|lead-34-1|lead-34-1:session_ended:1
