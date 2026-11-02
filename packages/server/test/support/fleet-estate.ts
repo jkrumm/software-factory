@@ -169,7 +169,7 @@ export function estateTerminals(estate: Estate): HcTerminal[] {
       name: 'athena-orchestrator',
       cwd: `${iu}/prometheus-scripts/wip/waves-teamchat`,
       title: 'Teamchat Wave 62',
-      status: 'done',
+      status: 'working',
       statusAt: ago(now, 90),
     },
     {
@@ -182,6 +182,16 @@ export function estateTerminals(estate: Estate): HcTerminal[] {
       statusMessage: 'Allow Bash(rm -rf node_modules)?',
       statusAt: ago(now, 30),
       parent: 't1r',
+    },
+    // an idle tab in a repo with a pending plan: it does not make the plan `running`
+    {
+      ...claude,
+      address: 't8m',
+      name: 'modelpick-idle',
+      cwd: `${src}/modelpick`,
+      title: 'Modelpick, done',
+      status: 'done',
+      statusAt: ago(now, 600),
     },
     // a shell, and a Claude Code outside every root: neither is in the model
     {

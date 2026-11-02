@@ -21,8 +21,8 @@ export const STALE_ASK_MS = 24 * 3_600_000
 /** A session as the merge left it: what the model shows, and what the plan lookup and the asks need besides. */
 export interface MergedSession {
   session: Omit<FleetSession, 'plan' | 'wave'>
-  /** the repo directory under a root it belongs to */
-  repo: string
+  /** the repo directory under a root it belongs to; undefined: no repo of the model (outside every root, or not under a repo) */
+  repo: string | undefined
   /** the text it was started with, where a plan path may be named; data, scanned for a path only */
   prompt: string | null
   /** its spawn's repo, the base of a relative plan path */
@@ -54,8 +54,9 @@ export interface DecisionRow {
 
 export interface ModelInput {
   now: Date
+  /** whether a place is visible (a visible root, or IuRoot by place) */
+  isVisible: (path: string) => boolean
   /** real paths */
-  visibleRoots: readonly string[]
   roots: readonly string[]
   status: Status
   sessions: MergedSession[]
@@ -64,7 +65,7 @@ export interface ModelInput {
   repos: RepoFacts[]
   decisions: DecisionRow[]
   queue: QueueRequest[]
-  /** when an ask the factory raises without a time of its own was first seen */
+  /** when an ask that has no time of its own (hc, a wait's fallback, an attention line) was first seen: the first build that saw it */
   firstSeen: ReadonlyMap<string, string>
   errors: string[]
 }
@@ -74,12 +75,45 @@ const isWorking = (s: { state: string }) => s.state === 'working' || s.state ===
 const STATE_ORDER = ['walled', 'blocked', 'stuck', 'working', 'waiting', 'starting', 'idle'] as const
 
 const hash = (text: string, length = 12): string => createHash('sha256').update(text).digest('hex').slice(0, length)
-const isUnder = (path: string, roots: readonly string[]) => roots.some((root) => path.startsWith(`${root}/`))
 
 /** The text of an attention line without what changes every minute, so the same condition keeps the same key. */
 const stable = (line: string): string => line.replace(/\b\d+ min\b/g, 'N min')
 
-/** What the line is about, for the repo and the session of its ask; the lines are `factory status`'s. */
+/**
+ * What an attention line is about, as the key of its ask: the session and the verb, the note, the spawn, the notification, the
+ * Issue and what is wrong with it. Never the line's counters (`for 5 min`) or its free text, so the same condition keeps its id.
+ */
+export function lineKey(line: string): string {
+  const session = /^(blocked|stuck|walled) (\S+?):?(?: |$)/.exec(line)
+  if (session) return `${session[1]}:${session[2]}`
+  const note = /^note (\S+) to /.exec(line)
+  if (note) return `note:${note[1]}`
+  const spawn = /^spawn (\S+) failed/.exec(line)
+  if (spawn) return `spawn:${spawn[1]}`
+  const notification = /^notification (\S+) was not delivered/.exec(line)
+  if (notification) return `notification:${notification[1]}`
+  const issue = /^Issue (\d+)(.*)$/.exec(line)
+  if (issue) {
+    const rest = issue[2] ?? ''
+    const kinds: [RegExp, string][] = [
+      [/^ parked: its lead stopped twice/, 'unreported'],
+      [/^ parked: its lead is gone/, 'lead-gone'],
+      [/^ blocked/, 'blocked'],
+      [/^ parked/, 'parked'],
+      [/^ is an alert/, 'alert-off'],
+      [/^ waits for the claim/, 'claim'],
+      [/^: its lead did not start/, 'lead-not-started'],
+      [/^: its worktree could not be made/, 'worktree'],
+      [/^: it cannot be finalized/, 'finalize'],
+      [/^: its worktree was kept/, 'worktree-kept'],
+    ]
+    const kind = kinds.find(([pattern]) => pattern.test(rest))?.[1]
+    return `issue:${issue[1]}:${kind ?? hash(stable(rest), 8)}`
+  }
+  return `line:${hash(stable(line))}`
+}
+
+/** The session or spawn or Issue an attention line names, for the repo and the session of its ask. */
 function lineSubject(line: string): { session?: string; spawn?: string; issue?: number } {
   const session = /^(?:blocked|stuck|walled) (\S+)/.exec(line) ?? /^note \S+ to (\S+)/.exec(line)
   if (session?.[1]) return { session: session[1].replace(/:$/, '') }
@@ -89,6 +123,10 @@ function lineSubject(line: string): { session?: string; spawn?: string; issue?: 
   if (issue?.[1]) return { issue: Number(issue[1]) }
   return {}
 }
+
+/** Whether a session counts as working a plan: running, or stopped mid-turn (blocked, stuck, walled), or waiting on workers or a deploy; not an idle or done tab, nor one that waits on the owner. */
+const worksAPlan = (s: { state: string; wait: string | null }) =>
+  s.state === 'waiting' ? s.wait !== 'owner' : s.state !== 'idle'
 
 const askKind = (line: string): FleetAsk['kind'] =>
   /^(blocked|stuck|walled|spawn|Issue) /.test(line) ? 'blocker' : 'note'
@@ -103,13 +141,12 @@ function sessionOrder(a: FleetSession, b: FleetSession): number {
  */
 export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   const { now, status } = input
-  const visible = (repo: string) => isUnder(repo, input.visibleRoots)
 
   // A session's plan, and a plan's live sessions.
   const worked = new Set<string>()
   for (const m of input.sessions) {
     const plan = input.sessionPlans.get(m.session.id)?.plan
-    if (plan) worked.add(plan)
+    if (plan && worksAPlan(m.session)) worked.add(plan)
   }
 
   const bySession = new Map<string, MergedSession>(input.sessions.map((m) => [m.session.id, m]))
@@ -118,10 +155,14 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   const issueRepo = new Map(status.issues.map((i) => [i.id, repoOf(i.repo)]))
 
   const repos: FleetRepo[] = []
+  const planErrors: string[] = []
+  const listed = new Set(input.repos.map((r) => r.path))
   for (const facts of input.repos) {
-    const isVisible = visible(facts.path)
+    const isVisible = input.isVisible(facts.path)
     const plans: FleetPlan[] = facts.plans.map((file) => {
-      const parsed = parsePlan(file.text, { visible: isVisible })
+      const { plan: parsed, problems } = parsePlan(file.text, { visible: isVisible })
+      for (const problem of problems)
+        planErrors.push(`plan ${basename(facts.path)}/${file.path.slice(facts.path.length + 1)}: ${problem}`)
       return {
         path: file.path,
         ...parsed,
@@ -156,11 +197,19 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   }
   repos.sort((a, b) => a.name.localeCompare(b.name) || a.space.localeCompare(b.space))
 
+  const unplaced: FleetSession[] = input.sessions
+    .filter((m) => !m.repo || !listed.has(m.repo))
+    .map((m) => ({ ...m.session, plan: null, wave: null }))
+    .sort(sessionOrder)
+
   const asks: FleetAsk[] = []
   const ask = (a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan'> & { plan?: string | null }) => {
     const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
     asks.push({ short: null, suggestion: null, actions: [], ...a, plan: a.plan ?? planOf })
   }
+
+  // The time of an ask that has none of its own: the first build that saw it (kept by the builder), never this build's.
+  const seen = (id: string) => input.firstSeen.get(id) ?? now.toISOString()
 
   // hc's blocked, and a session that declared a wait on the owner.
   const hcBlocked = new Set<string>()
@@ -168,29 +217,32 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     const { id, wait, since } = m.session
     const repo = m.repo ?? null
     if (m.hc?.status === 'blocked') {
-      const at = since ?? m.hc.statusAt
-      if (!at || now.getTime() - Date.parse(at) >= BLOCKED_AFTER_MS) {
+      // hc's own time for it (when its status last changed), else the first build that saw it; the debounce counts from there.
+      const askId = `hc:${id}`
+      const at = input.firstSeen.get(askId) ?? m.hc.statusAt ?? now.toISOString()
+      if (now.getTime() - Date.parse(at) >= BLOCKED_AFTER_MS || !m.hc.statusAt) {
         hcBlocked.add(id)
         ask({
-          id: `hc:${id}`,
+          id: askId,
           kind: 'permission',
           repo,
           session: id,
           text: m.hc.statusMessage ?? `${id} is blocked on a dialog`,
           source: 'hc',
-          at: at ?? now.toISOString(),
+          at,
         })
       }
     }
     if (wait === 'owner') {
+      const askId = `wait:${id}`
       ask({
-        id: `wait:${id}`,
+        id: askId,
         kind: 'question',
         repo,
         session: id,
         text: `${id} waits on the owner`,
         source: 'wait',
-        at: since ?? m.session.lastActivityAt ?? now.toISOString(),
+        at: since ?? seen(askId),
       })
     }
   }
@@ -200,7 +252,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     if (/^Issue \d+ asks: /.test(line)) continue
     const subject = lineSubject(line)
     if (subject.session && /^blocked /.test(line) && hcBlocked.has(subject.session)) continue
-    const id = `factory:${hash(stable(line))}`
+    const id = `factory:${lineKey(line)}`
     if (asks.some((a) => a.id === id)) continue
     const session = subject.session && bySession.has(subject.session) ? subject.session : null
     const repo =
@@ -214,7 +266,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
       session,
       text: line,
       source: 'factory',
-      at: input.firstSeen.get(id) ?? now.toISOString(),
+      at: seen(id),
     })
   }
 
@@ -236,7 +288,8 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
 
   asks.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id))
 
-  const alive = input.sessions.map((m) => m.session)
+  // Only what is listed under a repo is counted; the unplaced are listed apart.
+  const alive = repos.flatMap((r) => r.sessions)
   const summary: FleetSummary = {
     working: alive.filter(isWorking).length,
     done: alive.filter((s) => !isWorking(s) && s.hc === 'done').length,
@@ -250,9 +303,11 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     summary,
     asks,
     repos,
+    unplaced,
+    redacted: false,
     quota: status.accounts,
     queue: status.queue,
-    errors: input.errors,
+    errors: [...input.errors, ...planErrors],
   }
 }
 

@@ -51,7 +51,8 @@ import type { SQL } from 'bun'
 import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
-import { readSnapshot, type FleetBuilder } from './fleet/index.ts'
+import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
+import { redactVisible } from './fleet/redact.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
@@ -575,11 +576,14 @@ const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => (
   unrouted: { GET: async () => respond(DoorUnroutedList, { unrouted: await listUnrouted(sql) }) },
 })
 
-/** `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). */
-const fleetGetHandler = (sql: SQL) => async () => {
+/**
+ * `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). On the socket
+ * (`redact`) every visible repo keeps only its deterministic fields: a pane's model must not read IuRoot's text.
+ */
+const fleetGetHandler = (sql: SQL, options: { redact: boolean }) => async () => {
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
-  return respond(Fleet, snapshot)
+  return respond(Fleet, options.redact ? redactVisible(snapshot) : snapshot)
 }
 
 /** `POST /fleet/refresh`: a build now, answered with its model. */
@@ -659,7 +663,7 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
-    '/fleet': { GET: route(fleetGetHandler(sql)) },
+    '/fleet': { GET: route(fleetGetHandler(sql, { redact: false })) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
@@ -798,7 +802,7 @@ export function serveHooks(deps: {
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
-      '/fleet': { GET: viaSocket(fleetGetHandler(deps.sql)) },
+      '/fleet': { GET: viaSocket(fleetGetHandler(deps.sql, { redact: true })) },
       '/issues': {
         GET: viaSocket(issueListHandler(deps.sql)),
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),

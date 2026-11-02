@@ -6,7 +6,9 @@ export const MAX_PLAN_BYTES = 256 * 1024
 /** An active wave in a plan that nobody touched for this long is `stale`. */
 export const STALE_AFTER_MS = 3 * 24 * 3_600_000
 
-const HEADING = /^##\s+Wave\s+(\d+)\s*[—–:-]\s*(.*)$/
+/** `## Wave 3 — Title`, with `–`, `-`, `:` or `.` as the separator, or none (`## Wave 3 Title`). */
+const HEADING = /^##\s+Wave\s+(\d+)\b\s*(?:[—–:.-]+\s*)?(.*)$/
+const WAVE_LIKE = /^##\s+Wave\b/i
 const COMMENT = /<!--\s*(status|short)\s*:\s*(.*?)\s*-->/g
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -35,17 +37,25 @@ export const cutWords = (text: string, n = 8): string => {
 /** What a plan file says, without the state: that needs the sessions and the clock. */
 export type ParsedPlan = Omit<FleetPlan, 'state' | 'lastTouched' | 'path'>
 
+/** The plan and, apart from it, what in the file could not be read (line numbers only: the text may not leave the mini). */
+export interface PlanReading {
+  plan: ParsedPlan
+  problems: string[]
+}
+
 /**
  * Reads a `docs/waves/*.md` file: the `# ` title, its `**Goal:**` line, and every `## Wave <n> — <title>` heading with the
  * `<!-- status: … -->` and `<!-- short: … -->` comments on it. A heading with no status is `pending`. The text is data:
  * nothing in it is followed.
  */
-export function parsePlan(text: string, options: { visible: boolean }): ParsedPlan {
+export function parsePlan(text: string, options: { visible: boolean }): PlanReading {
   let title = ''
   let titleShort: string | null = null
   let goal: string | null = null
   const waves: FleetWave[] = []
-  for (const line of text.split('\n')) {
+  const problems: string[] = []
+  const lines = text.split(/\r\n|\n|\r/)
+  for (const [index, line] of lines.entries()) {
     if (!title && line.startsWith('# ')) {
       const parsed = comments(line.slice(2))
       title = parsed.text
@@ -57,7 +67,10 @@ export function parsePlan(text: string, options: { visible: boolean }): ParsedPl
       if (found?.[1]) goal = found[1].trim()
     }
     const heading = HEADING.exec(line)
-    if (!heading) continue
+    if (!heading) {
+      if (WAVE_LIKE.test(line)) problems.push(`line ${index + 1} starts with "## Wave" but has no wave number`)
+      continue
+    }
     const parsed = comments(heading[2] ?? '')
     const status =
       parsed.status === null
@@ -70,13 +83,14 @@ export function parsePlan(text: string, options: { visible: boolean }): ParsedPl
       ...status,
     })
   }
-  return {
+  const plan: ParsedPlan = {
     sha: createHash('sha256').update(text).digest('hex').slice(0, 12),
     title,
     short: titleShort ?? (options.visible && title ? cutWords(title) : null),
     goal,
     waves,
   }
+  return { plan, problems }
 }
 
 /** The text of a heading without its comments, and the comments' values (the last of a kind wins). */
