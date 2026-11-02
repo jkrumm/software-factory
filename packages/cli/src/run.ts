@@ -83,7 +83,7 @@ commands:
                     ask    --question <text> [--option <text> …] [--default <option>] [--expires <ISO time>]
                     drop   --reason <text>                              it should not be done
   issue answer <id> <text> [--decision <id>] [--id <call id>]
-                  answer the Issue's open question (the owner's way back from an ask; token or socket). The lead is
+                  answer the Issue's open question (the owner's way back from an ask; token only: a pane has none, so a lead cannot answer itself). The lead is
                   told in a note. --decision names the question when more than one was asked; --id makes a repeated call
                   one answer. Use -- before text that starts with a dash
   notify list [--pending]
@@ -605,17 +605,23 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const decision = flags.decision === undefined ? undefined : Number(flags.decision)
     if (decision !== undefined && !/^[1-9][0-9]{0,15}$/.test(flags.decision ?? ''))
       throw usage('--decision is a question id')
-    const session = flags.session ?? io.env.FACTORY_SESSION
+    if (!io.env.FACTORY_TOKEN) {
+      throw new FactoryError(
+        'auth',
+        'issue answer needs FACTORY_TOKEN: a pane has none, so a lead cannot answer itself',
+        {
+          hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+        },
+      )
+    }
     const { body } = await call(io, `/issues/${target}/answer`, {
       method: 'POST',
       auth: true,
-      socket: 'fallback',
       schema: IssueAnswerAck,
       body: {
         answer,
         ...(decision === undefined ? {} : { decision }),
         ...(flags.id ? { id: flags.id } : {}),
-        ...(session ? { session } : {}),
       },
     })
     return print(body, [body.issue, 'answer', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))

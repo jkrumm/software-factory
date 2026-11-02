@@ -143,13 +143,20 @@ describe('POST /issues/:id/answer', () => {
     expect((await app.send('POST', `/issues/${id}/answer`, { answer: 'x', id: 'r1' })).status).toBe(200)
   })
 
-  test('on the socket it answers too, and the record says it was a pane', async () => {
+  test('the socket does not answer: a pane, a lead among them, cannot answer its own question', async () => {
     const id = await asked()
-    const res = await viaSocket(`/issues/${id}/answer`, { answer: 'from a pane', session: 'some-session' })
-    expect(res.status).toBe(201)
+    const res = await viaSocket(`/issues/${id}/answer`, { answer: 'from a pane' })
+    expect([404, 405]).toContain(res.status)
     await pass()
-    const [decision] = await db.sql`SELECT answered_by FROM factory.decisions WHERE issue_id = ${id}`
-    expect(decision?.answered_by).toBe('session some-session')
+    const [decision] = await db.sql`SELECT answer FROM factory.decisions WHERE issue_id = ${id}`
+    expect(decision?.answer).toBeNull()
+    expect((await getIssue(db.sql, id))?.state).toBe('waiting')
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'answer'`).toHaveLength(0)
+  })
+
+  test('a session field is not part of the body', async () => {
+    const id = await asked()
+    expect((await app.send('POST', `/issues/${id}/answer`, { answer: 'x', session: 's' })).status).toBe(400)
   })
 })
 
@@ -212,17 +219,19 @@ describe('factory issue answer, factory notify', () => {
     expect(decision?.answer).toBe('the second one')
   })
 
-  test('without a token it goes by the socket; usage mistakes are exit 2', async () => {
+  test('usage mistakes are exit 2, an unknown Issue 4; without the token it says so (exit 3), socket or not', async () => {
     const id = await asked()
-    const plain = await factory(['issue', 'answer', String(id), 'via socket', '--format', 'plain'], {
-      FACTORY_TOKEN: '',
-    })
-    expect(plain.code).toBe(0)
-    expect(plain.stdout.split('\t').slice(0, 3)).toEqual([String(id), 'answer', 'filed'])
     expect((await factory(['issue', 'answer', String(id)])).code).toBe(2)
     expect((await factory(['issue', 'answer', 'x', 'text'])).code).toBe(2)
     expect((await factory(['issue', 'answer', String(id), 'text', '--decision', 'one'])).code).toBe(2)
     expect((await factory(['issue', 'answer', '99', 'text'])).code).toBe(4)
+    const bare = await factory(['issue', 'answer', String(id), 'no token'], {
+      FACTORY_TOKEN: '',
+      FACTORY_SESSION: `lead-${id}-1`,
+    })
+    expect(bare.code).toBe(3)
+    expect(bare.stderr).toContain('needs FACTORY_TOKEN')
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'answer'`).toHaveLength(0)
   })
 
   test('notify list and notify test', async () => {

@@ -47,13 +47,13 @@ export async function fileVerb(
 
 /**
  * The owner's answer, filed as an `answer` inbox row keyed `<issue>:answer:<call id>`: the same call twice is one answer. It is for no
- * attempt in particular (a question outlives the lead that asked it), and `who` says by which door it came: the token API is the
- * owner, the socket is a pane. The lifecycle decides whether there is an open question for it (a refusal is a line in the
+ * attempt in particular (a question outlives the lead that asked it), and it is always the owner's: the route is on the token API
+ * only, so a pane cannot reach it. The lifecycle decides whether there is an open question for it (a refusal is a line in the
  * Issue's events).
  */
 export async function fileAnswer(
   sql: SQL,
-  input: { issueId: number; body: IssueAnswerBody; who: string; now: Date },
+  input: { issueId: number; body: IssueAnswerBody; now: Date },
 ): Promise<
   | { ok: true; key: string; duplicate: boolean; state: IssueState }
   | { ok: false; problem: 'unknown_issue' | 'no_open_question' }
@@ -72,7 +72,7 @@ export async function fileAnswer(
     SELECT id FROM factory.decisions WHERE issue_id = ${issueId} AND answered_at IS NULL ORDER BY id DESC LIMIT 1`
   const decision = input.body.decision ?? (open ? Number(open.id) : undefined)
   if (decision === undefined) return { ok: false, problem: 'no_open_question' }
-  const payload = { answer, who: input.who, decision }
+  const payload = { answer, who: 'owner', decision }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: 'answer', at: now, payload })
   return { ok: true, key, duplicate, state: issue.state }
 }

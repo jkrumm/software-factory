@@ -1019,9 +1019,10 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   characters (a list is cut at six items and 450 characters). It is due from `FACTORY_DIGEST_AT` (`07:30`, before noon, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon
   local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
   three in the afternoon.
-- **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`, on the token API and the
-  socket) files an `answer` event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
-  as `socket` or `session <id>`, since a pane can reach it: a lead could answer its own question there, and the record is what shows it.
+- **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`) files an `answer`
+  event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the
+  lead is told in a note. **Token API only, never on the socket**: a pane has no token, so a lead cannot answer its own question, and the
+  answer is always the owner's (`answered_by = owner`). The CLI without `FACTORY_TOKEN` says so (exit 3).
 - **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
 - **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
   error if it did not arrive, also when the target is `off`). The test row is made already claimed (`sendNow`), so the tick cannot send it beside the caller.
