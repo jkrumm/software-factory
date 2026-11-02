@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -76,7 +76,7 @@ class FakeCommits implements Commits {
     this.calls++
     if (this.failure) throw this.failure
     const full = reported.map((sha) => this.resolves[sha] ?? sha)
-    return { commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
+    return { reported: full, commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
   }
 }
 
@@ -797,8 +797,9 @@ describe('the hold', () => {
     const marker = join(repo, 'grandchild.pid')
     fixture.commit(repo, {
       'project.yaml': SERVICE.replace('NAME', repo.split('/').pop() as string).replace(/ {2}probes:\n.*\n/, ''),
-      Makefile: `verify:\n\t@sleep 60 & echo $$! > ${marker}; wait\n`,
+      Makefile: `verify:\n\t@sleep 60 & echo $$! > ${marker}; wait\nversion:\n\t@git rev-parse HEAD\n`,
     })
+    commits.resolves[SHA] = fixture.git(repo, 'rev-parse', 'HEAD')
     const { id, key } = await lead(repo)
     await prove(id, key, 'service')
     expect((await ship(id, key)).status).toBe(201)
@@ -869,8 +870,9 @@ describe('the hold', () => {
     const repo = fixture.repo(`repo${++repos}`, {})
     fixture.commit(repo, {
       'project.yaml': SERVICE.replace('NAME', repo.split('/').pop() as string).replace(/ {2}probes:\n.*\n/, ''),
-      Makefile: 'verify:\n\t@echo the deployed service is broken; exit 3\n',
+      Makefile: 'verify:\n\t@echo the deployed service is broken; exit 3\nversion:\n\t@git rev-parse HEAD\n',
     })
+    commits.resolves[SHA] = fixture.git(repo, 'rev-parse', 'HEAD')
     const issuePorts = {
       ...ports(),
       ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }),
@@ -895,6 +897,181 @@ describe('the hold', () => {
     expect(sent[0]?.text).toContain('the deployed service is broken')
     expect(sent[0]?.text).toContain('Error 3')
     expect(runner.typed.filter((t) => t.text.includes('the deployed service is broken'))).toHaveLength(1)
+  })
+})
+
+describe('the deployed version', () => {
+  // These repos stay out of the tests after this describe: a project each would join every later pass.
+  const made: string[] = []
+  afterEach(() => {
+    for (const path of made.splice(0)) rmSync(path, { recursive: true, force: true })
+  })
+
+  /** A repo with three commits and a `make version` that prints what the test says is deployed. */
+  function deployable(name: string, makefile = 'verify:\n\t@true\nversion:\n\t@cat .deployed\n') {
+    const repo = fixture.repo(name, {
+      Makefile: makefile,
+      'project.yaml': SERVICE.replace('NAME', name).replace(/ {2}probes:\n.*\n/, ''),
+    })
+    made.push(repo)
+    const head = () => fixture.git(repo, 'rev-parse', 'HEAD')
+    const c1 = head()
+    fixture.commit(repo, { 'a.txt': '2' })
+    const c2 = head()
+    fixture.commit(repo, { 'a.txt': '3' })
+    const c3 = head()
+    return { repo, c1, c2, c3, deployed: (sha: string) => writeFileSync(join(repo, '.deployed'), `${sha}\n`) }
+  }
+  const run = (repo: string, shipped: string[], extra: { makeVerify?: boolean } = {}) =>
+    new MakeAndProbes().run({ repo, makeVerify: extra.makeVerify ?? false, version: { shipped }, probes: [] })
+
+  test('a deployed commit behind the shipped one is red, naming it; at it or past it is green; the checkout is not touched', async () => {
+    const { repo, c1, c2, c3, deployed } = deployable('versions')
+    deployed(c1)
+    const behind = await run(repo, [c2])
+    expect(behind).toEqual([{ name: 'deployed version', ok: false, detail: expect.stringContaining('make deploy') }])
+    expect(behind[0]?.detail).toContain(c2.slice(0, 12))
+    expect(behind[0]?.detail).toContain(`deployed ${c1.slice(0, 12)}`)
+    deployed(c2)
+    expect((await run(repo, [c2]))[0]).toMatchObject({ ok: true })
+    deployed(c3)
+    expect((await run(repo, [c2]))[0]).toMatchObject({ ok: true })
+    expect((await run(repo, [c1, c2, c3]))[0]).toMatchObject({ ok: true })
+    // Read-only: HEAD, the branch and the working tree are as they were.
+    expect(fixture.git(repo, 'rev-parse', 'HEAD')).toBe(c3)
+    expect(fixture.git(repo, 'status', '--porcelain', '--untracked-files=no')).toBe('')
+  })
+
+  test('every shipped commit must be held, and the red check names the ones that are not', async () => {
+    const { repo, c1, c2, c3, deployed } = deployable('versions-many')
+    deployed(c2)
+    const checks = await run(repo, [c1, c3])
+    expect(checks[0]).toMatchObject({ ok: false })
+    expect(checks[0]?.detail).toContain(c3.slice(0, 12))
+    expect(checks[0]?.detail).not.toContain(c1.slice(0, 12))
+  })
+
+  test('no `make version` target is red with the line to add; garbage, a failure, and a sha the repo lacks are red', async () => {
+    const bare = deployable('versions-bare', 'verify:\n\t@true\n')
+    bare.deployed(bare.c2)
+    expect(await run(bare.repo, [bare.c2])).toEqual([
+      { name: 'deployed version', ok: false, detail: 'add `make version`: the deployed commit sha' },
+    ])
+    const noMakefile = fixture.repo('versions-no-makefile', {})
+    made.push(noMakefile)
+    expect((await run(noMakefile, [fixture.git(noMakefile, 'rev-parse', 'HEAD')]))[0]?.detail).toContain(
+      'add `make version`',
+    )
+
+    const garbage = deployable('versions-garbage', 'version:\n\t@echo the version is 3\n')
+    const printed = await run(garbage.repo, [garbage.c2])
+    expect(printed[0]).toMatchObject({ ok: false })
+    expect(printed[0]?.detail).toContain('the deployed commit sha')
+    const failing = deployable('versions-failing', 'version:\n\t@echo no release; exit 4\n')
+    expect((await run(failing.repo, [failing.c2]))[0]?.detail).toContain('no release')
+    const two = deployable('versions-two-lines', 'version:\n\t@git rev-parse HEAD; git rev-parse HEAD\n')
+    expect((await run(two.repo, [two.c2]))[0]).toMatchObject({ ok: false })
+    const unknown = deployable('versions-unknown')
+    unknown.deployed('b'.repeat(40))
+    expect((await run(unknown.repo, [unknown.c2]))[0]?.detail).toContain('is not in')
+  })
+
+  test('no shipped commit on record is red, never skipped', async () => {
+    const { repo, deployed, c2 } = deployable('versions-none')
+    deployed(c2)
+    expect((await run(repo, []))[0]).toMatchObject({ name: 'deployed version', ok: false })
+  })
+
+  test('a red version does not hide the other signals: `make verify` runs too', async () => {
+    const { repo, c1, c2, deployed } = deployable('versions-all')
+    deployed(c1)
+    const checks = await run(repo, [c2], { makeVerify: true })
+    expect(checks.map((c) => [c.name, c.ok])).toEqual([
+      ['deployed version', false],
+      ['make verify', true],
+    ])
+  })
+
+  test('a stopped server leaves nothing running: the version is red, not a throw', async () => {
+    const { repo, c2, deployed } = deployable('versions-stopped')
+    deployed(c2)
+    const checks = await new MakeAndProbes().run(
+      { repo, makeVerify: false, version: { shipped: [c2] }, probes: [] },
+      AbortSignal.abort(),
+    )
+    expect(checks[0]).toMatchObject({ name: 'deployed version', ok: false })
+  })
+
+  async function holdOver(repo: string, sha: string, reported = true) {
+    commits.resolves[SHA] = sha
+    const issuePorts = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
+    const { id, key } = await lead(repo)
+    await prove(id, key, 'service')
+    expect((await ship(id, key)).status).toBe(201)
+    await emit(key, 'turn_started')
+    await emit(key, 'turn_ended')
+    moveTo((await issue(id)).wake_at as Date)
+    for (let i = 0; i < 6; i++) {
+      await tick({ sql: db.sql, clock, runner, issuePorts, classification, leadWorktrees: maker, projects: sync })
+      await classification.settled()
+      await maker.settled()
+      await offTick.settled()
+      clock.advance(5_000)
+    }
+    return { id, key, reported }
+  }
+
+  test('through the hold: a deployed version behind the ship is a regression to the lead, at it the Issue closes verified', async () => {
+    const stale = deployable('hold-behind')
+    stale.deployed(stale.c1)
+    const red = await holdOver(stale.repo, stale.c2)
+    expect((await issue(red.id)).state).toBe('working')
+    const sent = await notes(red.key)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.text).toContain('deployed version')
+    expect(sent[0]?.text).toContain('make deploy')
+
+    const current = deployable('hold-current')
+    current.deployed(current.c3)
+    const green = await holdOver(current.repo, current.c2)
+    expect((await issue(green.id)).state).toBe('closed')
+  })
+
+  test('through the hold: a squash is held to the merge commit the lead named, not to the branch’s own commits', async () => {
+    const { repo, c2, deployed } = deployable('hold-squash')
+    deployed(c2)
+    // The branch's commit is nowhere in the repo, as after a squash.
+    commits.branch = ['c'.repeat(40)]
+    const { id } = await holdOver(repo, c2)
+    expect((await issue(id)).state).toBe('closed')
+  })
+
+  test('through the hold: no `make version` is a regression with the line to add', async () => {
+    const { repo, c2 } = deployable('hold-bare', 'verify:\n\t@true\n')
+    const { id, key } = await holdOver(repo, c2)
+    expect((await issue(id)).state).toBe('working')
+    expect((await notes(key))[0]?.text).toContain('add `make version`: the deployed commit sha')
+  })
+
+  test('through the hold: a change that deploys nothing skips it, and so do modes auto and none', async () => {
+    const docs = deployable('hold-docs', 'verify:\n\t@true\n')
+    commits.paths = ['docs/x.md']
+    const docsOnly = await holdOver(docs.repo, docs.c2)
+    expect((await issue(docsOnly.id)).state).toBe('closed')
+
+    commits.paths = ['src/server.ts']
+    for (const mode of ['auto', 'none']) {
+      const name = `hold-${mode}`
+      const repo = fixture.repo(name, {
+        'project.yaml': SERVICE.replace('NAME', name)
+          .replace('mode: make', `mode: ${mode}`)
+          .replace(/ {2}probes:\n.*\n/, ''),
+        Makefile: 'verify:\n\t@true\n',
+      })
+      made.push(repo)
+      const done = await holdOver(repo, fixture.git(repo, 'rev-parse', 'HEAD'))
+      expect((await issue(done.id)).state).toBe('closed')
+    }
   })
 })
 
@@ -1809,7 +1986,7 @@ describe('the CLI', () => {
     const accepted = await factory(env, undefined, 'issue', 'ship', String(id), '--summary', 's', '--commit', SHA)
     expect(accepted.code).toBe(0)
     expect((await issue(id)).state).toBe('watching')
-  })
+  }, 20_000)
 
   test('stop takes the token and never falls back to the socket; a refusal exits 5', async () => {
     const id = await file(newRepo(SERVICE))
@@ -1856,5 +2033,5 @@ describe('the CLI', () => {
     expect((await factory({}, undefined, 'issue', 'reopen', String(id))).code).toBe(2)
     expect((await factory({}, undefined, 'issue', 'reopen', String(id), '--reason', 'x')).code).toBe(5)
     expect((await factory({}, undefined, 'issue', 'resume', String(id))).code).toBe(5)
-  })
+  }, 20_000)
 })

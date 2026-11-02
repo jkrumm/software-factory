@@ -537,6 +537,7 @@ describe('the make contract', () => {
       test: true,
       deploy: true,
       verify: true,
+      version: false,
       restart: true,
       quality: false,
       logs: true,
@@ -835,7 +836,7 @@ describe('factory project', () => {
     expect(show.stdout).toContain('hold\t45m')
     expect(show.stdout).toContain('ship\tdocs/** via push; ** via pr')
     expect(show.stdout).toContain(
-      'make\tcheck yes, test no, deploy no, verify yes, restart no, quality no, logs no, status no',
+      'make\tcheck yes, test no, deploy no, verify yes, version no, restart no, quality no, logs no, status no',
     )
 
     const json = JSON.parse((await factory('project', 'show', 'clop')).stdout)

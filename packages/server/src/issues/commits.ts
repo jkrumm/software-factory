@@ -2,6 +2,8 @@ import { branchOnBase, fetchOrigin, gitIn, originDefault, type Run } from './ori
 
 /** What an Issue's commits touched. */
 export interface CommitRead {
+  /** the commits the lead named, resolved to full shas: what a check of the deployed code is about */
+  reported: string[]
   /** the reported commits, full, then what else is on the lead's branch */
   commits: string[]
   /** every path they touched */
@@ -87,7 +89,8 @@ export class GitCommits implements Commits {
     }
 
     const commits = [...new Set([...full, ...onBranch])]
-    if (commits.length === 0) return { commits, paths: [], mergedAt: null }
+    const reportedFull = [...new Set(full)]
+    if (commits.length === 0) return { reported: reportedFull, commits, paths: [], mergedAt: null }
 
     const named = async (...range: string[]) => {
       const log = ['-c', 'core.quotePath=false', 'log', '-m', ...range, '--name-only', '-z', '--format=']
@@ -101,11 +104,11 @@ export class GitCommits implements Commits {
     ]
     const unique = [...new Set(paths)].sort()
 
-    if (full.length === 0) return { commits, paths: unique, mergedAt: null }
+    if (full.length === 0) return { reported: reportedFull, commits, paths: unique, mergedAt: null }
     const times = await git(['log', '--no-walk', '--format=%ct', ...full])
     if (times.exitCode !== 0) throw new Error(`git log failed (exit ${times.exitCode})`)
     const newest = Math.max(...times.stdout.split('\n').filter(Boolean).map(Number))
-    return { commits, paths: unique, mergedAt: new Date(newest * 1000) }
+    return { reported: reportedFull, commits, paths: unique, mergedAt: new Date(newest * 1000) }
   }
 
   /** The lead's branch since its worktree was cut, all of it: a range that cannot be read fails the verb, it does not lower the bar. */

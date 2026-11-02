@@ -59,6 +59,7 @@ const EMPTY: MakeTargets = {
   test: false,
   deploy: false,
   verify: false,
+  version: false,
   restart: false,
   quality: false,
   logs: false,
