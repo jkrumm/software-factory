@@ -749,6 +749,7 @@ describe('the rules, alone', () => {
     expect(targetsOf({ text: 'homelab: remove X.app', cmd: null }, ['macbook'], 'macbook')).toEqual([])
     // Nor is one the text names by a prefix alone.
     expect(targetsOf({ text: 'nas: remove X.app', cmd: null }, ['macbook'], 'macbook')).toEqual([])
+    expect(targetsOf({ text: 'remove X.app from mini', cmd: null }, ['macbook'], 'macbook')).toEqual([])
     expect(targetsOf({ text: 'remove the mini-app X.app', cmd: null }, ['macbook'], 'macbook')).toHaveLength(1)
   })
 
