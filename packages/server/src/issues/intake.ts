@@ -7,6 +7,8 @@ import type {
   IntakeInput,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { notifyDoorRefused } from '../notify/rules.ts'
+import { RepoRefused } from '../repos.ts'
 import { enqueue } from './inbox.ts'
 import { createIssueIn } from './create.ts'
 import { findIssue } from './read.ts'
@@ -45,6 +47,24 @@ const alertKey = (input: Pick<IntakeInput, 'source' | 'monitor' | 'event'>): str
  * An event filed before is one effect: the Issue's key, the inbox key and the counters' last event all see it.
  */
 export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeContext): Promise<IntakeResult> {
+  try {
+    return await fileAlert(sql, input, context)
+  } catch (error) {
+    // The filing rolled back, so the owner is told from outside it: the alert is refused (the sender gets its 422 and retries), and
+    // a route that points where no alert may file is the owner's to fix.
+    if (error instanceof RepoRefused) {
+      await notifyDoorRefused(sql, {
+        source: input.source,
+        monitor: input.monitor,
+        reason: error.message,
+        now: context.now,
+      })
+    }
+    throw error
+  }
+}
+
+async function fileAlert(sql: SQL, input: IntakeInput, context: IntakeContext): Promise<IntakeResult> {
   const { now } = context
   const key = alertKey(input)
   return sql.begin(async (tx): Promise<IntakeResult> => {

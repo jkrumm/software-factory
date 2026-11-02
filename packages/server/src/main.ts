@@ -11,6 +11,7 @@ import { AgwClassifier, Classification } from './issues/classify.ts'
 import { leadPorts } from './issues/lead.ts'
 import { WorktreeMaker } from './issues/leadtree.ts'
 import { GitWorktrees } from './issues/worktree.ts'
+import { makeNotifier } from './notify/index.ts'
 import { ProjectSync } from './projects/sync.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { HcClient } from './hc.ts'
@@ -60,6 +61,7 @@ if (!singleton) {
 await migrate(sql)
 
 const clock = systemClock
+const notifier = makeNotifier(config)
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
 const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now() })
 const runner = new HcRunner({
@@ -84,6 +86,8 @@ const server = serve({
   quota,
   projects,
   alertLeads: config.alertLeads,
+  notifier,
+  notifyTarget: config.notifyTarget,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -135,6 +139,7 @@ const ticker = startTicker(
     classification,
     leadWorktrees,
     alertLeads: config.alertLeads,
+    notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz },
   },
   TICK_INTERVAL_MS,
   monitor,

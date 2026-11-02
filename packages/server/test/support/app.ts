@@ -5,6 +5,7 @@ import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
 import { serve } from '../../src/http.ts'
+import type { Notifier } from '../../src/notify/port.ts'
 import { ProjectSync } from '../../src/projects/sync.ts'
 import { QuotaPoller } from '../../src/quota.ts'
 import { FakeQuotaSource } from './quota.ts'
@@ -47,6 +48,8 @@ export function startApp(deps: {
   roles?: RoleTable
   projects?: Pick<ProjectSync, 'syncNow'>
   alertLeads?: boolean
+  notifier?: Notifier
+  notifyTarget?: string
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)

@@ -2,6 +2,7 @@ import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
 import { issueAttention } from './issues/attention.ts'
+import { notificationAttention } from './notify/outbox.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
 import { BLOCKED_AFTER_MS } from './rules.ts'
@@ -64,6 +65,7 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
     attention: [
       ...attention(loaded, notes, spawns, now),
       ...(await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })),
+      ...(await notificationAttention(sql, now)),
     ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },

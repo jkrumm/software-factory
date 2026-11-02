@@ -8,11 +8,14 @@ import {
   DoorUnroutedList,
   Health,
   Issue,
+  IssueAnswerAck,
   IssueList,
   type IssueSummary,
   IssueVerb,
   IssueVerbAck,
   loadRoleTable,
+  Notification,
+  NotificationList,
   Project,
   ProjectList,
   ProjectSyncResult,
@@ -79,6 +82,13 @@ commands:
                     block  --reason <text>                              it cannot go on and nobody can answer
                     ask    --question <text> [--option <text> …] [--default <option>] [--expires <ISO time>]
                     drop   --reason <text>                              it should not be done
+  issue answer <id> <text> [--decision <id>] [--id <call id>]
+                  answer the Issue's open question (the owner's way back from an ask; token or socket). The lead is
+                  told in a note. --decision names the question when more than one was asked; --id makes a repeated call
+                  one answer. Use -- before text that starts with a dash
+  notify list [--pending]
+                  what the factory told the owner, newest first: key, kind, status, attempts, text (--pending: not yet sent)
+  notify test     send one line through the live path (the outbox and Hermes) and say whether it arrived; exit 1 if not (token)
   project list    the projects: manifest or defaults, leads, who holds the claim and who waits, broken manifests (token or socket)
   project show <name>
                   one project: the manifest in force, the make contract (which of check, test, deploy, verify, restart, quality, logs,
@@ -122,6 +132,8 @@ commands:
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
 --title, --facts, --key, --source  issue new
 --rotate         door token new: replace the source's token
+--decision      issue answer: the question it is for
+--pending       notify list: only what is not sent
 --phase, --note, --until, --why, --summary, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
@@ -249,6 +261,9 @@ const routeLine = (r: DoorRoute) => [r.source, r.monitor, r.repo, r.quiet, r.las
 
 const unroutedLine = (u: DoorUnrouted) => [u.source, u.monitor, u.count, u.lastSeen, u.lastTitle].map(cell).join('\t')
 
+const notificationLine = (n: Notification) =>
+  [n.key, n.kind, n.status, n.attempts, n.error, n.text.replace(/\s+/g, ' ')].map(cell).join('\t')
+
 const sessionLine = (s: Session) =>
   [s.id, s.state, s.wait, s.turn, s.pane, s.claudeSessionId, s.lastEventAt].map(cell).join('\t')
 
@@ -283,6 +298,8 @@ interface Flags {
   option?: string[]
   default?: string
   expires?: string
+  decision?: string
+  pending?: boolean
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -580,6 +597,48 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, issueLine(body))
   }
 
+  if (words[0] === 'issue' && words[1] === 'answer') {
+    const target = words[2]
+    const answer = words.slice(3).join(' ')
+    if (!target || !/^[1-9][0-9]{0,9}$/.test(target) || !answer)
+      throw usage('usage: issue answer <id> <text> [--decision <id>] [--id <call id>]')
+    const decision = flags.decision === undefined ? undefined : Number(flags.decision)
+    if (decision !== undefined && !/^[1-9][0-9]{0,15}$/.test(flags.decision ?? ''))
+      throw usage('--decision is a question id')
+    const session = flags.session ?? io.env.FACTORY_SESSION
+    const { body } = await call(io, `/issues/${target}/answer`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: IssueAnswerAck,
+      body: {
+        answer,
+        ...(decision === undefined ? {} : { decision }),
+        ...(flags.id ? { id: flags.id } : {}),
+        ...(session ? { session } : {}),
+      },
+    })
+    return print(body, [body.issue, 'answer', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
+  }
+
+  if (key === 'notify list' || key === 'notify test') {
+    if (key === 'notify test') {
+      const { body } = await call(io, '/notifications/test', { method: 'POST', auth: true, schema: Notification })
+      print(body, notificationLine(body))
+      if (body.status !== 'sent') {
+        throw new FactoryError('general', `the test message was not delivered${body.error ? `: ${body.error}` : ''}`)
+      }
+      return
+    }
+    const { body } = await call(io, `/notifications${flags.pending ? '?pending=1' : ''}`, {
+      auth: true,
+      schema: NotificationList,
+    })
+    const lines = body.notifications.map(notificationLine)
+    if (format === 'plain' && !lines.length) return
+    return print(body, lines.join('\n'))
+  }
+
   const verb = words[0] === 'issue' ? IssueVerb.safeParse(words[1]) : undefined
   if (verb?.success) {
     const target = words[2]
@@ -746,5 +805,7 @@ const OPTIONS = {
   option: { type: 'string', multiple: true },
   default: { type: 'string' },
   expires: { type: 'string' },
+  decision: { type: 'string' },
+  pending: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const

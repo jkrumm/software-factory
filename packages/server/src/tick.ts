@@ -9,6 +9,7 @@ import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } f
 import type { Classification } from './issues/classify.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
+import { type NotifyDeps, notifyPass } from './notify/index.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
 import type { ProjectSync } from './projects/sync.ts'
@@ -48,6 +49,8 @@ export interface TickDeps {
   alertLeads?: boolean
   /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
   projects?: ProjectSync
+  /** the owner's line: the rules that read state, then the outbox; without it nothing is sent */
+  notify?: NotifyDeps
 }
 
 export interface TickResult {
@@ -362,6 +365,14 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
     )
   } catch (error) {
     result.errors.push(`issues: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  // Last: what this pass decided goes out in the same pass, and a slow Hermes holds nothing that was claimed before it.
+  if (deps.notify) {
+    try {
+      result.errors.push(...(await notifyPass(deps.sql, deps.notify, () => deps.clock.now())))
+    } catch (error) {
+      result.errors.push(`notify: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
   return result
 }
