@@ -11,6 +11,7 @@ import {
   type LogRow,
   type NewLogRow,
   occKey,
+  occurrenceNow,
   readActs,
   readLog,
   readOccurrences,
@@ -555,7 +556,7 @@ export class Triage {
       readOccurrences(this.deps.sql, ids),
     ])
     const asks = model.asks
-      .map((a) => ({ ...a, occurrence: occurrences.get(a.id) ?? 1 }))
+      .map((a) => ({ ...a, occurrence: occurrenceNow(occurrences.get(a.id)) }))
       .filter((a) => !acts.closed.has(occKey(a.id, a.occurrence)) && !acts.later.has(occKey(a.id, a.occurrence)))
     return recount(model, asks, now)
   }

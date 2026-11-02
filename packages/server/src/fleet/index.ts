@@ -312,9 +312,11 @@ export class FleetBuilder {
       sessions: db.status.sessions,
       isVisible: (path) => places.isVisible(path),
     })
+    const complete = askSourcesAnswered(errors)
     const digested = applyDigest(base, view, scope, now)
     // The triage: tiers, suggestions with evidence, actions, and the bookkeeping that needs no one. Its failure leaves the asks as they are.
     let model: Omit<Fleet, 'fingerprint'> = digested
+    const failures: string[] = []
     let timed = digested.asks
     try {
       const triaged = await this.triage.apply({
@@ -323,7 +325,7 @@ export class FleetBuilder {
         queue,
         firstSeen: this.firstSeen,
         roots,
-        complete: askSourcesAnswered(errors),
+        complete,
       })
       model = triaged.model
       timed = triaged.timed
@@ -332,9 +334,10 @@ export class FleetBuilder {
       // What the owner closed or snoozed stays gone; the rest is the asks as the sources raised them.
       const hidden = await this.triage.hide(digested, now).catch((hideError: unknown) => {
         console.error('fleet triage fallback failed; closed and snoozed asks are listed again', hideError)
+        failures.push(`triage fallback: ${message(hideError)}: what the owner closed or snoozed is listed again`)
         return digested
       })
-      model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`] }
+      model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`, ...failures] }
     }
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
@@ -344,7 +347,7 @@ export class FleetBuilder {
     // Every ask the sources raised, also one the triage folded or the owner snoozed: it keeps its time for when it comes back.
     // A build that could not read a source leaves what it knew of that source's asks (they did not leave, they were not listed).
     const listed = timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const)
-    this.firstSeen = askSourcesAnswered(errors) ? new Map(listed) : new Map([...this.firstSeen, ...listed])
+    this.firstSeen = complete ? new Map(listed) : new Map([...this.firstSeen, ...listed])
     this.since = new Map(
       [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>
         x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [],

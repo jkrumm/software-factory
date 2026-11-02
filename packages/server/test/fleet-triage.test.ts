@@ -1179,9 +1179,7 @@ describe('the lead’s review', () => {
     requests = [stale('q-a', 'Restart the sync container', 2)]
     await build()
     await act('queue:q-a', 'deny')
-    await build()
-    requests = [stale('q-a', 'Restart the sync container', 2)]
-    await build() // occurrence 2
+    await build() // occurrence 1 is over
     // A probe that throws takes the triage down (an old request with a command is probed).
     requests = [
       stale('q-a', 'Restart the sync container', 2),
@@ -1205,7 +1203,7 @@ describe('the lead’s review', () => {
     })
     const fleet = await failing.refreshNow()
     expect(fleet.errors.some((e) => e.startsWith('triage:'))).toBe(true)
-    // Occurrence 1 was denied; the ask is on occurrence 2 and is listed, as such.
+    // Occurrence 1 was denied; the ask is back before any good build wrote the table: it is on occurrence 2 and is listed, as such.
     expect(ask(fleet, 'queue:q-a')?.occurrence).toBe(2)
   })
 
