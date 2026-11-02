@@ -1,0 +1,2 @@
+f99d778 06:16:55 feat: add --longest flag to wordstat
+7fed7d8 06:16:14 chore: scratch repo for the F2 gamedays

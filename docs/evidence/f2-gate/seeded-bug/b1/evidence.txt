@@ -1,0 +1,7 @@
+05:16:58|service|lead-35-1|1||{"note": "make verify: ok f99d778 (selftest: ok words=9 lines=2); make check ok"}
+05:17:01|infra|lead-35-1|1||{"text": "verify: ok f99d778f5134c2f6113388ab8bd49fd7d3c4ba37 (selftest: ok words=9 lines=2)\n~/.local/share/factory/gameday-deploys/factory-gameday-bug/bin:\ntotal 8\n-rwx------@ 1 <user>
+05:17:01|service|lead-35-1|1||{"text": "verify: ok f99d778f5134c2f6113388ab8bd49fd7d3c4ba37 (selftest: ok words=9 lines=2)\n~/.local/share/factory/gameday-deploys/factory-gameday-bug/bin:\ntotal 8\n-rwx------@ 1 <user>
+05:17:04|infra|lead-35-1|1||{"note": "make verify ok at f99d778; deployed copy runs --longest"}
+05:17:04|service|lead-35-1|1||{"note": "make verify: ok f99d778 (selftest: ok words=9 lines=2)"}
+05:18:06|hold|factory|1||{"hold": 1, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok f99d778f5134c2f6113388ab8bd49fd7d3c4ba37 (selftest: ok words=9 lines=2)"}]}
+05:18:12|transcript|factory|1|~/.local/share/factory/archive/35/1/e0dac7cc-27ec-43ce-aa90-a5d66d5adf39.jsonl|{"session": "lead-35-1", "claudeSessionId": "e0dac7cc-27ec-43ce-aa90-a5d66d5adf39"}
