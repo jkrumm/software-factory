@@ -585,7 +585,17 @@ const fleetGetHandler = (sql: SQL) => async () => {
 /** `POST /fleet/refresh`: a build now, answered with its model. */
 const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
   if (!fleet) return json({ error: 'the fleet builder is not running', code: 'not_ready' }, 503)
-  return respond(Fleet, await fleet.refreshNow())
+  try {
+    return respond(Fleet, await fleet.refreshNow())
+  } catch (error) {
+    return json(
+      {
+        error: `the fleet model could not be built: ${error instanceof Error ? error.message : String(error)}`,
+        code: 'build_failed',
+      },
+      503,
+    )
+  }
 }
 
 /** `GET /queue[?project=<path>]`. */

@@ -69,6 +69,8 @@ export interface ModelInput {
   errors: string[]
 }
 
+const isWorking = (s: { state: string }) => s.state === 'working' || s.state === 'starting'
+
 const STATE_ORDER = ['walled', 'blocked', 'stuck', 'working', 'waiting', 'starting', 'idle'] as const
 
 const hash = (text: string, length = 12): string => createHash('sha256').update(text).digest('hex').slice(0, length)
@@ -236,9 +238,9 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
 
   const alive = input.sessions.map((m) => m.session)
   const summary: FleetSummary = {
-    working: alive.filter((s) => s.state === 'working' || s.state === 'starting').length,
-    done: alive.filter((s) => s.hc === 'done').length,
-    idle: alive.filter((s) => s.state !== 'working' && s.state !== 'starting' && s.hc !== 'done').length,
+    working: alive.filter(isWorking).length,
+    done: alive.filter((s) => !isWorking(s) && s.hc === 'done').length,
+    idle: alive.filter((s) => !isWorking(s) && s.hc !== 'done').length,
     asks: asks.length,
     staleAsks: asks.filter((a) => now.getTime() - Date.parse(a.at) >= STALE_ASK_MS).length,
   }

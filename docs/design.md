@@ -1111,15 +1111,15 @@ One read model of the fleet that every surface reads instead of building its own
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `repos[]` (`name`, `space`, `visible`, `git`, `plan`, `morePlans`, `sessions[]`), `quota` and `queue` as `factory status`
-  has them, `errors[]`, `builtAt`, `fingerprint`. `working` counts `working` and `starting` sessions, `done` those hc reports `done`
-  (the turn ended unseen), `idle` the rest alive; `staleAsks` are asks older than 24 h.
+  has them, `errors[]`, `builtAt`, `fingerprint`. `working` counts `working` and `starting` sessions, `done` the others hc reports `done`
+  (the turn ended unseen), `idle` the rest alive (the three do not overlap); `staleAsks` are asks older than 24 h.
 - **A snapshot, never built inline.** `FleetBuilder` (`src/fleet/index.ts`) builds off the tick: `tick()` calls `kick()`, which starts a
   build behind its back when 30 s have passed and none runs; `POST /fleet/refresh` (`factory fleet --refresh`, token only) builds now
   and waits. The model is one row, `factory.fleet_snapshot` (migration `021`: JSON, fingerprint, `built_at`), written by a short
   transaction of its own; `GET /fleet` (token API and socket) reads that row, 503 `not_ready` before the first build. Every read is
   bounded (`git` 5 s, `hc` and the queue script 10 s, plan files 256 KiB) and none runs in a transaction.
 - **Failure is local.** A source that fails (hc, the human queue, a repo's `git`, a plan file) leaves its part as the last build had it
-  (memory; empty after a restart) and adds a line to `errors[]`; the rest of the model stands. Only the database part has no
+  (memory; empty after a restart) and adds a line to `errors[]` (a root that cannot be listed too); the rest of the model stands. Only the database part has no
   fallback: with nothing to fall back on the build fails, the stored snapshot stays and the tick logs it.
 - **`NOTIFY fleet`.** `pg_notify('fleet', <fingerprint>)` in the snapshot's transaction when the fingerprint is not the stored one. The
   fingerprint is a sha-256 of the model without `builtAt`, `lastActivityAt`, `readAt` and `sampledAt`, so the clock and a working agent's

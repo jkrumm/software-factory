@@ -1,5 +1,5 @@
 import { lstat, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { Fleet, FleetGit, Session, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
@@ -23,6 +23,7 @@ export { readSnapshot } from './store.ts'
 /** A build at most this often from the tick; `POST /fleet/refresh` builds at once. */
 export const FLEET_INTERVAL_MS = 30_000
 const CONCURRENCY = 8
+const MAX_DECISIONS = 500
 const PLAN = 'docs/waves/PLAN.md'
 
 export interface FleetDeps {
@@ -42,6 +43,8 @@ export interface FleetDeps {
 
 interface DbPart {
   status: Status
+  /** what the read left out, said in `errors` */
+  notes: string[]
   spawns: Map<string, { repo: string; prompt: string }>
   decisions: DecisionRow[]
 }
@@ -74,6 +77,7 @@ export class FleetBuilder {
   private lastStart = 0
   private chain: Promise<unknown> = Promise.resolve()
   private running: Promise<unknown> | undefined
+  private queued: Promise<Fleet> | undefined
   private seeded = false
   private firstSeen = new Map<string, string>()
   /** when a terminal the factory does not know was first seen in its state: hc's own time moves with every message */
@@ -103,15 +107,21 @@ export class FleetBuilder {
       })
   }
 
-  /** A build now, after the one in flight. */
+  /** A build now, after the one in flight; callers that arrive before it starts share it. */
   refreshNow(): Promise<Fleet> {
     this.lastStart = this.deps.now().getTime()
-    return this.exclusive(() => this.build())
+    if (this.queued) return this.queued
+    const queued = this.exclusive(() => {
+      this.queued = undefined
+      return this.build()
+    })
+    this.queued = queued
+    return queued
   }
 
-  /** Waits for the build the tick started. The tests use it; the server never waits. */
-  async settled(): Promise<void> {
-    await this.running
+  /** Waits for every build in flight or queued (the tick's and a refresh's), at most `timeoutMs`: shutdown and the tests. */
+  async settled(timeoutMs = 20_000): Promise<void> {
+    await Promise.race([this.chain, Bun.sleep(timeoutMs)])
   }
 
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -144,6 +154,7 @@ export class FleetBuilder {
       (v) => (this.last.db = v),
     )
     if (!db) throw new Error('the database part of the fleet could not be read and there is none to fall back on')
+    errors.push(...db.notes)
     const terminals =
       (await this.fallback(
         errors,
@@ -166,8 +177,14 @@ export class FleetBuilder {
     const repoPaths = new Set<string>()
     for (const m of sessions) if (m.repo) repoPaths.add(m.repo)
     for (const root of roots) {
-      for (const dir of await repoDirs(root)) {
-        if (await isFile(join(dir, PLAN))) repoPaths.add(dir)
+      try {
+        for (const dir of await repoDirs(root)) {
+          if (await isFile(join(dir, PLAN))) repoPaths.add(dir)
+        }
+      } catch (error) {
+        // A root that cannot be listed is said, and the repos the last build knew under it are tried again (they may still be reachable).
+        errors.push(`repos ${root}: ${message(error)}`)
+        for (const known of this.last.git.keys()) if (known.startsWith(`${root}/`)) repoPaths.add(known)
       }
     }
 
@@ -238,11 +255,17 @@ export class FleetBuilder {
     const decisionRows: { key: string; repo: string; question: string; created_at: Date }[] = await sql`
       SELECT d.key, i.repo, d.question, d.created_at FROM factory.decisions d
       JOIN factory.issues i ON i.id = d.issue_id
-      WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id LIMIT 50`
+      WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id LIMIT ${MAX_DECISIONS + 1}`
     return {
       status,
+      notes:
+        decisionRows.length > MAX_DECISIONS
+          ? [`database: more than ${MAX_DECISIONS} open decisions, the rest are not listed`]
+          : [],
       spawns: new Map(spawnRows.map((r) => [r.key, { repo: r.repo, prompt: r.prompt }])),
-      decisions: decisionRows.map((r) => ({ key: r.key, repo: r.repo, question: r.question, createdAt: r.created_at })),
+      decisions: decisionRows
+        .slice(0, MAX_DECISIONS)
+        .map((r) => ({ key: r.key, repo: r.repo, question: r.question, createdAt: r.created_at })),
     }
   }
 
@@ -329,13 +352,23 @@ async function usablePlan(path: string, roots: readonly string[]): Promise<strin
 }
 
 async function realRoots(roots: readonly string[]): Promise<string[]> {
-  const real = await Promise.all(roots.map((root) => realpath(root).catch(() => undefined)))
+  // A root that exists but cannot be resolved (no permission to open it) stays as configured: listing it then fails visibly.
+  const real = await Promise.all(
+    roots.map((root) =>
+      realpath(root).catch(() =>
+        stat(root).then(
+          () => resolve(root),
+          () => undefined,
+        ),
+      ),
+    ),
+  )
   return real.filter((root): root is string => root !== undefined)
 }
 
 /** The git repos directly under a root: `.git` is a directory, or a file for a worktree. */
 async function repoDirs(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+  const entries = await readdir(root, { withFileTypes: true })
   const found: string[] = []
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue
