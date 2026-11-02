@@ -130,7 +130,7 @@ export async function notifyDigest(
   const text = await loadMorning(sql, {
     now: input.now,
     date,
-    // Not injected: nothing is told apart, so everything is counted only (fail closed).
+    // Without a check nothing is told apart, and everything is counted only.
     isVisible: (await input.visible?.()) ?? (() => true),
   })
   await record(sql, { key, kind: 'digest', issueId: null, text }, input.now)

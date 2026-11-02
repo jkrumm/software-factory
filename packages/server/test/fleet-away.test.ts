@@ -126,6 +126,14 @@ async function since(t?: string): Promise<Since> {
 
 /** The scene: facts in and out of the window that starts at `T`, ordinary and IuRoot. */
 const T = '2026-11-01T00:00:00.000Z'
+/** The owner's cursor, set outright (the default reading is the window from it). */
+const cursorAt = async (iso: string) =>
+  db.sql`INSERT INTO factory.fleet_seen (id, seen_at) VALUES (1, ${new Date(iso)}) ON CONFLICT (id) DO UPDATE SET seen_at = EXCLUDED.seen_at`
+/** The default reading with the cursor at `T`: the window the board shows, which queues its headline. */
+const sinceT = async () => {
+  await cursorAt(T)
+  return since()
+}
 const at = (iso: string) => new Date(iso)
 async function scene(): Promise<void> {
   // An ordinary decision (an Issue of modelpick) and a closed shipped Issue, in the window; one closed before it.
@@ -447,7 +455,7 @@ describe('the cursor on a partial build', () => {
 describe('GET /fleet/since', () => {
   test('each group from seeded facts, every line with its source', async () => {
     await scene()
-    const reading = await since(T)
+    const reading = await sinceT()
     expect(reading.t).toBe(T)
 
     // Needs you: the asks with `at` in the window; yours first.
@@ -513,7 +521,7 @@ describe('GET /fleet/since', () => {
     const id = undoId
     const undo = await app.send('POST', `/fleet/triage/${id}/undo`, {})
     expect([undo.status, await undo.text()]).toEqual([201, expect.any(String)])
-    const again = await since(T)
+    const again = await sinceT()
     expect(again.handled.find((h) => h.source === ordinarySource)).toMatchObject({ undoId: null })
 
     // Still running: the lead, with how long it has run.
@@ -558,10 +566,10 @@ describe('GET /fleet/since', () => {
 
   test('it never calls agw: a missing headline is queued and answered pending', async () => {
     await scene()
-    const first = await since(T)
+    const first = await sinceT()
     expect(first.headline).toEqual({ state: 'pending', text: null })
     expect(agw).toHaveLength(0)
-    await since(T)
+    await sinceT()
     expect(agw).toHaveLength(0)
     expect(await db.sql`SELECT state FROM factory.fleet_windows`).toEqual([{ state: 'queued' }])
 
@@ -569,7 +577,7 @@ describe('GET /fleet/since', () => {
     await windows.pass()
     expect(agw).toHaveLength(1)
     expect(agw[0]?.cmd.slice(0, 4)).toEqual(['agw', 'digest', '--format', 'json'])
-    const ready = await since(T)
+    const ready = await sinceT()
     expect(ready.headline).toEqual({ state: 'ready', text: PARAGRAPH })
     await windows.pass()
     expect(agw).toHaveLength(1)
@@ -577,7 +585,7 @@ describe('GET /fleet/since', () => {
     const [spend] =
       await db.sql`SELECT sum(cost_usd)::float AS usd FROM factory.fleet_digest_runs WHERE batch_hash LIKE 'window:%'`
     expect(spend.usd).toBeCloseTo(0.002)
-    expect((await since(T)).spend.digestUsd).toBeGreaterThan(0)
+    expect((await sinceT()).spend.digestUsd).toBeGreaterThan(0)
   })
 
   test('without a digest the headline is none', async () => {
@@ -585,12 +593,12 @@ describe('GET /fleet/since', () => {
     const noDigest: SinceReader = { ...reader, windows: undefined }
     await app.stop()
     app = startApp({ sql: db.sql, clock, fleet: builder, since: noDigest, repoRoots: [estate.src] })
-    expect((await since(T)).headline).toEqual({ state: 'none', text: null })
+    expect((await sinceT()).headline).toEqual({ state: 'none', text: null })
   })
 
   test('no IuRoot text reaches a window call: an IuRoot item is a count', async () => {
     await scene()
-    await since(T)
+    await sinceT()
     await windows.pass()
     const sent = agw[0]?.stdin ?? ''
     const [item] = JSON.parse(sent) as { id: string; kind: string; text: string }[]
@@ -610,17 +618,17 @@ describe('GET /fleet/since', () => {
   test('a failed call leaves the groups as they are, waits, and is not retried at once', async () => {
     await scene()
     agwAnswer = () => ({ exitCode: 1, stdout: '' })
-    await since(T)
+    await sinceT()
     await windows.pass()
     expect(agw).toHaveLength(1)
-    expect((await since(T)).headline).toEqual({ state: 'failed', text: null })
+    expect((await sinceT()).headline).toEqual({ state: 'failed', text: null })
     await windows.pass()
     expect(agw).toHaveLength(1) // backing off
     clock.advance(16 * MIN)
     agwAnswer = () => answerWith(PARAGRAPH)
     await windows.pass()
     expect(agw).toHaveLength(2)
-    expect((await since(T)).headline).toEqual({ state: 'ready', text: PARAGRAPH })
+    expect((await sinceT()).headline).toEqual({ state: 'ready', text: PARAGRAPH })
   })
 
   test('equal facts are one window: with no cursor the start moves with the clock and the hash does not', async () => {
@@ -636,7 +644,7 @@ describe('GET /fleet/since', () => {
 
   test('an item that came back as an error is a run agw ended: the retry is a new run, under a new key', async () => {
     await scene()
-    await since(T)
+    await sinceT()
     agwAnswer = () => ({
       exitCode: 0,
       stdout: JSON.stringify({ status: 'done', output: { results: [{ id: 'w', error: 'bad' }] }, cost: 0.001 }),
@@ -652,7 +660,7 @@ describe('GET /fleet/since', () => {
   })
 
   test('a newer request supersedes the older windows: three requests, one call', async () => {
-    const ask = (n: number) => windows.request({ text: `facts ${n}`, hash: `h${n}` })
+    const ask = (n: number) => windows.request({ text: `facts ${n}`, hash: `h${n}`, context: '' })
     await ask(1)
     await ask(2)
     expect(await ask(3)).toEqual({ state: 'pending', text: null })
@@ -675,18 +683,18 @@ describe('GET /fleet/since', () => {
 
   test('two requests at once leave one window queued', async () => {
     await Promise.all([
-      windows.request({ text: 'facts 1', hash: 'h1' }),
-      windows.request({ text: 'facts 2', hash: 'h2' }),
+      windows.request({ text: 'facts 1', hash: 'h1', context: '' }),
+      windows.request({ text: 'facts 2', hash: 'h2', context: '' }),
     ])
     const states = await db.sql`SELECT state FROM factory.fleet_windows`
     expect(states.filter((r: { state: string }) => r.state === 'queued')).toHaveLength(1)
   })
 
   test('a request that lands during a call leaves the window superseded when the call fails', async () => {
-    await windows.request({ text: 'facts 1', hash: 'h1' })
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
     const run: typeof runProcess = async (cmd, _t, _e, stdin) => {
       agw.push({ cmd: [...cmd], stdin })
-      await windows.request({ text: 'facts 2', hash: 'h2' }) // a newer reading, while h1 is being asked
+      await windows.request({ text: 'facts 2', hash: 'h2', context: '' }) // a newer reading, while h1 is being asked
       return { exitCode: 1, stdout: '', stderr: '', timedOut: false } as Awaited<ReturnType<typeof runProcess>>
     }
     const racing = new WindowDigest({ sql: db.sql, now: () => clock.now(), bin: 'agw', run })
@@ -699,7 +707,7 @@ describe('GET /fleet/since', () => {
 
   test('a session’s headline is not in the facts: a new turn is not a new window', async () => {
     await scene()
-    const reading = await since(T)
+    const reading = await sinceT()
     const before = windowFacts(reading)
     const moved = {
       ...reading,
@@ -709,12 +717,96 @@ describe('GET /fleet/since', () => {
     expect(windowFacts(moved)?.hash).toBe(before?.hash)
   })
 
+  test('an explicit t later than the reading’s until is cut to it: an empty reading, never an inverted window', async () => {
+    terminals = []
+    requests = [{ id: 'q-1', text: 'Before', askedAt: new Date(NOW.getTime() - HOUR).toISOString(), state: 'pending' }]
+    await builder.refreshNow() // built at NOW
+    clock.advance(10 * MIN)
+    const reading = await since(new Date(NOW.getTime() + 5 * MIN).toISOString())
+    expect(reading.t).toBe(NOW.toISOString())
+    expect(reading.until).toBe(NOW.toISOString())
+    expect(reading.needsYou).toEqual([])
+    // (a wave is dated by the day, so one closed today is still in a window that starts today)
+    expect(reading.shipped.filter((x) => x.kind !== 'wave')).toEqual([])
+  })
+
+  test('only the default reading asks for a headline: an explicit t, and `fleet seen`, write nothing and displace nothing', async () => {
+    await scene()
+    const board = await sinceT()
+    expect(board.headline.state).toBe('pending')
+    const [queued] = await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`
+    expect(queued?.state).toBe('queued')
+
+    // A one-off look at another window: no row, no supersede, no paragraph yet.
+    const other = await since('2026-11-01T06:00:00Z')
+    expect(other.headline).toEqual({ state: 'none', text: null })
+    expect(await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`).toEqual([queued])
+    // The default reading again writes nothing either: its row exists and nothing waits.
+    await since()
+    expect(await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`).toEqual([queued])
+
+    await windows.pass()
+    // Once it is made, an explicit t over the same facts shows it, from the cache.
+    expect((await since(T)).headline).toEqual({ state: 'ready', text: PARAGRAPH })
+    const [ready] = await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`
+    // `fleet seen` reads /fleet, not a reading: it asks for no window.
+    await presence('desk', 'caught_up', (await Fleet.parse(await (await app.get('/fleet')).json())).builtAt)
+    expect(await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`).toEqual([ready])
+  })
+
+  test('a window let go between the choice and the claim is not started', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    let landed = false
+    const racing = new WindowDigest({
+      sql: db.sql,
+      now: () => clock.now(),
+      bin: 'agw',
+      run: async (cmd, _t, _e, stdin) => {
+        agw.push({ cmd: [...cmd], stdin })
+        return { ...answerWith(PARAGRAPH), stderr: '', timedOut: false } as Awaited<ReturnType<typeof runProcess>>
+      },
+      beforeClaim: async () => {
+        if (landed) return
+        landed = true
+        await windows.request({ text: 'facts 2', hash: 'h2', context: '' }) // a newer reading lands here
+      },
+    })
+    expect(await racing.pass()).toEqual({ called: false })
+    expect(agw).toHaveLength(0)
+    await racing.pass()
+    expect(agw).toHaveLength(1)
+    expect(JSON.parse(agw[0]?.stdin ?? '[]')[0].text).toBe('facts 2')
+    expect(await db.sql`SELECT hash, state FROM factory.fleet_windows ORDER BY hash`).toEqual([
+      { hash: 'h1', state: 'superseded' },
+      { hash: 'h2', state: 'ready' },
+    ])
+  })
+
+  test('the sessions’ headlines go to agw as the item’s context, outside the hash; an IuRoot one is never in it', async () => {
+    await scene()
+    const reading = await sinceT()
+    const named = {
+      ...reading,
+      running: reading.running.map((r) => ({ ...r, headline: `doing ${r.id}`, text: `${r.id}: doing` })),
+    }
+    const facts = windowFacts(named)
+    expect(facts?.context).toContain('software-factory-w6: doing software-factory-w6')
+    expect(facts?.context).not.toContain('prometheus')
+    expect(facts?.context).not.toContain('athena')
+    expect(facts?.hash).toBe(windowFacts(reading)?.hash)
+    // And the call carries it.
+    await windows.request({ text: 'the facts', hash: 'hc', context: 'a-session: where it stands' })
+    await windows.pass()
+    const [item] = JSON.parse(agw.at(-1)?.stdin ?? '[]')
+    expect(item).toMatchObject({ id: 'w', kind: 'window', text: 'the facts', context: 'a-session: where it stands' })
+  })
+
   test('a run agw has not finished is waited for, never started twice', async () => {
     await scene()
-    await since(T)
+    await sinceT()
     agwAnswer = () => ({ exitCode: 10, stdout: JSON.stringify({ status: 'running', runId: 'run-window-12345' }) })
     await windows.pass()
-    expect((await since(T)).headline.state).toBe('pending')
+    expect((await sinceT()).headline.state).toBe('pending')
     await windows.pass()
     expect(agw.map((c) => c.cmd.slice(0, 3))).toEqual([
       ['agw', 'digest', '--format'],
@@ -722,7 +814,7 @@ describe('GET /fleet/since', () => {
     ])
     agwAnswer = () => answerWith(PARAGRAPH)
     await windows.pass()
-    expect((await since(T)).headline.state).toBe('ready')
+    expect((await sinceT()).headline.state).toBe('ready')
   })
 
   test('a daily cap bounds the calls', async () => {
@@ -732,11 +824,11 @@ describe('GET /fleet/since', () => {
       return { exitCode: 1, stdout: '', stderr: '', timedOut: false } as Awaited<ReturnType<typeof runProcess>>
     }
     const capped = new WindowDigest({ sql: db.sql, now: () => clock.now(), bin: 'agw', run, dailyCap: 2 })
-    await capped.request({ text: 'facts one', hash: 'h1' })
+    await capped.request({ text: 'facts one', hash: 'h1', context: '' })
     await capped.pass()
     clock.advance(HOUR * 7) // past any backoff
     await capped.pass()
-    await capped.request({ text: 'facts two', hash: 'h2' })
+    await capped.request({ text: 'facts two', hash: 'h2', context: '' })
     await capped.pass()
     expect(agw).toHaveLength(2)
   })
@@ -905,9 +997,9 @@ describe('the morning reading', () => {
   test('the since groups as plain text under 3000 characters: no model text, an IuRoot item is a count', async () => {
     await scene()
     // A headline the model wrote: it stays on the board.
-    await since(T)
+    await sinceT()
     await windows.pass()
-    expect((await since(T)).headline.text).toBe(PARAGRAPH)
+    expect((await sinceT()).headline.text).toBe(PARAGRAPH)
     await presence('phone', 'caught_up')
     await db.sql`UPDATE factory.fleet_seen SET seen_at = ${at('2026-11-01T18:00:00Z')}`
     const places = await Places.of({ visibleRoots: [estate.iu], configured: [estate.src], home: estate.src })
@@ -1000,6 +1092,7 @@ describe('the CLI', () => {
 
   test('presence, since and seen; json and plain; the token is needed (exit 3)', async () => {
     await scene()
+    await cursorAt(T) // the board's window: the desk act below queues it, and `--t T` then shows its paragraph
     const here = await factory(['fleet', 'presence', 'desk', 'focus'])
     expect(here.code).toBe(0)
     expect(Presence.parse(JSON.parse(here.stdout)).desk.present).toBe(true)

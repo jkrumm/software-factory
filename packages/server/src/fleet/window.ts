@@ -3,6 +3,7 @@ import type { Since, SinceHeadline } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
+import { LOCKS } from '../locks.ts'
 import { redact } from '../notify/text.ts'
 import {
   CallFailed,
@@ -48,7 +49,12 @@ export interface WindowFacts {
   /** the text `agw digest` gets */
   text: string
   hash: string
+  /** what the model may know besides the facts, outside the hash (the ordinary sessions' headlines, which change with every turn); at most 1,000 characters */
+  context: string
 }
+
+/** What `agw digest` takes as an item's `context`. */
+const CONTEXT_MAX = 1_000
 
 type Groups = Omit<Since, 'headline'>
 
@@ -94,14 +100,22 @@ export function windowFacts(groups: Groups): WindowFacts | null {
     `Handled for you: ${groups.handled.length}${kinds.size > 0 ? ` (${[...kinds].map(([k, n]) => `${n} ${k}`).join(', ')})` : ''}`,
     list(
       'Still running',
-      // By id: a headline changes with every turn, and a new turn must not make a new window.
+      // By id: a headline changes with every turn, and a new turn must not make a new window (the headlines are the item's context).
       running.map((r) => oneLine(r.id)),
       running.length,
     ),
     `Items of a read-only area, counted only: ${hidden}`,
   ]
   const text = head(wellFormed(sections.join('\n')), WINDOW_TEXT_MAX)
-  return { text, hash: hash(text) }
+  // An IuRoot session has no headline here: the running list above is the ordinary ones only.
+  const context = head(
+    running
+      .filter((r) => r.headline)
+      .map((r) => `${oneLine(r.id, 60)}: ${oneLine(r.headline ?? '', 120)}`)
+      .join('\n'),
+    CONTEXT_MAX,
+  )
+  return { text, hash: hash(text), context }
 }
 
 export interface WindowDeps {
@@ -114,11 +128,14 @@ export interface WindowDeps {
   dailyCap?: number
   /** swapped by the tests */
   run?: typeof runProcess
+  /** runs between choosing a window and claiming it (the tests make a request land there) */
+  beforeClaim?: () => Promise<void>
 }
 
 interface Row {
   hash: string
   facts: string
+  context: string | null
   state: 'queued' | 'pending' | 'ready' | 'failed' | 'superseded'
   paragraph: string | null
   run_id: string | null
@@ -142,7 +159,7 @@ export class WindowDigest {
     this.run = deps.run ?? runProcess
   }
 
-  /** What the reading shows for these facts, without queueing anything. */
+  /** What the reading shows for these facts, without writing anything: a window nobody has asked for yet is pending. */
   async headline(facts: WindowFacts | null): Promise<SinceHeadline> {
     if (!facts) return { state: 'none', text: null }
     const [row]: Pick<Row, 'state' | 'paragraph'>[] = await this.deps
@@ -150,28 +167,43 @@ export class WindowDigest {
     return row ? toHeadline(row) : { state: 'pending', text: null }
   }
 
+  /** A paragraph already made for these facts, or `none`: for a reading that does not ask for a window (an explicit `t`). Writes nothing. */
+  async cached(facts: WindowFacts | null): Promise<SinceHeadline> {
+    if (!facts) return { state: 'none', text: null }
+    const [row]: Pick<Row, 'state' | 'paragraph'>[] = await this.deps
+      .sql`SELECT state, paragraph FROM factory.fleet_windows WHERE hash = ${facts.hash} AND state = 'ready'`
+    return row ? toHeadline(row) : { state: 'none', text: null }
+  }
+
   /**
-   * Makes sure the window has a row: a missing one is queued for the pass (this never calls agw), and it supersedes every older window
-   * that still waits (queued or backing off): only the newest is ever started. `now` starts the pass at once, for the
-   * first desk act after an away window, so the card has its paragraph by the time it is read.
+   * Makes sure the window has a row: a missing one is queued for the pass (this never calls agw), and it supersedes every other window
+   * that still waits (queued or backing off): only the newest is ever started. Requests take turns under an advisory lock, and nothing is
+   * written when the row exists and nothing waits. `now` starts the pass at once, for the first desk act after an away window, so the
+   * card has its paragraph by the time it is read.
    */
   async request(facts: WindowFacts | null, options: { now?: boolean } = {}): Promise<SinceHeadline> {
     if (!facts) return { state: 'none', text: null }
     const { sql } = this.deps
     const at = this.deps.now()
     await sql.begin(async (tx) => {
-      // Requests take turns: two at once would each miss the other's uncommitted row and leave both queued.
-      await tx`LOCK TABLE factory.fleet_windows IN SHARE ROW EXCLUSIVE MODE`
-      await tx`
-        INSERT INTO factory.fleet_windows (hash, facts, state, requested_at, updated_at)
-        VALUES (${facts.hash}, ${facts.text}, 'queued', ${at}, ${at})
-        ON CONFLICT (hash) DO UPDATE SET state = 'queued', requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at
-        WHERE factory.fleet_windows.state = 'superseded'`
-      // The newest request is the one about to be read: every older window still waiting is let go and never started. The lock makes
-      // requests take turns, so the one that arrives last is the newest and two at once leave one.
-      await tx`
-        UPDATE factory.fleet_windows SET state = 'superseded', updated_at = ${at}
-        WHERE state IN ('queued', 'failed') AND hash <> ${facts.hash}`
+      await tx`SELECT pg_advisory_xact_lock(${LOCKS.windows})`
+      const rows: { hash: string; state: Row['state'] }[] = await tx`
+        SELECT hash, state FROM factory.fleet_windows WHERE hash = ${facts.hash} OR state IN ('queued', 'failed')`
+      const own = rows.find((r) => r.hash === facts.hash)
+      const waiting = rows.some((r) => r.hash !== facts.hash)
+      if (own && own.state !== 'superseded' && !waiting) return
+      if (!own || own.state === 'superseded') {
+        await tx`
+          INSERT INTO factory.fleet_windows (hash, facts, context, state, requested_at, updated_at)
+          VALUES (${facts.hash}, ${facts.text}, ${facts.context}, 'queued', ${at}, ${at})
+          ON CONFLICT (hash) DO UPDATE SET state = 'queued', context = EXCLUDED.context, requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at`
+      }
+      // The newest request is the one about to be read: every other window still waiting is let go and never started.
+      if (waiting) {
+        await tx`
+          UPDATE factory.fleet_windows SET state = 'superseded', updated_at = ${at}
+          WHERE state IN ('queued', 'failed') AND hash <> ${facts.hash}`
+      }
     })
     if (options.now) this.kick(true)
     return this.headline(facts)
@@ -220,7 +252,12 @@ export class WindowDigest {
       WHERE batch_hash LIKE 'window:%' AND at >= ${new Date(now.getTime() - 24 * 3_600_000)}`
     if ((calls?.n ?? 0) >= (this.deps.dailyCap ?? WINDOW_DAILY_CAP))
       return { called: false, error: 'the daily cap of window calls is spent' }
-    return this.start(next)
+    await this.deps.beforeClaim?.()
+    // Claimed before the call: a window a newer request has let go meanwhile is no longer queued, and no row means no call.
+    const [claimed]: Row[] = await sql`
+      UPDATE factory.fleet_windows SET state = 'pending', updated_at = ${now}
+      WHERE hash = ${next.hash} AND state IN ('queued', 'failed') RETURNING *`
+    return claimed ? this.start(claimed) : { called: false }
   }
 
   private async start(row: Row): Promise<{ called: boolean; error?: string }> {
@@ -228,7 +265,9 @@ export class WindowDigest {
     const [ended]: { n: number }[] = await sql`
       SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE batch_hash = ${`window:${row.hash}`} AND terminal`
     const key = `factory-window-${row.hash}-${ended?.n ?? 0}`
-    const stdin = JSON.stringify([{ id: 'w', kind: 'window', text: row.facts }])
+    const stdin = JSON.stringify([
+      { id: 'w', kind: 'window', text: row.facts, ...(row.context ? { context: row.context } : {}) },
+    ])
     let reply: Reply
     try {
       reply = await this.exec([this.deps.bin, 'digest', '--format', 'json', '--idempotency-key', key], stdin)
@@ -240,7 +279,7 @@ export class WindowDigest {
       if (!reply.runId) return this.fail(row, 'agw says the run is pending but names no run id', false)
       await sql`
         UPDATE factory.fleet_windows SET state = 'pending', run_id = ${reply.runId}, waits_failed = 0, updated_at = ${this.deps.now()}
-        WHERE hash = ${row.hash} AND state <> 'superseded'`
+        WHERE hash = ${row.hash}`
       return { called: true }
     }
     return this.finish(row, reply)
@@ -297,7 +336,7 @@ export class WindowDigest {
     return { called: true }
   }
 
-  /** A failed call: the window waits (15 min, doubled with every failure in a row, at most 6 h) and the groups stand without the paragraph. */
+  /** A failed call: the window waits (it is let go instead when a newer window has been asked for) (15 min, doubled with every failure in a row, at most 6 h) and the groups stand without the paragraph. */
   private async fail(
     row: Row,
     reason: string,
@@ -310,7 +349,12 @@ export class WindowDigest {
     await this.deps.sql.begin(async (tx) => {
       await tx`
         UPDATE factory.fleet_windows
-        SET state = CASE WHEN state = 'superseded' THEN state ELSE 'failed' END, run_id = NULL, failures = ${failures}, waits_failed = 0, retry_at = ${new Date(now.getTime() + wait)},
+        SET state = CASE WHEN EXISTS (
+              SELECT 1 FROM factory.fleet_windows w
+              WHERE w.hash <> ${row.hash} AND (w.state = 'queued'
+                OR (w.state = 'ready' AND w.requested_at > (SELECT requested_at FROM factory.fleet_windows WHERE hash = ${row.hash})))
+            ) THEN 'superseded' ELSE 'failed' END,
+            run_id = NULL, failures = ${failures}, waits_failed = 0, retry_at = ${new Date(now.getTime() + wait)},
             error = ${reasonText(reason)}, updated_at = ${now}
         WHERE hash = ${row.hash}`
       await this.journal(tx, row, { ok: false, cost, error: reason, terminal })
