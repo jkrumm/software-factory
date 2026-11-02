@@ -44,9 +44,7 @@ describe('scripts/env-file.sh', () => {
     const { out } = load(
       `# the machines a probe may look at\n\nFACTORY_PROBE_HOSTS=box-a=alias-a,box-b=local\nFACTORY_DIGEST_EVERY=$(touch ${marker}) \`touch ${marker}\` $HOME\n`,
     )
-    expect(out).toBe(
-      'code=0 probe=box-a=alias-a,box-b=local every=$(touch ' + marker + ') `touch ' + marker + '` $HOME',
-    )
+    expect(out).toBe(`code=0 probe=box-a=alias-a,box-b=local every=$(touch ${marker}) \`touch ${marker}\` $HOME`)
     expect(existsSync(marker)).toBe(false)
   })
 
