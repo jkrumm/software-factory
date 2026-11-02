@@ -82,7 +82,7 @@ export async function startTestDb(options: { migrate?: boolean } = {}): Promise<
     sql,
     path: join(root, `.s.PGSQL.${port}`),
     reset: async () => {
-      await sql`TRUNCATE factory.events, factory.quota_readings, factory.queue_states, factory.spawns, factory.sessions, factory.witness, factory.prompts, factory.effects, factory.slots, factory.issues, factory.issue_deps, factory.issue_inbox, factory.issue_links, factory.issue_events, factory.issue_effects, factory.decisions, factory.evidence, factory.claims, factory.lead_worktrees, factory.projects, factory.door_routes, factory.door_unrouted, factory.door_issues, factory.notifications, factory.fleet_snapshot, factory.fleet_digest, factory.fleet_digest_runs RESTART IDENTITY`
+      await sql`TRUNCATE factory.events, factory.quota_readings, factory.queue_states, factory.spawns, factory.sessions, factory.witness, factory.prompts, factory.effects, factory.slots, factory.issues, factory.issue_deps, factory.issue_inbox, factory.issue_links, factory.issue_events, factory.issue_effects, factory.decisions, factory.evidence, factory.claims, factory.lead_worktrees, factory.projects, factory.door_routes, factory.door_unrouted, factory.door_issues, factory.notifications, factory.fleet_snapshot, factory.fleet_digest, factory.fleet_digest_runs, factory.fleet_digest_pending, factory.fleet_digest_backoff RESTART IDENTITY`
     },
     stop: async () => {
       await sql.close()

@@ -145,13 +145,15 @@ export type FleetDigestDay = z.infer<typeof FleetDigestDay>
 /** The digest's own state: whether it runs, the spend per day (newest first, the last 7 days with a call), the last failure. Not in the fingerprint. */
 export const FleetDigest = z.strictObject({
   enabled: z.boolean(),
+  /** a run `agw` has not finished is being waited for: no new call is made until it ends (not a failure) */
+  pending: z.boolean().default(false),
   lastAt: z.string().nullable(),
   lastError: z.string().nullable(),
   days: z.array(FleetDigestDay),
 })
 export type FleetDigest = z.infer<typeof FleetDigest>
 
-export const NO_DIGEST: FleetDigest = { enabled: false, lastAt: null, lastError: null, days: [] }
+export const NO_DIGEST: FleetDigest = { enabled: false, pending: false, lastAt: null, lastError: null, days: [] }
 
 /**
  * Everything of the model but the quota and the queue, which are `factory status`'s own shapes and live beside them in

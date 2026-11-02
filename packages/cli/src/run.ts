@@ -356,7 +356,7 @@ export function fleetScreen(f: Fleet): string {
   const today = d.days[0]
   out.push(
     d.enabled
-      ? `DIGEST\ton\t${today ? `${today.day}: ${today.calls} calls, ${today.failed} failed, $${today.costUsd.toFixed(4)}` : 'no call yet'}${d.lastError ? `\tlast pass failed: ${oneLine(d.lastError, 100)}` : ''}`
+      ? `DIGEST\ton${d.pending ? ' (waiting for a run)' : ''}\t${today ? `${today.day}: ${today.calls} calls, ${today.failed} failed, $${today.costUsd.toFixed(4)}` : 'no call yet'}${d.lastError ? `\tlast pass failed: ${oneLine(d.lastError, 100)}` : ''}`
       : 'DIGEST\toff',
   )
   if (f.errors.length > 0) {

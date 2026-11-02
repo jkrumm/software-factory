@@ -4,9 +4,11 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, 
 import { join } from 'node:path'
 import type { Fleet } from '@software-factory/contract'
 import { fleetScreen } from '../../cli/src/run.ts'
-import { Digest, MAX_ITEMS, type DigestFeed } from '../src/fleet/digest.ts'
+import { Digest, HANG_GUARD_MS, MAX_ITEMS, type DigestFeed } from '../src/fleet/digest.ts'
 import { FleetBuilder } from '../src/fleet/index.ts'
-import { lastReplyOf } from '../src/fleet/transcript.ts'
+import { applyDigest } from '../src/fleet/digest-model.ts'
+import { head, tail, wellFormed } from '../src/fleet/digest.ts'
+import { FileReplies, lastReplyOf, type ReplyReader } from '../src/fleet/transcript.ts'
 import type { HcLister, HcTerminal, QueueReader } from '../src/fleet/sources.ts'
 import { buildStatus } from '../src/status.ts'
 import { FakeClock } from './support/clock.ts'
@@ -19,34 +21,51 @@ const EVERY = 5 * 60_000
 
 /**
  * A stand-in for `agw digest` on PATH: it logs the items it was given (`calls.jsonl`) and answers by kind. The `mode` file
- * (`ok`, `fail`, `slow`, `pending`) says how; a text with POISON in it comes back as an error; a reply with "Shall I" asks.
+ * (`ok`, `fail`, `slow`, `pending`, `break`: fails when an item says BREAKS-CALL) says how, the `wait` file how `agw run wait` answers; a text with POISON in it comes back as an error; a reply with "Shall I" asks.
  */
 const FAKE_AGW = `
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 const dir = process.env.FAKE_AGW_DIR
 const args = process.argv.slice(2)
+const file = (name) => dir + '/' + name
+const read = (name, fallback) => (existsSync(file(name)) ? readFileSync(file(name), 'utf8').trim() : fallback)
+const words = (t) => t.split(/\\s+/).slice(0, 3).join(' ')
+const answer = (items) =>
+  items.map((i) => {
+    if (i.text.includes('LONGSHORT')) return { id: i.id, short: 'x'.repeat(500) }
+    if (i.text.includes('POISON')) return { id: i.id, error: 'the answer broke its schema' }
+    if (i.kind === 'heading') return { id: i.id, short: 'Short ' + words(i.text) }
+    if (i.kind === 'session') return { id: i.id, short: 'Session', headline: 'Headline ' + words(i.text.split('Last message: ').at(-1)) }
+    const asks = /Shall I|Which option|perhaps/.test(i.text)
+    return {
+      id: i.id,
+      asks,
+      kind: !asks ? 'note' : i.text.includes('Which option') ? 'question' : 'permission',
+      short: asks ? 'Wants an answer' : 'Reports',
+      confidence: i.text.includes('perhaps') ? 'low' : i.text.includes('Which option') ? 'medium' : 'high',
+    }
+  })
+const done = (items) =>
+  console.log(JSON.stringify({ runId: 'run-1', workflowId: 'digest', status: 'done', output: { model: 'fake', results: answer(items) }, cost: 0.002, unpricedCalls: 0 }))
+
+if (args[0] === 'run' && args[1] === 'wait') {
+  appendFileSync(file('waits.jsonl'), JSON.stringify({ args }) + '\\n')
+  const wait = read('wait', 'ok')
+  if (wait === 'pending') { console.log(JSON.stringify({ runId: args[2], status: 'running' })); process.exit(10) }
+  if (wait === 'fail') process.exit(1)
+  // the run that was started: the items of the last digest call
+  const last = readFileSync(file('calls.jsonl'), 'utf8').trim().split('\\n').map((l) => JSON.parse(l)).at(-1)
+  done(last.items)
+  process.exit(0)
+}
+
 const items = JSON.parse(await Bun.stdin.text())
-appendFileSync(dir + '/calls.jsonl', JSON.stringify({ args, items }) + '\\n')
-const mode = existsSync(dir + '/mode') ? readFileSync(dir + '/mode', 'utf8').trim() : 'ok'
-if (mode === 'fail') process.exit(1)
+appendFileSync(file('calls.jsonl'), JSON.stringify({ args, items }) + '\\n')
+const mode = read('mode', 'ok')
+if (mode === 'fail' || (mode === 'break' && items.some((i) => i.text.includes('BREAKS-CALL')))) process.exit(1)
 if (mode === 'pending') { console.log(JSON.stringify({ runId: 'run-pending-1', status: 'running' })); process.exit(10) }
 if (mode === 'slow') await Bun.sleep(5000)
-const words = (t) => t.split(/\\s+/).slice(0, 3).join(' ')
-const results = items.map((i) => {
-  if (i.text.includes('LONGSHORT')) return { id: i.id, short: 'x'.repeat(500) }
-  if (i.text.includes('POISON')) return { id: i.id, error: 'the answer broke its schema' }
-  if (i.kind === 'heading') return { id: i.id, short: 'Short ' + words(i.text) }
-  if (i.kind === 'session') return { id: i.id, short: 'Session', headline: 'Headline ' + words(i.text.split('Last message: ').at(-1)) }
-  const asks = /Shall I|Which option|perhaps/.test(i.text)
-  return {
-    id: i.id,
-    asks,
-    kind: !asks ? 'note' : i.text.includes('Which option') ? 'question' : 'permission',
-    short: asks ? 'Wants an answer' : 'Reports',
-    confidence: i.text.includes('perhaps') ? 'low' : i.text.includes('Which option') ? 'medium' : 'high',
-  }
-})
-console.log(JSON.stringify({ runId: 'run-1', workflowId: 'digest', status: 'done', output: { model: 'fake', results }, cost: 0.002, unpricedCalls: 0 }))
+done(items)
 `
 
 let db: TestDb
@@ -80,7 +99,7 @@ afterAll(async () => {
   await db.stop()
 })
 
-function newBuilder(options: { callTimeoutMs?: number; digest?: Digest | null } = {}): FleetBuilder {
+function newBuilder(options: { hangGuardMs?: number; digest?: Digest | null } = {}): FleetBuilder {
   digest =
     options.digest === null
       ? (undefined as unknown as Digest)
@@ -90,7 +109,7 @@ function newBuilder(options: { callTimeoutMs?: number; digest?: Digest | null } 
           now: () => clock.now(),
           bin: 'agw',
           everyMs: EVERY,
-          callTimeoutMs: options.callTimeoutMs,
+          hangGuardMs: options.hangGuardMs,
         }))
   return new FleetBuilder({
     sql: db.sql,
@@ -224,7 +243,7 @@ describe('the pass', () => {
     expect(calls()).toHaveLength(2)
   })
 
-  test('the call is agw digest with the items on stdin, the batch, the hour and the failed calls in its key', async () => {
+  test('the call is agw digest with the items on stdin, the batch and the attempt in its key', async () => {
     await builder.refreshNow()
     await digest.settled()
     const [call] = calls()
@@ -233,7 +252,7 @@ describe('the pass', () => {
       '--format',
       'json',
       '--idempotency-key',
-      expect.stringMatching(/^factory-digest-[0-9a-f]{24}-\d+-0$/),
+      expect.stringMatching(/^factory-digest-[0-9a-f]{24}-0$/),
     ])
     expect(call?.items.every((i) => /^i\d+$/.test(i.id))).toBe(true)
   })
@@ -308,49 +327,16 @@ describe('failure is quiet', () => {
     expect(healed.digest.lastError).toBeNull()
   })
 
-  test('a run that failed is not replayed to the retry; a slow one is asked for again', async () => {
-    const feed: DigestFeed = { headings: ['One heading'], sessions: [], complete: true }
-    const key = (n: number) => calls()[n]?.args.at(-1)
-    mode('fail')
-    await digest.pass(feed)
-    mode('ok')
-    await digest.pass(feed)
-    expect(key(1)).not.toBe(key(0))
-    expect(key(1)?.endsWith('-1')).toBe(true)
-    const feed2: DigestFeed = { headings: ['Another heading'], sessions: [], complete: true }
-    mode('pending')
-    await digest.pass(feed2)
-    await digest.pass(feed2)
-    expect(key(3)).toBe(key(2))
-    // another batch succeeding in between does not hand the failed batch's key back
-    mode('fail')
-    await digest.pass({ headings: ['Third heading'], sessions: [], complete: true })
-    mode('ok')
-    await digest.pass({ headings: ['Fourth heading'], sessions: [], complete: true })
-    await digest.pass({ headings: ['Third heading'], sessions: [], complete: true })
-    expect(key(6)?.endsWith('-1')).toBe(true)
-  })
-
-  test('a slow call is a failed pass', async () => {
-    builder = newBuilder({ callTimeoutMs: 300 })
+  test('a call that hangs past the guard is a failed pass, and the guard is not short', async () => {
+    expect(HANG_GUARD_MS).toBeGreaterThanOrEqual(30 * 60_000)
+    builder = newBuilder({ hangGuardMs: 300 })
     mode('slow')
     await builder.refreshNow()
     await digest.settled()
     const fleet = await builder.refreshNow()
-    expect(fleet.digest.lastError).toContain('did not answer in time')
+    expect(fleet.digest.lastError).toContain('hung past the guard')
     expect(fleet.digest.days[0]).toMatchObject({ calls: 1, failed: 1 })
     expect(repoOf(fleet, 'software-factory')?.plan?.waves[0]?.short).toBeNull()
-  })
-
-  test('agw still running (exit 10) is a failed pass, its run is found again by the next one', async () => {
-    mode('pending')
-    await builder.refreshNow()
-    await digest.settled()
-    const fleet = await builder.refreshNow()
-    expect(fleet.digest.lastError).toContain('still running')
-    expect(await buildStatus(db.sql, clock.now())).toMatchObject({
-      attention: ['digest: 1 failed pass in the last 24 h'],
-    })
   })
 
   test('a database that cannot give the cache leaves the last cache in the model, with a line in errors', async () => {
@@ -395,11 +381,10 @@ describe('the cache', () => {
     await idleSession('rb-a', join(estate.src, 'rb'), 'First report.')
     await round()
     await round()
-    // the turn-based sessions (a terminal only hc knows has no last message)
     const sessionItems = () =>
       calls()
         .flatMap((c) => c.items)
-        .filter((i) => i.kind === 'session' && i.text.includes('Last message'))
+        .filter((i) => i.kind === 'session')
     expect(sessionItems()).toHaveLength(1)
     await nextTurn('rb-a', 'Second report.')
     const fleet = await round()
@@ -600,7 +585,7 @@ describe('the digest in the model', () => {
   test('off: no call, no text, the model says so', async () => {
     builder = newBuilder({ digest: null })
     const fleet = await builder.refreshNow()
-    expect(fleet.digest).toEqual({ enabled: false, lastAt: null, lastError: null, days: [] })
+    expect(fleet.digest).toEqual({ enabled: false, pending: false, lastAt: null, lastError: null, days: [] })
     expect(calls()).toHaveLength(0)
     expect(fleetScreen(fleet)).toContain('DIGEST\toff')
   })
@@ -615,5 +600,324 @@ describe('the digest in the model', () => {
     mode('fail')
     const again = await builder.refreshNow()
     expect(again.fingerprint).toBe(after.fingerprint)
+  })
+})
+
+// --- the call lifecycle ------------------------------------------------------------------------------------------
+
+const fresh = (options: { replies?: ReplyReader } = {}): Digest =>
+  (digest = new Digest({ sql: db.sql, now: () => clock.now(), bin: 'agw', everyMs: EVERY, ...options }))
+const feedOf = (...headings: string[]): DigestFeed => ({ headings, sessions: [], complete: true })
+const waits = (): { args: string[] }[] => {
+  try {
+    return readFileSync(join(agwDir, 'waits.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+  } catch {
+    return []
+  }
+}
+const backoffRows = (): Promise<{ key: string; failures: number; batch: number; retry_at: Date }[]> =>
+  db.sql`SELECT key, failures, batch, retry_at FROM factory.fleet_digest_backoff ORDER BY key`
+const runRows = (): Promise<{ ok: boolean; items: number; error: string | null; cost_usd: string | null }[]> =>
+  db.sql`SELECT ok, items, error, cost_usd::text FROM factory.fleet_digest_runs ORDER BY id`
+
+describe('the call lifecycle', () => {
+  test('pending is not a failure: the batch is fixed to its run, later passes only wait for it, a restart too', async () => {
+    mode('pending')
+    writeFileSync(join(agwDir, 'wait'), 'pending')
+    const first = await digest.pass(feedOf('First heading', 'Second heading'))
+    expect(first).toMatchObject({ called: true, sent: 2, stored: 0, pending: true })
+    expect(await runRows()).toEqual([])
+    const [row] = await db.sql`SELECT run_id, jsonb_array_length(batch)::int AS n FROM factory.fleet_digest_pending`
+    expect(row).toEqual({ run_id: 'run-pending-1', n: 2 })
+    expect((await digest.view()).stats).toMatchObject({ pending: true, lastError: null })
+
+    // a restart, and a heading that is new: no second call, the run is waited for
+    fresh()
+    const more = feedOf('First heading', 'Second heading', 'Third heading')
+    expect(await digest.pass(more)).toMatchObject({ called: false, pending: true })
+    expect(calls()).toHaveLength(1)
+    expect(waits().map((w) => w.args)).toEqual([['run', 'wait', 'run-pending-1', '--format', 'json']])
+    expect(await runRows()).toEqual([])
+
+    // the run ends: its own batch is stored, the journal has its cost, the new heading waits for the next pass
+    writeFileSync(join(agwDir, 'wait'), 'ok')
+    expect(await digest.pass(more)).toMatchObject({ called: true, sent: 2, stored: 2 })
+    const view = await digest.view()
+    expect(view.heading('First heading')).toBe('Short First heading')
+    expect(view.heading('Third heading')).toBeNull()
+    expect(view.stats.pending).toBe(false)
+    expect(await runRows()).toEqual([{ ok: true, items: 2, error: null, cost_usd: '0.002000' }])
+    mode('ok')
+    expect(await digest.pass(more)).toMatchObject({ called: true, sent: 1, stored: 1 })
+    expect(calls()).toHaveLength(2)
+  })
+
+  test('a run that ends badly lets its batch go and backs it off', async () => {
+    mode('pending')
+    writeFileSync(join(agwDir, 'wait'), 'fail')
+    await digest.pass(feedOf('One heading', 'Two heading'))
+    const ended = await digest.pass(feedOf('One heading', 'Two heading'))
+    expect(ended).toMatchObject({ called: true, stored: 0, error: 'agw run exited 1' })
+    expect(await db.sql`SELECT 1 FROM factory.fleet_digest_pending`).toEqual([])
+    expect((await backoffRows()).map((r) => [r.failures, r.batch])).toEqual([
+      [1, 2],
+      [1, 2],
+    ])
+    expect((await runRows())[0]).toMatchObject({ ok: false, items: 2, error: 'agw run exited 1' })
+  })
+
+  test('a failed call backs its items off, doubling, persisted; a failed run is not replayed to its retry', async () => {
+    mode('fail')
+    const feed = feedOf('Alpha heading')
+    await digest.pass(feed)
+    const [one] = await backoffRows()
+    expect(one?.failures).toBe(1)
+    expect(one?.retry_at.getTime()).toBe(clock.now().getTime() + 5 * 60_000)
+    // inside the backoff nothing is asked, however often the pass runs
+    expect(await digest.pass(feed)).toMatchObject({ called: false })
+    expect(await digest.pass(feed)).toMatchObject({ called: false })
+    expect(calls()).toHaveLength(1)
+
+    clock.advance(5 * 60_000)
+    await digest.pass(feed)
+    const [two] = await backoffRows()
+    expect(two?.failures).toBe(2)
+    expect(two?.retry_at.getTime()).toBe(clock.now().getTime() + 10 * 60_000)
+
+    // a restart does not forget
+    fresh()
+    clock.advance(9 * 60_000)
+    expect(await digest.pass(feed)).toMatchObject({ called: false })
+    clock.advance(60_000)
+    await digest.pass(feed)
+    expect(calls()).toHaveLength(3)
+    const keys = calls().map((c) => c.args.at(-1))
+    expect(new Set(keys).size).toBe(3)
+
+    // content that changed starts over
+    expect(await digest.pass(feedOf('Alpha heading, reworded'))).toMatchObject({ called: true })
+    expect((await backoffRows()).map((r) => r.failures).sort()).toEqual([1, 3])
+  })
+
+  test('a batch that fails twice is halved until the poison item stands alone, and the rest is stored', async () => {
+    mode('break')
+    const feed = feedOf(...Array.from({ length: 39 }, (_, i) => `Fine heading ${i}`), 'BREAKS-CALL heading')
+    for (let i = 0; i < 20; i++) {
+      await digest.pass(feed)
+      clock.advance(25 * 3_600_000)
+    }
+    const sizes = calls().map((c) => c.items.length)
+    expect(sizes.slice(0, 2)).toEqual([40, 40])
+    expect(sizes[2]).toBeLessThanOrEqual(20)
+    expect(Math.min(...sizes)).toBe(1)
+    const [stored]: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
+    expect(stored?.n).toBe(39)
+    expect((await digest.view()).heading('BREAKS-CALL heading')).toBeNull()
+    // every failing call had a key of its own
+    const failing = calls().filter((c) => c.items.some((i) => i.text.includes('BREAKS')))
+    expect(new Set(failing.map((c) => c.args.at(-1))).size).toBe(failing.length)
+  })
+
+  test('an error answer is not asked again at once, also after a restart', async () => {
+    const feed = feedOf('Fine one', 'A POISON heading')
+    expect(await digest.pass(feed)).toMatchObject({ sent: 2, stored: 1, failedItems: 1 })
+    fresh()
+    expect(await digest.pass(feed)).toMatchObject({ called: false })
+    expect((await backoffRows()).map((r) => [r.failures, r.batch])).toEqual([[1, 1]])
+    // alone, and after its backoff, it is asked again
+    clock.advance(5 * 60_000)
+    expect(await digest.pass(feed)).toMatchObject({ called: true, sent: 1, stored: 0 })
+  })
+
+  test('a store that is refused is journalled as failed with the reason; the items back off', async () => {
+    await db.sql`ALTER TABLE factory.fleet_digest ADD CONSTRAINT refuse CHECK (answer->>'short' IS DISTINCT FROM 'Short Refused heading')`
+    const result = await digest.pass(feedOf('Refused heading', 'Fine heading'))
+    expect(result).toMatchObject({ called: true, stored: 0 })
+    expect(result.error).toContain('could not be stored')
+    expect((await runRows())[0]).toMatchObject({
+      ok: false,
+      items: 2,
+      error: expect.stringContaining('could not be stored'),
+    })
+    expect((await backoffRows()).map((r) => [r.failures, r.batch])).toEqual([
+      [1, 2],
+      [1, 2],
+    ])
+    // after a restart the pair is still backed off; later it is halved and the healthy one gets through
+    fresh()
+    expect(await digest.pass(feedOf('Refused heading', 'Fine heading'))).toMatchObject({ called: false })
+    for (let i = 0; i < 6; i++) {
+      clock.advance(25 * 3_600_000)
+      await digest.pass(feedOf('Refused heading', 'Fine heading'))
+    }
+    expect((await digest.view()).heading('Fine heading')).toBe('Short Fine heading')
+    expect((await digest.view()).heading('Refused heading')).toBeNull()
+  })
+})
+
+describe('text the database refuses', () => {
+  test('head and tail never cut a surrogate pair, wellFormed drops NUL and lone surrogates', () => {
+    const smile = '\u{1F600}'
+    expect(head(`ab${smile}cd`, 3)).toBe('ab')
+    expect(head(`ab${smile}cd`, 4)).toBe(`ab${smile}`)
+    expect(tail(`ab${smile}cd`, 3)).toBe('cd')
+    expect(tail(`ab${smile}cd`, 4)).toBe(`${smile}cd`)
+    expect(wellFormed('a\0b\uD83Dc\uDE00d')).toBe('ab\uFFFDc\uFFFDd')
+    expect(wellFormed(`x${smile}`)).toBe(`x${smile}`)
+    expect(wellFormed('ab\uD83Dc').isWellFormed()).toBe(true)
+  })
+
+  test('a heading, a session and a reply with NUL, lone surrogates and an emoji on every cut are sent and stored whole', async () => {
+    const smile = '\u{1F600}'
+    const heading = `Heading\0 with \uD83D lone ${'x'.repeat(280)}${smile}${'y'.repeat(30)}`
+    const reply = `A\0 ${'a'.repeat(997)}${smile}${'b'.repeat(2500)}\uDE00${'c'.repeat(1500)}${smile} Shall I?\0`
+    await idleSession('rb-a', join(estate.src, 'rb'), reply)
+    const r = await builder.refreshNow()
+    await digest.settled()
+    expect(r.errors).toEqual([])
+    const items = calls().flatMap((c) => c.items)
+    expect(items.length).toBeGreaterThan(0)
+    for (const i of items) {
+      expect(i.text.isWellFormed()).toBe(true)
+      expect(i.text.includes('\0')).toBe(false)
+    }
+    const view = await builder.refreshNow()
+    expect(view.asks.find((a) => a.source === 'reply')?.text.isWellFormed()).toBe(true)
+    const result = await digest.pass(feedOf(heading))
+    expect(result).toMatchObject({ called: true, stored: 1 })
+    expect(calls().at(-1)?.items[0]?.text.length).toBeLessThanOrEqual(300)
+    expect(calls().at(-1)?.items[0]?.text.isWellFormed()).toBe(true)
+    const rows: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
+    expect(rows[0]?.n).toBeGreaterThan(1)
+  })
+})
+
+describe('terminals only hc knows', () => {
+  test('get no digest headline: their tab title is shown as is and is not sent', async () => {
+    const fleet = await round()
+    const hcOnly = fleet.repos.flatMap((r) => r.sessions).filter((x) => !x.role || x.title)
+    expect(hcOnly.length).toBeGreaterThan(0)
+    expect(hcOnly.every((x) => x.headline === null)).toBe(true)
+    expect(sentText()).not.toContain('Tab title:')
+    // the estate's terminals change their titles all the time: nothing is sent for it, pass after pass
+    terminals = terminals.map((t) => ({ ...t, title: `${t.title} again` }))
+    await round()
+    await round()
+    expect(calls().filter((c) => c.items.some((i) => i.kind === 'session'))).toHaveLength(0)
+  })
+})
+
+describe('the last reply of a turn', () => {
+  const line = (o: unknown) => JSON.stringify(o)
+  const text = (t: string) => ({ type: 'assistant', message: { content: [{ type: 'text', text: t }] } })
+  const user = (content: unknown, extra: object = {}) => ({ type: 'user', message: { content }, ...extra })
+
+  test('only a prompt somebody wrote starts a turn: reminders, hook feedback, interrupts and tool results do not', () => {
+    const real = user('please go on')
+    const notPrompts = [
+      user([{ type: 'text', text: '<system-reminder>\nthe date\n</system-reminder>' }]),
+      user('<system-reminder>x</system-reminder>'),
+      user('Stop hook feedback: [[ -n "$x" ]]', { isMeta: true }),
+      user('Stop hook feedback: keep going'),
+      user('[Request interrupted by user]'),
+      user([{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+      user('<local-command-stdout>ok</local-command-stdout>'),
+      user([
+        { type: 'tool_result', content: 'x' },
+        { type: 'text', text: 'see the output above' },
+      ]),
+      user([{ type: 'text', text: 'Base directory for this skill: x' }], { isMeta: true, sourceToolUseID: 't1' }),
+      user('summary of the conversation', { isCompactSummary: true }),
+      user([{ type: 'tool_result', content: 'x' }], { toolUseResult: {} }),
+      user('<task-notification>done</task-notification>'),
+    ]
+    for (const n of notPrompts) {
+      expect(lastReplyOf([line(real), line(text('the answer')), line(n)].join('\n'))).toBe('the answer')
+    }
+    // a prompt with a reminder beside it is a prompt; the text before it is another turn
+    expect(
+      lastReplyOf(
+        [
+          line(text('old')),
+          line(
+            user([
+              { type: 'text', text: '<system-reminder>x</system-reminder>' },
+              { type: 'text', text: 'next task' },
+            ]),
+          ),
+        ].join('\n'),
+      ),
+    ).toBeNull()
+    expect(lastReplyOf([line(text('old')), line(real)].join('\n'))).toBeNull()
+  })
+
+  test('a session that went on while its transcript was read is skipped this pass', async () => {
+    await idleSession('rb-a', join(estate.src, 'rb'), 'First report. Shall I?')
+    const racing: ReplyReader = {
+      lastReply: async (path) => {
+        const reply = await new FileReplies().lastReply(path)
+        // the owner answers while the file is being read
+        await w.emit('rb-a', 'turn_started', clock.now())
+        return reply
+      },
+    }
+    builder = newBuilder({ digest: fresh({ replies: racing }) })
+    await builder.refreshNow()
+    await digest.settled()
+    const sentSession = calls()
+      .flatMap((c) => c.items)
+      .filter((i) => i.kind !== 'heading')
+    expect(sentSession).toEqual([])
+    const rows = await db.sql`SELECT key FROM factory.fleet_digest WHERE key LIKE 'session:%' OR key LIKE 'reply:%'`
+    expect(rows).toEqual([])
+  })
+})
+
+describe('an ask the session already has', () => {
+  test('a reply ask for a session that waits on the owner is that ask with the reply’s words, not a second one', async () => {
+    await w.spawned('rb-waits', { repo: join(estate.src, 'rb'), role: 'wave' })
+    await w.emit('rb-waits', 'turn_started', w.at(50))
+    await w.emit('rb-waits', 'wait_declared', w.at(40), { on: 'owner' })
+    await w.emit('rb-waits', 'turn_ended', w.at(39))
+    await db.sql`UPDATE factory.sessions SET transcript_path = ${transcript('rb-waits', 'PR #83 is open. Which option do you want?')} WHERE id = 'rb-waits'`
+    const before = await builder.refreshNow()
+    expect(before.asks.map((a) => a.id)).toContain('wait:rb-waits')
+    await digest.settled()
+    const fleet = await round()
+    const mine = fleet.asks.filter((a) => a.session === 'rb-waits')
+    expect(mine).toEqual([
+      expect.objectContaining({ id: 'wait:rb-waits', source: 'wait', kind: 'question', short: 'Wants an answer' }),
+    ])
+    expect(fleet.asks.some((a) => a.source === 'reply')).toBe(false)
+    expect(fleet.summary.asks).toBe(fleet.asks.length)
+  })
+})
+
+describe('applyDigest', () => {
+  test('gives text only to what the scope offered: the same rule that decides what is sent', async () => {
+    const base = await builder.refreshNow()
+    await digest.settled()
+    const cached = await digest.view()
+    const { fingerprint: _f, digest: _d, ...model } = base
+    const factory = model.repos.find((r) => r.name === 'software-factory')
+    const wave1 = (m: typeof model) =>
+      m.repos.find((r) => r.name === 'software-factory')?.plan?.waves.find((x) => x.n === 1)?.short
+    expect(wave1(model)).toBeNull()
+    const nothing = {
+      feed: { headings: [], sessions: [], complete: true },
+      sessions: new Map(),
+      plans: new Set<string>(),
+      repos: new Set<string>(),
+    }
+    const none = applyDigest(model, cached, nothing, clock.now())
+    expect(wave1(none)).toBeNull()
+    const offered = { ...nothing, repos: new Set([factory?.space ?? '']), plans: new Set([factory?.plan?.path ?? '']) }
+    expect(wave1(applyDigest(model, cached, offered, clock.now()))).toBe('Short Program lead, rotation')
+    // a repo offered but a plan that is not: no text either
+    expect(wave1(applyDigest(model, cached, { ...offered, plans: new Set<string>() }, clock.now()))).toBeNull()
+    expect(none.repos.find((r) => r.name === 'agent-workflows')?.plan?.waves.every((x) => x.short === null)).toBe(true)
   })
 })
