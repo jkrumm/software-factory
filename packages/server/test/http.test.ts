@@ -84,6 +84,8 @@ describe('config (finding 5)', () => {
       spoolDir: '/home/me/.local/share/factory/spool',
       hookSocket: '/home/me/.local/share/factory/hook.sock',
       slots: 2,
+      agwBin: '/home/me/.local/bin/agw',
+      alertLeads: false,
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -94,6 +96,13 @@ describe('config (finding 5)', () => {
     for (const bad of ['0', '-1', '2.5', 'many', '65']) {
       expect(() => loadConfig({ ...env, FACTORY_SLOTS: bad })).toThrow('FACTORY_SLOTS')
     }
+  })
+
+  test('FACTORY_ALERT_LEADS is off unless it says 1, and a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: '1' }).alertLeads).toBe(true)
+    for (const off of ['', '0', 'false'])
+      expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: off }).alertLeads).toBe(false)
+    expect(() => loadConfig({ ...env, FACTORY_ALERT_LEADS: 'maybe' })).toThrow('FACTORY_ALERT_LEADS')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {
