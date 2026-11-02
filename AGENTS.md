@@ -86,6 +86,7 @@ state, roles, process/health/contract/schema/API.
 - `scripts/` + `deploy/` + `.env.tpl` — release-directory deploy as agent-workflows does it (`deploy.sh`, `launch.sh`,
   `verify.sh`, the LaunchAgent plist template).
 - `scripts/gameday/` — the F1 kill gamedays: `run.sh <claimed|working>` `kill -9`s the server at a chosen moment and counts what survives; `setup.sh`, `collect.sh`, `teardown.sh`, `kill-server.sh`, `template/` the scratch repo. Evidence in `docs/evidence/f1-gamedays/`.
+- `scripts/gameday/f2/` — the F2 gamedays, live against the deployed factory with real leads: `run.sh <silent-lead|seeded-bug|seeded-bug-regress> [run-id]`, a `report.md` per run in `docs/evidence/f2-gate/`.
 
 ## Validate
 
