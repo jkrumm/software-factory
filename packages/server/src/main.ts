@@ -158,6 +158,7 @@ async function shutdown(signal: string): Promise<void> {
     await server.stop()
     await hooks.stop()
     await ticker.stop()
+    await leadWorktrees.stop(15_000)
     await witnessLoop.stop()
     await events.stop()
     await singleton?.release()

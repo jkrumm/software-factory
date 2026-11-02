@@ -56,29 +56,34 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
  * is judged on its passes. The pass starts what is due and returns at once; each one runs on its own, one at a time per Issue, and
  * records its result in a statement of its own. A try that fails backs off and is tried again until the retry budget (counted from
  * the first try) is spent: then the row is `failed` and `start_lead` parks the Issue. A row left `making` by a process that died
- * is no one's in flight, and is tried again at once.
+ * is no one's in flight, and is tried again at once. Only the Issue's current attempt is made.
  */
 export class WorktreeMaker {
   private readonly inflight = new Map<number, Promise<void>>()
+  private stopped = false
 
   constructor(private readonly deps: MakerDeps) {}
 
   async start(): Promise<void> {
     const room = (this.deps.concurrency ?? 2) - this.inflight.size
-    if (room <= 0) return
+    if (room <= 0 || this.stopped) return
     const { sql } = this.deps
     const now = this.deps.now()
     const due: Due[] = await sql`
       SELECT w.issue_id, w.attempt, i.repo, w.tries, w.first_at
       FROM factory.lead_worktrees w JOIN factory.issues i ON i.id = w.issue_id
       WHERE w.status IN ('pending', 'making') AND w.next_at <= ${now} AND i.state <> 'closed'
+        AND w.attempt = i.attempt
         AND w.issue_id NOT IN ${sql([0, ...this.inflight.keys()])}
       ORDER BY w.first_at, w.issue_id LIMIT ${room}`
     for (const row of due) {
-      await sql`
-        UPDATE factory.lead_worktrees SET status = 'making', tries = tries + 1
-        WHERE issue_id = ${row.issue_id} AND attempt = ${row.attempt}`
-      const running = this.make({ ...row, tries: row.tries + 1 })
+      // The budget runs from the first try that is started, not from the request: time spent behind busy makers is not a failure.
+      const [claimed]: { first_at: Date }[] = await sql`
+        UPDATE factory.lead_worktrees
+        SET status = 'making', tries = tries + 1, first_at = CASE WHEN tries = 0 THEN ${now} ELSE first_at END
+        WHERE issue_id = ${row.issue_id} AND attempt = ${row.attempt}
+        RETURNING first_at`
+      const running = this.make({ ...row, tries: row.tries + 1, first_at: claimed?.first_at ?? now })
         .catch((error: unknown) => {
           // The result could not be recorded (the database went away): the row stays `making` and is tried again.
           console.error('lead worktree not recorded', { issue: row.issue_id, reason: message(error) })
@@ -103,6 +108,12 @@ export class WorktreeMaker {
         SET status = ${spent ? 'failed' : 'pending'}, error = ${message(error)}, next_at = ${new Date(now.getTime() + worktreeRetryMs(row.tries))}
         WHERE issue_id = ${row.issue_id} AND attempt = ${row.attempt}`
     }
+  }
+
+  /** Starts nothing more, and waits up to `waitMs` for what is running: a shutdown does not release its lock under a running `git`. */
+  async stop(waitMs: number): Promise<void> {
+    this.stopped = true
+    await Promise.race([Promise.all(this.inflight.values()), Bun.sleep(waitMs)])
   }
 
   /** Waits for what is running now. The tests use it; the server never waits for a worktree. */
