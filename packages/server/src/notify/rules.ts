@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { digestDue, loadDigest, renderDigest } from './digest.ts'
+import { digestDue, loadMorning } from './digest.ts'
 import { record } from './outbox.ts'
 import { askMessage, failedMessage, type IssueRef, parkedMessage, quote, regressionMessage } from './text.ts'
 
@@ -113,16 +113,24 @@ export async function notifyDoorRefused(
 }
 
 /**
- * The digest, once per local day from `at` until noon: the key is the date, so a second tick, a restart and a second process
+ * The morning reading (the 07:30 digest), once per local day from `at` until noon: the key is the date, so a second tick, a restart and a second process
  * are one message. The text is built only when the day has none.
  */
-export async function notifyDigest(sql: SQL, input: { now: Date; at: string | null; timeZone: string }): Promise<void> {
+export async function notifyDigest(
+  sql: SQL,
+  input: { now: Date; at: string | null; timeZone: string; isVisible?: (path: string) => boolean },
+): Promise<void> {
   if (input.at === null) return
   const date = digestDue(input.now, { at: input.at, timeZone: input.timeZone })
   if (date === null) return
   const key = `notify:digest:${date}`
   const [known] = await sql`SELECT 1 FROM factory.notifications WHERE key = ${key}`
   if (known) return
-  const text = renderDigest(await loadDigest(sql, input.now, date))
+  // The morning reading is the since reading's groups (FV Wave 4); an IuRoot item is a count only.
+  const text = await loadMorning(sql, {
+    now: input.now,
+    date,
+    isVisible: input.isVisible ?? ((path) => path.split('/').includes('IuRoot')),
+  })
   await record(sql, { key, kind: 'digest', issueId: null, text }, input.now)
 }

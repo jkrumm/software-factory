@@ -6,6 +6,9 @@ import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
 import { FleetActions } from './fleet/act.ts'
 import { Digest } from './fleet/digest.ts'
+import { Places } from './fleet/place.ts'
+import type { SinceReader } from './fleet/since.ts'
+import { WindowDigest } from './fleet/window.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
@@ -99,6 +102,19 @@ const fleetActions = new FleetActions({
   home: process.env.HOME ?? '',
   refresh: () => fleet.refreshNow(),
 })
+// IuRoot's items are only ever counted in the since reading's headline and the morning message: the same places the digest's scope uses.
+const visible = async (): Promise<(path: string) => boolean> => {
+  const places = await Places.of({
+    visibleRoots: config.visibleRoots,
+    configured: config.repoRoots,
+    home: process.env.HOME ?? '',
+  })
+  return (path) => places.isVisible(path)
+}
+// The headline paragraph is the digest's `window` kind: off when the digest is (`FACTORY_DIGEST_EVERY=off`).
+const windows =
+  config.fleetDigestEveryMs === null ? undefined : new WindowDigest({ sql, now: () => clock.now(), bin: config.agwBin })
+const since: SinceReader = { sql, now: () => clock.now(), visible, windows }
 const runner = new HcRunner({
   bin: config.hcBin,
   session: config.hcSession,
@@ -125,6 +141,7 @@ const server = serve({
   notifyTarget: config.notifyTarget,
   fleet,
   fleetActions,
+  since,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -198,8 +215,9 @@ const ticker = startTicker(
     classification,
     leadWorktrees,
     fleet,
+    windows,
     alertLeads: config.alertLeads,
-    notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz },
+    notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz, visible },
   },
   TICK_INTERVAL_MS,
   monitor,
@@ -224,6 +242,7 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await fleet.settled()
+    await windows?.settled()
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)
     await witnessLoop.stop()

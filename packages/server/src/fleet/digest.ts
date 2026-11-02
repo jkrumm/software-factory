@@ -47,7 +47,7 @@ const REASON_MAX = 500
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 const hash = (text: string, length = 16): string => createHash('sha256').update(text).digest('hex').slice(0, length)
-const reasonText = (reason: string): string => head(wellFormed(reason), REASON_MAX)
+export const reasonText = (reason: string): string => head(wellFormed(reason), REASON_MAX)
 
 export type ItemKind = 'heading' | 'session' | 'reply'
 
@@ -186,12 +186,12 @@ function sessionText(s: FeedSession, last: string): string {
 // --- the call -----------------------------------------------------------------------------------------------------
 
 /** `agw` exits 10 for a run that is still going, 4 for a run it does not know. */
-const EXIT_PENDING = 10
-const EXIT_NOT_FOUND = 4
+export const EXIT_PENDING = 10
+export const EXIT_NOT_FOUND = 4
 const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9-]{5,127}$/
 
 /** The id of a pending run, from the JSON `agw` printed with exit 10. */
-function runIdOf(stdout: string): string | undefined {
+export function runIdOf(stdout: string): string | undefined {
   try {
     const body = JSON.parse(stdout) as Record<string, unknown>
     const run = body.run as Record<string, unknown> | undefined
@@ -203,7 +203,7 @@ function runIdOf(stdout: string): string | undefined {
 }
 
 /** A run's status as `agw` reports it: `pending | running | done | failed | cancelled`. */
-const statusOf = (stdout: string): string | undefined => {
+export const statusOf = (stdout: string): string | undefined => {
   try {
     const status = (JSON.parse(stdout) as { status?: unknown }).status
     return typeof status === 'string' ? status : undefined
@@ -211,9 +211,9 @@ const statusOf = (stdout: string): string | undefined => {
     return undefined
   }
 }
-const isTerminal = (status: string | undefined): boolean => status === 'failed' || status === 'cancelled'
+export const isTerminal = (status: string | undefined): boolean => status === 'failed' || status === 'cancelled'
 
-const Envelope = z.object({
+export const Envelope = z.object({
   output: z.object({ results: z.array(z.object({ id: z.string() }).loose()) }).loose(),
   cost: z.number().nullish(),
 })
@@ -227,7 +227,7 @@ type Reply =
  * A call that failed. `terminal`: `agw` says the run itself failed or was cancelled, which is the only thing that makes the retry a
  * new run. `unknown`: `agw` does not know the run. Anything else (an exit with no status) says nothing about the run.
  */
-class CallFailed extends Error {
+export class CallFailed extends Error {
   constructor(
     message: string,
     readonly kind: 'terminal' | 'unknown' | 'unclear' = 'unclear',

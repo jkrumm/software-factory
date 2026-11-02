@@ -1,5 +1,6 @@
-import type { Notification, NotificationKind } from '@software-factory/contract'
+import type { Notification, NotificationKind, Presence } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { readPresence } from '../fleet/presence.ts'
 import type { Notifier } from './port.ts'
 import type { Message } from './text.ts'
 
@@ -12,6 +13,21 @@ export const BACKOFF = { baseMs: 30_000, capMs: 300_000 }
 export const backoffMs = (attempt: number): number => Math.min(BACKOFF.capMs, BACKOFF.baseMs * 2 ** (attempt - 1))
 /** A claim not recorded within this long was a crashed send's: the row is due again (at-least-once). */
 export const LEASE_MS = 120_000
+
+/**
+ * The away rule (FV Wave 4), decided at send time from presence: why a message is folded instead of sent, or `null` when it goes out.
+ * A decision (`notify:ask:*`, the `yours` tier) goes out unless the desk is present; the morning reading and a test always go out; every
+ * other message goes out only while the phone is present and the desk is not. Before the board reports presence the owner is away.
+ */
+export function foldReason(key: string, presence: Pick<Presence, 'desk' | 'phone'>): string | null {
+  if (key.startsWith('notify:digest:') || key.startsWith('notify:test:')) return null
+  if (key.startsWith('notify:ask:'))
+    return presence.desk.present ? 'the desk is present: the board shows it live' : null
+  if (presence.desk.present) return 'the desk is present: the board shows it live'
+  return presence.phone.present
+    ? null
+    : 'the owner is away and this is not a decision: its facts are in the since reading'
+}
 
 /**
  * Records a message under its key; a key seen before changes nothing. Takes the transaction that decided it, or the pool. True when
@@ -34,7 +50,7 @@ interface Claimed {
 
 /**
  * Phase 1, in one short transaction: rows whose attempts ran out while a send was in flight are `failed`; the due rows (at most
- * `limit`) are counted as tried and leased. Nothing is sent here.
+ * `limit`) are either folded by the away rule (a reason, `folded_at`, never due again) or counted as tried and leased. Nothing is sent here.
  */
 export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed[]> {
   return sql.begin(async (tx) => {
@@ -43,11 +59,20 @@ export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed
       WHERE sent_at IS NULL AND failed_at IS NULL AND attempts >= ${MAX_ATTEMPTS} AND next_at <= ${now}`
     const due: { key: string; text: string; attempts: number }[] = await tx`
       SELECT key, text, attempts FROM factory.notifications
-      WHERE sent_at IS NULL AND failed_at IS NULL AND next_at <= ${now}
+      WHERE sent_at IS NULL AND failed_at IS NULL AND folded_at IS NULL AND next_at <= ${now}
       ORDER BY created_at, key LIMIT ${limit}
       FOR UPDATE SKIP LOCKED`
     const claimed: Claimed[] = []
+    const presence = due.length > 0 ? await readPresence(tx, now) : undefined
     for (const row of due) {
+      const folded = presence ? foldReason(row.key, presence) : null
+      if (folded !== null) {
+        // Never sent later; 'infinity' keeps a release that does not know the column from finding the row due.
+        await tx`
+          UPDATE factory.notifications SET folded_at = ${now}, folded_reason = ${folded}, next_at = 'infinity'
+          WHERE key = ${row.key}`
+        continue
+      }
       const attempts = row.attempts + 1
       await tx`
         UPDATE factory.notifications SET attempts = ${attempts}, next_at = ${new Date(now.getTime() + LEASE_MS)}
@@ -158,6 +183,8 @@ interface Row {
   attempts: number
   error: string | null
   failed_at: Date | null
+  folded_at: Date | null
+  folded_reason: string | null
 }
 
 const toNotification = (row: Row): Notification => ({
@@ -165,11 +192,12 @@ const toNotification = (row: Row): Notification => ({
   kind: row.kind,
   issueId: row.issue_id,
   text: row.text,
-  status: row.sent_at ? 'sent' : row.failed_at ? 'failed' : 'pending',
+  status: row.sent_at ? 'sent' : row.failed_at ? 'failed' : row.folded_at ? 'folded' : 'pending',
   createdAt: row.created_at.toISOString(),
   sentAt: row.sent_at?.toISOString() ?? null,
   attempts: row.attempts,
   error: row.error,
+  foldedReason: row.folded_reason,
 })
 
 /** Newest first; `pending` leaves out what was sent. */
@@ -178,15 +206,15 @@ export async function listNotifications(
   options: { pending?: boolean; limit?: number } = {},
 ): Promise<Notification[]> {
   const rows: Row[] = await sql`
-    SELECT key, kind, issue_id, text, created_at, sent_at, attempts, error, failed_at FROM factory.notifications
-    WHERE (${options.pending ?? false}::boolean = false OR sent_at IS NULL)
+    SELECT key, kind, issue_id, text, created_at, sent_at, attempts, error, failed_at, folded_at, folded_reason FROM factory.notifications
+    WHERE (${options.pending ?? false}::boolean = false OR (sent_at IS NULL AND folded_at IS NULL))
     ORDER BY created_at DESC, key DESC LIMIT ${options.limit ?? 100}`
   return rows.map(toNotification)
 }
 
 export async function getNotification(sql: SQL, key: string): Promise<Notification | undefined> {
   const [row]: Row[] = await sql`
-    SELECT key, kind, issue_id, text, created_at, sent_at, attempts, error, failed_at FROM factory.notifications WHERE key = ${key}`
+    SELECT key, kind, issue_id, text, created_at, sent_at, attempts, error, failed_at, folded_at, folded_reason FROM factory.notifications WHERE key = ${key}`
   return row && toNotification(row)
 }
 

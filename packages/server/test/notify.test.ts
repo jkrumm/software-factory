@@ -6,14 +6,7 @@ import { createIssue } from '../src/issues/create.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { intakeAlert } from '../src/issues/intake.ts'
 import { issuePass } from '../src/issues/worker.ts'
-import {
-  DIGEST_MAX_CHARS,
-  type DigestData,
-  digestDue,
-  localParts,
-  loadDigest,
-  renderDigest,
-} from '../src/notify/digest.ts'
+import { digestDue, localParts } from '../src/notify/digest.ts'
 import { notifyPass } from '../src/notify/index.ts'
 import {
   backoffMs,
@@ -49,6 +42,9 @@ beforeEach(async () => {
   clock = new FakeClock(new Date('2026-11-02T10:00:00.000Z'))
   notifier = new FakeNotifier()
   n = 0
+  // The away rule folds what is not a decision while nobody is present (FV Wave 4); these tests are about delivery, so the phone is
+  // in the foreground for good (an act dated far ahead is present at any clock the tests set).
+  await db.sql`INSERT INTO factory.fleet_presence_acts (place, act, at) VALUES ('phone', 'foreground', '2100-01-01T00:00:00Z')`
 })
 
 const now = () => clock.now()
@@ -459,69 +455,6 @@ describe('HermesNotifier', () => {
 })
 
 describe('the digest', () => {
-  const data: DigestData = {
-    date: '2026-11-02',
-    closed: [
-      { id: 12, outcome: 'done', title: 'Fix the forecast' },
-      { id: 13, outcome: 'dropped', title: 'Rename the "thing"' },
-    ],
-    watching: [{ id: 14, title: 'Cache the tiles' }],
-    parked: [{ id: 15, reason: 'unreported' }],
-    decisions: [{ issueId: 16, question: 'Ship it now or wait for the weekend?' }],
-    failedSpawns: [{ key: 'lead-17-1', error: 'gave up: retry budget spent' }],
-    quota: [
-      { account: 'main', fiveHourUsed: 12.4, weeklyUsed: 40, fresh: true },
-      { account: 'second', fiveHourUsed: null, weeklyUsed: 71.6, fresh: false },
-    ],
-    ran: { spawns: 9, started: 7, failed: 1, events: 230, sessions: 6, issueEvents: 41 },
-  }
-
-  test('golden', () => {
-    expect(renderDigest(data)).toBe(
-      [
-        'Factory digest 2026-11-02',
-        "Closed in 24 h: 2: #12 done “Fix the forecast”; #13 dropped “Rename the 'thing'”",
-        'Shipped and watching: 1: #14 “Cache the tiles”',
-        'Parked: 1: #15 unreported',
-        'Decisions open: 1: #16 “Ship it now or wait for the weekend?”',
-        'Failed spawns: 1: lead-17-1 “gave up: retry budget spent”',
-        'Quota: main 5h 12% week 40%; second 5h ? week 72% (stale)',
-        'Ran in 24 h: 9 spawns (7 started, 1 failed), 230 session events from 6 sessions, 41 Issue events',
-      ].join('\n'),
-    )
-  })
-
-  test('an empty day says so, and a huge one stays under 3000 characters', () => {
-    const empty = renderDigest({
-      ...data,
-      closed: [],
-      watching: [],
-      parked: [],
-      decisions: [],
-      failedSpawns: [],
-      quota: [],
-      ran: { spawns: 0, started: 0, failed: 0, events: 0, sessions: 0, issueEvents: 0 },
-    })
-    expect(empty).toContain('Closed in 24 h: none')
-    expect(empty).toContain('Quota: no reading')
-    const many = Array.from({ length: 500 }, (_, i) => ({ id: i, outcome: 'done', title: 'x'.repeat(300) }))
-    const big = renderDigest({ ...data, closed: many, watching: many, parked: [], decisions: [], failedSpawns: [] })
-    expect(big.length).toBeLessThan(DIGEST_MAX_CHARS)
-    expect(big).toContain('(+494 more)')
-    const accounts = Array.from({ length: 12 }, (_, i) => ({
-      account: `account-${i}-${'x'.repeat(60)}`,
-      fiveHourUsed: 1,
-      weeklyUsed: 2,
-      fresh: true,
-    }))
-    const crowded = renderDigest({ ...data, closed: many, watching: many, quota: accounts })
-    expect(crowded.length).toBeLessThan(DIGEST_MAX_CHARS)
-    expect(crowded).toContain('(+4 more)')
-    expect(crowded).toContain('Ran in 24 h:')
-    expect(big).toContain('Quota:')
-    expect(big).toContain('Ran in 24 h:')
-  })
-
   test('due from 07:30 local until noon, in the zone, across the day and the clock change', () => {
     const due = (iso: string) => digestDue(new Date(iso), { at: '07:30', timeZone: 'Europe/Berlin' })
     expect(due('2026-11-02T06:29:00Z')).toBeNull() // 07:29 CET
@@ -562,19 +495,5 @@ describe('the digest', () => {
     // switched off
     await notifyDigest(db.sql, { now: new Date('2026-11-06T07:00:00Z'), at: null, timeZone: 'Europe/Berlin' })
     expect(await digests()).not.toContain('notify:digest:2026-11-06')
-  })
-
-  test('it reads the day from the database', async () => {
-    const id = await working()
-    await step(id, 'ask', { question: 'ship?' })
-    const done = await working()
-    await step(done, 'close', { summary: 'ok', ...MERGED })
-    await db.sql`INSERT INTO factory.quota_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used) VALUES ('main', ${now()}, true, true, 10, 20)`
-    const loaded = await loadDigest(db.sql, now(), '2026-11-02')
-    expect(loaded.closed).toEqual([{ id: done, outcome: 'done', title: 'a title' }])
-    expect(loaded.decisions).toEqual([{ issueId: id, question: 'ship?' }])
-    expect(loaded.quota).toEqual([{ account: 'main', fiveHourUsed: 10, weeklyUsed: 20, fresh: true }])
-    expect(loaded.ran.issueEvents).toBeGreaterThan(0)
-    expect(renderDigest(loaded)).toContain(`Decisions open: 1: #${id} “ship?”`)
   })
 })

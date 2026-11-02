@@ -9,6 +9,8 @@ export interface NotifyDeps {
   target: string
   digestAt: string | null
   digestTz: string
+  /** whether a place is IuRoot's or a visible root's: its items are only counted in the morning reading (default: a path with an `IuRoot` segment) */
+  visible?: () => Promise<(path: string) => boolean>
 }
 
 /**
@@ -25,7 +27,14 @@ export async function notifyPass(sql: SQL, deps: NotifyDeps, now: () => Date): P
     }
   }
   await guarded('failures', () => notifyFailures(sql, now()))
-  await guarded('digest', () => notifyDigest(sql, { now: now(), at: deps.digestAt, timeZone: deps.digestTz }))
+  await guarded('digest', async () =>
+    notifyDigest(sql, {
+      now: now(),
+      at: deps.digestAt,
+      timeZone: deps.digestTz,
+      isVisible: deps.visible ? await deps.visible() : undefined,
+    }),
+  )
   await guarded('send', async () => {
     const note = deps.target === NOTIFY_OFF ? 'notifications are off (FACTORY_NOTIFY_TARGET=off)' : null
     const { errors: sendErrors } = await sendDue(sql, { notifier: deps.notifier, now, note })

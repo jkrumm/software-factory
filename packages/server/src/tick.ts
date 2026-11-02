@@ -5,6 +5,7 @@ import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { FleetBuilder } from './fleet/index.ts'
+import type { WindowDigest } from './fleet/window.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { Classification } from './issues/classify.ts'
@@ -54,6 +55,8 @@ export interface TickDeps {
   notify?: NotifyDeps
   /** the fleet read model: the tick starts a build when one is due and does not wait for it; without it none is built */
   fleet?: Pick<FleetBuilder, 'kick'>
+  /** the since reading's headline paragraph: the tick starts a pass when a window waits and none runs (behind its back, like the fleet build) */
+  windows?: Pick<WindowDigest, 'kick'>
 }
 
 export interface TickResult {
@@ -387,6 +390,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
   // The fleet model builds behind the tick's back (bounded reads, no transaction); the next pass finds it done or still running.
   deps.fleet?.kick()
+  deps.windows?.kick()
   return result
 }
 
