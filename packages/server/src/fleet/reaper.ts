@@ -306,7 +306,7 @@ export class Reaper {
         keep: {
           session: m.session.id,
           repo: basename(mine.main),
-          why: `cwd moved: hc has it in ${hcCwd}, the factory has ${m.cwd ?? hcCwd}`,
+          why: `cwd moved: hc has it in ${hcCwd}, the factory has ${m.cwd ?? 'no directory'}`,
         },
       }
     }
@@ -321,7 +321,8 @@ export class Reaper {
     if (cached && nowMs - cached.at < VERDICT_TTL_MS) answer = cached.answer
     else {
       answer = await this.gitVerdict(worktree)
-      this.answers.set(key, { at: nowMs, answer })
+      // A fresher answer (a close that was refused meanwhile) is not overwritten by this older one.
+      if ((this.answers.get(key)?.at ?? -1) <= nowMs) this.answers.set(key, { at: nowMs, answer })
     }
     if (answer.reasons.length > 0) {
       return { keep: { session: m.session.id, repo: basename(main), why: answer.reasons.join('; ') } }

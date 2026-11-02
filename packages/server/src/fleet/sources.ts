@@ -83,14 +83,20 @@ export class NotClosed extends Error {}
 
 /**
  * Whether a terminal runs Claude Code, the one answer for the list and the close. When the core reports a foreground program, that program
- * decides (its name is `claude`, or `claude` is one of its arguments: `node …/claude`); a status or label can outlive the program, so a shell
- * in its place is never Claude Code. With no foreground reported, the status app, the first argument or Claude's session label say.
+ * decides (its name or program is `claude`, or `node`/`bun` runs a script named `claude`); a status or label can outlive the program, so a shell
+ * in its place is never Claude Code. With no foreground reported, the status app, the program or Claude's session label say.
  */
 function isClaude(t: z.output<typeof Record_>): boolean {
-  const named = (arg: string) => arg.split('/').at(-1) === 'claude'
   const fg = t.foreground
-  if (fg && (fg.name || fg.argv.length > 0)) return fg.name === 'claude' || fg.argv.some(named)
-  return t.status?.app === 'claude-code' || t.argv.some(named) || 'jk.claude.session' in t.labels
+  if (fg && (fg.name || fg.argv.length > 0)) return fg.name === 'claude' || runs(fg.argv)
+  return t.status?.app === 'claude-code' || runs(t.argv) || 'jk.claude.session' in t.labels
+}
+
+/** The program is `claude`, or `claude` is the script a `node` or `bun` runs: an editor with a file named claude in its arguments is not. */
+function runs(argv: readonly string[]): boolean {
+  const base = (arg: string | undefined) => arg?.split('/').at(-1)
+  const program = base(argv[0])
+  return program === 'claude' || ((program === 'node' || program === 'bun') && base(argv[1]) === 'claude')
 }
 
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
