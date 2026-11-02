@@ -17,6 +17,8 @@ export interface Probes {
 export const PROBE_TIMEOUT_MS = 5_000
 /** An answer is reused this long: the build runs every 30 s and a probe can be an ssh round trip. */
 export const PROBE_TTL_MS = 5 * 60_000
+/** A probe that could not tell is tried again sooner: the machine may be back. */
+export const PROBE_UNKNOWN_TTL_MS = 30_000
 
 /** What a probe may be asked about a path: no shell syntax, no glob, no control characters. */
 export const SAFE_PATH = /^(?:~\/|\/)[\w@+ ./-]*$/
@@ -60,7 +62,7 @@ export class ProbeRunner implements Probes {
     const key = `${host}\0${path}`
     const now = (this.options.now?.() ?? new Date()).getTime()
     const hit = this.cache.get(key)
-    if (hit && now - hit.at < PROBE_TTL_MS) return hit.value
+    if (hit && now - hit.at < (hit.value === undefined ? PROBE_UNKNOWN_TTL_MS : PROBE_TTL_MS)) return hit.value
     const value = host === 'local' ? await this.local(path) : await this.remote(host, path)
     this.cache.set(key, { at: now, value })
     if (this.cache.size > 500) this.cache.delete(this.cache.keys().next().value as string)

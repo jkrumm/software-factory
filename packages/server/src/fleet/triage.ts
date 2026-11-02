@@ -22,6 +22,8 @@ export const OLD_REQUEST_MS = 7 * 86_400_000
 export const NOTE_EXPIRES_MS = STALE_ASK_MS
 /** Probes made by one build: oldest requests first; the rest wait for the next. */
 export const MAX_PROBES_PER_BUILD = 40
+/** A build spends at most this long on probes; the next one starts at the next request, so none starves. */
+export const PROBE_PASS_MS = 15_000
 
 const DAY_MS = 86_400_000
 const LABEL: Record<ActIntent, string> = {
@@ -73,6 +75,8 @@ export interface Target {
 }
 
 const MAX_TARGETS = 6
+/** Machines a request may name; one of them that is not configured is unprobeable. */
+const MACHINE_WORDS = /\b(?:macbook|mac mini|mini|homelab|vps|iphone|ipad)\b/i
 const HARMLESS = new Set(['cd', 'echo', 'true', 'sudo', 'test', ':'])
 const REMOVES = new Set(['rm', 'rmdir', 'trash'])
 const CREATES = new Set(['mkdir', 'touch'])
@@ -93,16 +97,22 @@ export function targetsOf(
   machines: readonly string[],
   queueMachine: string | undefined,
 ): Target[] {
-  const machine = machineOf(`${request.text}\n${request.cmd ?? ''}`, machines) ?? queueMachine
-  if (!machine) return []
+  const named = `${request.text}\n${request.cmd ?? ''}`
+  const machine = machineOf(named, machines)
+  // A machine the text names and nothing is configured for cannot be probed; the queue's machine is not a stand-in for it.
+  if (!machine && MACHINE_WORDS.test(named)) return []
+  const where = machine ?? queueMachine
+  if (!where) return []
   const targets = new Map<string, Target>()
   const add = (path: string, want: Target['want']): boolean => {
     if (!SAFE_PATH.test(path) || path.includes('..')) return false
-    targets.set(`${want}\0${path}`, { machine, path, want })
+    targets.set(`${want}\0${path}`, { machine: where, path, want })
     return true
   }
 
   if (request.cmd) {
+    // Only `&&`, `||`, `;` and newlines join commands; a pipe, a redirect, a substitution, a quote, a glob or a variable means more than a probe sees.
+    if (/[|<>$`(){}&\\"'*?[\]!#]/.test(request.cmd.replace(/&&|\|\||;/g, ' '))) return []
     for (const segment of request.cmd.split(/&&|\|\||;|\n/)) {
       const words = segment.trim().split(/\s+/).filter(Boolean)
       let at = 0
@@ -267,10 +277,15 @@ interface FindingsInput {
   queueMachine: string | undefined
   /** real paths of the repo roots: a gate names a repo that may have no plan and no session, so it is not in the model */
   roots: readonly string[]
+  /** where in the list this pass starts: the builds take turns */
+  offset?: number
+  /** the clock of the pass's own deadline */
+  clock?: () => number
 }
 
 /** The repo a deploy gate names: one of the model's by name, else a git directory of that name directly under a root. */
 async function repoNamed(name: string, input: Pick<FindingsInput, 'repos' | 'roots'>): Promise<string | undefined> {
+  if (name.startsWith('.')) return undefined
   const known = input.repos.find((r) => r.name === name)
   if (known) return known.space
   for (const root of input.roots) {
@@ -290,8 +305,12 @@ export async function gatherFindings(input: FindingsInput): Promise<Map<string, 
   const { now, probes } = input
   const out = new Map<string, Finding>()
   let budget = MAX_PROBES_PER_BUILD
-  for (const ask of input.asks) {
-    if (ask.source !== 'queue' || budget <= 0) continue
+  const clock = input.clock ?? Date.now
+  const deadline = clock() + PROBE_PASS_MS
+  const queued = input.asks.filter((a) => a.source === 'queue')
+  const start = queued.length > 0 ? (input.offset ?? 0) % queued.length : 0
+  for (const ask of [...queued.slice(start), ...queued.slice(0, start)]) {
+    if (budget <= 0 || clock() > deadline) break
     const request = input.queue.get(ask.id.slice('queue:'.length))
     if (!request) continue
     const found: Finding = {}
@@ -429,7 +448,7 @@ export function decide({ ask, request, finding, repos, now }: DecideInput): Tria
     case 'wait': {
       // Only a session that has finished its plan and asks what is next: the plan is the evidence, and the model's text is not read for it.
       const plan = [repo?.plan, ...(repo?.morePlans ?? [])].find((p) => p && p.path === ask.plan)
-      if (plan?.state === 'done' && repo && !repo.visible && !businessClass(ask.text) && ask.kind !== 'blocker') {
+      if (plan?.state === 'done' && repo && !repo.visible && !businessClass(ask.text)) {
         return {
           tier: 'one_click',
           suggestion: suggest(
@@ -450,7 +469,7 @@ export function decide({ ask, request, finding, repos, now }: DecideInput): Tria
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** The asks of hand-offs whose worker has ended: the result of work an ask started, back as a new ask. */
+/** The asks of hand-offs whose worker has ended: the result of work an ask started, back as a new ask. A worker that failed to start is the `spawn … failed` ask of `factory status`. */
 function handoffAsks(
   handoffs: readonly { ask: string; spawn: SpawnView }[],
   firstSeen: ReadonlyMap<string, string>,
@@ -490,7 +509,24 @@ export interface TriageDeps {
 }
 
 export class Triage {
+  private pass = 0
+
   constructor(private readonly deps: TriageDeps) {}
+
+  /** Only what the owner closed or snoozed leaves the list: what the build falls back to when the rest of the triage fails. */
+  async hide(model: Model, now: Date): Promise<Model> {
+    const acts = await readActs(this.deps.sql, now)
+    const asks = model.asks.filter((a) => !acts.closed.has(a.id) && !acts.later.has(a.id))
+    return {
+      ...model,
+      asks,
+      summary: {
+        ...model.summary,
+        asks: asks.length,
+        staleAsks: asks.filter((a) => now.getTime() - Date.parse(a.at) >= STALE_ASK_MS).length,
+      },
+    }
+  }
 
   /**
    * The model with the triage on it. Reads the owner's acts and the log, writes the new automatic decisions (short statements, no
@@ -538,6 +574,7 @@ export class Triage {
       machines: this.deps.machines,
       queueMachine: this.deps.queueMachine,
       roots: input.roots,
+      offset: this.pass++,
     })
     const asks = stepped.asks.map((ask): FleetAsk => {
       const decided = decide({

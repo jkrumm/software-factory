@@ -15,8 +15,8 @@ CREATE TABLE factory.fleet_triage_log (
   UNIQUE (kind, subject, fingerprint)
 );
 
--- What the owner did with an ask, through POST /fleet/asks/:id/act. Every intent but `later` happens once per ask (the
--- unique index: a repeated act answers with the first); `later` is a timer, the latest `until` wins.
+-- What the owner did with an ask, through POST /fleet/asks/:id/act. An ask is closed once (resolve, deny or hand_off: one of them,
+-- ever), a plan is archived once per ask; a repeated act answers with the first. `later` is a timer, the latest `until` wins.
 CREATE TABLE factory.fleet_acts (
   id     bigserial PRIMARY KEY,
   ask_id text NOT NULL,
@@ -26,5 +26,6 @@ CREATE TABLE factory.fleet_acts (
   until  timestamptz,
   result jsonb NOT NULL
 );
-CREATE UNIQUE INDEX fleet_acts_once ON factory.fleet_acts (ask_id, intent) WHERE intent <> 'later';
+CREATE UNIQUE INDEX fleet_acts_closed_once ON factory.fleet_acts (ask_id) WHERE intent IN ('resolve', 'deny', 'hand_off');
+CREATE UNIQUE INDEX fleet_acts_archive_once ON factory.fleet_acts (ask_id) WHERE intent = 'archive_plan';
 CREATE INDEX fleet_acts_ask_idx ON factory.fleet_acts (ask_id);
