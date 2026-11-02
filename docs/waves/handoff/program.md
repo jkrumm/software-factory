@@ -1,13 +1,14 @@
 # Program lead handoff
 
-Written by the night lead (`PLAN.md` Waves 6 and 7), 2026-11-02 14:00. State lives in `docs/program.md`; the night's record and the
+Written by the night lead (`PLAN.md` Waves 6 and 7), 2026-11-02 14:00, updated 16:10 (FV Waves 1 and 2 live). State lives in `docs/program.md`; the night's record and the
 proposals with their numbers are `docs/evidence/night-2026-11-01.md` (Morning section). The rotation 5 page is in git history.
 
 ## Running now
 
 | Agent | Repo | Work | Next |
 |-|-|-|-|
-| `software-factory-fv-w2-digest` | software-factory (hidden fan worker) | FV Wave 2, brief `docs/waves/briefs/fv-w2-digest.md` | `/code-review high` on its PR, land, deploy, prove one digest pass live (`factory fleet --format json`: shorts, headlines, a reply ask) |
+| `software-factory-fv-w3-triage` | software-factory (hidden fan worker) | FV Wave 3, brief `docs/waves/briefs/fv-w3-triage.md` | `/code-review high` on its PR and on the fix commits, land, deploy, prove one action and one undo live |
+| `dotfiles-fv-queue-resolve` | dotfiles (hidden fan worker) | `ask-human.sh resolve`, brief `docs/waves/briefs/fv-dotfiles-queue-resolve.md` | pushes to dotfiles master itself; check the commit and `make check` |
 | `agent-workflows-w1-r8`, `-w1-r4` | agent-workflows (lead, mother) | their Wave 5 (run-scoped arms) | `agw digest` is theirs and live (`f02f351`); FV Wave 5 asks the mother whether `agw agents` becomes a `/fleet` client or retires |
 
 ## How this lead worked, keep it
