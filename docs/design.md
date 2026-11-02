@@ -1173,31 +1173,34 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
 
 - **A pass** starts after a snapshot build when `FACTORY_DIGEST_EVERY` (default `5m`, `30s` to `24h`, `off`) has passed since the last. The
   items: a plan or wave heading with no `<!-- short: … -->` (kind `heading`; one item per heading text, whichever plan has it), a live
-  session (`session`: its tab title, role, repo, plan, wave and the end of its last message; a headline and a short), and the last assistant message of
+  session the factory knows (`session`: its tab title, role, repo, plan, wave and the end of its last message; a headline), and the last assistant message of
   a session whose turn has ended (`reply`: "does it ask the owner something?"). An item's fingerprint is the content it would send; one equal to
-  its cached answer costs nothing. The changed ones go in **one** call, at most 64 items and 120,000 characters (agw's limits; more is refused, never cut),
-  oldest answers first; the rest wait for the next pass. `agw digest --format json --idempotency-key factory-digest-<batch hash>-<hour>` with the items
-  on stdin; the key lets a slow run be found again by the next pass with the same batch, and an hour later a failed run is not replayed.
+  its cached answer costs nothing. The changed ones go in **one** call, at most 64 items and 120,000 characters (agw's limits, counted in UTF-16 units; more is refused, never cut),
+  oldest answers first; the rest wait for the next pass. Texts are made well-formed before they are hashed, sent or stored (no NUL, no lone surrogate: jsonb refuses both), and every cut keeps a surrogate pair whole.
 - **Once per turn.** A session's headline and reply are made when its turn count has moved *and* its turn has ended (`idle` or `waiting`); a turn that is still running keeps the
-  last headline and has no reply ask. The same words in a later turn move the cached turn without a call. A terminal only hc knows (no turn count,
-  no transcript on record) gets a headline from its title, role and wave, once per change of those.
+  last headline and has no reply ask. After the transcript is read the session is looked at again: one that went on meanwhile (another turn, or running) is skipped this pass.
+  The same words in a later turn move the cached turn without a call. A terminal only hc knows has no turn count or transcript on record and gets **no** digest headline: its tab title is shown as is.
+- **The call's lifecycle.** `agw digest --format json --idempotency-key factory-digest-<batch hash>-<attempt>` with the items on stdin. No short kill: the process has a
+  hang guard of 30 minutes (`rules/agent-limits.md`); `agw` itself answers "pending" (exit 10) with the run's id after its own wait budget. A pending run is **not a failure**: its id and its
+  batch are kept (`factory.fleet_digest_pending`, one row, migration `023`), and while it exists every pass only runs `agw run wait <runId>` for it (a new heading waits); when it ends its own
+  batch is stored, in the same transaction as the journal row and the cost. A call that fails for good (or a run that ends badly, or a store the database refuses) journals the pass as failed with the reason and backs each of its
+  items off (`factory.fleet_digest_backoff`: 5 min, doubled with every failure of the same content, at most a day; persisted, so a restart does not forget). An item that came back as `{id, error}` backs off the same way. Items that failed twice are
+  asked about in batches of at most half the size they failed in, after the healthy ones, until a poison item stands alone and the rest is stored. The attempt number in the key means a failed run is never replayed to its retry, and the backoff means a deterministic failure is not a new paid run every pass.
 - **The cache** is `factory.fleet_digest (key, fingerprint, answer, at)` (migration `022`), keys `heading:<hash of the text>`, `session:<id>` and
-  `reply:<id>`; every build reads it, so the text is in `/fleet` from the build after the pass. It survives a restart. A row nobody wants is dropped after 7 days.
+  `reply:<id>`; every build reads it, so the text is in `/fleet` from the build after the pass. It survives a restart. A row nobody wants is dropped after 7 days (not on a build that could not read all its sources).
   `factory.fleet_digest_runs` journals each call (when, ok, items, failed items, cost as agw reported it).
 - **The reply extract.** The transcript (`transcript_path`, only a Claude Code file `…/.claude*/projects/<project>/<session>.jsonl` after `realpath`) is read from its last
-  512 KiB as data: the last `text` block of an `assistant` line after the last prompt, no tool call, no thinking, at most 4,000 characters (start and end when longer). An answer with
+  512 KiB as data: the last `text` block of an `assistant` line after the last *prompt*, no tool call, no thinking, at most 4,000 characters (start and end when longer). Only a prompt somebody wrote starts a turn: a tool result (also with text beside it), a line
+  marked `isMeta`, a compact summary, a skill's base text, system reminders, hook feedback, local command output, a task notification and an interrupt marker do not. An answer with
   `asks: true` and confidence `high` or `medium` joins `asks` as `reply:<session>:<turn>` (`source: reply`, its `kind`, `short`, and the end of the message as `text`, `at` the time the
-  session went idle); a newer turn drops it at once, before the digest has read that turn.
+  session went idle); a newer turn drops it at once, before the digest has read that turn. A session that already has an ask of its own (`hc:` or `wait:`) is **one** ask: the reply gives it its `short` and `kind`, no second ask.
 - **IuRoot never goes.** The feed is built by `scopeOf` and nothing else: no heading of a visible repo or plan, no session whose repo, spawn repo, directory,
-  terminal directory or plan is visible (a session in an ordinary repo that works an IuRoot plan is IuRoot's), no session outside every repo. Their `short` stays the plan's
-  own comment or the heading cut at 8 words, their `headline` null, and the cache holds nothing of them.
-- **Failure is quiet.** A failed, slow (60 s process timeout; `agw` itself answers "pending", exit 10, at 50 s) or unparseable call stores nothing, the model keeps the cached text, and the pass is journalled
-  as failed. An item that comes back as `{id, error}` is not stored and not asked again for an hour. `factory status` shows `digest: N failed passes in the last 24 h` in
-  its attention (only when N > 0; the fleet model leaves that line out of the asks). `factory fleet --format json` has `digest { enabled, lastAt, lastError, days[] }`, the
+  terminal directory or plan is visible (a session in an ordinary repo that works an IuRoot plan is IuRoot's), no session outside every repo. `applyDigest` gates by the same scope (the repos, plans and sessions it offered),
+  so text is added to nothing else. Their `short` stays the plan's own comment or the heading cut at 8 words, their `headline` null, and the cache holds nothing of them.
+- **Failure is quiet.** A failed call stores nothing and the model keeps the cached text. `factory status` shows `digest: N failed passes in the last 24 h` in
+  its attention (only when N > 0; the fleet model leaves that line out of the asks). `factory fleet --format json` has `digest { enabled, pending, lastAt, lastError, days[] }`, the
   days UTC, newest first, each with calls, failed calls, items and `costUsd`; `digest` is not in the fingerprint, so a call that changes no text does not `NOTIFY`.
-  The 60 s ceiling is the brief's and departs from `rules/agent-limits.md` (a single non-agentic request: a hang guard of 30 minutes or more); the cost of a
-  slow call here is one pass, never a stuck Issue.
-- **Not done:** the `visible` marker still filters nothing in the (token-only) model; a reply of an hc-only terminal is not read (it has no transcript on record).
+- **Not done:** the `visible` marker still filters nothing in the (token-only) model.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
