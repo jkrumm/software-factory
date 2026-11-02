@@ -5,13 +5,22 @@
 # Pass: the lead ships with evidence and the Issue is watching; the bug is caught either by the lead's own production check or by
 # `make verify` after the hold (back to working, a note to the same lead, notify:regression); the fix ships, the second hold is green,
 # the Issue closes, finalize runs once, the transcript is archived. Evidence: docs/evidence/f2-gate/seeded-bug/<run>/.
-# Usage: seeded-bug.sh [run-id]     (exit 0: every pass line passed)
+#
+# Mode `regress` (seeded-bug-regress, one live proof of the regression branch): no seed in the repo. Once the Issue is `watching`, the script
+# breaks the deployed copy from outside, the deployed config only (a production fault that arrives after the ship), so `make verify` after
+# the 1 m hold is red for certain. Pass: hold red, the Issue back to working with a note to the same session and attempt, notify:regression
+# sent once, the lead fixes production (the repo's `make deploy` keeps an existing production config, so the fix is a change in the repo or
+# a removed config), ships again, the second hold is green, closed, finalized once. Evidence: docs/evidence/f2-gate/seeded-bug-regress/<run>/.
+# Usage: seeded-bug.sh [run-id] [seed|regress]     (exit 0: every pass line passed)
 # shellcheck disable=SC1091,SC2034 # SCRATCH and FINISHED are read by lib.sh's on_exit
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-run=${1:-b$(date -u +%d%H%M)}
-gameday=seeded-bug
-name=factory-gameday-bug
+run=${1:-b$(date -u +%d%H%M)} mode=${2:-seed}
+case $mode in
+  seed) gameday=seeded-bug name=factory-gameday-bug template=bug ;;
+  regress) gameday=seeded-bug-regress name=factory-gameday-regress template=regress ;;
+  *) echo "usage: seeded-bug.sh [run-id] [seed|regress]" >&2; exit 2 ;;
+esac
 mkdir -p "$EVIDENCE"
 TIMELINE=$EVIDENCE/quota-checks.txt quota_gate || exit 3
 claim_run "$gameday" "$run" || exit 2
@@ -27,27 +36,36 @@ log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut
 # A previous run's production, under the gameday's own directory; anything else at that path is not ours to delete.
 [[ ! -e $deployed || -e $deployed/REVISION ]] || { log "$deployed exists and is no gameday deployment; leaving it"; exit 1; }
 extra_cleanup() { rm -rf "${deployed:?}" && [[ ! -e $deployed ]]; }
-scratch_up "$name" "$F2_DIR/templates/bug"
+scratch_up "$name" "$F2_DIR/templates/$template"
 extra_cleanup # scratch_up has refused anything that is not ours, so a previous production is this gameday's leftover
 check_out=$(make -s -C "$repo" check 2>&1) || { log "make check FAILED on the scratch repo: $(tail -3 <<<"$check_out" | tr '\n' ' ')"; exit 1; }
 log "make check on the scratch repo: $(tail -1 <<<"$check_out")"
-# The seed is armed before the Issue is filed: the CR is in origin/master's production config, `make check` is green, and the deployed
-# copy's self test fails. A run whose seed is not armed would test nothing.
-cr=$(git --git-dir="$remote" show master:deploy/limits.conf | grep -c $'\r' || true)
-[[ $cr -eq 1 ]] || { log "seed NOT armed: deploy/limits.conf on origin/master has $cr CR lines"; exit 1; }
-make -s -C "$repo" deploy >/dev/null
-armed=$("$deployed/bin/wordstat" --self-test 2>&1 || true)
-rm -rf "${deployed:?}"
-log "seed armed: the deployed copy before the Issue says: $(tr '\n' ' ' <<<"$armed")"
-[[ $armed == *"is not a number"* ]] || { log "seed NOT armed"; exit 1; }
+if [[ $mode == seed ]]; then
+  # The seed is armed before the Issue is filed: the CR is in origin/master's production config, `make check` is green, and the deployed
+  # copy's self test fails. A run whose seed is not armed would test nothing.
+  cr=$(git --git-dir="$remote" show master:deploy/limits.conf | grep -c $'\r' || true)
+  [[ $cr -eq 1 ]] || { log "seed NOT armed: deploy/limits.conf on origin/master has $cr CR lines"; exit 1; }
+  make -s -C "$repo" deploy >/dev/null
+  armed=$("$deployed/bin/wordstat" --self-test 2>&1 || true)
+  rm -rf "${deployed:?}"
+  log "seed armed: the deployed copy before the Issue says: $(tr '\n' ' ' <<<"$armed")"
+  [[ $armed == *"is not a number"* ]] || { log "seed NOT armed"; exit 1; }
+else
+  # No seed anywhere in the repo: its production is healthy until the script breaks it from outside.
+  make -s -C "$repo" deploy >/dev/null
+  healthy_copy=$("$deployed/bin/wordstat" --self-test 2>&1 || true)
+  rm -rf "${deployed:?}"
+  log "no seed: the deployed copy before the Issue says: $healthy_copy"
+  [[ $healthy_copy == "selftest: ok words=9 lines=2" ]] || { log "the scratch repo's own production is not healthy"; exit 1; }
+fi
 
 ask="Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it."
-SOURCE_KEY=f2-bug-$run
+SOURCE_KEY=f2-$gameday-$run
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 seeded bug"}')
-filed=$(fx issue new --repo "$repo" --title "$ask" --facts - --key "f2-bug-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
+filed=$(fx issue new --repo "$repo" --title "$ask" --facts - --key "$SOURCE_KEY" --format json <<<"$facts" | jq -r '.id // .issue.id')
 [[ $filed =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
 issue=$filed
-log "issue $issue filed (source_key f2-bug-$run)"
+log "issue $issue filed (source_key $SOURCE_KEY)"
 attempt=1
 lead=$(lead_key "$issue" "$attempt")
 
@@ -61,9 +79,24 @@ log_change() {
     seen=$now
   fi
 }
+# Mode regress: the first time the Issue is `watching`, break the deployed config from outside (the repo is untouched). The fault is
+# in production only, and it arrives after the ship.
+broke_ms=""
+break_production() {
+  [[ $mode == regress && -z $broke_ms && $(state) == watching/* ]] || return 0
+  if [[ ! -e $deployed/config/limits.conf ]]; then
+    broke_ms=none
+    log "production break: no deployed config to break (the lead did not deploy)"
+    return 0
+  fi
+  printf 'MAX_WORDS=3\n' >"$deployed/config/limits.conf"
+  broke_ms=$(now_ms)
+  log "production break: the deployed config now says MAX_WORDS=3 (outside the repo, Issue $issue watching, hold $(issue_col "$issue" hold)); deployed self test: $("$deployed/bin/wordstat" --self-test 2>&1 | tr '\n' ' ')"
+}
 # Done: closed and finalized. Stuck: parked for something only the owner could answer, and still so 120 s later.
 stuck_since=""
 finished() {
+  break_production
   log_change
   local now
   now=$(state)
@@ -115,8 +148,16 @@ check_ge "ships (watching entered)" 1 "$ships"
 check_ge "evidence rows by the lead (not the factory) before the first ship" 1 "$(sqlq "SELECT count(*) FROM factory.evidence e WHERE e.issue_id = $issue AND e.author <> 'factory' AND e.kind <> 'transcript' AND e.at <= (SELECT min(at) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'ship' AND to_state = 'watching')")"
 check_ge "the Issue was watching (hold_over events)" 1 "$(ev hold_over)"
 
-if ((regressions > 0)); then
-  note_line "the bug was caught by make verify after the hold (regression), not by the lead's own production check"
+if ((regressions > 0)) || [[ $mode == regress ]]; then
+  note_line "the fault was caught by make verify after the hold (regression), not by the lead's own production check"
+  if [[ $mode == regress ]]; then
+    hold_ms=$(sqlq "SELECT coalesce((extract(epoch FROM min(at)) * 1000)::bigint, 0) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'hold_over'")
+    check "the production break landed while the Issue was watching, before the hold ended" 1 "$([[ $broke_ms =~ ^[0-9]+$ ]] && ((broke_ms < hold_ms)) && echo 1 || echo 0)"
+    notify_sent() { [[ $(sqlq "SELECT count(*) FROM factory.notifications WHERE key = 'notify:regression:$issue:1' AND sent_at IS NOT NULL") -eq 1 ]]; }
+    check "notify:regression:$issue:1 sent, once (within 60 s)" yes "$(wait_secs 60 notify_sent && echo yes || echo no)"
+    check "no other regression filed (only the first hold's)" 1 "$regressions"
+    check "repo untouched by the break: deploy/limits.conf on origin/master is not the fault" yes "$(git --git-dir="$remote" show master:deploy/limits.conf | grep -qx 'MAX_WORDS=3' && echo no || echo yes)"
+  fi
   check "regression events (one: the first hold)" 1 "$regressions"
   check "regression key and move" "regression:$issue:1|watching|working" "$(sqlq "SELECT key||'|'||from_state||'|'||to_state FROM factory.issue_events WHERE issue_id = $issue AND kind = 'regression' ORDER BY id LIMIT 1")"
   check "the regression came after hold_over" 1 "$(sqlq "SELECT (SELECT min(id) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'hold_over') < (SELECT min(id) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'regression')" | sed 's/t/1/;s/f/0/')"
