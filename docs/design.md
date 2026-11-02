@@ -595,11 +595,12 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
 | `reopen` | `factory issue reopen` (`POST /issues/:id/reopen`, token or socket) | `reopen:<issue>:<call id>` |
+| `stop` | `factory issue stop` (`POST /issues/:id/stop`, token only) | `stop:<issue>:<call id>` |
 | `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>` |
 | session events | hooks, live or from the spool | as in §3 |
 | `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified`, `regression` | the check after the hold, green or red, each naming its `hold`: an answer for an earlier hold is refused. A `regression` is also a `signal` with `regression: true` (F3), which names none | `verified:<issue>:<hold>`, `regression:<issue>:<hold>` |
-| `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park` | the owner or the orchestrator | the intent's id |
+| `note`, `answer`, `prio`, `dep`, `retier`, `park` | the owner or the orchestrator | the intent's id |
 | `settled`, `healed` | settle (F3) | the run's id |
 
 - **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
@@ -698,6 +699,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **Reopen.** `factory issue reopen <id> --reason <text>`, the only way a closed Issue moves: within 30 days of closing it is `queued`, and admission gives it a
   new attempt and a fresh worktree once the last attempt's `finalize` is done, so the old lead is gone before a new one starts. Past 30 days it is
   refused with a pointer to `factory issue new`.
+- **Stop.** `factory issue stop <id> --reason <text>` is the owner's way to end an Issue in any open state, one with no lead too, which no lead verb can reach: closed as `dropped` with the reason in `issue_events`, answered before the call returns like `ship`, and finalized like every close (with no attempt, only its place goes back). Token only: the socket has no such route, so no pane can end an Issue. A closed Issue is refused.
 - **Resume.** `factory issue resume <id> [--attempt <n>]` (`issues/resume.ts`) spawns `claude --resume <session> --fork-session` through the queue and the Runner:
   a tab in the repo's main checkout, role `lead`, no `issue_id`, so it takes no claim and reports on nothing. The Runner puts the archived file back under
   the account it got, in Claude Code's project directory for that path, an assumption about Claude Code's layout and the only one.
