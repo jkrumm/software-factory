@@ -342,8 +342,7 @@ export async function readSince(
   const start = windowStart({ t: options.t, seenAt, now })
   // The reading ends where its snapshot does: an ask raised after the last build is in neither this reading nor, once the owner has caught
   // up to its `until`, a window that would never show it.
-  const builtAt = new Date(snapshot.builtAt)
-  const until = readingEnd(now, builtAt)
+  const until = readingEnd(now, snapshot)
   const t = start.t > until ? until : start.t
   const groups = await buildSince(sql, {
     snapshot,

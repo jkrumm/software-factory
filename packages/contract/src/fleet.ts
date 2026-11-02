@@ -77,6 +77,11 @@ export const FleetGit = z.strictObject({
   lastCommit: FleetCommit.nullable(),
   /** the last 20 commits of the default branch, first-parent, newest first (FV Wave 4: what `GET /fleet/since` calls shipped); a snapshot an older release stored has none */
   recent: z.array(FleetCommit).default([]),
+  /**
+   * When `recent` was last read successfully (a build whose git timed out keeps the previous build's state and this time). A reading ends
+   * no later than the oldest of these, so the owner's cursor never passes a commit no reading could show. Not in the fingerprint; null: not read.
+   */
+  recentAt: z.string().nullable().default(null),
 })
 export type FleetGit = z.infer<typeof FleetGit>
 

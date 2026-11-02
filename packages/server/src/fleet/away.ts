@@ -29,15 +29,15 @@ export async function reportPresence(
 
 /**
  * Asks of the open window (raised since the cursor, at most 7 days back) that the stored snapshot still lists, besides `except`, and when
- * the snapshot was built: the cursor only reaches what the build saw.
+ * where a reading of it ends (`readingEnd`): the cursor only reaches what the build saw.
  */
-async function openAsks(sql: SQL, now: Date, except: string): Promise<{ open: number; builtAt: Date } | undefined> {
+async function openAsks(sql: SQL, now: Date, except: string): Promise<{ open: number; end: Date } | undefined> {
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return undefined
   const { t } = windowStart({ seenAt: await readSeenAt(sql), now })
   return {
     open: snapshot.asks.filter((a) => a.id !== except && Date.parse(a.at) >= t.getTime()).length,
-    builtAt: new Date(snapshot.builtAt),
+    end: readingEnd(now, snapshot),
   }
 }
 
@@ -61,5 +61,5 @@ export async function recordAskAct(
   if (!moveCursor) return
   const window = await openAsks(sql, now, ask)
   // An ask that landed after the build is not in the count: the cursor stops at what the build saw.
-  if (window?.open === 0) await moveSeen(sql, readingEnd(now, window.builtAt))
+  if (window?.open === 0) await moveSeen(sql, window.end)
 }

@@ -45,6 +45,8 @@ export class GitReader {
       dirty,
       lastCommit: sha && at ? { sha: sha.slice(0, 12), at, subject: subject ?? '' } : null,
       recent,
+      // The builder stamps the time of a successful read.
+      recentAt: null,
     }
   }
 
