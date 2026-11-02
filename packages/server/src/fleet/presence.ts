@@ -1,5 +1,6 @@
 import type { Presence, PresenceAct, PresencePlace } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { readSnapshot } from './store.ts'
 
 /**
  * Presence (FV Wave 4, docs/design.md §11 "The fleet view"): where the owner is, from acts only a person makes. An act is a row; presence
@@ -18,6 +19,12 @@ export const SINCE_MAX_BACK_MS = 7 * 24 * 3_600_000
 
 const TTL: Record<PresencePlace, number> = { desk: DESK_PRESENT_MS, phone: PHONE_PRESENT_MS }
 
+/**
+ * Where a reading ends: at `now`, or at the build of the snapshot it was made from when that is earlier. What landed after the build is in
+ * no reading, so the cursor never goes past it. The one definition: the since reading, `caught_up` and the act that closes a window use it.
+ */
+export const readingEnd = (now: Date, builtAt: Date): Date => (builtAt < now ? builtAt : now)
+
 /** One act of a person at a place; `caught_up` also moves the cursor. Short statements, no port inside. */
 export async function recordPresence(
   sql: SQL,
@@ -26,8 +33,13 @@ export async function recordPresence(
   const { place, act, now } = input
   await sql`INSERT INTO factory.fleet_presence_acts (place, act, at) VALUES (${place}, ${act}, ${now})`
   await sql`DELETE FROM factory.fleet_presence_acts WHERE at < ${new Date(now.getTime() - PRESENCE_KEEP_MS)}`
-  // The cursor goes to the end of the reading the owner saw, not to the click: what landed in between is in the next window.
-  if (act === 'caught_up') await moveSeen(sql, input.until && input.until < now ? input.until : now)
+  if (act !== 'caught_up') return
+  // The cursor goes to the end of the reading the owner saw, not to the click, and never past where the model was built: what landed in
+  // between is in the next window. With no model built there was no reading, and the cursor stays.
+  const snapshot = await readSnapshot(sql)
+  if (!snapshot) return
+  const end = readingEnd(now, new Date(snapshot.builtAt))
+  await moveSeen(sql, input.until && input.until < end ? input.until : end)
 }
 
 /** The cursor moves to `to` and never backwards. */

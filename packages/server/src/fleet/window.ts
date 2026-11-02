@@ -34,6 +34,8 @@ const BACKOFF_BASE_MS = 15 * 60_000
 const BACKOFF_MAX_MS = 6 * 3_600_000
 const WAITS_FAILED_MAX = 3
 const PENDING_MAX_MS = 2 * 3_600_000
+/** A claim with no run id is a crash's only once the call's own process guard has run out by this much. */
+const CLAIM_MARGIN_MS = 60_000
 const KEEP_MS = 14 * 24 * 3_600_000
 const LINE_MAX = 160
 const SHOWN = 8
@@ -187,17 +189,25 @@ export class WindowDigest {
     const at = this.deps.now()
     await sql.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(${LOCKS.windows})`
-      const rows: { hash: string; state: Row['state'] }[] = await tx`
-        SELECT hash, state FROM factory.fleet_windows WHERE hash = ${facts.hash} OR state IN ('queued', 'failed')`
+      const rows: { hash: string; state: Row['state']; context: string | null; requested_at: Date }[] = await tx`
+        SELECT hash, state, context, requested_at FROM factory.fleet_windows WHERE hash = ${facts.hash} OR state IN ('queued', 'failed')`
       const own = rows.find((r) => r.hash === facts.hash)
       const waiting = rows.some((r) => r.hash !== facts.hash)
-      if (own && own.state !== 'superseded' && !waiting) return
       if (!own || own.state === 'superseded') {
         await tx`
           INSERT INTO factory.fleet_windows (hash, facts, context, state, requested_at, updated_at)
           VALUES (${facts.hash}, ${facts.text}, ${facts.context}, 'queued', ${at}, ${at})
           ON CONFLICT (hash) DO UPDATE SET state = 'queued', context = EXCLUDED.context, requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at,
             retry_at = NULL, failures = 0, waits_failed = 0`
+      } else {
+        // The row is there: its context follows the sessions as they are now while it waits, and it is the newest request again.
+        if ((own.state === 'queued' || own.state === 'failed') && (own.context ?? '') !== facts.context) {
+          await tx`UPDATE factory.fleet_windows SET context = ${facts.context} WHERE hash = ${facts.hash}`
+        }
+        const [newest]: { newest: Date }[] = await tx`SELECT max(requested_at) AS newest FROM factory.fleet_windows`
+        if (newest && own.requested_at < newest.newest) {
+          await tx`UPDATE factory.fleet_windows SET requested_at = ${at} WHERE hash = ${facts.hash}`
+        }
       }
       // The newest request is the one about to be read: every other window still waiting is let go and never started.
       if (waiting) {
@@ -263,9 +273,15 @@ export class WindowDigest {
 
   private async start(row: Row): Promise<{ called: boolean; error?: string }> {
     const { sql } = this.deps
-    const [ended]: { n: number }[] = await sql`
-      SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE batch_hash = ${`window:${row.hash}`} AND terminal`
-    const key = `factory-window-${row.hash}-${ended?.n ?? 0}`
+    let key: string
+    try {
+      const [ended]: { n: number }[] = await sql`
+        SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE batch_hash = ${`window:${row.hash}`} AND terminal`
+      key = `factory-window-${row.hash}-${ended?.n ?? 0}`
+    } catch (error) {
+      // Claimed and failing before the call: a failure with its backoff, not a claim left behind.
+      return this.fail(row, `the call could not be prepared: ${message(error)}`, false)
+    }
     const stdin = JSON.stringify([
       { id: 'w', kind: 'window', text: row.facts, ...(row.context ? { context: row.context } : {}) },
     ])
@@ -288,8 +304,11 @@ export class WindowDigest {
 
   private async resume(row: Row): Promise<{ called: boolean; error?: string }> {
     if (!row.run_id) {
-      // Claimed and not heard of since (a crash between the claim and the run's id): back in the queue as it was, no failure to count.
-      // The idempotency key is the same, so agw hands back the run if it started one.
+      // Claimed and no run id yet. While the call can still be running (its process has a guard) that is the call; past it, a crash
+      // left the claim, and the window goes back in the queue with no failure counted: the idempotency key is the same, so agw hands back
+      // the run if it started one.
+      const claimed = this.deps.now().getTime() - row.updated_at.getTime()
+      if (claimed <= (this.deps.hangGuardMs ?? HANG_GUARD_MS) + CLAIM_MARGIN_MS) return { called: false }
       await this.deps
         .sql`UPDATE factory.fleet_windows SET state = 'queued', updated_at = ${this.deps.now()} WHERE hash = ${row.hash}`
       return { called: false }
@@ -343,7 +362,11 @@ export class WindowDigest {
     return { called: true }
   }
 
-  /** A failed call: the window waits (it is let go instead when a newer window has been asked for) (15 min, doubled with every failure in a row, at most 6 h) and the groups stand without the paragraph. */
+  /**
+   * A failed call. The window waits 15 min, doubled with every failure in a row, at most 6 h; the groups stand without the paragraph. If the
+   * default reading has asked for another window since (one that is queued, or requested after this one), this window is stale and is
+   * superseded instead: it would only spend the daily cap on a window nobody reads.
+   */
   private async fail(
     row: Row,
     reason: string,
@@ -354,14 +377,14 @@ export class WindowDigest {
     const failures = row.failures + 1
     const wait = Math.min(BACKOFF_BASE_MS * 2 ** (failures - 1), BACKOFF_MAX_MS)
     await this.deps.sql.begin(async (tx) => {
-      // The same lock a request holds: whether a newer window exists is decided with it, not beside it.
+      // Under the lock a request holds, so a request being made now is seen.
       await tx`SELECT pg_advisory_xact_lock(${LOCKS.windows})`
       await tx`
         UPDATE factory.fleet_windows
         SET state = CASE WHEN EXISTS (
               SELECT 1 FROM factory.fleet_windows w
               WHERE w.hash <> ${row.hash} AND (w.state = 'queued'
-                OR (w.state = 'ready' AND w.requested_at > (SELECT requested_at FROM factory.fleet_windows WHERE hash = ${row.hash})))
+                OR (w.state <> 'superseded' AND w.requested_at > (SELECT requested_at FROM factory.fleet_windows WHERE hash = ${row.hash})))
             ) THEN 'superseded' ELSE 'failed' END,
             run_id = NULL, failures = ${failures}, waits_failed = 0, retry_at = ${new Date(now.getTime() + wait)},
             error = ${reasonText(reason)}, updated_at = ${now}

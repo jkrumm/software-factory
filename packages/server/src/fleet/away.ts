@@ -1,6 +1,6 @@
 import type { Presence, PresenceAct, PresencePlace } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { moveSeen, readPresence, readSeenAt, recordPresence, windowStart } from './presence.ts'
+import { moveSeen, readingEnd, readPresence, readSeenAt, recordPresence, windowStart } from './presence.ts'
 import { readSince, type SinceReader } from './since.ts'
 import { readSnapshot } from './store.ts'
 
@@ -16,12 +16,7 @@ export async function reportPresence(
   const { sql } = reader
   const now = reader.now()
   const before = await readPresence(sql, now)
-  // The cursor never goes past where the model was built: no reading ever showed what landed after it (the same cut `readSince` makes).
-  const [built]: { built_at: Date }[] = input.until
-    ? await sql`SELECT built_at FROM factory.fleet_snapshot WHERE id = 1`
-    : []
-  const until = input.until && built && built.built_at < input.until ? built.built_at : input.until
-  await recordPresence(sql, { place: input.place, act: input.act, now, until })
+  await recordPresence(sql, { place: input.place, act: input.act, now, until: input.until })
   if (input.place === 'desk' && !before.desk.present && input.act !== 'caught_up') {
     try {
       await readSince(reader, { queue: 'now' })
@@ -66,5 +61,5 @@ export async function recordAskAct(
   if (!moveCursor) return
   const window = await openAsks(sql, now, ask)
   // An ask that landed after the build is not in the count: the cursor stops at what the build saw.
-  if (window?.open === 0) await moveSeen(sql, window.builtAt < now ? window.builtAt : now)
+  if (window?.open === 0) await moveSeen(sql, readingEnd(now, window.builtAt))
 }
