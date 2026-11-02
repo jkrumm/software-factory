@@ -69,12 +69,38 @@ const envOf = (argv: readonly string[], name: string): string | null => {
  * herdr-core has no call that settles the app's tab, so the app drops the tab when the terminal is removed.
  */
 export interface HcCloser {
+  /**
+   * Resolves when the terminal is gone. Throws `NotClosed` when nothing was done (it is not where the build saw it, or the core refused
+   * the kill and left it running); any other error leaves it unknown whether the kill happened.
+   */
   close(target: { address: string; cwd: string }): Promise<void>
+  /** Finishes a close that may have half happened, never killing: `gone` when the terminal is not there any more (a finished one is removed), `live` when it still runs. */
+  finish(address: string): Promise<'gone' | 'live'>
 }
+
+/** The close did nothing: the terminal was not touched. */
+export class NotClosed extends Error {}
 
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
 export class HcTerminals implements HcLister, HcCloser {
   constructor(private readonly client: HcClient) {}
+
+  async finish(address: string): Promise<'gone' | 'live'> {
+    let seen: z.output<typeof Record_>
+    try {
+      seen = await this.client.call('terminal.get', { terminal: address }, Record_, SOURCE_TIMEOUT_MS)
+    } catch (error) {
+      if (error instanceof HcError && error.refusal?.kind === 'not_found') return 'gone'
+      throw error
+    }
+    if (seen.state === 'live') return 'live'
+    try {
+      await this.client.call('terminal.rm', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
+    } catch (error) {
+      if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
+    }
+    return 'gone'
+  }
 
   async close({ address, cwd }: { address: string; cwd: string }): Promise<void> {
     const gone = (error: unknown): boolean => error instanceof HcError && error.refusal?.kind === 'not_found'
@@ -88,15 +114,17 @@ export class HcTerminals implements HcLister, HcCloser {
     if (seen.state === 'live') {
       const state = seen.status?.state
       if (state !== 'idle' && state !== 'done')
-        throw new Error(`${address} is ${state ?? 'not reporting'} again; not closed`)
-      if (seen.cwd !== cwd) throw new Error(`${address} is in ${seen.cwd ?? 'no directory'} now; not closed`)
+        throw new NotClosed(`${address} is ${state ?? 'not reporting'} again; not closed`)
+      if (seen.cwd !== cwd) throw new NotClosed(`${address} is in ${seen.cwd ?? 'no directory'} now; not closed`)
       try {
         await this.client.call('terminal.kill', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
       } catch (error) {
         // Already finished or gone is what was wanted. Any other refusal means the core looked and left it running, and a timeout or a
         // dead process says nothing: not closed, the next pass looks again.
         const kind = error instanceof HcError ? error.refusal?.kind : undefined
-        if (kind !== 'not_found' && kind !== 'finished') throw error
+        if (kind === undefined) throw error
+        if (kind !== 'not_found' && kind !== 'finished')
+          throw new NotClosed(`${address}: the core refused the kill (${kind})`)
       }
     }
     try {

@@ -233,7 +233,7 @@ async function handled(
     payload: { repo?: string }
   }[] = await sql`
     SELECT id, kind, subject, what, at, undone_at, payload FROM factory.fleet_triage_log
-    WHERE at >= ${t} AND at <= ${now} ORDER BY id DESC LIMIT ${LIMIT}`
+    WHERE at >= ${t} AND at <= ${now} AND payload->>'state' IS DISTINCT FROM 'closing' ORDER BY id DESC LIMIT ${LIMIT}`
   for (const r of rows) {
     // The reaper acts on ordinary repos only (never IuRoot's), and its rows cannot be undone.
     if (r.kind === 'reaped') {
