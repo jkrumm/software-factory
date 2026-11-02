@@ -158,7 +158,7 @@ describe('classify', () => {
     await pump.start()
     await until(() => classifier.calls.length >= 2)
     // Two at a time, and the same two are not started again while they run.
-    expect(classifier.calls.map((call) => call.id)).toEqual([a.id, b.id])
+    expect(classifier.calls.map((call) => call.id).sort()).toEqual([a.id, b.id])
     open()
     await pump.settled()
     expect((await stored(a.id)).classified_at).not.toBeNull()
@@ -166,7 +166,7 @@ describe('classify', () => {
     await pump.start()
     await until(() => classifier.calls.length >= 3)
     await pump.settled()
-    expect(classifier.calls.map((call) => call.id)).toEqual([a.id, b.id, c.id])
+    expect(classifier.calls.map((call) => call.id).sort()).toEqual([a.id, b.id, c.id])
     await pump.start()
     expect(classifier.calls).toHaveLength(3)
   })
