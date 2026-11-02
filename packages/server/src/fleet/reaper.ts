@@ -13,7 +13,7 @@ import type { GitReader } from './git.ts'
 import type { MergedSession } from './model.ts'
 import type { Places } from './place.ts'
 import { type HcCloser, NotClosed } from './sources.ts'
-import { closingReaped, insertLog, type NewLogRow, oldClosing, settleReaped } from './triage-store.ts'
+import { type ClosingRow, closingReaped, insertLog, type NewLogRow, settleReaped } from './triage-store.ts'
 
 /** A session is idle for this long (no turn, no hook event, hc not working) before it is looked at. */
 export const REAPER_IDLE_MS = 2 * 3_600_000
@@ -25,6 +25,8 @@ const VERDICT_TTL_MS = 120_000
 export const REAPER_ACT_BUDGET_MS = 60_000
 /** A close that was started and never confirmed shows in `closed` as unsettled once it is this old. */
 const UNSETTLED_AFTER_MS = 3_600_000
+/** A terminal that still runs, found so for a close that was started, is taken back only after this long (two reads apart, not one slow answer). */
+const LIVE_GRACE_MS = 10 * 60_000
 /** `closed` shows the last day. */
 const CLOSED_WINDOW_MS = 24 * 3_600_000
 const EVAL_CONCURRENCY = 4
@@ -106,6 +108,7 @@ function worktreeOf(path: string): { main: string; worktree: string; name: strin
     ? { main: found[1], worktree: `${found[1]}/.claude/worktrees/${found[2]}`, name: found[2] }
     : undefined
 }
+const ok = <T>(value: T): Promise<{ value: T; error?: string }> => Promise.resolve({ value })
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 const inside = (path: string, roots: readonly string[]) => roots.some((root) => path.startsWith(`${root}/`))
 
@@ -135,16 +138,12 @@ export class Reaper {
     const errors = this.carried
     this.carried = []
     const at = now()
-    if (mode === 'off') {
-      const unsettled = await this.unsettled(at).catch((error: unknown) => {
-        errors.push(`reaper: unsettled closes could not be read: ${message(error)}`)
-        return []
-      })
-      return { reaper: { ...NO_REAPER, closed: unsettled }, plan: NO_PLAN, errors }
-    }
+    // A failing close is counted per terminal for as long as hc lists it, whatever else a build does or fails at.
+    const listed = new Set(input.sessions.map((m) => m.hc?.address))
+    for (const address of this.failures.keys()) if (!listed.has(address)) this.failures.delete(address)
 
     const closer = this.deps.closer
-    const canAct = input.complete && closer !== undefined
+    const canAct = mode === 'on' && input.complete && closer !== undefined
     if (mode === 'on' && !canAct) {
       errors.push(
         closer
@@ -153,34 +152,46 @@ export class Reaper {
       )
     }
 
-    let judged: Judged[] = []
-    try {
-      judged = await this.judge(input, await this.openIssues(), at)
-    } catch (error) {
-      // Without knowing which sessions an Issue holds nothing is judged, and nothing is closed.
-      errors.push(`reaper: open Issues could not be read: ${message(error)}`)
-    }
-    const eligible = judged.flatMap((j) => ('eligible' in j ? [j.eligible] : []))
-    const present = new Set(eligible.map((e) => e.address))
-    for (const address of this.failures.keys()) if (!present.has(address)) this.failures.delete(address)
+    // The reads are independent; each carries its own failure, said in a fixed order.
+    const [judged, history, closing] = await Promise.all([
+      mode === 'off'
+        ? ok<Judged[]>([])
+        : this.guarded(() => this.judgeAll(input, at), [], 'open Issues could not be read'),
+      mode === 'off'
+        ? ok<ReaperClosed[]>([])
+        : this.guarded(() => this.recent(at), [], 'the closed sessions could not be read'),
+      this.guarded(() => closingReaped(this.deps.sql), [] as ClosingRow[], 'unsettled closes could not be read'),
+    ])
+    for (const r of [judged, history, closing]) if (r.error) errors.push(`reaper: ${r.error}`)
+
+    const eligible = judged.value.flatMap((j) => ('eligible' in j ? [j.eligible] : []))
     eligible.sort(
       (a, b) =>
         (this.failures.get(a.address) ?? 0) - (this.failures.get(b.address) ?? 0) ||
         a.idleSince.localeCompare(b.idleSince) ||
         a.id.localeCompare(b.id),
     )
-
-    if (mode === 'on' && canAct && eligible.length > REAPER_MAX_CLOSES) {
+    if (canAct && eligible.length > REAPER_MAX_CLOSES) {
       errors.push(`reaper: ${eligible.length - REAPER_MAX_CLOSES} more idle worktree sessions wait for the next pass`)
     }
-    const history = await this.recent(at).catch((error: unknown) => {
-      errors.push(`reaper: the closed sessions could not be read: ${message(error)}`)
-      return []
-    })
-    const unsettled = await this.unsettled(at).catch((error: unknown) => {
-      errors.push(`reaper: unsettled closes could not be read: ${message(error)}`)
-      return []
-    })
+    // `dry` closes nothing, ever: it neither finishes nor rewrites an unsettled close, it says there are some.
+    if (mode === 'dry' && closing.value.length > 0) {
+      errors.push(`reaper: ${closing.value.length} unsettled closes wait for FACTORY_REAPER=on`)
+    }
+
+    const unsettled: ReaperClosed[] = closing.value
+      .filter((r) => at.getTime() - r.at.getTime() >= UNSETTLED_AFTER_MS)
+      .map((r) => ({
+        session: r.session,
+        repo: r.repo ? basename(r.repo) : '',
+        what: `${r.what.replace(/^Closed /, 'Closing ')} (not confirmed)`,
+        why: 'Unsettled: the close was started and has not been confirmed for over an hour; the terminal may or may not be gone.',
+        evidence: r.evidence,
+        at: r.at.toISOString(),
+        dry: false,
+        unsettled: true,
+        logId: r.id,
+      }))
     const dry: ReaperClosed[] =
       mode === 'dry'
         ? eligible.map((e) => ({
@@ -198,12 +209,28 @@ export class Reaper {
     return {
       reaper: {
         mode,
-        closed: [...history, ...unsettled, ...dry],
-        kept: judged.flatMap((j) => ('keep' in j ? [j.keep] : [])),
+        closed: [...history.value, ...unsettled, ...dry],
+        kept: judged.value.flatMap((j) => ('keep' in j ? [j.keep] : [])),
       },
-      plan: { reconcile: canAct, close: mode === 'on' && canAct ? eligible.slice(0, REAPER_MAX_CLOSES) : [] },
+      plan: {
+        reconcile: canAct && closing.value.length > 0,
+        close: canAct ? eligible.slice(0, REAPER_MAX_CLOSES) : [],
+      },
       errors,
     }
+  }
+
+  /** A read that cannot fail the others: its value, or the fallback with the reason. */
+  private async guarded<T>(read: () => Promise<T>, fallback: T, what: string): Promise<{ value: T; error?: string }> {
+    try {
+      return { value: await read() }
+    } catch (error) {
+      return { value: fallback, error: `${what}: ${message(error)}` }
+    }
+  }
+
+  private async judgeAll(input: ReaperInput, at: Date): Promise<Judged[]> {
+    return this.judge(input, await this.openIssues(), at)
   }
 
   /**
@@ -385,22 +412,6 @@ export class Reaper {
     }))
   }
 
-  /** Closes started and never confirmed for over an hour: shown, never hidden (the terminal may or may not be gone). */
-  private async unsettled(at: Date): Promise<ReaperClosed[]> {
-    const rows = await oldClosing(this.deps.sql, new Date(at.getTime() - UNSETTLED_AFTER_MS))
-    return rows.map((r) => ({
-      session: r.session,
-      repo: r.repo ? basename(r.repo) : '',
-      what: r.what,
-      why: 'Unsettled: the close was started and has not been confirmed for over an hour; the terminal may or may not be gone.',
-      evidence: r.evidence,
-      at: r.at,
-      dry: false,
-      unsettled: true,
-      logId: r.id,
-    }))
-  }
-
   /** Why a worktree is not closable now (an empty list: nothing holds it), and the merge proof. Git is asked fresh, never from the cache. */
   private async gitVerdict(worktree: string): Promise<GitAnswer> {
     const reasons: string[] = []
@@ -410,10 +421,9 @@ export class Reaper {
       if (dirty > 0) reasons.push(`the worktree has ${dirty} uncommitted or untracked entr${dirty === 1 ? 'y' : 'ies'}`)
       const merge = await this.deps.git.mergeProof(worktree)
       if (merge.merged) proof = merge.proof
-      else
-        reasons.push(
-          `branch ${(await this.deps.git.branchOf(worktree)) ?? 'detached head'} is not merged: ${merge.proof}`,
-        )
+      // Nothing made here is its own reason, not a branch that is "not merged".
+      else if (merge.nothing) reasons.push(merge.proof)
+      else reasons.push(`branch ${(await this.deps.git.branchOf(worktree)) ?? 'detached head'}: ${merge.proof}`)
     } catch (error) {
       reasons.push(`cannot tell: ${message(error)}`)
     }
@@ -455,9 +465,12 @@ export class Reaper {
     return true
   }
 
-  /** Rows left `closing` by a crash or an uncertain failure: a terminal that is gone is closed, one that still runs was never touched. */
+  /**
+   * Rows left `closing` by a crash or an uncertain failure: a terminal that is gone is closed; one that still runs was probably never
+   * touched, and its row is taken back only once it is old enough to have been read twice (before that it stays `closing`).
+   */
   private async reconcile(closer: HcCloser, errors: string[], spent: () => boolean, gone: Set<string>): Promise<void> {
-    let pending: Awaited<ReturnType<typeof closingReaped>>
+    let pending: ClosingRow[]
     try {
       pending = await closingReaped(this.deps.sql)
     } catch (error) {
@@ -473,8 +486,12 @@ export class Reaper {
       }
       try {
         const state = await closer.finish(row.address)
-        if (state === 'gone') gone.add(row.address)
-        await this.settle(row, state === 'gone' ? 'closed' : 'untouched', errors)
+        if (state === 'gone') {
+          gone.add(row.address)
+          await this.settle(row, 'closed', errors)
+        } else if (this.deps.now().getTime() - row.at.getTime() >= LIVE_GRACE_MS) {
+          await this.settle(row, 'untouched', errors)
+        }
       } catch (error) {
         errors.push(`reaper: the close of ${row.address} is still unsettled: ${message(error)}`)
       }

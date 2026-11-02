@@ -130,30 +130,61 @@ export class GitReader {
   }
 
   /**
-   * Whether the work of this worktree is in the repo's default branch, with the proof as one line. Work means a commit made here: the
-   * worktree's own `HEAD` reflog must show one (`commit`, `cherry-pick`, `revert`), else there is nothing to be merged and the answer is
-   * "nothing done", not merged (a branch still where the worktree was cut proves nothing). The tip is `HEAD`, or for a branch that is gone
-   * the newest commit made here. Merged is: the tip is an ancestor of a default ref (any of `origin/main`, `origin/master`, `main`,
-   * `master` that exists), or every commit up to it has an equal patch there (`git cherry`), or its tree equals the tree of a commit on that
-   * ref's first-parent line (a squash merge). A tip with a commit the default branch lacks, in content as well, is unmerged. Read-only.
+   * Whether the work of this worktree is in the repo's default branch, with the proof as one line. Work is every commit made here, as the
+   * worktree's own `HEAD` log shows it (`commit`, `commit (amend)`, `cherry-pick`, `revert`, `rebase (pick)` and the like; a merge commit made
+   * to bring the default branch in is none, and a commit an amend replaced is not counted). None at all is `nothing`: a branch still where the
+   * worktree was cut proves nothing. Merged is: `HEAD` is in the default branch (an ancestor of any of `origin/main`, `origin/master`,
+   * `main`, `master` that exists; or every commit up to it has an equal patch there, `git cherry`; or its tree equals a commit on the first-parent
+   * line, a squash merge), **and** every commit made here that `HEAD` no longer holds (a reset or a checkout moved off it) is on the default
+   * branch by commit or by patch. A commit made here that is not there keeps the worktree ("own commit X not on the default branch"). Read-only.
    */
-  async mergeProof(worktree: string): Promise<{ merged: boolean; proof: string }> {
-    const own = await this.ownTip(worktree)
-    if ('why' in own) return { merged: false, proof: own.why }
-    const head = own.tip
+  async mergeProof(worktree: string): Promise<{ merged: boolean; proof: string; nothing?: boolean }> {
+    const own = await this.ownCommits(worktree)
+    if ('why' in own) return { merged: false, proof: own.why, nothing: true }
+    const head = (
+      await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
+    ).trim()
+    if (!head) return { merged: false, proof: 'its head has no commit' }
     const refs = await this.defaultRefs(worktree)
     if (refs.length === 0) return { merged: false, proof: 'the repo has no default branch to compare with' }
+
+    const held = await this.headProof(worktree, head, refs)
+    // The commits made here that HEAD does not hold any more: each must be on the default branch itself.
+    const loose: string[] = []
+    for (const sha of own.shas) {
+      if (sha === head) continue
+      const inHead = await this.isAncestor(worktree, sha, head)
+      if (!inHead) loose.push(sha)
+    }
+    for (const sha of loose) {
+      let there = false
+      for (const ref of refs) {
+        if ((await this.isAncestor(worktree, sha, ref.sha)) || (await this.patchThere(worktree, ref.sha, sha))) {
+          there = true
+          break
+        }
+      }
+      if (!there) return { merged: false, proof: `own commit ${sha.slice(0, 12)} not on the default branch` }
+    }
+    if (!held.merged) return held
+    return {
+      merged: true,
+      proof: loose.length > 0 ? `${held.proof}; ${loose.length} commit(s) it moved off are there too` : held.proof,
+    }
+  }
+
+  /** `HEAD` against the default refs: by commit, by patch, or by tree. */
+  private async headProof(
+    worktree: string,
+    head: string,
+    refs: readonly { name: string; sha: string }[],
+  ): Promise<{ merged: boolean; proof: string }> {
     const tree = (await this.git(worktree, ['rev-parse', `${head}^{tree}`])).trim()
-    const short = head.slice(0, 12) + (own.gone ? ' (its branch is gone)' : '')
+    const short = head.slice(0, 12)
     for (const ref of refs) {
       const name = ref.name.replace(/^refs\/(?:remotes|heads)\//, '')
-      const ancestor = await this.run(
-        ['git', '--no-optional-locks', '-C', worktree, 'merge-base', '--is-ancestor', head, ref.sha],
-        GIT_TIMEOUT_MS,
-        childEnv({ GIT_TERMINAL_PROMPT: '0' }),
-      )
-      if (ancestor.exitCode === 0) return { merged: true, proof: `commit ${short} is in ${name}` }
-      if (ancestor.exitCode !== 1) throw new Error(`git merge-base failed (exit ${ancestor.exitCode})`)
+      if (await this.isAncestor(worktree, head, ref.sha))
+        return { merged: true, proof: `commit ${short} is in ${name}` }
       const cherry = (await this.git(worktree, ['cherry', ref.sha, head])).split('\n').filter(Boolean)
       if (cherry.length > 0 && cherry.every((line) => line.startsWith('- '))) {
         return { merged: true, proof: `every commit up to ${short} has an equal patch on ${name} (git cherry)` }
@@ -167,38 +198,61 @@ export class GitReader {
     return { merged: false, proof: `unmerged, ${ahead} commit(s) the default branch lacks, in content as well` }
   }
 
+  /** Whether `sha` is in the history of `of`. Throws when git cannot say. */
+  private async isAncestor(worktree: string, sha: string, of: string): Promise<boolean> {
+    const done = await this.run(
+      ['git', '--no-optional-locks', '-C', worktree, 'merge-base', '--is-ancestor', sha, of],
+      GIT_TIMEOUT_MS,
+      childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+    )
+    if (done.exitCode === 0) return true
+    if (done.exitCode === 1) return false
+    throw new Error(`git merge-base failed (exit ${done.exitCode})`)
+  }
+
+  /** Whether the patch of `sha` is on `upstream` (`git cherry` marks it `-`). */
+  private async patchThere(worktree: string, upstream: string, sha: string): Promise<boolean> {
+    const lines = (await this.git(worktree, ['cherry', upstream, sha])).split('\n').filter(Boolean)
+    return lines.length > 0 && lines.every((line) => line.startsWith('- '))
+  }
+
   /**
-   * The commit to compare: `HEAD`, once this worktree's `HEAD` reflog shows a commit made here. A `HEAD` with no commit (the branch is gone)
-   * falls back to the newest commit the reflog shows. `why` says what is missing.
+   * The commits made in this worktree, oldest first, from its own `HEAD` log (read from the file in its git dir: it outlives a moved or
+   * deleted branch). Merge commits made to bring a branch in are left out, and so is a commit an amend replaced. One that is not in the repo
+   * any more (pruned) cannot be judged and is left out. `why` says that nothing was made here.
    */
-  private async ownTip(worktree: string): Promise<{ tip: string; gone: boolean } | { why: string }> {
-    // The worktree's own `HEAD` log, read from the file: `git reflog` refuses a `HEAD` that has no commit (a deleted branch).
+  private async ownCommits(worktree: string): Promise<{ shas: string[] } | { why: string }> {
     const dir = (await this.git(worktree, ['rev-parse', '--absolute-git-dir']).catch(() => '')).trim()
     const log = dir
       ? await Bun.file(`${dir}/logs/HEAD`)
           .text()
           .catch(() => undefined)
       : undefined
-    if (log === undefined) return { why: 'nothing on record that this worktree did any work (no reflog)' }
-    // `<old> <new> <who> <time> <zone>\t<message>`, oldest first: the newest commit made here is the last such line.
-    const made = log
-      .split('\n')
-      .reverse()
-      .flatMap((line) => {
-        const [front, subject] = line.split('\t')
-        const sha = front?.split(' ')[1]
-        return sha && /^(?:commit|cherry-pick|revert)\b/.test(subject ?? '') ? [[sha, subject]] : []
-      })
-    const newest = made[0]?.[0]
-    if (!newest) return { why: 'nothing done: no commit of its own' }
-    const head = (
-      await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
-    ).trim()
-    if (head) return { tip: head, gone: false }
-    const known = await this.git(worktree, ['rev-parse', '--verify', '--quiet', `${newest}^{commit}`]).catch(() => '')
-    return known.trim()
-      ? { tip: newest, gone: true }
-      : { why: 'its branch is gone and its last commit is not in the repo any more' }
+    if (log === undefined) return { why: 'no commit made here (no reflog)' }
+    // `<old> <new> <who> <time> <zone>\t<message>`, oldest first.
+    const made: string[] = []
+    const replaced = new Set<string>()
+    for (const line of log.split('\n')) {
+      const [front, subject = ''] = line.split('\t')
+      const [old, sha] = front?.split(' ') ?? []
+      if (!sha) continue
+      if (/^commit \(amend\)/.test(subject) && old) replaced.add(old)
+      if (
+        /^(?:commit(?! \(merge\))|cherry-pick|revert|rebase \((?:pick|reword|squash|fixup|continue)\))(?:[\s:(]|$)/.test(
+          subject,
+        )
+      ) {
+        made.push(sha)
+      }
+    }
+    const shas = [...new Set(made)].filter((sha) => !replaced.has(sha)).slice(-200)
+    if (shas.length === 0) return { why: 'no commit made here' }
+    const present: string[] = []
+    for (const sha of shas) {
+      const known = await this.git(worktree, ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`]).catch(() => '')
+      if (known.trim()) present.push(sha)
+    }
+    return present.length > 0 ? { shas: present } : { why: 'no commit made here that the repo still has' }
   }
 
   /** The branch a worktree is on; null when detached. */
