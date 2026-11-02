@@ -397,8 +397,8 @@ effect under a key, so a replay records nothing):
 #### `factory status`
 
 **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
-and spawns), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
-the accounts' readings, prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
+and spawns, and the Issues' open questions, parks and failures), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
+the accounts' readings, the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
 
 #### The spool and the event key
 
@@ -590,7 +590,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 
 | Event | Sent by | Key |
 |-|-|-|
-| `signal` | dedup: a repeat (recorded, the state stays) or, with `regression: true` in its payload while `watching`, a regression | the source's event id |
+| `signal` | dedup (F3, no sender yet): a repeat (recorded, the state stays) or, with `regression: true` in its payload while `watching`, a regression | the source's event id |
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
@@ -600,8 +600,10 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | session events | hooks, live or from the spool | as in §3 |
 | `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified`, `regression` | the check after the hold, green or red, each naming its `hold`: an answer for an earlier hold is refused. A `regression` is also a `signal` with `regression: true` (F3), which names none | `verified:<issue>:<hold>`, `regression:<issue>:<hold>` |
-| `note`, `answer`, `prio`, `dep`, `retier`, `park` | the owner or the orchestrator | the intent's id |
-| `settled`, `healed` | settle (F3) | the run's id |
+| `note` | the owner, `factory issue note` (`POST /issues/:id/note`, token only) | `<issue>:note:<call id>` |
+| `answer` | the owner, `factory issue answer` (`POST /issues/:id/answer`, token only) | `<issue>:answer:<call id>` |
+| `prio`, `dep`, `retier`, `park` | the orchestrator (F4): the table has entries, nothing sends them yet | the intent's id |
+| `settled`, `healed` | settle (F3, no sender yet) | the run's id |
 
 - **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
   SKIP LOCKED`, the form that leaves foreign keys alone: copying a session event in needs `KEY SHARE` on the Issue and never waits
@@ -703,9 +705,29 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **Resume.** `factory issue resume <id> [--attempt <n>]` (`issues/resume.ts`) spawns `claude --resume <session> --fork-session` through the queue and the Runner:
   a tab in the repo's main checkout, role `lead`, no `issue_id`, so it takes no claim and reports on nothing. The Runner puts the archived file back under
   the account it got, in Claude Code's project directory for that path, an assumption about Claude Code's layout and the only one.
-- **Ids survive a restore.** After a restore the sequence moves past every id in pane names and the spool. A lead
-  reporting an Issue the dump lost gets it rebuilt from the spool, or parked.
-- **Schedules.** A Postgres lease; `job_runs` is unique per (job, slot).
+- **Following an Issue** (`issues/follow.ts`, reads only). `factory status` and `GET /status` carry an ISSUES section: every open Issue
+  (and a closed one, for 24 hours, whose finalize failed) with its state, repo, the lead's session (the current attempt's, once it exists), the
+  lead's last `phase` of this attempt, what it waits for (`waiting`: the reason; a `queued` Issue the project's claim has no room for:
+  `claim`), the evidence still missing, and the open questions. Most urgent first (a failed finalize, `waiting`, `working`, `watching`,
+  `queued`), at most 40, the rest counted (`issuesMore`). Read from stored rows only, never git: the evidence missing is what the last `ship`
+  or `close` of this attempt derived from its commits (`derived.required`, on its inbox row), less the rows in `evidence` that are
+  fresh by the gate's own rule (`unmetKinds`), so until a lead has tried one, nothing is known and nothing is listed. The Issues
+  Those that need a look (an open question, a park, a lead or worktree that did not start, a finalize that failed) also have a line in ATTENTION (§3 "`factory status`"). `factory issue show <id>` (`GET /issues/:id/timeline`, token or socket) is the
+  Issue with its facts, its story oldest first, its evidence and its questions: the story is the Issue's `issue_events` (what the lifecycle
+  applied or refused, with the state it moved from and to) and the inbox rows no event came of (still unhandled, with the error of a row
+  that failed; a session's silent events are `factory session get`'s), the newest 500 with the rest counted (`timelineCut`). Every payload
+  is data as its sender filed it: on a terminal, one cut line, `key=value`, control characters gone. `--format json` is the whole.
+- **Notes.** `factory issue note <id> <text> [--id <call id>]` is the owner's way to reach a lead (`POST /issues/:id/note`, token only: a pane
+  can already type into a session with `session note`, and what a brief carries is the owner's). One inbox row `<issue>:note:<call id>`;
+  an Issue that is `queued`, `working`, `waiting` or `watching` takes it, a closed one is 409. The lifecycle records it, and for an Issue with
+  a lead plans `note_lead`, which types it through the session notes of §3 (`recordPrompt`, source `note`, prompt id `issue:<issue>:note:<call id>`,
+  so a repeated id types once) and tries again until the lead's session exists. An Issue with no lead running keeps it as the row, and the
+  **next brief carries it** (§5 "The brief"). A lead that is gone, whose Issue is not `working`, is not parked for it: the note stays in the
+  timeline.
+- **Ids and a restore.** Not built for Issues. `issues.id` is a sequence, and nothing moves it past the ids in pane names (`lead-<issue>-<attempt>`) or the
+  spool after a restore, nor rebuilds an Issue the dump lost from the spool: the F1 gameday proved it for sessions and spawns, whose keys are not
+  sequences. The F2 gamedays of §13 (Wave 6) decide it.
+- **Schedules.** Not built (F3): a Postgres lease, and `job_runs` unique per (job, slot).
 - **Tests.** A golden test pins each path's sequence of transitions and effects. A replay test crashes after every
   effect and replays, and must end with zero duplicates.
 
@@ -716,18 +738,18 @@ cannot close.
 
 | Step | Owner | Engine | Out |
 |-|-|-|-|
-| Intake | factory | a poller per source; requests skip to Classify | Signal |
-| Dedup by symptom | factory | rules; the judge once trusted (§8) | a new Issue, or a Signal attached |
-| Settle + runbook | factory | a grace timer; a runbook from `project.yaml` | healed and closed, or queued |
+| Intake | factory | a poller per source (F3); requests skip to Classify | Signal |
+| Dedup by symptom | factory | rules; the judge once trusted (§8, F3) | a new Issue, or a Signal attached |
+| Settle + runbook | factory | a grace timer; a runbook from `project.yaml` (F3) | healed and closed, or queued |
 | Classify | factory | one `agw` workflow | project, kind, class, size; the lead's tier and effort |
 | Queue + admit | factory | §3, §7 | an account, or a `resume_at` |
 | Spawn | factory | `Runner`, in a worktree of the lead's own | a lead with the brief |
 | Root cause → production | **lead** | Claude Code on Max, alone or with workers | shipped with evidence, closed, blocked or asking |
 | Watch | factory | the hold, `make verify`, the probes | closed, or a regression back to the lead |
-| Learn | factory | `agw` workflows, from the lead's report | known fix, labels, runbook candidates, changelog |
+| Learn | factory | `agw` workflows, from the lead's report (F3) | known fix, labels, runbook candidates, changelog |
 
-**Three ways in.** Signals from sources and jobs go through dedup (until F3, an alert reaches the loop through the door, §11, as one Issue). Requests go straight to Classify: Argo, Hermes,
-`factory issue new`, a TickTick item tagged `#factory`, a GitHub issue labelled `factory`, a `/factory` comment by
+**Three ways in.** Signals from sources and jobs go through dedup (until F3, an alert reaches the loop through the door, §11, as one Issue). Requests go straight to Classify. Built:
+`factory issue new` and `POST /issues` (so a pane, Argo or Hermes can file one). Designed, not built (F3): a TickTick item tagged `#factory`, a GitHub issue labelled `factory`, a `/factory` comment by
 the owner. A label starts work rather than authorship, because every agent on the mini acts as the owner's GitHub
 user; an issue labelled `alert` is a signal. The factory never triggers on its own comments, and text it cannot parse
 triggers nothing. Initiatives are requests too big for one lead; the orchestrator plans them into child Issues.
@@ -738,7 +760,7 @@ Every repo under `~/SourceRoot` takes requests, with or without a manifest.
 
 | Phase | The lead | With |
 |-|-|-|
-| Investigate | reproduces, reads logs and traces, finds the cause; merges or splits Issues when the cause says so | `/otel`, `make logs`, `factory issue show\|merge\|split` |
+| Investigate | reproduces, reads logs and traces, finds the cause; merges or splits Issues when the cause says so (F3: `merge` and `split` do not exist yet) | `/otel`, `make logs`, `factory issue show` |
 | Plan | picks the shape: alone, subagents, `rd fan` or a `/wave` chain | `/research`, the project's docs |
 | Build | implements and writes the tests | `@implementer`, `rd fan` |
 | Check | `make check`, `make test`, a review | `/check`, `/review` |
@@ -772,28 +794,33 @@ false confidence; the probes are the check that does not depend on it.
 ### The brief
 
 - **The ask:** the owner's words, or what the signals saw: what, where, since when, how often. Filed as data and fenced for every source (`source` is the caller's choice, and any pane on the socket can file), under "the ask, as filed".
-- **Facts:** the raw signals, the commands that pull their logs and traces, recent deploys and commits. Alert and
+- **Facts:** what the Issue was filed with (`facts`: for an alert, what the door parsed). Alert and
   issue text is marked as data, never instructions: the facts are a fenced block (the fence longer than any run of backticks inside), cut at
   16,000 characters with the way to the rest.
+- **Notes from the owner:** `factory issue note` texts filed while no lead was running, oldest first (at most 20), in a fence, only when there are any.
+  The ones since the previous attempt's brief that no lead was typed (no prompt `issue:<issue>:note:<call id>` that is `sent` or `delivered`);
+  each is recorded as a `delivered` prompt in the spawn's transaction, so a `note_lead` for the same call never types it a second time.
 - **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.
 - **Standing orders:** decide alone except the business classes; ask through `factory issue ask`; workers stay on
   Max; never end a turn on a background shell; every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
   by a test), so they are a prompt-cache hit. For that the brief opens with the standing orders and the done-means text, which are the same
-  in every brief, and then comes what is this Issue's: the ask, the facts, the history, the project.
+  in every brief, and then comes what is this Issue's: the ask, the facts, the owner's notes, the history, the project.
 
 Classification sets labels and routing, never a cause. The brief shows just kind and class.
 
 ### Following a lead
 
 - **A send-back keeps the lead honest.** On top of §3's rule, the `Stop` hook sends a lead back with one line
-  (report `ship`, `close`, `block`, `ask` or `wait`) when nothing was reported since the last prompt, no wait is
-  declared and the turn did not end on a limit. A turn answering the owner is never sent back. A second unreported
-  stop parks the Issue with a line for the owner, never a card, and from F4 also wakes the orchestrator.
-- **New facts go to the running lead.** A *possibly related* signal reaches it as a note, not a second session.
+  (report `ship`, `close`, `block`, `ask`, `wait` or `drop`) when nothing was reported since the turn the factory started, a refused
+  report counting as none (§4 "The send-back"). A turn answering the owner is never sent back. A second unreported
+  stop parks the Issue (`unreported`) with a line in `factory status` and one on the owner's line (§11), never a card, and from F4 also wakes the orchestrator.
+- **New facts go to the running lead** (F3, not built: dedup has no sender). A *possibly related* signal will reach it as a note, not a second session.
   The lead records whether it shares the cause; that answer is the judge's label.
-- **The owner can step in at any time** by typing in the tab. The lead treats it like a note.
+- **The owner can step in at any time** by typing in the tab (the lead treats it like a note and is not sent back for it), or
+  with `factory issue note <id> <text>` (§4 "Notes"), which reaches the lead's pane through the session notes and, with no lead running, the next brief.
+  Where the Issues stand is `factory status` (ISSUES), and one Issue's story is `factory issue show <id>` (§4 "Following an Issue").
 - **After ship** the lead stays open through the 30-minute hold, so a regression reaches a warm context. Once the
   hold, `make verify` and the probes are green, the factory closes the tab and removes the worktree.
 - **Where a lead works.** A worktree per attempt on `factory/<issue>-<attempt>`, made the way `rd fan` does. It
