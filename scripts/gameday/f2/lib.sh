@@ -14,28 +14,38 @@ MAX_RUNS=3
 # `sqlq <sql>` is a read-only query; strings are the caller's, never user input.
 sqlq() { db "$1"; }
 
-# The quota gate: stop before spending when me2 is past 60 % of its week or iu past 90 %. Prints the readings.
+# The quota gate: stop before spending when me2 is past 60 % of its week or iu past 90 %. Fails closed: a reading that is missing or not a
+# number stops the run. Prints the readings.
 quota_gate() {
   local q me2 iu
-  q=$(fx quota get --format json)
-  me2=$(jq -r '.quota[] | select(.account == "me2") | .weeklyUsed // 0' <<<"$q")
-  iu=$(jq -r '.quota[] | select(.account == "iu") | .weeklyUsed // 0' <<<"$q")
+  q=$(fx quota get --format json) || { log "quota: unreadable, stopping"; return 1; }
+  me2=$(jq -r '[.quota[] | select(.account == "me2") | .weeklyUsed] | first | if type == "number" then . else "x" end' <<<"$q")
+  iu=$(jq -r '[.quota[] | select(.account == "iu") | .weeklyUsed] | first | if type == "number" then . else "x" end' <<<"$q")
+  if ! [[ $me2 =~ ^[0-9]+(\.[0-9]+)?$ && $iu =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    log "quota: me2 week '$me2', iu week '$iu' are no readings, stopping"
+    return 1
+  fi
   log "quota: me2 week ${me2}%, iu week ${iu}%"
-  if ((me2 > 60 || iu > 90)); then
+  if awk -v a="$me2" -v b="$iu" 'BEGIN { exit !(a > 60 || b > 90) }'; then
     log "quota: me2 past 60 % of its week or iu past 90 %, stopping"
     return 1
   fi
 }
 
-# `claim_run <gameday> <run>`: the run's evidence directory. A run id is used once; a gameday has at most MAX_RUNS runs.
+# `claim_run <gameday> <run>`: the run's evidence directory. One gameday run at a time on this host (a lock directory outside the repo,
+# released by on_exit); a run id is used once; a gameday has at most MAX_RUNS runs.
+LOCK=${GAMEDAY_F2_LOCK:-$HOME/.local/share/factory/gameday-f2.lock}
 claim_run() {
   local gameday=$1 run=$2
   [[ $run =~ ^[a-z0-9]{1,8}$ ]] || { echo "run id must be 1-8 characters of [a-z0-9]" >&2; return 2; }
-  [[ ! -e $EVIDENCE/$gameday/$run ]] || { echo "run $gameday/$run exists; a rerun needs a new run id" >&2; return 2; }
+  mkdir -p "$(dirname "$LOCK")"
+  mkdir "$LOCK" 2>/dev/null || { echo "another F2 gameday run holds $LOCK (remove it only if no run is alive)" >&2; return 2; }
+  HAVE_LOCK=1
+  mkdir -p "$EVIDENCE/$gameday"
   local used
-  used=$(find "$EVIDENCE/$gameday" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  used=$(find "$EVIDENCE/$gameday" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
   ((used < MAX_RUNS)) || { echo "$gameday has had $used runs; the limit is $MAX_RUNS" >&2; return 2; }
-  mkdir -p "$EVIDENCE/$gameday/$run"
+  mkdir "$EVIDENCE/$gameday/$run" 2>/dev/null || { echo "run $gameday/$run exists; a rerun needs a new run id" >&2; return 2; }
 }
 
 # `scratch_up <repo name> <template dir>`: a repo under SOURCE_ROOT with a local bare remote, the gameday marker, the template and a
@@ -45,8 +55,9 @@ scratch_up() {
   local repo=$SOURCE_ROOT/$name remote=$REMOTES/$name.git
   [[ ! -e $repo && ! -e $remote ]] || { echo "scratch: $repo or $remote exists; run teardown first" >&2; return 1; }
   mkdir -p "$REMOTES"
-  git init --quiet --bare --initial-branch=master "$remote"
-  git init --quiet --initial-branch=master "$repo"
+  # The marker goes in as each resource is made, so a setup that fails halfway can still be torn down.
+  git init --quiet --bare --initial-branch=master "$remote" && : >"$remote/factory-gameday"
+  git init --quiet --initial-branch=master "$repo" && : >"$repo/.git/factory-gameday"
   cp -R "$template"/. "$repo"/
   cat >"$repo/project.yaml" <<YAML
 apiVersion: factory/v2
@@ -65,7 +76,6 @@ YAML
   git -C "$repo" add -A
   git -C "$repo" -c user.name=gameday -c user.email=gameday@example.com commit --quiet -m "chore: scratch repo for the F2 gamedays"
   git -C "$repo" push --quiet -u origin master
-  : >"$repo/.git/factory-gameday" && : >"$remote/factory-gameday"
   # The remote's HEAD names the default branch the way a clone's would; sync reads the manifest from origin/master.
   git -C "$repo" remote set-head origin master >/dev/null
   fx project sync --format json >/dev/null
@@ -77,6 +87,42 @@ YAML
 
 # `scratch_down <repo name>`: F1's teardown, which closes the repo's terminals and removes it only with its markers.
 scratch_down() { GAMEDAY_REPO=$1 "$GAMEDAY_DIR/teardown.sh" 2>&1 | scrub; }
+
+# `finish_run <repo name> [issue id]`: the end of a run, whatever way it ended. An Issue still open is stopped and its finalize awaited; the
+# scratch repo goes only once the Issue is finalized (its lead may be working in it until then). Returns 1 when something was left behind.
+finish_run() {
+  local name=$1 issue=${2:-} i
+  if [[ -n $issue ]]; then
+    if [[ $(issue_col "$issue" state) != closed ]]; then
+      for i in 1 2 3 4 5; do
+        fx issue stop "$issue" --reason "gameday run ended" --id "gd-end-$i-$$" --format json >/dev/null 2>&1 && break
+        sleep 5
+      done
+    fi
+    if ! wait_for "issue $issue finalized" is_finalized "$issue"; then
+      log "issue $issue is not finalized: leaving $name in place"
+      return 1
+    fi
+  fi
+  if declare -F extra_cleanup >/dev/null; then extra_cleanup; fi
+  scratch_down "$name" | tee -a "${TIMELINE:-$EVIDENCE/log.txt}" >/dev/null
+}
+
+# The scripts set SCRATCH and `issue` as they make them and FINISHED=1 when their own end ran; an exit before that (an error under
+# `set -e`, SIGINT, SIGTERM) stops the Issue and takes the scratch repo down, then the lock is released.
+FINISHED=0 HAVE_LOCK=0 SCRATCH="" issue=""
+on_exit() {
+  local rc=$?
+  trap - EXIT
+  if ((FINISHED == 0)) && [[ -n $SCRATCH ]]; then
+    log "run ended early (exit $rc): cleaning up"
+    finish_run "$SCRATCH" "$issue" || true
+  fi
+  ((HAVE_LOCK == 0)) || rmdir "$LOCK" 2>/dev/null || true
+  exit "$rc"
+}
+trap on_exit EXIT
+trap 'exit 130' INT TERM
 
 # `wait_for <what> <command…>`: poll every 3 s until the command succeeds. Ends on IDLE_LIMIT seconds with no change of the progress
 # line (PROGRESS_CMD's output), never on total time.
@@ -119,16 +165,16 @@ CHECKS_FAILED=0
 check() {
   local verdict=FAIL
   if [[ $2 == "$3" ]]; then verdict=PASS; else CHECKS_FAILED=$((CHECKS_FAILED + 1)); fi
-  printf '%s\t%s\texpected %s\tgot %s\n' "$verdict" "$1" "$2" "$3" | tee -a "$RESULT" | scrub
+  printf '%s\t%s\texpected %s\tgot %s\n' "$verdict" "$1" "$2" "$3" | scrub | tee -a "$RESULT"
 }
 # `check_ge <name> <least> <actual>`: a count that must be at least `least`.
 check_ge() {
   local verdict=FAIL
   if (("$3" >= "$2")); then verdict=PASS; else CHECKS_FAILED=$((CHECKS_FAILED + 1)); fi
-  printf '%s\t%s\texpected at least %s\tgot %s\n' "$verdict" "$1" "$2" "$3" | tee -a "$RESULT" | scrub
+  printf '%s\t%s\texpected at least %s\tgot %s\n' "$verdict" "$1" "$2" "$3" | scrub | tee -a "$RESULT"
 }
 # `note_line <text>`: a result line that is no pass condition (an observation).
-note_line() { printf 'NOTE\t%s\n' "$1" | tee -a "$RESULT" | scrub; }
+note_line() { printf 'NOTE\t%s\n' "$1" | scrub | tee -a "$RESULT"; }
 
 # The Issue's timeline: issue_events, the inbox, the session's events, the effects, the prompts, the notifications.
 dump_issue() { # <issue id> <out dir>
@@ -192,3 +238,14 @@ issue_col() { sqlq "SELECT coalesce($2::text,'') FROM factory.issues WHERE id = 
 
 # Finalize ended the attempt: the `issue_finalized` event.
 is_finalized() { [[ $(sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $1 AND kind = 'issue_finalized'") -ge 1 ]]; }
+
+# `wait_secs <seconds> <command…>`: poll once a second, at most that long.
+wait_secs() {
+  local end=$((SECONDS + $1))
+  shift
+  while ((SECONDS < end)); do
+    if "$@"; then return 0; fi
+    sleep 1
+  done
+  "$@"
+}

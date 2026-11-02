@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # wordstat: count the words and lines on stdin.
-# Usage: wordstat [--longest]      the longest word is added to the line
+# Usage: wordstat                  the counts of stdin
 #        wordstat --self-test      run a fixed sample through this copy with its own config
 set -euo pipefail
 

@@ -6,7 +6,7 @@
 # `make verify` after the hold (back to working, a note to the same lead, notify:regression); the fix ships, the second hold is green,
 # the Issue closes, finalize runs once, the transcript is archived. Evidence: docs/evidence/f2-gate/seeded-bug/<run>/.
 # Usage: seeded-bug.sh [run-id]     (exit 0: every pass line passed)
-# shellcheck disable=SC1091
+# shellcheck disable=SC1091,SC2034 # SCRATCH and FINISHED are read by lib.sh's on_exit
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 run=${1:-b$(date -u +%d%H%M)}
@@ -24,9 +24,14 @@ deployed=$HOME/.local/share/factory/gameday-deploys/$name
 healthy || { echo "seeded-bug: the factory is not healthy" >&2; exit 1; }
 
 log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut -c1-12), base commit $(git -C "$ROOT" rev-parse --short HEAD)"
-rm -rf "${deployed:?}" # a previous run's production, under the gameday's own directory
+# A previous run's production, under the gameday's own directory; anything else at that path is not ours to delete.
+[[ ! -e $deployed || -e $deployed/REVISION ]] || { log "$deployed exists and is no gameday deployment; leaving it"; exit 1; }
+rm -rf "${deployed:?}"
+extra_cleanup() { rm -rf "${deployed:?}"; }
+SCRATCH=$name
 scratch_up "$name" "$F2_DIR/templates/bug"
-log "make check on the scratch repo: $(make -s -C "$repo" check | tail -1)"
+check_out=$(make -s -C "$repo" check 2>&1) || { log "make check FAILED on the scratch repo: $(tail -3 <<<"$check_out" | tr '\n' ' ')"; exit 1; }
+log "make check on the scratch repo: $(tail -1 <<<"$check_out")"
 # The seed is armed before the Issue is filed: the CR is in origin/master's production config, `make check` is green, and the deployed
 # copy's self test fails. A run whose seed is not armed would test nothing.
 cr=$(git --git-dir="$remote" show master:deploy/limits.conf | grep -c $'\r' || true)
@@ -39,8 +44,9 @@ log "seed armed: the deployed copy before the Issue says: $(tr '\n' ' ' <<<"$arm
 
 ask="Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it."
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 seeded bug"}')
-issue=$(fx issue new --repo "$repo" --title "$ask" --facts - --key "f2-bug-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
-[[ $issue =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
+filed=$(fx issue new --repo "$repo" --title "$ask" --facts - --key "f2-bug-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
+[[ $filed =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
+issue=$filed
 log "issue $issue filed (source_key f2-bug-$run)"
 attempt=1
 lead=$(lead_key "$issue" "$attempt")
@@ -89,10 +95,13 @@ dump_issue "$issue" "$out"
 # ---- what happened ----------------------------------------------------------------------------------------------------------------
 ev() { sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $issue AND kind = '$1'"; }
 archive=${FACTORY_ARCHIVE_DIR:-$HOME/.local/share/factory/archive}/$issue/$attempt
+# The bug bit the lead's own production check: a tool result in its transcript that begins a line with the deployed copy's verify failure,
+# recorded before the first ship. (The Makefile's own source text, `cat` by the lead, has `$$out` there, not the program's message.)
+first_ship=$(sqlq "SELECT to_char(min(at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM factory.issue_events WHERE issue_id = $issue AND kind = 'ship' AND to_state = 'watching'")
 bitten=0
 for t in "$archive"/*.jsonl; do
   [[ -f $t ]] || continue
-  bitten=$((bitten + $(jq -r 'select(.type == "user") | .message.content | if type == "array" then .[] else empty end | select(.type == "tool_result") | (.content | if type == "string" then . else map(.text // "") | join(" ") end) | select(contains("FAIL the deployed copy: wordstat:"))' "$t" | wc -l | tr -d ' ')))
+  bitten=$((bitten + $(jq -r --arg ship "${first_ship:-9999}" 'select(.type == "user" and (.timestamp // "") < $ship) | .message.content | if type == "array" then .[] else empty end | select(.type == "tool_result") | (.content | if type == "string" then . else map(.text // "") | join(" ") end) | select(test("(^|\n)verify: FAIL the deployed copy: wordstat: MAX_WORDS")) | 1' "$t" | wc -l | tr -d ' ')))
 done
 ships=$(sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'ship' AND to_state = 'watching'")
 regressions=$(ev regression)
@@ -123,11 +132,13 @@ else
   note_line "no regression: the bug has to have bitten the lead's own production check before the ship, or the gameday did not happen"
   check "ships" 1 "$ships"
   check "verified holds" "verified:$issue:1" "$(sqlq "SELECT string_agg(key, ',' ORDER BY id) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'verified'")"
-  check_ge "tool results in the lead's transcript with the deployed copy's verify failure (only the real output has this text)" 1 "$bitten"
+  check_ge "tool results in the lead's transcript, before the first ship, with the deployed copy's verify failure" 1 "$bitten"
 fi
 
 check "production now: the deployed copy's self test" "selftest: ok words=9 lines=2" "$("$deployed/bin/wordstat" --self-test 2>&1 || true)"
-check "the change is on origin/master (--longest in bin/wordstat)" yes "$(git --git-dir="$remote" show master:bin/wordstat | grep -q -- '--longest' && echo yes || echo no)"
+check "the shipped program: --longest on the sample names the longest word (the deployed copy)" yes \
+  "$(printf 'the quick brown fox\njumps over the lazy dog\n' | "$deployed/bin/wordstat" --longest 2>&1 | grep -q 'words=9 lines=2.*longest=quick' && echo yes || echo no)"
+check_ge "the requested test is on origin/master (test/run.sh mentions longest)" 1 "$(git --git-dir="$remote" show master:test/run.sh | grep -c longest || true)"
 wt=$repo/.claude/worktrees/factory-$issue-$attempt
 terminals=$(terminals_of "$lead")
 echo "$terminals" | scrub >"$out/hc-terminals.json"
@@ -140,8 +151,11 @@ check_ge "transcripts in the archive for the attempt" 1 "$(wc -l <"$out/archive.
 check_ge "evidence rows of kind transcript" 1 "$(sqlq "SELECT count(*) FROM factory.evidence WHERE issue_id = $issue AND kind = 'transcript'")"
 
 # ---- teardown and report ---------------------------------------------------------------------------------------------------------
-rm -rf "${deployed:?}"
-scratch_down "$name" | tee -a "$TIMELINE" >/dev/null || true
+# Production and the scratch repo go only after finalize; a repo left behind is a failed line, not a quiet leftover.
+removed=yes
+finish_run "$name" "$issue" || removed=no
+FINISHED=1
+check "the scratch repo, its remote and the deployment were removed" yes "$removed"
 log "run $gameday/$run: $CHECKS_FAILED failed lines, wall $((SECONDS - started)) s"
 write_report "$gameday" "$run" "$out" "$issue" "$lead" "$started" "F2 gameday: a bug only production shows"
 ((CHECKS_FAILED == 0))
