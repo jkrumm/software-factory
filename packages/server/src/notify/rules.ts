@@ -118,7 +118,7 @@ export async function notifyDoorRefused(
  */
 export async function notifyDigest(
   sql: SQL,
-  input: { now: Date; at: string | null; timeZone: string; isVisible?: (path: string) => boolean },
+  input: { now: Date; at: string | null; timeZone: string; visible?: () => Promise<(path: string) => boolean> },
 ): Promise<void> {
   if (input.at === null) return
   const date = digestDue(input.now, { at: input.at, timeZone: input.timeZone })
@@ -131,7 +131,7 @@ export async function notifyDigest(
     now: input.now,
     date,
     // Not injected: nothing is told apart, so everything is counted only (fail closed).
-    isVisible: input.isVisible ?? (() => true),
+    isVisible: (await input.visible?.()) ?? (() => true),
   })
   await record(sql, { key, kind: 'digest', issueId: null, text }, input.now)
 }

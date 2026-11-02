@@ -11,9 +11,12 @@ import { FleetActions } from '../src/fleet/act.ts'
 import { moveSeen, readPresence } from '../src/fleet/presence.ts'
 import type { SinceReader } from '../src/fleet/since.ts'
 import type { HcLister, HcTerminal, QueueActor, QueueReader } from '../src/fleet/sources.ts'
-import { WindowDigest } from '../src/fleet/window.ts'
+import { WindowDigest, windowFacts } from '../src/fleet/window.ts'
 import { loadMorning } from '../src/notify/digest.ts'
-import { claim, foldReason, listNotifications, record, sendDue } from '../src/notify/outbox.ts'
+import { claim, foldReason, LEASE_MS, listNotifications, record, sendDue } from '../src/notify/outbox.ts'
+import { notifyPass } from '../src/notify/index.ts'
+import type { Notifier } from '../src/notify/port.ts'
+import { EXIT_TIMEOUT, runProcess as realRun } from '../src/exec.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { startApp, TEST_ROLES, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -107,7 +110,13 @@ beforeEach(async () => {
   app = startApp({ sql: db.sql, clock, fleet: builder, fleetActions: actions, since: reader, repoRoots: [estate.src] })
 })
 
-const presence = async (place: string, act: string) => app.send('POST', '/fleet/presence', { place, act })
+/** `caught_up` carries the `until` of the reading that was seen: by default the end of one read right now. */
+const presence = async (place: string, act: string, until?: string) =>
+  app.send('POST', '/fleet/presence', {
+    place,
+    act,
+    ...(act === 'caught_up' ? { until: until ?? clock.now().toISOString() } : {}),
+  })
 const fleetPresence = async () => Fleet.parse(await (await app.get('/fleet')).json()).presence
 async function since(t?: string): Promise<Since> {
   const res = await app.get(`/fleet/since${t ? `?t=${encodeURIComponent(t)}` : ''}`)
@@ -274,6 +283,43 @@ describe('seen_at, the owner-wide cursor', () => {
     clock.advance(HOUR)
     await presence('desk', 'caught_up')
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(new Date(NOW.getTime() + HOUR).toISOString())
+  })
+
+  test('caught_up takes the until of the reading that was seen: what landed after it is in the next window', async () => {
+    terminals = []
+    requests = [
+      { id: 'q-1', text: 'Seen already', askedAt: new Date(NOW.getTime() - HOUR).toISOString(), state: 'pending' },
+    ]
+    await builder.refreshNow()
+    const seen = await since()
+    expect(seen.needsYou.map((n) => n.ask.id)).toEqual(['queue:q-1'])
+    // An ask lands one second after the reading's end, and the owner clicks five minutes later.
+    requests = [
+      ...requests,
+      { id: 'q-2', text: 'Landed after', askedAt: new Date(NOW.getTime() + 1000).toISOString(), state: 'pending' },
+    ]
+    clock.advance(5 * MIN)
+    await builder.refreshNow()
+    expect((await presence('desk', 'caught_up', seen.until)).status).toBe(201)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(seen.until)
+    const next = await since()
+    expect(next.t).toBe(seen.until)
+    expect(next.needsYou.map((n) => n.ask.id)).toEqual(['queue:q-2'])
+    // Never past now, never backwards.
+    const later = new Date(clock.now().getTime() + HOUR).toISOString()
+    await presence('desk', 'caught_up', later)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(clock.now().toISOString())
+    await presence('phone', 'caught_up', seen.until)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(clock.now().toISOString())
+  })
+
+  test('caught_up needs its until, and no other act takes one', async () => {
+    const bare = await app.send('POST', '/fleet/presence', { place: 'desk', act: 'caught_up' })
+    expect(bare.status).toBe(400)
+    const other = await app.send('POST', '/fleet/presence', { place: 'desk', act: 'focus', until: NOW.toISOString() })
+    expect(other.status).toBe(400)
+    const malformed = await app.send('POST', '/fleet/presence', { place: 'desk', act: 'caught_up', until: 'yesterday' })
+    expect(malformed.status).toBe(400)
   })
 
   test('an act moves it only when it leaves no other ask of the open window in Needs you', async () => {
@@ -585,6 +631,40 @@ describe('GET /fleet/since', () => {
     expect(keys[1]?.endsWith('-1')).toBe(true)
   })
 
+  test('a newer request supersedes the older windows: three requests, one call', async () => {
+    const ask = (n: number) => windows.request({ text: `facts ${n}`, hash: `h${n}` })
+    await ask(1)
+    await ask(2)
+    expect(await ask(3)).toEqual({ state: 'pending', text: null })
+    expect(await db.sql`SELECT hash, state FROM factory.fleet_windows ORDER BY hash`).toEqual([
+      { hash: 'h1', state: 'superseded' },
+      { hash: 'h2', state: 'superseded' },
+      { hash: 'h3', state: 'queued' },
+    ])
+    await windows.pass()
+    await windows.pass()
+    await windows.pass()
+    expect(agw).toHaveLength(1)
+    expect(JSON.parse(agw[0]?.stdin ?? '[]')[0].text).toBe('facts 3')
+    // Asking for an older one again brings it back; it is then the newest.
+    await ask(1)
+    await windows.pass()
+    expect(agw).toHaveLength(2)
+    expect(JSON.parse(agw[1]?.stdin ?? '[]')[0].text).toBe('facts 1')
+  })
+
+  test('a session’s headline is not in the facts: a new turn is not a new window', async () => {
+    await scene()
+    const reading = await since(T)
+    const before = windowFacts(reading)
+    const moved = {
+      ...reading,
+      running: reading.running.map((r) => ({ ...r, headline: `turn ${r.id}`, text: `${r.id}: turn` })),
+    }
+    expect(before?.hash).toBeDefined()
+    expect(windowFacts(moved)?.hash).toBe(before?.hash)
+  })
+
   test('a run agw has not finished is waited for, never started twice', async () => {
     await scene()
     await since(T)
@@ -716,6 +796,57 @@ describe('the away rule in the outbox', () => {
     ).not.toBeNull()
   })
 
+  test('a delivery wins over a fold made while the send was in flight (a lease that ran out)', async () => {
+    await presence('phone', 'foreground')
+    await record(db.sql, message('notify:failed:spawn:slow', 'failed'), clock.now())
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const slow: Notifier = {
+      send: async () => {
+        await gate
+        return { ok: true }
+      },
+    }
+    const sending = sendDue(db.sql, { notifier: slow, now: () => clock.now() })
+    for (let i = 0; i < 100; i++) {
+      const [row] = await db.sql`SELECT attempts FROM factory.notifications`
+      if (row?.attempts === 1) break
+      await Bun.sleep(20)
+    }
+    // The lease runs out, the desk is there, and the next claim folds the row that is still being sent.
+    clock.advance(LEASE_MS + 1000)
+    await presence('desk', 'focus')
+    expect(await claim(db.sql, clock.now(), 5)).toEqual([])
+    expect((await statuses())['notify:failed:spawn:slow']).toBe('folded')
+    release()
+    expect((await sending).errors).toEqual([])
+    const [row] = await listNotifications(db.sql)
+    expect(row).toMatchObject({ status: 'sent', foldedReason: null })
+  })
+
+  test('the visibility check of the morning reading is awaited only when the reading is due', async () => {
+    let calls = 0
+    const visible = async () => {
+      calls++
+      return () => false
+    }
+    const deps = {
+      notifier: new FakeNotifier(),
+      target: 'slack:#agents',
+      digestAt: '07:30',
+      digestTz: 'Europe/Berlin',
+      visible,
+    }
+    await notifyPass(db.sql, deps, () => new Date('2026-11-02T05:00:00Z')) // 06:00 local
+    expect(calls).toBe(0)
+    await notifyPass(db.sql, deps, () => new Date('2026-11-02T06:30:00Z')) // 07:30
+    expect(calls).toBe(1)
+    await notifyPass(db.sql, deps, () => new Date('2026-11-02T06:31:00Z')) // already made today
+    expect(calls).toBe(1)
+  })
+
   test('a folded row is not claimed again', async () => {
     await record(db.sql, message('notify:parked:2:1', 'parked'), clock.now())
     expect(await claim(db.sql, clock.now(), 5)).toEqual([])
@@ -785,6 +916,32 @@ describe('the morning reading', () => {
   })
 })
 
+describe('git: the default head', () => {
+  test('one call finds it; a timeout is no fall-through to an older ref', async () => {
+    const calls: string[][] = []
+    let timeout = false
+    const run: typeof realRun = async (cmd, ...rest) => {
+      calls.push([...cmd])
+      if (timeout && cmd.includes('for-each-ref'))
+        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      return realRun(cmd, ...rest)
+    }
+    const git = new GitReader(run)
+    const repo = `${estate.src}/software-factory`
+    const commits = await git.recent(repo)
+    expect(commits[0]?.subject).toContain('software-factory')
+    expect(calls.filter((c) => c.includes('for-each-ref'))).toHaveLength(1)
+    expect(calls.filter((c) => c.includes('rev-parse'))).toHaveLength(0)
+    const sha = commits[0]?.sha ?? ''
+    expect(await git.newerThan(repo, sha)).toBe(false)
+
+    timeout = true
+    await expect(git.recent(repo)).rejects.toThrow('did not answer in time')
+    expect((await git.state(repo)).recent).toEqual([]) // no commits this build, not the old ones
+    expect(await git.newerThan(repo, sha)).toBeUndefined()
+  })
+})
+
 describe('the CLI', () => {
   async function factory(args: string[], env: Record<string, string> = {}) {
     const proc = Bun.spawn(['bun', CLI, ...args], {
@@ -818,6 +975,16 @@ describe('the CLI', () => {
     expect((await factory(['fleet', 'since', '--t', 'soon'])).code).toBe(2)
     expect((await factory(['fleet', 'since', '--t', '2099-01-01T00:00:00Z'])).code).toBe(2)
 
+    // A time with no zone or offset is the server's own 400 too.
+    expect((await factory(['fleet', 'since', '--t', '2026-11-01T07:30:00'])).code).toBe(2)
+    expect((await factory(['fleet', 'since', '--t', '2026-11-01'])).code).toBe(2)
+    expect((await factory(['fleet', 'act'])).stderr).toContain('--place')
+
+    // caught_up carries the until of what was seen: no --until is a usage error, and `seen` reads it for you.
+    expect((await factory(['fleet', 'presence', 'desk', 'caught_up'])).code).toBe(2)
+    expect((await factory(['fleet', 'presence', 'desk', 'focus', '--until', T])).code).toBe(2)
+    const named = await factory(['fleet', 'presence', 'phone', 'caught_up', '--until', T])
+    expect(Presence.parse(JSON.parse(named.stdout)).seenAt).toBe(T)
     const seen = await factory(['fleet', 'seen'])
     expect(Presence.parse(JSON.parse(seen.stdout)).seenAt).toBe(NOW.toISOString())
 

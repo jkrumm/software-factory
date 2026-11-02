@@ -172,10 +172,20 @@ export const PRESENCE_ACTS = ['focus', 'looked', 'board_click', 'unlock', 'memo'
 export const PresenceAct = z.enum(PRESENCE_ACTS)
 export type PresenceAct = z.infer<typeof PresenceAct>
 
+/** An ISO 8601 time with a `Z` or an offset: the one rule of `GET /fleet/since?t=`, `until` and the CLI's `--t`. */
+export const IsoTime = z.iso.datetime({ offset: true })
+
+/**
+ * `caught_up` takes the `until` of the since reading the owner saw: the cursor moves there (at most to now), so an item that landed after that
+ * reading stays in the next window. Any other act has no `until`.
+ */
 export const PresenceBody = z
-  .strictObject({ place: PresencePlace, act: PresenceAct })
+  .strictObject({ place: PresencePlace, act: PresenceAct, until: IsoTime.optional() })
   .refine((b) => b.place === 'phone' || (b.act !== 'memo' && b.act !== 'foreground'), {
     message: 'memo and foreground are the phone only',
+  })
+  .refine((b) => (b.act === 'caught_up') === (b.until !== undefined), {
+    message: 'caught_up takes the until of the reading that was seen, and no other act does',
   })
 export type PresenceBody = z.infer<typeof PresenceBody>
 

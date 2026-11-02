@@ -24,6 +24,7 @@ import {
   IssueNoteBody,
   IssueOwnerInput,
   IssueResumeInput,
+  IsoTime,
   IssueVerb,
   IssueVerbAck,
   IssueVerbBody,
@@ -646,7 +647,11 @@ const fleetPresenceHandler =
   async (req: Request): Promise<Response> => {
     const body = await parseBody(req, PresenceBody)
     if (!since) return json({ error: 'presence is not running', code: 'not_ready' }, 503)
-    return respond(Presence, await reportPresence(since, body), 201)
+    return respond(
+      Presence,
+      await reportPresence(since, { ...body, until: body.until ? new Date(body.until) : undefined }),
+      201,
+    )
   }
 
 /**
@@ -660,7 +665,7 @@ const fleetSinceHandler =
     const raw = new URL(req.url).searchParams.get('t')
     let t: Date | null = null
     if (raw !== null) {
-      if (!z.iso.datetime({ offset: true }).safeParse(raw).success) throw new BadRequest('t must be an ISO 8601 time')
+      if (!IsoTime.safeParse(raw).success) throw new BadRequest('t must be an ISO 8601 time')
       t = new Date(raw)
       if (t.getTime() > clock.now().getTime()) throw new BadRequest('t is in the future')
     }
