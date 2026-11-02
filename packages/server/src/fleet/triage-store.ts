@@ -52,13 +52,16 @@ const toRow = (r: RawLog): LogRow => ({
   undoneAt: r.undone_at?.toISOString() ?? null,
 })
 
-/** The most log rows the build reads: bookkeeping older than this has no effect on the model that matters (a fold of an ask long gone). */
-const LOG_WINDOW = 2000
-
+/**
+ * Every row that has an effect on the model, however old: a fold or a dismissal that stands, and a stale mark the owner undid.
+ * (A stale mark that stands changes nothing, an undone fold or dismissal neither.) The log's display is bounded by `listEntries`, this is not.
+ */
 export async function readLog(sql: SQL): Promise<LogRow[]> {
   const rows: RawLog[] = await sql`
     SELECT id, kind, subject, fingerprint, what, why, evidence, payload, at, undone_at
-    FROM factory.fleet_triage_log ORDER BY id DESC LIMIT ${LOG_WINDOW}`
+    FROM factory.fleet_triage_log
+    WHERE (kind IN ('fold', 'dismiss_note') AND undone_at IS NULL) OR (kind = 'plan_stale' AND undone_at IS NOT NULL)
+    ORDER BY id`
   return rows.map(toRow)
 }
 
@@ -146,14 +149,25 @@ export async function readActs(sql: SQL, now: Date): Promise<ActState> {
   return { closed, acted, later, handoffs }
 }
 
-export async function getAct(sql: SQL, ask: string, intent: ActIntent): Promise<ActResult | undefined> {
+/**
+ * What was done with the ask before: the same intent again is the first one's result; an ask closed by another intent
+ * (`resolve`, `deny` or `hand_off` are one of each ask) is `closed` with what closed it.
+ */
+export async function getAct(
+  sql: SQL,
+  ask: string,
+  intent: ActIntent,
+): Promise<{ same: ActResult } | { closedBy: ActIntent } | undefined> {
   if (intent === 'later') return undefined
-  const [row]: { result: Omit<ActResult, 'duplicate'> }[] =
-    await sql`SELECT result FROM factory.fleet_acts WHERE ask_id = ${ask} AND intent = ${intent}`
-  return row ? { ...row.result, duplicate: true } : undefined
+  const rows: { intent: ActIntent; result: Omit<ActResult, 'duplicate'> }[] =
+    await sql`SELECT intent, result FROM factory.fleet_acts WHERE ask_id = ${ask} AND intent <> 'later'`
+  const same = rows.find((r) => r.intent === intent)
+  if (same) return { same: { ...same.result, duplicate: true } }
+  const closing = intent === 'archive_plan' ? undefined : rows.find((r) => r.intent !== 'archive_plan')
+  return closing ? { closedBy: closing.intent } : undefined
 }
 
-/** Records an act. A second of the same ask and intent (not `later`) is not stored: the first stands. */
+/** Records an act. One that closes an ask already closed, or a second archive, is not stored: the first stands. */
 export async function recordAct(
   sql: SQL,
   input: {
@@ -168,5 +182,5 @@ export async function recordAct(
   await sql`
     INSERT INTO factory.fleet_acts (ask_id, intent, note, at, until, result)
     VALUES (${input.ask}, ${input.intent}, ${input.note}, ${input.at}, ${input.until}, ${JSON.stringify(input.result)}::text::jsonb)
-    ON CONFLICT (ask_id, intent) WHERE intent <> 'later' DO NOTHING`
+    ON CONFLICT DO NOTHING`
 }

@@ -307,7 +307,10 @@ export class FleetBuilder {
       model = triaged.model
       timed = triaged.timed
     } catch (error) {
-      model = { ...digested, errors: [...digested.errors, `triage: ${message(error)}`] }
+      console.error('fleet triage failed', message(error))
+      // What the owner closed or snoozed stays gone; the rest is the asks as the sources raised them.
+      const hidden = await this.triage.hide(digested, now).catch(() => digested)
+      model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`] }
     }
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(

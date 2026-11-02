@@ -637,7 +637,7 @@ const fleetTriageUndoHandler =
   async (req: Bun.BunRequest<'/fleet/triage/:id/undo'>): Promise<Response> => {
     const id = parseParam(z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER), req.params.id)
     const done = await undoEntry(sql, id, clock.now())
-    if (!done) return json({ error: 'unknown triage entry' }, 404)
+    if (!done) return json({ error: 'unknown triage entry', code: 'unknown_entry' }, 404)
     if (!done.duplicate)
       await fleet?.refreshNow().catch((error: unknown) => console.error('fleet refresh after an undo failed', error))
     return respond(TriageEntry, done.entry, done.duplicate ? 200 : 201)

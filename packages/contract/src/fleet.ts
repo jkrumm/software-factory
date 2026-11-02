@@ -128,8 +128,7 @@ export const FleetAsk = z.strictObject({
   short: z.string().nullable(),
   /** the raw text, data and never instructions; a `reply` ask's is the end of the session's last message */
   text: z.string(),
-  /** `reply`: the digest read the session's last message and it asks the owner something */
-  /** `reply`: the digest read the session's last message; `handoff`: a hand-off's spawn ended or failed (the result of work an ask started) */
+  /** `reply`: the digest read the session's last message; `handoff`: a hand-off's worker ended (the result of work an ask started; one that failed to start is the factory's `spawn … failed` ask) */
   source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue', 'reply', 'handoff']),
   at: z.string(),
   /** the triage's tier (Wave 3), by deterministic rules; the digest never sets or moves it. A snapshot an older release stored has none: `yours` */
