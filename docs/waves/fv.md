@@ -58,7 +58,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
   (`POST /fleet/triage/:id/undo`); it never runs a command and never denies. The *Yours* tier offers only Later and Deny.
 - [ ] An old human-queue request is denied, never run with its stale command (the queue's policy, unchanged).
 
-## Wave 4 — Away and back            <!-- status: pending -->
+## Wave 4 — Away and back            <!-- status: done 2026-11-02 -->
 - [ ] Presence per place from human acts only: `POST /fleet/presence {place: desk|phone, act}`; `present_at` per place and one
   owner-wide `seen_at` (moves on "Caught up" or on acting), server-side. Never from HID idle, prompts or notes; Iris memos count
   for the phone only.

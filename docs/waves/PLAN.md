@@ -142,5 +142,9 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] Board Wave 1 (dotfiles PR #60, `753af8b`): `worker` Sonnet on `iu`, 32 min; its three `/review` passes found one load blocker (a constant read before
   its declaration). Landed `--no-check`: the one red target is herdr-core's live version drift between the machines (0.1.15 vs 0.1.16). Live: reloaded on the
   MacBook, 25 asks on top, plans and session tree from `/fleet`; a factory ask shows its path instead of the repo's name (board Wave 2).
-- [ ] FV Waves 4–6 in order, the board's waves after the factory's they read.
+- [x] FV Wave 4 (PR #35, `88886e5`): 4 h 30 wall, `worker` Sonnet on `me2` (context 85 %); the lead's four `/code-review high` found 8 + 10 + 9 + 8, the
+  fix rounds twice built new bugs (a cursor pin on the oldest git read froze the cursor), so the fourth round was a simplification the lead read
+  himself. Live: `/fleet` carries presence (away, no act yet), `fleet since` over 24 h: 5 needs you, 266 shipped, 1 recovered, 6 handled, 27 running,
+  spend per account; the headline paragraph ready in one pass with IuRoot as a count only ("87 items in a read-only area were counted only").
+- [ ] FV Waves 5–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
