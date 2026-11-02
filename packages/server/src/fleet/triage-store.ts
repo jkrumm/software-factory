@@ -234,13 +234,23 @@ export async function recordAct(
 /** Absent this long, with nothing the owner did about it, a row is forgotten. */
 const SEEN_FORGET_MS = 90 * 24 * 3_600_000
 
-/** The occurrence each of these asks is on as the table stands (the last one, also when it has left): a repeat of an act lands on it. */
-export async function readOccurrences(sql: SQL, askIds: readonly string[]): Promise<Map<string, number>> {
-  const rows: { ask_id: string; occurrence: number }[] = await sql`
-    SELECT ask_id, occurrence FROM factory.fleet_ask_seen
+/**
+ * Where the table has each of these asks: its last occurrence and whether it is listed (`present`). An ask that left and is back
+ * is on the next one, which only `trackSeen` writes: a reader that cannot wait for it adds one itself (`occurrenceNow`).
+ */
+export async function readOccurrences(
+  sql: SQL,
+  askIds: readonly string[],
+): Promise<Map<string, { occurrence: number; present: boolean }>> {
+  const rows: { ask_id: string; occurrence: number; present: boolean }[] = await sql`
+    SELECT ask_id, occurrence, present FROM factory.fleet_ask_seen
     WHERE ask_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(askIds)}::text::jsonb))`
-  return new Map(rows.map((r) => [r.ask_id, r.occurrence]))
+  return new Map(rows.map((r) => [r.ask_id, { occurrence: r.occurrence, present: r.present }]))
 }
+
+/** The occurrence of an ask that is listed now, as `trackSeen` will write it. */
+export const occurrenceNow = (row: { occurrence: number; present: boolean } | undefined): number =>
+  row ? (row.present ? row.occurrence : row.occurrence + 1) : 1
 
 /** The first-seen time of every ask that is listed now (the builder restarts with these). */
 export async function readSeen(sql: SQL): Promise<Map<string, string>> {

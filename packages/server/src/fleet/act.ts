@@ -94,7 +94,7 @@ export class FleetActions {
     if (!ask) {
       // The ask is not in the model (done with, snoozed, folded). A repeat answers with what was done on the occurrence it is on, and
       // nothing is answered from an earlier one: a closed occurrence 1 does not cover an occurrence 2.
-      const occurrence = (await readOccurrences(sql, [askId])).get(askId)
+      const occurrence = (await readOccurrences(sql, [askId])).get(askId)?.occurrence
       const done = occurrence === undefined ? undefined : await getAct(sql, askId, occurrence, body.intent)
       if (done && 'same' in done) return { ok: true, created: false, result: done.same }
       if (done) return refuse(409, 'already_closed', `${askId} was closed by ${done.closedBy} already`)
