@@ -65,6 +65,7 @@ interface Transcript {
   id: string
   claude_session_id: string
   transcript_path: string
+  /** the spawn's, which the factory chose, before the one the pane reported */
   account: string | null
 }
 
@@ -81,7 +82,7 @@ export async function archiveAttempt(
   const { sql, store } = deps
   const lead = leadKey(issueId, attempt)
   const sessions: Transcript[] = await sql`
-    SELECT s.id, s.claude_session_id, s.transcript_path, COALESCE(s.account, p.account) AS account
+    SELECT s.id, s.claude_session_id, s.transcript_path, COALESCE(p.account, s.account) AS account
     FROM factory.sessions s LEFT JOIN factory.spawns p ON p.key = s.id
     WHERE (s.id = ${lead} OR p.parent = ${lead}) AND s.claude_session_id IS NOT NULL AND s.transcript_path IS NOT NULL
     ORDER BY s.id`

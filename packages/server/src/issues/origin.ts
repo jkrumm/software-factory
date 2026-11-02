@@ -31,9 +31,10 @@ export const fetchOrigin = async (repo: string, options: { run?: Run; git?: stri
 }
 
 /**
- * Whether what the lead reported as merged is what the branch holds: on the base, touching every file the branch changes, and no older
- * than the branch's last commit, so a partial merge with more work after it does not count. What decides a squash whose lines moved on
- * since, where a three-way merge conflicts and says nothing about whether the work landed.
+ * Whether what the lead reported as merged is what the branch holds: every file the branch changes is, at a reported commit that is on the
+ * base, exactly as the branch has it. Content, so a commit that merely touches the same files proves nothing and more work after a partial
+ * merge is still work. What decides a squash whose lines moved on since, where a three-way merge conflicts and says nothing about
+ * whether the work landed. Anything git cannot answer is no proof: a wrong yes here deletes a branch.
  */
 async function landedAs(
   repo: string,
@@ -49,28 +50,15 @@ async function landedAs(
   }
   const fork = await git(['merge-base', base, ref])
   if (onBase.length === 0 || fork.exitCode !== 0) return false
-  const names = (done: { stdout: string }) => done.stdout.split(/[\0\n]/).filter(Boolean)
-  const quoteless = ['-c', 'core.quotePath=false']
-  const own = names(await git([...quoteless, 'diff', '--name-only', '-z', fork.stdout.trim(), ref]))
-  const touched = new Set(
-    names(
-      await git([
-        ...quoteless,
-        'log',
-        '--no-walk',
-        '-m',
-        '--first-parent',
-        '--name-only',
-        '-z',
-        '--format=',
-        ...onBase,
-      ]),
-    ),
-  )
-  if (!own.every((path) => touched.has(path))) return false
-  const times = (await git(['log', '--no-walk', '--format=%ct', ...onBase])).stdout.split('\n').filter(Boolean)
-  const tip = Number((await git(['log', '-1', '--format=%ct', ref])).stdout.trim())
-  return Math.max(...times.map(Number)) >= tip
+  const changed = async (from: string): Promise<Set<string> | undefined> => {
+    const done = await git(['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', from, ref])
+    return done.exitCode === 0 ? new Set(done.stdout.split('\0').filter(Boolean)) : undefined
+  }
+  const own = await changed(fork.stdout.trim())
+  if (!own) return false
+  const differing = await Promise.all(onBase.map(changed))
+  if (differing.some((set) => set === undefined)) return false
+  return [...own].every((path) => differing.some((set) => !set?.has(path)))
 }
 
 /**

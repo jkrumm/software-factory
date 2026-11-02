@@ -32,6 +32,21 @@ export function childEnv(extra: Record<string, string> = {}): Record<string, str
   return env
 }
 
+/** The process groups running now: every way out of this process takes them along, a lost database lock's `process.exit` too. */
+const groups = new Set<number>()
+
+function killGroup(pid: number): void {
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    // The group is gone: what was wanted.
+  }
+}
+
+process.on('exit', () => {
+  for (const pid of groups) killGroup(pid)
+})
+
 /**
  * Runs a command and reads its stdout; past `timeoutMs` it is killed and the exit code is `EXIT_TIMEOUT`. `input`, if given,
  * is written to its stdin, which is then closed. `group` gives it a process group of its own, so a kill reaches what it started (`make`
@@ -44,6 +59,7 @@ export async function runProcess(
   input?: string,
   control: { group?: boolean; signal?: AbortSignal } = {},
 ): Promise<ProcessResult> {
+  if (control.signal?.aborted) return { exitCode: EXIT_STOPPED, stdout: '' }
   let proc: Bun.Subprocess<Bun.SpawnOptions.Writable, 'pipe', 'ignore'>
   try {
     proc = Bun.spawn(cmd, {
@@ -64,17 +80,15 @@ export async function runProcess(
   })
   const finished = Promise.all([proc.stdout.text(), proc.exited]).then(([stdout, exitCode]) => ({ stdout, exitCode }))
   finished.catch(() => {})
+  let onAbort = () => {}
   const stopped = new Promise<'stopped'>((resolve) => {
-    if (control.signal?.aborted) resolve('stopped')
-    control.signal?.addEventListener('abort', () => resolve('stopped'), { once: true })
+    onAbort = () => resolve('stopped')
+    control.signal?.addEventListener('abort', onAbort, { once: true })
   })
+  if (control.group) groups.add(proc.pid)
   const kill = () => {
-    if (!control.group) return proc.kill('SIGKILL')
-    try {
-      process.kill(-proc.pid, 'SIGKILL')
-    } catch {
-      // The group is gone: what was wanted.
-    }
+    if (control.group) killGroup(proc.pid)
+    else proc.kill('SIGKILL')
   }
   try {
     const outcome = await Promise.race([finished, deadline, stopped])
@@ -83,5 +97,7 @@ export async function runProcess(
     return { exitCode: outcome === 'timeout' ? EXIT_TIMEOUT : EXIT_STOPPED, stdout: '' }
   } finally {
     clearTimeout(timer)
+    groups.delete(proc.pid)
+    control.signal?.removeEventListener('abort', onAbort)
   }
 }
