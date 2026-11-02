@@ -140,7 +140,7 @@ export class GitReader {
    */
   async mergeProof(worktree: string): Promise<{ merged: boolean; proof: string; nothing?: boolean }> {
     const own = await this.ownCommits(worktree)
-    if ('why' in own) return { merged: false, proof: own.why, nothing: true }
+    if ('why' in own) return { merged: false, proof: own.why, nothing: own.nothing }
     const head = (
       await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
     ).trim()
@@ -149,24 +149,25 @@ export class GitReader {
     if (refs.length === 0) return { merged: false, proof: 'the repo has no default branch to compare with' }
 
     const held = await this.headProof(worktree, head, refs)
-    // The commits made here that HEAD does not hold any more: each must be on the default branch itself.
-    const loose: string[] = []
-    for (const sha of own.shas) {
-      if (sha === head) continue
-      const inHead = await this.isAncestor(worktree, sha, head)
-      if (!inHead) loose.push(sha)
+    if (!held.merged) return held
+    // The commits made here that HEAD does not hold any more (a reset or a checkout moved off them): each must be on the default branch
+    // itself, by commit or by patch. One `rev-list` per ref says which are not there by commit, and `git cherry` looks at what is left.
+    const loose = await this.notIn(worktree, own.shas, head)
+    let rest = loose
+    for (const ref of refs) {
+      if (rest.length === 0) break
+      rest = await this.notIn(worktree, rest, ref.sha)
     }
-    for (const sha of loose) {
+    for (const sha of rest) {
       let there = false
       for (const ref of refs) {
-        if ((await this.isAncestor(worktree, sha, ref.sha)) || (await this.patchThere(worktree, ref.sha, sha))) {
+        if (await this.patchThere(worktree, ref.sha, sha)) {
           there = true
           break
         }
       }
       if (!there) return { merged: false, proof: `own commit ${sha.slice(0, 12)} not on the default branch` }
     }
-    if (!held.merged) return held
     return {
       merged: true,
       proof: loose.length > 0 ? `${held.proof}; ${loose.length} commit(s) it moved off are there too` : held.proof,
@@ -210,6 +211,14 @@ export class GitReader {
     throw new Error(`git merge-base failed (exit ${done.exitCode})`)
   }
 
+  /** Those of `shas` that are not in the history of `of` (one `rev-list`). Throws when git cannot say. */
+  private async notIn(worktree: string, shas: readonly string[], of: string): Promise<string[]> {
+    if (shas.length === 0) return []
+    const out = await this.git(worktree, ['rev-list', ...shas, '--not', of])
+    const unreachable = new Set(out.split('\n').filter(Boolean))
+    return shas.filter((sha) => unreachable.has(sha))
+  }
+
   /** Whether the patch of `sha` is on `upstream` (`git cherry` marks it `-`). */
   private async patchThere(worktree: string, upstream: string, sha: string): Promise<boolean> {
     const lines = (await this.git(worktree, ['cherry', upstream, sha])).split('\n').filter(Boolean)
@@ -221,14 +230,14 @@ export class GitReader {
    * deleted branch). Merge commits made to bring a branch in are left out, and so is a commit an amend replaced. One that is not in the repo
    * any more (pruned) cannot be judged and is left out. `why` says that nothing was made here.
    */
-  private async ownCommits(worktree: string): Promise<{ shas: string[] } | { why: string }> {
+  private async ownCommits(worktree: string): Promise<{ shas: string[] } | { why: string; nothing: boolean }> {
     const dir = (await this.git(worktree, ['rev-parse', '--absolute-git-dir']).catch(() => '')).trim()
     const log = dir
       ? await Bun.file(`${dir}/logs/HEAD`)
           .text()
           .catch(() => undefined)
       : undefined
-    if (log === undefined) return { why: 'no commit made here (no reflog)' }
+    if (log === undefined) return { why: 'no commit made here (no reflog)', nothing: true }
     // `<old> <new> <who> <time> <zone>\t<message>`, oldest first.
     const made: string[] = []
     const replaced = new Set<string>()
@@ -245,14 +254,20 @@ export class GitReader {
         made.push(sha)
       }
     }
-    const shas = [...new Set(made)].filter((sha) => !replaced.has(sha)).slice(-200)
-    if (shas.length === 0) return { why: 'no commit made here' }
-    const present: string[] = []
-    for (const sha of shas) {
-      const known = await this.git(worktree, ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`]).catch(() => '')
-      if (known.trim()) present.push(sha)
-    }
-    return present.length > 0 ? { shas: present } : { why: 'no commit made here that the repo still has' }
+    const shas = [...new Set(made)].filter((sha) => !replaced.has(sha))
+    if (shas.length === 0) return { why: 'no commit made here', nothing: true }
+    // One call says which of them the repo has. A commit that is gone (pruned) cannot be proven and keeps the worktree; a call that fails
+    // throws, and the worktree is judged again at the next pass.
+    const checked = await this.run(
+      ['git', '--no-optional-locks', '-C', worktree, 'cat-file', '--batch-check'],
+      GIT_TIMEOUT_MS,
+      childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+      `${shas.join('\n')}\n`,
+    )
+    if (checked.exitCode !== 0) throw new Error(`git cat-file failed (exit ${checked.exitCode})`)
+    const missing = checked.stdout.split('\n').find((line) => line.endsWith(' missing'))
+    if (missing) return { why: `own commit ${missing.slice(0, 12)} is not in the repo any more`, nothing: false }
+    return { shas }
   }
 
   /** The branch a worktree is on; null when detached. */

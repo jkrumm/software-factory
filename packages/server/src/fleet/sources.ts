@@ -26,6 +26,8 @@ export interface HcTerminal {
   prompt: string | null
   role: string | null
   account: string | null
+  /** whether the core's reading says it still runs Claude Code, by the close's own strict test; absent in a stand-in means yes */
+  closable?: boolean
 }
 
 export interface HcLister {
@@ -165,6 +167,8 @@ export class HcTerminals implements HcLister, HcCloser {
           t.status?.app === 'claude-code' ||
           t.foreground?.name === 'claude' ||
           argv.includes('claude') ||
+          runs(argv) ||
+          runs(t.argv) ||
           'jk.claude.session' in t.labels
         // The prompt an agent started with is its longest argument; a short one is a flag.
         const prompt = [...t.argv].sort((a, b) => b.length - a.length)[0] ?? null
@@ -179,6 +183,7 @@ export class HcTerminals implements HcLister, HcCloser {
           statusAt: t.status_ms === null ? null : new Date(t.status_ms).toISOString(),
           parent: t.parent,
           claude,
+          closable: runsClaude(t),
           prompt: prompt && prompt.length > 80 ? prompt : null,
           role: envOf(t.argv, 'FACTORY_ROLE'),
           account: envOf(t.argv, 'CLAUDE_ACCOUNT_PICKED'),

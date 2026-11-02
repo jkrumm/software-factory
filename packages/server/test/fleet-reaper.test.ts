@@ -520,6 +520,91 @@ describe('the reaper closes', () => {
     expect(model.reaper.closed.map((c) => c.session)).toEqual(['feat-amend'])
   })
 
+  test('a failing close goes behind the others, and stays there through a build that only judged', async () => {
+    const main = freshRepo()
+    terminals = Array.from({ length: 6 }, (_, i) =>
+      terminal(`starve-${i}`, worktree(main, `starve-${i}`), { idleHours: 10 - i }),
+    )
+    // The one idle longest refuses every close; every attempt is recorded, the refusals too.
+    const refuse = terminals[0]?.address
+    const attempts: string[] = []
+    const real = closer.close.bind(closer)
+    closer.close = async (target) => {
+      attempts.push(target.address)
+      if (target.address === refuse) throw new NotClosed('always refused')
+      await real(target)
+    }
+    const builder = await setup('on')
+    await pass(builder)
+    // First pass: the refusing one is first in line, and takes one of the five slots.
+    expect(attempts[0]).toBe(refuse)
+    expect(attempts).toHaveLength(5)
+    const before = attempts.length
+    await pass(builder)
+    // Second pass: it goes behind the one that was left; the left one is closed first.
+    expect(attempts.slice(before)[0]).not.toBe(refuse)
+    expect(closer.calls).toHaveLength(5)
+  })
+
+  test('more than 200 commits made here: the oldest, reset away and not on the default branch, still keeps the worktree', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-many', 'none')
+    commit(wt, 'first.txt', 'unmerged work\n')
+    git(wt, ['reset', '-q', '--hard', 'master'])
+    for (let i = 0; i < 205; i++) git(wt, ['commit', '-q', '--allow-empty', '-m', `empty ${i}`])
+    git(main, ['merge', '-q', '--ff-only', 'feat-many'])
+    terminals = [terminal('feat-many', wt)]
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept[0]?.why).toContain('not on the default branch')
+  })
+
+  test('a judge never plans a close the closer refuses: an editor with a file called claude is not a candidate', async () => {
+    const wt = worktree(freshRepo(), 'feat-vim', 'merged')
+    terminals = [{ ...terminal('feat-vim', wt), closable: false }]
+    const model = await reap('dry')
+    expect(model.reaper.closed).toEqual([])
+    expect(model.reaper.kept).toEqual([])
+  })
+
+  test('a commit made here and then reset away is not on the default branch: kept, and said so', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-reset', 'none')
+    commit(wt, 'work.txt', 'real work\n')
+    git(wt, ['reset', '-q', '--hard', 'master'])
+    terminals = [terminal('feat-reset', wt)]
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept[0]?.why).toContain('own commit')
+    expect(model.reaper.kept[0]?.why).toContain('not on the default branch')
+  })
+
+  test('a commit made here, reset away, but on the default branch by patch is fine', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-reset-ok', 'none')
+    commit(wt, 'work2.txt', 'real work\n')
+    // The same change reaches master as a different commit, then the branch moves onto master.
+    commit(main, 'other.txt', 'x\n')
+    git(main, ['cherry-pick', 'feat-reset-ok'])
+    git(wt, ['reset', '-q', '--hard', 'master'])
+    terminals = [terminal('feat-reset-ok', wt)]
+    const model = await reap('on')
+    expect(model.reaper.closed.map((c) => c.session)).toEqual(['feat-reset-ok'])
+  })
+
+  test('an amended commit counts once: only the commit that stayed has to be there', async () => {
+    const main = freshRepo()
+    const wt = worktree(main, 'feat-amend', 'none')
+    commit(wt, 'a.txt', 'first\n')
+    writeFileSync(join(wt, 'a.txt'), 'second\n')
+    git(wt, ['add', '-A'])
+    git(wt, ['commit', '-q', '--amend', '-m', 'a, amended'])
+    git(main, ['merge', '-q', '--no-ff', '-m', 'merge', 'feat-amend'])
+    terminals = [terminal('feat-amend', wt)]
+    const model = await reap('on')
+    expect(model.reaper.closed.map((c) => c.session)).toEqual(['feat-amend'])
+  })
+
   test('a failing close keeps its count through a build that kept it, so it cannot starve the others', async () => {
     const main = freshRepo()
     terminals = Array.from({ length: 6 }, (_, i) =>
@@ -898,6 +983,9 @@ describe('HcTerminals.list', () => {
           record('t3', { argv: ['claude', 'go'] }),
           record('t4', { labels: { 'jk.claude.session': 'abc' } }),
           record('t5', { foreground: { name: 'zsh', argv: ['zsh'] } }),
+          record('t6', { argv: ['/Users/x/.local/bin/claude'] }),
+          record('t7', { argv: ['node', '/x/bin/claude'] }),
+          record('t8', { foreground: { name: 'vim', argv: ['vim', 'claude'] } }),
         ],
       }),
     }
@@ -908,6 +996,21 @@ describe('HcTerminals.list', () => {
       ['t3', true],
       ['t4', true],
       ['t5', false],
+      ['t6', true],
+      ['t7', true],
+      // the broad test sees `claude` among the arguments; only the close is strict
+      ['t8', true],
+    ])
+    // the close's test: a path-qualified binary and a node script are Claude Code, an editor with a file called claude is not
+    expect(listed.map((t) => [t.address, t.closable])).toEqual([
+      ['t1', true],
+      ['t2', true],
+      ['t3', true],
+      ['t4', true],
+      ['t5', false],
+      ['t6', true],
+      ['t7', true],
+      ['t8', false],
     ])
   })
 })
