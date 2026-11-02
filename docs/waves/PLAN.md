@@ -103,7 +103,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
 - [x] I: `factory-door` once W1 is live (brief to write: `packages/door`, its own LaunchAgent on the tailnet interface,
   POST only, per-source tokens in a 0600 file until the owner seeds them into 1Password in the morning, the monitor → repo
   registry in the database, not in git; the lead wires Kuma and HyperDX to it and proves one real alert becomes one Issue).
-- [ ] F2 gate re-run once PR #30 is live and dotfiles' doctor is green: one fresh real request through it, software-factory#31
+- [x] F2 gate re-run once PR #30 is live and dotfiles' doctor is green: one fresh real request through it, software-factory#31
   (`rd work` drops its prompt, owner feedback 2026-11-02) filed as a factory Issue against dotfiles.
 - [ ] FV (owner approval 2026-11-02, after the F2 gate): plan `docs/waves/fv.md`, agw `docs/waves/fv-digest.md`, dotfiles
   `docs/waves/fv-board.md`. Start FV Wave 1 and dotfiles' `ask-human.sh list --json` once the gate passed; agw digest after its
@@ -111,7 +111,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
 - [x] (W2 live) F2 Waves 2–5 in order (W4 `deep`, the rest `worker`; W3 adds an agw classify worker on disjoint files and tells agw's
   mother first). Issue leads start for `alert` Issues only once W4 is live.
 - [x] N once W3 is live: the notifier (`ask`, parked, failed through Hermes to Slack, the 07:30 digest).
-- [ ] F2 Wave 6, the gate: the gamedays and three real requests from the factory's own backlog (`rd close` on a merged worker, swapped in for the seed item, fixed in dotfiles `d432c25`; was: `rd`'s path seeds no
+- [x] F2 Wave 6, the gate: the gamedays and three real requests from the factory's own backlog (`rd close` on a merged worker, swapped in for the seed item, fixed in dotfiles `d432c25`; was: `rd`'s path seeds no
   space entry; `hc-resume` resumes without `--model/--effort`; `docs/remote-dev.md` says every structured create error falls back).
 - [ ] Per wave a retro entry in `docs/evidence/night-2026-11-01.md` (the fields in the plan's §Learning on the way); setup
   defects there or, once W1 is live, as Issues. The morning section proposes changes with their numbers.
