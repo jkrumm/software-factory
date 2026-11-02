@@ -76,9 +76,9 @@ export interface Target {
 
 const MAX_TARGETS = 6
 /** Machines a request may name; one of them that is not configured is unprobeable. */
-const MACHINE_WORDS = /\b(?:macbook|mac mini|the mini(?!-)|homelab|vps|iphone|ipad)\b/i
+const MACHINE_WORDS = /\b(?:macbook|mac mini|mini(?!-)|homelab|vps|iphone|ipad)\b/i
 /** `nas: remove X.app`: a request that opens with a name and a colon says where it is for. */
-const PREFIX = /^\s*([A-Za-z][\w-]*):/
+const LEADING_NAME = /^\s*([A-Za-z][\w-]*):/
 const HARMLESS = new Set(['cd', 'echo', 'true', 'sudo', 'test', ':'])
 const REMOVES = new Set(['rm', 'rmdir', 'trash'])
 const CREATES = new Set(['mkdir', 'touch'])
@@ -102,7 +102,7 @@ export function targetsOf(
   const named = `${request.text}\n${request.cmd ?? ''}`
   const machine = machineOf(named, machines)
   // A machine the text names and nothing is configured for cannot be probed; the queue's machine is not a stand-in for it.
-  if (!machine && (MACHINE_WORDS.test(named) || PREFIX.test(request.text))) return []
+  if (!machine && (MACHINE_WORDS.test(named) || LEADING_NAME.test(request.text))) return []
   const where = machine ?? queueMachine
   if (!where) return []
   const targets = new Map<string, Target>()

@@ -115,7 +115,7 @@ export class FleetActions {
       spawn: outcome.spawn ?? null,
       until: outcome.until?.toISOString() ?? null,
     }
-    await recordAct(sql, {
+    const stored = await recordAct(sql, {
       ask: askId,
       intent: body.intent,
       note: note ?? null,
@@ -123,6 +123,12 @@ export class FleetActions {
       until: outcome.until ?? null,
       result,
     })
+    if (!stored) {
+      // Another act won the row: it is the answer, not this one.
+      const winner = await getAct(sql, askId, body.intent)
+      if (winner && 'same' in winner) return { ok: true, created: false, result: winner.same }
+      return refuse(409, 'already_closed', `${askId} was closed already`)
+    }
     // The next read shows it; a build that fails leaves the act done.
     await this.deps.refresh().catch((error: unknown) => console.error('fleet refresh after an act failed', error))
     return { ok: true, created: true, result: { ...result, duplicate: false } }
@@ -210,7 +216,8 @@ export class FleetActions {
     const prompt = [
       'Archive a finished plan in this repo: one commit, nothing else.',
       '',
-      `Plan: ${rel} `,
+      // The plan's title is not repeated here: it is text from a file, and the path says which plan.
+      `Plan: ${rel}`,
       `The fleet view found all ${plan.waves.length} waves done (plan sha ${plan.sha}, ${now.toISOString()}).`,
       '',
       '1. Re-read the plan. If any wave is not done, or the file is not there, stop and say so in your last message.',
