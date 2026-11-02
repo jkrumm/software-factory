@@ -1,6 +1,13 @@
 import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { type Fleet, type FleetGit, NO_DIGEST, type Session, type Status } from '@software-factory/contract'
+import {
+  type Fleet,
+  type FleetGit,
+  NO_DIGEST,
+  type ReaperMode,
+  type Session,
+  type Status,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
 import { enclosingRepo } from '../projects/sync.ts'
@@ -8,6 +15,7 @@ import { type Digest, DigestView } from './digest.ts'
 import { applyDigest, scopeOf } from './digest-model.ts'
 import { GitReader } from './git.ts'
 import { Places } from './place.ts'
+import { Reaper } from './reaper.ts'
 import { type Probes, ProbeRunner } from './probes.ts'
 import { Triage } from './triage.ts'
 import { readSeen } from './triage-store.ts'
@@ -20,7 +28,14 @@ import {
   type RepoFacts,
 } from './model.ts'
 import { MAX_PLAN_BYTES, namedPlanPaths, namedWave } from './plans.ts'
-import { askSourcesAnswered, type HcLister, type HcTerminal, type QueueReader, type QueueRequest } from './sources.ts'
+import {
+  askSourcesAnswered,
+  type HcCloser,
+  type HcLister,
+  type HcTerminal,
+  type QueueReader,
+  type QueueRequest,
+} from './sources.ts'
 import { readSnapshot, writeSnapshot } from './store.ts'
 
 export { AskHumanQueue, HcTerminals } from './sources.ts'
@@ -48,6 +63,8 @@ export interface FleetDeps {
   /** the digest (`digest.ts`): its cache is read into every build and a pass is kicked after it; without it the model has no digest text */
   digest?: Digest
   alertLeads?: boolean
+  /** the reaper (`FACTORY_REAPER`): without it, or `off`, it reads nothing; `dry` lists, `on` closes through `closer` */
+  reaper?: { mode: ReaperMode; closer?: HcCloser }
   intervalMs?: number
   /** the triage's probes (`probes.ts`): the machines they may look at (`FACTORY_PROBE_HOSTS`: name → ssh alias or `local`), the one a queue request's command runs on, and (tests) the probes themselves */
   triage?: { hosts?: ReadonlyMap<string, string>; queueMachine?: string; probes?: Probes }
@@ -97,6 +114,7 @@ export class FleetBuilder {
   private since = new Map<string, string>()
   private readonly git: GitReader
   private readonly triage: Triage
+  private readonly reaper: Reaper
   private readonly last: {
     db?: DbPart
     hc?: HcTerminal[]
@@ -109,6 +127,13 @@ export class FleetBuilder {
   constructor(private readonly deps: FleetDeps) {
     this.git = deps.git ?? new GitReader()
     const hosts = deps.triage?.hosts ?? new Map<string, string>()
+    this.reaper = new Reaper({
+      sql: deps.sql,
+      now: deps.now,
+      mode: deps.reaper?.mode ?? 'off',
+      git: this.git,
+      closer: deps.reaper?.closer,
+    })
     this.triage = new Triage({
       sql: deps.sql,
       probes: deps.triage?.probes ?? new ProbeRunner({ hosts, home: deps.home, now: deps.now, git: this.git }),
@@ -187,7 +212,8 @@ export class FleetBuilder {
     }
 
     const visibleRoots = await realRoots(this.deps.visibleRoots)
-    const roots = [...new Set([...(await realRoots(this.deps.roots)), ...visibleRoots])]
+    const ordinaryRoots = await realRoots(this.deps.roots)
+    const roots = [...new Set([...ordinaryRoots, ...visibleRoots])]
     // Both forms of a root, as configured and after realpath: a stored path may be either.
     const places = await Places.of({
       visibleRoots: [...this.deps.visibleRoots, ...visibleRoots],
@@ -243,7 +269,7 @@ export class FleetBuilder {
         real.set(path, await realPath(path))
       }),
     )
-    const sessions = mergeSessions({
+    const merged = mergeSessions({
       sessions: db.status.sessions,
       spawns: db.spawns,
       terminals,
@@ -251,6 +277,18 @@ export class FleetBuilder {
       knownSince: this.since,
       real: (path) => real.get(path) ?? path,
     })
+    // The reaper closes finished worker sessions (git and hc, off the tick, no transaction); a session it closed is not in this build.
+    const reaped = await this.reaper.pass({
+      sessions: merged,
+      roots: ordinaryRoots.filter((root) => !places.isVisible(root)),
+      places,
+      complete: !errors.some((e) => /^(hc|database)/.test(e)),
+    })
+    errors.push(...reaped.errors)
+    if (reaped.closedTerminals.size > 0 && this.last.hc) {
+      this.last.hc = this.last.hc.filter((t) => !reaped.closedTerminals.has(t.address))
+    }
+    const sessions = merged.filter((m) => !reaped.closed.has(m.session.id))
     const planOf = new Map<string, { plan: string | null; wave: number | null }>()
     const repoPaths = new Set<string>()
     for (const m of sessions) if (m.repo) repoPaths.add(m.repo)
@@ -333,6 +371,7 @@ export class FleetBuilder {
       })
       model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`, ...failures] }
     }
+    model = { ...model, reaper: reaped.reaper }
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
       JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),

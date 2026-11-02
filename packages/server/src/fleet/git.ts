@@ -6,6 +6,8 @@ import { GIT_TIMEOUT_MS } from './sources.ts'
 
 /** The default branch, in the order both readers look: the first that exists. */
 const DEFAULT_REFS = ['refs/remotes/origin/main', 'refs/remotes/origin/master', 'refs/heads/main', 'refs/heads/master']
+/** How far down the default branch's first-parent line a tree is looked for (a squash merge is one commit there). */
+const TREE_SEARCH = 300
 /** Commits kept per repo for the since reading's Shipped group. */
 export const RECENT_COMMITS = 20
 
@@ -120,5 +122,65 @@ export class GitReader {
     )
     // A history that does not contain the commit (diverged) says nothing about a newer deploy.
     return ancestor.exitCode === 0 ? { head } : undefined
+  }
+  /** Entries of `git status --porcelain` in a worktree, untracked files included (ignored ones are not): 0 is clean. Throws when git cannot say. */
+  async dirtyEntries(worktree: string): Promise<number> {
+    const out = await this.git(worktree, ['status', '--porcelain', '--untracked-files=normal'])
+    return out.split('\n').filter((line) => line.trim() !== '').length
+  }
+
+  /**
+   * Whether the worktree's `HEAD` is in the repo's default branch, with the proof as one line. Merged is: the commit is an ancestor of
+   * a default ref (any of `origin/main`, `origin/master`, `main`, `master` that exists), or every commit it has beyond one has an equal patch
+   * there (`git cherry`), or its tree equals the tree of a commit on that ref's first-parent line (a squash merge). A head with a commit
+   * the default branch lacks, in content as well, is unmerged. A `HEAD` with no commit (its branch is gone) cannot be compared. Read-only.
+   */
+  async mergeProof(worktree: string): Promise<{ merged: boolean; proof: string }> {
+    const head = (
+      await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
+    ).trim()
+    if (!head) return { merged: false, proof: 'its branch has no commit to compare (gone)' }
+    const refs = await this.defaultRefs(worktree)
+    if (refs.length === 0) return { merged: false, proof: 'the repo has no default branch to compare with' }
+    const tree = (await this.git(worktree, ['rev-parse', `${head}^{tree}`])).trim()
+    const short = head.slice(0, 12)
+    for (const ref of refs) {
+      const name = ref.name.replace(/^refs\/(?:remotes|heads)\//, '')
+      const ancestor = await this.run(
+        ['git', '--no-optional-locks', '-C', worktree, 'merge-base', '--is-ancestor', head, ref.sha],
+        GIT_TIMEOUT_MS,
+        childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+      )
+      if (ancestor.exitCode === 0) return { merged: true, proof: `commit ${short} is in ${name}` }
+      if (ancestor.exitCode !== 1) throw new Error(`git merge-base failed (exit ${ancestor.exitCode})`)
+      const cherry = (await this.git(worktree, ['cherry', ref.sha, head])).split('\n').filter(Boolean)
+      if (cherry.length > 0 && cherry.every((line) => line.startsWith('- '))) {
+        return { merged: true, proof: `every commit up to ${short} has an equal patch on ${name} (git cherry)` }
+      }
+      const line = await this.git(worktree, ['log', '--first-parent', `-${TREE_SEARCH}`, '--format=%H %T', ref.sha])
+      const same = line.split('\n').find((entry) => entry.split(' ')[1] === tree)
+      if (same) return { merged: true, proof: `its tree equals ${same.slice(0, 12)} on ${name}` }
+    }
+    const [first] = refs
+    const ahead = first ? (await this.git(worktree, ['rev-list', '--count', `${first.sha}..${head}`])).trim() : '?'
+    return { merged: false, proof: `${ahead} commit(s) the default branch lacks, in content as well` }
+  }
+
+  /** The branch a worktree is on; null when detached. */
+  async branchOf(worktree: string): Promise<string | null> {
+    const out = await this.git(worktree, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => '')
+    return out.trim() || null
+  }
+
+  /** Every default ref that exists, in the order `defaultHead` prefers them. */
+  private async defaultRefs(repo: string): Promise<{ name: string; sha: string }[]> {
+    const out = await this.git(repo, ['for-each-ref', '--format=%(refname)%1f%(objectname)', ...DEFAULT_REFS])
+    const tips = new Map(
+      out.split('\n').flatMap((line) => (line.includes('\x1f') ? [line.trim().split('\x1f') as [string, string]] : [])),
+    )
+    return DEFAULT_REFS.flatMap((name) => {
+      const sha = tips.get(name)
+      return sha ? [{ name, sha }] : []
+    })
   }
 }

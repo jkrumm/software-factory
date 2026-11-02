@@ -689,6 +689,9 @@ const fleetTriageUndoHandler =
     const id = parseParam(z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER), req.params.id)
     const done = await undoEntry(sql, id, clock.now())
     if (!done) return json({ error: 'unknown triage entry', code: 'unknown_entry' }, 404)
+    if (done === 'not_undoable') {
+      return json({ error: 'a closed session cannot be brought back: its terminal is gone', code: 'not_undoable' }, 409)
+    }
     if (!done.duplicate)
       await fleet?.refreshNow().catch((error: unknown) => console.error('fleet refresh after an undo failed', error))
     return respond(TriageEntry, done.entry, done.duplicate ? 200 : 201)

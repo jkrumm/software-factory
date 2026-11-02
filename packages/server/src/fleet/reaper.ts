@@ -1,0 +1,365 @@
+import { basename } from 'node:path'
+import type { FleetReaper, ReaperClosed, ReaperKept, ReaperMode } from '@software-factory/contract'
+import type { SQL } from 'bun'
+import { real } from '../runner.ts'
+import { enclosingRepo } from '../projects/sync.ts'
+import type { GitReader } from './git.ts'
+import type { MergedSession } from './model.ts'
+import type { Places } from './place.ts'
+import type { HcCloser } from './sources.ts'
+import { insertLog, type NewLogRow } from './triage-store.ts'
+
+/** A session is idle for this long (no turn, no hook event, hc not working) before it is looked at. */
+export const REAPER_IDLE_MS = 2 * 3_600_000
+/** Closes tried per pass; the rest wait for the next build. */
+export const REAPER_MAX_CLOSES = 5
+/** What a session that is kept is looked at again after: git is not asked about the same worktree on every build. */
+const KEPT_TTL_MS = 120_000
+/** `closed` shows the last day. */
+const CLOSED_WINDOW_MS = 24 * 3_600_000
+const EVAL_CONCURRENCY = 4
+const WORKTREE = /^(.+?)\/\.claude\/worktrees\/([^/]+)(?:\/.*)?$/
+
+export interface ReaperDeps {
+  sql: SQL
+  now: () => Date
+  mode: ReaperMode
+  git: GitReader
+  /** ends a terminal; without it `on` closes nothing */
+  closer?: HcCloser
+}
+
+export interface ReaperInput {
+  sessions: readonly MergedSession[]
+  /** the real paths of the ordinary roots (`FACTORY_REPO_ROOTS`): a repo outside them is never acted on */
+  roots: readonly string[]
+  places: Places
+  /** hc and the database answered in this build: with a stale list nothing is closed */
+  complete: boolean
+}
+
+export interface ReaperResult {
+  reaper: FleetReaper
+  /** sessions closed in this pass: they leave the build's model at once */
+  closed: ReadonlySet<string>
+  /** terminals closed in this pass, by address */
+  closedTerminals: ReadonlySet<string>
+  errors: string[]
+}
+
+const OFF: ReaperResult = {
+  reaper: { mode: 'off', closed: [], kept: [] },
+  closed: new Set(),
+  closedTerminals: new Set(),
+  errors: [],
+}
+
+/** What the guards found for one idle worktree session. */
+interface Eligible {
+  id: string
+  address: string
+  /** hc's own cwd, as the core reports it: the close checks the terminal is still there */
+  cwd: string
+  repo: string
+  main: string
+  worktree: string
+  name: string
+  idleSince: string
+  proof: string
+  parent: string
+}
+
+type Verdict = { kind: 'close'; eligible: Eligible } | { kind: 'keep'; why: string }
+
+const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+const inside = (path: string, roots: readonly string[]) => roots.some((root) => path.startsWith(`${root}/`))
+
+/**
+ * The reaper (FV Wave 5, docs/design.md §11 "The reaper"): closes a finished worker session, `hc kill` then `hc rm`, when everything
+ * says it is done: Claude Code in a worktree of an ordinary repo, idle two hours, the worktree clean, the branch merged into the
+ * default branch, nobody waiting on it. The worktree stays (`rd fan --clean` owns worktrees). It runs in the fleet build (off the tick, in no
+ * transaction, git bounded) and acts through `HcCloser`. One row per close in `fleet_triage_log` (kind `reaped`, not undoable).
+ * `dry` lists what it would close and closes nothing; `off` reads nothing.
+ */
+export class Reaper {
+  /** the verdict of a session that is kept, by terminal and directory, for a while */
+  private readonly kept = new Map<string, { at: number; why: string }>()
+  /** closes that failed, by terminal: a failing one goes behind the others, so it cannot starve them */
+  private readonly failures = new Map<string, number>()
+  /** log rows whose insert failed after the terminal was closed: tried again at the next pass */
+  private unlogged: NewLogRow[] = []
+
+  constructor(private readonly deps: ReaperDeps) {}
+
+  async pass(input: ReaperInput): Promise<ReaperResult> {
+    const { mode, now } = this.deps
+    if (mode === 'off') return OFF
+    const errors: string[] = []
+    const at = now()
+
+    let holds: { sessions: Set<string>; paths: string[] }
+    try {
+      holds = await this.openIssues()
+    } catch (error) {
+      // Without knowing which sessions an Issue holds nothing is closed, and nothing is said about it either.
+      return {
+        reaper: { mode, closed: [], kept: [] },
+        closed: new Set(),
+        closedTerminals: new Set(),
+        errors: [`reaper: open Issues could not be read: ${message(error)}`],
+      }
+    }
+
+    const verdicts = await this.judge(input, holds, at)
+    const kept: ReaperKept[] = verdicts.flatMap((v) => (v.keep ? [v.keep] : []))
+    const eligible = verdicts.flatMap((v) => (v.eligible ? [v.eligible] : []))
+    eligible.sort(
+      (a, b) =>
+        (this.failures.get(a.address) ?? 0) - (this.failures.get(b.address) ?? 0) ||
+        a.idleSince.localeCompare(b.idleSince) ||
+        a.id.localeCompare(b.id),
+    )
+
+    const closedNow = new Set<string>()
+    const closedTerminals = new Set<string>()
+    const done: ReaperClosed[] = []
+    if (mode === 'on') {
+      const closer = this.deps.closer
+      if (!input.complete || !closer) {
+        errors.push(
+          closer
+            ? 'reaper: hc or the database did not answer in this build; nothing is closed'
+            : 'reaper: no way to close a terminal; nothing is closed',
+        )
+      } else {
+        await this.retryUnlogged(at, errors)
+        for (const e of eligible.slice(0, REAPER_MAX_CLOSES)) {
+          try {
+            await closer.close({ address: e.address, cwd: e.cwd })
+          } catch (error) {
+            this.failures.set(e.address, (this.failures.get(e.address) ?? 0) + 1)
+            errors.push(`reaper: ${e.id} was not closed: ${message(error)}`)
+            continue
+          }
+          this.failures.delete(e.address)
+          closedNow.add(e.id)
+          closedTerminals.add(e.address)
+          await this.log(rowOf(e), at, errors)
+        }
+      }
+    }
+
+    const history = await this.recent(at).catch((error: unknown) => {
+      errors.push(`reaper: the closed sessions could not be read: ${message(error)}`)
+      return []
+    })
+    const dry: ReaperClosed[] =
+      mode === 'dry'
+        ? eligible.map((e) => ({
+            session: e.id,
+            repo: e.repo,
+            what: whatOf(e),
+            why: whyOf(),
+            evidence: evidenceOf(e),
+            at: null,
+            dry: true,
+            logId: null,
+          }))
+        : []
+    done.push(...history, ...dry)
+    return { reaper: { mode, closed: done, kept }, closed: closedNow, closedTerminals, errors }
+  }
+
+  /** Every session the guards look at, judged: cheap guards first, git only for what is left. */
+  private async judge(
+    input: ReaperInput,
+    holds: { sessions: Set<string>; paths: string[] },
+    at: Date,
+  ): Promise<{ keep?: ReaperKept; eligible?: Eligible }[]> {
+    const byId = new Map(input.sessions.map((m) => [m.session.id, m]))
+    const nowMs = at.getTime()
+    const candidates: { m: MergedSession; main: string; worktree: string; name: string; idleSince: string }[] = []
+    for (const m of input.sessions) {
+      const found = this.candidate(m, input, holds, nowMs)
+      if (!found) continue
+      const parent = m.session.parent ? byId.get(m.session.parent) : undefined
+      // A parent that waits on workers may still send this one fixes.
+      if (parent?.session.wait === 'workers') continue
+      candidates.push({ m, ...found })
+    }
+
+    const alive = new Set(candidates.map((c) => `${c.m.hc?.address}\0${c.m.hc?.cwd}`))
+    for (const key of this.kept.keys()) if (!alive.has(key)) this.kept.delete(key)
+
+    const out: { keep?: ReaperKept; eligible?: Eligible }[] = []
+    for (let i = 0; i < candidates.length; i += EVAL_CONCURRENCY) {
+      const part = await Promise.all(
+        candidates
+          .slice(i, i + EVAL_CONCURRENCY)
+          .map(async (c): Promise<{ keep?: ReaperKept; eligible?: Eligible }> => {
+            const verdict = await this.look(c, byId, nowMs)
+            const repo = basename(c.main)
+            return verdict.kind === 'keep'
+              ? { keep: { session: c.m.session.id, repo, why: verdict.why } }
+              : { eligible: verdict.eligible }
+          }),
+      )
+      out.push(...part)
+    }
+    return out
+  }
+
+  /** The session if the cheap guards let it be looked at: Claude Code in an ordinary repo's worktree, idle, no Issue's. */
+  private candidate(
+    m: MergedSession,
+    input: ReaperInput,
+    holds: { sessions: Set<string>; paths: string[] },
+    nowMs: number,
+  ) {
+    const term = m.hc
+    if (!term?.claude || !m.cwd) return undefined
+    const found = WORKTREE.exec(m.cwd)
+    if (!found?.[1] || !found[2]) return undefined
+    const main = found[1]
+    const worktree = `${main}/.claude/worktrees/${found[2]}`
+    // A repo directly under an ordinary root and not IuRoot's: a main checkout has no `.claude/worktrees/` in its path.
+    if (!inside(main, input.roots) || enclosingRepo(main, input.roots) !== main) return undefined
+    if (input.places.isVisible(main) || input.places.isVisible(m.cwd)) return undefined
+    // The session's state and hc's agree it is not working; hc's word must be there.
+    if (m.session.state !== 'idle' || (term.status !== 'idle' && term.status !== 'done')) return undefined
+    const idleSince = m.session.lastActivityAt
+    if (!idleSince || nowMs - Date.parse(idleSince) < REAPER_IDLE_MS) return undefined
+    // A session of an open Issue (its lead, or anything in the lead's worktree) is never closed.
+    if (holds.sessions.has(m.session.id)) return undefined
+    const worktreeReal = real(worktree)
+    if (holds.paths.some((p) => worktreeReal === p || worktreeReal.startsWith(`${p}/`))) return undefined
+    return { main, worktree, name: found[2], idleSince }
+  }
+
+  private async look(
+    c: { m: MergedSession; main: string; worktree: string; name: string; idleSince: string },
+    byId: ReadonlyMap<string, MergedSession>,
+    nowMs: number,
+  ): Promise<Verdict> {
+    const { m, main, worktree } = c
+    const address = m.hc?.address ?? ''
+    const key = `${address}\0${m.hc?.cwd}`
+    const before = this.kept.get(key)
+    if (before && nowMs - before.at < KEPT_TTL_MS) return { kind: 'keep', why: before.why }
+
+    const reasons: string[] = []
+    let proof = ''
+    try {
+      const dirty = await this.deps.git.dirtyEntries(worktree)
+      if (dirty > 0) reasons.push(`the worktree has ${dirty} uncommitted or untracked entr${dirty === 1 ? 'y' : 'ies'}`)
+      const merge = await this.deps.git.mergeProof(worktree)
+      const branch = (await this.deps.git.branchOf(worktree)) ?? 'detached head'
+      if (merge.merged) proof = merge.proof
+      else reasons.push(`branch ${branch} is unmerged: ${merge.proof}`)
+    } catch (error) {
+      reasons.push(`cannot tell: ${message(error)}`)
+    }
+    if (reasons.length > 0) {
+      const why = reasons.join('; ')
+      this.kept.set(key, { at: nowMs, why })
+      return { kind: 'keep', why }
+    }
+    this.kept.delete(key)
+    const parentId = m.session.parent
+    const parent = parentId ? byId.get(parentId) : undefined
+    return {
+      kind: 'close',
+      eligible: {
+        id: m.session.id,
+        address,
+        cwd: m.hc?.cwd ?? '',
+        repo: basename(main),
+        main,
+        worktree,
+        name: c.name,
+        idleSince: c.idleSince,
+        proof,
+        parent: !parentId
+          ? 'no parent'
+          : parent
+            ? `parent ${parentId} is ${parent.session.state}, not waiting on workers`
+            : `parent ${parentId} is gone`,
+      },
+    }
+  }
+
+  /** Sessions of an Issue that is not closed, and the lead worktrees of such Issues (real paths). */
+  private async openIssues(): Promise<{ sessions: Set<string>; paths: string[] }> {
+    const { sql } = this.deps
+    const sessions: { id: string }[] = await sql`
+      SELECT s.id FROM factory.sessions s JOIN factory.issues i ON i.id = s.issue_id WHERE i.state <> 'closed'`
+    const paths: { path: string }[] = await sql`
+      SELECT w.path FROM factory.lead_worktrees w JOIN factory.issues i ON i.id = w.issue_id
+      WHERE i.state <> 'closed' AND w.path IS NOT NULL`
+    return { sessions: new Set(sessions.map((r) => r.id)), paths: paths.map((r) => real(r.path)) }
+  }
+
+  /** The reaper's rows of the last 24 h, newest first. */
+  private async recent(at: Date): Promise<ReaperClosed[]> {
+    const rows: {
+      id: string
+      what: string
+      why: string
+      evidence: string
+      payload: { session?: string; repo?: string }
+      at: Date
+    }[] = await this.deps.sql`
+      SELECT id, what, why, evidence, payload, at FROM factory.fleet_triage_log
+      WHERE kind = 'reaped' AND at >= ${new Date(at.getTime() - CLOSED_WINDOW_MS)} ORDER BY id DESC LIMIT 100`
+    return rows.map((r) => ({
+      session: r.payload.session ?? '',
+      repo: r.payload.repo ? basename(r.payload.repo) : '',
+      what: r.what,
+      why: r.why,
+      evidence: r.evidence,
+      at: r.at.toISOString(),
+      dry: false,
+      logId: Number(r.id),
+    }))
+  }
+
+  private async log(row: NewLogRow, at: Date, errors: string[]): Promise<void> {
+    try {
+      await insertLog(this.deps.sql, [row], at)
+    } catch (error) {
+      // The terminal is gone: the line is tried again, it is not a reason to close anything twice.
+      this.unlogged.push(row)
+      errors.push(`reaper: the log row of ${row.subject} could not be written: ${message(error)}`)
+    }
+  }
+
+  private async retryUnlogged(at: Date, errors: string[]): Promise<void> {
+    const pending = this.unlogged
+    this.unlogged = []
+    for (const row of pending) await this.log(row, at, errors)
+  }
+}
+
+const whatOf = (e: Eligible): string => `Closed ${e.id}, a finished worker session in ${e.repo}/${e.name}`
+const whyOf = (): string =>
+  'Idle for 2 h or more, its worktree clean, its branch merged, and its parent waits on nothing of it. Not undoable: the terminal is gone (the worktree stays).'
+const evidenceOf = (e: Eligible): string => `idle since ${e.idleSince}; ${e.proof}; ${e.parent}`
+
+/** The deterministic key: the worktree, and this incarnation of the terminal (its address and the idle time it was closed for). */
+const rowOf = (e: Eligible): NewLogRow => ({
+  kind: 'reaped',
+  subject: e.worktree,
+  fingerprint: `${e.address}:${e.idleSince}`,
+  what: whatOf(e),
+  why: whyOf(),
+  evidence: evidenceOf(e),
+  payload: {
+    session: e.id,
+    repo: e.main,
+    worktree: e.worktree,
+    address: e.address,
+    idleSince: e.idleSince,
+    proof: e.proof,
+    parent: e.parent,
+  },
+})

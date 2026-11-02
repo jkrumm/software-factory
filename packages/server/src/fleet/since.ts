@@ -223,10 +223,31 @@ async function handled(
   const out: SinceHandled[] = []
   const planRepo = (path: string): Fleet['repos'][number] | undefined =>
     snapshot?.repos.find((r) => path === r.space || path.startsWith(`${r.space}/`))
-  const rows: { id: string; subject: string; what: string; at: Date; undone_at: Date | null }[] = await sql`
-    SELECT id, subject, what, at, undone_at FROM factory.fleet_triage_log
+  const rows: {
+    id: string
+    kind: string
+    subject: string
+    what: string
+    at: Date
+    undone_at: Date | null
+    payload: { repo?: string }
+  }[] = await sql`
+    SELECT id, kind, subject, what, at, undone_at, payload FROM factory.fleet_triage_log
     WHERE at >= ${t} AND at <= ${now} ORDER BY id DESC LIMIT ${LIMIT}`
   for (const r of rows) {
+    // The reaper acts on ordinary repos only (never IuRoot's), and its rows cannot be undone.
+    if (r.kind === 'reaped') {
+      out.push({
+        kind: 'reaped',
+        text: r.what,
+        at: r.at.toISOString(),
+        repo: r.payload.repo ?? null,
+        visible: false,
+        source: `fleet_triage_log:${r.id}`,
+        undoId: null,
+      })
+      continue
+    }
     // A subject is a plan path or an ask id; one the snapshot cannot place is IuRoot's until shown otherwise.
     const repo = r.subject.startsWith('/') ? planRepo(r.subject) : undefined
     const visible = r.subject.startsWith('/') ? (repo ? repo.visible : true) : askVisible(r.subject)

@@ -1,4 +1,4 @@
-import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
+import { DEFAULT_ROLES_FILE, ReaperMode } from '@software-factory/contract'
 import { parseProbeHosts } from './fleet/probes.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
@@ -47,6 +47,8 @@ export interface Config {
   digestTz: string
   /** `FACTORY_DIGEST_EVERY` (`5m`, `90s`, `1h`, or `off`): how often the fleet digest asks `agw digest` about what changed; null is off (not the owner's morning line above) */
   fleetDigestEveryMs: number | null
+  /** `FACTORY_REAPER` (`on`, `dry`, `off`; default `dry`): whether the fleet build closes finished, merged worker sessions, only lists them, or reads nothing */
+  reaper: ReaperMode
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
 }
@@ -99,6 +101,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
+    reaper: reaperMode(env.FACTORY_REAPER),
   }
 }
 
@@ -116,6 +119,14 @@ function digestAt(value: string | undefined): string | null {
   // The digest is sent from this time until noon (a server that was down catches up before then): a later time could never be due.
   if (value >= '12:00') throw new Error(`FACTORY_DIGEST_AT must be before 12:00, got: ${value}`)
   return value
+}
+
+/** `on`, `dry` or `off`; unset is `dry`: a new switch lists before it acts. */
+function reaperMode(value: string | undefined): ReaperMode {
+  if (value === undefined || value === '') return 'dry'
+  const mode = ReaperMode.safeParse(value)
+  if (!mode.success) throw new Error(`FACTORY_REAPER must be on, dry or off, got: ${value}`)
+  return mode.data
 }
 
 const DURATION_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000 } as const

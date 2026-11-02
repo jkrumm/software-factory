@@ -94,6 +94,7 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
+      reaper: 'dry',
       probeHosts: new Map(),
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -150,6 +151,14 @@ describe('config (finding 5)', () => {
     expect(() => loadConfig({ ...env, FACTORY_PROBE_HOSTS: 'macbook=-oProxyCommand=x' })).toThrow('FACTORY_PROBE_HOSTS')
     for (const bad of ['5', '10s', '25h', 'often', '5 m'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_EVERY: bad })).toThrow('FACTORY_DIGEST_EVERY')
+  })
+
+  test('FACTORY_REAPER: dry unless set, on or off; a mistake is refused', () => {
+    expect(loadConfig(env).reaper).toBe('dry')
+    expect(loadConfig({ ...env, FACTORY_REAPER: 'on' }).reaper).toBe('on')
+    expect(loadConfig({ ...env, FACTORY_REAPER: 'off' }).reaper).toBe('off')
+    for (const bad of ['yes', 'ON', 'true'])
+      expect(() => loadConfig({ ...env, FACTORY_REAPER: bad })).toThrow('FACTORY_REAPER')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {
