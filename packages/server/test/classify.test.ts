@@ -191,14 +191,35 @@ describe('AgwClassifier', () => {
   test('runs factory-classify with the Issue on stdin and reads the run’s output', async () => {
     const { calls, run } = scripted([{ exitCode: 0, stdout: JSON.stringify({ status: 'done', output: answer }) }])
     expect(await new AgwClassifier({ bin: 'agw', run }).classify(input)).toEqual(answer)
-    expect(calls[0]?.cmd).toEqual(['agw', 'factory-classify', '--format', 'json'])
+    expect(calls[0]?.cmd).toEqual([
+      'agw',
+      'factory-classify',
+      '--format',
+      'json',
+      '--idempotency-key',
+      'factory-classify-1',
+    ])
+    // Facts go as a string, the repo as its directory's name.
     expect(JSON.parse(calls[0]?.stdin ?? '')).toEqual({
       title: 't',
-      facts: { x: 1 },
-      repo: '/r',
+      facts: '{"x":1}',
+      repo: 'r',
       source: 'request',
       projects: ['r'],
     })
+  })
+
+  test('a title and facts past the workflow’s limits are cut, not refused', async () => {
+    const { calls, run } = scripted([{ exitCode: 0, stdout: JSON.stringify({ status: 'done', output: answer }) }])
+    await new AgwClassifier({ bin: 'agw', run }).classify({
+      ...input,
+      title: 'x'.repeat(500),
+      facts: { blob: 'y'.repeat(30_000) },
+    })
+    const sent = JSON.parse(calls[0]?.stdin ?? '')
+    expect(sent.title).toHaveLength(300)
+    expect(typeof sent.facts).toBe('string')
+    expect(sent.facts).toHaveLength(20_000)
   })
 
   test('exit 10 means agw run wait <runId>, until the exit is not 10', async () => {
