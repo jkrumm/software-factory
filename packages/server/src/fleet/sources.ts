@@ -82,11 +82,11 @@ export interface HcCloser {
 export class NotClosed extends Error {}
 
 /**
- * Whether a terminal runs Claude Code, the one answer for the list and the close. When the core reports a foreground program, that program
+ * Whether a terminal still runs Claude Code, for the close only (the list's flag is broader on purpose). When the core reports a foreground program, that program
  * decides (its name or program is `claude`, or `node`/`bun` runs a script named `claude`); a status or label can outlive the program, so a shell
  * in its place is never Claude Code. With no foreground reported, the status app, the program or Claude's session label say.
  */
-function isClaude(t: z.output<typeof Record_>): boolean {
+function runsClaude(t: z.output<typeof Record_>): boolean {
   const fg = t.foreground
   if (fg && (fg.name || fg.argv.length > 0)) return fg.name === 'claude' || runs(fg.argv)
   return t.status?.app === 'claude-code' || runs(t.argv) || 'jk.claude.session' in t.labels
@@ -131,7 +131,7 @@ export class HcTerminals implements HcLister, HcCloser {
     }
     if (seen.state === 'live') {
       // Only Claude Code is closed: a shell that took the terminal's place (a kept terminal after a loss) is somebody's work.
-      if (!isClaude(seen)) throw new NotClosed(`${address} does not run Claude Code; not closed`)
+      if (!runsClaude(seen)) throw new NotClosed(`${address} does not run Claude Code; not closed`)
       const state = seen.status?.state
       if (state !== 'idle' && state !== 'done')
         throw new NotClosed(`${address} is ${state ?? 'not reporting'} again; not closed`)
@@ -159,7 +159,13 @@ export class HcTerminals implements HcLister, HcCloser {
     return terminals
       .filter((t) => t.state === 'live')
       .map((t) => {
-        const claude = isClaude(t)
+        const argv = t.foreground?.argv.length ? t.foreground.argv : t.argv
+        // The broad test: the fleet must not lose a session it can see. Only the close is strict (`runsClaude`).
+        const claude =
+          t.status?.app === 'claude-code' ||
+          t.foreground?.name === 'claude' ||
+          argv.includes('claude') ||
+          'jk.claude.session' in t.labels
         // The prompt an agent started with is its longest argument; a short one is a flag.
         const prompt = [...t.argv].sort((a, b) => b.length - a.length)[0] ?? null
         return {

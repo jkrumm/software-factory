@@ -80,30 +80,48 @@ export async function insertLog(sql: SQL, rows: readonly NewLogRow[], at: Date):
     ON CONFLICT (kind, subject, fingerprint) DO NOTHING`
 }
 
-/** A `reaped` row is written before the close with `payload.state = 'closing'` and settled after it; every reading shows settled rows only.
- * The reaper's rows whose close was not settled (a crash, an uncertain failure): the key and the terminal. */
-export async function closingReaped(sql: SQL): Promise<{ subject: string; fingerprint: string; address: string }[]> {
-  return await sql`
-    SELECT subject, fingerprint, payload->>'address' AS address FROM factory.fleet_triage_log
-    WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT 200`
+/** The most unsettled closes read at once: the reconcile and the display take the same rows, oldest first. */
+export const CLOSING_LIMIT = 500
+
+/** One close that was started and not settled (a crash, an uncertain failure): its key, its terminal, and what shows of it. */
+export interface ClosingRow {
+  id: number
+  subject: string
+  fingerprint: string
+  address: string
+  session: string
+  repo: string
+  what: string
+  evidence: string
+  at: Date
 }
 
-/** Closes still `closing` since before `before`: shown in the model as unsettled. */
-export async function oldClosing(
-  sql: SQL,
-  before: Date,
-): Promise<{ id: number; session: string; repo: string; what: string; evidence: string; at: string }[]> {
-  const rows: { id: string; what: string; evidence: string; at: Date; payload: { session?: string; repo?: string } }[] =
-    await sql`
-    SELECT id, what, evidence, at, payload FROM factory.fleet_triage_log
-    WHERE kind = 'reaped' AND payload->>'state' = 'closing' AND at < ${before} ORDER BY id LIMIT 500`
+/**
+ * A `reaped` row is written before the close with `payload.state = 'closing'` and settled after it; every reading shows settled rows only.
+ * These are the rows still `closing`, oldest first.
+ */
+export async function closingReaped(sql: SQL): Promise<ClosingRow[]> {
+  const rows: {
+    id: string
+    subject: string
+    fingerprint: string
+    what: string
+    evidence: string
+    at: Date
+    payload: { address?: string; session?: string; repo?: string }
+  }[] = await sql`
+    SELECT id, subject, fingerprint, what, evidence, at, payload FROM factory.fleet_triage_log
+    WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT ${CLOSING_LIMIT}`
   return rows.map((r) => ({
     id: Number(r.id),
+    subject: r.subject,
+    fingerprint: r.fingerprint,
+    address: r.payload.address ?? '',
     session: r.payload.session ?? '',
     repo: r.payload.repo ?? '',
     what: r.what,
     evidence: r.evidence,
-    at: r.at.toISOString(),
+    at: r.at,
   }))
 }
 
