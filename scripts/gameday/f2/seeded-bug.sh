@@ -37,13 +37,13 @@ attempt=1
 lead=$(lead_key "$issue" "$attempt")
 
 state() { issue_col "$issue" "state || '/' || coalesce(reason, '')"; }
-last=""
+seen=""
 log_change() {
   local now
   now=$(state)
-  if [[ $now != "$last" ]]; then
+  if [[ $now != "$seen" ]]; then
     log "issue $issue: $now (attempt $(issue_col "$issue" attempt), hold $(issue_col "$issue" hold)) | lead: $(fx session get "$lead" --format json 2>/dev/null | jq -r '"\(.state) turn=\(.turn)"' 2>/dev/null || echo none)"
-    last=$now
+    seen=$now
   fi
 }
 # Done: closed and finalized. Stuck: parked for something only the owner could answer, and still so 120 s later.
@@ -62,7 +62,7 @@ finished() {
   esac
   return 1
 }
-PROGRESS_CMD="progress_line $issue $lead"
+export PROGRESS_CMD="progress_line $issue $lead"
 if wait_for "issue $issue closed and finalized" finished; then waited=1; else waited=0; fi
 stuck=0
 [[ -n $stuck_since ]] && stuck=1

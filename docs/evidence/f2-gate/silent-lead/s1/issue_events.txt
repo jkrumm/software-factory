@@ -1,0 +1,5 @@
+05:02:49.428|created||queued|created:33|{"source": "request"}
+05:02:56.488|classified|||classified:33|{"kind": "chore", "size": "s", "tier": "haiku", "class": "routine", "effort": "low", "clamped": false, "floored": false}
+05:03:01.223|admitted|queued|working|admit:33:1|
+05:03:25.051|drop|working|closed|33:1:drop:cb71fec9-19eb-446f-bf21-22e3f614fe2a|{"reason": "Ask is a no-op acknowledgement with no change to make. Standing orders require a report before stopping, so the stop is reported as drop rather than skipped.", "attempt": 1}
+05:03:27.142|issue_finalized|||issue_finalized:33:1|{"attempt": 1}

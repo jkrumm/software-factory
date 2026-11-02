@@ -1,0 +1,1 @@
+05:03:26|transcript|factory|1|~/.local/share/factory/archive/33/1/d5fdbb87-b758-4f20-9bf9-60c86cbe398c.jsonl|{"session": "lead-33-1", "claudeSessionId": "d5fdbb87-b758-4f20-9bf9-60c86cbe398c"}

@@ -1,0 +1,5 @@
+FAIL	the Issue reached waiting/unreported on its own	expected 1	got 0
+NOTE	INCONCLUSIVE, not a machine defect: the lead (haiku, low) ended its first turn with factory issue drop, quoting the standing orders (Every stop reports) over the ask and the repo's AGENTS.md. The machine behaved: drop closed the Issue, finalize ran, claim and tab went.
+FAIL	Issue state after the run	expected waiting/unreported	got closed/
+FAIL	send-back effects	expected 1	got 0
+FAIL	lead verbs in the inbox	expected 0	got 1
