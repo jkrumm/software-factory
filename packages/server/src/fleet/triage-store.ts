@@ -80,14 +80,12 @@ export async function insertLog(sql: SQL, rows: readonly NewLogRow[], at: Date):
     ON CONFLICT (kind, subject, fingerprint) DO NOTHING`
 }
 
-/** A `reaped` row is written before the close with `payload.state = 'closing'` and settled after it; the readings show settled rows only. */
-export const CLOSING = `payload->>'state' = 'closing'`
-
-/** The reaper's rows whose close was not settled (a crash, an uncertain failure): the key and the terminal. */
+/** A `reaped` row is written before the close with `payload.state = 'closing'` and settled after it; every reading shows settled rows only.
+ * The reaper's rows whose close was not settled (a crash, an uncertain failure): the key and the terminal. */
 export async function closingReaped(sql: SQL): Promise<{ subject: string; fingerprint: string; address: string }[]> {
   return await sql`
     SELECT subject, fingerprint, payload->>'address' AS address FROM factory.fleet_triage_log
-    WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT 20`
+    WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT 200`
 }
 
 /** `closed`: the terminal is gone, the row stands. `untouched`: nothing happened, the row is taken back. */
