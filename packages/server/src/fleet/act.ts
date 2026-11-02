@@ -49,7 +49,7 @@ const fenced = (tag: string, text: string): string[] => {
 const oneLine = (text: string, max = 300) => text.replace(/\s+/g, ' ').trim().slice(0, max)
 
 export class FleetActions {
-  /** acts of one ask run one after the other: a double click is one act, a resolve and a deny are not both made */
+  /** acts of one ask run one after the other in this process (the server is one process: a database lock keeps a second copy out): a double click is one act, a resolve and a deny are not both made */
   private readonly chain = new Map<string, Promise<unknown>>()
 
   constructor(private readonly deps: ActDeps) {}
