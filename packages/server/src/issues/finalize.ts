@@ -93,9 +93,10 @@ async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
       issueId,
       attempt,
     )
-    // What the lead reported as merged: a squash leaves no commit of the branch on the base, and nothing else says it landed.
+    // What the lead reported as merged, as the full shas resolved when it shipped: a squash leaves no commit of the branch on the base,
+    // and nothing else says it landed. Never the strings the lead typed, which can be short or a branch name and resolve to something else now.
     const reported: { commits: string[] | null }[] = await sql`
-      SELECT payload->'commits' AS commits FROM factory.issue_inbox
+      SELECT payload->'derived'->'commits' AS commits FROM factory.issue_inbox
       WHERE issue_id = ${issueId} AND kind IN ('ship', 'close') AND result = 'applied' AND payload->>'attempt' = ${String(attempt)}`
     const tree = await deps.worktrees.remove({
       repo: issue.repo,
