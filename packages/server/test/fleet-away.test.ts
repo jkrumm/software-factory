@@ -351,6 +351,11 @@ describe('seen_at, the owner-wide cursor', () => {
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
   })
 
+  test('with no model built there was no reading: caught_up leaves the cursor where it is', async () => {
+    expect((await presence('desk', 'caught_up', NOW.toISOString())).status).toBe(201)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBeNull()
+  })
+
   test('caught_up needs its until, and no other act takes one', async () => {
     const bare = await app.send('POST', '/fleet/presence', { place: 'desk', act: 'caught_up' })
     expect(bare.status).toBe(400)
@@ -794,7 +799,11 @@ describe('GET /fleet/since', () => {
 
   test('a pending row with no run id (a crash after the claim) is queued again, with no failure to count', async () => {
     await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
-    await db.sql`UPDATE factory.fleet_windows SET state = 'pending' WHERE hash = 'h1'`
+    await db.sql`UPDATE factory.fleet_windows SET state = 'pending', updated_at = ${clock.now()} WHERE hash = 'h1'`
+    // Claimed just now: that is the call itself, not a crash. It is left alone.
+    expect(await windows.pass()).toEqual({ called: false })
+    expect(await db.sql`SELECT state FROM factory.fleet_windows`).toEqual([{ state: 'pending' }])
+    clock.advance(32 * MIN) // past the process guard and its margin
     expect(await windows.pass()).toEqual({ called: false })
     expect(await db.sql`SELECT state, failures, retry_at FROM factory.fleet_windows`).toEqual([
       { state: 'queued', failures: 0, retry_at: null },
@@ -802,6 +811,45 @@ describe('GET /fleet/since', () => {
     expect(await db.sql`SELECT 1 FROM factory.fleet_digest_runs`).toHaveLength(0)
     await windows.pass()
     expect(agw).toHaveLength(1)
+  })
+
+  test('a start that throws before the call is a failure with its backoff, not a claim left behind', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    const flaky = new Proxy(db.sql, {
+      apply(target, thisArg, args: unknown[]) {
+        const text = Array.isArray(args[0]) ? (args[0] as string[]).join('?') : ''
+        if (text.includes('batch_hash =') && text.includes('AND terminal')) throw new Error('the database went away')
+        return Reflect.apply(target as never, thisArg, args)
+      },
+    })
+    const failing = new WindowDigest({
+      sql: flaky,
+      now: () => clock.now(),
+      bin: 'agw',
+      run: async () => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false }) as never,
+    })
+    await failing.pass()
+    const [row] = await db.sql`SELECT state, failures, retry_at FROM factory.fleet_windows`
+    expect(row).toMatchObject({ state: 'failed', failures: 1 })
+    expect(row?.retry_at).not.toBeNull()
+  })
+
+  test('a request for an existing window refreshes its context and makes it the newest request again', async () => {
+    const ask = (n: number, context = '') => windows.request({ text: `facts ${n}`, hash: `h${n}`, context })
+    await ask(1, 'before')
+    await ask(1, 'after') // still queued: the context follows the sessions as they are now
+    expect(await db.sql`SELECT context FROM factory.fleet_windows`).toEqual([{ context: 'after' }])
+    await windows.pass() // h1 is ready
+    clock.advance(MIN)
+    await ask(2) // h2 is newer
+    clock.advance(MIN)
+    await ask(1, 'after') // the board reads the first window again: it is the newest request, and the waiting h2 is let go
+    const rows = await db.sql`SELECT hash, state, requested_at FROM factory.fleet_windows ORDER BY hash`
+    expect(rows.map((r: { hash: string; state: string }) => [r.hash, r.state])).toEqual([
+      ['h1', 'ready'],
+      ['h2', 'superseded'],
+    ])
+    expect(rows[0]?.requested_at.toISOString()).toBe(clock.now().toISOString())
   })
 
   test('asking again for a window that was let go while it backed off starts it at once', async () => {
@@ -1128,8 +1176,37 @@ describe('git: the default head', () => {
 
     timeout = true
     await expect(git.recent(repo)).rejects.toThrow('did not answer in time')
-    expect((await git.state(repo)).recent).toEqual([]) // no commits this build, not the old ones
+    await expect(git.state(repo)).rejects.toThrow('did not answer in time')
     expect(await git.newerThan(repo, sha)).toBeUndefined()
+  })
+})
+
+describe('git timing out in a build', () => {
+  test('the previous build’s repo state stays, commits included, with one line in errors', async () => {
+    let timeout = false
+    const run: typeof realRun = async (cmd, ...rest) => {
+      if (timeout && cmd.includes('for-each-ref'))
+        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      return realRun(cmd, ...rest)
+    }
+    const slow = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      git: new GitReader(run),
+    })
+    const repoOf = (f: Fleet) => f.repos.find((r) => r.name === 'software-factory')
+    const first = await slow.refreshNow()
+    const commits = repoOf(first)?.git?.recent ?? []
+    expect(commits.length).toBeGreaterThan(0)
+    timeout = true
+    const second = await slow.refreshNow()
+    expect(repoOf(second)?.git?.recent).toEqual(commits)
+    expect(second.errors.filter((e) => e.startsWith('git software-factory'))).toHaveLength(1)
   })
 })
 
@@ -1177,7 +1254,14 @@ describe('the CLI', () => {
     expect((await factory(['fleet', 'presence', 'desk', 'focus', '--until', T])).code).toBe(2)
     const named = await factory(['fleet', 'presence', 'phone', 'caught_up', '--until', T])
     expect(Presence.parse(JSON.parse(named.stdout)).seenAt).toBe(T)
-    const seen = await factory(['fleet', 'seen'])
+    // `fleet seen` has no default: the until is the one `fleet since` printed.
+    const noUntil = await factory(['fleet', 'seen'])
+    expect(noUntil.code).toBe(2)
+    expect(noUntil.stderr).toContain('--until')
+    expect((await factory(['fleet', 'seen', '--until', 'yesterday'])).code).toBe(2)
+    const printed = Since.parse(JSON.parse((await factory(['fleet', 'since'])).stdout)).until
+    expect((await factory(['--format', 'plain', 'fleet', 'since'])).stdout).toContain(`until ${printed}`)
+    const seen = await factory(['fleet', 'seen', '--until', printed])
     expect(Presence.parse(JSON.parse(seen.stdout)).seenAt).toBe(NOW.toISOString())
 
     const dir = mkdtempSync('/tmp/factory-away-sock-')
@@ -1185,7 +1269,7 @@ describe('the CLI', () => {
       for (const args of [
         ['fleet', 'presence', 'desk', 'focus'],
         ['fleet', 'since'],
-        ['fleet', 'seen'],
+        ['fleet', 'seen', '--until', T],
       ]) {
         const out = await factory(args, { FACTORY_TOKEN: '', FACTORY_SOCKET: join(dir, 'h.sock') })
         expect(out.code).toBe(3)

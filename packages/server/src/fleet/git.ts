@@ -37,8 +37,9 @@ export class GitReader {
     }
     const log = await this.git(repo, ['log', '-1', '--format=%H%x1f%cI%x1f%s']).catch(() => '')
     const [sha, at, subject] = log.trim().split('\x1f')
-    // A git that does not answer gives no commits this build, never an older ref's.
-    const recent = await this.recent(repo).catch(() => [])
+    // A git that does not answer fails the state: the builder keeps the previous build's (commits included) with a line in `errors`, never an
+    // empty list the cursor could pass.
+    const recent = await this.recent(repo)
     return {
       branch,
       dirty,

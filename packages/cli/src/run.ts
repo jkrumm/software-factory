@@ -92,9 +92,9 @@ commands:
                   what happened since --t (default: the cursor; at most 7 days back; a later or malformed --t is exit 2), grouped: Needs you,
                   Shipped, Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending,
                   failed or none). Only the default reading asks for a headline; --t shows one already made, or none
-  fleet seen [--place desk|phone] [--until <iso>]
-                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, else to where the model was built (read
-                  from /fleet), never past now; what landed after it is in the next window
+  fleet seen --until <iso> [--place desk|phone]
+                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, the until that fleet since printed for the
+                  reading that was seen (never past where the model was built); what landed after it is in the next window
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -196,7 +196,7 @@ commands:
 --pending       notify list: only what is not sent
 --undo <id>     fleet triage: take an automatic decision back
 --t <iso>        fleet since: the window's start
---until <iso>    fleet seen, fleet presence caught_up: the until of the reading that was seen
+--until <iso>    fleet seen (required), fleet presence caught_up: the until of the reading that was seen (fleet since prints it)
 --place <place> fleet seen, fleet act: desk (default) or phone
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --kind, --link, --file, --stdin  issue evidence
@@ -416,7 +416,7 @@ const presenceLine = (p: Presence): string =>
 /** The since reading on one screen: the headline, then each group with its lines and their sources. */
 export function sinceScreen(r: Since): string {
   const out: string[] = [
-    `SINCE\t${r.t}\t${r.until}${r.clamped ? '\t(cut to 7 days)' : ''}`,
+    `SINCE\tt ${r.t}\tuntil ${r.until}${r.clamped ? '\t(cut to 7 days)' : ''}`,
     `HEADLINE\t${r.headline.state}${r.headline.text ? `\t${oneLine(r.headline.text, 600)}` : ''}`,
   ]
   const group = (title: string, lines: string[]): void => {
@@ -864,7 +864,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         throw usage('memo and foreground are the phone only')
       if ((parsedAct.data === 'caught_up') !== (flags.until !== undefined))
         throw usage(
-          'caught_up takes --until <the until of the reading that was seen> (fleet seen reads it for you), and no other act does',
+          'caught_up takes --until <the until of the reading that was seen> (fleet since prints it), and no other act does',
         )
       if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
         throw usage('--until takes an ISO 8601 time with a Z or an offset')
@@ -877,19 +877,19 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       return print(body, presenceLine(body))
     }
     if (words[1] === 'seen') {
-      if (words.length > 2) throw usage('usage: fleet seen [--place desk|phone] [--until <iso>]')
+      if (words.length > 2) throw usage('usage: fleet seen --until <iso> [--place desk|phone]')
+      // The owner passes on the until of the reading that was seen (fleet since prints it): a default would be a build never shown.
+      if (flags.until === undefined || !IsoTime.safeParse(flags.until).success)
+        throw usage(
+          'usage: fleet seen --until <iso> [--place desk|phone]: --until is the until `fleet since` printed (ISO 8601 with a Z or an offset)',
+        )
       const place = PresencePlace.safeParse(flags.place ?? 'desk')
       if (!place.success) throw usage(`--place is one of ${PresencePlace.options.join(', ')}`)
-      if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
-        throw usage('--until takes an ISO 8601 time with a Z or an offset')
-      // Caught up with what was seen: the cursor goes to where the model was built (or to the --until named), not to the click. This reads
-      // /fleet, not a since reading, so it asks for no headline and displaces no window.
-      const until = flags.until ?? (await call(io, '/fleet', { auth: true, schema: Fleet })).body.builtAt
       const { body } = await call(io, '/fleet/presence', {
         method: 'POST',
         auth: true,
         schema: Presence,
-        body: { place: place.data, act: 'caught_up', until },
+        body: { place: place.data, act: 'caught_up', until: flags.until },
       })
       return print(body, presenceLine(body))
     }
@@ -910,7 +910,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     }
     if (words.length > 1)
       throw usage(
-        'usage: fleet [--refresh] | fleet act <ask> <intent> | fleet triage [--undo <id>] | fleet presence <place> <act> | fleet since [--t <iso>] | fleet seen',
+        'usage: fleet [--refresh] | fleet act <ask> <intent> | fleet triage [--undo <id>] | fleet presence <place> <act> | fleet since [--t <iso>] | fleet seen --until <iso>',
       )
     const refresh = flags.refresh === true
     const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {

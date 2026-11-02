@@ -13,7 +13,7 @@ import type {
 import type { SQL } from 'bun'
 import { latestReadings } from '../capacity.ts'
 import { readSnapshot } from './store.ts'
-import { readSeenAt, windowStart } from './presence.ts'
+import { readingEnd, readSeenAt, windowStart } from './presence.ts'
 import { windowFacts, type WindowDigest } from './window.ts'
 
 /**
@@ -343,7 +343,7 @@ export async function readSince(
   // The reading ends where its snapshot does: an ask raised after the last build is in neither this reading nor, once the owner has caught
   // up to its `until`, a window that would never show it.
   const builtAt = new Date(snapshot.builtAt)
-  const until = builtAt < now ? builtAt : now
+  const until = readingEnd(now, builtAt)
   const t = start.t > until ? until : start.t
   const groups = await buildSince(sql, {
     snapshot,
