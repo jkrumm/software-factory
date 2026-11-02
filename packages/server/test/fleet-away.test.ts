@@ -351,9 +351,12 @@ describe('seen_at, the owner-wide cursor', () => {
     expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
   })
 
-  test('with no model built there was no reading: caught_up leaves the cursor where it is', async () => {
-    expect((await presence('desk', 'caught_up', NOW.toISOString())).status).toBe(201)
+  test('with no model built there was no reading: caught_up is a 409 and records nothing', async () => {
+    const res = await presence('desk', 'caught_up', NOW.toISOString())
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { code: string }).code).toBe('no_build')
     expect((await readPresence(db.sql, clock.now())).seenAt).toBeNull()
+    expect(await db.sql`SELECT 1 FROM factory.fleet_presence_acts`).toHaveLength(0)
   })
 
   test('caught_up needs its until, and no other act takes one', async () => {
@@ -800,10 +803,7 @@ describe('GET /fleet/since', () => {
   test('a pending row with no run id (a crash after the claim) is queued again, with no failure to count', async () => {
     await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
     await db.sql`UPDATE factory.fleet_windows SET state = 'pending', updated_at = ${clock.now()} WHERE hash = 'h1'`
-    // Claimed just now: that is the call itself, not a crash. It is left alone.
-    expect(await windows.pass()).toEqual({ called: false })
-    expect(await db.sql`SELECT state FROM factory.fleet_windows`).toEqual([{ state: 'pending' }])
-    clock.advance(32 * MIN) // past the process guard and its margin
+    // This process is not making a call: a crash left the claim, and the window is queued again at once.
     expect(await windows.pass()).toEqual({ called: false })
     expect(await db.sql`SELECT state, failures, retry_at FROM factory.fleet_windows`).toEqual([
       { state: 'queued', failures: 0, retry_at: null },
@@ -811,6 +811,33 @@ describe('GET /fleet/since', () => {
     expect(await db.sql`SELECT 1 FROM factory.fleet_digest_runs`).toHaveLength(0)
     await windows.pass()
     expect(agw).toHaveLength(1)
+  })
+
+  test('if the failure record itself throws, the claim is released', async () => {
+    await windows.request({ text: 'facts 1', hash: 'h1', context: '' })
+    const noBegin = new Proxy(db.sql, {
+      get(target, prop, receiver) {
+        if (prop === 'begin') return () => Promise.reject(new Error('the database went away'))
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+    const broken = new WindowDigest({
+      sql: noBegin,
+      now: () => clock.now(),
+      bin: 'agw',
+      run: async () => ({ exitCode: 1, stdout: '', stderr: '', timedOut: false }) as never,
+    })
+    await expect(broken.pass()).rejects.toThrow('went away')
+    expect(await db.sql`SELECT state FROM factory.fleet_windows`).toEqual([{ state: 'queued' }])
+  })
+
+  test('a request for a row that exists, is the newest and has the same context writes nothing', async () => {
+    const ask = () => windows.request({ text: 'facts 1', hash: 'h1', context: 'same' })
+    await ask()
+    const before = await db.sql`SELECT requested_at, updated_at, context FROM factory.fleet_windows`
+    clock.advance(5 * MIN)
+    await ask()
+    expect(await db.sql`SELECT requested_at, updated_at, context FROM factory.fleet_windows`).toEqual(before)
   })
 
   test('a start that throws before the call is a failure with its backoff, not a claim left behind', async () => {
@@ -1176,7 +1203,12 @@ describe('git: the default head', () => {
 
     timeout = true
     await expect(git.recent(repo)).rejects.toThrow('did not answer in time')
-    await expect(git.state(repo)).rejects.toThrow('did not answer in time')
+    // Only `recent` falls back: the branch, the dirty bit and the last commit are still read.
+    const state = await git.state(repo)
+    expect(state.recentError).toContain('did not answer in time')
+    expect(state.recent).toEqual([])
+    expect(state.branch).toBe('master')
+    expect(state.lastCommit?.sha).toBe(sha)
     expect(await git.newerThan(repo, sha)).toBeUndefined()
   })
 })
@@ -1209,7 +1241,7 @@ describe('git timing out in a build', () => {
     expect(second.errors.filter((e) => e.startsWith('git software-factory'))).toHaveLength(1)
   })
 
-  test('the cursor does not pass commits the stale build could not show', async () => {
+  test('the since reading lists the repos whose commits could not be read as incomplete', async () => {
     let timeout = false
     const run: typeof realRun = async (cmd, ...rest) => {
       if (timeout && cmd.includes('for-each-ref'))
@@ -1226,13 +1258,17 @@ describe('git timing out in a build', () => {
       queue,
       git: new GitReader(run),
     })
-    await slow.refreshNow() // a good build at NOW
-    clock.advance(10 * MIN) // a commit lands now ...
+    await slow.refreshNow()
+    expect((await since()).incomplete).toEqual([])
     timeout = true
-    await slow.refreshNow() // ... and this build's git times out: its builtAt moves, its commits do not
-    expect((await presence('desk', 'caught_up', clock.now().toISOString())).status).toBe(201)
-    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
-    expect((await since()).until).toBe(NOW.toISOString())
+    await slow.refreshNow()
+    const reading = await since()
+    expect(reading.incomplete).toContain('software-factory')
+    // The previous build's commits stand in, so Shipped still lists them.
+    expect(reading.shipped.some((x) => x.kind === 'commit' && x.text.startsWith('software-factory:'))).toBe(true)
+    // The morning message says it as a count.
+    const text = await loadMorning(db.sql, { now: clock.now(), date: '2026-11-02', isVisible: () => false })
+    expect(text).toMatch(/Shipped may miss commits in \d+ repos/)
   })
 
   test('after a restart the first build’s git timing out still keeps the stored commits', async () => {
@@ -1317,7 +1353,10 @@ describe('the CLI', () => {
     expect(noUntil.stderr).toContain('--until')
     expect((await factory(['fleet', 'seen', '--until', 'yesterday'])).code).toBe(2)
     const printed = Since.parse(JSON.parse((await factory(['fleet', 'since'])).stdout)).until
-    expect((await factory(['--format', 'plain', 'fleet', 'since'])).stdout).toContain(`until ${printed}`)
+    // The plain screen opens with tab fields, the window's start and its until: `SINCE\t<t>\t<until>`.
+    const plainSince = (await factory(['--format', 'plain', 'fleet', 'since'])).stdout.split('\n')[0] ?? ''
+    expect(plainSince).toMatch(/^SINCE\t\S+\t\S+$/)
+    expect(plainSince.split('\t')[2]).toBe(printed)
     const seen = await factory(['fleet', 'seen', '--until', printed])
     expect(Presence.parse(JSON.parse(seen.stdout)).seenAt).toBe(NOW.toISOString())
 

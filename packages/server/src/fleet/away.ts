@@ -37,7 +37,7 @@ async function openAsks(sql: SQL, now: Date, except: string): Promise<{ open: nu
   const { t } = windowStart({ seenAt: await readSeenAt(sql), now })
   return {
     open: snapshot.asks.filter((a) => a.id !== except && Date.parse(a.at) >= t.getTime()).length,
-    end: readingEnd(now, snapshot),
+    end: readingEnd(now, new Date(snapshot.builtAt)),
   }
 }
 

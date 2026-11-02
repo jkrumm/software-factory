@@ -61,7 +61,7 @@ import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import type { FleetActions } from './fleet/act.ts'
 import { reportPresence } from './fleet/away.ts'
-import { readPresence } from './fleet/presence.ts'
+import { NoFleetBuild, readPresence } from './fleet/presence.ts'
 import { readSince, type SinceReader } from './fleet/since.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
 import { listEntries, undoEntry } from './fleet/triage-store.ts'
@@ -639,19 +639,23 @@ function decodeId(id: string): string {
 }
 
 /**
- * `POST /fleet/presence {place, act}`: one act of a person at a place (FV Wave 4). Token API only. `act` is a short enum; `memo` and
- * `foreground` are the phone's only. Answers the presence as the clock derives it. Nothing else moves presence.
+ * `POST /fleet/presence {place, act, until?}`: one act of a person at a place (FV Wave 4). Token API only. `act` is a short enum; `memo` and
+ * `foreground` are the phone's only; `caught_up` alone takes `until`, and is 409 when no fleet build exists. Answers the presence as the
+ * clock derives it. Nothing else moves presence.
  */
 const fleetPresenceHandler =
   (since: AppDeps['since']) =>
   async (req: Request): Promise<Response> => {
     const body = await parseBody(req, PresenceBody)
     if (!since) return json({ error: 'presence is not running', code: 'not_ready' }, 503)
-    return respond(
-      Presence,
-      await reportPresence(since, { ...body, until: body.until ? new Date(body.until) : undefined }),
-      201,
-    )
+    try {
+      const until = body.until ? new Date(body.until) : undefined
+      return respond(Presence, await reportPresence(since, { ...body, until }), 201)
+    } catch (error) {
+      // A `caught_up` with no fleet build has nothing to catch up with: nothing is recorded.
+      if (error instanceof NoFleetBuild) return json({ error: error.message, code: 'no_build' }, 409)
+      throw error
+    }
   }
 
 /**

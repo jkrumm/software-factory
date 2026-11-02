@@ -24,8 +24,11 @@ export class GitReader {
     return done.stdout
   }
 
-  /** Branch, the dirty bit (untracked files do not count) and the last commit. An empty repo has no commit; a detached head no branch. */
-  async state(repo: string): Promise<FleetGit> {
+  /**
+   * Branch, the dirty bit (untracked files do not count), the last commit and the recent ones. An empty repo has no commit; a detached head no
+   * branch. `recentError` says why the recent commits could not be read (then `recent` is empty and the caller keeps what it had).
+   */
+  async state(repo: string): Promise<FleetGit & { recentError?: string }> {
     const status = await this.git(repo, ['status', '--porcelain=v2', '--branch', '--untracked-files=no'])
     let branch: string | null = null
     let dirty = false
@@ -37,16 +40,21 @@ export class GitReader {
     }
     const log = await this.git(repo, ['log', '-1', '--format=%H%x1f%cI%x1f%s']).catch(() => '')
     const [sha, at, subject] = log.trim().split('\x1f')
-    // A git that does not answer fails the state: the builder keeps the previous build's (commits included) with a line in `errors`, never an
-    // empty list the cursor could pass.
-    const recent = await this.recent(repo)
+    // Only `recent` falls back when it cannot be read: the branch, the dirty bit and the last commit stand, and the builder keeps the previous
+    // build's commits and says so in `errors`.
+    let recent: FleetCommit[] = []
+    let recentError: string | undefined
+    try {
+      recent = await this.recent(repo)
+    } catch (error) {
+      recentError = error instanceof Error ? error.message : String(error)
+    }
     return {
       branch,
       dirty,
       lastCommit: sha && at ? { sha: sha.slice(0, 12), at, subject: subject ?? '' } : null,
       recent,
-      // The builder stamps the time of a successful read.
-      recentAt: null,
+      recentError,
     }
   }
 

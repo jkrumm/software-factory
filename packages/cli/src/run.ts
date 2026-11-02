@@ -93,7 +93,7 @@ commands:
                   Shipped, Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending,
                   failed or none). Only the default reading asks for a headline; --t shows one already made, or none
   fleet seen --until <iso> [--place desk|phone]
-                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, the until that fleet since printed for the
+                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, the until on the SINCE line (and in json) of the
                   reading that was seen (never past where the model was built); what landed after it is in the next window
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
@@ -416,9 +416,10 @@ const presenceLine = (p: Presence): string =>
 /** The since reading on one screen: the headline, then each group with its lines and their sources. */
 export function sinceScreen(r: Since): string {
   const out: string[] = [
-    `SINCE\tt ${r.t}\tuntil ${r.until}${r.clamped ? '\t(cut to 7 days)' : ''}`,
+    `SINCE\t${r.t}\t${r.until}${r.clamped ? '\t(cut to 7 days)' : ''}`,
     `HEADLINE\t${r.headline.state}${r.headline.text ? `\t${oneLine(r.headline.text, 600)}` : ''}`,
   ]
+  if (r.incomplete.length > 0) out.push(`INCOMPLETE\tShipped may miss commits in: ${r.incomplete.join(', ')}`)
   const group = (title: string, lines: string[]): void => {
     out.push(`${title} (${lines.length})`)
     for (const l of lines) out.push(`  ${l}`)
