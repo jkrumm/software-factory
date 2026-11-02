@@ -468,7 +468,13 @@ const issueOwnerHandler =
     const issue = await getIssue(sql, issueId)
     if (!issue) return json({ error: 'unknown issue' }, 404)
     const key = `${kind}:${issueId}:${id ?? crypto.randomUUID()}`
-    await enqueue(sql, { issueId, key, kind, at: clock.now(), payload: { reason } })
+    const { duplicate } = await enqueue(sql, { issueId, key, kind, at: clock.now(), payload: { reason } })
+    // The key is the caller's choice, and the inbox takes any: a row of something else under it is no earlier call of this one.
+    if (duplicate) {
+      const [row] =
+        await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key} AND kind = ${kind} AND issue_id = ${issueId}`
+      if (!row) return json({ error: 'the id is taken by another event: use another --id', code: 'refused' }, 409)
+    }
     const answer = await answerNow(sql, { issueId, key, now: () => clock.now() })
     if (answer?.result === 'refused') return json({ error: answer.detail, code: 'refused' }, 409)
     // Not answered yet: the row is filed and the tick has it. 202, and the Issue as it stands.
