@@ -17,6 +17,7 @@ import { createSpawn } from '../spawns.ts'
 import { readSnapshot } from './store.ts'
 import { QueueUnavailable, type QueueActor, type QueueReader } from './sources.ts'
 import { recordAskAct } from './away.ts'
+import { askSourcesAnswered } from './index.ts'
 import { Places } from './place.ts'
 import { getAct, readOccurrences, recordAct } from './triage-store.ts'
 
@@ -157,7 +158,7 @@ export class FleetActions {
     // A build that could not read a source an ask comes from (hc, the database, the human queue) is not a fresh view of what is open.
     const fresh = await this.deps
       .refresh()
-      .then((built) => !built.errors.some((e) => /^(hc|database|human queue|snapshot)/.test(e)))
+      .then((built) => askSourcesAnswered(built.errors))
       .catch((error: unknown) => {
         console.error('fleet refresh after an act failed', error)
         return false

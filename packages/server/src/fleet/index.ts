@@ -66,7 +66,7 @@ interface DbPart {
  * snapshot it restarts from): only then does an ask that is not listed have left, and its occurrence end. A plan or a repo that could not be
  * read changes no ask's existence.
  */
-const askSourcesAnswered = (errors: readonly string[]): boolean =>
+export const askSourcesAnswered = (errors: readonly string[]): boolean =>
   !errors.some((e) => /^(hc|database|human queue|digest|snapshot)/.test(e))
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
