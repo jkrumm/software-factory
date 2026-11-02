@@ -111,7 +111,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const owner = await projectOfPath(sql, issue.repo)
   const project = owner ? await getProject(sql, owner.name) : undefined
   const name = owner?.name ?? basename(issue.repo)
-  const notes = await unsentNotes(sql, issue.id, attempt)
+  const notes = await unsentNotes(sql, issue.id)
   const prompt = buildBrief({
     issue,
     attempt,
@@ -152,7 +152,8 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
               VALUES (${notePromptId(issue.id, note.call)}, ${key}, 'note', 'type', ${note.text}, 'delivered', ${now}, ${now}, 1)
               ON CONFLICT (id) DO UPDATE
                 SET session = EXCLUDED.session, status = 'delivered', sent_count = 1, error = NULL, failed_at = NULL, claimed_at = NULL
-                WHERE factory.prompts.status NOT IN ('sent', 'delivered')`
+                WHERE factory.prompts.status NOT IN ('sent', 'delivered')
+                  OR NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.id = factory.prompts.session)`
           }
         },
       },
@@ -165,27 +166,27 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
 }
 
 /**
- * The owner's notes (`factory issue note`) that no lead was typed: filed since the brief of an earlier attempt whose lead started (its
- * session exists), applied, and without a prompt under their call id that reached a session (typed or delivered). Oldest first, a few:
- * the rest are counted, and `factory issue show` has them.
+ * The owner's notes (`factory issue note`) that no lead was typed: applied, and without a prompt under their call id that reached a
+ * session that exists (typed or delivered). A note a brief or a lead took is therefore never carried twice, and one that reached nobody
+ * (a lead that never started, a prompt still pending for a dead one, the notes a brief had no room for) comes again. Oldest first, a few;
+ * the rest are counted.
  */
 async function unsentNotes(
   sql: SQL,
   issueId: number,
-  attempt: number,
 ): Promise<{ shown: { call: string; text: string }[]; more: number }> {
-  const rows: { call: string; text: string }[] = await sql`
-    SELECT b.payload->>'call' AS call, b.payload->>'text' AS text FROM factory.issue_inbox b
+  const rows: { call: string; text: string; total: string }[] = await sql`
+    SELECT b.payload->>'call' AS call, b.payload->>'text' AS text, count(*) OVER () AS total FROM factory.issue_inbox b
     WHERE b.issue_id = ${issueId} AND b.kind = 'note' AND b.result = 'applied'
       AND b.payload->>'call' IS NOT NULL AND b.payload->>'text' IS NOT NULL
-      AND b.at > COALESCE((
-        SELECT max(p.created_at) FROM factory.prompts p JOIN factory.sessions s ON s.id = p.session
-        WHERE p.source = 'brief' AND p.id LIKE ${`issue:${issueId}:brief:%`} AND p.id <> ${briefPromptId(issueId, attempt)}), '-infinity'::timestamptz)
       AND NOT EXISTS (
         SELECT 1 FROM factory.prompts p JOIN factory.sessions s ON s.id = p.session
         WHERE p.id = 'issue:' || b.issue_id || ':note:' || (b.payload->>'call') AND p.status IN ('sent', 'delivered'))
-    ORDER BY b.at, b.id LIMIT 500`
-  return { shown: rows.slice(0, MAX_BRIEF_NOTES), more: Math.max(0, rows.length - MAX_BRIEF_NOTES) }
+    ORDER BY b.at, b.id LIMIT ${MAX_BRIEF_NOTES}`
+  return {
+    shown: rows.map(({ call, text }) => ({ call, text })),
+    more: Math.max(0, Number(rows[0]?.total ?? 0) - rows.length),
+  }
 }
 
 const MAX_BRIEF_NOTES = 20

@@ -798,9 +798,9 @@ false confidence; the probes are the check that does not depend on it.
   issue text is marked as data, never instructions: the facts are a fenced block (the fence longer than any run of backticks inside), cut at
   16,000 characters with the way to the rest.
 - **Notes from the owner:** `factory issue note` texts filed while no lead was running, oldest first, in a fence, only when there are any.
-  Those filed since the brief of an earlier attempt whose lead started (its session exists) that reached no session (no prompt `issue:<issue>:note:<call id>` of a
-  session that is `sent` or `delivered`), so a lead that never started loses none. Each is recorded as a `delivered` prompt of the new lead in the spawn's
-  transaction (a prompt still pending for an earlier lead moves to it), so a `note_lead` for the same call never types it a second time. At most 20 are shown, with a count of the rest.
+  Those that reached no session (no prompt `issue:<issue>:note:<call id>` of a session that exists and is `sent` or `delivered`), so a lead that never started,
+  and the notes a brief had no room for, come again in the next one. Each is recorded as a `delivered` prompt of the new lead in the spawn's
+  transaction (a prompt still pending for an earlier lead, or one of a session that never existed, moves to it), so a `note_lead` for the same call never types it a second time. At most 20 are shown, with a count of the rest.
 - **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.

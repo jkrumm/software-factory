@@ -725,6 +725,7 @@ describe('factory issue note: what a brief carries', () => {
     await post(id, 'reopen', { reason: 'back' })
     await drive(4)
     expect(runner.started[1]?.prompt).toContain('never read')
+    expect((await promptsOf(leadKey(id, 2))).map((p) => p.id)).toEqual([`issue:${id}:note:one`])
   })
 
   test('a note still pending for the old lead moves to the new one with the brief that carries it', async () => {
@@ -754,6 +755,29 @@ describe('factory issue note: what a brief carries', () => {
     expect(brief).not.toContain('21. ')
     expect(brief).toContain(`2 more not shown: \`factory issue show ${id}\` has them.`)
     expect(await promptsOf(leadKey(id, 1))).toHaveLength(20)
+
+    // The two it had no room for reached nobody: the next lead's brief has them, and only them.
+    await emit(leadKey(id, 1), 'session_started', { claudeSessionId: 'c1' })
+    await post(id, 'drop', { reason: 'x', session: leadKey(id, 1) })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    const second = runner.started[1]?.prompt ?? ''
+    expect(second).toContain('1. note number 21')
+    expect(second).toContain('2. note number 22')
+    expect(second).not.toContain('note number 20')
+  })
+
+  test('a payload key from a sender is cleaned like its value', async () => {
+    const { id } = await lead()
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, at, payload)
+      VALUES (${id}, 'hostile-key', 'phase', ${clock.now()}, ${{ 'a\u001b[2J\u009bb': 'v' }})`
+    const shown = await factory({}, 'issue', 'show', String(id), '--format', 'plain')
+    // oxlint-disable-next-line no-control-regex -- exactly what must be absent
+    expect(shown.stdout).not.toMatch(/[\u001b\u0080-\u009f]/)
+    expect(shown.stdout).toContain('a [2J b=v')
   })
 
   test('evidence beyond what show lists is counted, and the newest is kept', async () => {
