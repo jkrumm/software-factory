@@ -5,6 +5,7 @@ import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import { GitReader } from './git.ts'
+import { Places } from './place.ts'
 import {
   assemble,
   type DecisionRow,
@@ -24,6 +25,8 @@ export { readSnapshot } from './store.ts'
 export const FLEET_INTERVAL_MS = 30_000
 const CONCURRENCY = 8
 const MAX_DECISIONS = 500
+/** the asks whose time is the first build that saw them (the others carry their own) */
+const TIMED_BY_BUILDER = new Set(['hc', 'wait', 'factory'])
 const PLAN = 'docs/waves/PLAN.md'
 
 export interface FleetDeps {
@@ -143,16 +146,23 @@ export class FleetBuilder {
     const now = this.deps.now()
     const errors: string[] = []
 
+    // Seeded from the stored snapshot once it has been read: a read that failed is tried again by the next build.
     if (!this.seeded) {
-      this.seeded = true
-      const stored = await readSnapshot(sql).catch(() => undefined)
-      for (const a of stored?.asks ?? []) if (a.source === 'factory') this.firstSeen.set(a.id, a.at)
-      for (const x of stored?.repos.flatMap((r) => r.sessions) ?? [])
-        if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
+      try {
+        const stored = await readSnapshot(sql)
+        this.seeded = true
+        for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
+        for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
+          if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
+        }
+      } catch (error) {
+        errors.push(`snapshot: ${message(error)}`)
+      }
     }
 
     const visibleRoots = await realRoots(this.deps.visibleRoots)
     const roots = [...new Set([...(await realRoots(this.deps.roots)), ...visibleRoots])]
+    const places = await Places.of({ visibleRoots, configured: roots, home: this.deps.home })
 
     const db = await this.fallback(
       errors,
@@ -180,7 +190,26 @@ export class FleetBuilder {
         (v) => (this.last.queue = v),
       )) ?? []
 
-    const sessions = mergeSessions(db.status.sessions, db.spawns, terminals, roots, this.since)
+    // Session paths are matched after realpath, like the roots (a link in a cwd or a spawn's repo is the same place).
+    const real = new Map<string, string>()
+    const wanted = new Set<string>()
+    for (const t of terminals) if (t.cwd) wanted.add(t.cwd)
+    for (const x of db.status.sessions) if (x.cwd) wanted.add(x.cwd)
+    for (const x of db.spawns.values()) wanted.add(x.repo)
+    await Promise.all(
+      [...wanted].map(async (path) => {
+        real.set(path, await realPath(path))
+      }),
+    )
+    const sessions = mergeSessions({
+      sessions: db.status.sessions,
+      spawns: db.spawns,
+      terminals,
+      roots,
+      knownSince: this.since,
+      real: (path) => real.get(path) ?? path,
+      isVisible: (path) => places.isVisible(path),
+    })
     const planOf = new Map<string, { plan: string | null; wave: number | null }>()
     const repoPaths = new Set<string>()
     for (const m of sessions) if (m.repo) repoPaths.add(m.repo)
@@ -204,19 +233,22 @@ export class FleetBuilder {
       if (home) repoPaths.add(home)
     }
 
+    // Each repo's errors are kept with it and merged in path order, so the reads running side by side cannot reorder them.
     const facts: RepoFacts[] = []
     const list = [...repoPaths].sort()
     for (let i = 0; i < list.length; i += CONCURRENCY) {
-      const read = await Promise.all(
-        list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf, errors)),
-      )
-      facts.push(...read.filter((r): r is RepoFacts => r !== undefined))
+      const read = await Promise.all(list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf)))
+      for (const found of read) {
+        if (!found) continue
+        facts.push(found.facts)
+        errors.push(...found.errors)
+      }
     }
 
     const model = assemble({
       now,
       roots,
-      visibleRoots,
+      isVisible: (path) => places.isVisible(path),
       status: db.status,
       sessions,
       sessionPlans: planOf,
@@ -231,11 +263,11 @@ export class FleetBuilder {
       JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),
     )
     const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
-    this.firstSeen = new Map(fleet.asks.filter((a) => a.source === 'factory').map((a) => [a.id, a.at]))
+    this.firstSeen = new Map(fleet.asks.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at]))
     this.since = new Map(
-      fleet.repos
-        .flatMap((r) => r.sessions)
-        .flatMap((x) => (x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [])),
+      [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>
+        x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [],
+      ),
     )
     await writeSnapshot(sql, fleet)
     return fleet
@@ -315,8 +347,8 @@ export class FleetBuilder {
     path: string,
     roots: readonly string[],
     planOf: ReadonlyMap<string, { plan: string | null }>,
-    errors: string[],
-  ): Promise<RepoFacts | undefined> {
+  ): Promise<{ facts: RepoFacts; errors: string[] } | undefined> {
+    const errors: string[] = []
     if (!(await exists(join(path, '.git')))) return undefined
     const name = path.split('/').at(-1) ?? path
     let git: FleetGit | null = null
@@ -345,7 +377,7 @@ export class FleetBuilder {
         if (before) plans.push(before)
       }
     }
-    return { path, git, plans, rootPlan }
+    return { facts: { path, git, plans, rootPlan }, errors }
   }
 }
 
@@ -360,6 +392,16 @@ async function usablePlan(path: string, roots: readonly string[]): Promise<strin
     return inside(real, roots) ? real : undefined
   } catch {
     return undefined
+  }
+}
+
+/** The real path of a path; for one that is gone (a removed worktree), its nearest existing parent's real path with the rest appended. */
+async function realPath(path: string): Promise<string> {
+  try {
+    return await realpath(path)
+  } catch {
+    const parent = dirname(path)
+    return parent === path ? path : join(await realPath(parent), basename(path))
   }
 }
 
@@ -394,18 +436,31 @@ async function repoDirs(root: string): Promise<string[]> {
 const stateOfHc = (status: string | null): 'working' | 'blocked' | 'idle' =>
   status === 'working' ? 'working' : status === 'blocked' ? 'blocked' : 'idle'
 
+export interface MergeInput {
+  sessions: readonly Session[]
+  spawns: ReadonlyMap<string, { repo: string; prompt: string }>
+  terminals: readonly HcTerminal[]
+  /** real paths */
+  roots: readonly string[]
+  knownSince?: ReadonlyMap<string, string>
+  /** a path after realpath: a session's directory is matched against the roots the way the roots are */
+  real?: (path: string) => string
+  isVisible?: (path: string) => boolean
+}
+
 /**
  * The factory's sessions and hc's Claude Code terminals, one entry per agent: a terminal is the factory session's when its
  * address is the session's pane or its name or `factory.key` label is the session's id. A terminal the factory does not know is
- * its own entry (IuRoot's, `rd`'s). Outside every root it is not shown.
+ * its own entry (IuRoot's, `rd`'s). One outside every root, or in no repo, has no `repo` and is listed as unplaced.
  */
-export function mergeSessions(
-  sessions: readonly Session[],
-  spawns: ReadonlyMap<string, { repo: string; prompt: string }>,
-  terminals: readonly HcTerminal[],
-  roots: readonly string[],
-  knownSince: ReadonlyMap<string, string> = new Map(),
-): MergedSession[] {
+export function mergeSessions(input: MergeInput): MergedSession[] {
+  const { sessions, spawns, terminals, roots, knownSince = new Map() } = input
+  const real = input.real ?? ((path: string) => path)
+  const isVisible = input.isVisible ?? (() => false)
+  const placeOf = (path: string | null | undefined) => {
+    const where = path ? real(path) : null
+    return { where, repo: where ? enclosingRepo(where, roots) : undefined, visible: where ? isVisible(where) : false }
+  }
   const used = new Set<string>()
   const merged: MergedSession[] = []
   const nameOf = new Map<string, string>()
@@ -418,10 +473,8 @@ export function mergeSessions(
       nameOf.set(term.address, s.id)
     }
     const spawn = s.spawn ? spawns.get(s.spawn) : undefined
-    const where = spawn?.repo ?? s.cwd ?? term?.cwd ?? null
+    const place = placeOf(spawn?.repo ?? s.cwd ?? term?.cwd)
     const times = [s.lastEventAt, term?.statusAt].filter((t): t is string => Boolean(t))
-    const repo = where ? enclosingRepo(where, roots) : undefined
-    if (!repo) continue
     merged.push({
       session: {
         id: s.id,
@@ -433,14 +486,15 @@ export function mergeSessions(
         account: s.account,
         terminal: term?.address ?? s.pane,
         title: term?.title ?? null,
+        visible: place.visible,
         headline: null,
         since: s.since,
         lastActivityAt: times.sort().at(-1) ?? null,
       },
-      repo,
+      repo: place.repo,
       prompt: spawn?.prompt ?? term?.prompt ?? null,
-      spawnRepo: spawn?.repo ?? null,
-      cwd: s.cwd ?? term?.cwd ?? null,
+      spawnRepo: spawn ? real(spawn.repo) : null,
+      cwd: placeOf(s.cwd ?? term?.cwd).where,
       hc: term,
     })
   }
@@ -451,8 +505,7 @@ export function mergeSessions(
   }
   for (const t of terminals) {
     if (!t.claude || used.has(t.address)) continue
-    const repo = t.cwd ? enclosingRepo(t.cwd, roots) : undefined
-    if (!repo) continue
+    const place = placeOf(t.cwd)
     merged.push({
       session: {
         id: t.name ?? t.address,
@@ -464,14 +517,15 @@ export function mergeSessions(
         account: t.account,
         terminal: t.address,
         title: t.title,
+        visible: place.visible,
         headline: null,
         since: knownSince.get(`${t.name ?? t.address}\0${stateOfHc(t.status)}`) ?? t.statusAt,
         lastActivityAt: t.statusAt,
       },
-      repo,
+      repo: place.repo,
       prompt: t.prompt,
       spawnRepo: null,
-      cwd: t.cwd,
+      cwd: place.where,
       hc: t,
     })
   }

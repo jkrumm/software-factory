@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fleet } from '@software-factory/contract'
 import { runProcess } from '../src/exec.ts'
@@ -242,6 +242,7 @@ describe('the estate', () => {
     const sessions = fleet.repos.flatMap((r) => r.sessions.map((s) => ({ repo: r.name, ...s })))
     expect(sessions.map((s) => s.id).sort()).toEqual([
       'athena-orchestrator',
+      'modelpick-idle',
       'prometheus-epx-w1',
       'rb-waits',
       'software-factor-fv-w1-read-model',
@@ -264,7 +265,11 @@ describe('the estate', () => {
       state: 'blocked',
       terminal: 't6n',
     })
-    expect(fleet.summary).toMatchObject({ working: 2, done: 1 })
+    // the lead, its worker and the teamchat orchestrator work; the idle tab is done; the blocked and the waiting are neither
+    expect(fleet.summary).toMatchObject({ working: 3, done: 1, idle: 2 })
+    // the Claude Code outside every root has no repo: unplaced, not counted
+    expect(fleet.unplaced.map((u) => u.id)).toEqual(['elsewhere'])
+    expect(fleet.summary.working + fleet.summary.idle + fleet.summary.done).toBe(sessions.length)
   })
 
   test('asks: every deterministic source, stable ids, text as data', async () => {
@@ -299,16 +304,17 @@ describe('the estate', () => {
       at: '2026-11-01T21:26:07.000Z',
     })
     const factory = fleet.asks.filter((a) => a.source === 'factory')
+    expect(factory.map((a) => a.id).sort()).toEqual(['factory:notification:notify:failed:x', 'factory:spawn:lw-fix'])
     expect(factory.map((a) => a.text).sort()).toEqual([
       'notification notify:failed:x was not delivered: Hermes did not answer',
       'spawn lw-fix failed: the pane never came up',
     ])
-    expect(factory.find((a) => a.text.startsWith('spawn'))).toMatchObject({
+    expect(factory.find((a) => a.text?.startsWith('spawn'))).toMatchObject({
       kind: 'blocker',
       repo: join(estate.src, 'linewatch'),
     })
     // the open decision is an ask of its own, not twice
-    expect(fleet.asks.filter((a) => a.text.includes('Benchmark'))).toHaveLength(1)
+    expect(fleet.asks.filter((a) => a.text?.includes('Benchmark'))).toHaveLength(1)
     // oldest first; only the October request is older than a day
     expect(fleet.asks[0]?.id).toBe('queue:20261027T230130-2786')
     expect(fleet.summary.staleAsks).toBe(1)
@@ -555,6 +561,268 @@ describe('review follow-ups', () => {
   })
 })
 
+/** A Claude Code terminal of the estate to copy from. */
+function aClaudeTerminal(): HcTerminal {
+  const found = terminals.find((t) => t.claude)
+  if (!found) throw new Error('the estate has no Claude Code terminal')
+  return found
+}
+
+/** The CLI against the test app. */
+async function factory(args: string[], env: Record<string, string> = {}) {
+  const proc = Bun.spawn(['bun', CLI, ...args], {
+    env: { ...process.env, FACTORY_URL: app.url.href, FACTORY_TOKEN: TEST_TOKEN, ...env },
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const [stdout, stderr, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
+  return { stdout, stderr, code }
+}
+
+describe('the lead’s review', () => {
+  const viaSocket = async (socketPath: string) =>
+    Fleet.parse(await (await fetch('http://localhost/fleet', { unix: socketPath })).json())
+
+  async function withSocket<T>(run: (socketPath: string) => Promise<T>): Promise<T> {
+    const dir = mkdtempSync('/tmp/factory-fleet-sock-')
+    const socketPath = join(dir, 'h.sock')
+    const hooks = serveHooks({
+      sql: db.sql,
+      clock,
+      token: TEST_TOKEN,
+      socketPath,
+      repoRoots: [estate.src],
+      roles: TEST_ROLES,
+      slots: 2,
+    })
+    try {
+      return await run(socketPath)
+    } finally {
+      await hooks.stop(true)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  test('A: the socket’s view keeps only deterministic fields of a visible repo; the token API has everything', async () => {
+    await factoryRows()
+    await builder.refreshNow()
+    const full = await get()
+    expect(full.redacted).toBe(false)
+    const teamchat = full.repos.find((r) => r.name === 'prometheus-scripts')
+    expect(teamchat?.plan?.title).toBe('Teamchat: Wave 62 and on')
+
+    await withSocket(async (socketPath) => {
+      const view = await viaSocket(socketPath)
+      expect(view.redacted).toBe(true)
+      const iu = view.repos.find((r) => r.name === 'prometheus-scripts')
+      expect(iu).toMatchObject({
+        visible: true,
+        git: { branch: 'master', dirty: false, lastCommit: { subject: null } },
+        plan: { state: 'running', title: null, short: null, goal: null, sha: teamchat?.plan?.sha },
+        sessions: [{ id: 'athena-orchestrator', state: 'working', title: null, headline: null, visible: true }],
+      })
+      expect(iu?.plan?.waves[0]).toMatchObject({ n: 62, title: null, short: null, statusText: null, status: 'active' })
+      expect(iu?.git?.lastCommit?.sha).toBeTruthy()
+      // an ask about a visible session: id, kind and time stay, the text goes
+      expect(view.asks.find((a) => a.id === 'hc:prometheus-epx-w1')).toMatchObject({ kind: 'permission', text: null })
+      // everything else is whole
+      expect(view.repos.find((r) => r.name === 'software-factory')?.plan?.title).toBe(
+        'Software factory: the program plan',
+      )
+      expect(view.asks.find((a) => a.id === 'queue:20261027T230130-2786')?.text).toContain('LoA status')
+      expect(JSON.stringify(view)).not.toContain('Teamchat')
+      expect(JSON.stringify(view)).not.toContain('Channel pinning')
+      expect(JSON.stringify(view)).not.toContain('rm -rf node_modules')
+      expect(JSON.stringify(view)).not.toContain('EPX Wave 1')
+      expect(view.summary).toEqual(full.summary)
+      expect(view.fingerprint).toBe(full.fingerprint)
+
+      // the CLI says which one it got
+      const out = await factory(['fleet', '--format', 'plain'], { FACTORY_TOKEN: '', FACTORY_SOCKET: socketPath })
+      expect(out.stdout.split('\n')[0]).toStartWith('VIEW\tsocket')
+      expect(
+        JSON.parse((await factory(['fleet'], { FACTORY_TOKEN: '', FACTORY_SOCKET: socketPath })).stdout).redacted,
+      ).toBe(true)
+    })
+    // the stored model is untouched
+    expect((await get()).repos.find((r) => r.name === 'prometheus-scripts')?.plan?.title).toBe(
+      'Teamchat: Wave 62 and on',
+    )
+  })
+
+  test('B: IuRoot is visible by place, whatever FACTORY_VISIBLE_ROOTS says', async () => {
+    await factoryRows()
+    const off = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src, estate.iu],
+      visibleRoots: [],
+      home: '/nonexistent-home',
+      hc,
+      queue,
+    })
+    const fleet = await off.refreshNow()
+    expect(fleet.repos.filter((r) => r.visible).map((r) => r.name)).toEqual(['prometheus-epx', 'prometheus-scripts'])
+    expect(fleet.repos.find((r) => r.name === 'software-factory')?.visible).toBe(false)
+    expect(fleet.repos.flatMap((r) => r.sessions).find((x) => x.id === 'athena-orchestrator')?.visible).toBe(true)
+  })
+
+  test('1: an hc blocked ask is timed by hc’s status, not the factory session’s state, and waits two minutes', async () => {
+    await factoryRows()
+    // the lead: the factory says working since 5 min ago; hc says blocked since 1 min ago
+    terminals = terminals.map((t) =>
+      t.address === 't4h'
+        ? {
+            ...t,
+            status: 'blocked',
+            statusMessage: 'Allow Bash?',
+            statusAt: new Date(clock.now().getTime() - 60_000).toISOString(),
+          }
+        : t,
+    )
+    const young = await builder.refreshNow()
+    expect(young.asks.some((a) => a.id === 'hc:software-factory-w6')).toBe(false)
+    clock.advance(3 * 60_000)
+    const later = await builder.refreshNow()
+    const ask = later.asks.find((a) => a.id === 'hc:software-factory-w6')
+    expect(ask?.at).toBe(new Date(clock.now().getTime() - 4 * 60_000).toISOString())
+    expect(ask?.at).not.toBe(later.repos.flatMap((r) => r.sessions).find((x) => x.id === 'software-factory-w6')?.since)
+    // and it stays put
+    clock.advance(10 * 60_000)
+    expect((await builder.refreshNow()).asks.find((a) => a.id === 'hc:software-factory-w6')?.at).toBe(ask?.at)
+  })
+
+  test('2, 8: an attention line keeps its id and its time across builds', async () => {
+    await factoryRows()
+    const first = await builder.refreshNow()
+    clock.advance(45 * 60_000)
+    const second = await builder.refreshNow()
+    const pick = (f: Fleet) => f.asks.filter((a) => a.source === 'factory').map((a) => [a.id, a.at])
+    expect(pick(second)).toEqual(pick(first))
+    expect(pick(first).length).toBe(2)
+  })
+
+  test('3: errors come in repo path order, run after run', async () => {
+    await factoryRows()
+    const failing: typeof runProcess = async (cmd) => {
+      await Bun.sleep(Math.floor(Math.random() * 20))
+      return cmd.includes('log') || cmd.includes('status') ? { exitCode: 128, stdout: '' } : { exitCode: 0, stdout: '' }
+    }
+    const flaky = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      git: new GitReader(failing),
+    })
+    const gitErrors = async () => (await flaky.refreshNow()).errors.filter((e) => e.startsWith('git '))
+    const first = await gitErrors()
+    expect(first).toHaveLength(8)
+    const paths = (await get()).repos.map((r) => r.space).sort()
+    expect(first.map((e) => e.split(':')[0])).toEqual(paths.map((p) => `git ${p.split('/').at(-1)}`))
+    for (let i = 0; i < 3; i++) expect(await gitErrors()).toEqual(first)
+  })
+
+  test('4: a session’s directory is matched after realpath', async () => {
+    const links = mkdtempSync('/tmp/factory-fleet-links-')
+    symlinkSync(estate.src, join(links, 'src'))
+    try {
+      terminals = [
+        ...terminals,
+        {
+          ...aClaudeTerminal(),
+          address: 't9l',
+          name: 'via-link',
+          cwd: `${links}/src/modelpick`,
+          title: 'through a link',
+          status: 'working',
+          parent: null,
+        },
+      ]
+      const fleet = await builder.refreshNow()
+      const repo = fleet.repos.find((r) => r.name === 'modelpick')
+      expect(repo?.sessions.map((x) => x.id)).toContain('via-link')
+      expect(repo?.plan?.state).toBe('running')
+      expect(fleet.unplaced.map((x) => x.id)).not.toContain('via-link')
+    } finally {
+      rmSync(links, { recursive: true, force: true })
+    }
+  })
+
+  test('5: an idle or done tab does not make a plan run; a working one does', async () => {
+    const fleet = await builder.refreshNow()
+    expect(fleet.repos.find((r) => r.name === 'modelpick')).toMatchObject({
+      plan: { state: 'planned' },
+      sessions: [{ id: 'modelpick-idle', hc: 'done' }],
+    })
+    terminals = terminals.map((t) => (t.address === 't8m' ? { ...t, status: 'working' } : t))
+    expect((await builder.refreshNow()).repos.find((r) => r.name === 'modelpick')?.plan?.state).toBe('running')
+  })
+
+  test('6: a session with no repo is unplaced and not in the summary', async () => {
+    mkdirSync(join(estate.src, 'not-a-repo'), { recursive: true })
+    terminals = [
+      ...terminals,
+      {
+        ...aClaudeTerminal(),
+        address: 't9n',
+        name: 'in-a-plain-dir',
+        cwd: join(estate.src, 'not-a-repo'),
+        status: 'working',
+        parent: null,
+      },
+    ]
+    const fleet = await builder.refreshNow()
+    expect(fleet.unplaced.map((x) => x.id).sort()).toEqual(['elsewhere', 'in-a-plain-dir'])
+    const listed = fleet.repos.flatMap((r) => r.sessions).length
+    expect(fleet.summary.working + fleet.summary.idle + fleet.summary.done).toBe(listed)
+  })
+
+  test('7: a snapshot that cannot be read at boot is read again by the next build', async () => {
+    await factoryRows()
+    const first = await builder.refreshNow()
+    clock.advance(40 * 60_000)
+    const restarted = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+    })
+    await db.sql`ALTER TABLE factory.fleet_snapshot RENAME TO fleet_snapshot_away`
+    try {
+      await expect(restarted.refreshNow()).rejects.toThrow()
+    } finally {
+      await db.sql`ALTER TABLE factory.fleet_snapshot_away RENAME TO fleet_snapshot`
+    }
+    const second = await restarted.refreshNow()
+    const factoryAt = (f: Fleet) => f.asks.filter((a) => a.source === 'factory').map((a) => a.at)
+    expect(factoryAt(second)).toEqual(factoryAt(first))
+  })
+
+  test('9: a plan heading that does not parse is an errors line with its line number', async () => {
+    const path = join(estate.src, 'modelpick/docs/waves/PLAN.md')
+    const original = await Bun.file(path).text()
+    writeFileSync(path, `${original}\r\n## Wave — nothing numbered\r\n`)
+    try {
+      const fleet = await builder.refreshNow()
+      const lines = original.split('\n').length + 1
+      expect(fleet.errors).toContain(
+        `plan modelpick/docs/waves/PLAN.md: line ${lines} starts with "## Wave" but has no wave number`,
+      )
+      expect(fleet.repos.find((r) => r.name === 'modelpick')?.plan?.waves).toHaveLength(1)
+    } finally {
+      writeFileSync(path, original)
+    }
+  })
+})
+
 describe('the fingerprint and NOTIFY', () => {
   test('moves with the model, not with the clock or a session’s last activity', async () => {
     await factoryRows()
@@ -667,17 +935,6 @@ describe('the human queue reader', () => {
 })
 
 describe('factory fleet', () => {
-  async function factory(args: string[], env: Record<string, string> = {}) {
-    const proc = Bun.spawn(['bun', CLI, ...args], {
-      env: { ...process.env, FACTORY_URL: app.url.href, FACTORY_TOKEN: TEST_TOKEN, ...env },
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    const [stdout, stderr, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
-    return { stdout, stderr, code }
-  }
-
   test('json is the contract, plain fits one screen with asks first', async () => {
     await factoryRows()
     await builder.refreshNow()
