@@ -388,7 +388,8 @@ describe('factory status: the ISSUES section', () => {
       [queued, 'queued'],
     ])
 
-    for (let i = 0; i < 45; i++) await file(newRepo())
+    const shared = newRepo()
+    for (let i = 0; i < 45; i++) await file(shared)
     const body = Status.parse(await (await app.get('/status')).json())
     expect(body.issues).toHaveLength(40)
     expect(body.issuesMore).toBe(48 - 40)
