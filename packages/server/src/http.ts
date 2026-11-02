@@ -348,7 +348,11 @@ const issueAnswerHandler =
     const body = await parseBody(req, IssueAnswerBody)
     const who = !options.viaSocket ? 'owner' : body.session ? `session ${body.session}` : 'socket'
     const filed = await fileAnswer(sql, { issueId, body, who, now: clock.now() })
-    if (!filed.ok) return json({ error: 'unknown issue' }, 404)
+    if (!filed.ok) {
+      return filed.problem === 'unknown_issue'
+        ? json({ error: 'unknown issue' }, 404)
+        : json({ error: 'this Issue has no open question' }, 409)
+    }
     const ack = { issue: issueId, key: filed.key, duplicate: filed.duplicate, state: filed.state }
     return respond(IssueAnswerAck, ack, filed.duplicate ? 200 : 201)
   }
@@ -367,13 +371,16 @@ const notificationTestHandler = (sql: SQL, clock: Clock, notifier: Notifier, tar
   const now = clock.now()
   const key = `notify:test:${now.getTime()}:${crypto.randomUUID().slice(0, 8)}`
   const note = target === 'off' ? 'notifications are off (FACTORY_NOTIFY_TARGET=off)' : null
-  await sendNow(
+  const sent = await sendNow(
     sql,
     { key, kind: 'test', issueId: null, text: "Factory test: the owner's line works." },
     { notifier, now: () => clock.now(), note },
   )
   const row = await getNotification(sql, key)
-  return row ? respond(Notification, row) : json({ error: 'the test message is gone' }, 500)
+  // A result that could not be recorded leaves the row pending with no error of its own: the cause is the caller's to see.
+  return row
+    ? respond(Notification, { ...row, error: row.error ?? sent.error })
+    : json({ error: 'the test message is gone' }, 500)
 }
 
 /**
@@ -582,6 +589,8 @@ export function serve(deps: AppDeps & { port: number }) {
   return Bun.serve({
     hostname: '127.0.0.1',
     port: deps.port,
+    // A test message waits on Hermes for up to its 10 s timeout, which is Bun's default idle limit: the answer must outlive it.
+    idleTimeout: 30,
     routes: table,
     // Bun routes per method: a known path with another method lands here, and must not read as "no such resource".
     fetch: (req) => {

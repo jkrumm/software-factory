@@ -130,6 +130,19 @@ describe('POST /issues/:id/answer', () => {
     expect(row?.payload).toMatchObject({ answer: 'for the first', decision: 1 })
   })
 
+  test('with no question open there is nothing to answer (409), and a repeated call is still a duplicate', async () => {
+    const { issue } = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'none', repo: TEST_REPO, title: 't', facts: {} },
+      { repoRoots: [TEST_ROOT], now: now() },
+    )
+    expect((await app.send('POST', `/issues/${issue.id}/answer`, { answer: 'x' })).status).toBe(409)
+    const id = await asked()
+    expect((await app.send('POST', `/issues/${id}/answer`, { answer: 'x', id: 'r1' })).status).toBe(201)
+    await pass()
+    expect((await app.send('POST', `/issues/${id}/answer`, { answer: 'x', id: 'r1' })).status).toBe(200)
+  })
+
   test('on the socket it answers too, and the record says it was a pane', async () => {
     const id = await asked()
     const res = await viaSocket(`/issues/${id}/answer`, { answer: 'from a pane', session: 'some-session' })

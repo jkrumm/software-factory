@@ -1020,7 +1020,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
   three in the afternoon.
 - **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`, on the token API and the
-  socket) files an `answer` event, bound to the question open at that moment when none is named, so a question asked later cannot take it; the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
+  socket) files an `answer` event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
   as `socket` or `session <id>`, since a pane can reach it: a lead could answer its own question there, and the record is what shows it.
 - **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
 - **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the

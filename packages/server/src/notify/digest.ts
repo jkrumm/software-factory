@@ -74,9 +74,9 @@ export function renderDigest(data: DigestData): string {
           .slice(0, QUOTA_SHOWN)
           .map(
             (q) =>
-              `${q.account} 5h ${percent(q.fiveHourUsed)} week ${percent(q.weeklyUsed)}${q.fresh ? '' : ' (stale)'}`,
+              `${q.account.slice(0, 24)} 5h ${percent(q.fiveHourUsed)} week ${percent(q.weeklyUsed)}${q.fresh ? '' : ' (stale)'}`,
           )
-          .join('; ')}`,
+          .join('; ')}${data.quota.length > QUOTA_SHOWN ? ` (+${data.quota.length - QUOTA_SHOWN} more)` : ''}`,
   )
   const r = data.ran
   lines.push(

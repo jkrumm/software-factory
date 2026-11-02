@@ -54,18 +54,25 @@ export async function fileVerb(
 export async function fileAnswer(
   sql: SQL,
   input: { issueId: number; body: IssueAnswerBody; who: string; now: Date },
-): Promise<{ ok: true; key: string; duplicate: boolean; state: IssueState } | { ok: false }> {
+): Promise<
+  | { ok: true; key: string; duplicate: boolean; state: IssueState }
+  | { ok: false; problem: 'unknown_issue' | 'no_open_question' }
+> {
   const { issueId, now } = input
   const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
-  if (!issue) return { ok: false }
+  if (!issue) return { ok: false, problem: 'unknown_issue' }
   const { id, answer } = input.body
+  const key = `${issueId}:answer:${id ?? crypto.randomUUID()}`
+  // A call made before is answered as it was, whatever became of the question since.
+  const [filedBefore] = await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key}`
+  if (filedBefore) return { ok: true, key, duplicate: true, state: issue.state }
   // An answer is for the question open when it was given: one that names none is bound to it now, so a question asked later
-  // cannot take it while it waits for the tick.
+  // cannot take it while it waits for the tick. With none open there is nothing to answer.
   const [open]: { id: string }[] = await sql`
     SELECT id FROM factory.decisions WHERE issue_id = ${issueId} AND answered_at IS NULL ORDER BY id DESC LIMIT 1`
   const decision = input.body.decision ?? (open ? Number(open.id) : undefined)
-  const key = `${issueId}:answer:${id ?? crypto.randomUUID()}`
-  const payload = { answer, who: input.who, ...(decision === undefined ? {} : { decision }) }
+  if (decision === undefined) return { ok: false, problem: 'no_open_question' }
+  const payload = { answer, who: input.who, decision }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: 'answer', at: now, payload })
   return { ok: true, key, duplicate, state: issue.state }
 }
