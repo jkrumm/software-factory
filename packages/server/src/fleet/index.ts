@@ -64,7 +64,7 @@ export interface FleetDeps {
   digest?: Digest
   alertLeads?: boolean
   /** the reaper (`FACTORY_REAPER`): without it, or `off`, it reads nothing; `dry` lists, `on` closes through `closer` */
-  reaper?: { mode: ReaperMode; closer?: HcCloser }
+  reaper?: { mode: ReaperMode; closer?: HcCloser; actBudgetMs?: number }
   intervalMs?: number
   /** the triage's probes (`probes.ts`): the machines they may look at (`FACTORY_PROBE_HOSTS`: name → ssh alias or `local`), the one a queue request's command runs on, and (tests) the probes themselves */
   triage?: { hosts?: ReadonlyMap<string, string>; queueMachine?: string; probes?: Probes }
@@ -115,6 +115,10 @@ export class FleetBuilder {
   private readonly git: GitReader
   private readonly triage: Triage
   private readonly reaper: Reaper
+  /** the sources that answered with an older reading in this build (`fallback`) */
+  private fell = new Set<string>()
+  /** the reaper's closes after a snapshot: one at a time, off the build */
+  private acting: Promise<void> | undefined
   private readonly last: {
     db?: DbPart
     hc?: HcTerminal[]
@@ -133,6 +137,7 @@ export class FleetBuilder {
       mode: deps.reaper?.mode ?? 'off',
       git: this.git,
       closer: deps.reaper?.closer,
+      actBudgetMs: deps.reaper?.actBudgetMs,
     })
     this.triage = new Triage({
       sql: deps.sql,
@@ -173,7 +178,7 @@ export class FleetBuilder {
       timer = setTimeout(resolve, timeoutMs)
     })
     try {
-      await Promise.race([Promise.all([this.chain, this.deps.digest?.settled()]), bound])
+      await Promise.race([Promise.all([this.chain, this.deps.digest?.settled(), this.acting]), bound])
     } finally {
       clearTimeout(timer)
     }
@@ -189,6 +194,7 @@ export class FleetBuilder {
     const { sql } = this.deps
     const now = this.deps.now()
     const errors: string[] = []
+    this.fell = new Set()
 
     // Seeded from the stored snapshot once it has been read: a read that failed is tried again by the next build.
     if (!this.seeded) {
@@ -277,18 +283,16 @@ export class FleetBuilder {
       knownSince: this.since,
       real: (path) => real.get(path) ?? path,
     })
-    // The reaper closes finished worker sessions (git and hc, off the tick, no transaction); a session it closed is not in this build.
-    const reaped = await this.reaper.pass({
+    // The reaper's judgement (git and the database, no port); its closes run after the snapshot is stored.
+    const reaped = await this.reaper.look({
       sessions: merged,
       roots: ordinaryRoots.filter((root) => !places.isVisible(root)),
       places,
-      complete: !errors.some((e) => /^(hc|database)/.test(e)),
+      // From what really fell back to an older answer, not from the error lines: the decisions cap is a note, not a stale read.
+      complete: !this.fell.has('hc') && !this.fell.has('database'),
     })
     errors.push(...reaped.errors)
-    if (reaped.closedTerminals.size > 0 && this.last.hc) {
-      this.last.hc = this.last.hc.filter((t) => !reaped.closedTerminals.has(t.address))
-    }
-    const sessions = merged.filter((m) => !reaped.closed.has(m.session.id))
+    const sessions = merged
     const planOf = new Map<string, { plan: string | null; wave: number | null }>()
     const repoPaths = new Set<string>()
     for (const m of sessions) if (m.repo) repoPaths.add(m.repo)
@@ -387,6 +391,7 @@ export class FleetBuilder {
       ),
     )
     await writeSnapshot(sql, fleet)
+    this.startAct(reaped.plan)
     // A source the feed is made from that failed makes it partial (the queue and git are not in it).
     digest?.kick({ ...scope.feed, complete: !errors.some((e) => /^(hc|database|repos |plan )/.test(e)) })
     return fleet
@@ -406,8 +411,26 @@ export class FleetBuilder {
       return value
     } catch (error) {
       errors.push(`${label}: ${message(error)}`)
+      this.fell.add(label)
       return previous
     }
+  }
+
+  /**
+   * The reaper's closes, behind the build that stored the snapshot: a build never waits for them. One pass at a time; a plan made while
+   * one is still running is dropped (the next build makes it again). A terminal that went is dropped from the hc fallback too.
+   */
+  private startAct(plan: Parameters<Reaper['act']>[0]): void {
+    if (this.acting || (!plan.reconcile && plan.close.length === 0)) return
+    this.acting = this.reaper
+      .act(plan)
+      .then((gone) => {
+        if (gone.size > 0 && this.last.hc) this.last.hc = this.last.hc.filter((t) => !gone.has(t.address))
+      })
+      .catch((error: unknown) => console.error('fleet reaper failed', message(error)))
+      .finally(() => {
+        this.acting = undefined
+      })
   }
 
   private async readDb(now: Date): Promise<DbPart> {

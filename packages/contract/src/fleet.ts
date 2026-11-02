@@ -295,6 +295,8 @@ export const ReaperClosed = z.strictObject({
   evidence: z.string(),
   at: z.string().nullable(),
   dry: z.boolean(),
+  /** a close that was started and never confirmed for over an hour: the terminal may or may not be gone, the log says so and hides nothing */
+  unsettled: z.boolean().default(false),
   logId: z.number().int().nullable(),
 })
 export type ReaperClosed = z.infer<typeof ReaperClosed>

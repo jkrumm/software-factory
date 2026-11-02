@@ -81,6 +81,17 @@ export interface HcCloser {
 /** The close did nothing: the terminal was not touched. */
 export class NotClosed extends Error {}
 
+/** Whether a terminal runs Claude Code: its status says so, its foreground program or first argument is `claude`, or it carries Claude's session label. */
+function isClaude(t: z.output<typeof Record_>): boolean {
+  const first = t.foreground?.argv[0] ?? t.argv[0] ?? ''
+  return (
+    t.status?.app === 'claude-code' ||
+    t.foreground?.name === 'claude' ||
+    first.split('/').at(-1) === 'claude' ||
+    'jk.claude.session' in t.labels
+  )
+}
+
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
 export class HcTerminals implements HcLister, HcCloser {
   constructor(private readonly client: HcClient) {}
@@ -112,6 +123,8 @@ export class HcTerminals implements HcLister, HcCloser {
       throw error
     }
     if (seen.state === 'live') {
+      // Only Claude Code is closed: a shell that took the terminal's place (a kept terminal after a loss) is somebody's work.
+      if (!isClaude(seen)) throw new NotClosed(`${address} does not run Claude Code; not closed`)
       const state = seen.status?.state
       if (state !== 'idle' && state !== 'done')
         throw new NotClosed(`${address} is ${state ?? 'not reporting'} again; not closed`)

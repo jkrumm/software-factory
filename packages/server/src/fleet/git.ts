@@ -130,20 +130,21 @@ export class GitReader {
   }
 
   /**
-   * Whether the worktree's `HEAD` is in the repo's default branch, with the proof as one line. Merged is: the commit is an ancestor of
-   * a default ref (any of `origin/main`, `origin/master`, `main`, `master` that exists), or every commit it has beyond one has an equal patch
-   * there (`git cherry`), or its tree equals the tree of a commit on that ref's first-parent line (a squash merge). A head with a commit
-   * the default branch lacks, in content as well, is unmerged. A `HEAD` with no commit (its branch is gone) cannot be compared. Read-only.
+   * Whether the work of this worktree is in the repo's default branch, with the proof as one line. Work means a commit made here: the
+   * worktree's own `HEAD` reflog must show one (`commit`, `cherry-pick`, `revert`), else there is nothing to be merged and the answer is
+   * "nothing done", not merged (a branch still where the worktree was cut proves nothing). The tip is `HEAD`, or for a branch that is gone
+   * the newest commit made here. Merged is: the tip is an ancestor of a default ref (any of `origin/main`, `origin/master`, `main`,
+   * `master` that exists), or every commit up to it has an equal patch there (`git cherry`), or its tree equals the tree of a commit on that
+   * ref's first-parent line (a squash merge). A tip with a commit the default branch lacks, in content as well, is unmerged. Read-only.
    */
   async mergeProof(worktree: string): Promise<{ merged: boolean; proof: string }> {
-    const head = (
-      await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
-    ).trim()
-    if (!head) return { merged: false, proof: 'its branch has no commit to compare (gone)' }
+    const own = await this.ownTip(worktree)
+    if ('why' in own) return { merged: false, proof: own.why }
+    const head = own.tip
     const refs = await this.defaultRefs(worktree)
     if (refs.length === 0) return { merged: false, proof: 'the repo has no default branch to compare with' }
     const tree = (await this.git(worktree, ['rev-parse', `${head}^{tree}`])).trim()
-    const short = head.slice(0, 12)
+    const short = head.slice(0, 12) + (own.gone ? ' (its branch is gone)' : '')
     for (const ref of refs) {
       const name = ref.name.replace(/^refs\/(?:remotes|heads)\//, '')
       const ancestor = await this.run(
@@ -163,7 +164,41 @@ export class GitReader {
     }
     const [first] = refs
     const ahead = first ? (await this.git(worktree, ['rev-list', '--count', `${first.sha}..${head}`])).trim() : '?'
-    return { merged: false, proof: `${ahead} commit(s) the default branch lacks, in content as well` }
+    return { merged: false, proof: `unmerged, ${ahead} commit(s) the default branch lacks, in content as well` }
+  }
+
+  /**
+   * The commit to compare: `HEAD`, once this worktree's `HEAD` reflog shows a commit made here. A `HEAD` with no commit (the branch is gone)
+   * falls back to the newest commit the reflog shows. `why` says what is missing.
+   */
+  private async ownTip(worktree: string): Promise<{ tip: string; gone: boolean } | { why: string }> {
+    // The worktree's own `HEAD` log, read from the file: `git reflog` refuses a `HEAD` that has no commit (a deleted branch).
+    const dir = (await this.git(worktree, ['rev-parse', '--absolute-git-dir']).catch(() => '')).trim()
+    const log = dir
+      ? await Bun.file(`${dir}/logs/HEAD`)
+          .text()
+          .catch(() => undefined)
+      : undefined
+    if (log === undefined) return { why: 'nothing on record that this worktree did any work (no reflog)' }
+    // `<old> <new> <who> <time> <zone>\t<message>`, oldest first: the newest commit made here is the last such line.
+    const made = log
+      .split('\n')
+      .reverse()
+      .flatMap((line) => {
+        const [front, subject] = line.split('\t')
+        const sha = front?.split(' ')[1]
+        return sha && /^(?:commit|cherry-pick|revert)\b/.test(subject ?? '') ? [[sha, subject]] : []
+      })
+    const newest = made[0]?.[0]
+    if (!newest) return { why: 'nothing done: no commit of its own' }
+    const head = (
+      await this.git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']).catch(() => '')
+    ).trim()
+    if (head) return { tip: head, gone: false }
+    const known = await this.git(worktree, ['rev-parse', '--verify', '--quiet', `${newest}^{commit}`]).catch(() => '')
+    return known.trim()
+      ? { tip: newest, gone: true }
+      : { why: 'its branch is gone and its last commit is not in the repo any more' }
   }
 
   /** The branch a worktree is on; null when detached. */

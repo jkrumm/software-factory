@@ -88,6 +88,25 @@ export async function closingReaped(sql: SQL): Promise<{ subject: string; finger
     WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT 200`
 }
 
+/** Closes still `closing` since before `before`: shown in the model as unsettled. */
+export async function oldClosing(
+  sql: SQL,
+  before: Date,
+): Promise<{ id: number; session: string; repo: string; what: string; evidence: string; at: string }[]> {
+  const rows: { id: string; what: string; evidence: string; at: Date; payload: { session?: string; repo?: string } }[] =
+    await sql`
+    SELECT id, what, evidence, at, payload FROM factory.fleet_triage_log
+    WHERE kind = 'reaped' AND payload->>'state' = 'closing' AND at < ${before} ORDER BY id LIMIT 50`
+  return rows.map((r) => ({
+    id: Number(r.id),
+    session: r.payload.session ?? '',
+    repo: r.payload.repo ?? '',
+    what: r.what,
+    evidence: r.evidence,
+    at: r.at.toISOString(),
+  }))
+}
+
 /** `closed`: the terminal is gone, the row stands. `untouched`: nothing happened, the row is taken back. */
 export async function settleReaped(
   sql: SQL,
