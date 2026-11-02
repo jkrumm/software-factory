@@ -88,7 +88,7 @@ restart paths of PR #16 are proven by tests only. agw runs its own
 night under its mother (gateway Wave 2, then review v2); the dotfiles chain closed Wave 10 (the herdr-core migration is done).
 Handoff: `docs/waves/handoff/program.md`.
 
-## Wave 6 — The night of 2026-11-01            <!-- status: active -->
+## Wave 6 — The night of 2026-11-01            <!-- status: done -->
 Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/waves/night-2026-11-01.md` (the plan, the owner's answers, models,
 learning), `docs/waves/f2.md`, `docs/waves/handoff/program.md` first. Briefs: `docs/waves/briefs/night-*.md`; write the
 missing ones from `f2.md` and `docs/design.md` in the same shape (header lines, the foreground-wait line, the gate) and
@@ -113,10 +113,21 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
 - [x] N once W3 is live: the notifier (`ask`, parked, failed through Hermes to Slack, the 07:30 digest).
 - [x] F2 Wave 6, the gate: the gamedays and three real requests from the factory's own backlog (`rd close` on a merged worker, swapped in for the seed item, fixed in dotfiles `d432c25`; was: `rd`'s path seeds no
   space entry; `hc-resume` resumes without `--model/--effort`; `docs/remote-dev.md` says every structured create error falls back).
-- [ ] Per wave a retro entry in `docs/evidence/night-2026-11-01.md` (the fields in the plan's §Learning on the way); setup
+- [x] Per wave a retro entry in `docs/evidence/night-2026-11-01.md` (the fields in the plan's §Learning on the way); setup
   defects there or, once W1 is live, as Issues. The morning section proposes changes with their numbers.
-- [ ] Budget marks: `me2` 60 % of its week, `iu` 90 %, `me` untouched (`factory quota get` before every spawn). At a mark,
+- [x] Budget marks: `me2` 60 % of its week, `iu` 90 %, `me` untouched (`factory quota get` before every spawn). At a mark,
   finish what runs, start nothing.
-- [ ] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
+- [x] Keep `docs/program.md` current at every track change; rotate at about 60 % context, or at 94 % of the account's week.
 
-**Left behind:**
+**Left behind:** F2 done, the gate passed on its re-run (`docs/evidence/f2-gate/`); C0, D, I, N, agw classify and shipped-means-deployed
+live; every wave reviewed by the lead's `/code-review high` and retro'd in `docs/evidence/night-2026-11-01.md`, whose Morning section
+holds the proposals with numbers. Budget marks held (`me2` 31 %, `iu` 79 %). Open: the defects listed there wait for the owner's call
+(Issues now, or F3/F4); the door tokens go into 1Password (owner); FV started under this lead (Wave 7).
+
+## Wave 7 — FV, the fleet view            <!-- status: active -->
+The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md` (merged by agw's lead), dotfiles `docs/waves/fv-board.md`.
+
+- [x] dotfiles `ask-human.sh list --json` (`370ed24`..`94c0b98`).
+- [ ] FV Wave 1 (PR #32): review, land, deploy, prove; agw digest (agw PR #103): full eval, then agw's lead merges.
+- [ ] FV Waves 2–6 in order, the board's waves after the factory's they read.
+- [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
