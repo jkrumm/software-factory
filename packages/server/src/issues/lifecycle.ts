@@ -94,6 +94,8 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   block: { working: { to: 'waiting', reason: 'blocked' } },
   // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
   unreported: { working: { to: 'waiting', reason: 'unreported', apply: stopIsNews } },
+  // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to (Wave 4 may start a new attempt from here).
+  lead_gone: { working: { to: 'waiting', reason: 'lead_gone' } },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
   // Wave 4: the evidence the manifest derives is checked here (`refuse`), for `ship` and for a `close` that touched deployable paths.
   ship: { working: { to: 'watching', hold: true } },

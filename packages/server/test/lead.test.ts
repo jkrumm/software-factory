@@ -311,6 +311,43 @@ describe('classify, then admission', () => {
     expect(await started(incident)).toMatchObject({ tier: 'sonnet', effort: 'high' })
   })
 
+  test('a note with no lead to go to parks the Issue as lead_gone, with a line for the owner', async () => {
+    for (const how of ['failed', 'ended'] as const) {
+      const { id, key } = await lead()
+      await post(id, 'ask', { question: 'Which?', session: key })
+      await pass()
+      // The lead's spawn failed, or its agent is gone from the core: nothing can be told the answer.
+      if (how === 'failed')
+        await db.sql`UPDATE factory.spawns SET status = 'failed', error = 'the runner refused' WHERE key = ${key}`
+      else await db.sql`UPDATE factory.sessions SET pane = 'w9:p9' WHERE id = ${key}`
+      await enqueue(db.sql, {
+        issueId: id,
+        key: `answer:${id}:o`,
+        kind: 'answer',
+        at: clock.now(),
+        payload: { answer: 'this one' },
+      })
+      await drive(3)
+      expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
+      expect(await trail(id)).toContain('lead_gone working→waiting')
+      const attention = (await statusOf()).attention
+      expect(
+        attention.some((line) => line.startsWith(`Issue ${id} parked: its lead is gone (spawn ${key} ${how}`)),
+      ).toBe(true)
+      expect(await db.sql`SELECT 1 FROM factory.prompts WHERE source = 'note' AND session = ${key}`).toHaveLength(0)
+      // The owner can send it back to work.
+      await enqueue(db.sql, {
+        issueId: id,
+        key: `wake:${id}:lg`,
+        kind: 'wake',
+        at: clock.now(),
+        payload: { for: 'lead_gone' },
+      })
+      await drive(2)
+      expect((await issue(id)).state).toBe('working')
+    }
+  })
+
   test('the brief is recorded with the spawn: a create that fails leaves no prompt behind', async () => {
     const id = await file(newRepo())
     const input = {

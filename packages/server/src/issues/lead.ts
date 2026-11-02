@@ -11,6 +11,7 @@ import { createSpawn, getSpawn, IssueClosed } from '../spawns.ts'
 import { buildBrief } from './brief.ts'
 import { leadLevel } from './classify.ts'
 import type { Effect, EffectPorts } from './effects.ts'
+import { enqueue } from './inbox.ts'
 import type { Worktrees } from './worktree.ts'
 
 /** A lead's spawn, pane and session: one per attempt. */
@@ -161,13 +162,24 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
 
 /**
  * `note_lead`: the news typed into the lead's session through the prompt loop, under the effect's key. A lead that has not become a
- * session yet is tried again next pass; one whose spawn is gone has nobody to tell.
+ * session yet is tried again next pass; one whose spawn failed or ended parks the Issue (`lead_gone`).
  */
 async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const { sql, clock } = deps
   const key = leadKey(effect.issueId, attemptOf(effect))
   const spawn = await getSpawn(sql, key, clock.now())
-  if (spawn?.status === 'failed' || spawn?.status === 'ended') return
+  if (spawn?.status === 'failed' || spawn?.status === 'ended') {
+    // Nobody is left to tell. The Issue would sit `working` with its claim held and no lead, unseen: it parks, with a line for the owner.
+    const detail = `spawn ${key} ${spawn.status}${spawn.error ? `: ${spawn.error}` : ''}`
+    await enqueue(sql, {
+      issueId: effect.issueId,
+      key: `lead_gone:${effect.issueId}:${attemptOf(effect)}`,
+      kind: 'lead_gone',
+      at: clock.now(),
+      payload: { detail },
+    })
+    return
+  }
   const [session] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${key}`
   if (!spawn || !session) throw new Error(`the lead ${key} is not running yet`)
   await recordPrompt(

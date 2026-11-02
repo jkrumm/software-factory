@@ -33,11 +33,14 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
 
   const parked: { id: number; reason: string; since: Date; why: string | null }[] = await sql`
     SELECT i.id, i.reason, i.updated_at AS since,
-      (SELECT e.payload->>'reason' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'block' ORDER BY e.id DESC LIMIT 1) AS why
-    FROM factory.issues i WHERE i.state = 'waiting' AND i.reason IN ('unreported', 'blocked', 'parked') ORDER BY i.id LIMIT ${PER_KIND}`
+      (SELECT COALESCE(e.payload->>'reason', e.payload->>'detail') FROM factory.issue_events e
+       WHERE e.issue_id = i.id AND e.kind IN ('block', 'lead_gone') ORDER BY e.id DESC LIMIT 1) AS why
+    FROM factory.issues i WHERE i.state = 'waiting' AND i.reason IN ('unreported', 'blocked', 'parked', 'lead_gone') ORDER BY i.id LIMIT ${PER_KIND}`
   for (const issue of parked) {
     if (issue.reason === 'unreported')
       lines.push(`Issue ${issue.id} parked: its lead stopped twice with nothing reported`)
+    else if (issue.reason === 'lead_gone')
+      lines.push(`Issue ${issue.id} parked: its lead is gone${issue.why ? ` (${oneLine(issue.why)})` : ''}`)
     else if (issue.reason === 'blocked')
       lines.push(`Issue ${issue.id} blocked${issue.why ? `: ${oneLine(issue.why)}` : ''}`)
     else lines.push(`Issue ${issue.id} parked`)
