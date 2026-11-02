@@ -93,8 +93,10 @@ export class HcTerminals implements HcLister, HcCloser {
       try {
         await this.client.call('terminal.kill', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
       } catch (error) {
-        // Already finished or gone is what was wanted; a timeout or a dead process says nothing, and the rm below tells.
-        if (!(error instanceof HcError && error.refusal)) throw error
+        // Already finished or gone is what was wanted. Any other refusal means the core looked and left it running, and a timeout or a
+        // dead process says nothing: not closed, the next pass looks again.
+        const kind = error instanceof HcError ? error.refusal?.kind : undefined
+        if (kind !== 'not_found' && kind !== 'finished') throw error
       }
     }
     try {

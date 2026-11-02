@@ -1,5 +1,11 @@
 import { basename } from 'node:path'
-import type { FleetReaper, ReaperClosed, ReaperKept, ReaperMode } from '@software-factory/contract'
+import {
+  type FleetReaper,
+  NO_REAPER,
+  type ReaperClosed,
+  type ReaperKept,
+  type ReaperMode,
+} from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { real } from '../runner.ts'
 import { enclosingRepo } from '../projects/sync.ts'
@@ -48,7 +54,7 @@ export interface ReaperResult {
 }
 
 const OFF: ReaperResult = {
-  reaper: { mode: 'off', closed: [], kept: [] },
+  reaper: NO_REAPER,
   closed: new Set(),
   closedTerminals: new Set(),
   errors: [],
@@ -86,8 +92,6 @@ export class Reaper {
   private readonly kept = new Map<string, { at: number; why: string }>()
   /** closes that failed, by terminal: a failing one goes behind the others, so it cannot starve them */
   private readonly failures = new Map<string, number>()
-  /** log rows whose insert failed after the terminal was closed: tried again at the next pass */
-  private unlogged: NewLogRow[] = []
 
   constructor(private readonly deps: ReaperDeps) {}
 
@@ -132,19 +136,33 @@ export class Reaper {
             : 'reaper: no way to close a terminal; nothing is closed',
         )
       } else {
-        await this.retryUnlogged(at, errors)
         for (const e of eligible.slice(0, REAPER_MAX_CLOSES)) {
+          // The verdict may be a few seconds old: the worktree is looked at again right before the close.
+          const again = await this.gitVerdict(e.worktree)
+          if (again.reasons.length > 0) {
+            errors.push(`reaper: ${e.id} is kept after all: ${again.reasons.join('; ')}`)
+            continue
+          }
+          // The row first (its key is the terminal and its idle time): a restart between the row and the close leaves a row and the next
+          // pass finishes the close; the other order would leave a close nobody wrote down.
+          const row = rowOf({ ...e, proof: again.proof })
+          try {
+            await insertLog(this.deps.sql, [row], at)
+          } catch (error) {
+            errors.push(`reaper: ${e.id} was not closed, its log row could not be written: ${message(error)}`)
+            continue
+          }
           try {
             await closer.close({ address: e.address, cwd: e.cwd })
           } catch (error) {
             this.failures.set(e.address, (this.failures.get(e.address) ?? 0) + 1)
             errors.push(`reaper: ${e.id} was not closed: ${message(error)}`)
+            await this.unlog(row, errors)
             continue
           }
           this.failures.delete(e.address)
           closedNow.add(e.id)
           closedTerminals.add(e.address)
-          await this.log(rowOf(e), at, errors)
         }
       }
     }
@@ -158,8 +176,8 @@ export class Reaper {
         ? eligible.map((e) => ({
             session: e.id,
             repo: e.repo,
-            what: whatOf(e),
-            why: whyOf(),
+            what: whatOf(e, true),
+            why: 'Idle for 2 h or more, its worktree clean, its branch merged, and its parent waits on nothing of it. FACTORY_REAPER=dry: nothing was closed.',
             evidence: evidenceOf(e),
             at: null,
             dry: true,
@@ -247,18 +265,7 @@ export class Reaper {
     const before = this.kept.get(key)
     if (before && nowMs - before.at < KEPT_TTL_MS) return { kind: 'keep', why: before.why }
 
-    const reasons: string[] = []
-    let proof = ''
-    try {
-      const dirty = await this.deps.git.dirtyEntries(worktree)
-      if (dirty > 0) reasons.push(`the worktree has ${dirty} uncommitted or untracked entr${dirty === 1 ? 'y' : 'ies'}`)
-      const merge = await this.deps.git.mergeProof(worktree)
-      const branch = (await this.deps.git.branchOf(worktree)) ?? 'detached head'
-      if (merge.merged) proof = merge.proof
-      else reasons.push(`branch ${branch} is unmerged: ${merge.proof}`)
-    } catch (error) {
-      reasons.push(`cannot tell: ${message(error)}`)
-    }
+    const { reasons, proof } = await this.gitVerdict(worktree)
     if (reasons.length > 0) {
       const why = reasons.join('; ')
       this.kept.set(key, { at: nowMs, why })
@@ -323,24 +330,36 @@ export class Reaper {
     }))
   }
 
-  private async log(row: NewLogRow, at: Date, errors: string[]): Promise<void> {
+  /** Why a worktree is not closable now (an empty list: nothing holds it), and the merge proof. Git is asked fresh, never from the cache. */
+  private async gitVerdict(worktree: string): Promise<{ reasons: string[]; proof: string }> {
+    const reasons: string[] = []
+    let proof = ''
     try {
-      await insertLog(this.deps.sql, [row], at)
+      const dirty = await this.deps.git.dirtyEntries(worktree)
+      if (dirty > 0) reasons.push(`the worktree has ${dirty} uncommitted or untracked entr${dirty === 1 ? 'y' : 'ies'}`)
+      const merge = await this.deps.git.mergeProof(worktree)
+      const branch = (await this.deps.git.branchOf(worktree)) ?? 'detached head'
+      if (merge.merged) proof = merge.proof
+      else reasons.push(`branch ${branch} is unmerged: ${merge.proof}`)
     } catch (error) {
-      // The terminal is gone: the line is tried again, it is not a reason to close anything twice.
-      this.unlogged.push(row)
-      errors.push(`reaper: the log row of ${row.subject} could not be written: ${message(error)}`)
+      reasons.push(`cannot tell: ${message(error)}`)
     }
+    return { reasons, proof }
   }
 
-  private async retryUnlogged(at: Date, errors: string[]): Promise<void> {
-    const pending = this.unlogged
-    this.unlogged = []
-    for (const row of pending) await this.log(row, at, errors)
+  /** A close that failed takes its row back, so the log never says what did not happen. */
+  private async unlog(row: NewLogRow, errors: string[]): Promise<void> {
+    try {
+      await this.deps.sql`
+        DELETE FROM factory.fleet_triage_log WHERE kind = 'reaped' AND subject = ${row.subject} AND fingerprint = ${row.fingerprint}`
+    } catch (error) {
+      errors.push(`reaper: the log row of ${row.subject} could not be taken back: ${message(error)}`)
+    }
   }
 }
 
-const whatOf = (e: Eligible): string => `Closed ${e.id}, a finished worker session in ${e.repo}/${e.name}`
+const whatOf = (e: Eligible, dry = false): string =>
+  `${dry ? 'Would close' : 'Closed'} ${e.id}, a finished worker session in ${e.repo}/${e.name}`
 const whyOf = (): string =>
   'Idle for 2 h or more, its worktree clean, its branch merged, and its parent waits on nothing of it. Not undoable: the terminal is gone (the worktree stays).'
 const evidenceOf = (e: Eligible): string => `idle since ${e.idleSince}; ${e.proof}; ${e.parent}`

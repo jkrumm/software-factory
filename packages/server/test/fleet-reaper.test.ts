@@ -6,9 +6,10 @@ import { Fleet, Since, TriageList } from '@software-factory/contract'
 import { runProcess } from '../src/exec.ts'
 import { GitReader } from '../src/fleet/git.ts'
 import { FleetBuilder } from '../src/fleet/index.ts'
+import { HcError, type HcClient } from '../src/hc.ts'
 import { Places } from '../src/fleet/place.ts'
 import type { SinceReader } from '../src/fleet/since.ts'
-import type { HcCloser, HcLister, HcTerminal } from '../src/fleet/sources.ts'
+import { type HcCloser, type HcLister, type HcTerminal, HcTerminals } from '../src/fleet/sources.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { loadMorning } from '../src/notify/digest.ts'
 import { startApp, TEST_TOKEN, type TestApp } from './support/app.ts'
@@ -30,6 +31,8 @@ let terminals: HcTerminal[]
 let hcFails: boolean
 let processes: string[][]
 let closer: FakeCloser
+/** runs once after the first `git status --porcelain` of a worktree: the world moves between the judging and the close */
+let afterFirstStatus: (() => void) | undefined
 let n = 0
 
 class FakeCloser implements HcCloser {
@@ -146,9 +149,15 @@ let current: FleetBuilder
 
 async function setup(mode: 'on' | 'dry' | 'off'): Promise<FleetBuilder> {
   await app?.stop()
-  const run: typeof runProcess = (cmd, ...rest) => {
+  const run: typeof runProcess = async (cmd, ...rest) => {
     processes.push(cmd)
-    return runProcess(cmd, ...rest)
+    const done = await runProcess(cmd, ...rest)
+    if (cmd.includes('--porcelain') && cmd.join(' ').includes('worktrees') && afterFirstStatus) {
+      const hook = afterFirstStatus
+      afterFirstStatus = undefined
+      hook()
+    }
+    return done
   }
   const places = await Places.of({ visibleRoots: [iu], configured: [src], home: tmp })
   const reader: SinceReader = {
@@ -178,6 +187,7 @@ beforeEach(async () => {
   terminals = []
   hcFails = false
   processes = []
+  afterFirstStatus = undefined
   closer = new FakeCloser()
 })
 
@@ -266,6 +276,16 @@ describe('the reaper closes', () => {
     expect(model.reaper.closed.map((c) => c.session).sort()).toEqual(['child-a', 'child-b'])
     const gone = model.reaper.closed.find((c) => c.session === 'child-b')
     expect(gone?.evidence).toContain('parent t999 is gone')
+  })
+
+  test('a worktree that turns dirty between the judging and the close is not closed', async () => {
+    const wt = worktree(freshRepo(), 'feat-late-dirty', 'merged')
+    terminals = [terminal('feat-late-dirty', wt)]
+    afterFirstStatus = () => writeFileSync(join(wt, 'late.txt'), 'someone is working here\n')
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.errors.some((e) => e.includes('feat-late-dirty') && e.includes('uncommitted or untracked'))).toBe(true)
+    expect(await reapedRows()).toHaveLength(0)
   })
 
   test('at most 5 closes a pass: the rest wait for the next', async () => {
@@ -454,6 +474,7 @@ describe('the switch', () => {
     expect(model.reaper.mode).toBe('dry')
     expect(model.reaper.closed).toHaveLength(1)
     expect(model.reaper.closed[0]).toMatchObject({ session: 'feat-dry', dry: true, at: null, logId: null })
+    expect(model.reaper.closed[0]?.what).toStartWith('Would close')
     expect(closer.calls).toHaveLength(0)
     expect(await reapedRows()).toHaveLength(0)
     expect(model.repos.flatMap((r) => r.sessions).map((s) => s.id)).toContain('feat-dry')
@@ -507,5 +528,64 @@ describe('the log and the readings', () => {
     const stored = (await (await app.get('/fleet')).json()) as Record<string, unknown>
     const old = Fleet.parse({ ...stored, reaper: undefined })
     expect(old.reaper).toEqual({ mode: 'off', closed: [], kept: [] })
+  })
+})
+
+describe('HcTerminals.close', () => {
+  type Reply = { result: unknown } | { refuse: string }
+  function client(replies: Record<string, Reply>) {
+    const calls: string[] = []
+    const fake = {
+      call: async (method: string) => {
+        calls.push(method)
+        const reply = replies[method]
+        if (!reply) throw new Error(`unexpected ${method}`)
+        if ('refuse' in reply) throw new HcError(`hc ${method}: ${reply.refuse}`, { kind: reply.refuse })
+        return reply.result
+      },
+    }
+    return { calls, closer: new HcTerminals(fake as unknown as HcClient) }
+  }
+  const live = (status = 'idle', cwd = '/w') => ({ address: 't1', state: 'live', cwd, status: { state: status } })
+
+  test('kills and removes a terminal that is still where the build saw it', async () => {
+    const { calls, closer } = client({
+      'terminal.get': { result: live() },
+      'terminal.kill': { result: {} },
+      'terminal.rm': { result: {} },
+    })
+    await closer.close({ address: 't1', cwd: '/w' })
+    expect(calls).toEqual(['terminal.get', 'terminal.kill', 'terminal.rm'])
+  })
+
+  test('a terminal that works again, or sits elsewhere, is not touched', async () => {
+    for (const seen of [live('working'), live('blocked'), live('idle', '/elsewhere')]) {
+      const { calls, closer } = client({ 'terminal.get': { result: seen } })
+      await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('not closed')
+      expect(calls).toEqual(['terminal.get'])
+    }
+  })
+
+  test('a kill the core refused leaves it running: no rm, an error', async () => {
+    const { calls, closer } = client({
+      'terminal.get': { result: live() },
+      'terminal.kill': { refuse: 'blocked' },
+      'terminal.rm': { result: {} },
+    })
+    await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('blocked')
+    expect(calls).toEqual(['terminal.get', 'terminal.kill'])
+  })
+
+  test('already finished is removed; already gone is done', async () => {
+    const finished = client({
+      'terminal.get': { result: live() },
+      'terminal.kill': { refuse: 'finished' },
+      'terminal.rm': { result: {} },
+    })
+    await finished.closer.close({ address: 't1', cwd: '/w' })
+    expect(finished.calls).toEqual(['terminal.get', 'terminal.kill', 'terminal.rm'])
+    const gone = client({ 'terminal.get': { refuse: 'not_found' } })
+    await gone.closer.close({ address: 't1', cwd: '/w' })
+    expect(gone.calls).toEqual(['terminal.get'])
   })
 })

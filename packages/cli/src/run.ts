@@ -399,7 +399,9 @@ export function fleetScreen(f: Fleet): string {
   )
   const r = f.reaper
   if (r.mode !== 'off') {
-    out.push(`REAPER\t${r.mode}\t${r.closed.length} closed (24 h)\t${r.kept.length} kept`)
+    out.push(
+      `REAPER\t${r.mode}\t${r.closed.filter((c) => !c.dry).length} closed (24 h)\t${r.closed.filter((c) => c.dry).length} would close\t${r.kept.length} kept`,
+    )
     for (const c of r.closed)
       out.push(`  ${c.dry ? 'would close' : 'closed'}\t${c.session}\t${c.repo}\t${oneLine(c.evidence, 160)}`)
     for (const k of r.kept) out.push(`  kept\t${k.session}\t${k.repo}\t${oneLine(k.why, 160)}`)
