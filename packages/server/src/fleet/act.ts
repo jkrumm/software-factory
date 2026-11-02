@@ -51,7 +51,7 @@ export interface ActDeps {
   visibleRoots: readonly string[]
   home: string
   /** a build now, after an act, so the next read of `/fleet` shows it */
-  refresh: () => Promise<unknown>
+  refresh: () => Promise<{ errors: readonly string[] }>
 }
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12)
@@ -154,11 +154,14 @@ export class FleetActions {
       return refuse(409, 'already_closed', `${askId} was closed already`)
     }
     // The next read shows it; a build that fails leaves the act done.
-    let fresh = true
-    await this.deps.refresh().catch((error: unknown) => {
-      fresh = false
-      console.error('fleet refresh after an act failed', error)
-    })
+    // A build that could not read a source an ask comes from (hc, the database, the human queue) is not a fresh view of what is open.
+    const fresh = await this.deps
+      .refresh()
+      .then((built) => !built.errors.some((e) => /^(hc|database|human queue|snapshot)/.test(e)))
+      .catch((error: unknown) => {
+        console.error('fleet refresh after an act failed', error)
+        return false
+      })
     // An act is a person's: presence at the place it names (default the desk), and the cursor when nothing else of the window is open
     // (not on a snapshot that this act did not refresh: it may still list what is closed, or miss what is new).
     await recordAskAct(sql, { place: body.place ?? 'desk', ask: askId, now, moveCursor: fresh }).catch(

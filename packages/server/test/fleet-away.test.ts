@@ -345,6 +345,36 @@ describe('the cursor on a stale snapshot', () => {
   })
 })
 
+describe('the cursor on a partial build', () => {
+  test('an act whose build could not read the queue does not move the cursor', async () => {
+    terminals = []
+    requests = [{ id: 'q-a', text: 'Pull the dotfiles', askedAt: '2026-11-02T10:00:00.000Z', state: 'pending' }]
+    await builder.refreshNow()
+    const partial = new FleetActions({
+      sql: db.sql,
+      clock,
+      queue,
+      roles: TEST_ROLES,
+      repoRoots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      refresh: async () => ({ errors: ['human queue: the script did not answer'] }),
+    })
+    await app.stop()
+    app = startApp({
+      sql: db.sql,
+      clock,
+      fleet: builder,
+      fleetActions: partial,
+      since: reader,
+      repoRoots: [estate.src],
+    })
+    const res = await app.send('POST', `/fleet/asks/${encodeURIComponent('queue:q-a')}/act`, { intent: 'later' })
+    expect(res.status).toBe(201)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBeNull()
+  })
+})
+
 describe('GET /fleet/since', () => {
   test('each group from seeded facts, every line with its source', async () => {
     await scene()
@@ -734,6 +764,16 @@ describe('the morning reading', () => {
     expect(text).not.toContain('(your last catch-up)')
   })
 
+  test('with no fleet model it says so, also at the cap; an unplaced check counts everything', async () => {
+    const text = await loadMorning(db.sql, { now: clock.now(), date: '2026-11-02', isVisible: () => false })
+    expect(text).toContain('The fleet model was not built yet')
+    // Everything is the read-only area's when nothing tells it apart: the lines are counts.
+    await scene()
+    const closed = await loadMorning(db.sql, { now: clock.now(), date: '2026-11-02', isVisible: () => true })
+    expect(closed).not.toContain('Benchmark with or without caching?')
+    expect(closed).toMatch(/Read-only area: [1-9]\d* items, counted only/)
+  })
+
   test('with nothing in the window it says so and is still short', async () => {
     const text = await loadMorning(db.sql, { now: clock.now(), date: '2026-11-02', isVisible: () => false })
     expect(text).toContain('Needs you: none')
@@ -767,8 +807,9 @@ describe('the CLI', () => {
     const json = await factory(['fleet', 'since', '--t', T])
     expect(json.code).toBe(0)
     expect(Since.parse(JSON.parse(json.stdout)).t).toBe(T)
+    await windows.settled()
     const screen = await factory(['--format', 'plain', 'fleet', 'since', '--t', T])
-    expect(screen.stdout).toMatch(/HEADLINE\t(pending|ready)/)
+    expect(screen.stdout).toContain('HEADLINE\tready')
     expect(screen.stdout).toContain('NEEDS YOU (')
     expect(screen.stdout).toContain('git:software-factory@')
     expect((await factory(['fleet', 'since', '--t', 'soon'])).code).toBe(2)

@@ -9,7 +9,7 @@ export interface NotifyDeps {
   target: string
   digestAt: string | null
   digestTz: string
-  /** whether a place is IuRoot's or a visible root's: its items are only counted in the morning reading (default: a path with an `IuRoot` segment) */
+  /** whether a place is IuRoot's or a visible root's: its items are only counted in the morning reading (not injected: everything is counted only) */
   visible?: () => Promise<(path: string) => boolean>
 }
 
