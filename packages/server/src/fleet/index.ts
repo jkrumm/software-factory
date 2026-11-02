@@ -176,6 +176,8 @@ export class FleetBuilder {
         this.seeded = true
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
         for (const [id, at] of seen) if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
+        // What a build whose git times out falls back to: the previous build's repo state, also after a restart.
+        for (const r of stored?.repos ?? []) if (r.git) this.last.git.set(r.space, r.git)
         for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
           if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
         }
@@ -276,7 +278,9 @@ export class FleetBuilder {
     const facts: RepoFacts[] = []
     const list = [...repoPaths].sort()
     for (let i = 0; i < list.length; i += CONCURRENCY) {
-      const read = await Promise.all(list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf)))
+      const read = await Promise.all(
+        list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf, now)),
+      )
       for (const found of read) {
         if (!found) continue
         facts.push(found.facts)
@@ -425,13 +429,14 @@ export class FleetBuilder {
     path: string,
     roots: readonly string[],
     planOf: ReadonlyMap<string, { plan: string | null }>,
+    now: Date,
   ): Promise<{ facts: RepoFacts; errors: string[] } | undefined> {
     const errors: string[] = []
     if (!(await exists(join(path, '.git')))) return undefined
     const name = path.split('/').at(-1) ?? path
     let git: FleetGit | null = null
     try {
-      git = await this.git.state(path)
+      git = { ...(await this.git.state(path)), recentAt: now.toISOString() }
       this.last.git.set(path, git)
     } catch (error) {
       errors.push(`git ${name}: ${message(error)}`)

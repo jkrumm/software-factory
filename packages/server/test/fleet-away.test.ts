@@ -764,7 +764,7 @@ describe('GET /fleet/since', () => {
     // Once it is made, an explicit t over the same facts shows it, from the cache.
     expect((await since(T)).headline).toEqual({ state: 'ready', text: PARAGRAPH })
     const [ready] = await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`
-    // `fleet seen` reads /fleet, not a reading: it asks for no window.
+    // A caught_up is not a reading: it asks for no window.
     await presence('desk', 'caught_up', (await Fleet.parse(await (await app.get('/fleet')).json())).builtAt)
     expect(await db.sql`SELECT hash, state, updated_at FROM factory.fleet_windows`).toEqual([ready])
   })
@@ -1208,6 +1208,63 @@ describe('git timing out in a build', () => {
     expect(repoOf(second)?.git?.recent).toEqual(commits)
     expect(second.errors.filter((e) => e.startsWith('git software-factory'))).toHaveLength(1)
   })
+
+  test('the cursor does not pass commits the stale build could not show', async () => {
+    let timeout = false
+    const run: typeof realRun = async (cmd, ...rest) => {
+      if (timeout && cmd.includes('for-each-ref'))
+        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      return realRun(cmd, ...rest)
+    }
+    const slow = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      git: new GitReader(run),
+    })
+    await slow.refreshNow() // a good build at NOW
+    clock.advance(10 * MIN) // a commit lands now ...
+    timeout = true
+    await slow.refreshNow() // ... and this build's git times out: its builtAt moves, its commits do not
+    expect((await presence('desk', 'caught_up', clock.now().toISOString())).status).toBe(201)
+    expect((await readPresence(db.sql, clock.now())).seenAt).toBe(NOW.toISOString())
+    expect((await since()).until).toBe(NOW.toISOString())
+  })
+
+  test('after a restart the first build’s git timing out still keeps the stored commits', async () => {
+    const good = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      git: new GitReader(),
+    })
+    const stored = (await good.refreshNow()).repos.find((r) => r.name === 'software-factory')?.git?.recent ?? []
+    expect(stored.length).toBeGreaterThan(0)
+    const run: typeof realRun = async (cmd, ...rest) =>
+      cmd.includes('for-each-ref')
+        ? ({ exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>)
+        : realRun(cmd, ...rest)
+    const restarted = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+      git: new GitReader(run),
+    })
+    const after = await restarted.refreshNow()
+    expect(after.repos.find((r) => r.name === 'software-factory')?.git?.recent).toEqual(stored)
+  })
 })
 
 describe('the CLI', () => {
@@ -1249,7 +1306,7 @@ describe('the CLI', () => {
     expect((await factory(['fleet', 'since', '--t', '2026-11-01'])).code).toBe(2)
     expect((await factory(['fleet', 'act'])).stderr).toContain('--place')
 
-    // caught_up carries the until of what was seen: no --until is a usage error, and `seen` reads it for you.
+    // caught_up carries the until of what was seen: no --until is a usage error, and so is `seen` without one.
     expect((await factory(['fleet', 'presence', 'desk', 'caught_up'])).code).toBe(2)
     expect((await factory(['fleet', 'presence', 'desk', 'focus', '--until', T])).code).toBe(2)
     const named = await factory(['fleet', 'presence', 'phone', 'caught_up', '--until', T])

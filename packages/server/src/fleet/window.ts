@@ -204,8 +204,9 @@ export class WindowDigest {
         if ((own.state === 'queued' || own.state === 'failed') && (own.context ?? '') !== facts.context) {
           await tx`UPDATE factory.fleet_windows SET context = ${facts.context} WHERE hash = ${facts.hash}`
         }
-        const [newest]: { newest: Date }[] = await tx`SELECT max(requested_at) AS newest FROM factory.fleet_windows`
-        if (newest && own.requested_at < newest.newest) {
+        const [newest]: { newest: Date | null }[] =
+          await tx`SELECT max(requested_at) AS newest FROM factory.fleet_windows`
+        if (newest?.newest && own.requested_at < newest.newest) {
           await tx`UPDATE factory.fleet_windows SET requested_at = ${at} WHERE hash = ${facts.hash}`
         }
       }

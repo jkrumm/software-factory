@@ -1,4 +1,4 @@
-import type { Presence, PresenceAct, PresencePlace } from '@software-factory/contract'
+import type { Fleet, Presence, PresenceAct, PresencePlace } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { readSnapshot } from './store.ts'
 
@@ -20,10 +20,18 @@ export const SINCE_MAX_BACK_MS = 7 * 24 * 3_600_000
 const TTL: Record<PresencePlace, number> = { desk: DESK_PRESENT_MS, phone: PHONE_PRESENT_MS }
 
 /**
- * Where a reading ends: at `now`, or at the build of the snapshot it was made from when that is earlier. What landed after the build is in
- * no reading, so the cursor never goes past it. The one definition: the since reading, `caught_up` and the act that closes a window use it.
+ * Where a reading ends: at `now`, or earlier at the build of the snapshot it was made from, or earlier still at the oldest time a repo's
+ * commits were read (a build whose git timed out kept the previous commits). What landed after is in no reading, so the cursor never goes
+ * past it. The one definition: the since reading, `caught_up` and the act that closes a window use it.
  */
-export const readingEnd = (now: Date, builtAt: Date): Date => (builtAt < now ? builtAt : now)
+export function readingEnd(now: Date, snapshot: Pick<Fleet, 'builtAt' | 'repos'>): Date {
+  let end = now
+  for (const at of [snapshot.builtAt, ...snapshot.repos.map((r) => r.git?.recentAt)]) {
+    const time = at ? new Date(at) : undefined
+    if (time && time < end) end = time
+  }
+  return end
+}
 
 /** One act of a person at a place; `caught_up` also moves the cursor. Short statements, no port inside. */
 export async function recordPresence(
@@ -38,7 +46,7 @@ export async function recordPresence(
   // between is in the next window. With no model built there was no reading, and the cursor stays.
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return
-  const end = readingEnd(now, new Date(snapshot.builtAt))
+  const end = readingEnd(now, snapshot)
   await moveSeen(sql, input.until && input.until < end ? input.until : end)
 }
 
