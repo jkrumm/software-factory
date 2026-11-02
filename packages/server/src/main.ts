@@ -9,6 +9,7 @@ import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
 import { leadPorts } from './issues/lead.ts'
+import { WorktreeMaker } from './issues/leadtree.ts'
 import { GitWorktrees } from './issues/worktree.ts'
 import { ProjectSync } from './projects/sync.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
@@ -108,7 +109,13 @@ try {
 chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
-const issuePorts = leadPorts({ sql, clock, roles, repoRoots: config.repoRoots, worktrees: new GitWorktrees() })
+const issuePorts = leadPorts({ sql, clock, roles, repoRoots: config.repoRoots })
+const leadWorktrees = new WorktreeMaker({
+  sql,
+  worktrees: new GitWorktrees(),
+  now: () => clock.now(),
+  retryBudgetMs: config.retryBudgetMs,
+})
 const classification = new Classification({
   sql,
   classifier: new AgwClassifier({ bin: config.agwBin }),
@@ -126,6 +133,7 @@ const ticker = startTicker(
     projects,
     issuePorts,
     classification,
+    leadWorktrees,
     alertLeads: config.alertLeads,
   },
   TICK_INTERVAL_MS,

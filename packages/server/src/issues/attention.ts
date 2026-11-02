@@ -64,5 +64,14 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
     ORDER BY e.id LIMIT ${PER_KIND}`
   for (const effect of stuck) lines.push(`Issue ${effect.issue_id}: its lead did not start: ${oneLine(effect.error)}`)
 
+  const trees: { issue_id: number; tries: number; error: string }[] = await sql`
+    SELECT w.issue_id, w.tries, w.error FROM factory.lead_worktrees w JOIN factory.issues i ON i.id = w.issue_id
+    WHERE w.status = 'pending' AND w.error IS NOT NULL AND i.state <> 'closed' ORDER BY w.first_at LIMIT ${PER_KIND}`
+  for (const tree of trees) {
+    lines.push(
+      `Issue ${tree.issue_id}: its worktree could not be made (try ${tree.tries}), trying again: ${oneLine(tree.error)}`,
+    )
+  }
+
   return lines
 }

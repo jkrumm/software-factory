@@ -1,7 +1,7 @@
 import type { IssueState, IssueVerb, IssueVerbBody } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { enqueue } from './inbox.ts'
-import { leadKey } from './lead.ts'
+import { leadKey } from './names.ts'
 
 /** The verbs that count as a report: a lead that stopped after one of them said where the Issue stands. `phase` does not. */
 export const REPORT_VERBS: readonly IssueVerb[] = ['ship', 'close', 'block', 'ask', 'wait', 'drop']

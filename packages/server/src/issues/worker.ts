@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import { admitIssues } from './admission.ts'
 import type { Classification } from './classify.ts'
 import { type EffectPorts, runEffects } from './effects.ts'
+import type { WorktreeMaker } from './leadtree.ts'
 import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
 import type { InboxRow } from './shared.ts'
@@ -89,14 +90,22 @@ export async function processInbox(sql: SQL, now: () => Date): Promise<string[]>
 }
 
 /**
- * One tick's work on Issues: Classify is started for the Issues that have none (it runs on its own), passed timers become inbox
+ * One tick's work on Issues: Classify is started for the Issues that have none and the leads' worktrees that are due are started (each
+ * runs on its own), passed timers become inbox
  * rows, Issues the claim has room for are admitted, the inbox moves Issues, and the effects they asked for run.
  */
 export async function issuePass(
   sql: SQL,
-  input: { now: () => Date; ports: EffectPorts; classification?: Classification; alertLeads?: boolean },
+  input: {
+    now: () => Date
+    ports: EffectPorts
+    classification?: Classification
+    worktrees?: WorktreeMaker
+    alertLeads?: boolean
+  },
 ): Promise<string[]> {
   await input.classification?.start()
+  await input.worktrees?.start()
   await fireTimers(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)

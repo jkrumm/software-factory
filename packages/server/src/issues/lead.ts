@@ -10,22 +10,16 @@ import { MAX_PROMPT_CHARS } from '../schemas.ts'
 import { createSpawn, getSpawn, IssueClosed } from '../spawns.ts'
 import { buildBrief } from './brief.ts'
 import { leadLevel } from './classify.ts'
-import type { Effect, EffectPorts } from './effects.ts'
+import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { enqueue } from './inbox.ts'
-import type { Worktrees } from './worktree.ts'
-
-/** A lead's spawn, pane and session: one per attempt. */
-export const leadKey = (issueId: number, attempt: number): string => `lead-${issueId}-${attempt}`
-export const leadBranch = (issueId: number, attempt: number): string => `factory/${issueId}-${attempt}`
-/** The first prompt of a lead, recorded under the id every prompt of the Issue's lead has. */
-export const briefPromptId = (issueId: number, attempt: number): string => `issue:${issueId}:brief:${attempt}`
+import { worktreeFor } from './leadtree.ts'
+import { briefPromptId, leadBranch, leadKey } from './names.ts'
 
 export interface LeadDeps {
   sql: SQL
   clock: Clock
   roles: RoleTable
   repoRoots: readonly string[]
-  worktrees: Worktrees
 }
 
 interface LeadIssue {
@@ -48,7 +42,7 @@ const attemptOf = (effect: Effect): number => {
 }
 
 /**
- * `start_lead`: a worktree of the Issue's repo (outside any transaction, a port with its own timeouts), the brief, and a spawn for
+ * `start_lead`: a worktree of the Issue's repo (made off the tick, see `leadtree.ts`), the brief, and a spawn for
  * role `lead` keyed `lead-<issue>-<attempt>`. The spawn is the lead's first and only prompt (the brief is its argument, never
  * typed a second time) and waits on the Issue's claim like any hold. A spawn that exists already is the attach: nothing more is
  * done, so a replay or a second admission finds the first.
@@ -79,9 +73,21 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
     issue,
   )
   const branch = leadBranch(issue.id, attempt)
-  const made = await deps.worktrees.create({ repo: issue.repo, branch })
+  // The worktree is made off the tick, by `WorktreeMaker`: this asks for it, and waits until it is there.
+  const tree = await worktreeFor(sql, issue.id, attempt, clock.now())
+  if (tree.status === 'failed') {
+    await enqueue(sql, {
+      issueId: issue.id,
+      key: `lead_gone:${issue.id}:${attempt}`,
+      kind: 'lead_gone',
+      at: clock.now(),
+      payload: { detail: `the worktree could not be made after ${tree.tries} tries: ${tree.error ?? 'unknown'}` },
+    })
+    return
+  }
+  if (tree.status !== 'made' || !tree.path) throw new Waiting(`the worktree of ${key} is being made`)
   // The worktree is a spawn's repo, so it is inside the allowed roots like any other.
-  const path = await resolveRepo(made.path, deps.repoRoots).catch((error: unknown) => {
+  const path = await resolveRepo(tree.path, deps.repoRoots).catch((error: unknown) => {
     throw error instanceof RepoRefused
       ? new Error(`the worktree is outside the allowed roots: ${error.message}`)
       : error

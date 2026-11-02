@@ -1,5 +1,11 @@
 import type { SQL } from 'bun'
 
+/**
+ * A port throws this when the work is not done yet and nothing went wrong (a worktree being made): the effect stays open and is
+ * asked again next pass, with no error recorded, and the Issue's later effects wait behind it.
+ */
+export class Waiting extends Error {}
+
 export type EffectKind = 'start_lead' | 'note_lead' | 'verify' | 'finalize'
 
 export interface Effect {
@@ -73,6 +79,10 @@ export async function runEffects(sql: SQL, ports: EffectPorts, now: () => Date):
         })
         await sql`UPDATE factory.issue_effects SET done_at = ${now()}, error = NULL WHERE id = ${row.id}`
       } catch (error) {
+        if (error instanceof Waiting) {
+          stopped.add(row.issue_id)
+          continue
+        }
         const message = error instanceof Error ? error.message : String(error)
         stopped.add(row.issue_id)
         errors.push(`${row.key}: ${message}`)
