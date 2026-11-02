@@ -5,7 +5,7 @@ import type { Clock } from '../clock.ts'
 import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { projectOfPath } from '../projects/claims.ts'
 import { getProject } from '../projects/store.ts'
-import type { Effect, EffectPorts } from './effects.ts'
+import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { enqueue } from './inbox.ts'
 import type { OffTick } from './offtick.ts'
 
@@ -74,11 +74,19 @@ export class MakeAndProbes implements Proof {
   }
 }
 
+/**
+ * How long after the server starts no check runs. A restart is a deploy, and `make deploy` writes what `make verify` compares and
+ * restarts the door only once `/health` answers: a hold that ended meanwhile, this repo's above all, would read the deploy as a regression.
+ */
+export const VERIFY_SETTLE_MS = 2 * 60_000
+
 export interface HoldDeps {
   sql: SQL
   clock: Clock
   proof: Proof
   offTick: OffTick
+  /** no check before this: `VERIFY_SETTLE_MS` after the start */
+  settledAt?: Date
 }
 
 /**
@@ -118,10 +126,27 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect): Prom
     key: green ? greenKey : redKey,
     kind: green ? 'verified' : 'regression',
     at: clock.now(),
-    payload: { hold, checks },
+    payload: {
+      hold,
+      checks,
+      // What the owner's line says of a regression.
+      ...(green
+        ? {}
+        : {
+            title: `${checks
+              .filter((check) => !check.ok)
+              .map((check) => check.name)
+              .join(', ')} failed`,
+          }),
+    },
   })
 }
 
 export function holdPorts(deps: HoldDeps): Pick<EffectPorts, 'verify'> {
-  return { verify: (effect) => deps.offTick.run(effect.key, () => verifyHold(deps, effect)) }
+  return {
+    verify: async (effect) => {
+      if (deps.settledAt && deps.clock.now() < deps.settledAt) throw new Waiting('the server has only just started')
+      await deps.offTick.run(effect.key, () => verifyHold(deps, effect))
+    },
+  }
 }
