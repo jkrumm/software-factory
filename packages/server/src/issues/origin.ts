@@ -32,7 +32,7 @@ export const fetchOrigin = async (repo: string, options: { run?: Run; git?: stri
 
 /**
  * Whether what the lead reported as merged is what the branch holds: every file the branch changes is, at a reported commit that is on the
- * base, exactly as the branch has it. Content, so a commit that merely touches the same files proves nothing and more work after a partial
+ * base and newer than the branch's fork point, exactly as the branch has it. Content, so a commit that merely touches the same files proves nothing and more work after a partial
  * merge is still work. What decides a squash whose lines moved on since, where a three-way merge conflicts and says nothing about
  * whether the work landed. Anything git cannot answer is no proof: a wrong yes here deletes a branch.
  */
@@ -44,12 +44,17 @@ async function landedAs(
   options: { run?: Run; git?: string },
 ): Promise<boolean> {
   const git = (args: string[]) => gitIn(repo, args, options)
+  const fork = await git(['merge-base', base, ref])
+  if (fork.exitCode !== 0) return false
+  // On the base and strictly newer than where the branch forked: a commit from before it can equal a branch that deletes or reverts
+  // what the commit lacked, and that proves nothing landed.
   const onBase: string[] = []
   for (const sha of reported) {
-    if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode === 0) onBase.push(sha)
+    if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode !== 0) continue
+    const newer = await git(['rev-list', '--count', '--ancestry-path', `${fork.stdout.trim()}..${sha}`])
+    if (newer.exitCode === 0 && Number(newer.stdout.trim()) > 0) onBase.push(sha)
   }
-  const fork = await git(['merge-base', base, ref])
-  if (onBase.length === 0 || fork.exitCode !== 0) return false
+  if (onBase.length === 0) return false
   const changed = async (from: string): Promise<Set<string> | undefined> => {
     const done = await git(['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', from, ref])
     return done.exitCode === 0 ? new Set(done.stdout.split('\0').filter(Boolean)) : undefined

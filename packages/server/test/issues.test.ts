@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_HOLD_MS, type Issue } from '@software-factory/contract'
-import { type Effect, type EffectKind, type EffectPorts, runEffects } from '../src/issues/effects.ts'
+import { type Effect, type EffectKind, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { REOPEN_WINDOW_MS, TABLE } from '../src/issues/lifecycle.ts'
@@ -1027,6 +1027,28 @@ describe('effects', () => {
       now,
     )
     expect(done).toEqual([healthy])
+  })
+
+  test('a check is not starved by Issues whose note keeps waiting or failing', async () => {
+    const waiting: number[] = []
+    for (let i = 0; i < 20; i++) waiting.push((await file()).id)
+    const checked = (await file()).id
+    for (const id of waiting) {
+      await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${id}, ${`note_lead:w${id}`}, 'note_lead', ${now()})`
+    }
+    await db.sql`INSERT INTO factory.issue_effects (issue_id, key, kind, created_at) VALUES (${checked}, ${`verify:v${checked}`}, 'verify', ${now()})`
+    const ran: string[] = []
+    await runEffects(
+      db.sql,
+      {
+        note_lead: async () => {
+          throw new Waiting('not yet')
+        },
+        verify: async (effect) => void ran.push(effect.key),
+      },
+      now,
+    )
+    expect(ran).toEqual([`verify:v${checked}`])
   })
 
   test('an effect with no port yet stays recorded and runs when one comes', async () => {

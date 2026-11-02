@@ -418,6 +418,27 @@ describe('GitCommits, against a repo with an origin', () => {
       )
     })
 
+    test('a commit from before the branch forked proves nothing for a branch that deletes', async () => {
+      const made = cloned('squash-older')
+      const older = made.head(made.origin)
+      fixture.commit(made.origin, { 'src/a.ts': 'x\n' })
+      fixture.git(made.clone, 'fetch', '-q', 'origin')
+      fixture.git(made.clone, 'merge', '-q', '--ff-only', 'origin/master')
+      fixture.git(made.clone, 'checkout', '-q', '-b', 'factory/1-1')
+      fixture.git(made.clone, 'rm', '-q', 'src/a.ts')
+      fixture.git(made.clone, 'commit', '-q', '-m', 'delete')
+      fixture.commit(made.origin, { 'docs/more.md': 'later\n' })
+      fixture.git(made.clone, 'fetch', '-q', 'origin')
+      // The old commit has no src/a.ts, as the branch has none: equal, and older than the fork.
+      expect(await branchOnBase(made.clone, 'factory/1-1', 'origin/master', { reported: [older] })).toBe(false)
+      // The same deletion landed after the fork is the squash.
+      fixture.git(made.origin, 'rm', '-q', 'src/a.ts')
+      fixture.git(made.origin, 'commit', '-q', '-m', 'squash')
+      fixture.git(made.clone, 'fetch', '-q', 'origin')
+      const squash = made.head(made.origin)
+      expect(await branchOnBase(made.clone, 'factory/1-1', 'origin/master', { reported: [older, squash] })).toBe(true)
+    })
+
     test('finalize removes it on the reported commit, and keeps it with none', async () => {
       const { clone, squash } = squashed('squash-remove')
       fixture.git(clone, 'checkout', '-q', 'master')
@@ -486,6 +507,15 @@ describe('ship', () => {
     expect(await again.json()).toMatchObject({ duplicate: true, key: `${id}:1:ship:s1:retry:2`, result: 'applied' })
     expect(commits.calls).toBe(3)
     expect((await issue(id)).hold).toBe(1)
+  })
+
+  test('a retry after a refusal does not store its inline evidence again', async () => {
+    const { id, key } = await lead()
+    const inline = { evidence: [{ kind: 'ui', link: 'https://example.com/shot' }] }
+    expect((await ship(id, key, { id: 's1', ...inline })).status).toBe(409)
+    await prove(id, key, 'service')
+    expect((await ship(id, key, { id: 's1', ...inline })).status).toBe(201)
+    expect((await evidence(id)).filter((e) => e.link === 'https://example.com/shot')).toHaveLength(1)
   })
 
   test('accepted: `watching` for the manifest’s hold, with what was found on the row', async () => {
@@ -883,6 +913,18 @@ describe('finalize', () => {
     expect(await trail(id)).toContain('issue_finalized')
   })
 
+  test('the worktree is judged on the full shas resolved at ship, not the strings the lead typed', async () => {
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    const resolved = 'f'.repeat(40)
+    commits.branch = [resolved]
+    expect((await post(id, 'ship', { summary: 'shipped', commits: ['abc1234'], session: key })).status).toBe(201)
+    await holdEnds(id)
+    await drive(4)
+    expect(worktrees.removed).toHaveLength(1)
+    expect(worktrees.removed[0]?.reported).toEqual(['abc1234', resolved])
+  })
+
   test('a queued Issue that is stopped never had a lead: only its place goes', async () => {
     const repo = newRepo(SERVICE)
     const id = await file(repo)
@@ -1064,6 +1106,45 @@ describe('finalize', () => {
     }
     expect(await trail(id)).toEqual(expect.arrayContaining(['transcript_missing', 'issue_finalized']))
     expect((await evidence(id)).filter((e) => e.kind === 'transcript')).toEqual([])
+  })
+
+  test('a transcript whose path cannot be resolved is not copied, and nothing throws', async () => {
+    const dir = mkdtempSync('/tmp/factory-transcripts-')
+    writeFileSync(join(dir, 'plain'), 'x')
+    const store = new FileTranscripts()
+    expect(await store.copy({ from: join(dir, 'plain', 'a.jsonl'), to: join(dir, 'out', 'a.jsonl'), root: dir })).toBe(
+      false,
+    )
+    expect(
+      await store.copy({ from: join(dir, 'a.jsonl'), to: join(dir, 'out', 'a.jsonl'), root: join(dir, 'plain', 'x') }),
+    ).toBe(false)
+  })
+
+  test('a registry that cannot be read leaves a line, and the attempt still ends', async () => {
+    const { id, key } = await lead()
+    const broken = {
+      ...ports(),
+      ...finalizePorts({
+        sql: db.sql,
+        clock,
+        runner,
+        worktrees,
+        transcripts: new FileTranscripts(),
+        archiveDir: archive,
+        projectsDir: async () => {
+          throw new Error('cannot read the account registry')
+        },
+        making: () => false,
+        offTick,
+      }),
+    }
+    await post(id, 'drop', { reason: 'no', session: key })
+    for (let i = 0; i < 3; i++) {
+      await issuePass(db.sql, { now: () => clock.now(), ports: broken })
+      await offTick.settled()
+    }
+    expect(await trail(id)).toEqual(expect.arrayContaining(['transcript_missing', 'issue_finalized']))
+    expect(worktrees.removed).toHaveLength(1)
   })
 
   test('a finalize older than the running attempt leaves that attempt’s claim alone', async () => {

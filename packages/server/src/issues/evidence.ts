@@ -210,10 +210,12 @@ export async function gateShip(context: Context): Promise<string | undefined> {
   if (derived.problem) return derived.problem
   if (derived.commits.length === 0) return 'ship names no merged commit'
   const inline = (row.payload?.evidence ?? []) as InlineEvidence[]
+  // Keyed by the call, not the row: a retry after a refusal is a row of its own, and the same call adds nothing twice.
+  const call = row.key.replace(/:retry:\d+$/, '')
   for (const [i, item] of inline.entries()) {
     await storeEvidence(tx, {
       issueId: issue.id,
-      key: `${row.key}:${i}`,
+      key: `${call}:${i}`,
       attempt: issue.attempt,
       kind: item.kind,
       link: item.link,
