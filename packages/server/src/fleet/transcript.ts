@@ -36,10 +36,24 @@ const isWritten = (text: string): boolean => {
   return rest !== '' && !SYSTEM_TEXT.test(rest)
 }
 
+/** A line Claude Code writes when the owner stopped the turn: it ends the turn with no reply (the text before it was never finished). */
+function isInterrupt(entry: { message?: { content?: unknown } }): boolean {
+  const content = entry.message?.content
+  const texts =
+    typeof content === 'string'
+      ? [content]
+      : Array.isArray(content)
+        ? content.flatMap((b) =>
+            typeof (b as { text?: unknown } | null)?.text === 'string' ? [(b as { text: string }).text] : [],
+          )
+        : []
+  return texts.some((t) => t.trimStart().startsWith('[Request interrupted by user'))
+}
+
 /**
  * Whether a `user` line begins a turn: a prompt the owner or an agent wrote. A tool result (also one with text beside it), a line
  * Claude Code marks as its own (`isMeta`, a compact summary, a transcript-only line, a skill's base text) and the text the harness
- * injects (system reminders, hook feedback, local command output, an interrupt marker) do not.
+ * injects (system reminders, hook feedback, local command output) do not. An interrupt marker is not a prompt either, but it ends the turn.
  */
 function isPrompt(entry: {
   isMeta?: unknown
@@ -78,7 +92,7 @@ export function lastReplyOf(tail: string): string | null {
       continue
     }
     if (entry.isSidechain === true) continue
-    if (entry.type === 'user' && isPrompt(entry)) return null
+    if (entry.type === 'user' && (isPrompt(entry) || isInterrupt(entry))) return null
     if (entry.type === 'assistant') {
       const text = textOf(entry.message?.content)
       if (text) return text
