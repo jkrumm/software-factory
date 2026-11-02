@@ -1,0 +1,5 @@
+05:03:01.223|admitted||applied||admit:33:1
+05:03:16.878|session_started|lead-33-1|ignored||lead-33-1:session_started:0
+05:03:17.138|turn_started|lead-33-1|ignored||lead-33-1:turn_started:1
+05:03:25.051|drop|lead-33-1|applied||33:1:drop:cb71fec9-19eb-446f-bf21-22e3f614fe2a
+05:03:26.383|session_ended|lead-33-1|ignored||lead-33-1:session_ended:1

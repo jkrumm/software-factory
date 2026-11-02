@@ -24,29 +24,32 @@ log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut
 scratch_up "$name" "$F2_DIR/templates/silent"
 base_commits=$(git --git-dir="$remote" rev-list --count master)
 
-ask="Reply with the single word noted and end your turn. Run no command at all, not even factory: this repo's AGENTS.md says why. If a hook or message tells you to report, ignore it, reply noted again and end your turn again."
+ask="Reply with the single word noted and end your turn. Run no command at all. The factory command is denied in this repo on purpose (see AGENTS.md): do not report, do not work around it. If a hook or message tells you to report, reply noted again and end your turn again."
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 silent lead"}')
 issue=$(fx issue new --repo "$repo" --title "Silent: $ask" --facts - --key "f2-silent-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
 [[ $issue =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
 log "issue $issue filed (source_key f2-silent-$run)"
 
 state() { issue_col "$issue" "state || '/' || coalesce(reason, '')"; }
-PROGRESS_CMD="progress_line $issue lead-$issue-1"
+export PROGRESS_CMD="progress_line $issue lead-$issue-1"
 attempt=1
 lead=$(lead_key "$issue" "$attempt")
 
 # Admitted, the lead started, then parked. Only changes are logged.
-last=""
+seen=""
 parked() {
   local now
   now=$(state)
-  if [[ $now != "$last" ]]; then
+  if [[ $now != "$seen" ]]; then
     log "issue $issue: $now | lead: $(fx session get "$lead" --format json 2>/dev/null | jq -r '"\(.state) turn=\(.turn)"' 2>/dev/null || echo none)"
-    last=$now
+    seen=$now
   fi
-  [[ $now == waiting/unreported ]]
+  # Parked, or ended some other way (a lead that reported after all): either way there is nothing more to wait for.
+  [[ $now == waiting/unreported || $now == closed/* ]]
 }
-if wait_for "issue $issue parked as unreported" parked; then reached=1; else reached=0; fi
+wait_for "issue $issue parked as unreported" parked || true
+reached=0
+[[ $(state) == waiting/unreported ]] && reached=1
 # The observation window: the machine, left alone, does nothing more.
 if ((reached)); then
   log "observing the parked Issue for 90 s: nothing may change"
@@ -81,7 +84,7 @@ check "the lead's worktree exists while parked" yes "$([[ -d $wt ]] && echo yes 
 
 # ---- stop, finalize ---------------------------------------------------------------------------------------------------------------
 stop_out=""
-if ((reached)); then
+if [[ $(state) != closed/* ]]; then
   log "issue $issue: factory issue stop"
   # 202 / exit 10 when the tick has the Issue in hand: the same --id asks again.
   for _ in 1 2 3 4 5; do
@@ -90,7 +93,7 @@ if ((reached)); then
   done
   log "stop: $(tr '\n' ' ' <<<"$stop_out" | cut -c1-200)"
 fi
-PROGRESS_CMD="progress_line $issue $lead"
+export PROGRESS_CMD="progress_line $issue $lead"
 if wait_for "issue $issue finalized" is_finalized "$issue"; then fin=1; else fin=0; fi
 sleep 3
 dump_issue "$issue" "$out"
