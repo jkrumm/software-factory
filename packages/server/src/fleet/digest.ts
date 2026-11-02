@@ -66,7 +66,7 @@ export interface DigestFeed {
   headings: string[]
   sessions: FeedSession[]
   /** every source was read in the build that made this feed; a partial one (hc down, a plan unreadable) must not make the cache forget rows */
-  complete?: boolean
+  complete: boolean
 }
 
 // --- the answers, as stored and as agw gives them ------------------------------------------------------------------
@@ -226,8 +226,8 @@ export class Digest {
   private lastStart = 0
   /** `key\0fingerprint` → when its answer was an error */
   private readonly failed = new Map<string, number>()
-  /** calls that failed for good since the last good one: part of the key, so a failed run is not replayed by the retry */
-  private failedCalls = 0
+  /** per batch: calls that failed for good, part of the key, so a failed run is not replayed by the retry of the same batch */
+  private readonly failedCalls = new Map<string, number>()
   private readonly run: typeof runProcess
   private readonly replies: ReplyReader
 
@@ -293,7 +293,7 @@ export class Digest {
     for (const t of touches) {
       await sql`UPDATE factory.fleet_digest SET answer = answer || ${JSON.stringify(t.patch)}::text::jsonb WHERE key = ${t.key}`
     }
-    await this.prune(feed.complete === false ? undefined : wanted, cached, now)
+    await this.prune(feed.complete ? wanted : undefined, cached, now)
     if (items.length === 0) return { called: false, sent: 0, stored: 0, failedItems: 0, waiting: 0 }
 
     // Oldest answers first (never answered, then by age); a batch is what one call takes, the rest waits for the next pass.
@@ -315,7 +315,10 @@ export class Digest {
       ;({ answers, cost } = await this.call(sent, now))
     } catch (error) {
       const reason = message(error)
-      if (!(error instanceof CallFailed && error.sameRun)) this.failedCalls++
+      if (!(error instanceof CallFailed && error.sameRun)) {
+        const batchKey = hash(JSON.stringify(sent), 24)
+        this.failedCalls.set(batchKey, (this.failedCalls.get(batchKey) ?? 0) + 1)
+      }
       await this.journal(sql, { ok: false, items: batch.length, failedItems: 0, cost: null, error: reason })
       return { called: true, sent: batch.length, stored: 0, failedItems: 0, waiting, error: reason }
     }
@@ -333,7 +336,6 @@ export class Digest {
     })
     // A call whose every item failed answered nothing: it counts as a failed pass.
     const ok = rows.length > 0
-    this.failedCalls = 0
     // The answers and the journal row of a paid call are stored together or not at all (the call is over: this is the one short transaction).
     await sql.begin(async (tx) => {
       for (const row of rows) {
@@ -434,7 +436,7 @@ export class Digest {
     const stdin = JSON.stringify(items)
     // The key is the batch's, the hour's and the count of failed calls: a slow call (a timeout, "pending") is found again by the next
     // pass with the same batch, while a run that failed is never replayed to the retry.
-    const key = `factory-digest-${hash(stdin, 24)}-${Math.floor(now.getTime() / 3_600_000)}-${this.failedCalls}`
+    const key = `factory-digest-${hash(stdin, 24)}-${Math.floor(now.getTime() / 3_600_000)}-${this.failedCalls.get(hash(stdin, 24)) ?? 0}`
     const result = await this.run(
       [this.deps.bin, 'digest', '--format', 'json', '--idempotency-key', key],
       timeout,

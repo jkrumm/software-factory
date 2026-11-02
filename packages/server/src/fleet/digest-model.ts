@@ -65,7 +65,7 @@ export function scopeOf(input: ScopeInput): DigestScope {
       })
     }
   }
-  return { feed: { headings, sessions: [...sessions.values()] }, sessions }
+  return { feed: { headings, sessions: [...sessions.values()], complete: true }, sessions }
 }
 
 /**

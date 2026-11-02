@@ -239,7 +239,11 @@ describe('the pass', () => {
   })
 
   test('more than 64 changed items: 64 go, the rest wait for the next pass', async () => {
-    const feed: DigestFeed = { headings: Array.from({ length: 70 }, (_, i) => `Heading number ${i}`), sessions: [] }
+    const feed: DigestFeed = {
+      headings: Array.from({ length: 70 }, (_, i) => `Heading number ${i}`),
+      sessions: [],
+      complete: true,
+    }
     const first = await digest.pass(feed)
     expect(first).toMatchObject({ called: true, sent: MAX_ITEMS, stored: MAX_ITEMS, waiting: 6 })
     expect(calls()[0]?.items).toHaveLength(MAX_ITEMS)
@@ -254,13 +258,13 @@ describe('the pass', () => {
   })
 
   test('the same heading in many plans is one item', async () => {
-    const feed: DigestFeed = { headings: Array.from({ length: 70 }, () => 'Plan'), sessions: [] }
+    const feed: DigestFeed = { headings: Array.from({ length: 70 }, () => 'Plan'), sessions: [], complete: true }
     expect(await digest.pass(feed)).toMatchObject({ sent: 1, stored: 1, waiting: 0 })
     expect(calls()[0]?.items).toHaveLength(1)
   })
 
   test('an answer too long, or with control characters, is cleaned or refused; it is never stored whole', async () => {
-    await digest.pass({ headings: ['LONGSHORT heading', 'Plain heading'], sessions: [] })
+    await digest.pass({ headings: ['LONGSHORT heading', 'Plain heading'], sessions: [], complete: true })
     const view = await digest.view()
     expect(view.heading('Plain heading')).toBe('Short Plain heading')
     expect(view.heading('LONGSHORT heading')).toBeNull()
@@ -269,7 +273,7 @@ describe('the pass', () => {
   })
 
   test('an item that comes back as an error is stored nowhere and not asked again at once', async () => {
-    const feed: DigestFeed = { headings: ['A fine heading', 'A POISON heading'], sessions: [] }
+    const feed: DigestFeed = { headings: ['A fine heading', 'A POISON heading'], sessions: [], complete: true }
     expect(await digest.pass(feed)).toMatchObject({ sent: 2, stored: 1, failedItems: 1 })
     expect(await digest.pass(feed)).toMatchObject({ called: false })
     const view = await digest.view()
@@ -305,7 +309,7 @@ describe('failure is quiet', () => {
   })
 
   test('a run that failed is not replayed to the retry; a slow one is asked for again', async () => {
-    const feed: DigestFeed = { headings: ['One heading'], sessions: [] }
+    const feed: DigestFeed = { headings: ['One heading'], sessions: [], complete: true }
     const key = (n: number) => calls()[n]?.args.at(-1)
     mode('fail')
     await digest.pass(feed)
@@ -313,11 +317,18 @@ describe('failure is quiet', () => {
     await digest.pass(feed)
     expect(key(1)).not.toBe(key(0))
     expect(key(1)?.endsWith('-1')).toBe(true)
-    const feed2: DigestFeed = { headings: ['Another heading'], sessions: [] }
+    const feed2: DigestFeed = { headings: ['Another heading'], sessions: [], complete: true }
     mode('pending')
     await digest.pass(feed2)
     await digest.pass(feed2)
     expect(key(3)).toBe(key(2))
+    // another batch succeeding in between does not hand the failed batch's key back
+    mode('fail')
+    await digest.pass({ headings: ['Third heading'], sessions: [], complete: true })
+    mode('ok')
+    await digest.pass({ headings: ['Fourth heading'], sessions: [], complete: true })
+    await digest.pass({ headings: ['Third heading'], sessions: [], complete: true })
+    expect(key(6)?.endsWith('-1')).toBe(true)
   })
 
   test('a slow call is a failed pass', async () => {
@@ -375,8 +386,8 @@ describe('the cache', () => {
   })
 
   test('a heading is made once per heading text, whichever plan has it', async () => {
-    await digest.pass({ headings: ['Same words'], sessions: [] })
-    await digest.pass({ headings: ['Same   words', 'Other words'], sessions: [] })
+    await digest.pass({ headings: ['Same words'], sessions: [], complete: true })
+    await digest.pass({ headings: ['Same   words', 'Other words'], sessions: [], complete: true })
     expect(calls().map((c) => c.items.map((i) => i.text))).toEqual([['Same words'], ['Other words']])
   })
 
@@ -401,7 +412,7 @@ describe('the cache', () => {
   })
 
   test('a partial feed does not make the cache forget', async () => {
-    await digest.pass({ headings: ['Kept for now'], sessions: [] })
+    await digest.pass({ headings: ['Kept for now'], sessions: [], complete: true })
     clock.advance(8 * 24 * 3_600_000)
     await digest.pass({ headings: ['Something else'], sessions: [], complete: false })
     const rows: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
@@ -409,9 +420,9 @@ describe('the cache', () => {
   })
 
   test('rows nobody wants are dropped after a week', async () => {
-    await digest.pass({ headings: ['Gone soon'], sessions: [] })
+    await digest.pass({ headings: ['Gone soon'], sessions: [], complete: true })
     clock.advance(8 * 24 * 3_600_000)
-    await digest.pass({ headings: ['Something else'], sessions: [] })
+    await digest.pass({ headings: ['Something else'], sessions: [], complete: true })
     const rows: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
     expect(rows[0]?.n).toBe(1)
   })
