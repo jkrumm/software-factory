@@ -588,13 +588,8 @@ const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
   try {
     return respond(Fleet, await fleet.refreshNow())
   } catch (error) {
-    return json(
-      {
-        error: `the fleet model could not be built: ${error instanceof Error ? error.message : String(error)}`,
-        code: 'build_failed',
-      },
-      503,
-    )
+    console.error('fleet refresh failed', error)
+    return json({ error: 'the fleet model could not be built; see the server log', code: 'build_failed' }, 503)
   }
 }
 

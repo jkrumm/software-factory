@@ -121,7 +121,15 @@ export class FleetBuilder {
 
   /** Waits for every build in flight or queued (the tick's and a refresh's), at most `timeoutMs`: shutdown and the tests. */
   async settled(timeoutMs = 20_000): Promise<void> {
-    await Promise.race([this.chain, Bun.sleep(timeoutMs)])
+    let timer: Timer | undefined
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+    })
+    try {
+      await Promise.race([this.chain, bound])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -218,7 +226,11 @@ export class FleetBuilder {
       firstSeen: this.firstSeen,
       errors,
     })
-    const fleet: Fleet = { ...model, fingerprint: fingerprintOf(model) }
+    // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
+    const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
+      JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),
+    )
+    const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
     this.firstSeen = new Map(fleet.asks.filter((a) => a.source === 'factory').map((a) => [a.id, a.at]))
     this.since = new Map(
       fleet.repos
