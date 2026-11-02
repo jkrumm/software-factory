@@ -630,7 +630,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   It runs on its own, off the tick (a classify takes minutes, and the tick's health is judged on it): the pump starts at most two, and a
   result is stored by its own transaction with an `issue_events` line (`classified`, or `classify_failed` with the reason). The answer
   `{ project, kind, class, size, tier, effort }` is zod-parsed. The Issue's repo decides the project, never the answer. Tier and effort
-  are cut to the role table's `lead` entry and never above `opus/high`. A classify that fails, times out, does not parse or whose
+  are cut to the role table's `lead` entry and never above `opus/high`, and a risky or business class or an incident is never below `sonnet/high`; the lead starts at that level worked out again against the table of that moment. A classify that fails, times out, does not parse or whose
   command is missing stores the `lead` entry as the defaults: the Issue is admitted all the same, never stuck. A restart loses what was in
   flight and the next pass asks again. Only an Issue with `classified_at` is admitted.
 - **Admission.** Each pass, under the capacity lock, the oldest classified `queued` Issue of each project and any urgent one (an incident, or
