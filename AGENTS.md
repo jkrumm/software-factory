@@ -60,7 +60,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   the same commit as the code it describes; behaviour goes to `docs/design.md` §3 "As built", not here.
 - Direct-to-master, conventional commits, no AI attribution.
 
-**Issues** are `docs/design.md` §4: `src/issues/lifecycle.ts` is the one writer of `issues.state` (a create, always `queued`, is `intake.ts`); past about 500 lines, stop. `FACTORY_AGW_BIN` is the `agw` Classify calls; `FACTORY_ALERT_LEADS=1` lets an `alert` Issue have a lead (off until Wave 4 is live). `issue_id` goes on a lead's session only.
+**Issues** are `docs/design.md` §4: `src/issues/lifecycle.ts` is the one writer of `issues.state` (a create, always `queued`, is `create.ts`; the door's `intake.ts` files through it); past about 500 lines, stop. `FACTORY_AGW_BIN` is the `agw` Classify calls; `FACTORY_ALERT_LEADS=1` lets an `alert` Issue have a lead (off until Wave 4 is live). `issue_id` goes on a lead's session only.
 
 **Behaviour as built** is in `docs/design.md` §3 "As built": the tick, spaces, the runner, hooks and the socket, prompt delivery,
 the rules that act, the spool, derived state, sessions, the witness, panes as clients, test slots, quota, admission, the queue
