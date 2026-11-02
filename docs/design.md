@@ -633,10 +633,12 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   are cut to the role table's `lead` entry and never above `opus/high`. A classify that fails, times out, does not parse or whose
   command is missing stores the `lead` entry as the defaults: the Issue is admitted all the same, never stuck. A restart loses what was in
   flight and the next pass asks again. Only an Issue with `classified_at` is admitted.
-- **Admission.** Each pass, under the capacity lock, the classified `queued` Issues (urgent first, then oldest) that the project's claim
-  has room for hold the claim and get `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. Held back, and still `queued`:
-  `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, and an `alert` while `FACTORY_ALERT_LEADS`
-  is unset (decision 3, until Wave 4 is live); `factory status` says which. Requests are not asked.
+- **Admission.** Each pass, under the capacity lock, the oldest classified `queued` Issue of each project and any urgent one (an incident, or
+  the owner's `urgent` class: Classify never answers `urgent`) are looked at; those the project's claim has room for hold the claim and get
+  `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. The rest of a project cannot go before its oldest and are not read.
+  Held back, and still `queued`: `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, and an `alert`
+  while `FACTORY_ALERT_LEADS` is unset (decision 3, until Wave 4 is live; it is left out of the reading, so it does not stand in front of a
+  request); `factory status` says which. Requests are not asked.
 - **Attach or start.** `start_lead` makes the worktree `factory/<issue>-<attempt>` of the repo the way `rd fan` does (`issues/worktree.ts`: fetch
   origin, branch from the default branch, `wtp` where the repo has `.wtp.yml`, outside any transaction, each step under a timeout; the same
   branch answers its worktree again) and creates the spawn: role `lead`, tier and effort from Classify, key and pane

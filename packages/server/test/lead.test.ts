@@ -640,6 +640,33 @@ describe('what the review found', () => {
     expect(await trail(id)).toContain('refused')
   })
 
+  test('only a project’s oldest queued Issue is looked at, and an incident takes the urgent place', async () => {
+    const repo = newRepo()
+    const first = await file(repo)
+    const second = await file(repo)
+    const third = await file(repo)
+    classifier.answer = (input: { id: number }) => ({
+      project: null,
+      kind: input.id === third ? 'incident' : 'bug',
+      class: 'routine',
+      size: 's',
+      tier: 'sonnet',
+      effort: 'medium',
+    })
+    await drive(8)
+    // The first holds the one ordinary place; the incident takes the urgent one; the second waits, and was never looked at.
+    expect((await issue(first)).state).toBe('working')
+    expect((await issue(third)).state).toBe('working')
+    expect((await issue(second)).state).toBe('queued')
+    const claims =
+      await db.sql`SELECT issue_id, urgent, held_at IS NOT NULL AS held FROM factory.claims ORDER BY issue_id`
+    expect(claims).toEqual([
+      { issue_id: first, urgent: false, held: true },
+      { issue_id: second, urgent: false, held: false },
+      { issue_id: third, urgent: true, held: true },
+    ])
+  })
+
   test('Issues the claim cannot take do not starve the ones behind them', async () => {
     const held = newRepo()
     for (let i = 0; i < 22; i++) await file(held, 'alert')
