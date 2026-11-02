@@ -9,7 +9,7 @@ import { FleetBuilder } from '../src/fleet/index.ts'
 import { HcError, type HcClient } from '../src/hc.ts'
 import { Places } from '../src/fleet/place.ts'
 import type { SinceReader } from '../src/fleet/since.ts'
-import { type HcCloser, type HcLister, type HcTerminal, HcTerminals } from '../src/fleet/sources.ts'
+import { type HcCloser, type HcLister, type HcTerminal, HcTerminals, NotClosed } from '../src/fleet/sources.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { loadMorning } from '../src/notify/digest.ts'
 import { startApp, TEST_TOKEN, type TestApp } from './support/app.ts'
@@ -37,15 +37,26 @@ let n = 0
 
 class FakeCloser implements HcCloser {
   calls: { address: string; cwd: string }[] = []
-  failures: string[] = []
+  /** each close takes the next one: an error is thrown with the terminal untouched, `partial` kills it and then throws */
+  failures: (Error | 'partial')[] = []
+  finished: string[] = []
   /** the list hc answers keeps the terminal (a stale listing) */
   keepListed = false
 
   async close(target: { address: string; cwd: string }): Promise<void> {
     const failure = this.failures.shift()
-    if (failure) throw new Error(failure)
+    if (failure === 'partial') {
+      terminals = terminals.filter((t) => t.address !== target.address)
+      throw new Error('hc rm timed out after the kill')
+    }
+    if (failure) throw failure
     this.calls.push(target)
     if (!this.keepListed) terminals = terminals.filter((t) => t.address !== target.address)
+  }
+
+  async finish(address: string): Promise<'gone' | 'live'> {
+    this.finished.push(address)
+    return terminals.some((t) => t.address === address) ? 'live' : 'gone'
   }
 }
 
@@ -300,19 +311,71 @@ describe('the reaper closes', () => {
     expect(closer.calls).toHaveLength(7)
   })
 
-  test('a close that fails is a line in errors, not logged, and retried at the next pass', async () => {
+  test('a close that did nothing takes its row back and is tried again at the next pass', async () => {
     const wt = worktree(freshRepo(), 'feat-retry', 'merged')
     terminals = [terminal('feat-retry', wt)]
-    closer.failures = ['hc timed out']
+    closer.failures = [new NotClosed('refused')]
     const builder = await setup('on')
     const first = Fleet.parse(await builder.refreshNow())
-    expect(first.errors.some((e) => e.includes('feat-retry') && e.includes('hc timed out'))).toBe(true)
+    expect(first.errors.some((e) => e.includes('feat-retry') && e.includes('refused'))).toBe(true)
     expect(closer.calls).toHaveLength(0)
     expect(first.reaper.closed).toHaveLength(0)
     expect(await reapedRows()).toHaveLength(0)
     const second = Fleet.parse(await builder.refreshNow())
     expect(closer.calls).toHaveLength(1)
     expect(second.errors.some((e) => e.includes('reaper:'))).toBe(false)
+    expect(await reapedRows()).toHaveLength(1)
+  })
+
+  test('a close that failed on an unknown footing keeps its row unsettled; the next pass finds the terminal still running and takes it back', async () => {
+    const wt = worktree(freshRepo(), 'feat-unsure', 'merged')
+    terminals = [terminal('feat-unsure', wt)]
+    closer.failures = [new Error('hc timed out')]
+    const builder = await setup('on')
+    const first = Fleet.parse(await builder.refreshNow())
+    expect(first.errors.some((e) => e.includes('hc timed out'))).toBe(true)
+    expect(first.reaper.closed).toHaveLength(0)
+    expect((await reapedRows()).map((r: { payload: { state?: string } }) => r.payload.state)).toEqual(['closing'])
+    expect(
+      (await Since.parse(await (await app.get(`/fleet/since?t=${NOW.toISOString()}`)).json())).handled,
+    ).toHaveLength(0)
+    const second = Fleet.parse(await builder.refreshNow())
+    expect(closer.finished).toHaveLength(1)
+    expect(closer.calls).toHaveLength(1)
+    expect(second.reaper.closed).toHaveLength(1)
+    const rows = await reapedRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.payload.state).toBeUndefined()
+  })
+
+  test('a kill that worked and a rm that failed: the next pass settles the row as closed, once', async () => {
+    const wt = worktree(freshRepo(), 'feat-half', 'merged')
+    terminals = [terminal('feat-half', wt)]
+    closer.failures = ['partial']
+    const builder = await setup('on')
+    const first = Fleet.parse(await builder.refreshNow())
+    expect(first.reaper.closed).toHaveLength(0)
+    const second = Fleet.parse(await builder.refreshNow())
+    expect(second.reaper.closed).toHaveLength(1)
+    expect(second.reaper.closed[0]).toMatchObject({ session: 'feat-half', dry: false })
+    const rows = await reapedRows()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.payload.state).toBeUndefined()
+    expect(closer.calls).toHaveLength(0)
+  })
+
+  test('a row left by a crash before the close, with the terminal still running, is taken back and the close is made', async () => {
+    const wt = worktree(freshRepo(), 'feat-crash', 'merged')
+    const session = terminal('feat-crash', wt)
+    terminals = [session]
+    await db.sql`
+      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+      VALUES ('reaped', ${wt}, 'stale-incarnation', 'Closed feat-crash', 'x', 'y',
+              ${JSON.stringify({ session: 'feat-crash', address: session.address, state: 'closing' })}::text::jsonb, ${clock.now()})`
+    const model = await reap('on')
+    expect(closer.finished).toEqual([session.address])
+    expect(closer.calls).toHaveLength(1)
+    expect(model.reaper.closed).toHaveLength(1)
     expect(await reapedRows()).toHaveLength(1)
   })
 })
@@ -564,6 +627,17 @@ describe('HcTerminals.close', () => {
       await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('not closed')
       expect(calls).toEqual(['terminal.get'])
     }
+  })
+
+  test('finish: gone when not found, removed when finished, live when it runs', async () => {
+    const gone = client({ 'terminal.get': { refuse: 'not_found' } })
+    expect(await gone.closer.finish('t1')).toBe('gone')
+    const dead = client({ 'terminal.get': { result: { ...live(), state: 'finished' } }, 'terminal.rm': { result: {} } })
+    expect(await dead.closer.finish('t1')).toBe('gone')
+    expect(dead.calls).toEqual(['terminal.get', 'terminal.rm'])
+    const running = client({ 'terminal.get': { result: live() } })
+    expect(await running.closer.finish('t1')).toBe('live')
+    expect(running.calls).toEqual(['terminal.get'])
   })
 
   test('a kill the core refused leaves it running: no rm, an error', async () => {

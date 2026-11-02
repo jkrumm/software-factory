@@ -80,6 +80,33 @@ export async function insertLog(sql: SQL, rows: readonly NewLogRow[], at: Date):
     ON CONFLICT (kind, subject, fingerprint) DO NOTHING`
 }
 
+/** A `reaped` row is written before the close with `payload.state = 'closing'` and settled after it; the readings show settled rows only. */
+export const CLOSING = `payload->>'state' = 'closing'`
+
+/** The reaper's rows whose close was not settled (a crash, an uncertain failure): the key and the terminal. */
+export async function closingReaped(sql: SQL): Promise<{ subject: string; fingerprint: string; address: string }[]> {
+  return await sql`
+    SELECT subject, fingerprint, payload->>'address' AS address FROM factory.fleet_triage_log
+    WHERE kind = 'reaped' AND payload->>'state' = 'closing' ORDER BY id LIMIT 20`
+}
+
+/** `closed`: the terminal is gone, the row stands. `untouched`: nothing happened, the row is taken back. */
+export async function settleReaped(
+  sql: SQL,
+  key: { subject: string; fingerprint: string },
+  outcome: 'closed' | 'untouched',
+): Promise<void> {
+  if (outcome === 'untouched') {
+    await sql`
+      DELETE FROM factory.fleet_triage_log
+      WHERE kind = 'reaped' AND subject = ${key.subject} AND fingerprint = ${key.fingerprint} AND payload->>'state' = 'closing'`
+    return
+  }
+  await sql`
+    UPDATE factory.fleet_triage_log SET payload = payload - 'state'
+    WHERE kind = 'reaped' AND subject = ${key.subject} AND fingerprint = ${key.fingerprint}`
+}
+
 export const toEntry = (r: LogRow): TriageEntry => ({
   id: r.id,
   kind: r.kind,
@@ -94,7 +121,7 @@ export const toEntry = (r: LogRow): TriageEntry => ({
 export async function listEntries(sql: SQL, limit = 100): Promise<TriageEntry[]> {
   const rows: RawLog[] = await sql`
     SELECT id, kind, subject, fingerprint, what, why, evidence, payload, at, undone_at
-    FROM factory.fleet_triage_log ORDER BY id DESC LIMIT ${limit}`
+    FROM factory.fleet_triage_log WHERE payload->>'state' IS DISTINCT FROM 'closing' ORDER BY id DESC LIMIT ${limit}`
   return rows.map((r) => toEntry(toRow(r)))
 }
 
