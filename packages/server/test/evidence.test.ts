@@ -329,6 +329,18 @@ describe('GitCommits, against a repo with an origin', () => {
     expect(found.paths).toContain('src/a.ts')
   })
 
+  test('ship: a reported commit already seen, with the branch merged only on the remote, is found after a fetch', async () => {
+    const { origin, clone, head, cut } = cloned('late')
+    fixture.git(clone, 'checkout', '-q', '-b', 'factory/1-1')
+    fixture.commit(clone, { 'src/b.ts': 'x' })
+    fixture.commit(origin, { 'docs/seen.md': 'y' })
+    fixture.git(clone, 'fetch', '-q', 'origin')
+    const reported = [head(origin)]
+    fixture.commit(origin, { 'src/b.ts': 'x' })
+    const found = await read({ repo: clone, cut, reported, merged: true })
+    expect(found.paths).toEqual(['docs/seen.md', 'src/b.ts'])
+  })
+
   test('every commit of the branch counts, however many, and a range that cannot be read is a failure', async () => {
     const { clone, cut } = cloned('long')
     fixture.git(clone, 'checkout', '-q', '-b', 'factory/1-1')
