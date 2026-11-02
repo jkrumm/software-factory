@@ -4,7 +4,7 @@
 # parks the Issue, the claim is held, nothing else happens; then `factory issue stop` ends it and finalize removes tab, worktree and claim.
 # Nobody types into the lead's pane. Evidence: docs/evidence/f2-gate/silent-lead/<run>/.
 # Usage: silent-lead.sh [run-id]     (exit 0: every pass line passed)
-# shellcheck disable=SC1091
+# shellcheck disable=SC1091,SC2034 # SCRATCH and FINISHED are read by lib.sh's on_exit
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 run=${1:-s$(date -u +%d%H%M)}
@@ -21,13 +21,15 @@ repo=$SOURCE_ROOT/$name remote=$REMOTES/$name.git
 healthy || { echo "silent-lead: the factory is not healthy" >&2; exit 1; }
 
 log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut -c1-12), base commit $(git -C "$ROOT" rev-parse --short HEAD)"
+SCRATCH=$name
 scratch_up "$name" "$F2_DIR/templates/silent"
 base_commits=$(git --git-dir="$remote" rev-list --count master)
 
 ask="Reply with the single word noted and end your turn. Run no command at all. The factory command is denied in this repo on purpose (see AGENTS.md): do not report, do not work around it. If a hook or message tells you to report, reply noted again and end your turn again."
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 silent lead"}')
-issue=$(fx issue new --repo "$repo" --title "Silent: $ask" --facts - --key "f2-silent-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
-[[ $issue =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
+filed=$(fx issue new --repo "$repo" --title "Silent: $ask" --facts - --key "f2-silent-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
+[[ $filed =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
+issue=$filed
 log "issue $issue filed (source_key f2-silent-$run)"
 
 state() { issue_col "$issue" "state || '/' || coalesce(reason, '')"; }
@@ -70,7 +72,9 @@ check "unreported inbox rows, applied" "1|applied" "$(sqlq "SELECT count(*)||'|'
 check "the unreported row is of the same turn as the send-back" "unreported:$issue:$lead:$sendback_turn" \
   "$(sqlq "SELECT key FROM factory.issue_inbox WHERE issue_id = $issue AND kind = 'unreported'")"
 check "notify:parked rows in factory.notifications" 1 "$(sqlq "SELECT count(*) FROM factory.notifications WHERE issue_id = $issue AND key LIKE 'notify:parked:$issue:%'")"
-note_line "owner's line: $(sqlq "SELECT status FROM (SELECT CASE WHEN sent_at IS NULL THEN 'pending' ELSE 'sent' END AS status FROM factory.notifications WHERE issue_id = $issue AND kind = 'parked') x" | head -1) - $(sqlq "SELECT text FROM factory.notifications WHERE issue_id = $issue AND kind = 'parked'" | head -1)"
+parked_sent() { [[ $(sqlq "SELECT count(*) FROM factory.notifications WHERE issue_id = $issue AND kind = 'parked' AND sent_at IS NOT NULL") -eq 1 ]]; }
+check "the parked line reached the owner's outbox as sent (within 60 s)" yes "$(wait_secs 60 parked_sent && echo yes || echo no)"
+note_line "owner's line: $(sqlq "SELECT text FROM factory.notifications WHERE issue_id = $issue AND kind = 'parked'" | head -1)"
 check "the claim repo:$name is held while the Issue is parked" "repo:$name|true" "$(sqlq "SELECT key||'|'||(held_at IS NOT NULL) FROM factory.claims WHERE issue_id = $issue")"
 check "the lead's session is still alive" yes "$(fx session get "$lead" --format json | jq -r 'if .state == "dead" then "no" else "yes" end')"
 check "no lead verb reached the inbox" 0 "$(sqlq "SELECT count(*) FROM factory.issue_inbox WHERE issue_id = $issue AND kind IN ('phase','wait','ship','close','block','ask','drop')")"
@@ -94,7 +98,7 @@ if [[ $(state) != closed/* ]]; then
   log "stop: $(tr '\n' ' ' <<<"$stop_out" | cut -c1-200)"
 fi
 export PROGRESS_CMD="progress_line $issue $lead"
-if wait_for "issue $issue finalized" is_finalized "$issue"; then fin=1; else fin=0; fi
+wait_for "issue $issue finalized" is_finalized "$issue" || true
 sleep 3
 dump_issue "$issue" "$out"
 terminals=$(terminals_of "$lead")
@@ -108,10 +112,13 @@ check "live terminals of the lead after finalize (tab closed)" 0 "$(jq '[.[] | s
 check "the lead's worktree directory after finalize" no "$([[ -d $wt ]] && echo yes || echo no)"
 check "the lead's branch factory/$issue-$attempt after finalize" gone "$(git -C "$repo" show-ref --verify --quiet "refs/heads/factory/$issue-$attempt" && echo present || echo gone)"
 check_ge "transcripts archived for the attempt (not a pass line of the brief)" 1 "$(wc -l <"$out/archive.txt" | tr -d ' ')"
-note_line "finalize reached: $fin; the server's tick errors since the run began are not read here"
 
 # ---- teardown and report ---------------------------------------------------------------------------------------------------------
-scratch_down "$name" | tee -a "$TIMELINE" >/dev/null || true
-log "run $gameday/$run: $((CHECKS_FAILED)) failed lines, wall $((SECONDS - started)) s"
+# The scratch repo goes only after finalize; a repo left behind is a failed line, not a quiet leftover.
+removed=yes
+finish_run "$name" "$issue" || removed=no
+FINISHED=1
+check "the scratch repo and its remote were removed" yes "$removed"
+log "run $gameday/$run: $CHECKS_FAILED failed lines, wall $((SECONDS - started)) s"
 write_report "$gameday" "$run" "$out" "$issue" "$lead" "$started" "F2 gameday: a silent lead"
 ((CHECKS_FAILED == 0))
