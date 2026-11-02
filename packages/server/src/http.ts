@@ -6,6 +6,7 @@ import {
   DoorRouteList,
   DoorUnroutedList,
   EventAck,
+  Fleet,
   Health,
   IntakeAck,
   IntakeInput,
@@ -50,6 +51,7 @@ import type { SQL } from 'bun'
 import { z } from 'zod'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { readSnapshot, type FleetBuilder } from './fleet/index.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
@@ -111,6 +113,8 @@ export interface AppDeps {
   notifyTarget?: string
   /** reads the commits a `ship` or a `close` names; git on the host unless a test says otherwise */
   commits?: Commits
+  /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
+  fleet?: Pick<FleetBuilder, 'refreshNow'>
 }
 
 /** Largest request body the server reads. */
@@ -571,6 +575,19 @@ const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => (
   unrouted: { GET: async () => respond(DoorUnroutedList, { unrouted: await listUnrouted(sql) }) },
 })
 
+/** `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). */
+const fleetGetHandler = (sql: SQL) => async () => {
+  const snapshot = await readSnapshot(sql)
+  if (!snapshot) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
+  return respond(Fleet, snapshot)
+}
+
+/** `POST /fleet/refresh`: a build now, answered with its model. */
+const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
+  if (!fleet) return json({ error: 'the fleet builder is not running', code: 'not_ready' }, 503)
+  return respond(Fleet, await fleet.refreshNow())
+}
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -603,6 +620,7 @@ export function routes({
   notifier = new NullNotifier(),
   notifyTarget = 'off',
   commits = new GitCommits(),
+  fleet,
 }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
@@ -636,6 +654,8 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
+    '/fleet': { GET: route(fleetGetHandler(sql)) },
+    '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots)),
@@ -738,7 +758,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), `GET /fleet` and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -773,6 +793,7 @@ export function serveHooks(deps: {
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
+      '/fleet': { GET: viaSocket(fleetGetHandler(deps.sql)) },
       '/issues': {
         GET: viaSocket(issueListHandler(deps.sql)),
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),

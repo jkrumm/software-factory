@@ -88,6 +88,22 @@ function gatedRunner() {
   return { runner, release, until, entered }
 }
 
+describe('the fleet model', () => {
+  test('a pass starts a build and does not wait for it, even when the build is stuck', async () => {
+    let kicks = 0
+    const stuck = new Promise<void>(() => {})
+    const fleet = {
+      kick: () => {
+        kicks++
+        void stuck
+      },
+    }
+    await tick({ ...deps(noType as unknown as Runner), fleet })
+    await tick({ ...deps(noType as unknown as Runner), fleet })
+    expect(kicks).toBe(2)
+  })
+})
+
 describe('the session of a spawn', () => {
   const sessionState = async (key: string) => (await getSession(db.sql, key, clock.now()))?.state
   const sessionRows = (key: string) => db.sql`SELECT pane FROM factory.sessions WHERE id = ${key}`

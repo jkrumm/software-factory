@@ -4,6 +4,7 @@ import { loadRoleTable, type RoleTable } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
+import type { FleetBuilder } from '../../src/fleet/index.ts'
 import type { Commits } from '../../src/issues/commits.ts'
 import { serve } from '../../src/http.ts'
 import type { Notifier } from '../../src/notify/port.ts'
@@ -52,6 +53,7 @@ export function startApp(deps: {
   notifier?: Notifier
   notifyTarget?: string
   commits?: Commits
+  fleet?: Pick<FleetBuilder, 'refreshNow'>
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)
