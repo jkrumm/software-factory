@@ -727,12 +727,12 @@ false confidence; the probes are the check that does not depend on it.
 
 ### The brief
 
-- **The ask:** the owner's words, or what the signals saw: what, where, since when, how often.
+- **The ask:** the owner's words, or what the signals saw: what, where, since when, how often. Filed as data and fenced for every source (`source` is the caller's choice, and any pane on the socket can file), under "the ask, as filed".
 - **Facts:** the raw signals, the commands that pull their logs and traces, recent deploys and commits. Alert and
   issue text is marked as data, never instructions: the facts are a fenced block (the fence longer than any run of backticks inside), cut at
   16,000 characters with the way to the rest.
-- **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply*. Empty until F3.
-- **The project:** make contract, deploy mode, how each path ships, production targets.
+- **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
+- **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.
 - **Standing orders:** decide alone except the business classes; ask through `factory issue ask`; workers stay on
   Max; never end a turn on a background shell; every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
