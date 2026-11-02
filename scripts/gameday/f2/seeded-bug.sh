@@ -26,10 +26,9 @@ healthy || { echo "seeded-bug: the factory is not healthy" >&2; exit 1; }
 log "run $gameday/$run: release $(fx health --format json | jq -r .version | cut -c1-12), base commit $(git -C "$ROOT" rev-parse --short HEAD)"
 # A previous run's production, under the gameday's own directory; anything else at that path is not ours to delete.
 [[ ! -e $deployed || -e $deployed/REVISION ]] || { log "$deployed exists and is no gameday deployment; leaving it"; exit 1; }
-rm -rf "${deployed:?}"
-extra_cleanup() { rm -rf "${deployed:?}"; }
-SCRATCH=$name
+extra_cleanup() { rm -rf "${deployed:?}" && [[ ! -e $deployed ]]; }
 scratch_up "$name" "$F2_DIR/templates/bug"
+extra_cleanup # scratch_up has refused anything that is not ours, so a previous production is this gameday's leftover
 check_out=$(make -s -C "$repo" check 2>&1) || { log "make check FAILED on the scratch repo: $(tail -3 <<<"$check_out" | tr '\n' ' ')"; exit 1; }
 log "make check on the scratch repo: $(tail -1 <<<"$check_out")"
 # The seed is armed before the Issue is filed: the CR is in origin/master's production config, `make check` is green, and the deployed
@@ -43,6 +42,7 @@ log "seed armed: the deployed copy before the Issue says: $(tr '\n' ' ' <<<"$arm
 [[ $armed == *"is not a number"* ]] || { log "seed NOT armed"; exit 1; }
 
 ask="Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it."
+SOURCE_KEY=f2-bug-$run
 facts=$(jq -cn --arg ask "$ask" '{ask: $ask, gameday: "f2 seeded bug"}')
 filed=$(fx issue new --repo "$repo" --title "$ask" --facts - --key "f2-bug-$run" --format json <<<"$facts" | jq -r '.id // .issue.id')
 [[ $filed =~ ^[0-9]+$ ]] || { log "no Issue id from issue new"; exit 1; }
@@ -101,7 +101,7 @@ first_ship=$(sqlq "SELECT to_char(min(at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH
 bitten=0
 for t in "$archive"/*.jsonl; do
   [[ -f $t ]] || continue
-  bitten=$((bitten + $(jq -r --arg ship "${first_ship:-9999}" 'select(.type == "user" and (.timestamp // "") < $ship) | .message.content | if type == "array" then .[] else empty end | select(.type == "tool_result") | (.content | if type == "string" then . else map(.text // "") | join(" ") end) | select(test("(^|\n)verify: FAIL the deployed copy: wordstat: MAX_WORDS")) | 1' "$t" | wc -l | tr -d ' ')))
+  bitten=$((bitten + $(jq -r --arg ship "${first_ship:-9999}" 'select(.type == "user" and (.timestamp // "9999") < $ship) | .message.content | if type == "array" then .[] else empty end | select(.type == "tool_result") | (.content | if type == "string" then . else map(.text // "") | join(" ") end) | select(test("(^|\n)verify: FAIL the deployed copy: wordstat: MAX_WORDS")) | 1' "$t" | wc -l | tr -d ' ')))
 done
 ships=$(sqlq "SELECT count(*) FROM factory.issue_events WHERE issue_id = $issue AND kind = 'ship' AND to_state = 'watching'")
 regressions=$(ev regression)
@@ -138,7 +138,12 @@ fi
 check "production now: the deployed copy's self test" "selftest: ok words=9 lines=2" "$("$deployed/bin/wordstat" --self-test 2>&1 || true)"
 check "the shipped program: --longest on the sample names the longest word (the deployed copy)" yes \
   "$(printf 'the quick brown fox\njumps over the lazy dog\n' | "$deployed/bin/wordstat" --longest 2>&1 | grep -q 'words=9 lines=2.*longest=quick' && echo yes || echo no)"
-check_ge "the requested test is on origin/master (test/run.sh mentions longest)" 1 "$(git --git-dir="$remote" show master:test/run.sh | grep -c longest || true)"
+# The requested test: master's own test/run.sh passes and has an expectation that runs --longest (a comment would not count).
+tree=$(mktemp -d)
+git --git-dir="$remote" archive master | tar -x -C "$tree"
+check "origin/master's test/run.sh passes" "check: ok" "$(cd "$tree" && bash test/run.sh 2>&1 | tail -1)"
+check_ge "expectations in test/run.sh that run --longest" 1 "$(grep -cE '^[[:space:]]*expect .*--longest' "$tree/test/run.sh" || true)"
+rm -rf "${tree:?}"
 wt=$repo/.claude/worktrees/factory-$issue-$attempt
 terminals=$(terminals_of "$lead")
 echo "$terminals" | scrub >"$out/hc-terminals.json"
