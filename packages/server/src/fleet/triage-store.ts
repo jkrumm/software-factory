@@ -96,7 +96,7 @@ export async function oldClosing(
   const rows: { id: string; what: string; evidence: string; at: Date; payload: { session?: string; repo?: string } }[] =
     await sql`
     SELECT id, what, evidence, at, payload FROM factory.fleet_triage_log
-    WHERE kind = 'reaped' AND payload->>'state' = 'closing' AND at < ${before} ORDER BY id LIMIT 50`
+    WHERE kind = 'reaped' AND payload->>'state' = 'closing' AND at < ${before} ORDER BY id LIMIT 500`
   return rows.map((r) => ({
     id: Number(r.id),
     session: r.payload.session ?? '',

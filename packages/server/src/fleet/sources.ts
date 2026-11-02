@@ -81,15 +81,16 @@ export interface HcCloser {
 /** The close did nothing: the terminal was not touched. */
 export class NotClosed extends Error {}
 
-/** Whether a terminal runs Claude Code: its status says so, its foreground program or first argument is `claude`, or it carries Claude's session label. */
+/**
+ * Whether a terminal runs Claude Code, the one answer for the list and the close. When the core reports a foreground program, that program
+ * decides (its name is `claude`, or `claude` is one of its arguments: `node …/claude`); a status or label can outlive the program, so a shell
+ * in its place is never Claude Code. With no foreground reported, the status app, the first argument or Claude's session label say.
+ */
 function isClaude(t: z.output<typeof Record_>): boolean {
-  const first = t.foreground?.argv[0] ?? t.argv[0] ?? ''
-  return (
-    t.status?.app === 'claude-code' ||
-    t.foreground?.name === 'claude' ||
-    first.split('/').at(-1) === 'claude' ||
-    'jk.claude.session' in t.labels
-  )
+  const named = (arg: string) => arg.split('/').at(-1) === 'claude'
+  const fg = t.foreground
+  if (fg && (fg.name || fg.argv.length > 0)) return fg.name === 'claude' || fg.argv.some(named)
+  return t.status?.app === 'claude-code' || t.argv.some(named) || 'jk.claude.session' in t.labels
 }
 
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
@@ -152,8 +153,7 @@ export class HcTerminals implements HcLister, HcCloser {
     return terminals
       .filter((t) => t.state === 'live')
       .map((t) => {
-        const argv = t.foreground?.argv.length ? t.foreground.argv : t.argv
-        const claude = t.status?.app === 'claude-code' || t.foreground?.name === 'claude' || argv.includes('claude')
+        const claude = isClaude(t)
         // The prompt an agent started with is its longest argument; a short one is a flag.
         const prompt = [...t.argv].sort((a, b) => b.length - a.length)[0] ?? null
         return {
