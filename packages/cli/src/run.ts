@@ -272,7 +272,10 @@ const statusIssueLine = (i: StatusIssue) =>
 export function statusScreen(s: Status): string {
   const section = (title: string, rows: string[]) => [title, ...(rows.length ? rows.map((r) => `  ${r}`) : ['  -'])]
   return [
-    ...section('ATTENTION', s.attention),
+    ...section(
+      'ATTENTION',
+      s.attention.map((line) => oneLine(line, 1_000)),
+    ),
     ...section('ISSUES', [
       ...s.issues.map(statusIssueLine),
       ...(s.issuesMore > 0 ? [`... ${s.issuesMore} more not shown`] : []),
@@ -323,20 +326,7 @@ const issueLine = (i: IssueSummary) =>
     .map((value) => (typeof value === 'string' ? oneLine(value, 1000) : cell(value)))
     .join('\t')
 
-/** The words a person wrote or a refusal gave (a note's text, a refusal's detail): shown whole, up to what a verb accepts. */
-const WORDS = new Set([
-  'text',
-  'detail',
-  'reason',
-  'summary',
-  'note',
-  'question',
-  'answer',
-  'why',
-  'document',
-  'default',
-  'phase',
-])
+/** Longest a value of a payload is shown: what a note or a refusal says is whole up to what a verb accepts. */
 const WORDS_MAX = 4_000
 
 /**
@@ -348,7 +338,7 @@ const payloadSummary = (payload: unknown): string => {
   if (typeof payload !== 'object' || Array.isArray(payload)) return oneLine(payload, WORDS_MAX)
   return Object.entries(payload as Record<string, unknown>)
     .filter(([name]) => name !== 'derived' && name !== 'attempt')
-    .map(([name, value]) => `${oneLine(name, 40)}=${oneLine(value, WORDS.has(name) ? WORDS_MAX : 60)}`)
+    .map(([name, value]) => `${oneLine(name, 40)}=${oneLine(value, WORDS_MAX)}`)
     .join(' ')
 }
 
@@ -364,7 +354,7 @@ const timelineLine = (t: TimelineEntry) =>
     .join('\t')
 
 /** One Issue for a terminal: its row, its facts as one cut line of data, its evidence, its questions, then the story, oldest first. */
-export function issueViewScreen(v: IssueView): string {
+function issueViewScreen(v: IssueView): string {
   return [
     issueLine(v),
     `facts\t${oneLine(v.facts, 400)}`,

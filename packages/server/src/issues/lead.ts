@@ -154,7 +154,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
                 SET session = EXCLUDED.session, text = EXCLUDED.text, status = 'delivered', sent_count = 1, error = NULL,
                     failed_at = NULL, claimed_at = NULL, created_at = EXCLUDED.created_at, sent_at = EXCLUDED.created_at,
                     delivered_at = EXCLUDED.created_at
-                WHERE (factory.prompts.status NOT IN ('sent', 'delivered') AND factory.prompts.claimed_at IS NULL)
+                WHERE factory.prompts.status NOT IN ('sent', 'delivered', 'typing')
                   OR NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.id = factory.prompts.session)`
           }
         },

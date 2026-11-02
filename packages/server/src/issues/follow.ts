@@ -16,11 +16,11 @@ import { unmetKinds } from './evidence.ts'
 import { getIssue } from './read.ts'
 
 /** Open Issues the status screen lists; the rest are counted. */
-export const STATUS_ISSUES = 40
+const STATUS_ISSUES = 40
 /** A closed Issue stays on the screen this long when its finalize failed. */
 const FINALIZE_SHOWN_MS = 24 * 3_600_000
 /** Entries of an Issue's story `GET /issues/:id/timeline` returns, newest ones; the count of the rest is in the answer. */
-export const TIMELINE_ENTRIES = 500
+const TIMELINE_ENTRIES = 500
 const EVIDENCE_ENTRIES = 200
 
 /** What the owner needs first: a failed finalize, then Issues that wait, then the running, then the queue. */
@@ -53,6 +53,14 @@ const isKind = (value: unknown): value is EvidenceKind => EVIDENCE_KINDS.some((k
  * listed.
  */
 export async function statusIssues(sql: SQL, now: Date): Promise<{ issues: StatusIssue[]; more: number }> {
+  // One snapshot: an Issue that closes between the choice and the lookup would be shown after it left the list.
+  return sql.begin(async (tx) => {
+    await tx`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`
+    return readStatusIssues(tx, now)
+  })
+}
+
+async function readStatusIssues(sql: SQL, now: Date): Promise<{ issues: StatusIssue[]; more: number }> {
   const since = new Date(now.getTime() - FINALIZE_SHOWN_MS)
   // Which Issues are shown is decided on the Issue row alone; only those 40 are looked into (lead, phase, questions, derived evidence).
   const shown: { id: number; total: string }[] = await sql`

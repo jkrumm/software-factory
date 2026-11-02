@@ -858,7 +858,7 @@ describe('what review round 4 found', () => {
     expect(effect?.error).toContain('is not running yet')
   })
 
-  test('a prompt in flight to an earlier lead is not taken over by the next brief', async () => {
+  test('a prompt being typed to an earlier lead is not taken over by the next brief', async () => {
     const { id, key } = await lead()
     runner.answer = 'busy'
     await note(id, { id: 'flying', text: 'being typed right now' })
@@ -873,6 +873,34 @@ describe('what review round 4 found', () => {
     expect(runner.started[1]?.prompt).toContain('being typed right now')
     expect((await promptsOf(key)).map((p) => [p.id, p.status])).toEqual([[`issue:${id}:note:flying`, 'typing']])
     expect(await promptsOf(leadKey(id, 2))).toEqual([])
+  })
+
+  test('a prompt that was typed once and is waiting for a retry moves to the next lead', async () => {
+    const { id, key } = await lead()
+    runner.answer = 'busy'
+    await note(id, { id: 'retry', text: 'typed once, no turn since' })
+    await drive(2)
+    // The claim of the first typing stays on the row after the retry was queued.
+    await db.sql`UPDATE factory.prompts SET status = 'pending', claimed_at = ${clock.now()}, sent_count = 1 WHERE source = 'note'`
+    await post(id, 'drop', { reason: 'x', session: key })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    expect(runner.started[1]?.prompt).toContain('typed once, no turn since')
+    expect((await promptsOf(leadKey(id, 2))).map((p) => [p.id, p.status])).toEqual([
+      [`issue:${id}:note:retry`, 'delivered'],
+    ])
+    expect(await promptsOf(key)).toEqual([])
+  })
+
+  test('the options of a question are shown whole', async () => {
+    const { id, key } = await lead()
+    const option = `${'o'.repeat(190)}END`
+    await post(id, 'ask', { id: 'q', question: 'Which?', options: [option, 'b'], session: key })
+    await drive(2)
+    const shown = await factory({}, 'issue', 'show', String(id), '--format', 'plain')
+    expect(shown.stdout).toContain(`${option}`)
   })
 
   test('a session’s events waiting in the inbox are not the Issue’s story', async () => {
