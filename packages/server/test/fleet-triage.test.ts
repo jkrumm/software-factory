@@ -16,7 +16,7 @@ import {
   type QueueReader,
   QueueUnavailable,
 } from '../src/fleet/sources.ts'
-import { businessClass, decide, targetsOf } from '../src/fleet/triage.ts'
+import { businessClass, decide, gatherFindings, targetsOf } from '../src/fleet/triage.ts'
 import { startApp, TEST_ROLES, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { buildEstate, type Estate, estateTerminals } from './support/fleet-estate.ts'
@@ -747,6 +747,65 @@ describe('the rules, alone', () => {
     expect(targetsOf({ text: 'remove X.app', cmd: null }, [], undefined)).toEqual([])
     // A machine the text names and nothing is configured for is not the queue's machine.
     expect(targetsOf({ text: 'homelab: remove X.app', cmd: null }, ['macbook'], 'macbook')).toEqual([])
+    // Nor is one the text names by a prefix alone.
+    expect(targetsOf({ text: 'nas: remove X.app', cmd: null }, ['macbook'], 'macbook')).toEqual([])
+    expect(targetsOf({ text: 'remove the mini-app X.app', cmd: null }, ['macbook'], 'macbook')).toHaveLength(1)
+  })
+
+  test('a probe pass stops at its deadline, between probes, and the next one starts further on', async () => {
+    let t = 0
+    const seen: string[] = []
+    const slow: Probes = {
+      exists: async (_machine, path) => {
+        seen.push(path)
+        t += 6_000 // each probe takes 6 s of the pass's 15
+        return false
+      },
+      newerDeploy: async () => undefined,
+    }
+    const mk = (id: string): FleetAsk => ({
+      id: `queue:${id}`,
+      kind: 'human',
+      repo: null,
+      session: null,
+      plan: null,
+      short: null,
+      text: `MacBook: remove ${id}.app`,
+      source: 'queue',
+      at: iso(9),
+      tier: 'yours',
+      suggestion: null,
+      actions: [],
+      folded: [],
+    })
+    const names = ['a', 'b', 'c', 'd', 'e', 'f']
+    const asks = names.map(mk)
+    const queueOf = new Map(
+      names.map((n) => [
+        n,
+        { id: n, text: `MacBook: remove ${n}.app`, cmd: `trash /Applications/${n}.app`, askedAt: iso(9), state: null },
+      ]),
+    )
+    const run = (offset: number) =>
+      gatherFindings({
+        asks,
+        queue: queueOf,
+        repos: [],
+        now: NOW,
+        probes: slow,
+        machines: ['macbook'],
+        queueMachine: 'macbook',
+        roots: [],
+        offset,
+        clock: () => t,
+      })
+    // Six probes would take 36 s: the pass stops once 15 s are spent (after the third, which ends at 18 s).
+    await run(0)
+    expect(seen).toEqual(['/Applications/a.app', '/Applications/b.app', '/Applications/c.app'])
+    t = 0
+    seen.length = 0
+    await run(3)
+    expect(seen).toEqual(['/Applications/d.app', '/Applications/e.app', '/Applications/f.app'])
   })
 
   test('probe hosts are names and ssh aliases, nothing else', () => {

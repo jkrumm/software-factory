@@ -15,6 +15,10 @@ CREATE TABLE factory.fleet_triage_log (
   UNIQUE (kind, subject, fingerprint)
 );
 
+-- The rows that change the model, however old (the build reads exactly these every 30 s).
+CREATE INDEX fleet_triage_log_effect_idx ON factory.fleet_triage_log (id)
+  WHERE (kind IN ('fold', 'dismiss_note') AND undone_at IS NULL) OR (kind = 'plan_stale' AND undone_at IS NOT NULL);
+
 -- What the owner did with an ask, through POST /fleet/asks/:id/act. An ask is closed once (resolve, deny or hand_off: one of them,
 -- ever), a plan is archived once per ask; a repeated act answers with the first. `later` is a timer, the latest `until` wins.
 CREATE TABLE factory.fleet_acts (
