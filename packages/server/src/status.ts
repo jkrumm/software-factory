@@ -1,6 +1,7 @@
 import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
+import { issueAttention } from './issues/attention.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
 import { BLOCKED_AFTER_MS } from './rules.ts'
@@ -45,7 +46,7 @@ function attention(
 }
 
 /** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, pending notes. */
-export async function buildStatus(sql: SQL, now: Date): Promise<Status> {
+export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: boolean } = {}): Promise<Status> {
   const loaded = (await loadSessions(sql, now)).filter((s) => s.view.state !== 'dead')
   loaded.sort(
     (a, b) =>
@@ -60,7 +61,10 @@ export async function buildStatus(sql: SQL, now: Date): Promise<Status> {
     .sort((a, b) => Number(a.status === 'failed') - Number(b.status === 'failed'))
   return {
     now: now.toISOString(),
-    attention: attention(loaded, notes, spawns, now),
+    attention: [
+      ...attention(loaded, notes, spawns, now),
+      ...(await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })),
+    ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
     accounts: (await latestReadings(sql)).map((r) => toQuota(r, now)),

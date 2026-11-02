@@ -1,4 +1,6 @@
 import type { SQL } from 'bun'
+import { admitIssues } from './admission.ts'
+import type { Classification } from './classify.ts'
 import { type EffectPorts, runEffects } from './effects.ts'
 import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
@@ -86,9 +88,17 @@ export async function processInbox(sql: SQL, now: () => Date): Promise<string[]>
   return errors
 }
 
-/** One tick's work on Issues: passed timers become inbox rows, the inbox moves Issues, the effects they asked for run. */
-export async function issuePass(sql: SQL, input: { now: () => Date; ports: EffectPorts }): Promise<string[]> {
+/**
+ * One tick's work on Issues: Classify is started for the Issues that have none (it runs on its own), passed timers become inbox
+ * rows, Issues the claim has room for are admitted, the inbox moves Issues, and the effects they asked for run.
+ */
+export async function issuePass(
+  sql: SQL,
+  input: { now: () => Date; ports: EffectPorts; classification?: Classification; alertLeads?: boolean },
+): Promise<string[]> {
+  await input.classification?.start()
   await fireTimers(sql, input.now())
+  await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)
   return [...errors, ...(await runEffects(sql, input.ports, input.now))]
 }

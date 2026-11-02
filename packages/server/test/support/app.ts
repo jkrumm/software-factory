@@ -46,6 +46,7 @@ export function startApp(deps: {
   repoRoots?: readonly string[]
   roles?: RoleTable
   projects?: Pick<ProjectSync, 'syncNow'>
+  alertLeads?: boolean
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)

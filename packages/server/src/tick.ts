@@ -6,6 +6,7 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
+import type { Classification } from './issues/classify.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
@@ -38,6 +39,10 @@ export interface TickDeps {
   quota?: QuotaPoller
   /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
   issuePorts?: EffectPorts
+  /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
+  classification?: Classification
+  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead (decision 3: off until Wave 4 is live) */
+  alertLeads?: boolean
   /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
   projects?: ProjectSync
 }
@@ -181,7 +186,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
             first_claimed_at = COALESCE(first_claimed_at, ${now})
         WHERE key = ${row.key}`
       // From the claim on it is a session that is starting; the hooks' first event ends that.
-      await openSession(tx, { id: row.key, spawnKey: row.key, pane: null, at: now })
+      await openSession(tx, { id: row.key, spawnKey: row.key, pane: null, issueId: row.issue_id, at: now })
       live.sessions?.push({ id: row.key, repo: row.repo, role: row.role, finished: false })
       claims.push({
         key: row.key,
@@ -343,7 +348,14 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
   try {
     const now = () => deps.clock.now()
-    result.errors.push(...(await issuePass(deps.sql, { now, ports: deps.issuePorts ?? {} })))
+    result.errors.push(
+      ...(await issuePass(deps.sql, {
+        now,
+        ports: deps.issuePorts ?? {},
+        classification: deps.classification,
+        alertLeads: deps.alertLeads ?? false,
+      })),
+    )
   } catch (error) {
     result.errors.push(`issues: ${error instanceof Error ? error.message : String(error)}`)
   }

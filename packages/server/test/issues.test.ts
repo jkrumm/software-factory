@@ -1050,6 +1050,22 @@ describe('effects', () => {
   })
 })
 
+describe('effects with no port', () => {
+  test('a check that has no port yet does not hold back the lead’s note', async () => {
+    const world = new World()
+    // Only the lead has ports; `verify` (Wave 4) has none.
+    const lead = { start_lead: world.ports.start_lead, note_lead: world.ports.note_lead }
+    const id = await working()
+    await step(id, 'ship', undefined, lead)
+    await step(id, 'hold_over', { hold: 1 }, lead)
+    expect(await effects(id)).toEqual(['start_lead', 'verify'])
+    await step(id, 'signal', { regression: true }, lead)
+    expect(world.calls.filter((c) => c.startsWith('note_lead'))).toHaveLength(1)
+    const open = await db.sql`SELECT kind FROM factory.issue_effects WHERE issue_id = ${id} AND done_at IS NULL`
+    expect(open.map((r: { kind: string }) => r.kind)).toEqual(['verify'])
+  })
+})
+
 describe('the replay test: a crash after every effect', () => {
   type Action = { send: string; payload?: Record<string, unknown> } | { advance: number }
   // One Issue through everything that has an effect: a lead, notes, two holds, proof, finalize.

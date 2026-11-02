@@ -42,7 +42,8 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
   await tx`INSERT INTO factory.sessions (id, created_at) VALUES (${event.session}, ${event.at}) ON CONFLICT (id) DO NOTHING`
   // A session of a spawn is the spawn's: its pane is known from the start.
   await tx`
-    UPDATE factory.sessions s SET spawn_key = p.key, pane = COALESCE(s.pane, p.session), tab = COALESCE(s.tab, p.tab)
+    UPDATE factory.sessions s SET spawn_key = p.key, pane = COALESCE(s.pane, p.session), tab = COALESCE(s.tab, p.tab),
+      issue_id = COALESCE(s.issue_id, p.issue_id)
     FROM factory.spawns p
     WHERE s.id = ${event.session} AND p.key = s.id AND s.spawn_key IS NULL`
   if (event.kind === 'session_started') {
@@ -76,13 +77,13 @@ export async function recordIn(tx: SQL, event: EventInput): Promise<{ duplicate:
  */
 export async function openSession(
   tx: SQL,
-  input: { id: string; spawnKey: string; pane: string | null; tab?: string | null; at: Date },
+  input: { id: string; spawnKey: string; pane: string | null; tab?: string | null; issueId?: number | null; at: Date },
 ): Promise<void> {
   await tx`
-    INSERT INTO factory.sessions (id, spawn_key, pane, tab, created_at)
-    VALUES (${input.id}, ${input.spawnKey}, ${input.pane}, ${input.tab ?? null}, ${input.at})
+    INSERT INTO factory.sessions (id, spawn_key, pane, tab, issue_id, created_at)
+    VALUES (${input.id}, ${input.spawnKey}, ${input.pane}, ${input.tab ?? null}, ${input.issueId ?? null}, ${input.at})
     ON CONFLICT (id) DO UPDATE SET spawn_key = EXCLUDED.spawn_key, pane = COALESCE(EXCLUDED.pane, factory.sessions.pane),
-      tab = COALESCE(EXCLUDED.tab, factory.sessions.tab)`
+      tab = COALESCE(EXCLUDED.tab, factory.sessions.tab), issue_id = COALESCE(EXCLUDED.issue_id, factory.sessions.issue_id)`
 }
 
 /** A spawn that gave up never became a session: its row, if it never got a pane or an event, goes. True if it went. */
