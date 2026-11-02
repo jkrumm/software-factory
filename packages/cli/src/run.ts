@@ -39,6 +39,10 @@ import {
   SpawnList,
   Status,
   WaitOn,
+  ActIntent,
+  ActResult,
+  TriageEntry,
+  TriageList,
 } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
 import { BIN, call, DEFAULT_URL, type Io } from './client.ts'
@@ -68,6 +72,13 @@ commands:
                   the fleet read model (plain: asks first, then the repos with a running plan, then the digest; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
+  fleet act <ask> <intent> [--note <text>] [--until <time>]
+                  do something with an ask (token only): resolve (a queue request, marked done), deny (a queue request, or a decision answered with a
+                  denial), later (hide it until --until, default 24 h), archive_plan (a worker moves a done plan to docs/waves/archive/), hand_off (a
+                  worker starts on it; its end comes back as a new ask). Only what the ask's \`actions\` offer; a repeat answers with the first
+  fleet triage [--undo <id>]
+                  what the triage did on its own (a stale plan marked, an ask folded under a newer one, an expired note dismissed), newest first;
+                  --undo takes one back. It never runs a command and never denies
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -167,6 +178,7 @@ commands:
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
 --pending       notify list: only what is not sent
+--undo <id>     fleet triage: take an automatic decision back
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --kind, --link, --file, --stdin  issue evidence
 --attempt <n>    issue resume: which attempt (default: the latest)
@@ -336,7 +348,13 @@ export function fleetScreen(f: Fleet): string {
   out.push('ASKS')
   if (f.asks.length === 0) out.push('  -')
   for (const a of f.asks) {
-    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.short ?? a.text, 100)}`)
+    out.push(
+      `  ${a.id}\t${a.kind}\t${a.tier}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.short ?? a.text, 100)}`,
+    )
+    if (a.suggestion) {
+      out.push(`    suggest ${a.suggestion.verb} (${a.suggestion.confidence})\t${oneLine(a.suggestion.evidence, 160)}`)
+    }
+    if (a.actions.length > 0) out.push(`    actions ${a.actions.map((x) => x.intent).join(' ')}`)
   }
   out.push('REPOS')
   const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))
@@ -365,6 +383,11 @@ export function fleetScreen(f: Fleet): string {
   }
   return out.join('\n')
 }
+
+const triageLine = (t: TriageEntry) =>
+  [t.id, t.kind, t.at, t.undoneAt ? `undone ${t.undoneAt}` : '-', oneLine(t.what, 120), oneLine(t.evidence, 160)].join(
+    '\t',
+  )
 
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
@@ -483,6 +506,7 @@ interface Flags {
   expires?: string
   decision?: string
   pending?: boolean
+  undo?: string
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -701,7 +725,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, spawnLine(body))
   }
 
-  if (key === 'fleet') {
+  if (words[0] === 'fleet') {
     if (!io.env.FACTORY_TOKEN) {
       throw new FactoryError(
         'auth',
@@ -711,6 +735,49 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         },
       )
     }
+    if (key === 'fleet act') throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>]')
+    if (words[1] === 'act') {
+      const [, , ask, intent] = words
+      if (!ask || !intent || words.length > 4)
+        throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>]')
+      const parsed = ActIntent.safeParse(intent)
+      if (!parsed.success) throw usage(`intent is one of ${ActIntent.options.join(', ')}`)
+      const { body } = await call(io, `/fleet/asks/${encodeURIComponent(ask)}/act`, {
+        method: 'POST',
+        auth: true,
+        timeoutMs: 60_000,
+        schema: ActResult,
+        body: {
+          intent: parsed.data,
+          ...(flags.note ? { note: flags.note } : {}),
+          ...(flags.until ? { until: flags.until } : {}),
+        },
+      })
+      return print(
+        body,
+        [
+          body.ask,
+          body.intent,
+          body.duplicate ? 'again' : 'done',
+          body.spawn ?? body.until ?? '-',
+          oneLine(body.detail, 200),
+        ].join('\t'),
+      )
+    }
+    if (words[1] === 'triage') {
+      if (words.length > 2) throw usage('usage: fleet triage [--undo <id>]')
+      if (flags.undo !== undefined) {
+        const id = Number(flags.undo)
+        if (!Number.isSafeInteger(id) || id <= 0) throw usage('--undo takes a triage entry id')
+        const { body } = await call(io, `/fleet/triage/${id}/undo`, { method: 'POST', auth: true, schema: TriageEntry })
+        return print(body, triageLine(body))
+      }
+      const { body } = await call(io, '/fleet/triage', { auth: true, schema: TriageList })
+      if (format === 'plain' && body.entries.length === 0) return
+      return print(body, body.entries.map(triageLine).join('\n'))
+    }
+    if (words.length > 1)
+      throw usage('usage: fleet [--refresh] | fleet act <ask> <intent> | fleet triage [--undo <id>]')
     const refresh = flags.refresh === true
     const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {
       method: refresh ? 'POST' : 'GET',
@@ -1147,5 +1214,6 @@ const OPTIONS = {
   expires: { type: 'string' },
   decision: { type: 'string' },
   pending: { type: 'boolean' },
+  undo: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

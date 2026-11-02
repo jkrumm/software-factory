@@ -1108,7 +1108,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 
 One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
 `docs/waves/fv.md`). Wave 1 is the deterministic half; Wave 2 (below, "The digest") adds the model text: `short`, `headline` and the asks found
-in a session's last message. `suggestion` and `actions` stay null or empty until Wave 3.
+in a session's last message. Wave 3 (below, "Triage and actions") adds `tier`, `suggestion` and `actions` to every ask.
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `repos[]` (`name`, `space`, `visible`, `git`, `plan`, `morePlans`, `sessions[]`), `unplaced[]` (live sessions with no repo of
@@ -1201,6 +1201,34 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
   its attention (only when N > 0; the fleet model leaves that line out of the asks). `factory fleet --format json` has `digest { enabled, pending, lastAt, lastError, days[] }`, the
   days UTC, newest first, each with calls, failed calls, items and `costUsd`; `digest` is not in the fingerprint, so a call that changes no text does not `NOTIFY`.
 - **Not done:** the `visible` marker still filters nothing in the (token-only) model.
+
+**Triage and actions (FV Wave 3).** `src/fleet/triage.ts` (the rules and the pass the build runs after the digest), `probes.ts`, `triage-store.ts`, `act.ts`. Migration `024`:
+`factory.fleet_triage_log` and `factory.fleet_acts`. Deterministic rules only: the digest's text (`short`, a reply ask's `kind`) is shown and never read to decide a tier, and nothing moves an ask into `automatic`.
+
+- **A tier per ask** (`automatic | one_click | hand_off | yours`) with `suggestion { verb, why, evidence, confidence }` and `actions[]`. In this order for a human-queue request: (1) *already done*: an
+  old (7 days) request whose command is nothing but `rm`/`rmdir`/`trash` and `mkdir`/`touch` on safe absolute paths, or that names an app (`/Applications/<name>.app`) with a remove or install word, and a probe
+  finds every path as the command would leave it → `one_click`, suggestion `resolve`, evidence the probe's answer; (2) a failed deploy gate (`Deploy gate [<repo>] … <sha> FAILED`) whose repo's default branch
+  has moved past that commit (git, read-only) → `one_click`, `deny`; (3) the **business classes** (spend, irreversible data loss, Touch ID / password / a machine the owner must be at, other people) → `yours`, no
+  suggestion, only `deny` and `later`; (4) older than 7 days → `one_click`, `deny`, evidence the date and age ("an old request is denied, never run with its stale command"); (5) else `yours`. Other
+  sources: a `factory` blocker in an ordinary repo (not in IuRoot, no business class) is `hand_off` (`hand_off`, `later`); a session's `wait`/`reply` ask whose plan is `done` in an ordinary repo is `one_click` with
+  `archive_plan` (evidence: the waves counted); a `handoff` ask (below) is `one_click` with `resolve` (acknowledge); everything else is `yours` (`later`, plus `deny` for a decision). An ask whose tier has no
+  suggestion with evidence is `yours`. A suggestion without evidence is never made.
+- **Probes** are read-only, bounded (5 s) and run in the fleet build, off the tick, in no transaction, at most 40 per build, answers cached 5 minutes. A path is looked at on a machine named in `FACTORY_PROBE_HOSTS`
+  (`<name>=<ssh alias|local>,…`, none by default; a probe on a machine not listed says nothing): the machine the text names, else `macbook`, the machine the queue's commands run on. Remote probes are `ssh -o BatchMode=yes <alias> test -e <path>`
+  with the path matched against `^(~/|/)[\w@+ ./-]*$` and quoted. A probe that cannot tell (unreachable, timed out) is no evidence. A command with anything else in it (an install, a pipe, a glob, a variable, a relative path, `..`) has no targets.
+- **Actions are intents** (`POST /fleet/asks/:id/act {intent, note?, until?}`, token API only, never the socket): only what the ask's `actions` offer now (409 `not_offered` otherwise), done once (a repeat is 200 with the first's result;
+  `factory.fleet_acts`, unique per ask and intent but `later`), serialized per ask and intent, followed by a fleet build so the next read shows it. `resolve` and `deny` on a queue request call `ask-human.sh resolve <id> --as done|denied [--note]`
+  (the script's help is read first: until dotfiles has `resolve`, the answer is 503 `unavailable` with the reason and nothing is recorded); **nothing in this wave runs a request's command**. `deny` on a decision files the
+  owner's answer (`fileAnswer`, the same row `factory issue answer` writes) with the denial text. `later` hides the ask until `until` (default 24 h, at most 30 days; the build drops it, the ask keeps its first-seen time).
+  `archive_plan` and `hand_off` are spawns (role `worker`, repo through the same `FACTORY_REPO_ROOTS` check as `POST /spawns`, never a visible repo): the brief for an archive is one commit moving the plan to `docs/waves/archive/`, made by the worker,
+  never by the server; the brief for a hand-off carries the ask's text as data between `<ask>` tags and asks for a last line `Result: …`. Keys are deterministic (`fleet-archive-<hash>`, `fleet-handoff-<hash>`). A resolved, denied or handed-off ask is gone for good (its id is one occurrence).
+  The result comes back as a new ask: when a hand-off's worker has ended, `handoff:<spawn key>` (`source: handoff`, `kind: note`).
+- **Automatic is bookkeeping only** (`fleet_triage_log`: kind, subject, what, why, evidence, `at`, `undone_at`; unique on `(kind, subject, fingerprint)`, so what the owner undid is not made again for the same fact): a stale plan marked
+  (`plan_stale`; undo reads that plan as `planned` until its text changes), an ask folded under the newer ask about the same subject (`fold`: factory asks of one subject, identical queue texts; the older leaves `asks` and the newer lists it in
+  `folded`; it holds only while the newer one is listed), an expired note dismissed (`dismiss_note`: a factory note ask 24 h old). `GET /fleet/triage` lists the log, `POST /fleet/triage/:id/undo` takes a row back (201, 200 when already undone, 404). None
+  of it runs a command, denies an ask, or touches the queue: a folded request stays in the queue.
+- **CLI.** `factory fleet act <ask> <intent> [--note] [--until]`, `factory fleet triage [--undo <id>]`; the plain screen shows each ask's tier, suggestion and actions.
+- **Not done:** the digest does not rank within a tier (asks stay oldest first); a hand-off's result is the ended worker, not its last message; an ask the owner snoozed or folded is re-timed from the first build after a restart.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.

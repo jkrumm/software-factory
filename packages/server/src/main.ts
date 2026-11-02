@@ -4,6 +4,7 @@ import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
+import { FleetActions } from './fleet/act.ts'
 import { Digest } from './fleet/digest.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
@@ -71,6 +72,7 @@ const notifier = makeNotifier(config)
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
 const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now(), fetch: true })
 const hcClient = new HcClient({ bin: config.hcBin, session: config.hcSession })
+const askHuman = new AskHumanQueue(config.askHumanBin)
 const fleet = new FleetBuilder({
   sql,
   now: () => clock.now(),
@@ -78,12 +80,22 @@ const fleet = new FleetBuilder({
   visibleRoots: config.visibleRoots,
   home: process.env.HOME ?? '',
   hc: new HcTerminals(hcClient),
-  queue: new AskHumanQueue(config.askHumanBin),
+  queue: askHuman,
+  // The queue's commands run on the machine named `macbook`; a probe on a machine not listed says nothing.
+  triage: { hosts: config.probeHosts, queueMachine: config.probeHosts.has('macbook') ? 'macbook' : undefined },
   digest:
     config.fleetDigestEveryMs === null
       ? undefined
       : new Digest({ sql, now: () => clock.now(), bin: config.agwBin, everyMs: config.fleetDigestEveryMs }),
   alertLeads: config.alertLeads,
+})
+const fleetActions = new FleetActions({
+  sql,
+  clock,
+  queue: askHuman,
+  roles,
+  repoRoots: config.repoRoots,
+  refresh: () => fleet.refreshNow(),
 })
 const runner = new HcRunner({
   bin: config.hcBin,
@@ -110,6 +122,7 @@ const server = serve({
   notifier,
   notifyTarget: config.notifyTarget,
   fleet,
+  fleetActions,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a

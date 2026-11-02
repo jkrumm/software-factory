@@ -1,4 +1,5 @@
 import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
+import { parseProbeHosts } from './fleet/probes.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -23,8 +24,10 @@ export interface Config {
   repoRoots: string[]
   /** the directories whose repos the fleet view shows read-only (`FACTORY_VISIBLE_ROOTS`, default `$HOME/IuRoot`): never a spawn or Issue target on their account */
   visibleRoots: string[]
-  /** `dotfiles/scripts/ask-human.sh`, the human queue's reader (`FACTORY_ASK_HUMAN`) */
+  /** `dotfiles/scripts/ask-human.sh`, the human queue's reader and its `resolve` (`FACTORY_ASK_HUMAN`) */
   askHumanBin: string
+  /** the machines the fleet triage's probes may look at (`FACTORY_PROBE_HOSTS`, `<name>=<ssh alias|local>,…`; none by default): a probe on any other machine says nothing */
+  probeHosts: Map<string, string>
   /** where the hooks append their events (`FACTORY_SPOOL_DIR`) */
   spoolDir: string
   /** the unix socket the hooks post to (`FACTORY_SOCKET`) */
@@ -83,6 +86,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
     visibleRoots: visibleRoots(env.FACTORY_VISIBLE_ROOTS, env.HOME),
+    probeHosts: parseProbeHosts(env.FACTORY_PROBE_HOSTS),
     askHumanBin: env.FACTORY_ASK_HUMAN || `${required('HOME')}/${DOTFILES}/scripts/ask-human.sh`,
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),

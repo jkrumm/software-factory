@@ -99,6 +99,8 @@ export class HcTerminals implements HcLister {
 export interface QueueRequest {
   id: string
   text: string
+  /** the command the request would run once the owner approves it: data, read by the probes for what it names, never run by the factory */
+  cmd?: string | null
   askedAt: string
   state: string | null
 }
@@ -107,11 +109,22 @@ export interface QueueReader {
   list(): Promise<QueueRequest[]>
 }
 
+export type QueueOutcome = 'done' | 'denied' | 'superseded'
+
+/** The queue refused or could not take an answer: `reason` is what the owner is told (503). */
+export class QueueUnavailable extends Error {}
+
+/** Writes a result into the human queue. It never runs the request's command: `resolve` only records how the request ended. */
+export interface QueueActor {
+  resolve(id: string, as: QueueOutcome, note?: string): Promise<void>
+}
+
 const QueueList = z.array(
   z
     .object({
       id: z.string().min(1),
       text: z.string(),
+      cmd: z.string().nullable().optional(),
       askedAt: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'askedAt is not a time'),
       state: z.string().optional(),
     })
@@ -122,7 +135,7 @@ const QueueList = z.array(
  * The queue is dotfiles': `ask-human.sh list --json`, one JSON array. A script without the flag yet answers in plain text or
  * fails; that is an error line in the model, not a crash.
  */
-export class AskHumanQueue implements QueueReader {
+export class AskHumanQueue implements QueueReader, QueueActor {
   constructor(
     private readonly bin: string,
     private readonly run: typeof runProcess = runProcess,
@@ -151,8 +164,34 @@ export class AskHumanQueue implements QueueReader {
     return parsed.data.map((r) => ({
       id: r.id,
       text: r.text,
+      cmd: r.cmd ?? null,
       askedAt: new Date(r.askedAt).toISOString(),
       state: r.state ?? null,
     }))
+  }
+
+  /**
+   * `ask-human.sh resolve <id> --as done|denied|superseded [--note <text>]` (dotfiles': it lands beside this wave). Until the script
+   * has it, the answer is `QueueUnavailable` with the reason: the help text is read first, so a script without the subcommand is
+   * never asked to run an unknown one. The id is the queue's own (`list --json`), checked against its shape before it reaches argv.
+   */
+  async resolve(id: string, as: QueueOutcome, note?: string): Promise<void> {
+    if (!/^\w[\w.-]*$/.test(id)) throw new QueueUnavailable(`queue id ${id} is not a queue id`)
+    if (
+      !(await stat(this.bin).then(
+        (s) => s.isFile(),
+        () => false,
+      ))
+    )
+      throw new QueueUnavailable(`${this.bin} does not exist`)
+    const help = await this.run([this.bin, 'help'], SOURCE_TIMEOUT_MS, childEnv())
+    if (help.exitCode !== 0 || !/\bresolve\b/.test(help.stdout))
+      throw new QueueUnavailable(
+        'the human queue has no `resolve` yet (ask-human.sh resolve lands with the dotfiles wave)',
+      )
+    const args = [this.bin, 'resolve', id, '--as', as, ...(note ? ['--note', note] : [])]
+    const done = await this.run(args, SOURCE_TIMEOUT_MS, childEnv())
+    if (done.exitCode === EXIT_TIMEOUT) throw new QueueUnavailable('ask-human.sh resolve did not answer in time')
+    if (done.exitCode !== 0) throw new QueueUnavailable(`ask-human.sh resolve exited ${done.exitCode}`)
   }
 }

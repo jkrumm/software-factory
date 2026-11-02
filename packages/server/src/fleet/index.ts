@@ -8,6 +8,8 @@ import { type Digest, DigestView } from './digest.ts'
 import { applyDigest, scopeOf } from './digest-model.ts'
 import { GitReader } from './git.ts'
 import { Places } from './place.ts'
+import { type Probes, ProbeRunner } from './probes.ts'
+import { Triage } from './triage.ts'
 import {
   assemble,
   type DecisionRow,
@@ -28,7 +30,7 @@ export const FLEET_INTERVAL_MS = 30_000
 const CONCURRENCY = 8
 const MAX_DECISIONS = 500
 /** the asks whose time is the first build that saw them (the others carry their own) */
-const TIMED_BY_BUILDER = new Set(['hc', 'wait', 'factory'])
+const TIMED_BY_BUILDER = new Set(['hc', 'wait', 'factory', 'handoff'])
 const PLAN = 'docs/waves/PLAN.md'
 
 export interface FleetDeps {
@@ -46,6 +48,8 @@ export interface FleetDeps {
   digest?: Digest
   alertLeads?: boolean
   intervalMs?: number
+  /** the triage's probes (`probes.ts`): the machines they may look at (`FACTORY_PROBE_HOSTS`: name → ssh alias or `local`), the one a queue request's command runs on, and (tests) the probes themselves */
+  triage?: { hosts?: ReadonlyMap<string, string>; queueMachine?: string; probes?: Probes }
 }
 
 interface DbPart {
@@ -91,6 +95,7 @@ export class FleetBuilder {
   /** when a terminal the factory does not know was first seen in its state: hc's own time moves with every message */
   private since = new Map<string, string>()
   private readonly git: GitReader
+  private readonly triage: Triage
   private readonly last: {
     db?: DbPart
     hc?: HcTerminal[]
@@ -102,6 +107,13 @@ export class FleetBuilder {
 
   constructor(private readonly deps: FleetDeps) {
     this.git = deps.git ?? new GitReader()
+    const hosts = deps.triage?.hosts ?? new Map<string, string>()
+    this.triage = new Triage({
+      sql: deps.sql,
+      probes: deps.triage?.probes ?? new ProbeRunner({ hosts, home: deps.home, now: deps.now, git: this.git }),
+      machines: [...hosts.keys()],
+      queueMachine: deps.triage?.queueMachine,
+    })
   }
 
   /** The tick's call. Never throws and never waits for the build. */
@@ -286,13 +298,24 @@ export class FleetBuilder {
       sessions: db.status.sessions,
       isVisible: (path) => places.isVisible(path),
     })
-    const model = applyDigest(base, view, scope, now)
+    const digested = applyDigest(base, view, scope, now)
+    // The triage: tiers, suggestions with evidence, actions, and the bookkeeping that needs no one. Its failure leaves the asks as they are.
+    let model: Omit<Fleet, 'fingerprint'> = digested
+    let timed = digested.asks
+    try {
+      const triaged = await this.triage.apply({ model: digested, now, queue, firstSeen: this.firstSeen, roots })
+      model = triaged.model
+      timed = triaged.timed
+    } catch (error) {
+      model = { ...digested, errors: [...digested.errors, `triage: ${message(error)}`] }
+    }
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
       JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),
     )
     const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
-    this.firstSeen = new Map(fleet.asks.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at]))
+    // Every ask the sources raised, also one the triage folded or the owner snoozed: it keeps its time for when it comes back.
+    this.firstSeen = new Map(timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at]))
     this.since = new Map(
       [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>
         x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [],

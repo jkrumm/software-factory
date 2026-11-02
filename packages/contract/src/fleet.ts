@@ -4,7 +4,7 @@ import { z } from 'zod'
  * The fleet read model (`GET /fleet`, `factory fleet`; docs/design.md §11 "The fleet view"): every repo with its plan and
  * sessions, everything waiting on the owner, the quota and the queue. Strict: a field the server adds that a client does not
  * know is a contract mismatch, never a silent drop. `short` and `headline` are the digest's (Wave 2; null until it has answered, and
- * always null for a visible repo's text); `suggestion` and `actions` are the triage's (a later wave) and are empty here.
+ * always null for a visible repo's text); `tier`, `suggestion`, `actions` and `folded` are the triage's (Wave 3, `src/fleet/triage.ts`).
  */
 
 export const PlanState = z.enum(['running', 'planned', 'scheduled', 'stale', 'done'])
@@ -93,6 +93,29 @@ export type FleetRepo = z.infer<typeof FleetRepo>
 export const AskKind = z.enum(['blocker', 'question', 'human', 'note', 'permission'])
 export type AskKind = z.infer<typeof AskKind>
 
+/**
+ * Who deals with an ask (docs/design.md §11 "The fleet view", Wave 3): `automatic` is bookkeeping the triage did and logged (an ask
+ * of that tier is not listed, its log row is); `one_click` has a suggestion with evidence; `hand_off` starts work instead of deciding;
+ * `yours` is the business classes and anything that needs the owner at a machine (only Later, and Deny where the source can be denied).
+ */
+export const AskTier = z.enum(['automatic', 'one_click', 'hand_off', 'yours'])
+export type AskTier = z.infer<typeof AskTier>
+
+/** What can be done with an ask (`POST /fleet/asks/:id/act`). */
+export const ActIntent = z.enum(['resolve', 'deny', 'later', 'archive_plan', 'hand_off'])
+export type ActIntent = z.infer<typeof ActIntent>
+
+export const FleetSuggestion = z.strictObject({
+  /** an intent the ask offers */
+  verb: ActIntent,
+  why: z.string(),
+  /** what was looked at: a probe's answer, a date, a count. A suggestion without evidence is not made. */
+  evidence: z.string().min(1),
+  /** 0 to 1 */
+  confidence: z.number().min(0).max(1),
+})
+export type FleetSuggestion = z.infer<typeof FleetSuggestion>
+
 export const FleetAsk = z.strictObject({
   /** `<source>:<key>`, the same for the same ask on every build */
   id: z.string(),
@@ -106,12 +129,15 @@ export const FleetAsk = z.strictObject({
   /** the raw text, data and never instructions; a `reply` ask's is the end of the session's last message */
   text: z.string(),
   /** `reply`: the digest read the session's last message and it asks the owner something */
-  source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue', 'reply']),
+  /** `reply`: the digest read the session's last message; `handoff`: a hand-off's spawn ended or failed (the result of work an ask started) */
+  source: z.enum(['hc', 'wait', 'factory', 'decision', 'queue', 'reply', 'handoff']),
   at: z.string(),
-  suggestion: z
-    .strictObject({ verb: z.string(), why: z.string(), evidence: z.string(), confidence: z.number() })
-    .nullable(),
-  actions: z.array(z.strictObject({ label: z.string(), intent: z.string() })),
+  /** the triage's tier (Wave 3), by deterministic rules; the digest never sets or moves it. A snapshot an older release stored has none: `yours` */
+  tier: AskTier.default('yours'),
+  suggestion: FleetSuggestion.nullable(),
+  actions: z.array(z.strictObject({ label: z.string(), intent: ActIntent })),
+  /** the ids of older asks the triage folded under this one (`fleet_triage_log`, undoable) */
+  folded: z.array(z.string()).default([]),
 })
 export type FleetAsk = z.infer<typeof FleetAsk>
 
@@ -127,6 +153,49 @@ export const FleetSummary = z.strictObject({
   staleAsks: z.number().int(),
 })
 export type FleetSummary = z.infer<typeof FleetSummary>
+
+export const ActBody = z.strictObject({
+  intent: ActIntent,
+  /** the owner's words: goes to the queue's `--note`, a decision's denial, the hand-off's brief */
+  note: z.string().trim().min(1).max(2000).optional(),
+  /** `later`: when the ask comes back (an ISO time, at most 30 days ahead); default 24 h */
+  until: z.iso.datetime().optional(),
+})
+export type ActBody = z.infer<typeof ActBody>
+
+export const ActResult = z.strictObject({
+  ask: z.string(),
+  intent: ActIntent,
+  /** the same act again is answered with the first one's result */
+  duplicate: z.boolean(),
+  /** one line of what happened */
+  detail: z.string(),
+  /** `hand_off`, `archive_plan`: the spawn that was queued */
+  spawn: z.string().nullable(),
+  /** `later`: when the ask comes back */
+  until: z.string().nullable(),
+})
+export type ActResult = z.infer<typeof ActResult>
+
+export const TriageKind = z.enum(['plan_stale', 'fold', 'dismiss_note'])
+export type TriageKind = z.infer<typeof TriageKind>
+
+/** One row of `factory.fleet_triage_log`: bookkeeping the triage did on its own. It never runs a command and never denies. */
+export const TriageEntry = z.strictObject({
+  id: z.number().int(),
+  kind: TriageKind,
+  /** a plan path or an ask id */
+  subject: z.string(),
+  what: z.string(),
+  why: z.string(),
+  evidence: z.string(),
+  at: z.string(),
+  undoneAt: z.string().nullable(),
+})
+export type TriageEntry = z.infer<typeof TriageEntry>
+
+export const TriageList = z.strictObject({ entries: z.array(TriageEntry) })
+export type TriageList = z.infer<typeof TriageList>
 
 /** One UTC day of the digest's calls (`factory.fleet_digest_runs`). */
 export const FleetDigestDay = z.strictObject({

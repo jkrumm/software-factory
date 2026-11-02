@@ -44,4 +44,30 @@ export class GitReader {
       () => null,
     )
   }
+
+  /**
+   * Whether the repo's default branch has moved past `sha`: the first of `origin/main`, `origin/master`, `main`, `master` that
+   * resolves is a descendant of the commit (and not the commit). `undefined` when git cannot say (no such commit here, no default
+   * branch, a history that does not contain it). Read-only.
+   */
+  async newerThan(repo: string, sha: string): Promise<{ head: string } | false | undefined> {
+    if (!/^[0-9a-f]{7,40}$/.test(sha)) return undefined
+    const commit = await this.git(repo, ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`]).catch(() => '')
+    if (!commit.trim()) return undefined
+    for (const ref of ['origin/main', 'origin/master', 'main', 'master']) {
+      const head = (
+        await this.git(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).catch(() => '')
+      ).trim()
+      if (!head) continue
+      if (head === commit.trim()) return false
+      const ancestor = await this.run(
+        ['git', '--no-optional-locks', '-C', repo, 'merge-base', '--is-ancestor', commit.trim(), head],
+        GIT_TIMEOUT_MS,
+        childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+      )
+      // A history that does not contain the commit (diverged) says nothing about a newer deploy.
+      return ancestor.exitCode === 0 ? { head } : undefined
+    }
+    return undefined
+  }
 }
