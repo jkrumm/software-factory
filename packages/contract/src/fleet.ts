@@ -77,7 +77,7 @@ export const FleetRepo = z.strictObject({
   name: z.string(),
   /** the repo's real path; the herdr space is keyed by it */
   space: z.string(),
-  /** under `FACTORY_VISIBLE_ROOTS` or anywhere in IuRoot: shown read-only, never a spawn or Issue target of this view, and its text stays on the mini */
+  /** under `FACTORY_VISIBLE_ROOTS` or anywhere in IuRoot: shown read-only, never a spawn or Issue target of this view, and its text stays on the mini. It filters nothing in this model (which is token-only); it marks the repos Wave 2's digest must skip */
   visible: z.boolean(),
   git: FleetGit.nullable(),
   /** the plan a live session works, else the repo's `docs/waves/PLAN.md`, else the first one a spawn names */

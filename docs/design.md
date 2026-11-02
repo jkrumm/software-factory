@@ -1139,7 +1139,9 @@ One read model of the fleet that every surface reads instead of building its own
   Issues, decisions outside the roots, queue text with no place, error lines, symlinked spawns, notes to ended sessions and ticket-slug
   branch names), so `GET /fleet` and `POST /fleet/refresh` are on the token API only and the socket answers 404. `factory fleet`
   needs `FACTORY_TOKEN` and says so without one (exit 3, as `issue answer`). A consumer in a pane gets the fleet through an agent
-  that holds the token, not through the socket. `visible` on a repo stays: Wave 2's digest skips those repos.
+  that holds the token, not through the socket. `visible` on a repo stays: it filters nothing here, it marks the repos Wave 2's digest
+  skips. Attention-line ask ids (subject, verb, hash) replaced an earlier format: the first-seen times of factory asks restart once at
+  the deploy.
 - **Plans.** A session's plan is, in order: the `docs/waves/*.md` path its start text names (the spawn's prompt, or the longest argument
   of a terminal; the path named most often, ignoring what follows a `Never` on a line; relative to the spawn's repo or a root, `~/` to
   the home), else the `docs/waves/PLAN.md` found walking up from its directory to its repo (a worktree counts as its main checkout),
