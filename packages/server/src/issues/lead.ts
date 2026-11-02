@@ -154,7 +154,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
                 SET session = EXCLUDED.session, text = EXCLUDED.text, status = 'delivered', sent_count = 1, error = NULL,
                     failed_at = NULL, claimed_at = NULL, created_at = EXCLUDED.created_at, sent_at = EXCLUDED.created_at,
                     delivered_at = EXCLUDED.created_at
-                WHERE factory.prompts.status NOT IN ('sent', 'delivered')
+                WHERE (factory.prompts.status NOT IN ('sent', 'delivered') AND factory.prompts.claimed_at IS NULL)
                   OR NOT EXISTS (SELECT 1 FROM factory.sessions s WHERE s.id = factory.prompts.session)`
           }
         },
@@ -258,7 +258,15 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
     return
   }
   const [session] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${key}`
-  if (!spawn || !session) throw new Error(`the lead ${key} is not running yet`)
+  if (!spawn || !session) {
+    // No spawn at all on an Issue that is not working: its lead never started (the worktree failed and parked it) and nothing will. The
+    // news waits in the timeline, and a note comes again in the next brief. Thrown for ever, it would hold every later effect of the Issue.
+    if (!spawn) {
+      const [issue] = await sql`SELECT state FROM factory.issues WHERE id = ${effect.issueId}`
+      if (issue?.state !== 'working') return
+    }
+    throw new Error(`the lead ${key} is not running yet`)
+  }
   // A regression is one note per hold, under the Issue's own prompt id; the rest go by the effect's key.
   const hold = effect.payload?.cause === 'regression' ? Number(effect.payload.hold) : Number.NaN
   const call = effect.payload?.cause === 'note' ? effect.payload.call : undefined

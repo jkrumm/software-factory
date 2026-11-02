@@ -807,3 +807,92 @@ describe('factory issue note: what a brief carries', () => {
     expect(view.evidence[0]?.link).toBe('https://example.com/5')
   })
 })
+
+describe('what review round 4 found', () => {
+  const note = (id: number, body: Record<string, unknown>) => app.send('POST', `/issues/${id}/note`, body)
+
+  test('a note’s text and a refusal’s reason are shown whole in plain format', async () => {
+    const { id, key } = await lead()
+    const long = `${'word '.repeat(300)}END`
+    await note(id, { id: 'long', text: long })
+    await ship(id, key)
+    await drive(2)
+    const shown = await factory({}, 'issue', 'show', String(id), '--format', 'plain')
+    expect(shown.stdout).toContain(`text=${long}`)
+    expect(shown.stdout).toMatch(/detail=ship refused, evidence missing[^\n]*then ship again\./)
+  })
+
+  test('bidi overrides, line separators and zero-width characters never reach a terminal', async () => {
+    const { id, key } = await lead()
+    await post(id, 'phase', { id: 'p', phase: 'a\u202eb\u2066c\u2028d\u200be\ufefff\u2060g', session: key })
+    await drive(2)
+    const shown = await factory({}, 'issue', 'show', String(id), '--format', 'plain')
+    // oxlint-disable-next-line no-control-regex -- exactly what must be absent
+    expect(shown.stdout).not.toMatch(/[\u202a-\u202e\u2066-\u2069\u2028\u2029\u200b-\u200f\u2060\ufeff]/)
+    expect(shown.stdout).toContain('phase=a b c d e f g')
+  })
+
+  test('a note on an Issue whose lead never started ends quietly and holds nothing back', async () => {
+    const id = await file(newRepo(SERVICE))
+    // The worktree failed: the Issue parked as lead_gone with no spawn ever made.
+    await db.sql`UPDATE factory.issues SET state = 'waiting', reason = 'lead_gone', attempt = 1 WHERE id = ${id}`
+    expect((await note(id, { id: 'n', text: 'anyone there?' })).status).toBe(201)
+    await drive(3)
+    const [effect] = await db.sql`SELECT done_at, error, attempts FROM factory.issue_effects WHERE kind = 'note_lead'`
+    expect(effect).toMatchObject({ error: null })
+    expect(effect?.done_at).not.toBeNull()
+    expect(await db.sql`SELECT 1 FROM factory.prompts WHERE source = 'note'`).toHaveLength(0)
+    // It reached nobody, so the next brief has it.
+    expect(
+      await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'note' AND key = ${`${id}:note:n`}`,
+    ).toHaveLength(1)
+  })
+
+  test('on a working Issue whose lead is still starting a note waits and is typed when it is up', async () => {
+    const id = await file(newRepo(SERVICE))
+    await db.sql`UPDATE factory.issues SET state = 'working', attempt = 1 WHERE id = ${id}`
+    await note(id, { id: 'n', text: 'wait for the lead' })
+    await drive(2)
+    const [effect] = await db.sql`SELECT done_at, error FROM factory.issue_effects WHERE kind = 'note_lead'`
+    expect(effect?.done_at).toBeNull()
+    expect(effect?.error).toContain('is not running yet')
+  })
+
+  test('a prompt in flight to an earlier lead is not taken over by the next brief', async () => {
+    const { id, key } = await lead()
+    runner.answer = 'busy'
+    await note(id, { id: 'flying', text: 'being typed right now' })
+    await drive(2)
+    await db.sql`UPDATE factory.prompts SET status = 'typing', claimed_at = ${clock.now()} WHERE source = 'note'`
+    await post(id, 'drop', { reason: 'x', session: key })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    // The new lead reads it in its brief; the claimed row stays the old lead's.
+    expect(runner.started[1]?.prompt).toContain('being typed right now')
+    expect((await promptsOf(key)).map((p) => [p.id, p.status])).toEqual([[`issue:${id}:note:flying`, 'typing']])
+    expect(await promptsOf(leadKey(id, 2))).toEqual([])
+  })
+
+  test('a session’s events waiting in the inbox are not the Issue’s story', async () => {
+    const { id, key } = await lead()
+    await emit(key, 'turn_started')
+    await emit(key, 'prompt_idle')
+    const waiting = await db.sql`SELECT kind FROM factory.issue_inbox WHERE issue_id = ${id} AND handled_at IS NULL`
+    expect(waiting.length).toBeGreaterThan(0)
+    const kinds = (await viewOf(id)).timeline.map((t) => t.kind)
+    expect(kinds).not.toContain('turn_started')
+    expect(kinds).not.toContain('prompt_idle')
+    expect(kinds).not.toContain('session_started')
+  })
+
+  test('the lookups of status and show have their indexes', async () => {
+    const rows = await db.sql`
+      SELECT indexname FROM pg_indexes WHERE schemaname = 'factory' AND indexname IN ('issue_inbox_ship', 'issue_events_phase')`
+    expect(rows.map((r: { indexname: string }) => r.indexname).sort()).toEqual([
+      'issue_events_phase',
+      'issue_inbox_ship',
+    ])
+  })
+})

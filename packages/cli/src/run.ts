@@ -236,11 +236,15 @@ const quotaLine = (q: Quota) =>
 const promptLine = (p: Prompt) =>
   [p.id, p.session, p.status, p.sentCount, p.sentAt, p.deliveredAt, p.error].map(cell).join('\t')
 
-/** Someone else's text on the owner's terminal: one line, control characters (C1 too) gone, cut. */
+// Control characters (C1 too), the bidi overrides and isolates that reorder what follows, the line and paragraph separators, and the
+// characters that show as nothing (zero-width, soft hyphen, BOM, word joiner): all of them go.
+// oxlint-disable-next-line no-control-regex -- exactly what is removed
+const HIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]+/g
+
+/** Someone else's text on the owner's terminal: one line, hidden characters gone, cut. */
 const oneLine = (value: unknown, max = 160): string => {
   const text = typeof value === 'string' ? value : (JSON.stringify(value) ?? '')
-  // oxlint-disable-next-line no-control-regex -- exactly what is removed
-  const clean = text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim()
+  const clean = text.replace(HIDDEN, ' ').trim()
   return clean.length > max ? `${clean.slice(0, max)}…` : clean
 }
 
@@ -255,6 +259,7 @@ const statusIssueLine = (i: StatusIssue) =>
     i.lead ? oneLine(i.lead, 80) : '-',
     i.phase ? `phase ${oneLine(i.phase, 40)}` : 'phase -',
     i.waiting ? `waiting ${i.waiting}` : '',
+    i.wakeAt ? `looks again ${i.wakeAt}` : '',
     i.missing.length > 0 ? `evidence missing ${i.missing.join(',')}` : '',
     i.decisions > 0 ? `${i.decisions} open ${i.decisions === 1 ? 'question' : 'questions'}` : '',
     i.finalizeError ? `finalize failed: ${oneLine(i.finalizeError, 80)}` : '',
@@ -318,16 +323,32 @@ const issueLine = (i: IssueSummary) =>
     .map((value) => (typeof value === 'string' ? oneLine(value, 1000) : cell(value)))
     .join('\t')
 
+/** The words a person wrote or a refusal gave (a note's text, a refusal's detail): shown whole, up to what a verb accepts. */
+const WORDS = new Set([
+  'text',
+  'detail',
+  'reason',
+  'summary',
+  'note',
+  'question',
+  'answer',
+  'why',
+  'document',
+  'default',
+  'phase',
+])
+const WORDS_MAX = 4_000
+
 /**
  * What an entry's payload says, for a screen: `key=value` with each value cut, so a long free text cannot push the rest off the line. Data,
  * as filed; without `attempt` (the line's neighbours say it) and the commits `ship` derived (the verb's own fields have them).
  */
 const payloadSummary = (payload: unknown): string => {
   if (payload === null || payload === undefined) return ''
-  if (typeof payload !== 'object' || Array.isArray(payload)) return oneLine(payload)
+  if (typeof payload !== 'object' || Array.isArray(payload)) return oneLine(payload, WORDS_MAX)
   return Object.entries(payload as Record<string, unknown>)
     .filter(([name]) => name !== 'derived' && name !== 'attempt')
-    .map(([name, value]) => `${oneLine(name, 40)}=${oneLine(value, 60)}`)
+    .map(([name, value]) => `${oneLine(name, 40)}=${oneLine(value, WORDS.has(name) ? WORDS_MAX : 60)}`)
     .join(' ')
 }
 
@@ -337,7 +358,7 @@ const timelineLine = (t: TimelineEntry) =>
     t.source === 'inbox' ? `${t.kind} (${t.result ?? 'not handled yet'})` : t.kind,
     t.from || t.to ? `${t.from ?? '-'}→${t.to ?? '-'}` : '',
     t.session ? oneLine(t.session, 80) : '',
-    t.detail ? oneLine(t.detail) : payloadSummary(t.payload),
+    t.detail ? oneLine(t.detail, WORDS_MAX) : payloadSummary(t.payload),
   ]
     .map((part, i) => (i < 2 ? part : part || '-'))
     .join('\t')
