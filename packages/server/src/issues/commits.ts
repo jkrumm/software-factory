@@ -2,8 +2,11 @@ import { branchOnBase, fetchOrigin, gitIn, originDefault, type Run } from './ori
 
 /** What an Issue's commits touched. */
 export interface CommitRead {
-  /** the commits the lead named, resolved to full shas: what a check of the deployed code is about */
-  reported: string[]
+  /**
+   * `origin/<default>` as it stood when the commits were proven landed: the sha that holds all the branch's work and every commit named.
+   * What a deployed version must hold, whatever a squash or rebase did to the branch's own commits. Null where nothing was proven landed.
+   */
+  landedAt: string | null
   /** the reported commits, full, then what else is on the lead's branch */
   commits: string[]
   /** every path they touched */
@@ -88,9 +91,15 @@ export class GitCommits implements Commits {
         throw new CommitsRefused(`commit ${sha.slice(0, 12)} is older than this attempt`)
     }
 
+    let landedAt: string | null = null
+    if (full.length > 0 || needsBase) {
+      const base = await originDefault(repo, this.options)
+      const tip = base ? await git(['rev-parse', '-q', '--verify', `${base}^{commit}`]) : undefined
+      if (tip?.exitCode === 0) landedAt = tip.stdout.trim()
+    }
+
     const commits = [...new Set([...full, ...onBranch])]
-    const reportedFull = [...new Set(full)]
-    if (commits.length === 0) return { reported: reportedFull, commits, paths: [], mergedAt: null }
+    if (commits.length === 0) return { landedAt, commits, paths: [], mergedAt: null }
 
     const named = async (...range: string[]) => {
       const log = ['-c', 'core.quotePath=false', 'log', '-m', ...range, '--name-only', '-z', '--format=']
@@ -104,11 +113,11 @@ export class GitCommits implements Commits {
     ]
     const unique = [...new Set(paths)].sort()
 
-    if (full.length === 0) return { reported: reportedFull, commits, paths: unique, mergedAt: null }
+    if (full.length === 0) return { landedAt, commits, paths: unique, mergedAt: null }
     const times = await git(['log', '--no-walk', '--format=%ct', ...full])
     if (times.exitCode !== 0) throw new Error(`git log failed (exit ${times.exitCode})`)
     const newest = Math.max(...times.stdout.split('\n').filter(Boolean).map(Number))
-    return { reported: reportedFull, commits, paths: unique, mergedAt: new Date(newest * 1000) }
+    return { landedAt, commits, paths: unique, mergedAt: new Date(newest * 1000) }
   }
 
   /** The lead's branch since its worktree was cut, all of it: a range that cannot be read fails the verb, it does not lower the bar. */

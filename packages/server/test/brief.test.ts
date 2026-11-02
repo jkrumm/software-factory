@@ -130,7 +130,9 @@ describe('the brief', () => {
     const at = steps.map((step) => a.indexOf(step))
     expect(at.every((i) => i > 0)).toBe(true)
     expect(at).toEqual([...at].sort((x, y) => x - y))
-    expect(a).toContain('add the target')
+    expect(a).toContain('a probe')
+    expect(a).toContain('you never add or edit it')
+    expect(a).toContain('`factory issue block` with that reason')
     expect(orders(buildBrief(make('/work/other', 99))).replace('/work/other', '/work/alpha')).toBe(a)
     for (const mode of ['auto', 'agentic', 'none'] as const) {
       const manifest = ProjectManifest.parse({ apiVersion: 'factory/v2', name: 'beta', deploy: { mode } })

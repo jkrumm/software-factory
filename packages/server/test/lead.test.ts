@@ -44,7 +44,7 @@ const SHA = 'a'.repeat(40)
 /** Commits as the lead names them, touching nothing that deploys: this file is about the lead, `evidence.test.ts` about the bar. */
 const commits: Commits = {
   read: async ({ reported }) => ({
-    reported: [...reported],
+    landedAt: null,
     commits: [...reported],
     paths: ['docs/x.md'],
     mergedAt: null,

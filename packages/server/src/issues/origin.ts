@@ -117,33 +117,36 @@ export interface DeployedCheck {
 }
 
 /**
- * Whether the deployed commit `make version` printed holds every shipped commit: each is an ancestor of it, or it. Only reads: a deployed
- * commit the repo has not seen yet is fetched for, and no working tree or branch is touched. A squash ships one merge commit, which the
- * deployed one must hold the same way.
+ * Whether the deployed commit `make version` printed holds `landedAt`, the `origin/<default>` the ship found: that sha is the deployed
+ * one or an ancestor of it. One sha, whatever a squash or rebase did to the branch's commits. Only reads: a deployed commit the repo has
+ * not seen yet is fetched for, which writes remote refs and objects and touches no index or working tree. `merge-base --is-ancestor` says
+ * 1 for "not an ancestor"; any other exit is a git that could not compare, which is not the same as "not deployed".
  */
 export async function deployedHolds(
   repo: string,
   deployed: string,
-  shipped: readonly string[],
+  landedAt: string,
   options: { run?: Run; git?: string; signal?: AbortSignal } = {},
 ): Promise<DeployedCheck> {
   const git = (args: string[]) => gitIn(repo, args, options)
-  const resolve = () => git(['rev-parse', '-q', '--verify', `${deployed}^{commit}`])
-  let known = await resolve()
+  const resolve = (ref: string) => git(['rev-parse', '-q', '--verify', `${ref}^{commit}`])
+  let known = await resolve(deployed)
   if (known.exitCode !== 0) {
     await fetchOrigin(repo, options)
-    known = await resolve()
+    known = await resolve(deployed)
   }
   if (known.exitCode !== 0) return { ok: false, detail: `the deployed commit ${deployed} is not in ${repo}` }
   const full = known.stdout.trim()
-  const behind: string[] = []
-  for (const sha of shipped) {
-    if ((await git(['merge-base', '--is-ancestor', sha, full])).exitCode !== 0) behind.push(sha.slice(0, 12))
-  }
-  return behind.length === 0
-    ? { ok: true, detail: `deployed ${full.slice(0, 12)} holds ${shipped.length} shipped commit(s)` }
-    : {
-        ok: false,
-        detail: `deployed ${full.slice(0, 12)} does not hold the shipped ${behind.join(', ')}: \`make deploy\` has not run on them`,
-      }
+  const landed = await resolve(landedAt)
+  if (landed.exitCode !== 0)
+    return { ok: false, detail: `could not compare: ${landedAt.slice(0, 12)} is not in ${repo}` }
+  const compared = await git(['merge-base', '--is-ancestor', landedAt, full])
+  if (compared.exitCode === 0)
+    return { ok: true, detail: `deployed ${full.slice(0, 12)} holds ${landedAt.slice(0, 12)}, where the work landed` }
+  if (compared.exitCode === 1)
+    return {
+      ok: false,
+      detail: `deployed ${full.slice(0, 12)} does not hold ${landedAt.slice(0, 12)}, where the work landed: \`make deploy\` has not run on it`,
+    }
+  return { ok: false, detail: `could not compare: git merge-base exit ${compared.exitCode}` }
 }

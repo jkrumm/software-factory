@@ -69,10 +69,10 @@ function makeModeOrders(checkout: string): string {
     '2. `git pull --ff-only`',
     '3. `make deploy`',
     '4. `make verify`',
-    '5. `make version`: it prints the deployed commit sha, one line',
+    '5. `make version`: it prints the deployed commit sha, one line (if the repo has none, `factory issue block` with that reason; do not add it)',
     '6. `factory issue ship`',
     '',
-    'After the hold the factory runs `make version` itself and reads the deployed commit: red unless it holds every commit you shipped. A repo without `make version` is red with that line: add the target (the deployed commit sha) in your own change. A change that deploys nothing (docs, tests) skips this.',
+    'After the hold the factory runs `make version` itself and reads the deployed commit: red unless it holds the `origin` commit where your work landed. `make version` is a probe, like the probes above: you never add or edit it within your Issue. A repo without it is red, and the answer is `factory issue block` with that reason: the owner adds it. A change that deploys nothing (docs, tests) skips all of this.',
   ].join('\n')
 }
 
