@@ -100,7 +100,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
   rebased onto the herdr-core runner or closed with the reason (its gamedays feed F2 W6).
 - [x] F2 Wave 1 (`night-f2-w1-issues.md`, `deep`) with D beside it (`night-d-hidden-waves.md`, `worker`; it overlaps W1
   only in route registration: land W1 first, D rebases).
-- [ ] I: `factory-door` once W1 is live (brief to write: `packages/door`, its own LaunchAgent on the tailnet interface,
+- [x] I: `factory-door` once W1 is live (brief to write: `packages/door`, its own LaunchAgent on the tailnet interface,
   POST only, per-source tokens in a 0600 file until the owner seeds them into 1Password in the morning, the monitor → repo
   registry in the database, not in git; the lead wires Kuma and HyperDX to it and proves one real alert becomes one Issue).
 - [ ] (W2 live) F2 Waves 2–5 in order (W4 `deep`, the rest `worker`; W3 adds an agw classify worker on disjoint files and tells agw's
