@@ -141,8 +141,10 @@ check "the shipped program: --longest on the sample names the longest word (the 
 # The requested test: master's own test/run.sh passes and has an expectation that runs --longest (a comment would not count).
 tree=$(mktemp -d)
 git --git-dir="$remote" archive master | tar -x -C "$tree"
-check "origin/master's test/run.sh passes" "check: ok" "$(cd "$tree" && bash test/run.sh 2>&1 | tail -1)"
-check_ge "expectations in test/run.sh that run --longest" 1 "$(grep -cE '^[[:space:]]*expect .*--longest' "$tree/test/run.sh" || true)"
+tests_rc=0
+tests_out=$(cd "$tree" && bash test/run.sh 2>&1) || tests_rc=$?
+check "origin/master's test/run.sh passes (exit status and last line)" "0|check: ok" "$tests_rc|$(tail -1 <<<"$tests_out")"
+check_ge "uncommented lines in test/run.sh that run bin/wordstat --longest" 1 "$(grep -v '^[[:space:]]*#' "$tree/test/run.sh" | grep -c 'wordstat --longest' || true)"
 rm -rf "${tree:?}"
 wt=$repo/.claude/worktrees/factory-$issue-$attempt
 terminals=$(terminals_of "$lead")

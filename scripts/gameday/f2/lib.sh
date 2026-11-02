@@ -99,7 +99,9 @@ finish_run() {
   local name=$1 issue=${2:-} i rc=0
   if [[ -z $issue && -n ${SOURCE_KEY:-} ]]; then
     # The create may have succeeded with its answer lost: find the Issue by the key this run filed it under.
-    issue=$(sqlq "SELECT id FROM factory.issues WHERE source_key = '$SOURCE_KEY' LIMIT 1" 2>/dev/null || true)
+    # A create in flight may not be committed yet; a lookup that fails is no answer, and the resources stay.
+    sleep 3
+    issue=$(sqlq "SELECT id FROM factory.issues WHERE source = 'request' AND source_key = '$SOURCE_KEY' LIMIT 1") || { log "cannot look up an Issue filed under $SOURCE_KEY: leaving $name in place"; return 1; }
   fi
   if [[ -n $issue ]]; then
     if [[ $(issue_col "$issue" state) != closed ]]; then
