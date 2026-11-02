@@ -673,6 +673,18 @@ describe('the lead’s verbs', () => {
     expect(await second.json()).toMatchObject({ key: `${id}:2:phase:same`, duplicate: false })
   })
 
+  test('a verb filed for an earlier attempt that reaches the Issue on a later one is refused', async () => {
+    const { id, key } = await lead()
+    // Filed by attempt 1's lead, handled after attempt 2 began.
+    await post(id, 'close', { summary: 'done', session: key })
+    await db.sql`UPDATE factory.issues SET attempt = 2 WHERE id = ${id}`
+    await pass()
+    expect((await issue(id)).state).toBe('working')
+    expect(await trail(id)).toContain('refused')
+    const [refused] = await db.sql`SELECT detail FROM factory.issue_inbox WHERE kind = 'close'`
+    expect(refused?.detail).toBe('close was filed for attempt 1, the Issue is on attempt 2')
+  })
+
   test('a lead reports through the socket with no token', async () => {
     const dir = mkdtempSync('/tmp/factory-lead-sock-')
     const socketPath = join(dir, 'h.sock')
@@ -971,10 +983,17 @@ describe('factory issue <verb>', () => {
       'drop',
     ])
     expect(rows[2]?.payload).toEqual({
+      attempt: 1,
       summary: 'shipped',
       evidence: [{ kind: 'commit', link: 'https://example.com/c', note: 'a, b' }],
     })
-    expect(rows[5]?.payload).toEqual({ question: 'Which?', options: ['a', 'b'], default: 'a', expiresAt: until })
+    expect(rows[5]?.payload).toEqual({
+      attempt: 1,
+      question: 'Which?',
+      options: ['a', 'b'],
+      default: 'a',
+      expiresAt: until,
+    })
 
     const again = await factory(env, 'issue', ...(calls[0] ?? []), '--format', 'plain')
     expect(again.stdout).toContain('\tduplicate\t')

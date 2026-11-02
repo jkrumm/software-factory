@@ -1,4 +1,4 @@
-import type { IssueOutcome, IssueState, WaitReason } from '@software-factory/contract'
+import { ISSUE_VERBS, type IssueOutcome, type IssueState, type WaitReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { addDependency, releaseDependents } from './deps.ts'
 import { answerDecision, recordDecision } from './decisions.ts'
@@ -239,6 +239,11 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
       { event: row.kind, detail },
     )
     return { issue, result: 'refused', detail }
+  }
+  // A lead's verb is for the attempt it was filed under; a new attempt began since, and its lead has not said this.
+  const filedFor = row.payload?.attempt
+  if (typeof filedFor === 'number' && (ISSUE_VERBS as readonly string[]).includes(kind) && filedFor !== issue.attempt) {
+    return refused(`${kind} was filed for attempt ${filedFor}, the Issue is on attempt ${issue.attempt}`)
   }
   if (!step) {
     if (SILENT.has(kind)) return { issue, result: 'ignored', detail: null }
