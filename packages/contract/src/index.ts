@@ -3,6 +3,7 @@ import { Effort, RoleName, Tier } from './roles.ts'
 
 export * from './door.ts'
 export * from './issues.ts'
+export * from './notify.ts'
 export * from './projects.ts'
 export * from './roles.ts'
 export { EVENT_KINDS, type EventKind } from './spool.ts'

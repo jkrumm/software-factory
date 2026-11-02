@@ -86,6 +86,10 @@ describe('config (finding 5)', () => {
       slots: 2,
       agwBin: '/home/me/.local/bin/agw',
       alertLeads: false,
+      notifyTarget: 'slack:#agents',
+      hermesBin: '/home/me/.local/bin/hermes',
+      digestAt: '07:30',
+      digestTz: 'Europe/Berlin',
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -103,6 +107,21 @@ describe('config (finding 5)', () => {
     for (const off of ['', '0', 'false'])
       expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: off }).alertLeads).toBe(false)
     expect(() => loadConfig({ ...env, FACTORY_ALERT_LEADS: 'maybe' })).toThrow('FACTORY_ALERT_LEADS')
+  })
+
+  test('the notifier: a target, a binary, a digest time and zone, and a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_NOTIFY_TARGET: 'off', HERMES_BIN: '/x/hermes' })).toMatchObject({
+      notifyTarget: 'off',
+      hermesBin: '/x/hermes',
+    })
+    expect(loadConfig({ ...env, FACTORY_DIGEST_AT: '06:05', FACTORY_DIGEST_TZ: 'UTC' })).toMatchObject({
+      digestAt: '06:05',
+      digestTz: 'UTC',
+    })
+    expect(loadConfig({ ...env, FACTORY_DIGEST_AT: 'off' }).digestAt).toBeNull()
+    for (const bad of ['7:30', '24:00', '07:60', 'morning'])
+      expect(() => loadConfig({ ...env, FACTORY_DIGEST_AT: bad })).toThrow('FACTORY_DIGEST_AT')
+    expect(() => loadConfig({ ...env, FACTORY_DIGEST_TZ: 'Mars/Olympus' })).toThrow('FACTORY_DIGEST_TZ')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {

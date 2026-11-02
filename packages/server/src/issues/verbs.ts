@@ -1,4 +1,4 @@
-import type { IssueState, IssueVerb, IssueVerbBody } from '@software-factory/contract'
+import type { IssueAnswerBody, IssueState, IssueVerb, IssueVerbBody } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { enqueue } from './inbox.ts'
 import { leadKey } from './names.ts'
@@ -42,5 +42,25 @@ export async function fileVerb(
   // The attempt the call was filed for: a verb that reaches the Issue after a new attempt began is refused, not applied to it.
   const payload = { ...fields, attempt: issue.attempt }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: verb, at: now, payload, session })
+  return { ok: true, key, duplicate, state: issue.state }
+}
+
+/**
+ * The owner's answer, filed as an `answer` inbox row keyed `<issue>:answer:<call id>`: the same call twice is one answer. It is for no
+ * attempt in particular (a question outlives the lead that asked it), and `who` says by which door it came: the token API is the
+ * owner, the socket is a pane. The lifecycle decides whether there is an open question for it (a refusal is a line in the
+ * Issue's events).
+ */
+export async function fileAnswer(
+  sql: SQL,
+  input: { issueId: number; body: IssueAnswerBody; who: string; now: Date },
+): Promise<{ ok: true; key: string; duplicate: boolean; state: IssueState } | { ok: false }> {
+  const { issueId, now } = input
+  const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+  if (!issue) return { ok: false }
+  const { id, answer, decision } = input.body
+  const key = `${issueId}:answer:${id ?? crypto.randomUUID()}`
+  const payload = { answer, who: input.who, ...(decision === undefined ? {} : { decision }) }
+  const { duplicate } = await enqueue(sql, { issueId, key, kind: 'answer', at: now, payload })
   return { ok: true, key, duplicate, state: issue.state }
 }

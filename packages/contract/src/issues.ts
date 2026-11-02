@@ -177,3 +177,22 @@ export const IssueVerbAck = z.object({
   state: IssueState,
 })
 export type IssueVerbAck = z.infer<typeof IssueVerbAck>
+
+/**
+ * `POST /issues/:id/answer`: the owner's answer to an open question (the `answer` event). Not a lead's verb, so it is not in
+ * `ISSUE_VERBS`. `decision` names the question it is for; without it the Issue's open question is answered.
+ */
+export const IssueAnswerBody = z.strictObject({
+  ...common,
+  answer: Words(2000),
+  decision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+})
+export type IssueAnswerBody = z.infer<typeof IssueAnswerBody>
+
+export const IssueAnswerAck = z.object({
+  issue: z.number().int(),
+  key: z.string(),
+  duplicate: z.boolean(),
+  state: IssueState,
+})
+export type IssueAnswerAck = z.infer<typeof IssueAnswerAck>

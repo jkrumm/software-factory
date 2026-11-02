@@ -983,6 +983,49 @@ runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and th
   the seconds it is down a POST is refused at the connection, and Slack still gets every alert, so nothing is lost that was not already
   only in Slack.
 
+### The owner's line (owner decision 4, 2026-11-01)
+
+Until now the factory reached the owner nowhere but `factory status` and the board. It now writes to Slack through Hermes, which only
+delivers: a message is a template filled with facts, never a model's words (SF2).
+
+- **The `Notifier` port** (`notify/port.ts`) has one call, `send(message)`, answering `ok` or an error and never throwing. `HermesNotifier`
+  runs `hermes send --to <target> --quiet` with the text on stdin and a 10 s process timeout (`HERMES_BIN`; `FACTORY_NOTIFY_TARGET`,
+  default `slack:#agents`: a channel name is no secret, and a message there never makes Hermes answer). `FACTORY_NOTIFY_TARGET=off` is the
+  `NullNotifier`: rows are still recorded and count as sent, with the reason in `error`. The tests use a fake.
+- **An outbox, never a port in a transaction.** `factory.notifications` (`key` primary). A rule that decides a message inserts its row
+  `ON CONFLICT DO NOTHING` in the transaction that decides it (`ask` in `recordDecision`, parked and the hold in `applyEvent`), so a rolled
+  back decision says nothing; the rules that read state (`notifyFailures`, the digest) run once a tick as statements of their own, and their
+  keys make a replay a no-op. The tick then sends: claim and commit (at most 5 rows, `attempts + 1`, `next_at` = now + a 2-minute lease),
+  call the notifier outside any transaction (the calls of one pass side by side, so a dead Hermes costs one timeout), record the result. A
+  failed send backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for a week. A
+  crash between the send and its record leaves the lease to run out and the row is sent again: **at-least-once**, so a message may arrive twice.
+- **What goes out**, one line each, `Issue <id> (<repo name>)` first, never a path or a hostname. Agent text (a question, a lead's reason, a
+  monitor name) is cut to 200 characters, reduced to one line, scrubbed of token and host shapes (best effort, `notify/text.ts`) and fenced in
+  “quotation marks” it cannot contain, so it reads as a quote and never as the factory's own sentence.
+
+  | Key | When | Notes |
+  |-|-|-|
+  | `notify:ask:<decision id>` | a `decisions` row is new | names `factory issue answer <id> "<text>" --decision <n>` |
+  | `notify:parked:<issue>:<revision>` | an Issue moved to `waiting` as `unreported` or `lead_gone` | a lead's own `block` or `park` is its report and sends nothing |
+  | `notify:failed:spawn:<spawn key>` | a lead spawn failed for good (last 24 h) | |
+  | `notify:failed:<start_lead\|finalize>:<effect key>` | an effect failed 3 times and is still open | |
+  | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
+  | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |
+  | `notify:digest:<date>` | 07:30 local | below |
+  | `notify:test:...` | `factory notify test` | |
+
+- **The digest** is a pure function (`renderDigest`) of what the database held: Issues closed in 24 h, shipped and watching, parked, decisions
+  open, failed spawns, quota per account, and what ran (spawns, session events, Issue events of the last 24 h). Plain text under 3000
+  characters, lists cut at eight. It is due from `FACTORY_DIGEST_AT` (`07:30`, or `off`) in `FACTORY_DIGEST_TZ` (`Europe/Berlin`) until noon
+  local time, once per local date (the key is the date): a server that was down at 07:30 sends it at start if it is before noon, and not at
+  three in the afternoon.
+- **The way back.** `factory issue answer <id> <text> [--decision <id>] [--id <call id>]` (`POST /issues/:id/answer`, on the token API and the
+  socket) files an `answer` event; the lead is told in a note. On the token API the answer is the owner's; on the socket it is recorded
+  as `socket` or `session <id>`, since a pane can reach it: a lead could answer its own question there, and the record is what shows it.
+- **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
+- **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
+  error if it did not arrive).
+
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.
 

@@ -31,6 +31,13 @@ export interface Config {
   agwBin: string
   /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Unset: no (decision 3, until Wave 4 is live) */
   alertLeads: boolean
+  /** `FACTORY_NOTIFY_TARGET`: where Hermes delivers the owner's messages; `off` sends nothing */
+  notifyTarget: string
+  /** `HERMES_BIN` */
+  hermesBin: string
+  /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
+  digestAt: string | null
+  digestTz: string
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -72,7 +79,34 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     slots: slots(env.FACTORY_SLOTS),
     agwBin: env.FACTORY_AGW_BIN || `${required('HOME')}/.local/bin/agw`,
     alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS),
+    notifyTarget: env.FACTORY_NOTIFY_TARGET || DEFAULT_NOTIFY_TARGET,
+    hermesBin: env.HERMES_BIN || `${required('HOME')}/.local/bin/hermes`,
+    digestAt: digestAt(env.FACTORY_DIGEST_AT),
+    digestTz: digestTz(env.FACTORY_DIGEST_TZ),
   }
+}
+
+/** A channel's name is not a secret, and a message to it never makes Hermes answer. */
+export const DEFAULT_NOTIFY_TARGET = 'slack:#agents'
+export const DEFAULT_DIGEST_AT = '07:30'
+export const DEFAULT_DIGEST_TZ = 'Europe/Berlin'
+
+function digestAt(value: string | undefined): string | null {
+  if (value === undefined || value === '') return DEFAULT_DIGEST_AT
+  if (value === 'off') return null
+  if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))
+    throw new Error(`FACTORY_DIGEST_AT must be HH:MM or off, got: ${value}`)
+  return value
+}
+
+function digestTz(value: string | undefined): string {
+  const zone = value || DEFAULT_DIGEST_TZ
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: zone })
+  } catch {
+    throw new Error(`FACTORY_DIGEST_TZ is not a time zone: ${zone}`)
+  }
+  return zone
 }
 
 /** A switch: unset or empty is off; `1`/`true`/`on` is on; anything else is a mistake that must not read as either. */

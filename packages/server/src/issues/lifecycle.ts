@@ -1,5 +1,6 @@
 import { ISSUE_VERBS, type IssueOutcome, type IssueState, type WaitReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { notifyMove } from '../notify/rules.ts'
 import { addDependency, releaseDependents } from './deps.ts'
 import { answerDecision, recordDecision } from './decisions.ts'
 import type { EffectKind } from './effects.ts'
@@ -259,6 +260,8 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     { issueId: issue.id, key: row.key, kind, from: issue.state, to: step.to ?? null, at: row.at },
     row.payload,
   )
+  // The owner hears of a park by the factory itself and of a regression, in the transaction that decided it.
+  await notifyMove(tx, { issue: moved, kind, payload: row.payload, now })
   if (step.to === 'closed') {
     // A closed Issue wants no lead, no note and no check: an older `finalize` still has work to do.
     await tx`
