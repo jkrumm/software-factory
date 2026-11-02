@@ -10,20 +10,26 @@ export const FETCH_TIMEOUT_MS = 30_000
 export async function gitIn(
   repo: string,
   args: string[],
-  options: { run?: Run; timeoutMs?: number; git?: string } = {},
+  options: { run?: Run; timeoutMs?: number; git?: string; signal?: AbortSignal } = {},
 ): Promise<{ exitCode: number; stdout: string }> {
   const run = options.run ?? runProcess
   const done = await run(
     [options.git ?? 'git', '-C', repo, ...args],
     options.timeoutMs ?? GIT_TIMEOUT_MS,
     childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+    undefined,
+    // With a signal (the server is stopping) a kill reaches what git started.
+    options.signal ? { group: true, signal: options.signal } : undefined,
   )
   if (done.exitCode === EXIT_TIMEOUT) throw new Error(`git ${args[0]} did not finish in time`)
   return done
 }
 
 /** Asks the remote what it has now. False when it could not: what the last fetch left is then the best there is. */
-export const fetchOrigin = async (repo: string, options: { run?: Run; git?: string } = {}): Promise<boolean> => {
+export const fetchOrigin = async (
+  repo: string,
+  options: { run?: Run; git?: string; signal?: AbortSignal } = {},
+): Promise<boolean> => {
   const done = await gitIn(repo, ['fetch', '-q', 'origin'], { ...options, timeoutMs: FETCH_TIMEOUT_MS }).catch(
     () => undefined,
   )
@@ -102,4 +108,42 @@ export async function originDefault(
     if (found.exitCode === 0) return candidate
   }
   return undefined
+}
+
+export interface DeployedCheck {
+  ok: boolean
+  /** what was found, in words the lead reads as the reason of a red check */
+  detail: string
+}
+
+/**
+ * Whether the deployed commit `make version` printed holds every shipped commit: each is an ancestor of it, or it. Only reads: a deployed
+ * commit the repo has not seen yet is fetched for, and no working tree or branch is touched. A squash ships one merge commit, which the
+ * deployed one must hold the same way.
+ */
+export async function deployedHolds(
+  repo: string,
+  deployed: string,
+  shipped: readonly string[],
+  options: { run?: Run; git?: string; signal?: AbortSignal } = {},
+): Promise<DeployedCheck> {
+  const git = (args: string[]) => gitIn(repo, args, options)
+  const resolve = () => git(['rev-parse', '-q', '--verify', `${deployed}^{commit}`])
+  let known = await resolve()
+  if (known.exitCode !== 0) {
+    await fetchOrigin(repo, options)
+    known = await resolve()
+  }
+  if (known.exitCode !== 0) return { ok: false, detail: `the deployed commit ${deployed} is not in ${repo}` }
+  const full = known.stdout.trim()
+  const behind: string[] = []
+  for (const sha of shipped) {
+    if ((await git(['merge-base', '--is-ancestor', sha, full])).exitCode !== 0) behind.push(sha.slice(0, 12))
+  }
+  return behind.length === 0
+    ? { ok: true, detail: `deployed ${full.slice(0, 12)} holds ${shipped.length} shipped commit(s)` }
+    : {
+        ok: false,
+        detail: `deployed ${full.slice(0, 12)} does not hold the shipped ${behind.join(', ')}: \`make deploy\` has not run on them`,
+      }
 }

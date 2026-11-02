@@ -94,6 +94,8 @@ commands:
                     wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
                     ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
                            the merged commits; refused (exit 5, saying what is missing) until the evidence they require is on record
+                           deploy mode make: deploy from the repo's main checkout first (git pull --ff-only, make deploy, make verify, make version);
+                           the hold then runs make version (the deployed commit sha) and is red unless it holds the commits
                     close  --summary <text> (--commit <sha> … | --document <path or url>)
                            done, nothing deployed; refused (exit 5) when the commits touch deployable paths
                     block  --reason <text>                              it cannot go on and nobody can answer

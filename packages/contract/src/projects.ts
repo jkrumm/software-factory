@@ -89,7 +89,17 @@ export const defaultManifest = (name: string): ProjectManifest =>
   ProjectManifest.parse({ apiVersion: MANIFEST_API_VERSION, name })
 
 /** The targets of the make contract (design §9). */
-export const MAKE_CONTRACT = ['check', 'test', 'deploy', 'verify', 'restart', 'quality', 'logs', 'status'] as const
+export const MAKE_CONTRACT = [
+  'check',
+  'test',
+  'deploy',
+  'verify',
+  'version',
+  'restart',
+  'quality',
+  'logs',
+  'status',
+] as const
 export type MakeTarget = (typeof MAKE_CONTRACT)[number]
 
 /** Which contract targets a project's Makefile has; `makefile` is false when there is none (and then every target is). */
@@ -99,6 +109,8 @@ export const MakeTargets = z.object({
   test: z.boolean(),
   deploy: z.boolean(),
   verify: z.boolean(),
+  /** prints the deployed commit sha, one line: what the hold reads to know the shipped commits are deployed */
+  version: z.boolean().default(false),
   restart: z.boolean(),
   quality: z.boolean(),
   logs: z.boolean(),

@@ -686,7 +686,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   `factory issue evidence <id> --kind ui|service|infra|data` (`--link`, `--file`, `--stdin`; at most 32 KiB) is a row in `evidence` keyed
   `evidence:<issue>:<attempt>:<call id>`, by the lead or the owner, under the same rules as a verb, and takes nothing for a closed Issue.
 - **The hold.** `ship` moves it to `watching` with `wake_at` at now plus the manifest's `hold`. A passed `wake_at` is `hold_over`, which plans `verify`:
-  no check for two minutes after the server starts (`make deploy` writes what `make verify` compares only once `/health` answers, so a hold ending in a deploy would read as a regression), then off the tick, `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
+  no check for two minutes after the server starts (`make deploy` writes what `make verify` compares only once `/health` answers, so a hold ending in a deploy would read as a regression), then off the tick. Under `deploy.mode: make`, when the ship that started this hold changed something that deploys (its `derived.required` is not empty; the ship row is the newest applied one of this attempt), the first check is `make version` in the repo (`deployed version`: 30 s, read-only, a static read of the Makefile for the target): it must print one line, the deployed commit sha, and every commit the lead named (`derived.reported`, the merge commit of a squash; else `derived.commits`; none is red, never skipped) must be that commit or an ancestor of it (`deployedHolds`, `issues/origin.ts`; a deployed commit the repo has not seen is fetched for). Behind it, no `make version` target, output that is no sha, a failure or a timeout is a red check with its reason, and `add \`make version\`: the deployed commit sha` where there is no target, which the lead fixes in its own repo. A ship that deploys nothing, the modes `auto`, `agentic` and `none`, and a ship from before the evidence gate skip it. **The factory never writes a checkout:** it does not pull, fast-forward or clean one, and deploying from the main checkout is the lead's job (§5). The probes and `make verify` run whether the version check is red or not, so the lead sees every signal. Then `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
   an HTTP GET per probe (15 s, redirects are answers), pass or fail, never averaged. No check at all is green. Green files `verified`: closed, the
   results in `evidence` (kind `hold`, author `factory`). Red files `regression` naming the hold: back to `working`, one note to the same lead under
   `issue:<id>:regression:<hold>` with the results as JSON on one line, data, and `notify:regression:<issue>:<hold>` on the owner's line. A check whose hold ended meanwhile files nothing, and one whose answer is filed
@@ -786,7 +786,13 @@ kinds and how the check runs: §4, "The evidence gate".
 | API or service | `make verify`; error rate and p95 of the changed endpoints, before and after |
 | Infra or config | the service's status and logs after the change |
 | Data or migration | the queries that show the data is right |
+| Deploy mode `make`, any change that deploys | the deployed version: the hold reads `make version` and is red unless it holds the shipped commits (§4, "The hold") |
 | Nothing deployed | the commit or the document, via `factory issue close` |
+
+Under mode `make` the brief orders the deploy in the project section (identical in every brief of that mode but for the path): in the repo's
+**main checkout**, check it is on the default branch and clean, `git pull --ff-only`, `make deploy`, `make verify`, `make version`, then `ship`;
+never from the lead's worktree, because a repo whose `make setup` links its own `pwd` would point the install at a directory that goes away. The
+deployed version is read, not claimed: no evidence item stands for it, and the factory does not move the checkout to make the code present.
 
 **No lead edits a probe within the Issue it ships.** Each deployable project lists a few user-journey probes, pass
 or fail, never averaged. The factory runs them after every hold. Tests a model wrote for its own change can give
@@ -938,9 +944,9 @@ ticktick: { list: WeatherOrb }
 
 - **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Later (F3):** signals, heal, jobs, ticktick: accepted and dropped, so an F3 manifest does not break F2.
 - **A broken manifest** becomes an upkeep Issue; the factory keeps running on the last valid version.
-- **Make contract:** `check`, `test`, `deploy`, `verify`, `restart`, `quality`, `logs`, `status`. `check`, `test` and
+- **Make contract:** `check`, `test`, `deploy`, `verify`, `version`, `restart`, `quality`, `logs`, `status`. `version` prints the deployed commit sha, one line, and only reads. `check`, `test` and
   `quality` take `BASE=<ref>`. Every target ends in a one-line verdict. A repo is onboarded when it first has signals
-  or Issues, with the targets that path needs. The factory itself runs only `restart` and `verify`.
+  or Issues, with the targets that path needs. The factory itself runs only `restart`, `verify` and `version`.
 - **No manifest:** requests only, one lead, done means the commit or document.
 - **Project key:** the repo's directory name under `~/SourceRoot`. `factory.projects` and the `usage` schema's
   normalised repos use the same slug (U4). No cross-schema foreign key until both exist.
