@@ -1,0 +1,12 @@
+2026-11-02T05:20:29.064Z run seeded-bug/b3: release 9bc57ae5f45f, base commit a3f7642
+2026-11-02T05:20:34.220Z scratch: factory-gameday-bug up; project {"name":"factory-gameday-bug","source":"manifest","mode":"make","hold":"1m","make":{"check":true,"deploy":true,"verify":true}}
+2026-11-02T05:20:34.506Z make check on the scratch repo: check: ok
+2026-11-02T05:20:34.794Z seed armed: the deployed copy before the Issue says: wordstat: MAX_WORDS in config/limits.conf is not a number 
+2026-11-02T05:20:35.035Z issue 37 filed (source_key f2-bug-b3)
+2026-11-02T05:20:36.192Z issue 37: queued/ (attempt 0, hold 0) | lead: none
+2026-11-02T05:20:46.199Z issue 37: working/ (attempt 1, hold 0) | lead: none
+2026-11-02T05:21:28.723Z issue 37: watching/ (attempt 1, hold 1) | lead: working turn=1
+2026-11-02T05:22:42.523Z issue 37: closed/ (attempt 1, hold 1) | lead: dead turn=1
+2026-11-02T05:22:51.454Z ships 1, regressions 0, production check failures seen by the lead 10
+teardown: factory-gameday-bug removed
+2026-11-02T05:22:54.666Z run seeded-bug/b3: 0 failed lines, wall 146 s

@@ -1,0 +1,22 @@
+{
+  "id": 37,
+  "state": "closed",
+  "reason": null,
+  "outcome": "done",
+  "source": "request",
+  "sourceKey": "f2-bug-b3",
+  "repo": "~/SourceRoot/factory-gameday-bug",
+  "title": "Add a --longest flag to wordstat: with it the output line gets longest=<word> appended, the first of the longest words. Add a test for it.",
+  "kind": "feature",
+  "class": "routine",
+  "size": "s",
+  "tier": "sonnet",
+  "effort": "medium",
+  "classifiedAt": "2026-11-02T05:20:38.797Z",
+  "parent": null,
+  "attempt": 1,
+  "wakeAt": null,
+  "createdAt": "2026-11-02T05:20:34.966Z",
+  "updatedAt": "2026-11-02T05:22:31.700Z",
+  "closedAt": "2026-11-02T05:22:36.590Z"
+}

@@ -1,0 +1,11 @@
+05:20:41.563|admitted||applied||admit:37:1
+05:20:57.737|session_started|lead-37-1|ignored||lead-37-1:session_started:0
+05:20:57.840|turn_started|lead-37-1|ignored||lead-37-1:turn_started:1
+05:21:00.006|phase|lead-37-1|applied||37:1:phase:f73bda7e-1cf8-493f-8946-77266795ac2e
+05:21:21.515|ship|lead-37-1|refused|ship refused, evidence missing recorded after the merged commit (2026-11-02T05:21:17.000Z): infra (the service's status and logs after the change). File each with `factory issue evidence 37 --kind <kind> --link <url>`, then ship again.|37:1:ship:d8fa1f20-4e59-46ab-b773-b2054e8652f9
+05:21:26.335|ship|lead-37-1|applied||37:1:ship:83e3f450-7295-4ec6-9f20-e93217ca00f4
+05:21:35.004|turn_ended|lead-37-1|ignored||lead-37-1:turn_ended:1
+05:22:31.575|hold_over||applied||hold:37:1:1
+05:22:31.700|verified||applied||verified:37:1
+05:22:35.041|prompt_idle|lead-37-1|ignored||lead-37-1:prompt_idle:1
+05:22:36.761|session_ended|lead-37-1|ignored||lead-37-1:session_ended:1

@@ -1,0 +1,5 @@
+05:21:21|service|lead-37-1|1||{"note": "make verify: ok 43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b (selftest: ok words=9 lines=2)"}
+05:21:23|infra|lead-37-1|1||{"text": "verify: ok 43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b (selftest: ok words=9 lines=2)\n43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b\n"}
+05:21:23|service|lead-37-1|1||{"text": "verify: ok 43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b (selftest: ok words=9 lines=2)\n"}
+05:22:31|hold|factory|1||{"hold": 1, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok 43a2ee1df2daa1327719b2e12f9ebf4d8fdab62b (selftest: ok words=9 lines=2)"}]}
+05:22:37|transcript|factory|1|~/.local/share/factory/archive/37/1/0fecb498-c3b4-47ae-b1b7-32c5e2c85d7d.jsonl|{"session": "lead-37-1", "claudeSessionId": "0fecb498-c3b4-47ae-b1b7-32c5e2c85d7d"}
