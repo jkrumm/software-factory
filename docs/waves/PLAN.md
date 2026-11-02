@@ -132,5 +132,8 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] FV Wave 1 (PR #32, `b7813fd`): 2 h 51 wall, `worker` Sonnet on `me2` (context 70 %); the lead's two `/code-review high` found 11 + 9, the second round 7
   IuRoot leaks through a redacted socket view, so `/fleet` became token-only. Live: 23 repos (2 IuRoot, visible), 19 asks (16 queue,
   14 older than 24 h), 0 errors; the socket answers `fleet needs FACTORY_TOKEN`.
-- [ ] FV Waves 2–6 in order, the board's waves after the factory's they read.
+- [x] FV Wave 2 (PR #33, `077bca9`): 3 h 14 wall, `worker` Sonnet on `me2` (context 68 %); the lead's three `/code-review high` found 10 + 8 + 8,
+  most in the call's lifecycle (a paid run repeated every pass, a dead run blocking a day), simplified in the third round. Live: first
+  pass 2 calls, 128 items, $0.0043; 133 wave shorts; no IuRoot item in the cache (IuRoot shorts are the headings cut at 8 words).
+- [ ] FV Waves 3–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.

@@ -42,7 +42,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
   and `at`.
 - [ ] Tests through the API; a recorded fixture of today's estate (16 queue requests, 4 stale plans) as the golden read.
 
-## Wave 2 — The digest            <!-- status: pending -->
+## Wave 2 — The digest            <!-- status: done -->
 - [ ] Every 5 min: a fingerprint per item (turn count, plan sha, queue ids, attention); unchanged items cost nothing. Changed,
   non-IuRoot items go to **one** `agw digest` call (batched, schema-checked), results cached by content hash in a table: a plan's
   short titles once per heading change, a headline at most once per new turn.
