@@ -163,7 +163,8 @@ function projectSection({ project, worktree, attempt }: BriefInput): string {
   return [
     '## The project',
     '',
-    `- Name: ${project.name}. Attempt ${attempt}. You work in \`${worktree.path}\` on branch \`${worktree.branch}\`, cut from the remote's default branch.`,
+    // The path is a directory name somebody chose: quoted as a string, so a newline or a backtick in it ends nowhere.
+    `- Name: ${project.name}. Attempt ${attempt}. You work in ${JSON.stringify(worktree.path)} on branch ${JSON.stringify(worktree.branch)}, cut from the remote's default branch.`,
     `- Make contract: ${makeContract(project.makeTargets)}`,
     `- Deploy mode: ${deploy.mode} (hold after shipping: ${deploy.hold})`,
     '',
