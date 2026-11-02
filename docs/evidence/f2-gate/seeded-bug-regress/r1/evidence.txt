@@ -1,0 +1,6 @@
+06:05:59|service|lead-40-1|1||{"text": "words=4 lines=1 longest=quick\n"}
+06:05:59|service|lead-40-1|1||{"note": "make verify ok at 418347a; deployed --longest outputs words=4 lines=1 longest=quick"}
+06:07:27|service|lead-40-1|1||{"text": "MAX_WORDS=3\nverify: ok 76eea4dcf0ad4c63f6a43ddd5446b395ba0de4f0 (selftest: ok words=9 lines=2)\nwords=3 lines=1 longest=quick\n"}
+06:07:27|service|lead-40-1|1||{"note": "make verify ok at 76eea4d with production MAX_WORDS=3"}
+06:08:27|hold|factory|1||{"hold": 2, "checks": [{"ok": true, "name": "make verify", "detail": "exit 0: verify: ok 76eea4dcf0ad4c63f6a43ddd5446b395ba0de4f0 (selftest: ok words=9 lines=2)"}]}
+06:08:33|transcript|factory|1|~/.local/share/factory/archive/40/1/1cb9e747-cd60-48c6-8b98-41fd1913b7f2.jsonl|{"session": "lead-40-1", "claudeSessionId": "1cb9e747-cd60-48c6-8b98-41fd1913b7f2"}

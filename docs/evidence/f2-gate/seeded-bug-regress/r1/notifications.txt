@@ -1,0 +1,1 @@
+06:07:07|notify:regression:40:1|regression|sent|Issue 40 (factory-gameday-regress) regressed after its ship (hold 1) and went back to its lead: “make verify failed”

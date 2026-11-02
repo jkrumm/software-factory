@@ -1,0 +1,15 @@
+2026-11-02T06:05:05.083Z run seeded-bug-regress/r1: release 9bc57ae5f45f, base commit 304b84f
+2026-11-02T06:05:10.226Z scratch: factory-gameday-regress up; project {"name":"factory-gameday-regress","source":"manifest","mode":"make","hold":"1m","make":{"check":true,"deploy":true,"verify":true}}
+2026-11-02T06:05:10.475Z make check on the scratch repo: check: ok
+2026-11-02T06:05:10.699Z no seed: the deployed copy before the Issue says: selftest: ok words=9 lines=2
+2026-11-02T06:05:11.029Z issue 40 filed (source_key f2-seeded-bug-regress-r1)
+2026-11-02T06:05:12.492Z issue 40: queued/ (attempt 0, hold 0) | lead: none
+2026-11-02T06:05:22.987Z issue 40: working/ (attempt 1, hold 0) | lead: none
+2026-11-02T06:06:03.456Z production break: the deployed config now says MAX_WORDS=3 (outside the repo, Issue 40 watching, hold 1); deployed self test: wordstat: 9 words exceed MAX_WORDS=3 (config/limits.conf) selftest: FAIL 
+2026-11-02T06:06:04.985Z issue 40: watching/ (attempt 1, hold 1) | lead: idle turn=1
+2026-11-02T06:07:13.025Z issue 40: working/ (attempt 1, hold 1) | lead: working turn=2
+2026-11-02T06:07:32.252Z issue 40: watching/ (attempt 1, hold 2) | lead: idle turn=2
+2026-11-02T06:08:36.599Z issue 40: closed/ (attempt 1, hold 2) | lead: dead turn=2
+2026-11-02T06:08:45.563Z ships 2, regressions 1, production check failures seen by the lead 0
+teardown: factory-gameday-regress removed
+2026-11-02T06:08:52.329Z run seeded-bug-regress/r1: 1 failed lines, wall 228 s

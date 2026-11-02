@@ -1,0 +1,3 @@
+76eea4d 07:07:22 fix: self-test uses its own limit, not the production MAX_WORDS
+418347a 07:05:53 feat: add --longest flag to wordstat
+0c252e7 07:05:05 chore: scratch repo for the F2 gamedays

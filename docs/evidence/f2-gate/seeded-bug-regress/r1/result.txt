@@ -1,0 +1,32 @@
+PASS	the Issue ran to its close without the owner (not stuck, not idle)	expected 1	got 1
+PASS	Issue after the run: closed/done, attempt 1	expected closed|done|1	got closed|done|1
+PASS	ships (watching entered)	expected at least 1	got 2
+PASS	evidence rows by the lead (not the factory) before the first ship	expected at least 1	got 2
+PASS	the Issue was watching (hold_over events)	expected at least 1	got 2
+NOTE	the fault was caught by make verify after the hold (regression), not by the lead's own production check
+PASS	the production break landed while the Issue was watching, before the hold ended	expected 1	got 1
+PASS	notify:regression:40:1 sent, once (within 60 s)	expected yes	got yes
+PASS	no other regression filed (only the first hold's)	expected 1	got 1
+PASS	repo untouched by the break: deploy/limits.conf on origin/master is not the fault	expected yes	got yes
+PASS	regression events (one: the first hold)	expected 1	got 1
+PASS	regression key and move	expected regression:40:1|watching|working	got regression:40:1|watching|working
+PASS	the regression came after hold_over	expected 1	got 1
+PASS	regression note to the same lead (prompt row, session)	expected issue:40:regression:1|lead-40-1	got issue:40:regression:1|lead-40-1
+PASS	notify:regression rows	expected 1	got 1
+PASS	one lead session, one lead worktree for the Issue across the regression	expected 1|1|1	got 1|1|1
+PASS	turns the lead started after the regression (it acted on the note)	expected at least 1	got 1
+PASS	ships after the fix (the second hold)	expected 2	got 2
+PASS	verified holds: the second hold only	expected verified:40:2	got verified:40:2
+PASS	regression detail names the deployed config	expected yes	got yes
+PASS	production now: the deployed copy's self test	expected selftest: ok words=9 lines=2	got selftest: ok words=9 lines=2
+FAIL	the shipped program: --longest on the sample names the longest word (the deployed copy)	expected yes	got no
+PASS	origin/master's test/run.sh passes (exit status and last line)	expected 0|check: ok	got 0|check: ok
+PASS	uncommented lines in test/run.sh that run bin/wordstat --longest	expected at least 1	got 2
+PASS	finalize ran once (issue_finalized events)	expected 1	got 1
+PASS	claim rows after finalize	expected 0	got 0
+PASS	live terminals of the lead after finalize (tab closed)	expected 0	got 0
+PASS	the lead's worktree directory after finalize	expected no	got no
+PASS	transcripts in the archive for the attempt	expected at least 1	got 1
+PASS	evidence rows of kind transcript	expected at least 1	got 1
+PASS	the scratch repo, its remote and the deployment were removed	expected yes	got yes
+NOTE	FINDING, the one FAIL is real: the lead diagnosed the cause (production's config was set to MAX_WORDS=3 after its deploy, and make deploy keeps an existing production config) but did not repair production. It changed --self-test to check its sample against its own fixed limit and left MAX_WORDS=3 in production, so the second hold is green while the shipped program still rejects the 9-word sample there. The machine behaved on every line; whether weakening a check counts as a fix is the lead's call and the review's, which the factory does not judge.
