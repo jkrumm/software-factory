@@ -51,9 +51,10 @@ const VERSION_TIMEOUT_MS = 30_000
 const SHA = /^[0-9a-f]{7,64}$/
 const STDERR_MARK = '\n--stderr--\n'
 /** make's own words for a target it does not have (or no Makefile at all), read under `LC_ALL=C`. */
-const NO_VERSION_TARGET = /No rule to make target\s+[`'\u2018"]?version['\u2019"]?|no makefile found/i
+const NO_VERSION_TARGET = /No rule to make target\s+[`'\u2018"]version['\u2019"]|no makefile found/i
 /** stdout is what `make version` prints and nothing else; stderr is kept apart, for the reason of a failure. */
 const VERSION_SCRIPT = `t=$(mktemp) || exit 1
+trap 'rm -f "$t"' EXIT TERM INT
 make --no-print-directory -s -C "$1" version 2>"$t"
 st=$?
 if [ "$st" -ne 0 ]; then printf '%s' '${STDERR_MARK}'; tail -c ${MAX_DETAIL_CHARS} "$t"; fi
@@ -93,17 +94,16 @@ export class MakeAndProbes implements Proof {
         { group: true, signal },
       )
       if (done.exitCode === EXIT_TIMEOUT) return red(`make version did not finish in ${VERSION_TIMEOUT_MS / 1000} s`)
-      const [printed = '', stderr = ''] = done.stdout.split(STDERR_MARK)
       if (done.exitCode !== 0) {
+        // The script adds the marker and the end of stderr only on a failure.
+        const [printed = '', stderr = ''] = done.stdout.split(STDERR_MARK)
         if (NO_VERSION_TARGET.test(stderr)) return red(NO_TARGET_LINE)
         return red(`make version exit ${done.exitCode}: ${tail(printed.trim())} ${tail(stderr.trim())}`.trimEnd())
       }
-      if (!SHA.test(printed.trim()))
-        return red(`make version printed ${JSON.stringify(tail(printed.trim()))}: one line, the deployed commit sha`)
-      return {
-        name,
-        ...(await deployedHolds(repo, printed.trim(), version.landedAt, { run: this.options.run, signal })),
-      }
+      const printed = done.stdout.trim()
+      if (!SHA.test(printed))
+        return red(`make version printed ${JSON.stringify(tail(printed))}: one line, the deployed commit sha`)
+      return { name, ...(await deployedHolds(repo, printed, version.landedAt, { run: this.options.run, signal })) }
     } catch (error) {
       // Neither make nor git failing to answer is a retry: the lead is told, with the other checks beside it.
       return red(error instanceof Error ? error.message : String(error))

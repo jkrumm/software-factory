@@ -998,6 +998,13 @@ describe('the deployed version', () => {
     expect(check?.detail).toContain('make version exit')
   })
 
+  test('a missing prerequisite that merely starts with `version` is not a missing `version` target', async () => {
+    const { repo, c2 } = deployable('versions-prereq-h', 'version: version.h\n\t@true\n')
+    const [check] = await run(repo, c2)
+    expect(check?.detail).not.toBe(NO_TARGET_LINE)
+    expect(check?.detail).toContain('make version exit')
+  })
+
   test('garbage, two lines, a failure with its stderr, and a sha the repo lacks are red, each with its reason', async () => {
     const garbage = deployable('versions-garbage', 'version:\n\t@echo the version is 3\n')
     const printed = await run(garbage.repo, garbage.c2)
