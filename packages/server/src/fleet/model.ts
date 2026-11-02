@@ -153,6 +153,10 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   const repoOf = (path: string | undefined) => (path ? enclosingRepo(path, input.roots) : undefined)
   const spawnRepo = new Map(status.queue.spawns.map((s) => [s.key, repoOf(s.repo)]))
   const issueRepo = new Map(status.issues.map((i) => [i.id, repoOf(i.repo)]))
+  const spawnVisible = new Set(
+    status.queue.spawns.filter((x) => input.isVisible(x.repo) || input.isVisible(x.space)).map((x) => x.key),
+  )
+  const issueVisible = new Set(status.issues.filter((i) => input.isVisible(i.repo)).map((i) => i.id))
 
   const repos: FleetRepo[] = []
   const planErrors: string[] = []
@@ -204,13 +208,25 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
 
   const asks: FleetAsk[] = []
   const ask = (
-    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'visible'> & { plan?: string | null },
+    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'visible'> & {
+      plan?: string | null
+      /** a place the ask is known to be in besides its repo and session (the spawn's or the Issue's own path) */
+      visibleBy?: boolean
+    },
   ) => {
     const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
     // Visible by its place, listed or not: an Issue's decision in an IuRoot repo with no plan and no session is still IuRoot's.
     const visible =
       (a.repo !== null && input.isVisible(a.repo)) || (a.session !== null && visibleSessions.has(a.session))
-    asks.push({ short: null, suggestion: null, actions: [], ...a, plan: a.plan ?? planOf, visible })
+    const { visibleBy, ...rest } = a
+    asks.push({
+      short: null,
+      suggestion: null,
+      actions: [],
+      ...rest,
+      plan: a.plan ?? planOf,
+      visible: visible || visibleBy === true,
+    })
   }
   const visibleSessions = new Set(input.sessions.filter((m) => m.session.visible).map((m) => m.session.id))
 
@@ -275,6 +291,9 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
       text: line,
       source: 'factory',
       at: seen(id),
+      visibleBy:
+        (subject.spawn !== undefined && spawnVisible.has(subject.spawn)) ||
+        (subject.issue !== undefined && issueVisible.has(subject.issue)),
     })
   }
 
@@ -314,7 +333,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     unplaced,
     redacted: false,
     quota: status.accounts,
-    queue: status.queue,
+    queue: { ...status.queue, visibleSpawns: [...spawnVisible] },
     errors: [...input.errors, ...planErrors],
   }
 }

@@ -682,9 +682,63 @@ describe('the lead’s review', () => {
       expect(view.asks.find((a) => a.id === 'decision:iu1:dec')).toMatchObject({ kind: 'question', text: null })
       expect(view.asks.find((a) => a.id === 'factory:spawn:iu-fix')).toMatchObject({ text: null })
       expect(view.queue.spawns.find((x) => x.key === 'iu-fix')).toMatchObject({ status: 'failed', error: null })
-      expect(JSON.stringify(view)).not.toContain('secret IuRoot')
+      for (const seeded of ['Secret IuRoot title', 'Ship the secret IuRoot migration?', 'secret IuRoot failure detail'])
+        expect(JSON.stringify(view)).not.toContain(seeded)
       // an ordinary repo's ask is whole
       expect(view.asks.find((a) => a.id === 'queue:20261027T230130-2786')?.text).toContain('LoA')
+    })
+  })
+
+  test('A3: a spawn in a custom visible root, or one whose space is in IuRoot, loses its error; an error line naming a visible repo is withheld', async () => {
+    const custom = mkdtempSync('/tmp/factory-fleet-custom-')
+    try {
+      const quiet = makeRepo(custom, 'quiet-custom', { 'README.md': 'x\n' }, 1, NOW)
+      await db.sql`
+        INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, error, created_at)
+        VALUES ('custom-fix', ${quiet}, 'p', 'worker', 'sonnet', 'high', 'failed', 'Custom Root Failure Detail', ${w.at(20)})`
+      await db.sql`
+        INSERT INTO factory.spawns (key, repo, space, prompt, role, tier, effort, status, error, created_at)
+        VALUES ('space-fix', ${join(estate.src, 'rb')}, ${join(estate.iu, 'prometheus-epx')}, 'p', 'worker', 'sonnet', 'high', 'failed', 'Space Failure Detail', ${w.at(20)})`
+      const failEpx: typeof runProcess = async (cmd) =>
+        cmd.some((part) => part.endsWith('prometheus-epx')) ? { exitCode: 128, stdout: '' } : runProcess(cmd, 5_000)
+      const wide = new FleetBuilder({
+        sql: db.sql,
+        now: () => clock.now(),
+        roots: [estate.src, custom],
+        visibleRoots: [custom, estate.iu],
+        home: '/nonexistent-home',
+        hc,
+        queue,
+        git: new GitReader(failEpx),
+      })
+      const built = await wide.refreshNow()
+      expect(built.errors.some((e) => e.startsWith('git prometheus-epx:'))).toBe(true)
+      await withSocket(async (socketPath) => {
+        const view = await viaSocket(socketPath)
+        expect(view.queue.spawns.find((x) => x.key === 'custom-fix')?.error).toBeNull()
+        expect(view.queue.spawns.find((x) => x.key === 'space-fix')?.error).toBeNull()
+        expect(view.asks.find((a) => a.id === 'factory:spawn:custom-fix')?.text).toBeNull()
+        expect(view.errors.some((e) => e.includes('prometheus-epx'))).toBe(false)
+        expect(view.errors).toContain('git: an error in a visible repo (withheld)')
+        for (const seeded of ['Custom Root Failure Detail', 'Space Failure Detail'])
+          expect(JSON.stringify(view)).not.toContain(seeded)
+      })
+      // the token API's model has all of it
+      const full = await get()
+      expect(full.queue.spawns.find((x) => x.key === 'custom-fix')?.error).toBe('Custom Root Failure Detail')
+      expect(full.queue.visibleSpawns.sort()).toEqual(['custom-fix', 'space-fix'])
+    } finally {
+      rmSync(custom, { recursive: true, force: true })
+    }
+  })
+
+  test('a snapshot an older release wrote is not ready, not a 500', async () => {
+    await db.sql`
+      INSERT INTO factory.fleet_snapshot (id, model, fingerprint, built_at)
+      VALUES (1, '{"builtAt":"2026-11-01T00:00:00.000Z","summary":{}}'::jsonb, 'old', ${w.at(10)})`
+    expect((await app.get('/fleet')).status).toBe(503)
+    await withSocket(async (socketPath) => {
+      expect((await fetch('http://localhost/fleet', { unix: socketPath })).status).toBe(503)
     })
   })
 

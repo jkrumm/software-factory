@@ -231,6 +231,11 @@ export type ErrorBody = z.infer<typeof ErrorBody>
 /** `GET /fleet` (`packages/contract/src/fleet.ts`): the read model, with the quota and the queue as `factory status` has them. */
 export const Fleet = FleetBody.extend({
   quota: z.array(Quota),
-  queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
+  queue: z.object({
+    effective: QueueState,
+    spawns: z.array(Spawn),
+    /** the keys of the spawns whose repo or space is in a visible place (listed in `repos` or not): the socket's view withholds their error */
+    visibleSpawns: z.array(z.string()),
+  }),
 })
 export type Fleet = z.infer<typeof Fleet>

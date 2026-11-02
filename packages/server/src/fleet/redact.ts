@@ -7,8 +7,9 @@ import type { Fleet, FleetAsk, FleetPlan, FleetRepo, FleetSession, Spawn } from 
  * counts, dates, shas and wave numbers and statuses. What goes (null): plan titles, goals and shorts, wave titles and status
  * texts, commit subjects, Claude's titles and headlines, an ask's text, a spawn's error.
  *
- * Not covered, said in `docs/design.md` §11: `errors[]` lines (the factory's own words with a repo name or a path), a spawn's key,
- * and the human queue's requests, which name no repo.
+ * Also withheld: the error of a spawn in a visible place (`queue.visibleSpawns`), and an `errors[]` line that names a visible repo
+ * (its kind and the fact remain). Not covered, said in `docs/design.md` §11: the human queue's requests, which name no repo, and
+ * quota, which holds numbers and account names.
  *
  * Pure: the stored snapshot is untouched.
  */
@@ -87,21 +88,49 @@ const ask = (a: FleetAsk): FleetAsk =>
       }
     : a
 
-/** A spawn is IuRoot's when it runs in a visible repo of the model or anywhere in a directory named IuRoot. */
-const spawn = (s: Spawn, visibleSpaces: ReadonlySet<string>): Spawn =>
-  s.repo.split('/').includes('IuRoot') ||
-  [...visibleSpaces].some((space) => s.repo === space || s.repo.startsWith(`${space}/`))
-    ? { ...s, error: null }
+/** A spawn in a visible place keeps its key, status, account and times; its error text goes. */
+const spawn = (s: Spawn, visibleKeys: ReadonlySet<string>): Spawn =>
+  visibleKeys.has(s.key)
+    ? {
+        key: s.key,
+        status: s.status,
+        repo: s.repo,
+        space: s.space,
+        role: s.role,
+        tier: s.tier,
+        effort: s.effort,
+        hold: s.hold,
+        account: s.account,
+        resumeAt: s.resumeAt,
+        attempts: s.attempts,
+        session: s.session,
+        pane: s.pane,
+        tab: s.tab,
+        workspace: s.workspace,
+        error: null,
+        parent: s.parent,
+        placement: s.placement,
+      }
     : s
 
+/** An `errors[]` line that names a visible repo (`git <name>: …`, `plan <name>/…`, or its path) keeps only its kind. */
+const errorLine = (line: string, visibleRepos: readonly { name: string; space: string }[]): string => {
+  const hit = visibleRepos.some(
+    (r) => line.startsWith(`git ${r.name}:`) || line.startsWith(`plan ${r.name}/`) || line.includes(r.space),
+  )
+  return hit ? `${line.split(/[ :]/)[0]}: an error in a visible repo (withheld)` : line
+}
+
 export function redactVisible(fleet: Fleet): Fleet {
-  const visibleSpaces = new Set(fleet.repos.filter((r) => r.visible).map((r) => r.space))
+  const visibleRepos = fleet.repos.filter((r) => r.visible)
+  const visibleKeys = new Set(fleet.queue.visibleSpawns)
   return {
     ...fleet,
     redacted: true,
     repos: fleet.repos.map(repo),
     unplaced: fleet.unplaced.map(session),
     asks: fleet.asks.map(ask),
-    queue: { ...fleet.queue, spawns: fleet.queue.spawns.map((s) => spawn(s, visibleSpaces)) },
+    queue: { ...fleet.queue, spawns: fleet.queue.spawns.map((s) => spawn(s, visibleKeys)) },
+    errors: fleet.errors.map((line) => errorLine(line, visibleRepos)),
   }
 }
