@@ -1000,14 +1000,14 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   failed send backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for a week. A
   crash between the send and its record leaves the lease to run out and the row is sent again: **at-least-once**, so a message may arrive twice.
 - **What goes out**, one line each, `Issue <id> (<repo name>)` first, never a path or a hostname. Agent text (a question, a lead's reason, a
-  monitor name) is cut to 200 characters, reduced to one line, scrubbed of token and host shapes (best effort, `notify/text.ts`) and fenced in
+  monitor name) is cut to 200 characters, reduced to one line, scrubbed of token, host and path shapes and of a link's query and fragment (best effort, `notify/text.ts`) and fenced in
   “quotation marks” it cannot contain, so it reads as a quote and never as the factory's own sentence.
 
   | Key | When | Notes |
   |-|-|-|
   | `notify:ask:<decision id>` | a `decisions` row is new | names `factory issue answer <id> "<text>" --decision <n>` |
   | `notify:parked:<issue>:<revision>` | an Issue moved to `waiting` as `unreported` or `lead_gone` | a lead's own `block` or `park` is its report and sends nothing |
-  | `notify:failed:spawn:<spawn key>` | a lead spawn failed for good (last 24 h) | |
+  | `notify:failed:spawn:<spawn key>` | a lead spawn failed for good and its Issue is open | a spawn has no time of its failure, so there is no window |
   | `notify:failed:<start_lead\|finalize>:<effect key>` | an effect failed 3 times and is still open | |
   | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
   | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |

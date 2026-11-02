@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { DIGEST_WINDOW_MS, digestDue, loadDigest, renderDigest } from './digest.ts'
+import { digestDue, loadDigest, renderDigest } from './digest.ts'
 import { record } from './outbox.ts'
 import { askMessage, failedMessage, type IssueRef, parkedMessage, quote, regressionMessage } from './text.ts'
 
@@ -49,12 +49,14 @@ export async function notifyMove(
 export const STUCK_AFTER_ATTEMPTS = 3
 const EFFECT_WHAT: Record<string, string> = { start_lead: 'its lead did not start', finalize: 'its finalize failed' }
 
-/** Lead spawns that failed for good in the last day (older ones were seen when they happened), and effects that keep failing. */
+/**
+ * Lead spawns that failed for good while their Issue is open (a spawn has no time of its failure, and a closed Issue's is history), and
+ * effects that keep failing.
+ */
 export async function notifyFailures(sql: SQL, now: Date): Promise<void> {
-  const since = new Date(now.getTime() - DIGEST_WINDOW_MS)
   const spawns: { key: string; error: string | null; issue_id: number; repo: string }[] = await sql`
     SELECT s.key, s.error, i.id AS issue_id, i.repo FROM factory.spawns s JOIN factory.issues i ON i.id = s.issue_id
-    WHERE s.status = 'failed' AND s.role = 'lead' AND s.created_at > ${since}
+    WHERE s.status = 'failed' AND s.role = 'lead' AND i.state <> 'closed'
       AND NOT EXISTS (SELECT 1 FROM factory.notifications n WHERE n.key = 'notify:failed:spawn:' || s.key)
     ORDER BY s.created_at, s.key LIMIT 20`
   for (const spawn of spawns) {

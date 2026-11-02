@@ -20,7 +20,10 @@ const HOSTS: RegExp[] = [
 
 /** Best effort, not a guarantee: the texts are templates around agent words, and these are the shapes a secret or a host has. */
 export function redact(text: string): string {
-  let out = text
+  // A link keeps its address and loses what carries a credential: the query and the fragment.
+  let out = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>)]+)[?#]\S*/gi, '$1')
+  // A path on this machine says where the repos live: only its last part stays.
+  out = out.replace(/(?<![\w:/.~-])~?(?:\/[\w.@+-]+){2,}/g, (path) => `…/${path.slice(path.lastIndexOf('/') + 1)}`)
   for (const pattern of SECRETS) out = out.replace(pattern, '[secret]')
   for (const pattern of HOSTS) out = out.replace(pattern, '[host]')
   return out

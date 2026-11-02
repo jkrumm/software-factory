@@ -34,16 +34,16 @@ interface Claimed {
 
 /**
  * Phase 1, in one short transaction: rows whose attempts ran out while a send was in flight are `failed`; the due rows (at most
- * `limit`, or just `key`) are counted as tried and leased. Nothing is sent here.
+ * `limit`) are counted as tried and leased. Nothing is sent here.
  */
-export async function claim(sql: SQL, now: Date, limit: number, key?: string): Promise<Claimed[]> {
+export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed[]> {
   return sql.begin(async (tx) => {
     await tx`
       UPDATE factory.notifications SET failed_at = ${now}, error = COALESCE(error, 'the send did not report back')
       WHERE sent_at IS NULL AND failed_at IS NULL AND attempts >= ${MAX_ATTEMPTS} AND next_at <= ${now}`
     const due: { key: string; text: string; attempts: number }[] = await tx`
       SELECT key, text, attempts FROM factory.notifications
-      WHERE sent_at IS NULL AND failed_at IS NULL AND next_at <= ${now} AND (${key ?? null}::text IS NULL OR key = ${key ?? null}::text)
+      WHERE sent_at IS NULL AND failed_at IS NULL AND next_at <= ${now}
       ORDER BY created_at, key LIMIT ${limit}
       FOR UPDATE SKIP LOCKED`
     const claimed: Claimed[] = []
@@ -58,7 +58,10 @@ export async function claim(sql: SQL, now: Date, limit: number, key?: string): P
   })
 }
 
-/** Phase 3: the result, in a statement of its own. */
+/**
+ * Phase 3: the result, in a statement of its own. A delivery is recorded whatever happened meanwhile (unless the message was given
+ * up on); a failure only for the attempt it belongs to, so a send that outlived its lease cannot undo a newer attempt's result.
+ */
 async function recordResult(
   sql: SQL,
   row: Claimed,
@@ -67,14 +70,16 @@ async function recordResult(
   note: string | null,
 ): Promise<void> {
   if (result.ok) {
-    await sql`UPDATE factory.notifications SET sent_at = ${now}, error = ${note} WHERE key = ${row.key}`
+    await sql`
+      UPDATE factory.notifications SET sent_at = ${now}, error = ${note}
+      WHERE key = ${row.key} AND sent_at IS NULL AND failed_at IS NULL`
     return
   }
   const spent = row.attempts >= MAX_ATTEMPTS
   await sql`
     UPDATE factory.notifications
     SET error = ${result.error}, next_at = ${new Date(now.getTime() + backoffMs(row.attempts))}, failed_at = ${spent ? now : null}
-    WHERE key = ${row.key}`
+    WHERE key = ${row.key} AND attempts = ${row.attempts} AND sent_at IS NULL AND failed_at IS NULL`
 }
 
 export interface SendOptions {
@@ -84,6 +89,23 @@ export interface SendOptions {
   note?: string | null
 }
 
+/** One claimed row through the notifier and into its record; says whether it arrived and why not. */
+async function deliver(sql: SQL, row: Claimed, options: SendOptions): Promise<string | null> {
+  let result: Awaited<ReturnType<Notifier['send']>>
+  try {
+    result = await options.notifier.send(row.text)
+  } catch (error) {
+    result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+  try {
+    await recordResult(sql, row, result, options.now(), options.note ?? null)
+  } catch (error) {
+    // The message went out and the record did not: the lease runs out and it is sent again (at-least-once).
+    return `${row.key}: could not record the result: ${error instanceof Error ? error.message : String(error)}`
+  }
+  return result.ok ? null : `${row.key}: ${result.error}`
+}
+
 /**
  * Sends what is due: claim and commit, call the notifier outside any transaction (every call has a process timeout, and the
  * calls of one pass run side by side, so a Hermes that is down costs one timeout, not five), record each result. Returns the keys
@@ -91,32 +113,35 @@ export interface SendOptions {
  */
 export async function sendDue(
   sql: SQL,
-  options: SendOptions & { limit?: number; key?: string },
+  options: SendOptions & { limit?: number },
 ): Promise<{ sent: string[]; errors: string[] }> {
-  const rows = await claim(sql, options.now(), options.limit ?? BATCH, options.key)
+  const rows = await claim(sql, options.now(), options.limit ?? BATCH)
   const sent: string[] = []
   const errors: string[] = []
   await Promise.all(
     rows.map(async (row) => {
-      let result: Awaited<ReturnType<Notifier['send']>>
-      try {
-        result = await options.notifier.send(row.text)
-      } catch (error) {
-        result = { ok: false, error: error instanceof Error ? error.message : String(error) }
-      }
-      try {
-        await recordResult(sql, row, result, options.now(), options.note ?? null)
-        if (result.ok) sent.push(row.key)
-        else errors.push(`${row.key}: ${result.error}`)
-      } catch (error) {
-        // The message went out and the record did not: the lease runs out and it is sent again (at-least-once).
-        errors.push(
-          `${row.key}: could not record the result: ${error instanceof Error ? error.message : String(error)}`,
-        )
-      }
+      const error = await deliver(sql, row, options)
+      if (error === null) sent.push(row.key)
+      else errors.push(error)
     }),
   )
   return { sent, errors }
+}
+
+/**
+ * A message sent now, on the caller's wait: the row is made already claimed (a try counted, leased), so the tick cannot send it
+ * beside the caller. `factory notify test` goes this way and learns whether it arrived. False when the key was there already.
+ */
+export async function sendNow(sql: SQL, message: Message, options: SendOptions): Promise<boolean> {
+  const now = options.now()
+  const rows = await sql`
+    INSERT INTO factory.notifications (key, kind, issue_id, text, created_at, next_at, attempts)
+    VALUES (${message.key}, ${message.kind}, ${message.issueId}, ${message.text}, ${now}, ${new Date(now.getTime() + LEASE_MS)}, 1)
+    ON CONFLICT (key) DO NOTHING
+    RETURNING key`
+  if (rows.length === 0) return false
+  await deliver(sql, { key: message.key, text: message.text, attempts: 1 }, options)
+  return true
 }
 
 interface Row {

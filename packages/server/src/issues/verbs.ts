@@ -58,7 +58,12 @@ export async function fileAnswer(
   const { issueId, now } = input
   const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
   if (!issue) return { ok: false }
-  const { id, answer, decision } = input.body
+  const { id, answer } = input.body
+  // An answer is for the question open when it was given: one that names none is bound to it now, so a question asked later
+  // cannot take it while it waits for the tick.
+  const [open]: { id: string }[] = await sql`
+    SELECT id FROM factory.decisions WHERE issue_id = ${issueId} AND answered_at IS NULL ORDER BY id DESC LIMIT 1`
+  const decision = input.body.decision ?? (open ? Number(open.id) : undefined)
   const key = `${issueId}:answer:${id ?? crypto.randomUUID()}`
   const payload = { answer, who: input.who, ...(decision === undefined ? {} : { decision }) }
   const { duplicate } = await enqueue(sql, { issueId, key, kind: 'answer', at: now, payload })

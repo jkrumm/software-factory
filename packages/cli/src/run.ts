@@ -623,9 +623,15 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
 
   if (key === 'notify list' || key === 'notify test') {
     if (key === 'notify test') {
-      const { body } = await call(io, '/notifications/test', { method: 'POST', auth: true, schema: Notification })
+      const { body } = await call(io, '/notifications/test', {
+        method: 'POST',
+        auth: true,
+        timeoutMs: 30_000,
+        schema: Notification,
+      })
       print(body, notificationLine(body))
-      if (body.status !== 'sent') {
+      // A sent row that still carries an error was counted as sent without a delivery: the notifier is off.
+      if (body.status !== 'sent' || body.error) {
         throw new FactoryError('general', `the test message was not delivered${body.error ? `: ${body.error}` : ''}`)
       }
       return

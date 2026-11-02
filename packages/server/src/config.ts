@@ -96,6 +96,8 @@ function digestAt(value: string | undefined): string | null {
   if (value === 'off') return null
   if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))
     throw new Error(`FACTORY_DIGEST_AT must be HH:MM or off, got: ${value}`)
+  // The digest is sent from this time until noon (a server that was down catches up before then): a later time could never be due.
+  if (value >= '12:00') throw new Error(`FACTORY_DIGEST_AT must be before 12:00, got: ${value}`)
   return value
 }
 

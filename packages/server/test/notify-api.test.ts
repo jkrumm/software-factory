@@ -122,6 +122,14 @@ describe('POST /issues/:id/answer', () => {
     expect(bare.status).toBe(401)
   })
 
+  test('an answer that names no question is for the one open when it was given', async () => {
+    const id = await asked()
+    await app.send('POST', `/issues/${id}/answer`, { answer: 'for the first', id: 'a1' })
+    // before the tick handles it, the lead (impossibly, but the order of events is the database's) asks again
+    const [row] = await db.sql`SELECT payload FROM factory.issue_inbox WHERE key = ${`${id}:answer:a1`}`
+    expect(row?.payload).toMatchObject({ answer: 'for the first', decision: 1 })
+  })
+
   test('on the socket it answers too, and the record says it was a pane', async () => {
     const id = await asked()
     const res = await viaSocket(`/issues/${id}/answer`, { answer: 'from a pane', session: 'some-session' })
@@ -150,6 +158,13 @@ describe('notifications', () => {
     const row = Notification.parse(await res.json())
     expect(row).toMatchObject({ kind: 'test', status: 'sent', attempts: 1 })
     expect(notifier.sent).toEqual(["Factory test: the owner's line works."])
+  })
+
+  test('with the target off a test says so', async () => {
+    const off = startApp({ sql: db.sql, clock, notifier: new FakeNotifier(), notifyTarget: 'off' })
+    const row = Notification.parse(await (await off.send('POST', '/notifications/test', {})).json())
+    expect(row).toMatchObject({ status: 'sent', error: 'notifications are off (FACTORY_NOTIFY_TARGET=off)' })
+    await off.stop()
   })
 
   test('a test that does not arrive says why and stays pending for the tick to retry', async () => {

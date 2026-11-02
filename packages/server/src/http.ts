@@ -47,7 +47,7 @@ import { createIssue } from './issues/create.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
 import { getIssue, listIssues } from './issues/read.ts'
 import { fileAnswer, fileVerb } from './issues/verbs.ts'
-import { getNotification, listNotifications, record, sendDue } from './notify/outbox.ts'
+import { getNotification, listNotifications, sendNow } from './notify/outbox.ts'
 import { NullNotifier, type Notifier } from './notify/port.ts'
 import { getProject, listProjects } from './projects/store.ts'
 import type { ProjectSync } from './projects/sync.ts'
@@ -367,8 +367,11 @@ const notificationTestHandler = (sql: SQL, clock: Clock, notifier: Notifier, tar
   const now = clock.now()
   const key = `notify:test:${now.getTime()}:${crypto.randomUUID().slice(0, 8)}`
   const note = target === 'off' ? 'notifications are off (FACTORY_NOTIFY_TARGET=off)' : null
-  await record(sql, { key, kind: 'test', issueId: null, text: "Factory test: the owner's line works." }, now)
-  await sendDue(sql, { notifier, now: () => clock.now(), note, key })
+  await sendNow(
+    sql,
+    { key, kind: 'test', issueId: null, text: "Factory test: the owner's line works." },
+    { notifier, now: () => clock.now(), note },
+  )
   const row = await getNotification(sql, key)
   return row ? respond(Notification, row) : json({ error: 'the test message is gone' }, 500)
 }
