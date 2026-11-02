@@ -210,7 +210,7 @@ export class FleetActions {
     const prompt = [
       'Archive a finished plan in this repo: one commit, nothing else.',
       '',
-      `Plan: ${rel} (title: ${oneLine(plan.title, 120)})`,
+      `Plan: ${rel} `,
       `The fleet view found all ${plan.waves.length} waves done (plan sha ${plan.sha}, ${now.toISOString()}).`,
       '',
       '1. Re-read the plan. If any wave is not done, or the file is not there, stop and say so in your last message.',

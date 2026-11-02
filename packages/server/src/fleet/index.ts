@@ -309,7 +309,10 @@ export class FleetBuilder {
     } catch (error) {
       console.error('fleet triage failed', message(error))
       // What the owner closed or snoozed stays gone; the rest is the asks as the sources raised them.
-      const hidden = await this.triage.hide(digested, now).catch(() => digested)
+      const hidden = await this.triage.hide(digested, now).catch((hideError: unknown) => {
+        console.error('fleet triage fallback failed; closed and snoozed asks are listed again', hideError)
+        return digested
+      })
       model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`] }
     }
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).

@@ -76,7 +76,9 @@ export interface Target {
 
 const MAX_TARGETS = 6
 /** Machines a request may name; one of them that is not configured is unprobeable. */
-const MACHINE_WORDS = /\b(?:macbook|mac mini|mini|homelab|vps|iphone|ipad)\b/i
+const MACHINE_WORDS = /\b(?:macbook|mac mini|the mini(?!-)|homelab|vps|iphone|ipad)\b/i
+/** `nas: remove X.app`: a request that opens with a name and a colon says where it is for. */
+const PREFIX = /^\s*([A-Za-z][\w-]*):/
 const HARMLESS = new Set(['cd', 'echo', 'true', 'sudo', 'test', ':'])
 const REMOVES = new Set(['rm', 'rmdir', 'trash'])
 const CREATES = new Set(['mkdir', 'touch'])
@@ -100,7 +102,7 @@ export function targetsOf(
   const named = `${request.text}\n${request.cmd ?? ''}`
   const machine = machineOf(named, machines)
   // A machine the text names and nothing is configured for cannot be probed; the queue's machine is not a stand-in for it.
-  if (!machine && MACHINE_WORDS.test(named)) return []
+  if (!machine && (MACHINE_WORDS.test(named) || PREFIX.test(request.text))) return []
   const where = machine ?? queueMachine
   if (!where) return []
   const targets = new Map<string, Target>()
@@ -307,10 +309,11 @@ export async function gatherFindings(input: FindingsInput): Promise<Map<string, 
   let budget = MAX_PROBES_PER_BUILD
   const clock = input.clock ?? Date.now
   const deadline = clock() + PROBE_PASS_MS
+  const late = () => clock() > deadline
   const queued = input.asks.filter((a) => a.source === 'queue')
   const start = queued.length > 0 ? (input.offset ?? 0) % queued.length : 0
   for (const ask of [...queued.slice(start), ...queued.slice(0, start)]) {
-    if (budget <= 0 || clock() > deadline) break
+    if (budget <= 0 || late()) break
     const request = input.queue.get(ask.id.slice('queue:'.length))
     if (!request) continue
     const found: Finding = {}
@@ -318,7 +321,7 @@ export async function gatherFindings(input: FindingsInput): Promise<Map<string, 
     const gate = deployGateOf(request.text)
     if (gate) {
       const repo = await repoNamed(gate.repo, input)
-      if (repo) {
+      if (repo && !late()) {
         budget--
         const newer = await probes.newerDeploy(repo, gate.sha)
         if (newer)
@@ -332,6 +335,10 @@ export async function gatherFindings(input: FindingsInput): Promise<Map<string, 
         const seen: string[] = []
         let all = true
         for (const t of targets) {
+          if (late()) {
+            all = false
+            break
+          }
           budget--
           const exists = await probes.exists(t.machine, t.path)
           if (exists === undefined || exists !== (t.want === 'present')) {
@@ -504,6 +511,8 @@ export interface TriageDeps {
   probes: Probes
   /** the machines a probe may look at, as configured (`FACTORY_PROBE_HOSTS` names) */
   machines: readonly string[]
+  /** the clock of a pass's deadline (ms); tests inject theirs */
+  clock?: () => number
   /** the machine a queue request's command runs on (the owner's laptop): paths in it are probed there, or not at all */
   queueMachine?: string
 }
@@ -575,6 +584,7 @@ export class Triage {
       queueMachine: this.deps.queueMachine,
       roots: input.roots,
       offset: this.pass++,
+      clock: this.deps.clock,
     })
     const asks = stepped.asks.map((ask): FleetAsk => {
       const decided = decide({

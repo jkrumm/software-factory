@@ -167,7 +167,7 @@ export async function getAct(
   return closing ? { closedBy: closing.intent } : undefined
 }
 
-/** Records an act. One that closes an ask already closed, or a second archive, is not stored: the first stands. */
+/** Records an act; `false` when it closes an ask already closed, or archives twice: the first stands. */
 export async function recordAct(
   sql: SQL,
   input: {
@@ -178,9 +178,10 @@ export async function recordAct(
     until: Date | null
     result: Omit<ActResult, 'duplicate'>
   },
-): Promise<void> {
-  await sql`
+): Promise<boolean> {
+  const stored = await sql`
     INSERT INTO factory.fleet_acts (ask_id, intent, note, at, until, result)
     VALUES (${input.ask}, ${input.intent}, ${input.note}, ${input.at}, ${input.until}, ${JSON.stringify(input.result)}::text::jsonb)
-    ON CONFLICT DO NOTHING`
+    ON CONFLICT DO NOTHING RETURNING id`
+  return stored.length > 0
 }
