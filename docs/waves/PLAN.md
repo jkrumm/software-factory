@@ -105,7 +105,7 @@ commit each before its spawn. Workers are hidden fan workers: `rd fan software-f
   registry in the database, not in git; the lead wires Kuma and HyperDX to it and proves one real alert becomes one Issue).
 - [ ] (W2 live) F2 Waves 2–5 in order (W4 `deep`, the rest `worker`; W3 adds an agw classify worker on disjoint files and tells agw's
   mother first). Issue leads start for `alert` Issues only once W4 is live.
-- [ ] N once W3 is live: the notifier (`ask`, parked, failed through Hermes to Slack, the 07:30 digest).
+- [x] N once W3 is live: the notifier (`ask`, parked, failed through Hermes to Slack, the 07:30 digest).
 - [ ] F2 Wave 6, the gate: the gamedays and three real requests from the factory's own backlog (`rd`'s direct-to-hc path seeds no
   space entry; `hc-resume` resumes without `--model/--effort`; `docs/remote-dev.md` says every structured create error falls back).
 - [ ] Per wave a retro entry in `docs/evidence/night-2026-11-01.md` (the fields in the plan's §Learning on the way); setup
