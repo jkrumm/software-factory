@@ -203,10 +203,16 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     .sort(sessionOrder)
 
   const asks: FleetAsk[] = []
-  const ask = (a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan'> & { plan?: string | null }) => {
+  const ask = (
+    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'visible'> & { plan?: string | null },
+  ) => {
     const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
-    asks.push({ short: null, suggestion: null, actions: [], ...a, plan: a.plan ?? planOf })
+    // Visible by its place, listed or not: an Issue's decision in an IuRoot repo with no plan and no session is still IuRoot's.
+    const visible =
+      (a.repo !== null && input.isVisible(a.repo)) || (a.session !== null && visibleSessions.has(a.session))
+    asks.push({ short: null, suggestion: null, actions: [], ...a, plan: a.plan ?? planOf, visible })
   }
+  const visibleSessions = new Set(input.sessions.filter((m) => m.session.visible).map((m) => m.session.id))
 
   // The time of an ask that has none of its own: the first build that saw it (kept by the builder), never this build's.
   const seen = (id: string) => input.firstSeen.get(id) ?? now.toISOString()
@@ -219,8 +225,10 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
     if (m.hc?.status === 'blocked') {
       // hc's own time for it (when its status last changed), else the first build that saw it; the debounce counts from there.
       const askId = `hc:${id}`
-      const at = input.firstSeen.get(askId) ?? m.hc.statusAt ?? now.toISOString()
-      if (now.getTime() - Date.parse(at) >= BLOCKED_AFTER_MS || !m.hc.statusAt) {
+      const hcAt = m.hc.statusAt && !Number.isNaN(Date.parse(m.hc.statusAt)) ? m.hc.statusAt : null
+      const at = input.firstSeen.get(askId) ?? hcAt ?? now.toISOString()
+      // With no usable time from hc there is nothing to debounce from: the ask is raised at once, at the first build that saw it.
+      if (hcAt === null || now.getTime() - Date.parse(at) >= BLOCKED_AFTER_MS) {
         hcBlocked.add(id)
         ask({
           id: askId,

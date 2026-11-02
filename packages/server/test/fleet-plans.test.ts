@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { mergeSessions } from '../src/fleet/index.ts'
 import { lineKey } from '../src/fleet/model.ts'
-import { HcTerminals } from '../src/fleet/sources.ts'
+import { type HcTerminal, HcTerminals } from '../src/fleet/sources.ts'
 import { cutWords, namedPlanPaths, namedWave, parsePlan, planState, STALE_AFTER_MS } from '../src/fleet/plans.ts'
+import type { Session } from '@software-factory/contract'
 import type { HcClient } from '../src/hc.ts'
 
 const NOW = new Date('2026-11-02T12:00:00Z')
@@ -89,6 +91,76 @@ describe('parsePlan: other writers', () => {
     })
     expect(plan.waves.map((w) => w.n)).toEqual([2])
     expect(problems).toEqual(['line 2 starts with "## Wave" but has no wave number'])
+  })
+})
+
+describe('parsePlan: headings that look alike', () => {
+  test('lower case reads like upper case; 3.5 is no wave number', () => {
+    const { plan, problems } = parsePlan('# P\n## wave 2 — Lower\n## Wave 3.5 Half\n## Wave 4 Four\n', {
+      visible: false,
+    })
+    expect(plan.waves.map((w) => [w.n, w.title])).toEqual([
+      [2, 'Lower'],
+      [4, 'Four'],
+    ])
+    expect(problems).toEqual(['line 3 starts with "## Wave" but has no wave number'])
+  })
+})
+
+describe('mergeSessions', () => {
+  const session = {
+    id: 's',
+    state: 'working',
+    pane: 't1',
+    spawn: 's',
+    cwd: '/home/o/SourceRoot/repo',
+    wait: null,
+    role: 'worker',
+    account: 'a',
+    parent: null,
+    since: null,
+    lastEventAt: '2026-11-02T10:00:00.000Z',
+  } as unknown as Session
+  const terminal = {
+    address: 't1',
+    name: 's',
+    cwd: '/home/o/IuRoot/other',
+    title: 'T',
+    factoryKey: 's',
+    status: 'working',
+    statusMessage: null,
+    statusAt: null,
+    parent: null,
+    claude: true,
+    prompt: null,
+    role: null,
+    account: null,
+  } satisfies HcTerminal
+
+  test('a session is visible when any place it is in is: its terminal moved into IuRoot', () => {
+    const [merged] = mergeSessions({
+      sessions: [session],
+      spawns: new Map([['s', { repo: '/home/o/SourceRoot/repo', prompt: 'p' }]]),
+      terminals: [terminal],
+      roots: ['/home/o/SourceRoot', '/home/o/IuRoot'],
+      real: (path) => path,
+      isVisible: (path) => path.startsWith('/home/o/IuRoot/'),
+    })
+    expect(merged?.session.visible).toBe(true)
+    expect(merged?.repo).toBe('/home/o/SourceRoot/repo')
+  })
+
+  test('paths are matched after the real path', () => {
+    const [merged] = mergeSessions({
+      sessions: [session],
+      spawns: new Map(),
+      terminals: [],
+      roots: ['/real/SourceRoot'],
+      real: (path) => path.replace('/home/o', '/real'),
+      isVisible: () => false,
+    })
+    expect(merged?.repo).toBe('/real/SourceRoot/repo')
+    expect(merged?.cwd).toBe('/real/SourceRoot/repo')
   })
 })
 
