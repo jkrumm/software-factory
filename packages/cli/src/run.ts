@@ -41,6 +41,7 @@ import {
   WaitOn,
   ActIntent,
   ActResult,
+  IsoTime,
   Presence,
   PresenceAct,
   PresencePlace,
@@ -85,12 +86,13 @@ commands:
                   --undo takes one back. It never runs a command and never denies
   fleet presence <place> <act>
                   one act of a person (token only): place desk|phone, act focus|looked|board_click|unlock|memo|foreground|caught_up (memo and
-                  foreground are the phone's). Presence is derived: the desk is present 45 min after its last act, the phone 10 min; neither is away
+                  foreground are the phone's; caught_up takes --until, see fleet seen). Presence is derived: the desk is present 45 min after its last act, the phone 10 min; neither is away
   fleet since [--t <iso>]
                   what happened since --t (default: the cursor, at most 7 days back; a later or malformed one is exit 2), grouped: Needs you, Shipped,
                   Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending, failed or none)
-  fleet seen [--place desk|phone]
-                  caught up (default desk): moves the owner-wide cursor to now, on every surface
+  fleet seen [--place desk|phone] [--until <iso>]
+                  caught up (default desk): moves the owner-wide cursor to the end of the reading just read (or --until, the one that was seen),
+                  never past now, on every surface; what landed after it is in the next window
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -192,6 +194,7 @@ commands:
 --pending       notify list: only what is not sent
 --undo <id>     fleet triage: take an automatic decision back
 --t <iso>        fleet since: the window's start
+--until <iso>    fleet seen, fleet presence caught_up: the until of the reading that was seen
 --place <place> fleet seen, fleet act: desk (default) or phone
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --kind, --link, --file, --stdin  issue evidence
@@ -802,11 +805,12 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         },
       )
     }
-    if (key === 'fleet act') throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>]')
+    if (key === 'fleet act')
+      throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]')
     if (words[1] === 'act') {
       const [, , ask, intent] = words
       if (!ask || !intent || words.length > 4)
-        throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>]')
+        throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]')
       const parsed = ActIntent.safeParse(intent)
       if (!parsed.success) throw usage(`intent is one of ${ActIntent.options.join(', ')}`)
       const parsedPlace = flags.place === undefined ? undefined : PresencePlace.safeParse(flags.place)
@@ -856,29 +860,41 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       }
       if (parsedPlace.data === 'desk' && (parsedAct.data === 'memo' || parsedAct.data === 'foreground'))
         throw usage('memo and foreground are the phone only')
+      if ((parsedAct.data === 'caught_up') !== (flags.until !== undefined))
+        throw usage(
+          'caught_up takes --until <the until of the reading that was seen> (fleet seen reads it for you), and no other act does',
+        )
+      if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
+        throw usage('--until takes an ISO 8601 time with a Z or an offset')
       const { body } = await call(io, '/fleet/presence', {
         method: 'POST',
         auth: true,
         schema: Presence,
-        body: { place: parsedPlace.data, act: parsedAct.data },
+        body: { place: parsedPlace.data, act: parsedAct.data, ...(flags.until ? { until: flags.until } : {}) },
       })
       return print(body, presenceLine(body))
     }
     if (words[1] === 'seen') {
-      if (words.length > 2) throw usage('usage: fleet seen [--place desk|phone]')
+      if (words.length > 2) throw usage('usage: fleet seen [--place desk|phone] [--until <iso>]')
       const place = PresencePlace.safeParse(flags.place ?? 'desk')
       if (!place.success) throw usage(`--place is one of ${PresencePlace.options.join(', ')}`)
+      if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
+        throw usage('--until takes an ISO 8601 time with a Z or an offset')
+      // Caught up with what was seen: the cursor goes to the end of the reading read now (or the one --until names), not to the click.
+      const until = flags.until ?? (await call(io, '/fleet/since', { auth: true, schema: Since })).body.until
       const { body } = await call(io, '/fleet/presence', {
         method: 'POST',
         auth: true,
         schema: Presence,
-        body: { place: place.data, act: 'caught_up' },
+        body: { place: place.data, act: 'caught_up', until },
       })
       return print(body, presenceLine(body))
     }
     if (words[1] === 'since') {
       if (words.length > 2) throw usage('usage: fleet since [--t <iso>]')
-      if (flags.t !== undefined && Number.isNaN(Date.parse(flags.t))) throw usage('--t takes an ISO 8601 time')
+      if (flags.t !== undefined && !IsoTime.safeParse(flags.t).success) {
+        throw usage('--t takes an ISO 8601 time with a Z or an offset, like 2026-11-02T07:30:00Z')
+      }
       const { body } = await call(
         io,
         `/fleet/since${flags.t === undefined ? '' : `?t=${encodeURIComponent(flags.t)}`}`,

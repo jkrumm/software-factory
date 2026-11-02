@@ -86,7 +86,7 @@ export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed
 
 /**
  * Phase 3: the result, in a statement of its own. A delivery is recorded whatever happened meanwhile (unless the message was given
- * up on); a failure only for the attempt it belongs to, so a send that outlived its lease cannot undo a newer attempt's result.
+ * up on; a row a later claim folded while the send was in flight is sent after all: the fold is undone); a failure only for the attempt it belongs to, so a send that outlived its lease cannot undo a newer attempt's result.
  */
 async function recordResult(
   sql: SQL,
@@ -97,7 +97,7 @@ async function recordResult(
 ): Promise<void> {
   if (result.ok) {
     await sql`
-      UPDATE factory.notifications SET sent_at = ${now}, error = ${note}, failed_at = NULL
+      UPDATE factory.notifications SET sent_at = ${now}, error = ${note}, failed_at = NULL, folded_at = NULL, folded_reason = NULL
       WHERE key = ${row.key} AND sent_at IS NULL`
     return
   }
@@ -105,7 +105,7 @@ async function recordResult(
   await sql`
     UPDATE factory.notifications
     SET error = ${result.error}, next_at = ${new Date(now.getTime() + backoffMs(row.attempts))}, failed_at = ${spent ? now : null}
-    WHERE key = ${row.key} AND attempts = ${row.attempts} AND sent_at IS NULL AND failed_at IS NULL`
+    WHERE key = ${row.key} AND attempts = ${row.attempts} AND sent_at IS NULL AND failed_at IS NULL AND folded_at IS NULL`
 }
 
 export interface SendOptions {

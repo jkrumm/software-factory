@@ -11,12 +11,12 @@ import { readSnapshot } from './store.ts'
  */
 export async function reportPresence(
   reader: SinceReader,
-  input: { place: PresencePlace; act: PresenceAct },
+  input: { place: PresencePlace; act: PresenceAct; until?: Date },
 ): Promise<Presence> {
   const { sql } = reader
   const now = reader.now()
   const before = await readPresence(sql, now)
-  await recordPresence(sql, { place: input.place, act: input.act, now })
+  await recordPresence(sql, { place: input.place, act: input.act, now, until: input.until })
   if (input.place === 'desk' && !before.desk.present && input.act !== 'caught_up') {
     try {
       await readSince(reader, { queue: 'now' })
@@ -27,17 +27,23 @@ export async function reportPresence(
   return readPresence(sql, now)
 }
 
-/** Asks of the open window (raised since the cursor, at most 7 days back) that are still listed, besides `except`. */
-async function openAsks(sql: SQL, now: Date, except: string): Promise<number> {
+/**
+ * Asks of the open window (raised since the cursor, at most 7 days back) that the stored snapshot still lists, besides `except`, and when
+ * the snapshot was built: the cursor only reaches what the build saw.
+ */
+async function openAsks(sql: SQL, now: Date, except: string): Promise<{ open: number; builtAt: Date } | undefined> {
   const snapshot = await readSnapshot(sql)
-  if (!snapshot) return 1
+  if (!snapshot) return undefined
   const { t } = windowStart({ seenAt: await readSeenAt(sql), now })
-  return snapshot.asks.filter((a) => a.id !== except && Date.parse(a.at) >= t.getTime()).length
+  return {
+    open: snapshot.asks.filter((a) => a.id !== except && Date.parse(a.at) >= t.getTime()).length,
+    builtAt: new Date(snapshot.builtAt),
+  }
 }
 
 /**
  * The owner acted on an ask (`POST /fleet/asks/:id/act`): a presence act for the place it names, and the cursor moves to now when that act
- * leaves no other ask of the open window in Needs you. Never backwards.
+ * leaves no other ask of the open window in Needs you: to the snapshot's build time (at most now), never backwards.
  */
 export async function recordAskAct(
   sql: SQL,
@@ -52,5 +58,8 @@ export async function recordAskAct(
   const { place, ask, now, moveCursor } = input
   // Acting on a card is a click on the board at the desk, and Iris in the foreground on the phone.
   await recordPresence(sql, { place, act: place === 'desk' ? 'board_click' : 'foreground', now })
-  if (moveCursor && (await openAsks(sql, now, ask)) === 0) await moveSeen(sql, now)
+  if (!moveCursor) return
+  const window = await openAsks(sql, now, ask)
+  // An ask that landed after the build is not in the count: the cursor stops at what the build saw.
+  if (window?.open === 0) await moveSeen(sql, window.builtAt < now ? window.builtAt : now)
 }

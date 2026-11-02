@@ -94,7 +94,8 @@ export function windowFacts(groups: Groups): WindowFacts | null {
     `Handled for you: ${groups.handled.length}${kinds.size > 0 ? ` (${[...kinds].map(([k, n]) => `${n} ${k}`).join(', ')})` : ''}`,
     list(
       'Still running',
-      running.map((r) => oneLine(r.headline ?? r.text)),
+      // By id: a headline changes with every turn, and a new turn must not make a new window.
+      running.map((r) => oneLine(r.id)),
       running.length,
     ),
     `Items of a read-only area, counted only: ${hidden}`,
@@ -150,7 +151,8 @@ export class WindowDigest {
   }
 
   /**
-   * Makes sure the window has a row: a missing one is queued for the pass (this never calls agw). `now` starts the pass at once, for the
+   * Makes sure the window has a row: a missing one is queued for the pass (this never calls agw), and it supersedes every older window
+   * that still waits (queued or backing off): only the newest is ever started. `now` starts the pass at once, for the
    * first desk act after an away window, so the card has its paragraph by the time it is read.
    */
   async request(facts: WindowFacts | null, options: { now?: boolean } = {}): Promise<SinceHeadline> {
@@ -160,7 +162,12 @@ export class WindowDigest {
     await sql`
       INSERT INTO factory.fleet_windows (hash, facts, state, requested_at, updated_at)
       VALUES (${facts.hash}, ${facts.text}, 'queued', ${at}, ${at})
-      ON CONFLICT (hash) DO NOTHING`
+      ON CONFLICT (hash) DO UPDATE SET state = 'queued', requested_at = EXCLUDED.requested_at, updated_at = EXCLUDED.updated_at
+      WHERE factory.fleet_windows.state = 'superseded'`
+    // The newest request is the one about to be read: every older window still waiting is let go and never started.
+    await sql`
+      UPDATE factory.fleet_windows SET state = 'superseded', updated_at = ${at}
+      WHERE state IN ('queued', 'failed') AND hash <> ${facts.hash}`
     if (options.now) this.kick(true)
     return this.headline(facts)
   }

@@ -21,12 +21,13 @@ const TTL: Record<PresencePlace, number> = { desk: DESK_PRESENT_MS, phone: PHONE
 /** One act of a person at a place; `caught_up` also moves the cursor. Short statements, no port inside. */
 export async function recordPresence(
   sql: SQL,
-  input: { place: PresencePlace; act: PresenceAct; now: Date },
+  input: { place: PresencePlace; act: PresenceAct; now: Date; until?: Date },
 ): Promise<void> {
   const { place, act, now } = input
   await sql`INSERT INTO factory.fleet_presence_acts (place, act, at) VALUES (${place}, ${act}, ${now})`
   await sql`DELETE FROM factory.fleet_presence_acts WHERE at < ${new Date(now.getTime() - PRESENCE_KEEP_MS)}`
-  if (act === 'caught_up') await moveSeen(sql, now)
+  // The cursor goes to the end of the reading the owner saw, not to the click: what landed in between is in the next window.
+  if (act === 'caught_up') await moveSeen(sql, input.until && input.until < now ? input.until : now)
 }
 
 /** The cursor moves to `to` and never backwards. */
@@ -51,14 +52,13 @@ export async function readPresence(sql: SQL, now: Date): Promise<Presence> {
   const last = new Map(rows.map((r) => [r.place, r.at]))
   const place = (name: PresencePlace) => {
     const at = last.get(name) ?? null
-    return { at, present: at !== null && now.getTime() - at.getTime() < TTL[name] }
+    const expires = at === null ? null : at.getTime() + TTL[name]
+    return { at, expires, present: expires !== null && now.getTime() < expires }
   }
   const desk = place('desk')
   const phone = place('phone')
   const away = !desk.present && !phone.present
-  const expiries = [desk, phone].flatMap((p, i) =>
-    p.at ? [p.at.getTime() + (i === 0 ? DESK_PRESENT_MS : PHONE_PRESENT_MS)] : [],
-  )
+  const expiries = [desk.expires, phone.expires].filter((e): e is number => e !== null)
   return {
     desk: { at: desk.at?.toISOString() ?? null, present: desk.present },
     phone: { at: phone.at?.toISOString() ?? null, present: phone.present },

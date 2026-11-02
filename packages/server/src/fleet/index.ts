@@ -20,7 +20,7 @@ import {
   type RepoFacts,
 } from './model.ts'
 import { MAX_PLAN_BYTES, namedPlanPaths, namedWave } from './plans.ts'
-import type { HcLister, HcTerminal, QueueReader, QueueRequest } from './sources.ts'
+import { askSourcesAnswered, type HcLister, type HcTerminal, type QueueReader, type QueueRequest } from './sources.ts'
 import { readSnapshot, writeSnapshot } from './store.ts'
 
 export { AskHumanQueue, HcTerminals } from './sources.ts'
@@ -60,14 +60,6 @@ interface DbPart {
   spawns: Map<string, { repo: string; prompt: string }>
   decisions: DecisionRow[]
 }
-
-/**
- * Whether every source an ask comes from answered in this build (hc, the database, the human queue, the digest's reply asks, the stored
- * snapshot it restarts from): only then does an ask that is not listed have left, and its occurrence end. A plan or a repo that could not be
- * read changes no ask's existence.
- */
-export const askSourcesAnswered = (errors: readonly string[]): boolean =>
-  !errors.some((e) => /^(hc|database|human queue|digest|snapshot)/.test(e))
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 

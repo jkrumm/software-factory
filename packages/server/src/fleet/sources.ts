@@ -229,3 +229,11 @@ export class AskHumanQueue implements QueueReader, QueueActor {
     return undefined
   }
 }
+
+/**
+ * Whether every source an ask comes from answered in this build (hc, the database, the human queue, the digest's reply asks, the stored
+ * snapshot it restarts from): only then does an ask that is not listed have left, and its occurrence end. A plan or a repo that could not be
+ * read changes no ask's existence.
+ */
+export const askSourcesAnswered = (errors: readonly string[]): boolean =>
+  !errors.some((e) => /^(hc|database|human queue|digest|snapshot)/.test(e))

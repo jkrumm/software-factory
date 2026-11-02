@@ -27,13 +27,9 @@ export async function notifyPass(sql: SQL, deps: NotifyDeps, now: () => Date): P
     }
   }
   await guarded('failures', () => notifyFailures(sql, now()))
-  await guarded('digest', async () =>
-    notifyDigest(sql, {
-      now: now(),
-      at: deps.digestAt,
-      timeZone: deps.digestTz,
-      isVisible: deps.visible ? await deps.visible() : undefined,
-    }),
+  // The visibility check is passed as the function that makes it: only a morning reading that is due awaits it.
+  await guarded('digest', () =>
+    notifyDigest(sql, { now: now(), at: deps.digestAt, timeZone: deps.digestTz, visible: deps.visible }),
   )
   await guarded('send', async () => {
     const note = deps.target === NOTIFY_OFF ? 'notifications are off (FACTORY_NOTIFY_TARGET=off)' : null

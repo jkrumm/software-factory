@@ -4,8 +4,8 @@ import type { FleetCommit, FleetGit } from '@software-factory/contract'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { GIT_TIMEOUT_MS } from './sources.ts'
 
-/** The default branch, in the order `newerThan` looks: the first that resolves. */
-const DEFAULT_REFS = ['origin/main', 'origin/master', 'main', 'master']
+/** The default branch, in the order both readers look: the first that exists. */
+const DEFAULT_REFS = ['refs/remotes/origin/main', 'refs/remotes/origin/master', 'refs/heads/main', 'refs/heads/master']
 /** Commits kept per repo for the since reading's Shipped group. */
 export const RECENT_COMMITS = 20
 
@@ -51,22 +51,33 @@ export class GitReader {
    * first of `origin/main`, `origin/master`, `main`, `master` that resolves; none is an empty list. Read-only, bounded, off the request path.
    */
   async recent(repo: string, limit = RECENT_COMMITS): Promise<FleetCommit[]> {
+    const head = await this.defaultHead(repo)
+    if (!head) return []
+    const log = await this.git(repo, ['log', '--first-parent', `-${limit}`, '--format=%H%x1f%cI%x1f%s%x1e', head])
+    return log
+      .split('\x1e')
+      .map((record) => record.trim())
+      .filter(Boolean)
+      .flatMap((record) => {
+        const [sha, at, subject] = record.split('\x1f')
+        return sha && at ? [{ sha: sha.slice(0, 12), at, subject: subject ?? '' }] : []
+      })
+  }
+
+  /**
+   * The tip of the repo's default branch: the first of `origin/main`, `origin/master`, `main`, `master` that exists, from one
+   * `for-each-ref` call. `undefined` when none does. A git that does not answer in time throws: it is no reason to read an older ref.
+   */
+  async defaultHead(repo: string): Promise<string | undefined> {
+    const out = await this.git(repo, ['for-each-ref', '--format=%(refname)%1f%(objectname)', ...DEFAULT_REFS])
+    const tips = new Map(
+      out.split('\n').flatMap((line) => (line.includes('\x1f') ? [line.trim().split('\x1f') as [string, string]] : [])),
+    )
     for (const ref of DEFAULT_REFS) {
-      const head = (
-        await this.git(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).catch(() => '')
-      ).trim()
-      if (!head) continue
-      const log = await this.git(repo, ['log', '--first-parent', `-${limit}`, '--format=%H%x1f%cI%x1f%s%x1e', head])
-      return log
-        .split('\x1e')
-        .map((record) => record.trim())
-        .filter(Boolean)
-        .flatMap((record) => {
-          const [sha, at, subject] = record.split('\x1f')
-          return sha && at ? [{ sha: sha.slice(0, 12), at, subject: subject ?? '' }] : []
-        })
+      const tip = tips.get(ref)
+      if (tip) return tip
     }
-    return []
+    return undefined
   }
 
   /** The time of the file's last commit; the file's mtime for one that has none (untracked, or outside any repo). */
@@ -80,28 +91,23 @@ export class GitReader {
   }
 
   /**
-   * Whether the repo's default branch has moved past `sha`: the first of `origin/main`, `origin/master`, `main`, `master` that
-   * resolves is a descendant of the commit (and not the commit). `undefined` when git cannot say (no such commit here, no default
+   * Whether the repo's default branch has moved past `sha`: the default branch (`defaultHead`) is a descendant of the commit (and not the commit). `undefined` when git cannot say (no such commit here, no default
    * branch, a history that does not contain it). Read-only.
    */
   async newerThan(repo: string, sha: string): Promise<{ head: string } | false | undefined> {
     if (!/^[0-9a-f]{7,40}$/.test(sha)) return undefined
     const commit = await this.git(repo, ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`]).catch(() => '')
     if (!commit.trim()) return undefined
-    for (const ref of ['origin/main', 'origin/master', 'main', 'master']) {
-      const head = (
-        await this.git(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).catch(() => '')
-      ).trim()
-      if (!head) continue
-      if (head === commit.trim()) return false
-      const ancestor = await this.run(
-        ['git', '--no-optional-locks', '-C', repo, 'merge-base', '--is-ancestor', commit.trim(), head],
-        GIT_TIMEOUT_MS,
-        childEnv({ GIT_TERMINAL_PROMPT: '0' }),
-      )
-      // A history that does not contain the commit (diverged) says nothing about a newer deploy.
-      return ancestor.exitCode === 0 ? { head } : undefined
-    }
-    return undefined
+    // One answer for the default branch; a git that times out says nothing (not a look at an older ref).
+    const head = await this.defaultHead(repo).catch(() => undefined)
+    if (!head) return undefined
+    if (head === commit.trim()) return false
+    const ancestor = await this.run(
+      ['git', '--no-optional-locks', '-C', repo, 'merge-base', '--is-ancestor', commit.trim(), head],
+      GIT_TIMEOUT_MS,
+      childEnv({ GIT_TERMINAL_PROMPT: '0' }),
+    )
+    // A history that does not contain the commit (diverged) says nothing about a newer deploy.
+    return ancestor.exitCode === 0 ? { head } : undefined
   }
 }
