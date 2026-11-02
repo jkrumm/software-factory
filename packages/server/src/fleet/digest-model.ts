@@ -114,7 +114,7 @@ export function applyDigest(
       ) {
         // A session that already has an ask of its own (blocked on a dialog, waiting on the owner) is one ask: the reply gives it its words.
         const own = asks.findIndex((a) => a.session === s.id && (a.source === 'hc' || a.source === 'wait'))
-        const folded = asks[own]
+        const folded = own >= 0 ? asks[own] : undefined
         if (folded) {
           asks[own] = { ...folded, short: reply.short, kind: reply.kind }
           return { ...s, headline: view.headline(s.id) }

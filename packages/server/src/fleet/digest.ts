@@ -30,6 +30,8 @@ export const HANG_GUARD_MS = 30 * 60_000
 /** An item that failed is asked about again after this long, doubled with every failure, at most a day (persisted: `fleet_digest_backoff`). */
 const BACKOFF_BASE_MS = 5 * 60_000
 const BACKOFF_MAX_MS = 24 * 3_600_000
+/** A run that has not ended after this long is let go (a lifecycle deadline, not a limit on a request: `agw` has its own watchdog far below it). */
+export const PENDING_MAX_MS = 24 * 3_600_000
 const backoffMs = (failures: number): number => Math.min(BACKOFF_BASE_MS * 2 ** (failures - 1), BACKOFF_MAX_MS)
 /** A batch that has failed twice is halved with every further failure, so one poison item is isolated in a few steps. */
 const batchCap = (failures: number, failedBatch: number): number =>
@@ -237,7 +239,26 @@ type Reply =
   | { kind: 'pending'; runId: string | undefined }
   | { kind: 'hung' }
 
-class CallFailed extends Error {}
+/** A call that failed; `terminal`: `agw` says the run itself failed or was cancelled (else it may be a blip and the run still going). */
+class CallFailed extends Error {
+  constructor(
+    message: string,
+    readonly terminal = false,
+  ) {
+    super(message)
+  }
+}
+
+const TERMINAL = new Set(['failed', 'cancelled', 'canceled', 'error', 'timed_out'])
+/** Whether what `agw` printed says its run is over for good. */
+function endedBadly(stdout: string): boolean {
+  try {
+    const status = (JSON.parse(stdout) as { status?: unknown }).status
+    return typeof status === 'string' && TERMINAL.has(status)
+  } catch {
+    return false
+  }
+}
 
 export interface DigestDeps {
   sql: SQL
@@ -349,9 +370,9 @@ export class Digest {
   async pass(feed: DigestFeed): Promise<PassResult> {
     const { sql } = this.deps
     const now = this.deps.now()
-    const [pending]: { run_id: string; batch: unknown }[] =
-      await sql`SELECT run_id, batch FROM factory.fleet_digest_pending WHERE id = 1`
-    if (pending) return this.resume(pending.run_id, pending.batch, now)
+    const [pending]: { run_id: string; batch: unknown; started_at: Date }[] =
+      await sql`SELECT run_id, batch, started_at FROM factory.fleet_digest_pending WHERE id = 1`
+    if (pending) return this.resume(pending.run_id, pending.batch, pending.started_at, now)
 
     const cached = new Map<string, CacheRow>()
     for (const r of await sql`SELECT key, fingerprint, answer, at FROM factory.fleet_digest`) {
@@ -382,6 +403,7 @@ export class Digest {
       picked.push(item)
       chars += item.text.length
     }
+    if (picked.length === 0) return { called: false, sent: 0, stored: 0, failedItems: 0, waiting: items.length }
     const batch: BatchItem[] = picked.map((item, i) => ({
       id: `i${i}`,
       key: item.key,
@@ -419,19 +441,26 @@ export class Digest {
     return this.finish(batch, reply, waiting, false, now)
   }
 
-  /** A pass with a pending run: only waits for it. Pending is not a failure; a run that ended badly backs its batch off. */
-  private async resume(runId: string, stored: unknown, now: Date): Promise<PassResult> {
+  /**
+   * A pass with a pending run: only waits for it. Pending is not a failure, and neither is a wait that did not get through (a blip, a
+   * hung process): the run is kept. It is let go when `agw` says it failed or was cancelled, or when it is a day old.
+   */
+  private async resume(runId: string, stored: unknown, startedAt: Date, now: Date): Promise<PassResult> {
     const parsed = z.array(BatchItem).safeParse(stored)
     const batch = parsed.success ? parsed.data : []
+    if (!parsed.success) return this.failBatch(batch, 'the pending batch does not parse', 0, now, true)
+    if (now.getTime() - startedAt.getTime() > PENDING_MAX_MS) {
+      return this.failBatch(batch, `run ${runId} did not end in a day`, 0, now, true)
+    }
+    const waiting = { called: false, sent: batch.length, stored: 0, failedItems: 0, waiting: 0, pending: true }
     let reply: Reply
     try {
       reply = await this.exec([this.deps.bin, 'run', 'wait', runId, '--format', 'json'])
     } catch (error) {
-      return this.failBatch(batch, message(error), 0, now, true)
+      if (error instanceof CallFailed && error.terminal) return this.failBatch(batch, message(error), 0, now, true)
+      return { ...waiting, error: message(error) }
     }
-    if (reply.kind !== 'done')
-      return { called: false, sent: batch.length, stored: 0, failedItems: 0, waiting: 0, pending: true }
-    if (!parsed.success) return this.failBatch(batch, 'the pending batch does not parse', 0, now, true)
+    if (reply.kind !== 'done') return waiting
     return this.finish(batch, reply, 0, true, now)
   }
 
@@ -465,7 +494,7 @@ export class Digest {
         if (rows.length > 0) {
           await tx`DELETE FROM factory.fleet_digest_backoff WHERE key IN ${tx(rows.map((r) => r.item.key))}`
         }
-        await this.backOff(tx, refused, 'the answer was missing, an error or broke its schema', now, 1)
+        await this.backOff(tx, refused, 'the answer was missing, an error or broke its schema', 1)
         await this.journal(tx, { ok, items: batch.length, failedItems: refused.length, cost: reply.cost, error })
         if (clearPending) await tx`DELETE FROM factory.fleet_digest_pending WHERE id = 1`
       })
@@ -500,7 +529,7 @@ export class Digest {
   ): Promise<PassResult> {
     const { sql } = this.deps
     await sql.begin(async (tx) => {
-      await this.backOff(tx, batch, reason, now, batch.length)
+      await this.backOff(tx, batch, reason, batch.length)
       await this.journal(tx, { ok: false, items: batch.length, failedItems: 0, cost: null, error: reason })
       if (clearPending) await tx`DELETE FROM factory.fleet_digest_pending WHERE id = 1`
     })
@@ -512,10 +541,12 @@ export class Digest {
     sql: SQL,
     items: readonly Pick<BatchItem, 'key' | 'fingerprint'>[],
     reason: string,
-    now: Date,
     batchSize: number,
   ): Promise<void> {
     if (items.length === 0) return
+    // From the time of the failure, not of the pass: a call can run for minutes before it fails.
+    const now = this.deps.now()
+    const why = head(wellFormed(reason), 500)
     const known: { key: string; fingerprint: string; failures: number }[] =
       await sql`SELECT key, fingerprint, failures FROM factory.fleet_digest_backoff WHERE key IN ${sql(items.map((i) => i.key))}`
     const before = new Map(known.map((k) => [k.key, k]))
@@ -524,7 +555,7 @@ export class Digest {
       const failures = prior && prior.fingerprint === item.fingerprint ? prior.failures + 1 : 1
       await sql`
         INSERT INTO factory.fleet_digest_backoff (key, fingerprint, failures, batch, retry_at, error)
-        VALUES (${item.key}, ${item.fingerprint}, ${failures}, ${batchSize}, ${new Date(now.getTime() + backoffMs(failures))}, ${reason.slice(0, 500)})
+        VALUES (${item.key}, ${item.fingerprint}, ${failures}, ${batchSize}, ${new Date(now.getTime() + backoffMs(failures))}, ${why})
         ON CONFLICT (key) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, failures = EXCLUDED.failures, batch = EXCLUDED.batch,
           retry_at = EXCLUDED.retry_at, error = EXCLUDED.error`
     }
@@ -606,19 +637,22 @@ export class Digest {
     const result = await this.run(cmd, this.deps.hangGuardMs ?? HANG_GUARD_MS, childEnv(), stdin)
     if (result.exitCode === EXIT_TIMEOUT) return { kind: 'hung' }
     if (result.exitCode === EXIT_PENDING) return { kind: 'pending', runId: runIdOf(result.stdout) }
-    if (result.exitCode !== 0) throw new CallFailed(`agw ${cmd[1]} exited ${result.exitCode}`)
+    if (result.exitCode !== 0)
+      throw new CallFailed(`agw ${cmd[1]} exited ${result.exitCode}`, endedBadly(result.stdout))
     let body: unknown
     try {
       body = JSON.parse(result.stdout)
     } catch {
       throw new CallFailed(`agw ${cmd[1]} printed no JSON`)
     }
+    const status = (body as { status?: unknown } | null)?.status
+    if (typeof status === 'string' && status !== 'done') {
+      if (TERMINAL.has(status)) throw new CallFailed(`the digest run is ${status}`, true)
+      return { kind: 'pending', runId: runIdOf(result.stdout) }
+    }
     const parsed = Envelope.safeParse(body)
     if (!parsed.success) {
       throw new CallFailed(`agw ${cmd[1]} answered an unexpected shape: ${parsed.error.issues[0]?.message}`)
-    }
-    if (parsed.data.status !== undefined && parsed.data.status !== 'done') {
-      throw new CallFailed(`the digest run is ${parsed.data.status}`)
     }
     // An id we did not send is dropped, a repeat keeps the first.
     const answers = new Map<string, Record<string, unknown>>()
@@ -632,7 +666,7 @@ export class Digest {
   ): Promise<void> {
     await sql`
       INSERT INTO factory.fleet_digest_runs (at, ok, items, failed_items, cost_usd, error)
-      VALUES (${this.deps.now()}, ${run.ok}, ${run.items}, ${run.failedItems}, ${run.cost}, ${run.error?.slice(0, 500) ?? null})`
+      VALUES (${this.deps.now()}, ${run.ok}, ${run.items}, ${run.failedItems}, ${run.cost}, ${run.error ? head(wellFormed(run.error), 500) : null})`
   }
 
   /** Rows no item wants any more (a heading rewritten, a session gone), once they have been unwanted for a week (not on a partial feed); old journal and backoff rows. */
