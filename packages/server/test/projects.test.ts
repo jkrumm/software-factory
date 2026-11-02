@@ -5,6 +5,7 @@ import { Project, ProjectList, ProjectSyncResult, type Project as ProjectView } 
 import { claimDue } from '../src/tick.ts'
 import { runProcess } from '../src/exec.ts'
 import { createIssue } from '../src/issues/create.ts'
+import { releaseClaim } from '../src/projects/claims.ts'
 import { makeTargetsOf, readMakefile } from '../src/projects/make.ts'
 import { parseManifest } from '../src/projects/manifest.ts'
 import { projectPass } from '../src/projects/pass.ts'
@@ -96,6 +97,9 @@ beforeEach(async () => {
   sync = new ProjectSync({ sql: db.sql, roots, now: () => clock.now() })
 })
 
+const closeIssue = (id: number) =>
+  db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${id}`
+
 async function fileIssue(repo: string, key: string, urgent = false): Promise<number> {
   const { issue } = await createIssue(
     db.sql,
@@ -184,6 +188,52 @@ describe('which commit is read', () => {
     fixture.git(clone, 'checkout', '-q', '--detach')
     fixture.git(clone, 'branch', '-D', 'master')
     expect((await syncProject('cloned')).manifest.leads).toBe(3)
+  })
+
+  test('the remote’s default branch decides, not a checkout that is behind, and sync asks the remote first', async () => {
+    const origin = fixture.repo('fetched-origin', {})
+    const clone = join(fixture.root, 'fetched')
+    fixture.git(fixture.root, 'clone', '-q', origin, clone)
+    fixture.commit(origin, { 'project.yaml': MANIFEST.replace('alpha', 'fetched') })
+    const fetching = new ProjectSync({ sql: db.sql, roots: [fixture.root], now: () => clock.now(), fetch: true })
+    await fileIssue(clone, 'f2')
+    await sync.syncNow()
+    await fetching.syncNow()
+    expect((await getProject('fetched')).source).toBe('manifest')
+    expect(fixture.git(clone, 'log', '--oneline', 'master', '--', 'project.yaml')).toBe('')
+  })
+
+  test('the tick’s sync fetches behind its back and reads the result on a later pass', async () => {
+    const origin = fixture.repo('behind-origin', {})
+    const clone = join(fixture.root, 'behind')
+    fixture.git(fixture.root, 'clone', '-q', origin, clone)
+    await fileIssue(clone, 'b1')
+    let fetches = 0
+    const counting: typeof runProcess = (cmd, ...rest) => {
+      if (cmd.includes('fetch')) fetches++
+      return runProcess(cmd, ...rest)
+    }
+    const syncing = new ProjectSync({
+      sql: db.sql,
+      roots: [fixture.root],
+      now: () => clock.now(),
+      fetch: true,
+      run: counting,
+    })
+    // The first pass makes the row, so there is something to fetch from now on; the pass after a fetch reads and starts no other.
+    await syncing.syncIfDue()
+    await syncing.settled()
+    await syncing.syncIfDue()
+    fetches = 0
+    fixture.commit(origin, { 'project.yaml': MANIFEST.replace('alpha', 'behind') })
+    clock.advance(11 * 60_000)
+    await syncing.syncIfDue()
+    await syncing.settled()
+    expect(fetches).toBeGreaterThan(0)
+    const before = fetches
+    await syncing.syncIfDue()
+    expect((await getProject('behind')).source).toBe('manifest')
+    expect(fetches).toBe(before)
   })
 
   test('a repo whose default branch cannot be found keeps what its row has', async () => {
@@ -594,7 +644,7 @@ describe('claims', () => {
     expect(await db.sql`SELECT 1 FROM factory.claims`).toHaveLength(1)
   })
 
-  test('the oldest queued Issue goes first when the claim is given back, and the tick gives back a closed Issue’s', async () => {
+  test('the oldest queued Issue goes first when the claim is given back', async () => {
     const solo = fixture.repo('solo', {})
     const i1 = await fileIssue(solo, 'one')
     const i2 = await fileIssue(solo, 'two')
@@ -605,8 +655,10 @@ describe('claims', () => {
     await lead('s3', solo, i3)
     expect((await holdersOf('solo')).queued).toEqual([i2, i3])
 
-    const close = (id: number) =>
-      db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${id}`
+    const close = async (id: number) => {
+      await closeIssue(id)
+      await releaseClaim(db.sql, id)
+    }
     const pass = async () => {
       clock.advance(31_000)
       await projectPass(db.sql, sync)
@@ -639,7 +691,8 @@ describe('claims', () => {
     await lead('s3', solo, i3)
     await db.sql`UPDATE factory.spawns SET status = 'failed' WHERE key = 's2'`
     await db.sql`UPDATE factory.spawns SET status = 'started' WHERE key = 's1'`
-    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${i1}`
+    await closeIssue(i1)
+    await releaseClaim(db.sql, i1)
     clock.advance(31_000)
     await projectPass(db.sql, sync)
     const { claims } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })
@@ -680,7 +733,8 @@ describe('claims', () => {
     await lead('s2', solo, i2)
     expect((await lead('s3', solo, i3)).hold).toBe('claim')
     await db.sql`UPDATE factory.spawns SET status = 'started' WHERE key IN ('s1', 's2')`
-    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${i1}`
+    await closeIssue(i1)
+    await releaseClaim(db.sql, i1)
     clock.advance(31_000)
     await projectPass(db.sql, sync)
     const { claims } = await claimDue({ sql: db.sql, clock, runner: new FakeRunner() })

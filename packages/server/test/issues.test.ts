@@ -37,8 +37,25 @@ async function file(key = `k${++n}`): Promise<Issue> {
   return made.issue
 }
 
+/** What `derive` puts on a `ship` or a `close` when the commits require nothing: this file is about the moves, `evidence.test.ts` about the bar. */
+const NOTHING_REQUIRED = {
+  commits: ['a'.repeat(40)],
+  paths: ['docs/x.md'],
+  required: [],
+  mergedAt: null,
+  holdMs: DEFAULT_HOLD_MS,
+  problem: null,
+}
+const GATED = new Set(['ship', 'close'])
+
 const send = (issueId: number, kind: string, payload?: Record<string, unknown>, key = `${issueId}:${kind}:${++n}`) =>
-  enqueue(db.sql, { issueId, key, kind, at: clock.now(), payload })
+  enqueue(db.sql, {
+    issueId,
+    key,
+    kind,
+    at: clock.now(),
+    payload: GATED.has(kind) ? { derived: NOTHING_REQUIRED, ...payload } : payload,
+  })
 
 /** What ports were called with, and by a key as a real port does: the second call under a key finds it done. */
 class World {
@@ -685,7 +702,7 @@ describe('the inbox', () => {
     const id = await working()
     const late = new Date(clock.now().getTime() - 60_000)
     await send(id, 'close')
-    await enqueue(db.sql, { issueId: id, key: 'late', kind: 'ship', at: late })
+    await enqueue(db.sql, { issueId: id, key: 'late', kind: 'ship', at: late, payload: { derived: NOTHING_REQUIRED } })
     await pass()
     expect((await state(id)).state).toBe('watching')
     expect((await inbox(id)).map((r) => r.result)).toEqual(['applied', 'refused', 'applied'])
@@ -783,6 +800,7 @@ describe('the inbox', () => {
       key: 'late',
       kind: 'close',
       at: new Date(clock.now().getTime() - 120_000),
+      payload: { derived: NOTHING_REQUIRED },
     })
     let calls = 0
     const failingOnce = () => {

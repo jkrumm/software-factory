@@ -17,6 +17,7 @@ import {
   RunnerError,
   type StartInput,
   type StartResult,
+  stageFork,
   UncertainTyping,
 } from './runner.ts'
 
@@ -182,6 +183,7 @@ export class HcRunner implements Runner {
     let placement = await this.place(input, root, budget)
     if (placement.kind === 'tab') noteSpace(placement.space)
     await this.pretrust(input.repo, budget)
+    await stageFork(input, env, this.options.home ?? process.env.HOME ?? '')
     // A terminal whose program has ended, or was replaced by a shell, is not an agent: a retry starts one again, on whatever
     // account it was given now.
     for (const stale of found) {
@@ -251,10 +253,25 @@ export class HcRunner implements Runner {
     }
   }
 
+  /** Every terminal of the spawn, killed if it runs and removed; one that went meanwhile is what was wanted. */
+  async close(key: string): Promise<void> {
+    const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
+    try {
+      for (const terminal of await this.find(key, budget)) {
+        if (terminal.state === 'live') await this.kill(terminal.address, budget)
+        await this.rpc('terminal.rm', { terminal: terminal.address }, Removed, budget).catch((error: unknown) => {
+          if (!(error instanceof HcError && error.refusal)) throw error
+        })
+      }
+    } catch (error) {
+      throw asRunnerError(error)
+    }
+  }
+
   // --- steps -----------------------------------------------------------------------------------------------------
 
   /** The program and its arguments; the prompt is last. */
-  private argv({ tier, effort, resume, prompt }: StartInput): string[] {
+  private argv({ tier, effort, resume, fork, prompt }: StartInput): string[] {
     return [
       this.options.claudeBin ?? 'claude',
       '--dangerously-skip-permissions',
@@ -263,6 +280,7 @@ export class HcRunner implements Runner {
       '--effort',
       effort,
       ...(resume ? ['--resume', resume] : []),
+      ...(fork ? ['--resume', fork.session, '--fork-session'] : []),
       prompt,
     ]
   }

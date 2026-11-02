@@ -8,10 +8,13 @@ const oneLine = (text: string, max = 160): string => {
 }
 
 const PER_KIND = 10
+/** A kept worktree is the owner's to look at; a week on it is no news. */
+const KEPT_SHOWN_MS = 7 * 24 * 3_600_000
 
 /**
  * What the owner should look at, one line each, for `factory status`: open questions, Issues a lead parked or blocked, alerts held
- * back by the switch, Issues waiting for their project's claim, and a lead that cannot be started. Lead text is data and is shown cut.
+ * back by the switch, Issues waiting for their project's claim, a lead that cannot be started, an attempt that cannot be finalized and a
+ * worktree finalize kept (for a week). Lead text is data and is shown cut.
  */
 export async function issueAttention(sql: SQL, now: Date, options: { alertLeads: boolean }): Promise<string[]> {
   const lines: string[] = []
@@ -50,7 +53,7 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
     const alerts: { id: number }[] = await sql`
       SELECT id FROM factory.issues WHERE state = 'queued' AND source = 'alert' ORDER BY id LIMIT ${PER_KIND}`
     for (const alert of alerts)
-      lines.push(`Issue ${alert.id} is an alert and starts no lead: FACTORY_ALERT_LEADS is not set`)
+      lines.push(`Issue ${alert.id} is an alert and starts no lead: FACTORY_ALERT_LEADS is off`)
   }
 
   const waiting: { id: number; project: string }[] = await sql`
@@ -70,6 +73,21 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
   for (const tree of trees) {
     lines.push(
       `Issue ${tree.issue_id}: its worktree could not be made (try ${tree.tries}), trying again: ${oneLine(tree.error)}`,
+    )
+  }
+
+  const ending: { issue_id: number; error: string }[] = await sql`
+    SELECT issue_id, error FROM factory.issue_effects
+    WHERE kind = 'finalize' AND done_at IS NULL AND cancelled_at IS NULL AND error IS NOT NULL
+    ORDER BY id LIMIT ${PER_KIND}`
+  for (const effect of ending) lines.push(`Issue ${effect.issue_id}: it cannot be finalized: ${oneLine(effect.error)}`)
+
+  const kept: { issue_id: number; path: string | null; why: string }[] = await sql`
+    SELECT issue_id, payload->>'path' AS path, payload->>'kept' AS why FROM factory.issue_events
+    WHERE kind = 'worktree_kept' AND at > ${new Date(now.getTime() - KEPT_SHOWN_MS)} ORDER BY id DESC LIMIT ${PER_KIND}`
+  for (const tree of kept) {
+    lines.push(
+      `Issue ${tree.issue_id}: its worktree was kept (${oneLine(tree.why)})${tree.path ? `: ${oneLine(tree.path)}` : ''}`,
     )
   }
 

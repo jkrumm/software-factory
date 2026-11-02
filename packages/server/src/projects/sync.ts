@@ -16,6 +16,7 @@ import { makeTargetsOf } from './make.ts'
 /** A full pass over the roots at most this often; the repos Issues and spawns name are picked up on every tick. */
 export const SYNC_INTERVAL_MS = 10 * 60_000
 const GIT_TIMEOUT_MS = 5_000
+const FETCH_TIMEOUT_MS = 30_000
 const CONCURRENCY = 8
 
 export interface SyncDeps {
@@ -25,6 +26,8 @@ export interface SyncDeps {
   intervalMs?: number
   /** the process runner, for tests that want to count or break it */
   run?: typeof runProcess
+  /** ask each project's remote what it has: a repo's default branch moves on GitHub without touching this checkout */
+  fetch?: boolean
 }
 
 interface Row {
@@ -55,10 +58,12 @@ const suffixed = (name: string, repo: string) =>
   `${name}~${createHash('sha256').update(repo).digest('hex').slice(0, 8)}`
 
 /**
- * Reads each project's `project.yaml` from the default branch of its checkout (`git show`, so a feature branch or an edit not
- * committed yet is not what the factory runs on) and its Makefile, and stores both on the project's row. A full pass visits every
+ * Reads each project's `project.yaml` from the remote's default branch as last fetched (so a feature branch, an edit not committed
+ * yet or a checkout that is behind is not what the factory runs on) and its Makefile, and stores both on the project's row. A full pass visits every
  * repo directly under a root that has a manifest, every repo that already has a row and every repo an Issue or spawn names; between
- * full passes (`intervalMs`, ten minutes) a tick gives a row only to a named repo that has none. Passes never overlap.
+ * full passes (`intervalMs`, ten minutes) a tick gives a row only to a named repo that has none. Passes never overlap. The fetch that
+ * keeps the remote's refs fresh takes as long as the network does, so the tick starts it behind its back and looks again once it is
+ * over; `factory project sync` waits for it.
  *
  * Project keys: the directory's name. A second directory of the same name (under another root) is told apart by its path: the
  * repo that was stored first keeps `<name>`, the other is `<name>~<8 hex of the sha-256 of its real path>`, and a stored repo
@@ -67,18 +72,55 @@ const suffixed = (name: string, repo: string) =>
 export class ProjectSync {
   private lastFull = 0
   private chain: Promise<unknown> = Promise.resolve()
+  private fetching: Promise<void> | undefined
+  /** the full pass that reads what a fetch brought: it starts no fetch of its own */
+  private fresh = false
 
   constructor(private readonly deps: SyncDeps) {}
 
   /** The tick's call: a full pass when it is due, else only the repos that are named and unknown. */
   syncIfDue(): Promise<ProjectSyncResult> {
+    const fresh = this.fresh
+    this.fresh = false
     const due = this.deps.now().getTime() - this.lastFull >= (this.deps.intervalMs ?? SYNC_INTERVAL_MS)
-    return this.exclusive(() => this.pass(due))
+    if (due && !fresh) this.fetchBehind()
+    return this.exclusive(() => this.pass(due || fresh))
   }
 
-  /** `factory project sync`: a full pass now. */
-  syncNow(): Promise<ProjectSyncResult> {
+  /** `factory project sync`: what the remotes have, then a full pass. */
+  async syncNow(): Promise<ProjectSyncResult> {
+    await this.fetchAll()
     return this.exclusive(() => this.pass(true))
+  }
+
+  private fetchBehind(): void {
+    if (!this.deps.fetch || this.fetching) return
+    this.fetching = this.fetchAll().finally(() => {
+      this.fetching = undefined
+      this.fresh = true
+    })
+  }
+
+  /** Waits for the fetch behind the tick's back. The tests use it; the server never waits. */
+  async settled(): Promise<void> {
+    await this.fetching
+  }
+
+  /** A failed fetch (a repo with no remote, a network that is away) leaves the refs as they were: what they say is read all the same. */
+  private async fetchAll(): Promise<void> {
+    if (!this.deps.fetch) return
+    const run = this.deps.run ?? runProcess
+    const env = childEnv({ GIT_TERMINAL_PROMPT: '0' })
+    const known: { repo: string }[] = await this.deps.sql`SELECT repo FROM factory.projects`.catch(() => [])
+    for (let i = 0; i < known.length; i += CONCURRENCY) {
+      await Promise.all(
+        known
+          .slice(i, i + CONCURRENCY)
+          .map(({ repo }) =>
+            run(['git', '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, env).catch(() => undefined),
+          ),
+      )
+    }
   }
 
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -160,8 +202,9 @@ export class ProjectSync {
    * `project.yaml` as committed on the repo's default branch: its text; `null` when the branch has no such file; `undefined` when there
    * is no default branch to read (an empty repo, another name); `bad` when there is
    * one that cannot be read as a manifest (not a regular file, larger than the limit), with the hash that keys its upkeep Issue.
-   * The branch is resolved first and only that branch is read: `origin/HEAD`'s (the local branch, else `origin/<it>`), else the first
-   * of `main` and `master` that exists. Anything git fails at throws, so the row keeps what it has: a failure is not a deletion.
+   * The branch is resolved first and only that branch is read: `origin/HEAD`'s (`origin/<it>`, else the local branch), else the first
+   * of `main` and `master` that exists, on the remote before the local one. Anything git fails at throws, so the row keeps what it has: a
+   * failure is not a deletion.
    */
   private async manifestText(repo: string): Promise<Manifested> {
     if (!(await exists(join(repo, '.git')))) return null
@@ -176,8 +219,8 @@ export class ProjectSync {
     const head = await git(['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'], [0, 1])
     const named = head.exitCode === 0 ? head.stdout.trim().replace(/^origin\//, '') : ''
     const refs = named
-      ? [`refs/heads/${named}`, `refs/remotes/origin/${named}`]
-      : ['refs/heads/main', 'refs/heads/master']
+      ? [`refs/remotes/origin/${named}`, `refs/heads/${named}`]
+      : ['refs/remotes/origin/main', 'refs/remotes/origin/master', 'refs/heads/main', 'refs/heads/master']
     let ref: string | undefined
     for (const candidate of refs) {
       if ((await git(['rev-parse', '--verify', '-q', `${candidate}^{commit}`], [0, 1])).exitCode === 0) {

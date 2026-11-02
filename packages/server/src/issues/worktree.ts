@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
+import { fetchOrigin, originDefault } from './origin.ts'
 
 /** A lead's own checkout: a branch of the repo, cut from the default branch as it is on the remote. */
 export interface Worktree {
@@ -9,13 +11,18 @@ export interface Worktree {
   sha: string
 }
 
+/** What became of a lead's worktree at the end of its attempt. */
+export type Removal = { removed: true } | { kept: string; path: string | null }
+
 /**
- * Makes a lead's worktree (the steps of dotfiles' `fan-worktree.sh`, which `rd fan` uses). Idempotent per branch: a branch whose
- * worktree already exists answers that worktree, so a start that crashed after the checkout and before its spawn finds its work.
- * A port: no call of it is inside a transaction.
+ * Makes and removes a lead's worktree (the steps of dotfiles' `fan-worktree.sh`, which `rd fan` uses). `create` is idempotent per branch: a
+ * branch whose worktree was made whole answers that worktree, so a start that crashed after it and before its spawn finds its work; one
+ * left half made is removed and made again. `remove` takes it away only when nothing would be lost. A port: no call of it is inside a
+ * transaction.
  */
 export interface Worktrees {
   create(input: { repo: string; branch: string }): Promise<Worktree>
+  remove(input: { repo: string; branch: string }): Promise<Removal>
 }
 
 export class WorktreeFailed extends Error {}
@@ -24,6 +31,8 @@ const FETCH_TIMEOUT_MS = 90_000
 const GIT_TIMEOUT_MS = 30_000
 /** The repo's own `wtp` hooks install dependencies and copy env files. */
 const WTP_TIMEOUT_MS = 300_000
+/** In the worktree's git directory, not its files, so it never reads as a change: written last, it says the setup finished. */
+const READY_MARKER = 'factory-ready'
 
 /** `git` and `wtp` on the host. Fetches the remote first, so the branch is cut from what is pushed, not from a checkout that is behind. */
 export class GitWorktrees implements Worktrees {
@@ -48,37 +57,68 @@ export class GitWorktrees implements Worktrees {
     return result.exitCode === 0 ? result.stdout.trim() : undefined
   }
 
+  private async git(repo: string, ...args: string[]): Promise<string | undefined> {
+    return this.probe([this.options.git ?? 'git', '-C', repo, ...args])
+  }
+
+  private async listed(repo: string, branch: string): Promise<string | undefined> {
+    const git = this.options.git ?? 'git'
+    const listing = await this.run(
+      [git, '-C', repo, 'worktree', 'list', '--porcelain'],
+      GIT_TIMEOUT_MS,
+      'git worktree list',
+    )
+    return worktreeOf(listing, branch)
+  }
+
+  private async marker(path: string): Promise<string | undefined> {
+    const dir = await this.git(path, 'rev-parse', '--absolute-git-dir')
+    return dir ? join(dir, READY_MARKER) : undefined
+  }
+
+  /** What a setup that did not finish left: nobody has worked in it. Best effort, and the next try looks again. */
+  private async discard(repo: string, branch: string): Promise<void> {
+    const path = await this.listed(repo, branch).catch(() => undefined)
+    if (path) await this.git(repo, 'worktree', 'remove', '--force', path)
+    await this.git(repo, 'worktree', 'prune')
+    await this.git(repo, 'branch', '-D', branch)
+  }
+
   async create({ repo, branch }: { repo: string; branch: string }): Promise<Worktree> {
     const git = this.options.git ?? 'git'
     await this.run([git, '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, 'git fetch origin')
 
-    let base = await this.probe([git, '-C', repo, 'symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'])
-    if (!base) {
-      for (const candidate of ['origin/master', 'origin/main']) {
-        if (await this.probe([git, '-C', repo, 'rev-parse', '-q', '--verify', candidate])) {
-          base = candidate
-          break
-        }
-      }
-    }
+    const base = await originDefault(repo, this.options)
     if (!base) throw new WorktreeFailed(`no origin default branch in ${repo}`)
     const sha = await this.run([git, '-C', repo, 'rev-parse', base], GIT_TIMEOUT_MS, 'git rev-parse')
 
     // The branch exists: its worktree is this one's earlier try, or the branch is somebody else's.
     if (await this.probe([git, '-C', repo, 'rev-parse', '-q', '--verify', `refs/heads/${branch}`])) {
-      const listing = await this.run(
-        [git, '-C', repo, 'worktree', 'list', '--porcelain'],
-        GIT_TIMEOUT_MS,
-        'git worktree list',
-      )
-      const path = worktreeOf(listing, branch)
+      const path = await this.listed(repo, branch)
       if (!path) throw new WorktreeFailed(`branch ${branch} already exists in ${repo}`)
-      return { path, base, sha }
+      const marker = await this.marker(path)
+      if (marker && existsSync(marker)) return { path, base, sha }
+      await this.discard(repo, branch)
     }
 
+    try {
+      const path = await this.make(repo, branch, base)
+      const marker = await this.marker(path)
+      if (!marker) throw new WorktreeFailed(`${path} is no worktree`)
+      await Bun.write(marker, `${sha}\n`)
+      return { path, base, sha }
+    } catch (error) {
+      await this.discard(repo, branch)
+      throw error
+    }
+  }
+
+  private async make(repo: string, branch: string, base: string): Promise<string> {
+    const git = this.options.git ?? 'git'
     let path: string
     const wtp = this.options.wtp ?? Bun.which('wtp')
-    const wantsWtp = existsSync(`${repo}/.wtp.yml`)
+    // As the base has it: a checkout that is behind must not decide how a worktree of what is pushed is set up.
+    const wantsWtp = (await this.probe([git, '-C', repo, 'cat-file', '-e', `${base}:.wtp.yml`])) !== undefined
     // Plain git would skip the repo's setup hooks (dependencies, env files): a lead in such a tree is worse than none.
     if (wantsWtp && !wtp) throw new WorktreeFailed(`${repo} has a .wtp.yml and wtp is not on PATH: install wtp`)
     if (wtp && wantsWtp) {
@@ -95,7 +135,35 @@ export class GitWorktrees implements Worktrees {
     if (!path || !existsSync(path)) throw new WorktreeFailed(`worktree path '${path}' is missing after the create`)
     // A branch cut from origin/<default> must not track it: a bare `git push` would target the default branch.
     await this.probe([git, '-C', path, 'branch', '--unset-upstream', branch])
-    return { path, base, sha }
+    return path
+  }
+
+  /** Whether all the branch holds is on the base: by commit, or by content (a squash merge leaves no commit of the branch behind). */
+  private async onBase(repo: string, branch: string, base: string): Promise<boolean> {
+    const ref = `refs/heads/${branch}`
+    if (!(await this.git(repo, 'rev-parse', '-q', '--verify', ref))) return true
+    if ((await this.git(repo, 'rev-list', '--count', ref, '--not', base)) === '0') return true
+    const merged = await this.git(repo, 'merge-tree', '--write-tree', base, ref)
+    return merged !== undefined && merged === (await this.git(repo, 'rev-parse', `${base}^{tree}`))
+  }
+
+  /**
+   * Removes the worktree and its branch when it is clean and its commits are on the fetched base; otherwise leaves both and says why. A
+   * worktree that is gone already is removed. A failed fetch reads what the last one left, which can only keep more.
+   */
+  async remove({ repo, branch }: { repo: string; branch: string }): Promise<Removal> {
+    await this.git(repo, 'worktree', 'prune')
+    const path = (await this.listed(repo, branch)) ?? null
+    if (path && (await this.git(path, 'status', '--porcelain')) !== '')
+      return { kept: 'it has uncommitted changes', path }
+    await fetchOrigin(repo, this.options)
+    const base = await originDefault(repo, this.options)
+    if (!base) return { kept: `${repo} has no origin default branch to check it against`, path }
+    if (!(await this.onBase(repo, branch, base))) return { kept: `its commits are not on ${base}`, path }
+    if (path && (await this.git(repo, 'worktree', 'remove', path)) === undefined)
+      return { kept: 'git worktree remove refused', path }
+    await this.git(repo, 'branch', '-D', branch)
+    return { removed: true }
   }
 }
 

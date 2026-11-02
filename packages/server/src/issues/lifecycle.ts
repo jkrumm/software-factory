@@ -4,10 +4,11 @@ import { notifyMove } from '../notify/rules.ts'
 import { addDependency, releaseDependents } from './deps.ts'
 import { answerDecision, recordDecision } from './decisions.ts'
 import type { EffectKind } from './effects.ts'
+import { gateClose, gateShip, holdMsOf, recordProof } from './evidence.ts'
 import type { IssueRow } from './read.ts'
 import { badTime, type Context, type InboxRow, logEvent, text, time } from './shared.ts'
 
-/** The hold after `ship`, until a manifest says otherwise (Wave 4). */
+/** The hold after `ship`, where nothing says otherwise: `derive` reads the manifest's. */
 export const DEFAULT_HOLD_MS = 30 * 60_000
 /** `closed → queued` is for the same fault within this long. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
@@ -67,6 +68,10 @@ async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefine
 const thisHold = ({ issue, row }: Context): string | undefined =>
   row.payload?.hold === issue.hold ? undefined : `not the current hold (${issue.hold})`
 
+/** A failed check names the hold it ended; a regression signal (F3) names none and speaks for the Issue as it is. */
+const heldNow = (context: Context): string | undefined =>
+  context.row.payload?.hold === undefined ? undefined : thisHold(context)
+
 const stopped: Step = { to: 'closed', outcome: 'dropped' }
 const recorded: Step = {}
 const noted: Step = { effects: ['note_lead'] }
@@ -95,12 +100,12 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   block: { working: { to: 'waiting', reason: 'blocked' } },
   // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
   unreported: { working: { to: 'waiting', reason: 'unreported', apply: stopIsNews } },
-  // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to (Wave 4 may start a new attempt from here).
+  // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to.
   lead_gone: { working: { to: 'waiting', reason: 'lead_gone' } },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
-  // Wave 4: the evidence the manifest derives is checked here (`refuse`), for `ship` and for a `close` that touched deployable paths.
-  ship: { working: { to: 'watching', hold: true } },
-  close: { working: { to: 'closed', outcome: 'done' } },
+  // The evidence derived from the commits decides these two; the check runs here, in the transition's transaction, on what `derive` found.
+  ship: { working: { to: 'watching', hold: true, apply: gateShip } },
+  close: { working: { to: 'closed', outcome: 'done', apply: gateClose } },
   drop: { working: { to: 'closed', outcome: 'dropped' } },
   // session events
   limit_stop: { working: { to: 'waiting', reason: 'wall', apply: wallIsNews } },
@@ -121,10 +126,10 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     watching: recorded,
     closed: recorded,
   },
-  regression: { watching: { to: 'working', effects: ['note_lead'] } },
+  regression: { watching: { to: 'working', effects: ['note_lead'], refuse: heldNow } },
   // the tick and the proof after the hold
   hold_over: { watching: { effects: ['verify'], refuse: thisHold } },
-  verified: { watching: { to: 'closed', outcome: 'done', refuse: thisHold } },
+  verified: { watching: { to: 'closed', outcome: 'done', refuse: thisHold, apply: recordProof } },
   wake: { waiting: { to: 'working', effects: ['note_lead'], apply: wakeIsDue } },
   // A question past its expiry with no default: it stays open (an answer is still taken), and the line is for the owner.
   lapsed: { waiting: { only: 'decision' } },
@@ -145,7 +150,7 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
       to: 'queued',
       refuse: ({ issue, now }) =>
         issue.closed_at && now.getTime() - issue.closed_at.getTime() > REOPEN_WINDOW_MS
-          ? 'closed more than 30 days ago: file a new Issue'
+          ? 'closed more than 30 days ago: file a new Issue with `factory issue new`'
           : undefined,
     },
   },
@@ -182,7 +187,7 @@ async function move(tx: SQL, issue: IssueRow, step: Step, cause: InboxRow, now: 
       : step.reason === 'decision'
         ? time(cause.payload, 'expiresAt')
         : null
-  const wakeAt = step.hold ? new Date(now.getTime() + DEFAULT_HOLD_MS) : until
+  const wakeAt = step.hold ? new Date(now.getTime() + (holdMsOf(cause) ?? DEFAULT_HOLD_MS)) : until
   const [row]: IssueRow[] = await tx`
     UPDATE factory.issues
     SET state = ${to}, reason = ${step.reason ?? null}, wall_session = ${step.reason === 'wall' ? cause.session : null}, outcome = ${step.outcome ?? null}, attempt = ${attempt}, hold = ${hold}, waits = ${waits}, revision = revision + 1,

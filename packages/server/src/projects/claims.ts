@@ -69,12 +69,10 @@ export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<Cla
   return admitted ? 'held' : 'queued'
 }
 
-/**
- * Gives the Issue's claims back (held or queued). Finalize calls this from every exit path (Wave 4); until it does, `releaseClosed`
- * in the tick is what releases the claim of an Issue that closed.
- */
-export async function releaseClaim(tx: SQL, issueId: number): Promise<void> {
-  await tx`DELETE FROM factory.claims WHERE issue_id = ${issueId}`
+/** Gives the Issue's claims back (held or queued) and says which: finalize calls this from every exit path. */
+export async function releaseClaim(tx: SQL, issueId: number): Promise<string[]> {
+  const rows: { key: string }[] = await tx`DELETE FROM factory.claims WHERE issue_id = ${issueId} RETURNING key`
+  return rows.map((row) => row.key)
 }
 
 const IDLE = `c.held_at IS NOT NULL
@@ -90,9 +88,9 @@ export async function releaseIdleClaim(tx: SQL, issueId: number): Promise<void> 
 }
 
 /**
- * The tick's sweep, under the capacity lock like every admission: the claims of Issues that closed (Wave 4's finalize releases
- * those itself and this part goes), the held claims of Issues whose every spawn failed (`IDLE`), and the spawns still queued or
- * waiting for an Issue that closed, which fail: a lead for it would work on nothing. Returns what it released or failed.
+ * The tick's sweep, under the capacity lock like every admission: the held claims of Issues whose every spawn failed (`IDLE`), and the
+ * spawns still queued or waiting for an Issue that closed, which fail: a lead for it would work on nothing. A closed Issue's claim is
+ * finalize's. Returns what it released or failed.
  */
 export async function releaseClosed(sql: SQL): Promise<{ released: number; failed: string[] }> {
   return sql.begin(async (tx) => {
@@ -107,7 +105,7 @@ export async function releaseClosed(sql: SQL): Promise<{ released: number; faile
     for (const { key } of failed) await dropEmptySession(tx, key)
     const released = await tx.unsafe(
       `DELETE FROM factory.claims c USING factory.issues i
-       WHERE i.id = c.issue_id AND (i.state = 'closed' OR (${IDLE}))
+       WHERE i.id = c.issue_id AND i.state <> 'closed' AND ${IDLE}
        RETURNING c.issue_id`,
     )
     return { released: released.length, failed: failed.map((f) => f.key) }

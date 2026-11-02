@@ -582,7 +582,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
   transition table, a test pins its edges to this diagram, and the same transaction writes an `issue_events` row for every event
   it applies. What is not the table lives beside it: `create.ts` (a create, always `queued`), `deps.ts`, `decisions.ts`, `timers.ts`, `shared.ts`.
-  The reversal bound measures the table's module (about 250 lines in Wave 3). An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
+  The reversal bound measures the table's module (about 290 lines in Wave 4). An event a state has no entry for moves nothing: a session event is `ignored`, anything else `refused` with a
   line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
   a session with an `issue_id` is copied in by the same transaction that stores it (`recordIn`, the only writer of session
@@ -594,11 +594,12 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
+| `reopen` | `factory issue reopen` (`POST /issues/:id/reopen`, token or socket) | `reopen:<issue>:<call id>` |
 | `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>` |
 | session events | hooks, live or from the spool | as in §3 |
 | `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
-| `verified` | the check after the hold (W4), naming its `hold`: proof of an earlier hold is refused | the check's id |
-| `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park`, `reopen` | the owner or the orchestrator | the intent's id |
+| `verified`, `regression` | the check after the hold, green or red, each naming its `hold`: an answer for an earlier hold is refused. A `regression` is also a `signal` with `regression: true` (F3), which names none | `verified:<issue>:<hold>`, `regression:<issue>:<hold>` |
+| `note`, `stop`, `answer`, `prio`, `dep`, `retier`, `park` | the owner or the orchestrator | the intent's id |
 | `settled`, `healed` | settle (F3) | the run's id |
 
 - **One Issue at a time.** A tick pass takes the Issue with the oldest unhandled row and locks its row with `FOR NO KEY UPDATE
@@ -610,13 +611,15 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   Events carry what they end: a wake its `for`, the end of a hold and its proof their `hold`, so one that arrives late refuses.
 - **Effects run after the commit.** A step's effects (`start_lead`, `note_lead`, `verify`, `finalize`; every step into `closed`
   has `finalize`) are rows in `issue_effects` under `<effect>:<inbox key>`, in the transition's transaction. `runEffects` calls
-  the port outside any transaction, only for each Issue's oldest open effect, so nothing overtakes an effect that has no port yet
-  or failed, least tried first. A step into `closed` cancels the Issue's open effects but `finalize` (`cancelled_at`): a closed Issue
+  the port outside any transaction, only for each Issue's oldest open effect, so nothing overtakes an effect that failed, least
+  tried first. A step into `closed` cancels the Issue's open effects but `finalize` (`cancelled_at`): a closed Issue
   gets no lead, note or check, and `finalize` waits behind nothing. A crash after the
-  call calls it again under the same key, so a port must find its own work by that key. A kind with no port stays recorded
-  and undone (`TickDeps.issuePorts`): Wave 3 wires `start_lead` and `note_lead` (`issues/lead.ts`), and Wave 4 brings `verify` and
-  `finalize`; until then a `verify` with no port holds nothing back, so a lead is still told of an answer or a regression. `hold_over` asks for `verify` and
-  closes nothing: until W4's check reports `verified` the Issue stays `watching`.
+  call calls it again under the same key, so a port must find its own work by that key. The ports are `issues/lead.ts`
+  (`start_lead`, `note_lead`), `issues/hold.ts` (`verify`) and `issues/finalize.ts` (`finalize`), wired in `TickDeps.issuePorts`. `verify`
+  and `finalize` take minutes, so they run **off the tick** (`issues/offtick.ts`): the port's first ask starts the work and throws
+  `Waiting`, and the ask after it ended returns or throws what it did. At most four run at once, and nothing of it outlives the process:
+  a restart asks again, and the work finds what it already did by its keys. `hold_over` asks for `verify` and closes nothing: the
+  check's `verified` or `regression` moves the Issue.
 - **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
   close removes every `issue_deps` row on and of the Issue: a row is a dep still open, and a blocker that reopens holds nobody back.
 - **Intake.** `POST /issues` (token and socket, `factory issue new`; `GET /issues[/:id]`, `issue list|show`) and `createIssue`
@@ -637,31 +640,67 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **Admission.** Each pass, under the capacity lock, the oldest classified `queued` Issue of each project and any urgent one (an incident, or
   the owner's `urgent` class: Classify never answers `urgent`) are looked at; those the project's claim has room for hold the claim and get
   `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. The rest of a project cannot go before its oldest and are not read.
-  Held back, and still `queued`: `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, and an `alert`
-  while `FACTORY_ALERT_LEADS` is unset (decision 3, until Wave 4 is live; it is left out of the reading, so it does not stand in front of a
-  request); `factory status` says which. Requests are not asked.
+  Held back, and still `queued`: `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, a reopened Issue whose
+  last attempt is not finalized, and an `alert` while `FACTORY_ALERT_LEADS` is off (it is left out of the reading, so it does not stand in front of a
+  request); `factory status` says which. Requests are not asked. Decision 3 held alert leads back until evidence and the hold were live: since
+  Wave 4 the switch defaults on (`config.ts`), and `FACTORY_ALERT_LEADS=0` turns it off.
 - **Attach or start.** `start_lead` asks for the worktree `factory/<issue>-<attempt>` of the repo, made the way `rd fan` does (`issues/worktree.ts`:
-  fetch origin, branch from the default branch, `wtp` where the repo has `.wtp.yml`; each step under a timeout; the same branch answers its
-  worktree again) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
+  fetch origin, branch from the default branch, `wtp` where `origin/<default>` has a `.wtp.yml`; each step under a timeout; the same branch answers its
+  worktree again, if a marker in its git directory says the setup finished; one without it is removed and made again, and a failed setup removes what it made) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
   minutes: the row in `lead_worktrees` is written first (`pending`), at most two are made at once and one at a time per Issue, a failed try
   backs off (30 s doubling to 5 min) until the retry budget, counted from the first try, is spent (`failed`). The effect waits (`Waiting`, no error) until the
-  worktree is `made`, and a `failed` one parks the Issue as `lead_gone` with the reason. Then it creates the spawn: role `lead`, tier and effort from Classify,
+  worktree is `made`, and a `failed` one parks the Issue as `lead_gone` with the reason. Then it looks at the Issue again: a close ends the start, and a `drop` or `stop` not handled yet is waited for. Then it creates the spawn: role `lead`, tier and effort from Classify,
   key and pane `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
   spawn's `issue_id` goes on its session, and on the lead's session only: a wall parks the Issue from any session with an `issue_id`, so a
   worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) in the spawn's own transaction, so a create that fails leaves none, and never typed a second time. A GitHub comment carries a marker, a card a key. A worktree that cannot be made shows in `factory status` with its try and its error.
 - **The lead's verbs.** `factory issue phase|wait|ship|close|block|ask|drop <id>` is one inbox row each, key `<issue>:<attempt>:<verb>:<call id>`, on the
   token API and on the socket (a lead has no token). `FACTORY_SESSION` says which lead: a session may only report on the Issue it works, and only its current lead is heard (409; an earlier attempt's lead, still open, is not). A pane that names another session's id stays inside the trust boundary SF11 accepts: the socket's mode 0600 is the credential, as for `session note` and `wait`. On the socket, which has no token, a verb must name one. The `lead-<issue>-<attempt>` spawn keys are reserved (`POST /spawns` refuses them), and `start_lead` attaches only to a spawn of its own Issue.
-  The row is handled by the next tick; `ship` and `close` are recorded with no evidence check yet (Wave 4 puts it in their `refuse`).
+  The row is handled by the next tick; `ship` and `close`, which the evidence decides, before the call returns.
   `ask` records a `decisions` row, shows in `factory status`, and sets `wake_at` to its `expiresAt`: a passed expiry answers the lead with the
   default (an `answer` from `default`, and a note to the lead), or, with none (or on a `business` Issue, whose questions are the owner's whatever default the lead named), records `lapsed` and keeps the question open with a line for the owner:
   an answer is still taken. An expiry's answer names its question and applies to that one only.
 - **The send-back.** On top of §3's workers rule, a stop of a session with an `issue_id` whose Issue is `working`, in a turn the factory
   started (the brief, or a prompt the prompt loop typed: not one the owner typed), with no `ship|close|block|ask|wait|drop` from that session
-  since the turn began, is sent back with one line (`issue-sendback:<session>:<turn>`). The next stop of that turn, which arrives with
+  since the turn began but a refused one, is sent back with one line (`issue-sendback:<session>:<turn>`). The next stop of that turn, which arrives with
   `stop_hook_active` (the hook asks on every stop and forwards the flag), files `unreported:<issue>:<session>:<turn>`: the Issue is `waiting` for `unreported`, with a line in `factory status`. The same stop
   asked again records nothing.
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.
-- **Finalize once,** from every exit path: terminal state, release the claim, remove the worktree, promote the next.
+- **The evidence gate.** `ship` names its merged commits (`--commit`, required) and `close` may. Before the row is filed, outside any
+  transaction, `derive` (`issues/evidence.ts`) has `GitCommits` (`issues/commits.ts`) resolve them: each must exist and be on `origin/<default>`
+  (looked for again after a `git fetch`, 30 s: a PR merged on GitHub is on no local ref until then), and what else the branch
+  `factory/<issue>-<attempt>` holds since the worktree's cut counts too, so the commits a lead names do not set its bar (a rebase over
+  newer work counts those commits: stricter, never lighter; a merge commit counts as what it brought in). The paths give the kinds required
+  by `requiredEvidence`: the manifest's `deploy.migrations` are `data`; `docs/`, `*.md` and tests need nothing; `deploy/`, `scripts/`,
+  `config/`, `Makefile`, `Dockerfile` and the like are `infra`; `*.tsx`, `*.css` and the like are `ui`; the rest is `service`. The manifest has no
+  keys for these, so they are conventions in one list. `deploy.mode: none`, which is also no manifest, requires nothing. The answer travels on the
+  row as `derived` (the body's schema has no such field, so a lead cannot set it); the lifecycle's `gateShip` and `gateClose` decide on it inside
+  the transition's transaction, reading `evidence`, and a row without it is refused. A git that fails refuses the verb. The factory
+  checks existence and freshness only: a kind is met by a row at or after the newest reported commit's committer time, in whole seconds.
+  Refused, the row is `refused` with what is missing in `detail`, the call answers 409 with the same text, and the CLI exits 5. `ship` and `close` are
+  handled before the call returns (`answerNow`: the same worker under the same lock as the tick; a row the tick has in hand comes back `result: null`, and
+  the CLI exits 10). A repeated `--id` gets the row's answer again without asking git. A refused verb is no report, so the send-back still applies.
+  `close` is refused when the commits touch anything that requires evidence, and when it names neither a commit nor a `--document`.
+  `factory issue evidence <id> --kind ui|service|infra|data` (`--link`, `--file`, `--stdin`; at most 32 KiB) is a row in `evidence` keyed
+  `evidence:<issue>:<attempt>:<call id>`, by the lead or the owner, under the same rules as a verb, and takes nothing for a closed Issue.
+- **The hold.** `ship` moves it to `watching` with `wake_at` at now plus the manifest's `hold`. A passed `wake_at` is `hold_over`, which plans `verify`:
+  off the tick, `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
+  an HTTP GET per probe (15 s, redirects are answers), pass or fail, never averaged. No check at all is green. Green files `verified`: closed, the
+  results in `evidence` (kind `hold`, author `factory`). Red files `regression` naming the hold: back to `working`, one note to the same lead under
+  `issue:<id>:regression:<hold>` with the results as JSON on one line, data. A check whose hold ended meanwhile files nothing, and one whose answer is filed
+  runs nothing.
+- **Finalize once,** from every exit path (`issues/finalize.ts`), in this order: the claim is given back, a lead's spawn that never started fails, and
+  whoever waited for the place is looked at now; the lead's terminal is killed and removed (`Runner.close`, by its label); the attempt's transcripts, the
+  lead's and those of the workers it spawned, are copied to `FACTORY_ARCHIVE_DIR` (default `~/.local/share/factory/archive`)`/<issue>/<attempt>/<claude session>.jsonl`, with the
+  subagents' directory beside it, and linked in `evidence` (kind `transcript`), never parsed; the worktree and its branch are removed when clean and on the fetched
+  base, by commit or by content (`git merge-tree`: a squash leaves no commit of the branch behind), otherwise kept with an `issue_events` line
+  and a week in `factory status`. `issue_finalized:<issue>:<attempt>` ends it: a second close of an attempt that has it only gives the place
+  back. A finalize that fails is tried again and shows in status, and the place is back already. Every step finds its own work done, so a crash between any two replays to one of each.
+- **Reopen.** `factory issue reopen <id> --reason <text>`, the only way a closed Issue moves: within 30 days of closing it is `queued`, and admission gives it a
+  new attempt and a fresh worktree once the last attempt's `finalize` is done, so the old lead is gone before a new one starts. Past 30 days it is
+  refused with a pointer to `factory issue new`.
+- **Resume.** `factory issue resume <id> [--attempt <n>]` (`issues/resume.ts`) spawns `claude --resume <session> --fork-session` through the queue and the Runner:
+  a tab in the repo's main checkout, role `lead`, no `issue_id`, so it takes no claim and reports on nothing. The Runner puts the archived file back under
+  the account it got, in Claude Code's project directory for that path, an assumption about Claude Code's layout and the only one.
 - **Ids survive a restore.** After a restore the sequence moves past every id in pane names and the spool. A lead
   reporting an Issue the dump lost gets it rebuilt from the spool, or parked.
 - **Schedules.** A Postgres lease; `job_runs` is unique per (job, slot).
@@ -704,7 +743,7 @@ Every repo under `~/SourceRoot` takes requests, with or without a manifest.
 | Verify locally | sees it work | `@verifier` |
 | Ship | merges by the manifest's `ship` rules, deploys by its `deploy.mode` | `make deploy`, `/ship` |
 | Check production | the same evidence against the running system | `make verify`, `/otel`, screenshots |
-| Report | `factory issue ship` with a three-line summary and the evidence | `factory` |
+| Report | `factory issue evidence`, then `factory issue ship` with a three-line summary and the merged commits | `factory` |
 
 Production says no: the lead fixes forward, while it still holds the context. A revert is its call, never a factory
 reflex.
@@ -713,7 +752,8 @@ reflex.
 
 The factory derives the evidence an Issue needs from what its merged commits touched, so a lead cannot pick a
 lighter bar: `ship` is refused without it, and `close` is refused when the commits touch deployable paths. The
-factory checks that the evidence exists and is fresh. Judging it stays with the lead and the review.
+factory checks that the evidence exists and is fresh. Judging it stays with the lead and the review. How the paths become
+kinds and how the check runs: §4, "The evidence gate".
 
 | Change | Evidence |
 |-|-|
@@ -890,9 +930,9 @@ ticktick: { list: WeatherOrb }
   most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
   `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
   says so in a manifest), done means the commit or the document.
-- **Sync** (`ProjectSync`). The manifest is read from the repo's **default branch** as committed, not from the working tree: a
-  feature branch checked out, or an edit not committed, is not what the factory runs on. The branch is resolved first and only it is
-  read: `origin/HEAD`'s (the local branch, else `origin/<it>`), else the first of `main` and `master` that exists. A file that is
+- **Sync** (`ProjectSync`). The manifest is read from the repo's **default branch on the remote**, as last fetched, not from the working tree: a
+  feature branch checked out, an edit not committed, or a checkout that is behind is not what the factory runs on. The branch is resolved first and only it is
+  read: `origin/HEAD`'s (`origin/<it>`, else the local branch), else the first of `main` and `master` that exists, on the remote before the local one. The tick fetches behind its back with each full pass and reads the result on the next; `factory project sync` waits for the fetch. A file that is
   not a regular one, or is larger than 64 KiB, is a broken manifest (its size is read from the tree before the blob). A
   full pass visits every git repo directly under a `FACTORY_REPO_ROOTS` root that has a manifest, every repo that has a row and every
   repo an Issue or spawn names (a worktree path counts as its repo: the first directory below the root), at most every ten minutes and
@@ -1054,7 +1094,7 @@ group.
 |-|-|-|
 | `sessions` | pane, worktree, Claude session id, transcript path, repo, role, parent, account in effect, model, effort, nullable `issue_id` (F2) | F1 |
 | `events` | every hook and witness fact, unique key, payload, seen at | F1 |
-| `spawn_requests` | key, repo, role, prompt, tier, effort, requested at, `resume_at`, account, resulting session | F1 |
+| `spawn_requests` | key, repo, role, prompt, tier, effort, requested at, `resume_at`, account, resulting session; `fork_session`, `fork_archive` for a fork of an archived session | F1 |
 | `queue_scopes` | scope, state (`run`, `pace`, `drain`), reason, who, when | F1 |
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
 | `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered`, written in the spawn's own transaction | F1 |
@@ -1066,7 +1106,7 @@ group.
 | `issue_links` | Signal → Issue, Issue → Issue, who, why, whether it acted | F2 |
 | `claims` | key `repo:<project>`, one row per Issue: urgent, queued at, held at (NULL while queued) | F2 |
 | `issue_events` | phases, notes, orchestrator actions, state changes (`events` is the session store's name since F1) | F2 |
-| `evidence` | per Issue: kind, link or payload, at, from whom | F2 |
+| `evidence` | per Issue: unique key, attempt, kind (`ui`, `service`, `infra`, `data`; the factory's own `hold` and `transcript`), link or payload, at, from whom | F2 |
 | `decisions` | question, options, default, expiry, answer, who, when | F2 |
 | `artifacts`, `comments` | plan or report as path@sha, comment threads | F2 |
 | `signals` | source, source time, subject, fingerprint, payload | F3 |

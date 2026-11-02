@@ -37,6 +37,8 @@ interface CallOptions<S extends z.ZodType> {
   schema: S
   /** statuses that carry the schema's body besides 2xx */
   also?: number[]
+  /** longer than the default for a call that waits for git */
+  timeoutMs?: number
 }
 
 /**

@@ -7,9 +7,13 @@ import { loadConfig } from './config.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
+import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
+import { finalizePorts } from './issues/finalize.ts'
+import { holdPorts, MakeAndProbes } from './issues/hold.ts'
 import { leadPorts } from './issues/lead.ts'
 import { WorktreeMaker } from './issues/leadtree.ts'
+import { OffTick } from './issues/offtick.ts'
 import { GitWorktrees } from './issues/worktree.ts'
 import { makeNotifier } from './notify/index.ts'
 import { ProjectSync } from './projects/sync.ts'
@@ -63,7 +67,7 @@ await migrate(sql)
 const clock = systemClock
 const notifier = makeNotifier(config)
 const quota = new QuotaPoller({ sql, clock, source: new ClaudeAccountSource({ bin: config.claudeAccountBin }) })
-const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now() })
+const projects = new ProjectSync({ sql, roots: config.repoRoots, now: () => clock.now(), fetch: true })
 const runner = new HcRunner({
   bin: config.hcBin,
   session: config.hcSession,
@@ -113,13 +117,28 @@ try {
 chmodSync(config.hookSocket, 0o600)
 
 const spool = new SpoolReplayer({ sql, dir: config.spoolDir, now: () => clock.now() })
-const issuePorts = leadPorts({ sql, clock, roles, repoRoots: config.repoRoots })
+const worktrees = new GitWorktrees()
 const leadWorktrees = new WorktreeMaker({
   sql,
-  worktrees: new GitWorktrees(),
+  worktrees,
   now: () => clock.now(),
   retryBudgetMs: config.retryBudgetMs,
 })
+const offTick = new OffTick()
+const issuePorts = {
+  ...leadPorts({ sql, clock, roles, repoRoots: config.repoRoots }),
+  ...holdPorts({ sql, clock, proof: new MakeAndProbes(), offTick }),
+  ...finalizePorts({
+    sql,
+    clock,
+    runner,
+    worktrees,
+    transcripts: new FileTranscripts(),
+    archiveDir: config.archiveDir,
+    making: (issueId) => leadWorktrees.busy(issueId),
+    offTick,
+  }),
+}
 const classification = new Classification({
   sql,
   classifier: new AgwClassifier({ bin: config.agwBin }),
@@ -164,6 +183,7 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await leadWorktrees.stop(15_000)
+    await offTick.stop(15_000)
     await witnessLoop.stop()
     await events.stop()
     await singleton?.release()

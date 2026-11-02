@@ -11,8 +11,10 @@ import {
   IssueAnswerAck,
   IssueList,
   type IssueSummary,
+  IssueEvidenceAck,
   IssueVerb,
   IssueVerbAck,
+  MAX_EVIDENCE_BYTES,
   loadRoleTable,
   Notification,
   NotificationList,
@@ -36,6 +38,9 @@ import {
 import pkg from '../package.json' with { type: 'json' }
 import { BIN, call, DEFAULT_URL, type Io } from './client.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
+
+/** A call that waits for git on the server; the server's own idle timeout is longer. */
+const GIT_CALL_TIMEOUT_MS = 100_000
 
 const HELP = `usage: ${BIN} [--format json|plain] <command>
 
@@ -77,8 +82,10 @@ commands:
                   and it may only report on the Issue it works). One event per call; --id makes a repeated call one event.
                     phase  --phase <name> [--note <text>]
                     wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
-                    ship   --summary <text> [--evidence kind=<k>[,link=<url>][,note=<text>] …]
-                    close  --summary <text>                             done, nothing deployed
+                    ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
+                           the merged commits; refused (exit 5, saying what is missing) until the evidence they require is on record
+                    close  --summary <text> (--commit <sha> … | --document <path or url>)
+                           done, nothing deployed; refused (exit 5) when the commits touch deployable paths
                     block  --reason <text>                              it cannot go on and nobody can answer
                     ask    --question <text> [--option <text> …] [--default <option>] [--expires <ISO time>]
                     drop   --reason <text>                              it should not be done
@@ -89,6 +96,12 @@ commands:
   notify list [--pending]
                   what the factory told the owner, newest first: key, kind, status, attempts, text (--pending: not yet sent)
   notify test     send one line through the live path (the outbox and Hermes) and say whether it arrived; exit 1 if not (token)
+  issue evidence <id> --kind ui|service|infra|data (--link <url> | --file <path> | --stdin) [--id <call id>]
+                  record evidence, a link or up to 32 KiB of text; it counts for a ship when it is no older than the merged commit
+  issue reopen <id> --reason <text> [--id <call id>]
+                  the same fault within 30 days of closing: a new attempt in a fresh worktree. Past 30 days it is refused: issue new
+  issue resume <id> [--attempt <n>] [--id <call id>]
+                  open an attempt's archived session in a tab of its own, as a fork; the archive stays as it was
   project list    the projects: manifest or defaults, leads, who holds the claim and who waits, broken manifests (token or socket)
   project show <name>
                   one project: the manifest in force, the make contract (which of check, test, deploy, verify, restart, quality, logs,
@@ -134,14 +147,16 @@ commands:
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
 --pending       notify list: only what is not sent
---phase, --note, --until, --why, --summary, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
+--phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
+--kind, --link, --file, --stdin  issue evidence
+--attempt <n>    issue resume: which attempt (default: the latest)
 --name <label>   slot run: what the slot is for (default: the command)
 --project <path> queue: the project (a repo inside the allowed roots); without it the global scope
 --format json    one JSON line (default)
 --format plain   tab-separated lines, or the bare value
 FACTORY_URL      the server (default ${DEFAULT_URL})
 FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role;
-                 spawn create|get, session get, queue get and issue new|list|show|<verb> fall back to the socket without it)
+                 spawn create|get, session get, queue get and issue new|list|show|evidence|reopen|resume|<verb> fall back to the socket without it)
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file
@@ -293,6 +308,13 @@ interface Flags {
   why?: string
   summary?: string
   evidence?: string[]
+  commit?: string[]
+  document?: string
+  kind?: string
+  link?: string
+  file?: string
+  stdin?: boolean
+  attempt?: string
   reason?: string
   question?: string
   option?: string[]
@@ -390,6 +412,24 @@ function parseEvidence(text: string): { kind: string; link?: string; note?: stri
   return { kind: match[1], ...(match[2] ? { link: match[2] } : {}), ...(match[3] ? { note: match[3] } : {}) }
 }
 
+/** What `issue evidence` records: a link, or the text of a file or of stdin, kept to the limit here so the answer says which. */
+async function evidenceBody(flags: Flags, io: Io): Promise<{ link: string } | { text: string }> {
+  const sources = [flags.link !== undefined, flags.file !== undefined, flags.stdin === true].filter(Boolean)
+  if (sources.length !== 1) throw usage('issue evidence takes one of --link, --file and --stdin')
+  if (flags.link !== undefined) return { link: flags.link }
+  const text = flags.stdin
+    ? await (io.stdin?.() ?? Promise.resolve(''))
+    : await Bun.file(flags.file ?? '')
+        .text()
+        .catch(() => {
+          throw usage(`cannot read ${flags.file}`)
+        })
+  if (!text) throw usage('the evidence is empty')
+  if (Buffer.byteLength(text) > MAX_EVIDENCE_BYTES)
+    throw usage(`the evidence is larger than ${MAX_EVIDENCE_BYTES} bytes`)
+  return { text }
+}
+
 /** The body of a lead's verb from its flags; the server checks every value again. */
 function verbBody(verb: IssueVerb, flags: Flags, io: Io): Record<string, unknown> {
   const need = (name: keyof Flags): string => {
@@ -409,13 +449,20 @@ function verbBody(verb: IssueVerb, flags: Flags, io: Io): Record<string, unknown
     case 'wait':
       return { ...common, until: need('until'), ...optional('why') }
     case 'ship':
+      if (!flags.commit?.length) throw usage('issue ship needs --commit <merged sha>, once per commit')
       return {
         ...common,
         summary: need('summary'),
+        commits: flags.commit,
         ...(flags.evidence?.length ? { evidence: flags.evidence.map(parseEvidence) } : {}),
       }
     case 'close':
-      return { ...common, summary: need('summary') }
+      return {
+        ...common,
+        summary: need('summary'),
+        ...(flags.commit?.length ? { commits: flags.commit } : {}),
+        ...optional('document'),
+      }
     case 'block':
     case 'drop':
       return { ...common, reason: need('reason') }
@@ -651,6 +698,59 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, lines.join('\n'))
   }
 
+  if (words[0] === 'issue' && words[1] === 'evidence') {
+    const target = words[2]
+    if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target) || !flags.kind) {
+      throw usage('usage: issue evidence <id> --kind <kind> (--link <url> | --file <path> | --stdin)')
+    }
+    const session = flags.session ?? io.env.FACTORY_SESSION
+    const { body } = await call(io, `/issues/${target}/evidence`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: IssueEvidenceAck,
+      body: {
+        kind: flags.kind,
+        ...(await evidenceBody(flags, io)),
+        ...(flags.id ? { id: flags.id } : {}),
+        ...(session ? { session } : {}),
+      },
+    })
+    return print(body, [body.issue, body.kind, body.duplicate ? 'duplicate' : 'filed', body.key, body.at].join('\t'))
+  }
+
+  if (words[0] === 'issue' && words[1] === 'reopen') {
+    const target = words[2]
+    if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target) || !flags.reason) {
+      throw usage('usage: issue reopen <id> --reason <text>')
+    }
+    const { body } = await call(io, `/issues/${target}/reopen`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: Issue,
+      timeoutMs: GIT_CALL_TIMEOUT_MS,
+      body: { reason: flags.reason, ...(flags.id ? { id: flags.id } : {}) },
+    })
+    return print(body, issueLine(body))
+  }
+
+  if (words[0] === 'issue' && words[1] === 'resume') {
+    const target = words[2]
+    const attempt = flags.attempt === undefined ? undefined : Number(flags.attempt)
+    if (!target || words.length > 3 || !/^[1-9][0-9]{0,9}$/.test(target) || Number.isNaN(attempt)) {
+      throw usage('usage: issue resume <id> [--attempt <n>]')
+    }
+    const { body } = await call(io, `/issues/${target}/resume`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: Spawn,
+      body: { ...(attempt === undefined ? {} : { attempt }), ...(flags.id ? { id: flags.id } : {}) },
+    })
+    return print(body, spawnLine(body))
+  }
+
   const verb = words[0] === 'issue' ? IssueVerb.safeParse(words[1]) : undefined
   if (verb?.success) {
     const target = words[2]
@@ -661,9 +761,17 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       auth: true,
       socket: 'fallback',
       schema: IssueVerbAck,
+      timeoutMs: GIT_CALL_TIMEOUT_MS,
       body: verbBody(verb.data, flags, io),
     })
-    return print(body, [body.issue, body.verb, body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
+    print(body, [body.issue, body.verb, body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
+    // `ship` and `close` are answered by the lifecycle (a refusal is exit 5); an answer that is not in yet is not a success.
+    if ((verb.data === 'ship' || verb.data === 'close') && body.result === null) {
+      throw new FactoryError('pending', `${verb.data} is filed and not answered yet`, {
+        hint: `\`${BIN} issue show ${body.issue}\` shows where the Issue stands`,
+      })
+    }
+    return
   }
 
   if (key === 'project list') {
@@ -685,7 +793,12 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
   }
 
   if (key === 'project sync') {
-    const { body } = await call(io, '/projects/sync', { method: 'POST', auth: true, schema: ProjectSyncResult })
+    const { body } = await call(io, '/projects/sync', {
+      method: 'POST',
+      auth: true,
+      schema: ProjectSyncResult,
+      timeoutMs: GIT_CALL_TIMEOUT_MS,
+    })
     const lines = [
       `synced ${body.synced}`,
       ...body.broken.map((b) => `broken ${b.project}${b.issue === null ? '' : ` #${b.issue}`}`),
@@ -812,6 +925,13 @@ const OPTIONS = {
   why: { type: 'string' },
   summary: { type: 'string' },
   evidence: { type: 'string', multiple: true },
+  commit: { type: 'string', multiple: true },
+  document: { type: 'string' },
+  kind: { type: 'string' },
+  link: { type: 'string' },
+  file: { type: 'string' },
+  stdin: { type: 'boolean' },
+  attempt: { type: 'string' },
   reason: { type: 'string' },
   question: { type: 'string' },
   option: { type: 'string', multiple: true },

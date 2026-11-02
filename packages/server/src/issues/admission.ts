@@ -10,8 +10,8 @@ const BATCH = 20
 export interface AdmitOptions {
   now: Date
   /**
-   * `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Off until Wave 4's evidence is live (decision 3); such an Issue
-   * stays `queued`. A request is not asked.
+   * `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. On by default since Wave 4's evidence (decision 3); off, such an
+   * Issue stays `queued`. A request is not asked.
    */
   alertLeads: boolean
 }
@@ -28,8 +28,9 @@ interface Waiting {
  * it and gets `admitted` (key `admit:<issue>:<attempt>`, so a second admission is the same row). The lead's spawn is made by the
  * `start_lead` effect that event plans, and finds its claim held. The others of a project cannot be admitted before the oldest, so
  * they are not read. Held back, and still `queued`: `drain` (for the repo or globally), a paused project, a project not synced yet,
- * a full claim, and an `alert` while its switch is off (left out of the reading, so it does not stand in front of a request behind
- * it). Under the capacity lock like every admission.
+ * a full claim, an `alert` while its switch is off (left out of the reading, so it does not stand in front of a request behind
+ * it), and a reopened Issue whose last attempt is not finalized: its lead closes before a new one is admitted. Under the capacity lock
+ * like every admission.
  */
 export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<number> {
   return sql.begin(async (tx) => {
@@ -45,6 +46,9 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
         ) p
         WHERE i.state = 'queued' AND i.classified_at IS NOT NULL AND NOT p.paused
           AND (i.source <> 'alert' OR ${options.alertLeads})
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.issue_effects e
+            WHERE e.issue_id = i.id AND e.kind = 'finalize' AND e.done_at IS NULL AND e.cancelled_at IS NULL)
       )
       SELECT id, repo, attempt FROM q
       WHERE urgent OR id = (SELECT min(o.id) FROM q o WHERE o.project = q.project AND NOT o.urgent)

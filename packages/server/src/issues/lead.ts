@@ -14,7 +14,7 @@ import { leadLevel } from './classify.ts'
 import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { enqueue } from './inbox.ts'
 import { worktreeFor } from './leadtree.ts'
-import { briefPromptId, leadBranch, leadKey } from './names.ts'
+import { briefPromptId, leadBranch, leadKey, regressionPromptId } from './names.ts'
 
 export interface LeadDeps {
   sql: SQL
@@ -92,6 +92,15 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
     return
   }
   if (tree.status !== 'made' || !tree.path) throw new Waiting(`the worktree of ${key} is being made`)
+  // The worktree took its time: what the Issue was when this began says nothing now. A stop not handled yet is waited for, not assumed:
+  // one filed for an earlier attempt is refused, and this lead still starts.
+  const [now_]: { state: IssueState; stopping: boolean }[] = await sql`
+    SELECT i.state, EXISTS (
+      SELECT 1 FROM factory.issue_inbox b WHERE b.issue_id = i.id AND b.handled_at IS NULL AND b.kind IN ('drop', 'stop')
+    ) AS stopping
+    FROM factory.issues i WHERE i.id = ${issue.id}`
+  if (!now_ || now_.state === 'closed') return
+  if (now_.stopping) throw new Waiting(`a stop of Issue ${issue.id} is not handled yet`)
   // The worktree is a spawn's repo, so it is inside the allowed roots like any other.
   const path = await resolveRepo(tree.path, deps.repoRoots).catch((error: unknown) => {
     throw error instanceof RepoRefused
@@ -161,10 +170,14 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
     }
     case 'wake':
       return `${head} your wait is over. Carry on from where you stopped.`
-    case 'regression':
+    case 'regression': {
+      // One line: what the checks printed is data, and JSON escapes whatever it holds.
+      const checks = payload?.checks
+      const data = checks === undefined ? '' : ` The checks, as data: ${JSON.stringify(checks)}.`
       return clip(
-        `${head} a regression was reported after your ship${field('summary') ? `: ${field('summary')}` : ''}. Fix forward, then report again.`,
+        `${head} a regression was reported after your ship${field('summary') ? `: ${field('summary')}` : ''}.${data} Fix forward, then report again.`,
       )
+    }
     case 'note':
       return clip(`${head} ${field('text') ?? 'a note from the owner'}`)
     default:
@@ -198,9 +211,12 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   }
   const [session] = await sql`SELECT 1 FROM factory.sessions WHERE id = ${key}`
   if (!spawn || !session) throw new Error(`the lead ${key} is not running yet`)
+  // A regression is one note per hold, under the Issue's own prompt id; the rest go by the effect's key.
+  const hold = effect.payload?.cause === 'regression' ? Number(effect.payload.hold) : Number.NaN
+  const id = Number.isInteger(hold) ? regressionPromptId(effect.issueId, hold) : effect.key
   await recordPrompt(
     sql,
-    { id: effect.key, session: key, source: 'note', text: noteText(effect.issueId, effect.payload) },
+    { id, session: key, source: 'note', text: noteText(effect.issueId, effect.payload) },
     clock.now(),
   )
 }

@@ -45,7 +45,7 @@ export interface TickDeps {
   classification?: Classification
   /** makes the leads' worktrees off the tick; without it a lead is never started */
   leadWorktrees?: WorktreeMaker
-  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead (decision 3: off until Wave 4 is live) */
+  /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead (decision 3) */
   alertLeads?: boolean
   /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
   projects?: ProjectSync
@@ -86,6 +86,8 @@ export interface Claim {
   attempts: number
   /** when this spawn's retry budget started */
   firstClaimedAt: Date
+  /** the archived session this spawn forks */
+  fork?: { session: string; archive: string }
 }
 
 interface DueRow {
@@ -106,6 +108,8 @@ interface DueRow {
   attempts: number
   error: string | null
   first_claimed_at: Date | null
+  fork_session: string | null
+  fork_archive: string | null
 }
 
 /** One line per spawn that leaves the queue for good, so the reason is in the log whatever else is read. */
@@ -131,7 +135,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at,
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive,
         (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
@@ -209,6 +213,9 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         effort: row.effort,
         attempts: row.attempts + 1,
         firstClaimedAt: row.first_claimed_at ?? now,
+        ...(row.fork_session && row.fork_archive
+          ? { fork: { session: row.fork_session, archive: row.fork_archive } }
+          : {}),
       })
     }
     return { claims, failed, skipped }
@@ -285,6 +292,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       account: claim.account,
       tier: claim.tier,
       effort: claim.effort,
+      fork: claim.fork,
     })
   } catch (error) {
     return recordFailure(deps, claim, error)

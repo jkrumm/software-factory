@@ -134,7 +134,9 @@ export type IssueVerb = z.infer<typeof IssueVerb>
 
 /** The call id is part of the inbox key (`<issue>:<verb>:<call id>`), so a repeated call is one event. */
 const CallId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'not a valid call id')
-const Words = (max: number) => z.string().trim().min(1).max(max)
+/** What Postgres cannot keep in text or JSON: a NUL, half a surrogate pair. */
+const storable = (text: string): boolean => !text.includes('\0') && text.isWellFormed()
+const Words = (max: number) => z.string().trim().min(1).max(max).refine(storable, 'not storable text')
 /** A time Postgres stores: the lifecycle refuses the rest after the call was acknowledged, so the door does it first. */
 const At = z.iso.datetime({ offset: true }).refine((text) => {
   const ms = Date.parse(text)
@@ -143,14 +145,36 @@ const At = z.iso.datetime({ offset: true }).refine((text) => {
 
 const common = { id: CallId.optional(), session: z.string().min(1).max(256).optional() }
 
-const Evidence = z.strictObject({ kind: Words(40), link: Words(1000).optional(), note: Words(1000).optional() })
+/** What §5's table asks of a change, by what it touched. `factory issue evidence --kind`; the factory's own rows have kinds of their own. */
+export const EVIDENCE_KINDS = ['ui', 'service', 'infra', 'data'] as const
+export const EvidenceKind = z.enum(EVIDENCE_KINDS)
+export type EvidenceKind = z.infer<typeof EvidenceKind>
+
+export const MAX_EVIDENCE_BYTES = 32 * 1024
+
+/** A commit as a lead names it: hex only, so a value can never read as an option of `git`. */
+const Sha = z.string().regex(/^[0-9a-f]{7,64}$/, 'not a commit sha')
+
+const Evidence = z.strictObject({ kind: EvidenceKind, link: Words(1000).optional(), note: Words(1000).optional() })
 
 /** The body of each verb. `session` is the caller's `FACTORY_SESSION`; a session may only report on the Issue it works. */
 export const IssueVerbBody = {
   phase: z.strictObject({ ...common, phase: Words(80), note: Words(2000).optional() }),
   wait: z.strictObject({ ...common, until: At, why: Words(500).optional() }),
-  ship: z.strictObject({ ...common, summary: Words(4000), evidence: z.array(Evidence).max(20).optional() }),
-  close: z.strictObject({ ...common, summary: Words(4000) }),
+  /** `commits`: what was merged. Required evidence is derived from them, never declared. */
+  ship: z.strictObject({
+    ...common,
+    summary: Words(4000),
+    commits: z.array(Sha).min(1).max(20),
+    evidence: z.array(Evidence).max(20).optional(),
+  }),
+  /** Done with nothing deployed: the commit or the document is the proof. */
+  close: z.strictObject({
+    ...common,
+    summary: Words(4000),
+    commits: z.array(Sha).min(1).max(20).optional(),
+    document: Words(1000).optional(),
+  }),
   block: z.strictObject({ ...common, reason: Words(2000) }),
   ask: z
     .strictObject({
@@ -175,6 +199,9 @@ export const IssueVerbAck = z.object({
   duplicate: z.boolean(),
   /** the Issue's state when the call was filed; the event itself is handled by the next tick */
   state: IssueState,
+  /** `ship` and `close` are handled before the call is answered: `null` is a row the tick had in hand, still to be answered */
+  result: z.enum(['applied', 'refused', 'ignored']).nullable(),
+  detail: z.string().nullable(),
 })
 export type IssueVerbAck = z.infer<typeof IssueVerbAck>
 
@@ -196,3 +223,38 @@ export const IssueAnswerAck = z.object({
   state: IssueState,
 })
 export type IssueAnswerAck = z.infer<typeof IssueAnswerAck>
+
+/** `POST /issues/:id/evidence`: what a lead proves, a link or up to 32 KiB of text. The factory checks it exists and is fresh, never what it says. */
+export const IssueEvidenceInput = z
+  .strictObject({
+    ...common,
+    kind: EvidenceKind,
+    link: Words(1000).optional(),
+    text: z.string().min(1).refine(storable, 'not storable text: a binary file is a link').optional(),
+  })
+  .refine((body) => (body.link === undefined) !== (body.text === undefined), {
+    message: 'evidence is a link or a text, one of them',
+    path: ['link'],
+  })
+  .refine((body) => Buffer.byteLength(body.text ?? '') <= MAX_EVIDENCE_BYTES, {
+    message: `evidence is larger than ${MAX_EVIDENCE_BYTES} bytes`,
+    path: ['text'],
+  })
+export type IssueEvidenceInput = z.output<typeof IssueEvidenceInput>
+
+export const IssueEvidenceAck = z.object({
+  issue: z.number().int(),
+  kind: EvidenceKind,
+  key: z.string(),
+  duplicate: z.boolean(),
+  at: z.string(),
+})
+export type IssueEvidenceAck = z.infer<typeof IssueEvidenceAck>
+
+/** `POST /issues/:id/reopen`: the same fault within 30 days of closing; past that, a new Issue. */
+export const IssueReopenInput = z.strictObject({ id: CallId.optional(), reason: Words(2000) })
+export type IssueReopenInput = z.output<typeof IssueReopenInput>
+
+/** `POST /issues/:id/resume`: a fork of an attempt's archived session; the Issue's latest attempt unless it names one. */
+export const IssueResumeInput = z.strictObject({ id: CallId.optional(), attempt: z.number().int().min(1).optional() })
+export type IssueResumeInput = z.output<typeof IssueResumeInput>

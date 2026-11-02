@@ -85,7 +85,8 @@ describe('config (finding 5)', () => {
       hookSocket: '/home/me/.local/share/factory/hook.sock',
       slots: 2,
       agwBin: '/home/me/.local/bin/agw',
-      alertLeads: false,
+      alertLeads: true,
+      archiveDir: '/home/me/.local/share/factory/archive',
       notifyTarget: 'slack:#agents',
       hermesBin: '/home/me/.local/bin/hermes',
       digestAt: '07:30',
@@ -102,9 +103,10 @@ describe('config (finding 5)', () => {
     }
   })
 
-  test('FACTORY_ALERT_LEADS is off unless it says 1, and a mistake is refused', () => {
+  test('FACTORY_ALERT_LEADS is on unless it says 0, and a mistake is refused', () => {
     expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: '1' }).alertLeads).toBe(true)
-    for (const off of ['', '0', 'false'])
+    expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: '' }).alertLeads).toBe(true)
+    for (const off of ['0', 'false', 'off'])
       expect(loadConfig({ ...env, FACTORY_ALERT_LEADS: off }).alertLeads).toBe(false)
     expect(() => loadConfig({ ...env, FACTORY_ALERT_LEADS: 'maybe' })).toThrow('FACTORY_ALERT_LEADS')
   })

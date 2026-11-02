@@ -58,12 +58,92 @@ describe('GitWorktrees', () => {
   })
 
   test('a repo with a .wtp.yml and no wtp is refused: plain git would skip its setup', async () => {
-    const { clone } = cloneOf('wtp')
-    await Bun.write(join(clone, '.wtp.yml'), 'version: "1.0"\n')
+    const { origin, clone } = cloneOf('wtp')
+    fixture.commit(origin, { '.wtp.yml': 'version: "1.0"\n' })
     // An empty `wtp` is a host without it.
     await expect(new GitWorktrees({ wtp: '' }).create({ repo: clone, branch: 'factory/7-1' })).rejects.toThrow(
       'install wtp',
     )
+  })
+
+  test('a .wtp.yml that is only in this checkout is not the repo’s, and one the base has decides though this checkout is behind', async () => {
+    const { clone } = cloneOf('wtp-local')
+    await Bun.write(join(clone, '.wtp.yml'), 'version: "1.0"\n')
+    const made = await new GitWorktrees({ wtp: '' }).create({ repo: clone, branch: 'factory/7-2' })
+    expect(existsSync(made.path)).toBe(true)
+  })
+
+  test('a setup that failed leaves nothing behind, so a retry starts clean', async () => {
+    const { origin, clone } = cloneOf('half')
+    fixture.commit(origin, { '.wtp.yml': 'version: "1.0"\n' })
+    // A `wtp` that makes the worktree and then fails in the repo's own hook.
+    const script = join(fixture.root, 'wtp-fails')
+    await Bun.write(script, `#!/bin/sh\ngit worktree add -q -b "$3" .claude/worktrees/half "$4"\nexit 1\n`)
+    Bun.spawnSync(['chmod', '+x', script])
+    await expect(new GitWorktrees({ wtp: script }).create({ repo: clone, branch: 'factory/8-1' })).rejects.toThrow(
+      'wtp add failed',
+    )
+    expect(existsSync(join(clone, '.claude', 'worktrees', 'half'))).toBe(false)
+    expect(fixture.git(clone, 'branch', '--list', 'factory/8-1')).toBe('')
+  })
+
+  test('a worktree a crash left half made is removed and made again; one made whole is answered', async () => {
+    const { clone } = cloneOf('crash')
+    const git = new GitWorktrees()
+    // The state a process that died inside the setup leaves: the branch and the worktree, no marker.
+    const left = join(clone, '.claude', 'worktrees', 'factory-9-1')
+    fixture.git(clone, 'worktree', 'add', '-q', '-b', 'factory/9-1', left, 'origin/master')
+    await Bun.write(join(left, 'half.txt'), 'nobody worked here')
+    const made = await git.create({ repo: clone, branch: 'factory/9-1' })
+    expect(made.path).toBe(left)
+    expect(existsSync(join(left, 'half.txt'))).toBe(false)
+    await Bun.write(join(left, 'work.txt'), 'somebody works here')
+    await git.create({ repo: clone, branch: 'factory/9-1' })
+    expect(existsSync(join(left, 'work.txt'))).toBe(true)
+  })
+
+  test('remove: a clean worktree whose commits are on the base goes, with its branch', async () => {
+    const { origin, clone } = cloneOf('gone')
+    fixture.git(origin, 'config', 'receive.denyCurrentBranch', 'ignore')
+    const git = new GitWorktrees()
+    const made = await git.create({ repo: clone, branch: 'factory/10-1' })
+    fixture.commit(made.path, { 'a.txt': 'x' })
+    fixture.git(made.path, 'push', '-q', 'origin', 'HEAD:master')
+    expect(await git.remove({ repo: clone, branch: 'factory/10-1' })).toEqual({ removed: true })
+    expect(existsSync(made.path)).toBe(false)
+    expect(fixture.git(clone, 'branch', '--list', 'factory/10-1')).toBe('')
+    expect(await git.remove({ repo: clone, branch: 'factory/10-1' })).toEqual({ removed: true })
+  })
+
+  test('remove: a squash merged on the remote counts, found after a fetch', async () => {
+    const { origin, clone } = cloneOf('squash')
+    const git = new GitWorktrees()
+    const made = await git.create({ repo: clone, branch: 'factory/11-1' })
+    fixture.commit(made.path, { 'a.txt': 'one' })
+    fixture.commit(made.path, { 'a.txt': 'two' })
+    fixture.commit(origin, { 'a.txt': 'two' })
+    expect(await git.remove({ repo: clone, branch: 'factory/11-1' })).toEqual({ removed: true })
+  })
+
+  test('remove: uncommitted work and commits not on the base are kept, and say why', async () => {
+    const { clone } = cloneOf('kept')
+    const git = new GitWorktrees()
+    const dirty = await git.create({ repo: clone, branch: 'factory/12-1' })
+    await Bun.write(join(dirty.path, 'wip.txt'), 'x')
+    expect(await git.remove({ repo: clone, branch: 'factory/12-1' })).toEqual({
+      kept: 'it has uncommitted changes',
+      path: dirty.path,
+    })
+    expect(existsSync(dirty.path)).toBe(true)
+
+    const ahead = await git.create({ repo: clone, branch: 'factory/12-2' })
+    fixture.commit(ahead.path, { 'b.txt': 'x' })
+    expect(await git.remove({ repo: clone, branch: 'factory/12-2' })).toEqual({
+      kept: 'its commits are not on origin/master',
+      path: ahead.path,
+    })
+    expect(existsSync(ahead.path)).toBe(true)
+    expect(fixture.git(clone, 'branch', '--list', 'factory/12-2')).toContain('factory/12-2')
   })
 
   test('worktreeOf reads git’s listing', () => {

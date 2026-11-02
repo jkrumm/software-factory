@@ -26,6 +26,7 @@ async function takeIssue(
   skip: ReadonlySet<number>,
   now: () => Date,
   errors: string[],
+  only?: number,
 ): Promise<{ id: number; failed: boolean } | undefined> {
   return sql.begin(async (tx) => {
     const [locked]: IssueRow[] = await tx`
@@ -34,7 +35,7 @@ async function takeIssue(
         SELECT issue_id, min(id) FILTER (WHERE error IS NULL) AS fresh, min(id) AS oldest
         FROM factory.issue_inbox WHERE handled_at IS NULL GROUP BY issue_id
       ) o ON o.issue_id = i.id
-      WHERE i.id NOT IN ${tx([0, ...skip])}
+      WHERE i.id NOT IN ${tx([0, ...skip])} AND (${only ?? null}::integer IS NULL OR i.id = ${only ?? null})
       ORDER BY o.fresh NULLS LAST, o.oldest
       LIMIT 1
       FOR NO KEY UPDATE OF i SKIP LOCKED`
@@ -88,6 +89,31 @@ export async function processInbox(sql: SQL, now: () => Date): Promise<string[]>
     if (!taken.failed) worked++
   }
   return errors
+}
+
+/** How long a caller waits for the worker holding its Issue before it leaves the row to the tick. */
+const ANSWER_TRIES = 30
+const ANSWER_WAIT_MS = 100
+
+export type Answer = { result: 'applied' | 'refused' | 'ignored'; detail: string | null }
+
+/**
+ * Handles an Issue's inbox now, for a call whose answer the caller waits for (`ship`, `close`, `reopen`): the same worker under the same
+ * lock as the tick's, so the lifecycle is still what decides. Undefined: the row is not handled yet, a tick has the Issue or it failed.
+ */
+export async function answerNow(
+  sql: SQL,
+  input: { issueId: number; key: string; now: () => Date },
+): Promise<Answer | undefined> {
+  for (let tries = 0; tries < ANSWER_TRIES; tries++) {
+    await takeIssue(sql, new Set(), input.now, [], input.issueId)
+    const [row]: { result: Answer['result'] | null; detail: string | null; error: string | null }[] =
+      await sql`SELECT result, detail, error FROM factory.issue_inbox WHERE key = ${input.key}`
+    if (row?.result) return { result: row.result, detail: row.detail }
+    if (row?.error) return undefined
+    await Bun.sleep(ANSWER_WAIT_MS)
+  }
+  return undefined
 }
 
 /**
