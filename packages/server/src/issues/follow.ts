@@ -1,5 +1,6 @@
 import {
   type DecisionEntry,
+  EVENT_KINDS,
   EVIDENCE_KINDS,
   type EvidenceEntry,
   type EvidenceKind,
@@ -53,6 +54,17 @@ const isKind = (value: unknown): value is EvidenceKind => EVIDENCE_KINDS.some((k
  */
 export async function statusIssues(sql: SQL, now: Date): Promise<{ issues: StatusIssue[]; more: number }> {
   const since = new Date(now.getTime() - FINALIZE_SHOWN_MS)
+  // Which Issues are shown is decided on the Issue row alone; only those 40 are looked into (lead, phase, questions, derived evidence).
+  const shown: { id: number; total: string }[] = await sql`
+    SELECT i.id, count(*) OVER () AS total FROM factory.issues i
+    WHERE i.state <> 'closed'
+       OR (i.closed_at > ${since} AND EXISTS (
+         SELECT 1 FROM factory.issue_effects f
+         WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL AND f.error IS NOT NULL))
+    ORDER BY CASE i.state WHEN 'closed' THEN 0 WHEN 'waiting' THEN 1 WHEN 'working' THEN 2 WHEN 'watching' THEN 3 WHEN 'queued' THEN 4 ELSE 5 END,
+             i.updated_at, i.id
+    LIMIT ${STATUS_ISSUES}`
+  if (shown.length === 0) return { issues: [], more: 0 }
   const rows: StatusRow[] = await sql`
     SELECT i.id, i.state, i.reason, i.repo, i.title, i.attempt, i.wake_at, i.updated_at, i.closed_at,
       (SELECT s.id FROM factory.sessions s WHERE s.id = 'lead-' || i.id || '-' || i.attempt) AS lead,
@@ -66,11 +78,7 @@ export async function statusIssues(sql: SQL, now: Date): Promise<{ issues: Statu
       (SELECT b.payload->'derived' FROM factory.issue_inbox b
        WHERE b.issue_id = i.id AND b.kind IN ('ship', 'close') AND b.payload->>'attempt' = i.attempt::text AND b.payload ? 'derived'
        ORDER BY b.id DESC LIMIT 1) AS derived
-    FROM factory.issues i
-    WHERE i.state <> 'closed'
-       OR (i.closed_at > ${since} AND EXISTS (
-         SELECT 1 FROM factory.issue_effects f
-         WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL AND f.error IS NOT NULL))`
+    FROM factory.issues i WHERE i.id IN ${sql(shown.map((row) => row.id))}`
 
   const open = rows.filter((row) => row.state === 'working' || row.state === 'waiting')
   const stored: { issue_id: number; kind: string; newest: Date }[] =
@@ -106,7 +114,7 @@ export async function statusIssues(sql: SQL, now: Date): Promise<{ issues: Statu
   const sorted = [...rows].sort(
     (a, b) => RANK[a.state] - RANK[b.state] || a.updated_at.getTime() - b.updated_at.getTime() || a.id - b.id,
   )
-  return { issues: sorted.slice(0, STATUS_ISSUES).map(view), more: Math.max(0, sorted.length - STATUS_ISSUES) }
+  return { issues: sorted.map(view), more: Math.max(0, Number(shown[0]?.total ?? 0) - shown.length) }
 }
 
 interface EventRow {
@@ -135,7 +143,7 @@ interface InboxRow {
 /**
  * One Issue's story, oldest first: its `issue_events` (what the lifecycle applied or refused, with the state it moved from and to) and
  * the inbox rows no event came of, which are the ones still unhandled (a failed one with its error) and the other things filed that
- * moved nothing. A session's silent events (`turn_started`, `prompt_idle`…) are in `factory session get`, not here. Then its evidence and
+ * moved nothing. A session's events (`turn_started`, `prompt_idle`…) are in `factory session get`, not here unless the lifecycle applied or refused one. Then its evidence and
  * its questions. Every payload is what its sender filed: data.
  */
 export async function getIssueView(sql: SQL, id: number): Promise<IssueView | undefined> {
@@ -158,12 +166,12 @@ async function readIssueView(sql: SQL, id: number): Promise<IssueView | undefine
   const waiting: InboxRow[] = await sql`
     SELECT b.id, b.key, b.kind, b.session, b.at, b.payload, b.result, b.detail, b.error FROM factory.issue_inbox b
     WHERE b.issue_id = ${id} AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.key = b.key)
-      AND (b.handled_at IS NULL OR b.session IS NULL)
+      AND (b.handled_at IS NULL OR b.session IS NULL) AND b.kind NOT IN ${sql([...EVENT_KINDS])}
     ORDER BY b.at DESC, b.id DESC LIMIT ${TIMELINE_ENTRIES}`
   const [waitingCounted]: { n: number }[] = await sql`
     SELECT count(*)::int AS n FROM factory.issue_inbox b
     WHERE b.issue_id = ${id} AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.key = b.key)
-      AND (b.handled_at IS NULL OR b.session IS NULL)`
+      AND (b.handled_at IS NULL OR b.session IS NULL) AND b.kind NOT IN ${sql([...EVENT_KINDS])}`
 
   const story: { at: Date; rank: number; id: number; entry: TimelineEntry }[] = [
     ...events.map((e) => ({

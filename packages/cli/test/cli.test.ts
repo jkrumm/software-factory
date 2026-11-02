@@ -112,7 +112,7 @@ const STATUS = {
       lead: 'lead-7-1',
       phase: 'build',
       waiting: 'decision',
-      wakeAt: null,
+      wakeAt: '2026-10-31T00:00:00.000Z',
       missing: ['service', 'ui'],
       decisions: 1,
       finalizeError: null,
@@ -590,7 +590,7 @@ describe('factory status', () => {
     ])
     expect(lines[1]).toBe('  blocked sess-2 for 3 min: Dangerous rm')
     expect(lines).toContain(
-      '  #7\twaiting\trepo\tlead-7-1\tphase build\twaiting decision\tevidence missing service,ui\t1 open question\tthe forecast is wrong',
+      '  #7\twaiting\trepo\tlead-7-1\tphase build\twaiting decision\tlooks again 2026-10-31T00:00:00.000Z\tevidence missing service,ui\t1 open question\tthe forecast is wrong',
     )
     expect(lines).toContain('  #8\tqueued\tother\t-\tphase -\twaiting claim\ttwo [31m lines')
     expect(lines).toContain('  ... 2 more not shown')

@@ -707,11 +707,11 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   the account it got, in Claude Code's project directory for that path, an assumption about Claude Code's layout and the only one.
 - **Following an Issue** (`issues/follow.ts`, reads only). `factory status` and `GET /status` carry an ISSUES section: every open Issue
   (and a closed one, for 24 hours, whose finalize failed) with its state, repo, the lead's session (the current attempt's, once it exists), the
-  lead's last `phase` of this attempt, what it waits for (`waiting`: the reason; a `queued` Issue the project's claim has no room for:
+  lead's last `phase` of this attempt, when the factory looks again (`wakeAt`: a timed wait, an expiry, the end of a hold), what it waits for (`waiting`: the reason; a `queued` Issue the project's claim has no room for:
   `claim`), the evidence still missing, and the open questions. Most urgent first (a failed finalize, `waiting`, `working`, `watching`,
   `queued`), at most 40, the rest counted (`issuesMore`). `claim` is shown for the Issue admission looked at (a claim row exists, not held: the oldest of its project); Issues queued behind it have no claim row and show nothing. Read from stored rows only, never git: the evidence missing is what the last `ship`
   or `close` of this attempt derived from its commits (`derived.required`, on its inbox row), less the rows in `evidence` that are
-  fresh by the gate's own rule (`unmetKinds`), so until a lead has tried one, nothing is known and nothing is listed. The Issues
+  fresh by the gate's own rule (`unmetKinds`), so until a lead has tried one, nothing is known and nothing is listed.
   Those that need a look (an open question, a park, a lead or worktree that did not start, a finalize that failed) also have a line in ATTENTION (§3 "`factory status`"). `factory issue show <id>` (`GET /issues/:id/timeline`, token or socket) is the
   Issue with its facts, its story oldest first, its evidence and its questions: the story is the Issue's `issue_events` (what the lifecycle
   applied or refused, with the state it moved from and to) and the inbox rows no event came of (still unhandled, with the error of a row
@@ -723,7 +723,8 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   a lead plans `note_lead`, which types it through the session notes of §3 (`recordPrompt`, source `note`, prompt id `issue:<issue>:note:<call id>`,
   so a repeated id types once; a pane's `session note` cannot take an `issue:` id) and tries again until the lead's session exists. A note filed as the Issue closes is refused by the lifecycle with a line in the timeline. An Issue with no lead running keeps it as the row, and the
   **next brief carries it** (§5 "The brief"). A lead that is gone, whose Issue is not `working`, is not parked for it: the note stays in the
-  timeline.
+  timeline. An Issue that is not `working` and whose lead never got a spawn (the worktree failed: `lead_gone`) ends the effect quietly, so it holds back no later
+  note, wake or answer, and the note comes again in the next brief.
 - **Ids and a restore.** Not built for Issues. `issues.id` is a sequence, and nothing moves it past the ids in pane names (`lead-<issue>-<attempt>`) or the
   spool after a restore, nor rebuilds an Issue the dump lost from the spool: the F1 gameday proved it for sessions and spawns, whose keys are not
   sequences. The F2 gamedays of §13 (Wave 6) decide it.
