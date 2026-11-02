@@ -54,7 +54,7 @@ const send = (issueId: number, kind: string, payload?: Record<string, unknown>, 
     key,
     kind,
     at: clock.now(),
-    payload: GATED.has(kind) ? { derived: NOTHING_REQUIRED, ...payload } : payload,
+    payload: GATED.has(kind) ? { derived: NOTHING_REQUIRED, commits: NOTHING_REQUIRED.commits, ...payload } : payload,
   })
 
 /** What ports were called with, and by a key as a real port does: the second call under a key finds it done. */
@@ -800,7 +800,7 @@ describe('the inbox', () => {
       key: 'late',
       kind: 'close',
       at: new Date(clock.now().getTime() - 120_000),
-      payload: { derived: NOTHING_REQUIRED },
+      payload: { derived: NOTHING_REQUIRED, document: 'docs/x.md' },
     })
     let calls = 0
     const failingOnce = () => {

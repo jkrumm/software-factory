@@ -13,11 +13,19 @@ export interface TranscriptStore {
 /** Claude's session id goes into a path here and onto a command line at `resume`, and a pane reported it. */
 const SESSION_ID = /^[A-Za-z0-9-]{1,128}$/
 
+/** What is at a path, not following a link; nothing there is an answer, and anything else that went wrong is an error to try again. */
+async function look(path: string) {
+  return lstat(path).catch((error: unknown) => {
+    if ((error as { code?: string }).code === 'ENOENT') return undefined
+    throw error
+  })
+}
+
 /** The file, and the directory beside it where Claude Code keeps the session's subagents. Never read: the format is Claude Code's. */
 export class FileTranscripts implements TranscriptStore {
   async copy({ from, to }: { from: string; to: string }): Promise<boolean> {
     if (!from.endsWith('.jsonl')) return false
-    const found = await lstat(from).catch(() => undefined)
+    const found = await look(from)
     if (!found?.isFile()) return false
     // The archive holds whole sessions: only the owner reads it.
     await mkdir(dirname(to), { recursive: true, mode: 0o700 })
@@ -25,7 +33,7 @@ export class FileTranscripts implements TranscriptStore {
     await copyFile(from, part)
     await rename(part, to)
     const subagents = from.slice(0, -'.jsonl'.length)
-    const beside = await lstat(subagents).catch(() => undefined)
+    const beside = await look(subagents)
     if (beside?.isDirectory()) {
       const copied = to.slice(0, -'.jsonl'.length)
       await rm(copied, { recursive: true, force: true })

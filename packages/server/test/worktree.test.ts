@@ -102,6 +102,23 @@ describe('GitWorktrees', () => {
     expect(existsSync(join(left, 'work.txt'))).toBe(true)
   })
 
+  test('a branch with commits and no finished setup is not deleted', async () => {
+    const { clone } = cloneOf('worked')
+    const left = join(clone, '.claude', 'worktrees', 'factory-9-2')
+    fixture.git(clone, 'worktree', 'add', '-q', '-b', 'factory/9-2', left, 'origin/master')
+    fixture.commit(left, { 'work.txt': 'somebody worked here' })
+    await expect(new GitWorktrees().create({ repo: clone, branch: 'factory/9-2' })).rejects.toThrow('has commits')
+    expect(existsSync(join(left, 'work.txt'))).toBe(true)
+  })
+
+  test('a worktree answered again gives the sha it was cut from, not where the base is now', async () => {
+    const { origin, clone } = cloneOf('moved')
+    const git = new GitWorktrees()
+    const first = await git.create({ repo: clone, branch: 'factory/9-3' })
+    fixture.commit(origin, { 'NEW.md': 'x' })
+    expect((await git.create({ repo: clone, branch: 'factory/9-3' })).sha).toBe(first.sha)
+  })
+
   test('remove: a clean worktree whose commits are on the base goes, with its branch', async () => {
     const { origin, clone } = cloneOf('gone')
     fixture.git(origin, 'config', 'receive.denyCurrentBranch', 'ignore')

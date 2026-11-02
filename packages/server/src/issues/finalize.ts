@@ -25,7 +25,9 @@ export interface FinalizeDeps {
 
 /**
  * The claim goes back, a lead that never started never will, and whoever waits for the place is looked at now rather than at its next
- * recheck. Under the capacity lock like every admission. Each statement finds its work done on a replay.
+ * recheck. Under the capacity lock like every admission, and on the tick: no check that fills the off-tick jobs may hold a project's place,
+ * and between two passes no start is in flight, so a spawn still `starting` is one a crash left, whose lease would otherwise start it
+ * later. Each statement finds its work done on a replay.
  */
 async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: number): Promise<void> {
   const now = clock.now()
@@ -35,7 +37,7 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
     const key = leadKey(issueId, attempt)
     const stopped = await tx`
       UPDATE factory.spawns SET status = 'failed', claimed_at = NULL, error = ${`Issue ${issueId} closed before the spawn started`}
-      WHERE key = ${key} AND status IN ('queued', 'waiting')
+      WHERE key = ${key} AND status IN ('queued', 'waiting', 'starting')
       RETURNING key`
     if (stopped.length > 0) await dropEmptySession(tx, key)
     if (keys.length === 0) return
@@ -45,6 +47,8 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
         AND issue_id IN (SELECT issue_id FROM factory.claims WHERE key IN ${tx(keys)} AND held_at IS NULL)`
   })
 }
+
+const attemptOf = (effect: Effect): number => Number(effect.payload?.attempt ?? 0)
 
 const once = (issueId: number, attempt: number): string => `issue_finalized:${issueId}:${attempt}`
 
@@ -57,8 +61,8 @@ async function mark(sql: SQL, issueId: number, key: string, kind: string, at: Da
 }
 
 /**
- * What ends an attempt, from every exit path, in this order: the claim given back first, so nothing below can keep the next Issue
- * waiting; the lead's tab closed, so nothing writes after it; its transcripts archived; its worktree removed when clean and on the
+ * What ends an attempt, from every exit path, in this order (the place was given back already, so nothing here can keep the next Issue
+ * waiting): the lead's tab and those of the workers it spawned closed, so nothing writes after them; the transcripts archived; its worktree removed when clean and on the
  * base, otherwise kept with a line for the owner. `issue_finalized:<issue>:<attempt>` closes it: a second close of an attempt that
  * has it (a reopen that never started a lead) gives the claim back and touches nothing else. Every step finds its own work done, so a
  * crash between any two replays to one of each. Terminal state, and the promotion of the next Issue, are the transition's and admission's.
@@ -66,8 +70,7 @@ async function mark(sql: SQL, issueId: number, key: string, kind: string, at: Da
 async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
   const { sql, clock } = deps
   const issueId = effect.issueId
-  const attempt = Number(effect.payload?.attempt ?? 0)
-  await giveBack(deps, issueId, attempt)
+  const attempt = attemptOf(effect)
 
   const [done] = await sql`SELECT 1 FROM factory.issue_events WHERE key = ${once(issueId, attempt)}`
   if (done) return
@@ -76,7 +79,9 @@ async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
     if (deps.making(issueId)) throw new Waiting(`the worktree of Issue ${issueId} is being made`)
     const [issue]: { repo: string }[] = await sql`SELECT repo FROM factory.issues WHERE id = ${issueId}`
     if (!issue) throw new Error(`issue ${issueId} is gone`)
-    await deps.runner.close(leadKey(issueId, attempt))
+    const lead = leadKey(issueId, attempt)
+    const workers: { key: string }[] = await sql`SELECT key FROM factory.spawns WHERE parent = ${lead}`
+    for (const key of [lead, ...workers.map((worker) => worker.key)]) await deps.runner.close(key)
     await archiveAttempt(
       { sql, store: deps.transcripts, dir: deps.archiveDir, now: () => clock.now() },
       issueId,
@@ -91,5 +96,10 @@ async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
 }
 
 export function finalizePorts(deps: FinalizeDeps): Pick<EffectPorts, 'finalize'> {
-  return { finalize: (effect) => deps.offTick.run(effect.key, () => finalize(deps, effect)) }
+  return {
+    finalize: async (effect) => {
+      await giveBack(deps, effect.issueId, attemptOf(effect))
+      await deps.offTick.run(effect.key, () => finalize(deps, effect))
+    },
+  }
 }

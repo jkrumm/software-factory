@@ -55,12 +55,13 @@ class PaneRunner extends FakeRunner {
 class FakeCommits implements Commits {
   paths: string[] = ['src/server.ts']
   mergedAt: Date | null = null
+  branch: string[] = []
   failure?: Error
   calls = 0
   async read({ reported }: { reported: readonly string[] }): Promise<CommitRead> {
     this.calls++
     if (this.failure) throw this.failure
-    return { commits: [...reported], paths: this.paths, mergedAt: this.mergedAt }
+    return { commits: [...reported, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
   }
 }
 
@@ -277,7 +278,7 @@ describe('GitCommits, against a repo with an origin', () => {
     const head = (repo: string) => fixture.git(repo, 'rev-parse', 'HEAD')
     return { origin, clone, head, cut: head(clone) }
   }
-  const read = (input: { repo: string; cut?: string | null; reported: string[]; branch?: string }) =>
+  const read = (input: { repo: string; cut?: string | null; reported: string[]; merged?: boolean }) =>
     new GitCommits().read({ branch: 'factory/1-1', cut: null, ...input })
 
   test('reads what a merged commit touched and when, looking on the remote for one this checkout has not seen', async () => {
@@ -307,6 +308,33 @@ describe('GitCommits, against a repo with an origin', () => {
     fixture.commit(clone, { 'src/a.ts': 'x' })
     await expect(read({ repo: clone, reported: [head(clone)] })).rejects.toThrow('is not on origin/master')
     await expect(read({ repo: clone, reported: ['b'.repeat(40)] })).rejects.toThrow('push it first')
+  })
+
+  test('an old commit of the base proves nothing about this attempt', async () => {
+    const { clone, head } = cloned('old')
+    const sha = head(clone)
+    await expect(read({ repo: clone, cut: sha, reported: [sha] })).rejects.toThrow('older than this attempt')
+  })
+
+  test('ship: all the branch holds must be on the base, by commit or by content', async () => {
+    const { origin, clone, head, cut } = cloned('held')
+    fixture.git(clone, 'checkout', '-q', '-b', 'factory/1-1')
+    fixture.commit(clone, { 'src/a.ts': 'x' })
+    fixture.commit(origin, { 'docs/other.md': 'y' })
+    const reported = [head(origin)]
+    await expect(read({ repo: clone, cut, reported, merged: true })).rejects.toThrow('holds work that is not on')
+    // The same change squashed onto the base: no commit of the branch is there, its content is.
+    fixture.commit(origin, { 'src/a.ts': 'x' })
+    const found = await read({ repo: clone, cut, reported: [head(origin)], merged: true })
+    expect(found.paths).toContain('src/a.ts')
+  })
+
+  test('every commit of the branch counts, however many, and a range that cannot be read is a failure', async () => {
+    const { clone, cut } = cloned('long')
+    fixture.git(clone, 'checkout', '-q', '-b', 'factory/1-1')
+    for (let i = 0; i < 3; i++) fixture.commit(clone, { [`src/${i}.ts`]: 'x' })
+    expect((await read({ repo: clone, cut, reported: [] })).paths).toEqual(['src/0.ts', 'src/1.ts', 'src/2.ts'])
+    await expect(read({ repo: clone, cut: 'c'.repeat(40), reported: [] })).rejects.toThrow('rev-list failed')
   })
 
   test('what else is on the lead’s branch counts, so the commits it names do not set the bar', async () => {
@@ -405,6 +433,11 @@ describe('ship', () => {
     expect((await post(id, 'ship', { summary: 's', commits: ['--all'], session: key })).status).toBe(400)
   })
 
+  test('evidence that says nothing is none: a kind alone is refused', async () => {
+    const { id, key } = await lead()
+    expect((await ship(id, key, { evidence: [{ kind: 'service' }] })).status).toBe(400)
+  })
+
   test('a lead that stops on a refused ship has reported nothing, and is sent back', async () => {
     const { id, key } = await lead()
     const { stopCheck } = await import('../src/rules.ts')
@@ -490,6 +523,14 @@ describe('close', () => {
     const none = await post(three.id, 'close', { summary: 'done', session: three.key })
     expect(none.status).toBe(409)
     expect(((await none.json()) as { error: string }).error).toContain('the commit')
+  })
+
+  test('something merely on the branch is no proof: a close names a commit or a document', async () => {
+    const { id, key } = await lead(newRepo())
+    commits.branch = ['b'.repeat(40)]
+    commits.paths = ['docs/x.md']
+    const response = await post(id, 'close', { summary: 'done', session: key })
+    expect(response.status).toBe(409)
   })
 })
 
@@ -667,14 +708,45 @@ describe('finalize', () => {
     expect((await issue(next)).state).toBe('working')
   })
 
-  test('a spawn that never started never will', async () => {
-    const repo = newRepo(SERVICE)
-    const id = await file(repo)
-    await drive(2)
-    await post(id, 'drop', { reason: 'no' })
+  test.each(['queued', 'starting'])('a lead’s spawn left %s never starts, a crash’s lease or not', async (status) => {
+    const { id, key } = await lead()
+    await db.sql`UPDATE factory.spawns SET status = ${status} WHERE key = ${key}`
+    await post(id, 'drop', { reason: 'no', session: key })
+    expect(await issuePass(db.sql, { now: () => clock.now(), ports: ports() })).toEqual([])
+    await offTick.settled()
+    const [spawn] = await db.sql`SELECT status FROM factory.spawns WHERE key = ${key}`
+    expect(spawn?.status).toBe('failed')
+  })
+
+  test('the workers it spawned are closed with the lead', async () => {
+    const { id, key, repo } = await lead()
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, created_at, parent)
+      VALUES ('its-worker', ${repo}, 'x', 'worker', 'sonnet', 'high', 'started', ${clock.now()}, ${key})`
+    await post(id, 'drop', { reason: 'no', session: key })
     await drive(3)
-    const [spawn] = await db.sql`SELECT status FROM factory.spawns WHERE key = ${leadKey(id, 1)}`
-    if (spawn) expect(spawn.status).not.toBe('queued')
+    expect(runner.closed).toEqual([key, 'its-worker'])
+  })
+
+  test('the place is back on the tick, whatever fills the off-tick jobs', async () => {
+    const { id, key } = await lead()
+    offTick = new OffTick(0)
+    await post(id, 'drop', { reason: 'no', session: key })
+    await drive(2)
+    expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
+    expect(await trail(id)).not.toContain('issue_finalized')
+  })
+
+  test('a worktree asked for before the close is not made after it, when the Issue is reopened', async () => {
+    const { id, key } = await lead()
+    await post(id, 'drop', { reason: 'no', session: key })
+    await drive(3)
+    await db.sql`UPDATE factory.lead_worktrees SET status = 'pending', next_at = ${clock.now()} WHERE issue_id = ${id}`
+    await db.sql`UPDATE factory.projects SET paused = true`
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(2)
+    expect((await issue(id)).state).toBe('queued')
+    expect(worktrees.made).toHaveLength(1)
   })
 
   test('a transcript copied for real, with its subagents, and a file that is not one', async () => {

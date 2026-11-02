@@ -65,7 +65,13 @@ export async function fileVerb(
   const reported = 'commits' in fields ? (fields.commits ?? []) : []
   const derived =
     gated && !known
-      ? await derive(sql, input.commits, { issueId, repo: issue.repo, attempt: issue.attempt, reported })
+      ? await derive(sql, input.commits, {
+          issueId,
+          repo: issue.repo,
+          attempt: issue.attempt,
+          reported,
+          merged: verb === 'ship',
+        })
       : undefined
   // The attempt the call was filed for: a verb that reaches the Issue after a new attempt began is refused, not applied to it.
   const payload = { ...fields, attempt: issue.attempt, ...(derived ? { derived } : {}) }

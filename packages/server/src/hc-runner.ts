@@ -260,7 +260,7 @@ export class HcRunner implements Runner {
       for (const terminal of await this.find(key, budget)) {
         if (terminal.state === 'live') await this.kill(terminal.address, budget)
         await this.rpc('terminal.rm', { terminal: terminal.address }, Removed, budget).catch((error: unknown) => {
-          if (!(error instanceof HcError && error.refusal)) throw error
+          if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
         })
       }
     } catch (error) {

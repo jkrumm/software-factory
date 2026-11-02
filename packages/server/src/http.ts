@@ -469,7 +469,8 @@ const issueReopenHandler =
     await enqueue(sql, { issueId, key, kind: 'reopen', at: clock.now(), payload: { reason } })
     const answer = await answerNow(sql, { issueId, key, now: () => clock.now() })
     if (answer?.result === 'refused') return json({ error: answer.detail, code: 'refused' }, 409)
-    return respond(Issue, (await getIssue(sql, issueId)) ?? issue)
+    // Not answered yet: the row is filed and the tick has it. 202, and the Issue as it stands.
+    return respond(Issue, (await getIssue(sql, issueId)) ?? issue, answer ? 200 : 202)
   }
 
 /** `POST /issues/:id/resume`: a spawn that forks an attempt's archived session. */
