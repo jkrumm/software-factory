@@ -1012,8 +1012,8 @@ describe('the deployed version', () => {
     expect(printed[0]?.detail).toContain('the deployed commit sha')
     const failing = deployable('versions-failing', 'version:\n\t@echo no release >&2; echo some out; exit 4\n')
     const failed = (await run(failing.repo, failing.c2))[0]
-    expect(failed?.detail).toContain('no release')
-    expect(failed?.detail).toContain('some out')
+    expect(failed?.detail).toMatch(/^make version exit 2: stdout: some out \/ stderr: no release\n/)
+    expect(failed?.detail).not.toContain('  ')
     const two = deployable('versions-two-lines', 'version:\n\t@git rev-parse HEAD; git rev-parse HEAD\n')
     expect((await run(two.repo, two.c2))[0]).toMatchObject({ ok: false })
     const noisy = deployable('versions-noisy', 'version:\n\t@echo a warning >&2; cat .deployed\n')
@@ -1022,6 +1022,28 @@ describe('the deployed version', () => {
     const unknown = deployable('versions-unknown')
     unknown.deployed('b'.repeat(40))
     expect((await run(unknown.repo, unknown.c2))[0]?.detail).toContain('is not in')
+  })
+
+  test('make’s words in a failed recipe are not its own: only the top-level line with no failed recipe after it is a missing target', async () => {
+    const quoted = deployable(
+      'versions-quoted',
+      'version:\n\t@echo "make: *** No rule to make target \'version\'.  Stop." >&2; exit 2\n',
+    )
+    const [check] = await run(quoted.repo, quoted.c2)
+    expect(check?.detail).not.toBe(NO_TARGET_LINE)
+    expect(check?.detail).toContain('make version exit')
+    const nested = deployable(
+      'versions-nested',
+      'version:\n\t@$(MAKE) --no-print-directory -f /nonexistent/version.mk version\n',
+    )
+    expect((await run(nested.repo, nested.c2))[0]?.detail).not.toBe(NO_TARGET_LINE)
+  })
+
+  test('a failure that printed nothing shows only what make itself said', async () => {
+    const { repo, c2 } = deployable('versions-mute', 'version:\n\t@exit 5\n')
+    expect((await run(repo, c2))[0]?.detail).toMatch(
+      /^make version exit 2: stderr: make: \*\*\* \[.*version\] Error 5$/,
+    )
   })
 
   test('a failure of stderr is bounded', async () => {
@@ -1175,6 +1197,22 @@ describe('the deployed version', () => {
     expect((await issue(id)).state).toBe('working')
     const [red] = await db.sql`SELECT payload FROM factory.issue_inbox WHERE key LIKE 'regression:%'`
     expect(JSON.stringify(red.payload.checks)).toContain('project is not known')
+  })
+
+  test('through the hold: a project that is gone is red even for a ship that deploys nothing', async () => {
+    const { repo, c2 } = deployable('hold-no-project-docs')
+    commits.landedAt = c2
+    commits.paths = ['docs/x.md']
+    const { id, key } = await lead(repo)
+    expect((await ship(id, key)).status).toBe(201)
+    await db.sql`DELETE FROM factory.projects WHERE repo = ${repo}`
+    moveTo((await issue(id)).wake_at as Date)
+    const real = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
+    for (let i = 0; i < 3; i++) {
+      await issuePass(db.sql, { now: () => clock.now(), ports: real })
+      await offTick.settled()
+    }
+    expect((await issue(id)).state).toBe('working')
   })
 
   test('through the hold: no `make version` is a regression saying the owner adds it', async () => {

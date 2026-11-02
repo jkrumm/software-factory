@@ -50,15 +50,22 @@ export const NO_TARGET_LINE =
 const VERSION_TIMEOUT_MS = 30_000
 const SHA = /^[0-9a-f]{7,64}$/
 const STDERR_MARK = '\n--stderr--\n'
-/** make's own words for a target it does not have (or no Makefile at all), read under `LC_ALL=C`. */
-const NO_VERSION_TARGET = /No rule to make target\s+[`'\u2018"]version['\u2019"]|no makefile found/i
-/** stdout is what `make version` prints and nothing else; stderr is kept apart, for the reason of a failure. */
-const VERSION_SCRIPT = `t=$(mktemp) || exit 1
-trap 'rm -f "$t"' EXIT TERM INT
-make --no-print-directory -s -C "$1" version 2>"$t"
+/**
+ * make's own top-level line for a target it does not have (or no Makefile at all), read under `LC_ALL=C`: `make: *** …`, never a sub-make's
+ * `make[1]: *** …`, and never with the `[version] Error` line a recipe that failed (a nested make that printed those words) is followed by.
+ */
+const NO_VERSION_TARGET =
+  /^make: \*\*\* (?:No rule to make target\s+[`'\u2018"]version['\u2019"]|No targets specified and no makefile found)/im
+const RECIPE_FAILED = /^make: \*\*\* \[.*\] Error/m
+/**
+ * stdout is what `make version` prints and nothing else; stderr is caught by the shell through the pipe (no file to leave behind when a
+ * kill cannot be trapped) and shown, with a marker, only when it failed.
+ */
+// Started as a top-level make whatever started this server: an inherited MAKELEVEL prefixes its lines `make[n]:`, and MAKEFLAGS could carry `-n`.
+const VERSION_SCRIPT = `unset MAKELEVEL MAKEFLAGS MFLAGS MAKEOVERRIDES MAKE_TERMOUT MAKE_TERMERR\nexec 3>&1
+err=$(make --no-print-directory -s -C "$1" version 2>&1 1>&3 3>&-)
 st=$?
-if [ "$st" -ne 0 ]; then printf '%s' '${STDERR_MARK}'; tail -c ${MAX_DETAIL_CHARS} "$t"; fi
-rm -f "$t"
+if [ "$st" -ne 0 ]; then printf '%s' '${STDERR_MARK}'; printf '%s' "$err" | tail -c ${MAX_DETAIL_CHARS}; fi
 exit "$st"`
 
 /**
@@ -97,8 +104,12 @@ export class MakeAndProbes implements Proof {
       if (done.exitCode !== 0) {
         // The script adds the marker and the end of stderr only on a failure.
         const [printed = '', stderr = ''] = done.stdout.split(STDERR_MARK)
-        if (NO_VERSION_TARGET.test(stderr)) return red(NO_TARGET_LINE)
-        return red(`make version exit ${done.exitCode}: ${tail(printed.trim())} ${tail(stderr.trim())}`.trimEnd())
+        if (NO_VERSION_TARGET.test(stderr) && !RECIPE_FAILED.test(stderr)) return red(NO_TARGET_LINE)
+        const said = [
+          printed.trim() && `stdout: ${tail(printed.trim())}`,
+          stderr.trim() && `stderr: ${tail(stderr.trim())}`,
+        ].filter(Boolean)
+        return red(`make version exit ${done.exitCode}${said.length > 0 ? `: ${said.join(' / ')}` : ''}`)
       }
       const printed = done.stdout.trim()
       if (!SHA.test(printed))
@@ -174,16 +185,14 @@ async function versionCheck(
   attempt: number,
   project: { mode: string } | undefined,
 ): Promise<ProofInput['version']> {
+  // First, so that no gap below can hide it: a hold that no longer knows its project cannot say what its deploy should have shown.
+  if (!project)
+    return { problem: 'the project is not known at hold time, so what its deploy should have shown is not either' }
   const [row]: { derived: Derived | null }[] = await sql`
     SELECT payload->'derived' AS derived FROM factory.issue_inbox
     WHERE issue_id = ${issueId} AND kind = 'ship' AND result = 'applied' AND (payload->>'attempt')::int = ${attempt}
     ORDER BY id DESC LIMIT 1`
   const derived = row?.derived
-  if (!project) {
-    return derived && (derived.required?.length ?? 1) > 0
-      ? { problem: 'the project is not known at hold time, so what its deploy should have shown is not either' }
-      : undefined
-  }
   if (project.mode !== 'make') return undefined
   if (!row) return { problem: `no ship of attempt ${attempt} is on record to check the deployed version against` }
   if (!derived) return { problem: 'the ship came without its commits derived: nothing says what it changed' }
