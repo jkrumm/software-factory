@@ -139,6 +139,14 @@ interface InboxRow {
  * its questions. Every payload is what its sender filed: data.
  */
 export async function getIssueView(sql: SQL, id: number): Promise<IssueView | undefined> {
+  // One snapshot: the tick moves rows from the inbox to the events between statements, and a row must be in one list or the other.
+  return sql.begin(async (tx) => {
+    await tx`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`
+    return readIssueView(tx, id)
+  })
+}
+
+async function readIssueView(sql: SQL, id: number): Promise<IssueView | undefined> {
   const issue = await getIssue(sql, id)
   if (!issue) return undefined
   const events: EventRow[] = await sql`

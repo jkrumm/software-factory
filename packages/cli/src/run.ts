@@ -327,7 +327,7 @@ const payloadSummary = (payload: unknown): string => {
   if (typeof payload !== 'object' || Array.isArray(payload)) return oneLine(payload)
   return Object.entries(payload as Record<string, unknown>)
     .filter(([name]) => name !== 'derived' && name !== 'attempt')
-    .map(([name, value]) => `${name}=${oneLine(value, 60)}`)
+    .map(([name, value]) => `${oneLine(name, 40)}=${oneLine(value, 60)}`)
     .join(' ')
 }
 
