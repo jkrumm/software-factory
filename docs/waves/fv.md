@@ -50,7 +50,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
   "asks the owner something?" with kind and confidence; an ask above the bar joins `asks` with `source: reply`.
 - [ ] A failed or slow digest leaves the deterministic model as it was; a counter in `factory status`. Spend per day in the digest.
 
-## Wave 3 — Triage and actions            <!-- status: pending -->
+## Wave 3 — Triage and actions            <!-- status: done -->
 - [ ] Four tiers (the proposal's table) per ask, with `suggestion { verb, why, evidence, confidence }` from deterministic probes
   first (a file absent, a newer deploy, a plan 10/10); the model only ranks.
 - [ ] Actions are intents (`POST /fleet/asks/:id/act {intent}`): resolve, deny, later, archive plan, hand off (a spawn or an agw

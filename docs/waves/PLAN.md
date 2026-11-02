@@ -135,5 +135,9 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] FV Wave 2 (PR #33, `077bca9`): 3 h 14 wall, `worker` Sonnet on `me2` (context 68 %); the lead's three `/code-review high` found 10 + 8 + 8,
   most in the call's lifecycle (a paid run repeated every pass, a dead run blocking a day), simplified in the third round. Live: first
   pass 2 calls, 128 items, $0.0043; 133 wave shorts; no IuRoot item in the cache (IuRoot shorts are the headings cut at 8 words).
-- [ ] FV Waves 3–6 in order, the board's waves after the factory's they read.
+- [x] FV Wave 3 (PR #34, `6b98d06`) with dotfiles `ask-human.sh resolve`: 3 h 23 wall, `worker` Sonnet on `me2` (context 80 %); the lead's
+  `/code-review high` found 9 + 5 (worst: a business-class request offered a one-click resolve; free text judged "done"; the IuRoot
+  spawn guard on a snapshot flag). Live: 26 asks tiered (21 yours, 3 hand_off, 2 one_click), a stale IuRoot plan marked by the
+  automatic tier, one `later` act recorded and the ask hidden. `launch.sh` reads `~/.config/factory/env` (allowlisted keys).
+- [ ] FV Waves 4–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
