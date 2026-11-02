@@ -139,5 +139,8 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
   `/code-review high` found 9 + 5 (worst: a business-class request offered a one-click resolve; free text judged "done"; the IuRoot
   spawn guard on a snapshot flag). Live: 26 asks tiered (21 yours, 3 hand_off, 2 one_click), a stale IuRoot plan marked by the
   automatic tier, one `later` act recorded and the ask hidden. `launch.sh` reads `~/.config/factory/env` (allowlisted keys).
+- [x] Board Wave 1 (dotfiles PR #60, `753af8b`): `worker` Sonnet on `iu`, 32 min; its three `/review` passes found one load blocker (a constant read before
+  its declaration). Landed `--no-check`: the one red target is herdr-core's live version drift between the machines (0.1.15 vs 0.1.16). Live: reloaded on the
+  MacBook, 25 asks on top, plans and session tree from `/fleet`; a factory ask shows its path instead of the repo's name (board Wave 2).
 - [ ] FV Waves 4–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
