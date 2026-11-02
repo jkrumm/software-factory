@@ -98,7 +98,7 @@ interface GitAnswer {
   proof: string
 }
 
-const keyOf = (c: { m: MergedSession; cwd: string }): string => `${c.m.hc?.address}\0${c.cwd}`
+const keyOf = (address: string | undefined, cwd: string): string => `${address}\0${cwd}`
 /** `<repo>/.claude/worktrees/<name>[/…]`: the repo's main checkout and the worktree's root. */
 function worktreeOf(path: string): { main: string; worktree: string; name: string } | undefined {
   const found = WORKTREE.exec(path)
@@ -170,6 +170,9 @@ export class Reaper {
         a.id.localeCompare(b.id),
     )
 
+    if (mode === 'on' && canAct && eligible.length > REAPER_MAX_CLOSES) {
+      errors.push(`reaper: ${eligible.length - REAPER_MAX_CLOSES} more idle worktree sessions wait for the next pass`)
+    }
     const history = await this.recent(at).catch((error: unknown) => {
       errors.push(`reaper: the closed sessions could not be read: ${message(error)}`)
       return []
@@ -216,7 +219,7 @@ export class Reaper {
     const spent = () => now().getTime() >= deadline
     const errors: string[] = []
     try {
-      if (plan.reconcile) await this.reconcile(closer, errors, spent)
+      if (plan.reconcile) await this.reconcile(closer, errors, spent, closed)
       for (const e of plan.close) {
         if (spent()) {
           errors.push(`reaper: the time of this pass is spent; ${e.id} and the sessions behind it wait for the next`)
@@ -243,17 +246,14 @@ export class Reaper {
     for (const m of input.sessions) {
       const c = this.candidate(m, input, holds, nowMs)
       if (!c) continue
-      if ('keep' in c) {
-        out.push(c)
-        continue
-      }
+      // A parent that waits on workers may still send this one fixes: neither closed nor listed.
       const parent = m.session.parent ? byId.get(m.session.parent) : undefined
-      // A parent that waits on workers may still send this one fixes.
       if (parent?.session.wait === 'workers') continue
-      found.push(c.found)
+      if ('keep' in c) out.push(c)
+      else found.push(c.found)
     }
 
-    const alive = new Set(found.map(keyOf))
+    const alive = new Set(found.map((c) => keyOf(c.m.hc?.address, c.cwd)))
     for (const key of this.answers.keys()) if (!alive.has(key)) this.answers.delete(key)
 
     for (let i = 0; i < found.length; i += EVAL_CONCURRENCY) {
@@ -306,7 +306,7 @@ export class Reaper {
         keep: {
           session: m.session.id,
           repo: basename(mine.main),
-          why: `cwd moved: hc has it in ${hcCwd}, the factory has ${m.cwd ?? 'none'}`,
+          why: `cwd moved: hc has it in ${hcCwd}, the factory has ${m.cwd ?? hcCwd}`,
         },
       }
     }
@@ -315,7 +315,7 @@ export class Reaper {
 
   private async look1(c: Found, byId: ReadonlyMap<string, MergedSession>, nowMs: number): Promise<Judged> {
     const { m, main, worktree } = c
-    const key = keyOf(c)
+    const key = keyOf(m.hc?.address, c.cwd)
     const cached = this.answers.get(key)
     let answer: GitAnswer
     if (cached && nowMs - cached.at < VERDICT_TTL_MS) answer = cached.answer
@@ -428,6 +428,8 @@ export class Reaper {
     const again = await this.gitVerdict(e.worktree)
     if (again.reasons.length > 0) {
       this.failures.set(e.address, (this.failures.get(e.address) ?? 0) + 1)
+      // The next build keeps it on this answer instead of planning the same close again.
+      this.answers.set(keyOf(e.address, e.cwd), { at: at.getTime(), answer: again })
       errors.push(`reaper: ${e.id} is kept after all: ${again.reasons.join('; ')}`)
       return false
     }
@@ -453,7 +455,7 @@ export class Reaper {
   }
 
   /** Rows left `closing` by a crash or an uncertain failure: a terminal that is gone is closed, one that still runs was never touched. */
-  private async reconcile(closer: HcCloser, errors: string[], spent: () => boolean): Promise<void> {
+  private async reconcile(closer: HcCloser, errors: string[], spent: () => boolean, gone: Set<string>): Promise<void> {
     let pending: Awaited<ReturnType<typeof closingReaped>>
     try {
       pending = await closingReaped(this.deps.sql)
@@ -461,10 +463,16 @@ export class Reaper {
       errors.push(`reaper: unsettled closes could not be read: ${message(error)}`)
       return
     }
-    for (const row of pending) {
-      if (spent()) return
+    for (const [index, row] of pending.entries()) {
+      if (spent()) {
+        errors.push(
+          `reaper: the time of this pass is spent; ${pending.length - index} unsettled closes wait for the next`,
+        )
+        return
+      }
       try {
         const state = await closer.finish(row.address)
+        if (state === 'gone') gone.add(row.address)
         await this.settle(row, state === 'gone' ? 'closed' : 'untouched', errors)
       } catch (error) {
         errors.push(`reaper: the close of ${row.address} is still unsettled: ${message(error)}`)

@@ -337,6 +337,35 @@ describe('the reaper closes', () => {
     expect(await reapedRows()).toHaveLength(0)
   })
 
+  test('after a close refused on a fresh look, the next build keeps the session on that answer: listed, no second try', async () => {
+    const wt = worktree(freshRepo(), 'feat-late-kept', 'merged')
+    terminals = [terminal('feat-late-kept', wt)]
+    afterFirstStatus = () => writeFileSync(join(wt, 'late.txt'), 'someone is working here\n')
+    const builder = await setup('on')
+    await pass(builder)
+    const second = await pass(builder)
+    expect(second.errors.filter((e) => e.includes('kept after all'))).toHaveLength(1)
+    const third = await pass(builder)
+    expect(third.errors.some((e) => e.includes('kept after all'))).toBe(false)
+    expect(third.reaper.kept.map((k) => k.session)).toEqual(['feat-late-kept'])
+    expect(closer.calls).toHaveLength(0)
+  })
+
+  test('a row left by a crash before the close, with the terminal still running, is taken back and the close is made', async () => {
+    const wt = worktree(freshRepo(), 'feat-crash', 'merged')
+    const session = terminal('feat-crash', wt)
+    terminals = [session]
+    await db.sql`
+      INSERT INTO factory.fleet_triage_log (kind, subject, fingerprint, what, why, evidence, payload, at)
+      VALUES ('reaped', ${wt}, 'stale-incarnation', 'Closed feat-crash', 'x', 'y',
+              ${JSON.stringify({ session: 'feat-crash', address: session.address, state: 'closing' })}::text::jsonb, ${clock.now()})`
+    const model = await reap('on')
+    expect(closer.finished).toEqual([session.address])
+    expect(closer.calls).toHaveLength(1)
+    expect(model.reaper.closed).toHaveLength(1)
+    expect(await reapedRows()).toHaveLength(1)
+  })
+
   test('at most 5 closes a pass: the rest wait for the next', async () => {
     const main = freshRepo()
     terminals = Array.from({ length: 7 }, (_, i) =>
@@ -366,7 +395,7 @@ describe('the reaper closes', () => {
     const next = await pass(builder)
     expect(next.errors.some((e) => e.includes('the time of this pass is spent'))).toBe(true)
     await pass(builder)
-    expect(closer.calls.length).toBeGreaterThanOrEqual(3)
+    expect(closer.calls).toHaveLength(4)
   })
 
   test('a close that did nothing takes its row back and is tried again at the next pass', async () => {
@@ -457,8 +486,9 @@ describe('the reaper closes', () => {
     const wt = worktree(freshRepo(), 'feat-unborn', 'merged')
     git(wt, ['update-ref', '-d', 'refs/heads/feat-unborn'])
     terminals = [terminal('feat-unborn', wt)]
-    await reap('on')
+    const model = await reap('on')
     expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept).toHaveLength(1)
   })
 
   test('git is asked once in a while: dry judges a worktree once, and the branch name only when it is unmerged', async () => {
@@ -627,6 +657,25 @@ describe('each guard alone keeps a session', () => {
     terminals = [boss, terminal('child2', worktree(main, 'child2'), { parent: boss.address })]
     const model = await reap('on')
     expect(model.reaper.closed.map((c) => c.session)).toEqual(['child2'])
+  })
+
+  test('cwd moved under a parent that waits on workers: neither closed nor listed', async () => {
+    const main = freshRepo()
+    const a = worktree(main, 'moved-a', 'merged')
+    const b = worktree(main, 'moved-b', 'merged')
+    await w.spawned('boss3', { repo: main, role: 'lead', startedMinutesAgo: 500 })
+    await w.emit('boss3', 'turn_started', w.at(400))
+    await w.emit('boss3', 'wait_declared', w.at(390), { on: 'workers' })
+    await w.emit('boss3', 'turn_ended', w.at(389))
+    await w.spawned('mover2', { repo: a, startedMinutesAgo: 500, parent: 'boss3' })
+    await w.emit('mover2', 'session_started', w.at(499), { claudeSessionId: 'c-mover2', cwd: a })
+    await w.emit('mover2', 'turn_started', w.at(300))
+    await w.emit('mover2', 'turn_ended', w.at(200))
+    const boss = terminal('boss3', main, { idleHours: 6 })
+    terminals = [boss, terminal('mover2', b, { parent: boss.address })]
+    const model = await reap('on')
+    expect(closer.calls).toHaveLength(0)
+    expect(model.reaper.kept).toEqual([])
   })
 
   test('a session outside every root', async () => {
@@ -806,6 +855,25 @@ describe('HcTerminals.close', () => {
     const { calls, closer } = client({ 'terminal.get': { result: shell } })
     await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('does not run Claude Code')
     expect(calls).toEqual(['terminal.get'])
+  })
+
+  test("a shell in Claude's place is refused even when the status app and the label are stale", async () => {
+    const shell = {
+      ...live(),
+      labels: { 'jk.claude.session': 'abc' },
+      foreground: { name: 'zsh', argv: ['zsh'] },
+    }
+    const { calls, closer } = client({ 'terminal.get': { result: shell } })
+    await expect(closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('does not run Claude Code')
+    expect(calls).toEqual(['terminal.get'])
+    // `node …/claude` is Claude Code.
+    const node = { ...live(), status: null, foreground: { name: 'node', argv: ['node', '/x/bin/claude'] } }
+    const ok = client({
+      'terminal.get': { result: node },
+      'terminal.kill': { result: {} },
+      'terminal.rm': { result: {} },
+    })
+    await expect(ok.closer.close({ address: 't1', cwd: '/w' })).rejects.toThrow('not reporting')
   })
 
   test('a kill the core refused leaves it running: no rm, an error', async () => {
