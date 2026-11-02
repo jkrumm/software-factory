@@ -83,8 +83,8 @@ export class MakeAndProbes implements Proof {
         return red(`make version printed ${JSON.stringify(tail(printed))}: one line, the deployed commit sha`)
       return { name, ...(await deployedHolds(repo, printed, shipped, { run: this.options.run, signal })) }
     } catch (error) {
-      if (error instanceof CannotExecute) return red(error.message)
-      throw error
+      // Neither make nor git failing to answer is a retry: the lead is told, with the other checks beside it.
+      return red(error instanceof Error ? error.message : String(error))
     }
   }
 
