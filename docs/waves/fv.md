@@ -28,8 +28,8 @@ does not file Issues.
 the foreground-wait line, the gate); a part in another repo is its own worker on disjoint files, after a note to that repo's
 mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Briefs: `docs/waves/briefs/fv-w<n>-*.md`.
 
-## Wave 1 — The read model, deterministic            <!-- status: pending -->
-- [ ] `GET /fleet` (token and socket), `factory fleet [--format json|plain]`, contract schema in `packages/contract` (the shape in
+## Wave 1 — The read model, deterministic            <!-- status: done -->
+- [x] `GET /fleet` (token only: the socket is every pane's and IuRoot text must not reach an agent's model), `factory fleet [--format json|plain]`, contract schema in `packages/contract` (the shape in
   the proposal's "The read model"), and a Postgres `NOTIFY fleet` when it changes; no model text yet (`short` and `headline` null).
 - [ ] Repos: every repo under `FACTORY_REPO_ROOTS` and `FACTORY_VISIBLE_ROOTS` with a plan or a live session; git branch, dirty, last
   commit, read off the tick with the projects' rules (bounded git, no transaction).

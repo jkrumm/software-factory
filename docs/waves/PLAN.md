@@ -129,6 +129,8 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 
 - [x] dotfiles `ask-human.sh list --json` (`370ed24`..`94c0b98`).
 - [x] agw digest: agw PR #103 `f02f351`, live (a real call: "Shall I merge it now?" → asks, permission; Haiku on the iu credit pool, $0.00022).
-- [ ] FV Wave 1 (PR #32): review, land, deploy, prove.
+- [x] FV Wave 1 (PR #32, `b7813fd`): 2 h 51 wall, `worker` Sonnet on `me2` (context 70 %); the lead's two `/code-review high` found 11 + 9, the second round 7
+  IuRoot leaks through a redacted socket view, so `/fleet` became token-only. Live: 23 repos (2 IuRoot, visible), 19 asks (16 queue,
+  14 older than 24 h), 0 errors; the socket answers `fleet needs FACTORY_TOKEN`.
 - [ ] FV Waves 2–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
