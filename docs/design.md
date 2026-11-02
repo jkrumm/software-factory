@@ -709,19 +709,19 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   (and a closed one, for 24 hours, whose finalize failed) with its state, repo, the lead's session (the current attempt's, once it exists), the
   lead's last `phase` of this attempt, what it waits for (`waiting`: the reason; a `queued` Issue the project's claim has no room for:
   `claim`), the evidence still missing, and the open questions. Most urgent first (a failed finalize, `waiting`, `working`, `watching`,
-  `queued`), at most 40, the rest counted (`issuesMore`). Read from stored rows only, never git: the evidence missing is what the last `ship`
+  `queued`), at most 40, the rest counted (`issuesMore`). `claim` is shown for the Issue admission looked at (a claim row exists, not held: the oldest of its project); Issues queued behind it have no claim row and show nothing. Read from stored rows only, never git: the evidence missing is what the last `ship`
   or `close` of this attempt derived from its commits (`derived.required`, on its inbox row), less the rows in `evidence` that are
   fresh by the gate's own rule (`unmetKinds`), so until a lead has tried one, nothing is known and nothing is listed. The Issues
   Those that need a look (an open question, a park, a lead or worktree that did not start, a finalize that failed) also have a line in ATTENTION (§3 "`factory status`"). `factory issue show <id>` (`GET /issues/:id/timeline`, token or socket) is the
   Issue with its facts, its story oldest first, its evidence and its questions: the story is the Issue's `issue_events` (what the lifecycle
   applied or refused, with the state it moved from and to) and the inbox rows no event came of (still unhandled, with the error of a row
-  that failed; a session's silent events are `factory session get`'s), the newest 500 with the rest counted (`timelineCut`). Every payload
+  that failed; a session's silent events are `factory session get`'s), the newest 500 with the rest counted (`timelineCut`), and the newest 200 pieces of evidence with the rest counted (`evidenceCut`). Every payload
   is data as its sender filed it: on a terminal, one cut line, `key=value`, control characters gone. `--format json` is the whole.
 - **Notes.** `factory issue note <id> <text> [--id <call id>]` is the owner's way to reach a lead (`POST /issues/:id/note`, token only: a pane
   can already type into a session with `session note`, and what a brief carries is the owner's). One inbox row `<issue>:note:<call id>`;
   an Issue that is `queued`, `working`, `waiting` or `watching` takes it, a closed one is 409. The lifecycle records it, and for an Issue with
   a lead plans `note_lead`, which types it through the session notes of §3 (`recordPrompt`, source `note`, prompt id `issue:<issue>:note:<call id>`,
-  so a repeated id types once) and tries again until the lead's session exists. An Issue with no lead running keeps it as the row, and the
+  so a repeated id types once; a pane's `session note` cannot take an `issue:` id) and tries again until the lead's session exists. A note filed as the Issue closes is refused by the lifecycle with a line in the timeline. An Issue with no lead running keeps it as the row, and the
   **next brief carries it** (§5 "The brief"). A lead that is gone, whose Issue is not `working`, is not parked for it: the note stays in the
   timeline.
 - **Ids and a restore.** Not built for Issues. `issues.id` is a sequence, and nothing moves it past the ids in pane names (`lead-<issue>-<attempt>`) or the
@@ -797,9 +797,10 @@ false confidence; the probes are the check that does not depend on it.
 - **Facts:** what the Issue was filed with (`facts`: for an alert, what the door parsed). Alert and
   issue text is marked as data, never instructions: the facts are a fenced block (the fence longer than any run of backticks inside), cut at
   16,000 characters with the way to the rest.
-- **Notes from the owner:** `factory issue note` texts filed while no lead was running, oldest first (at most 20), in a fence, only when there are any.
-  The ones since the previous attempt's brief that no lead was typed (no prompt `issue:<issue>:note:<call id>` that is `sent` or `delivered`);
-  each is recorded as a `delivered` prompt in the spawn's transaction, so a `note_lead` for the same call never types it a second time.
+- **Notes from the owner:** `factory issue note` texts filed while no lead was running, oldest first, in a fence, only when there are any.
+  Those filed since the brief of an earlier attempt whose lead started (its session exists) that reached no session (no prompt `issue:<issue>:note:<call id>` of a
+  session that is `sent` or `delivered`), so a lead that never started loses none. Each is recorded as a `delivered` prompt of the new lead in the spawn's
+  transaction (a prompt still pending for an earlier lead moves to it), so a `note_lead` for the same call never types it a second time. At most 20 are shown, with a count of the rest.
 - **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.

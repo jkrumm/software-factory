@@ -251,8 +251,8 @@ const statusIssueLine = (i: StatusIssue) =>
   [
     `#${i.id}`,
     i.state,
-    lastSegment(i.repo),
-    i.lead ?? '-',
+    oneLine(lastSegment(i.repo), 60),
+    i.lead ? oneLine(i.lead, 80) : '-',
     i.phase ? `phase ${oneLine(i.phase, 40)}` : 'phase -',
     i.waiting ? `waiting ${i.waiting}` : '',
     i.missing.length > 0 ? `evidence missing ${i.missing.join(',')}` : '',
@@ -314,7 +314,9 @@ export function statusScreen(s: Status): string {
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
 const issueLine = (i: IssueSummary) =>
-  [i.id, i.state, i.reason ?? i.outcome, i.source, i.repo, i.title].map(cell).join('\t')
+  [i.id, i.state, i.reason ?? i.outcome, i.source, i.repo, i.title]
+    .map((value) => (typeof value === 'string' ? oneLine(value, 1000) : cell(value)))
+    .join('\t')
 
 /**
  * What an entry's payload says, for a screen: `key=value` with each value cut, so a long free text cannot push the rest off the line. Data,
@@ -334,7 +336,7 @@ const timelineLine = (t: TimelineEntry) =>
     t.at,
     t.source === 'inbox' ? `${t.kind} (${t.result ?? 'not handled yet'})` : t.kind,
     t.from || t.to ? `${t.from ?? '-'}→${t.to ?? '-'}` : '',
-    t.session ?? '',
+    t.session ? oneLine(t.session, 80) : '',
     t.detail ? oneLine(t.detail) : payloadSummary(t.payload),
   ]
     .map((part, i) => (i < 2 ? part : part || '-'))
@@ -345,16 +347,22 @@ export function issueViewScreen(v: IssueView): string {
   return [
     issueLine(v),
     `facts\t${oneLine(v.facts, 400)}`,
+    ...(v.evidenceCut > 0 ? [`... ${v.evidenceCut} earlier evidence entries not shown`] : []),
     ...v.evidence.map((e) =>
-      ['evidence', e.at, e.kind, e.author, `attempt ${e.attempt ?? '-'}`, e.link ?? payloadSummary(e.payload)].join(
-        '\t',
-      ),
+      [
+        'evidence',
+        e.at,
+        oneLine(e.kind, 40),
+        oneLine(e.author, 80),
+        `attempt ${e.attempt ?? '-'}`,
+        e.link ? oneLine(e.link, 300) : payloadSummary(e.payload),
+      ].join('\t'),
     ),
     ...v.decisions.map((d) =>
       [
         'question',
         d.id,
-        d.answeredAt ? `answered by ${d.answeredBy ?? '-'}` : 'open',
+        d.answeredAt ? `answered by ${oneLine(d.answeredBy ?? '-', 40)}` : 'open',
         oneLine(d.question),
         d.answer ? `answer: ${oneLine(d.answer)}` : d.default ? `default ${oneLine(d.default, 60)}` : '',
       ]

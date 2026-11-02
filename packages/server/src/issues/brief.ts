@@ -70,6 +70,8 @@ export interface BriefInput {
   history?: readonly HistoryItem[]
   /** the owner's notes filed while no lead was running, oldest first */
   notes?: readonly string[]
+  /** notes beyond the ones listed */
+  notesMore?: number
 }
 
 /** Longest the facts run in the brief; the rest is one `factory issue show` away. */
@@ -118,13 +120,14 @@ function askSection(issue: BriefIssue): string {
 }
 
 /** Notes the owner filed before this lead existed (`factory issue note`): what a lead running would have been typed. In a fence, so a note cannot pose as a section. */
-function notesSection(notes: readonly string[]): string {
+function notesSection(notes: readonly string[], more: number, issueId: number): string {
   return [
     '## Notes from the owner',
     '',
     "Filed with `factory issue note` while no lead was running, oldest first. They are the owner's words for this Issue, as the ask is.",
     '',
     fenced(notes.map((note, i) => `${i + 1}. ${note.replace(/\n+/g, ' ')}`).join('\n'), 'text'),
+    ...(more > 0 ? ['', `${more} more not shown: \`factory issue show ${issueId}\` has them.`] : []),
   ].join('\n')
 }
 
@@ -199,7 +202,7 @@ export function buildBrief(input: BriefInput): string {
     `# Issue ${input.issue.id}`,
     askSection(input.issue),
     factsBlock(input.issue),
-    ...(input.notes && input.notes.length > 0 ? [notesSection(input.notes)] : []),
+    ...(input.notes && input.notes.length > 0 ? [notesSection(input.notes, input.notesMore ?? 0, input.issue.id)] : []),
     historySection(input.history ?? []),
     projectSection(input),
   ].join('\n\n')

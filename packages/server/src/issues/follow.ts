@@ -152,6 +152,10 @@ export async function getIssueView(sql: SQL, id: number): Promise<IssueView | un
     WHERE b.issue_id = ${id} AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.key = b.key)
       AND (b.handled_at IS NULL OR b.session IS NULL)
     ORDER BY b.at DESC, b.id DESC LIMIT ${TIMELINE_ENTRIES}`
+  const [waitingCounted]: { n: number }[] = await sql`
+    SELECT count(*)::int AS n FROM factory.issue_inbox b
+    WHERE b.issue_id = ${id} AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.key = b.key)
+      AND (b.handled_at IS NULL OR b.session IS NULL)`
 
   const story: { at: Date; rank: number; id: number; entry: TimelineEntry }[] = [
     ...events.map((e) => ({
@@ -192,9 +196,14 @@ export async function getIssueView(sql: SQL, id: number): Promise<IssueView | un
   story.sort((a, b) => a.at.getTime() - b.at.getTime() || a.rank - b.rank || a.id - b.id)
   const shown = story.slice(-TIMELINE_ENTRIES)
 
+  // The newest ones, oldest first: what a lead proved last is what the gate reads.
   const evidence: (Omit<EvidenceEntry, 'at'> & { at: Date })[] = await sql`
-    SELECT kind, link, payload, attempt, at, author FROM factory.evidence
-    WHERE issue_id = ${id} ORDER BY at, id LIMIT ${EVIDENCE_ENTRIES}`
+    SELECT * FROM (
+      SELECT kind, link, payload, attempt, at, author, id FROM factory.evidence
+      WHERE issue_id = ${id} ORDER BY at DESC, id DESC LIMIT ${EVIDENCE_ENTRIES}) newest
+    ORDER BY at, id`
+  const [evidenceCounted]: { n: number }[] =
+    await sql`SELECT count(*)::int AS n FROM factory.evidence WHERE issue_id = ${id}`
   const decisions: {
     id: string
     question: string
@@ -210,8 +219,16 @@ export async function getIssueView(sql: SQL, id: number): Promise<IssueView | un
   return {
     ...issue,
     timeline: shown.map((s) => s.entry),
-    timelineCut: Math.max(0, (counted?.n ?? 0) - events.length) + Math.max(0, story.length - shown.length),
-    evidence: evidence.map((e) => ({ ...e, at: e.at.toISOString() })),
+    timelineCut: Math.max(0, (counted?.n ?? 0) + (waitingCounted?.n ?? 0) - shown.length),
+    evidence: evidence.map(({ kind, link, payload, attempt, at, author }) => ({
+      kind,
+      link,
+      payload,
+      attempt,
+      at: at.toISOString(),
+      author,
+    })),
+    evidenceCut: Math.max(0, (evidenceCounted?.n ?? 0) - evidence.length),
     decisions: decisions.map((d): DecisionEntry => ({
       id: Number(d.id),
       question: d.question,
