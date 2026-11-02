@@ -16,3 +16,12 @@ You run on the `deep` role (Opus/high): this is what makes an autonomous ship sa
 Tests: a golden test per path (ship refused, ship accepted, hold green, hold red and back, close refused, close accepted, drop, reopen in and past 30 days); the replay test crashes after every effect of the hold and finalize, zero duplicates; a seeded red `make verify` reaches the lead as exactly one note. `packages/server/src/issues/lifecycle.ts` stays under the §4 reversal bound (about 500 lines): past it, stop and report.
 
 **Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`): never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy. End with a report: done / deferred, one line each, and the lifecycle module's line count.
+
+**From Wave 3 (its deferred list, yours to close):**
+- A reopened Issue can start a new lead while the old one runs: finalize closes the old lead before an attempt starts.
+- A `drop` filed while the worktree is being made can still let the lead start: the start checks the Issue's state after the worktree exists.
+- A retry after a failed worktree setup returns the incomplete worktree: a marker file or a check, and a failed setup removes what it made.
+- The brief's ship rules and the `.wtp.yml` check read the local default branch: use the fetched `origin/<default>`, and so does `factory project sync` (a merged manifest read as `defaults` until `git pull`, seen live on two repos).
+- `lifecycle.ts` is about 260 lines after Wave 3's split; §4's reversal bound counts that module.
+
+Your migration is `017_*` (N takes 018): rebase on `origin/master` before you open the PR.

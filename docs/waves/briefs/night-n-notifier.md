@@ -1,6 +1,6 @@
 Branch: night-n-notifier
 Title: feat(notify): the factory reaches the owner through Hermes, the morning digest
-Owned files: `packages/server/src/notify/**` (new), `packages/server/src/tick.ts` and `main.ts` (the wiring only), `packages/server/src/issues/**` (the calls that record a notification only), `packages/server/src/http.ts` (the new routes only), `packages/server/migrations/` (new files only, number from the lead), `packages/contract/src/**`, `packages/cli/**`, `packages/server/test/**`, `AGENTS.md` (pointer lines), `docs/design.md` §11. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `hc-runner.ts`, anything in hermes-agent (no change there is needed; if one is, stop and say which).
+Owned files: `packages/server/src/notify/**` (new), `packages/server/src/tick.ts` and `main.ts` (the wiring only), `packages/server/src/issues/**` (the calls that record a notification only), `packages/server/src/http.ts` (the new routes only), `packages/server/migrations/` (new files only: yours is `018_*`), `packages/contract/src/**`, `packages/cli/**`, `packages/server/test/**`, `AGENTS.md` (pointer lines), `docs/design.md` §11. Never: `docs/waves/PLAN.md`, `docs/program.md`, `docs/evidence/**`, `hc-runner.ts`, anything in hermes-agent (no change there is needed; if one is, stop and say which).
 
 # Brief: N, the notifier (owner decision 4, 2026-11-01)
 
@@ -20,3 +20,5 @@ Read `AGENTS.md`, `docs/waves/night-2026-11-01.md` (decision 4), `docs/design.md
 Tests through the port's fake: each kind once, a replay records nothing, a failing send retries and fails, the digest at the boundary of the day and of the server being down, a crash between claim and record.
 
 **Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`): never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy. End with a report: done / deferred, one line each.
+
+**From Wave 3:** the brief tells a lead that an answer arrives as a note, but no verb lets the owner answer: the `answer` event exists with no way in. `factory issue answer <id> <text> [--decision <id>]` on the token API and the socket is yours, and it is what the `ask` line names. `factory status`'s attention lines from Wave 3 (`issues/attention.ts`) are the source for `failed`.
