@@ -591,14 +591,22 @@ describe('the fingerprint and NOTIFY', () => {
       ],
       { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
     )
-    void proc.stdin.write('LISTEN fleet;\nSELECT pg_sleep(2.5);\nSELECT 1;\n')
+    void proc.stdin.write('LISTEN fleet;\nSELECT pg_sleep(6);\nSELECT 1;\n')
     void proc.stdin.flush()
-    await Bun.sleep(700)
+    // psql is listening once it sits in its sleep
+    for (let i = 0; i < 100; i++) {
+      const [sleeping] = await db.sql`SELECT 1 FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(6)%'`
+      if (sleeping) break
+      await Bun.sleep(50)
+    }
     await factoryRows()
     const first = await builder.refreshNow()
     clock.advance(1_000)
     await builder.refreshNow() // unchanged
     void proc.stdin.end()
+    await db.sql`SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE query = 'SELECT pg_sleep(6);' AND pid <> pg_backend_pid()`.catch(
+      () => {},
+    )
     const [out, err] = await Promise.all([proc.stdout.text(), proc.stderr.text()])
     await proc.exited
     const text = `${out}${err}`
