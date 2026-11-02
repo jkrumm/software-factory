@@ -203,10 +203,21 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
 
   const asks: FleetAsk[] = []
   const ask = (
-    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'tier' | 'folded'> & { plan?: string | null },
+    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'tier' | 'folded' | 'occurrence'> & {
+      plan?: string | null
+    },
   ) => {
     const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
-    asks.push({ short: null, tier: 'yours', suggestion: null, actions: [], folded: [], ...a, plan: a.plan ?? planOf })
+    asks.push({
+      short: null,
+      tier: 'yours',
+      suggestion: null,
+      actions: [],
+      folded: [],
+      occurrence: 1,
+      ...a,
+      plan: a.plan ?? planOf,
+    })
   }
 
   // The time of an ask that has none of its own: the first build that saw it (kept by the builder), never this build's.

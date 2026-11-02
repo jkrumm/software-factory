@@ -10,6 +10,7 @@ import { GitReader } from './git.ts'
 import { Places } from './place.ts'
 import { type Probes, ProbeRunner } from './probes.ts'
 import { Triage } from './triage.ts'
+import { readSeen } from './triage-store.ts'
 import {
   assemble,
   type DecisionRow,
@@ -30,7 +31,7 @@ export const FLEET_INTERVAL_MS = 30_000
 const CONCURRENCY = 8
 const MAX_DECISIONS = 500
 /** the asks whose time is the first build that saw them (the others carry their own) */
-const TIMED_BY_BUILDER = new Set(['hc', 'wait', 'factory', 'handoff'])
+const TIMED_BY_BUILDER = new Set<string>(['hc', 'wait', 'factory', 'handoff'])
 const PLAN = 'docs/waves/PLAN.md'
 
 export interface FleetDeps {
@@ -170,6 +171,10 @@ export class FleetBuilder {
         const stored = await readSnapshot(sql)
         this.seeded = true
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
+        // The table has every ask the builds listed, also the ones the triage folded or the owner snoozed (the snapshot has not): a
+        // restart must not make an old ask look new, or a fold would be decided the other way round.
+        for (const [id, at] of await readSeen(sql))
+          if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
         for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
           if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
         }
@@ -303,7 +308,14 @@ export class FleetBuilder {
     let model: Omit<Fleet, 'fingerprint'> = digested
     let timed = digested.asks
     try {
-      const triaged = await this.triage.apply({ model: digested, now, queue, firstSeen: this.firstSeen, roots })
+      const triaged = await this.triage.apply({
+        model: digested,
+        now,
+        queue,
+        firstSeen: this.firstSeen,
+        roots,
+        complete: !errors.some((e) => /^(hc|database|human queue|snapshot)/.test(e)),
+      })
       model = triaged.model
       timed = triaged.timed
     } catch (error) {

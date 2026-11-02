@@ -137,6 +137,11 @@ export const FleetAsk = z.strictObject({
   actions: z.array(z.strictObject({ label: z.string(), intent: ActIntent })),
   /** the ids of older asks the triage folded under this one (`fleet_triage_log`, undoable) */
   folded: z.array(z.string()).default([]),
+  /**
+   * Which time the ask has been raised: an ask that leaves its source for a build ends its occurrence, and a return is a new one (1 again
+   * is never reused). What the owner did with an ask (a close, a snooze) is of one occurrence.
+   */
+  occurrence: z.number().int().positive().default(1),
 })
 export type FleetAsk = z.infer<typeof FleetAsk>
 

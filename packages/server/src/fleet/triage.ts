@@ -6,7 +6,7 @@ import { getSpawn, type SpawnView } from '../spawns.ts'
 import { STALE_ASK_MS } from './model.ts'
 import { SAFE_PATH, type Probes } from './probes.ts'
 import type { QueueRequest } from './sources.ts'
-import { insertLog, type LogRow, type NewLogRow, readActs, readLog } from './triage-store.ts'
+import { insertLog, type LogRow, type NewLogRow, occKey, readActs, readLog, trackSeen } from './triage-store.ts'
 
 /**
  * The triage (docs/design.md §11 "The fleet view", Wave 3): a tier, a suggestion with evidence and the offered actions for every ask,
@@ -91,15 +91,16 @@ function machineOf(text: string, machines: readonly string[]): string | undefine
 /**
  * The paths a request names, with what would make each one done, for a command made only of `rm`/`rmdir`/`trash`, `mkdir`/`touch` and
  * harmless words. Anything else in it (an install, a pull, a pipe, a glob, a variable, a relative path) means the request does more than
- * a probe can see: no targets. A request with no command is read for `/Applications/<name>.app` or `<Name>.app` and a removal or
- * install word. The machine is the one the text names, else the queue's own (`queueMachine`, the machine its commands run on).
+ * a probe can see: no targets. A request with no command has none either: what its text says is no verdict (negations, conditions,
+ * install against remove). The machine is the one the text names, else the queue's own (`queueMachine`, the machine its commands run on).
  */
 export function targetsOf(
   request: { text: string; cmd?: string | null },
   machines: readonly string[],
   queueMachine: string | undefined,
 ): Target[] {
-  const named = `${request.text}\n${request.cmd ?? ''}`
+  if (!request.cmd) return []
+  const named = `${request.text}\n${request.cmd}`
   const machine = machineOf(named, machines)
   // A machine the text names and nothing is configured for cannot be probed; the queue's machine is not a stand-in for it.
   if (!machine && (MACHINE_WORDS.test(named) || LEADING_NAME.test(request.text))) return []
@@ -112,7 +113,7 @@ export function targetsOf(
     return true
   }
 
-  if (request.cmd) {
+  {
     // Only `&&`, `||`, `;` and newlines join commands; a pipe, a redirect, a substitution, a quote, a glob or a variable means more than a probe sees.
     if (/[|<>$`(){}&\\"'*?[\]!#]/.test(request.cmd.replace(/&&|\|\||;/g, ' '))) return []
     for (const segment of request.cmd.split(/&&|\|\||;|\n/)) {
@@ -130,14 +131,8 @@ export function targetsOf(
     return targets.size > 0 && targets.size <= MAX_TARGETS ? [...targets.values()] : []
   }
 
-  const removal = /\b(?:remove|uninstall|delete|trash)\b/i.test(request.text)
-  const creation = !removal && /\binstall\b/i.test(request.text)
-  if (!removal && !creation) return []
-  const apps = new Set<string>()
-  for (const m of request.text.matchAll(/\/Applications\/([\w .-]+?)\.app\b/g)) if (m[1]) apps.add(m[1])
-  for (const m of request.text.matchAll(/(?<![\w/.-])([A-Za-z][\w-]*)\.app\b/g)) if (m[1]) apps.add(m[1])
-  for (const name of apps) if (!add(`/Applications/${name}.app`, removal ? 'absent' : 'present')) return []
-  return targets.size > 0 && targets.size <= MAX_TARGETS ? [...targets.values()] : []
+  // Free text is not read for "done": an install or a removal in prose has negations, conditions and other things in it. No command, no verdict.
+  return []
 }
 
 /** `Deploy gate [<repo>] deploy of origin/main <sha> FAILED`: the repo and the commit the gate was about. */
@@ -152,12 +147,16 @@ export function deployGateOf(text: string): { repo: string; sha: string } | unde
 const days = (ms: number) => Math.floor(ms / DAY_MS)
 
 /** `factory:<subject>:<hash>` → the subject part; a line with no subject of its own (`line`) supersedes nothing. */
-function supersessionKey(ask: FleetAsk): string | undefined {
+function supersessionKey(ask: FleetAsk, cmds: ReadonlyMap<string, string | null>): string | undefined {
   if (ask.source === 'factory') {
     const subject = ask.id.slice(0, ask.id.lastIndexOf(':'))
     return subject === 'factory:line' ? undefined : subject
   }
-  if (ask.source === 'queue') return `queue\0${ask.text.toLowerCase().replace(/\s+/g, ' ').trim()}`
+  // Two requests are the same only when what they say and what they would run are both the same.
+  if (ask.source === 'queue') {
+    const squash = (t: string) => t.replace(/\s+/g, ' ').trim()
+    return `queue\0${squash(ask.text).toLowerCase()}\0${squash(cmds.get(ask.id) ?? '')}`
+  }
   return undefined
 }
 
@@ -165,7 +164,11 @@ function supersessionKey(ask: FleetAsk): string | undefined {
  * What the triage may do without asking: a stale plan marked, an ask folded under the newer one about the same subject, an expired
  * note dismissed. Each is a row (what, why, evidence) the owner can undo; none runs a command or denies anything.
  */
-export function automaticSteps(model: Model, now: Date): NewLogRow[] {
+export function automaticSteps(
+  model: Model,
+  now: Date,
+  cmds: ReadonlyMap<string, string | null> = new Map(),
+): NewLogRow[] {
   const rows: NewLogRow[] = []
   for (const repo of model.repos) {
     for (const plan of [repo.plan, ...repo.morePlans]) {
@@ -185,7 +188,7 @@ export function automaticSteps(model: Model, now: Date): NewLogRow[] {
 
   const groups = new Map<string, FleetAsk[]>()
   for (const ask of model.asks) {
-    const key = supersessionKey(ask)
+    const key = supersessionKey(ask, cmds)
     if (key) groups.set(key, [...(groups.get(key) ?? []), ask])
   }
   for (const group of groups.values()) {
@@ -316,6 +319,8 @@ export async function gatherFindings(input: FindingsInput): Promise<Map<string, 
     if (budget <= 0 || late()) break
     const request = input.queue.get(ask.id.slice('queue:'.length))
     if (!request) continue
+    // A business-class request is the owner's whatever a probe finds: nothing is asked of the world for it.
+    if (businessClass(`${ask.text}\n${request.cmd ?? ''}`)) continue
     const found: Finding = {}
 
     const gate = deployGateOf(request.text)
@@ -393,6 +398,8 @@ export function decide({ ask, request, finding, repos, now }: DecideInput): Tria
   switch (ask.source) {
     case 'queue': {
       const deny = action('deny')
+      // The business classes first: whatever a probe says, such a request is the owner's, with only later and deny.
+      if (businessClass(text)) return yours('deny')
       if (finding?.satisfied) {
         return {
           tier: 'one_click',
@@ -417,7 +424,6 @@ export function decide({ ask, request, finding, repos, now }: DecideInput): Tria
           actions: [deny, later],
         }
       }
-      if (businessClass(text)) return yours('deny')
       if (age >= OLD_REQUEST_MS) {
         return {
           tier: 'one_click',
@@ -501,6 +507,7 @@ function handoffAsks(
       suggestion: null,
       actions: [],
       folded: [],
+      occurrence: 1,
     })
   }
   return asks
@@ -517,30 +524,40 @@ export interface TriageDeps {
   queueMachine?: string
 }
 
+const recount = (model: Model, asks: FleetAsk[], now: Date): Model => ({
+  ...model,
+  asks,
+  summary: {
+    ...model.summary,
+    asks: asks.length,
+    staleAsks: asks.filter((a) => now.getTime() - Date.parse(a.at) >= STALE_ASK_MS).length,
+  },
+})
+
 export class Triage {
   private pass = 0
 
   constructor(private readonly deps: TriageDeps) {}
 
-  /** Only what the owner closed or snoozed leaves the list: what the build falls back to when the rest of the triage fails. */
+  /** Only what the owner closed or snoozed leaves the list: what the build falls back to when the rest of the triage fails (no occurrences known: any occurrence counts). */
   async hide(model: Model, now: Date): Promise<Model> {
-    const acts = await readActs(this.deps.sql, now)
-    const asks = model.asks.filter((a) => !acts.closed.has(a.id) && !acts.later.has(a.id))
-    return {
-      ...model,
-      asks,
-      summary: {
-        ...model.summary,
-        asks: asks.length,
-        staleAsks: asks.filter((a) => now.getTime() - Date.parse(a.at) >= STALE_ASK_MS).length,
-      },
-    }
+    const acts = await readActs(
+      this.deps.sql,
+      now,
+      model.asks.map((a) => a.id),
+    )
+    return recount(
+      model,
+      model.asks.filter((a) => !acts.closedAny(a.id) && !acts.laterAny(a.id)),
+      now,
+    )
   }
 
   /**
-   * The model with the triage on it. Reads the owner's acts and the log, writes the new automatic decisions (short statements, no
-   * port inside), probes the stale queue requests, then decides every ask. `timed` is every ask before anything was hidden: the
-   * builder keeps the first-seen times of those, so an ask that comes back has the time it always had.
+   * The model with the triage on it. Reads the owner's acts once and the log, notes which asks the sources listed (an ask that left and
+   * came back is a new occurrence), writes the new automatic decisions in one statement (no port inside), probes the stale queue
+   * requests, then decides every ask. `timed` is every ask before anything was hidden: the builder keeps the first-seen times of those,
+   * so an ask that comes back has the time it always had. `complete`: every source answered, so an ask that is not listed has left.
    */
   async apply(input: {
     model: Model
@@ -548,32 +565,40 @@ export class Triage {
     queue: readonly QueueRequest[]
     firstSeen: ReadonlyMap<string, string>
     roots: readonly string[]
+    complete: boolean
   }): Promise<{ model: Model; timed: FleetAsk[] }> {
     const { sql, probes } = this.deps
     const { now } = input
-    const acts = await readActs(sql, now)
-    // A hand-off's worker is no longer in `factory status` once it has started: the spawn is read itself, the ended ones become asks.
+    const acts = await readActs(
+      sql,
+      now,
+      input.model.asks.map((a) => a.id),
+    )
+    // A hand-off's worker is no longer in `factory status` once it has started: the spawn is read itself (only the unresolved hand-offs
+    // of the last day), the ended ones become asks.
     const handoffs: { ask: string; spawn: SpawnView }[] = []
     for (const h of acts.handoffs) {
-      if (acts.closed.has(`handoff:${h.spawn}`)) continue
+      if (acts.closedAny(`handoff:${h.spawn}`)) continue
       const spawn = await getSpawn(sql, h.spawn, now)
       if (spawn) handoffs.push({ ask: h.ask, spawn })
     }
-    const withHandoffs: Model = {
-      ...input.model,
-      asks: [...input.model.asks, ...handoffAsks(handoffs, input.firstSeen, now)],
-    }
-    const timed = withHandoffs.asks
+    const listed = [...input.model.asks, ...handoffAsks(handoffs, input.firstSeen, now)]
+    const occurrences = await trackSeen(sql, listed, now, input.complete)
+    const timed = listed.map((a) => ({ ...a, occurrence: occurrences.get(a.id) ?? 1 }))
+    const closed = (a: FleetAsk) =>
+      acts.closed.has(occKey(a.id, a.occurrence)) || acts.later.has(occKey(a.id, a.occurrence))
     // What the owner closed or snoozed is not listed; the automatic steps are decided on what is.
-    const open: Model = {
-      ...withHandoffs,
-      asks: withHandoffs.asks.filter((a) => !acts.closed.has(a.id) && !acts.later.has(a.id)),
-    }
-
-    await insertLog(sql, automaticSteps(open, now), now)
-    const stepped = applyAutomatic(open, await readLog(sql))
+    const open = recount(
+      input.model,
+      timed.filter((a) => !closed(a)),
+      now,
+    )
 
     const requests = new Map(input.queue.map((r) => [r.id, r]))
+    const cmds = new Map(input.queue.map((r) => [`queue:${r.id}`, r.cmd ?? null]))
+    await insertLog(sql, automaticSteps(open, now, cmds), now)
+    const stepped = applyAutomatic(open, await readLog(sql))
+
     const findings = await gatherFindings({
       asks: stepped.asks,
       queue: requests,
@@ -594,8 +619,8 @@ export class Triage {
         repos: stepped.repos,
         now,
       })
-      // An action the owner already took on this ask is not offered again (archiving a plan once).
-      const taken = acts.acted.get(ask.id)
+      // An action the owner already took on this occurrence is not offered again (archiving a plan once).
+      const taken = acts.acted.get(occKey(ask.id, ask.occurrence))
       const actions = decided.actions.filter((a) => !(taken?.has(a.intent) && a.intent !== 'later'))
       const verb = decided.suggestion?.verb
       const suggestion = verb && actions.some((a) => a.intent === verb) ? decided.suggestion : null
@@ -603,17 +628,6 @@ export class Triage {
       const tier = decided.tier === 'one_click' && !suggestion ? 'yours' : decided.tier
       return { ...ask, tier, suggestion, actions }
     })
-    return {
-      model: {
-        ...stepped,
-        asks,
-        summary: {
-          ...stepped.summary,
-          asks: asks.length,
-          staleAsks: asks.filter((a) => now.getTime() - Date.parse(a.at) >= STALE_ASK_MS).length,
-        },
-      },
-      timed,
-    }
+    return { model: recount(stepped, asks, now), timed }
   }
 }
