@@ -141,7 +141,7 @@ function sessionOrder(a: FleetSession, b: FleetSession): number {
  * The read model from what was read: pure, so the same sources always give the same model. Plans are parsed here, their state
  * decided against the sessions and the clock. `fingerprint` is left for `fingerprintOf`.
  */
-export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
+export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest'> {
   const { now, status } = input
 
   // A session's plan, and a plan's live sessions.
@@ -251,6 +251,8 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   // The factory's own attention lines. Open decisions have their own asks below, and a blocked session its hc ask.
   for (const line of status.attention) {
     if (/^Issue \d+ asks: /.test(line)) continue
+    // The digest's own counter (`factory status` shows it): about the model's text, not something waiting on the owner.
+    if (line.startsWith('digest: ')) continue
     const subject = lineSubject(line)
     if (subject.session && /^blocked /.test(line) && hcBlocked.has(subject.session)) continue
     const id = `factory:${lineKey(line)}`
@@ -311,8 +313,8 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint'> {
   }
 }
 
-/** Keys that move with the clock or with every tool call: a model that differs only there has not changed. */
-const VOLATILE = new Set(['builtAt', 'lastActivityAt', 'readAt', 'sampledAt'])
+/** Keys that move with the clock or with every tool call, and the digest's own spend: a model that differs only there has not changed. */
+const VOLATILE = new Set(['builtAt', 'lastActivityAt', 'readAt', 'sampledAt', 'digest'])
 
 /** sha-256 (16 hex) of the model without its volatile fields; what `NOTIFY fleet` carries. */
 export function fingerprintOf(model: Omit<Fleet, 'fingerprint'>): string {

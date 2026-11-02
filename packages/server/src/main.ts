@@ -4,6 +4,7 @@ import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
+import { Digest } from './fleet/digest.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
@@ -78,6 +79,10 @@ const fleet = new FleetBuilder({
   home: process.env.HOME ?? '',
   hc: new HcTerminals(hcClient),
   queue: new AskHumanQueue(config.askHumanBin),
+  digest:
+    config.fleetDigestEveryMs === null
+      ? undefined
+      : new Digest({ sql, now: () => clock.now(), bin: config.agwBin, everyMs: config.fleetDigestEveryMs }),
   alertLeads: config.alertLeads,
 })
 const runner = new HcRunner({

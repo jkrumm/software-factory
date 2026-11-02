@@ -93,6 +93,7 @@ describe('config (finding 5)', () => {
       hermesBin: '/home/me/.local/bin/hermes',
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
+      fleetDigestEveryMs: 300_000,
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -133,6 +134,14 @@ describe('config (finding 5)', () => {
     for (const bad of ['7:30', '24:00', '07:60', 'morning', '12:00', '18:30'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_AT: bad })).toThrow('FACTORY_DIGEST_AT')
     expect(() => loadConfig({ ...env, FACTORY_DIGEST_TZ: 'Mars/Olympus' })).toThrow('FACTORY_DIGEST_TZ')
+  })
+
+  test('FACTORY_DIGEST_EVERY: five minutes, a duration of 30 s to 24 h, or off; a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '90s' }).fleetDigestEveryMs).toBe(90_000)
+    expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '1h' }).fleetDigestEveryMs).toBe(3_600_000)
+    expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: 'off' }).fleetDigestEveryMs).toBeNull()
+    for (const bad of ['5', '10s', '25h', 'often', '5 m'])
+      expect(() => loadConfig({ ...env, FACTORY_DIGEST_EVERY: bad })).toThrow('FACTORY_DIGEST_EVERY')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {

@@ -1,6 +1,7 @@
 import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
+import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
 import { notificationAttention } from './notify/outbox.ts'
@@ -47,6 +48,12 @@ function attention(
   return lines
 }
 
+/** The fleet digest's counter: one line when a pass failed in the last day (the model keeps what it had; this says it is not being refreshed). */
+async function digestAttention(sql: SQL, now: Date): Promise<string[]> {
+  const failed = await digestFailures(sql, now)
+  return failed > 0 ? [`digest: ${failed} failed ${failed === 1 ? 'pass' : 'passes'} in the last 24 h`] : []
+}
+
 /** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, the open Issues, pending notes. */
 export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: boolean } = {}): Promise<Status> {
   const loaded = (await loadSessions(sql, now)).filter((s) => s.view.state !== 'dead')
@@ -68,6 +75,7 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
       ...attention(loaded, notes, spawns, now),
       ...(await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })),
       ...(await notificationAttention(sql, now)),
+      ...(await digestAttention(sql, now)),
     ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
