@@ -343,7 +343,7 @@ describe('the lead’s verbs', () => {
     expect(IssueVerbAck.parse(await response.json())).toEqual({
       issue: id,
       verb: 'phase',
-      key: `${id}:phase:c1`,
+      key: `${id}:1:phase:c1`,
       duplicate: false,
       state: 'working',
     })
@@ -358,7 +358,7 @@ describe('the lead’s verbs', () => {
     const second = await post(id, 'phase', { id: 'again', phase: 'plan' })
     expect(second.status).toBe(200)
     expect(await second.json()).toMatchObject({ duplicate: true })
-    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${`${id}:phase:again`}`).toHaveLength(1)
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${`${id}:1:phase:again`}`).toHaveLength(1)
   })
 
   test('wait parks until a time and wakes the lead then', async () => {
@@ -417,7 +417,7 @@ describe('the lead’s verbs', () => {
     expect((await issue(id)).wake_at.toISOString()).toBe(expiresAt)
     const [decision] = await db.sql`SELECT key, question, options, default_option, answered_at FROM factory.decisions`
     expect(decision).toMatchObject({
-      key: `${id}:ask:q1`,
+      key: `${id}:1:ask:q1`,
       question: 'Which port?',
       options: ['80', '8080'],
       default_option: '8080',
@@ -496,6 +496,18 @@ describe('the lead’s verbs', () => {
     )
   })
 
+  test('the attempt is in the key, and only the Issue’s current lead is heard', async () => {
+    const { id, key } = await lead()
+    expect((await post(id, 'phase', { id: 'same', phase: 'a', session: key })).status).toBe(201)
+    // A second attempt: the earlier lead is still open, and the same call id is a new event.
+    await db.sql`UPDATE factory.issues SET attempt = 2 WHERE id = ${id}`
+    const stale = await post(id, 'phase', { id: 'same', phase: 'b', session: key })
+    expect(stale.status).toBe(409)
+    const second = await post(id, 'phase', { id: 'same', phase: 'b' })
+    expect(second.status).toBe(201)
+    expect(await second.json()).toMatchObject({ key: `${id}:2:phase:same`, duplicate: false })
+  })
+
   test('a lead reports through the socket with no token', async () => {
     const dir = mkdtempSync('/tmp/factory-lead-sock-')
     const socketPath = join(dir, 'h.sock')
@@ -517,7 +529,7 @@ describe('the lead’s verbs', () => {
         body: JSON.stringify({ reason: 'stuck', session: key, id: 'sock' }),
       })
       expect(response.status).toBe(201)
-      expect(await response.json()).toMatchObject({ key: `${id}:block:sock` })
+      expect(await response.json()).toMatchObject({ key: `${id}:1:block:sock` })
     } finally {
       await hooks.stop(true)
       rmSync(dir, { recursive: true, force: true })
@@ -758,7 +770,7 @@ describe('factory issue <verb>', () => {
     for (const args of calls) {
       const result = await factory(env, 'issue', ...args, '--format', 'plain')
       expect(result.code).toBe(0)
-      expect(result.stdout).toBe(`${id}\t${args[0]}\tfiled\t${id}:${args[0]}:${args.at(-1)}\tworking\n`)
+      expect(result.stdout).toBe(`${id}\t${args[0]}\tfiled\t${id}:1:${args[0]}:${args.at(-1)}\tworking\n`)
     }
     const rows =
       await db.sql`SELECT kind, session, payload FROM factory.issue_inbox WHERE key LIKE ${`${id}:%`} AND session = ${key} ORDER BY id`
