@@ -98,7 +98,7 @@ const PROMPT = {
 }
 const STATUS = {
   now: '2026-10-30T12:05:00.000Z',
-  attention: ['blocked sess-2 for 3 min: Dangerous rm'],
+  attention: ['blocked sess-2 for 3 min: Dangerous rm', 'Issue 7 asks: a\u202eb\u200bc'],
   sessions: [{ ...SESSION, id: 'sess-2', state: 'blocked', role: 'wave', account: 'me' }, SESSION],
   queue: { effective: 'pace', spawns: [{ ...SPAWNS[1], hold: 'pace' }] },
   accounts: [QUOTA],
@@ -573,7 +573,9 @@ describe('factory status', () => {
   test('json is the contract body', async () => {
     const r = await factory(['status'])
     expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
-    expect(JSON.parse(r.stdout)).toMatchObject({ attention: ['blocked sess-2 for 3 min: Dangerous rm'] })
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      attention: ['blocked sess-2 for 3 min: Dangerous rm', 'Issue 7 asks: a\u202eb\u200bc'],
+    })
   })
 
   test('plain is one screen: attention, sessions by state, the queue with its holds, accounts, notes', async () => {
@@ -589,6 +591,10 @@ describe('factory status', () => {
       'NOTES',
     ])
     expect(lines[1]).toBe('  blocked sess-2 for 3 min: Dangerous rm')
+    // A lead's question is text from elsewhere: nothing in it reorders the line.
+    expect(lines[2]).toBe('  Issue 7 asks: a b c')
+    // oxlint-disable-next-line no-control-regex -- exactly what must be absent
+    expect(r.stdout).not.toMatch(/[\u202a-\u202e\u200b-\u200f]/)
     expect(lines).toContain(
       '  #7\twaiting\trepo\tlead-7-1\tphase build\twaiting decision\tlooks again 2026-10-31T00:00:00.000Z\tevidence missing service,ui\t1 open question\tthe forecast is wrong',
     )
