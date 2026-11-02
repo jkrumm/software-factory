@@ -183,7 +183,7 @@ export type IssueVerbAck = z.infer<typeof IssueVerbAck>
  * `ISSUE_VERBS`. `decision` names the question it is for; without it the Issue's open question is answered.
  */
 export const IssueAnswerBody = z.strictObject({
-  ...common,
+  id: CallId.optional(),
   answer: Words(2000),
   decision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 })

@@ -337,17 +337,16 @@ const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>)
 }
 
 /**
- * `POST /issues/:id/answer`, on the port and on the socket: the owner's answer to an open question. One inbox row keyed
- * `<issue>:answer:<call id>`; the same call again is 200 `duplicate`, the first 201. The token API is the owner; on the socket the
- * caller is a pane, and `who` says so, with its session when it names one.
+ * `POST /issues/:id/answer`, on the token API only: the owner's answer to an open question. One inbox row keyed
+ * `<issue>:answer:<call id>`; the same call again is 200 `duplicate`, the first 201. It is not on the socket, because a pane
+ * (a lead among them) has no token and must not be able to answer its own question.
  */
 const issueAnswerHandler =
-  (sql: SQL, clock: Clock, options: { viaSocket: boolean }) =>
+  (sql: SQL, clock: Clock) =>
   async (req: Bun.BunRequest<'/issues/:id/answer'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     const body = await parseBody(req, IssueAnswerBody)
-    const who = !options.viaSocket ? 'owner' : body.session ? `session ${body.session}` : 'socket'
-    const filed = await fileAnswer(sql, { issueId, body, who, now: clock.now() })
+    const filed = await fileAnswer(sql, { issueId, body, now: clock.now() })
     if (!filed.ok) {
       return filed.problem === 'unknown_issue'
         ? json({ error: 'unknown issue' }, 404)
@@ -391,6 +390,8 @@ const issueVerbHandler =
   (sql: SQL, clock: Clock, options: { requireSession: boolean }) =>
   async (req: Bun.BunRequest<'/issues/:id/:verb'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
+    // The owner's `answer` is no verb of a lead: the token API serves it on its own route, and here it is no route at all.
+    if (req.params.verb === 'answer') return json({ error: 'not found' }, 404)
     const verb = parseParam(IssueVerb, req.params.verb)
     const body = await parseBody(req, IssueVerbBody[verb])
     const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now(), ...options })
@@ -529,7 +530,7 @@ export function routes({
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
-    '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock, { viaSocket: false })) },
+    '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock)) },
     '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, { requireSession: false })) },
     '/notifications': { GET: route(notificationListHandler(sql)) },
     '/notifications/test': { POST: route(notificationTestHandler(sql, clock, notifier, notifyTarget)) },
@@ -606,7 +607,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), a lead's verbs (`POST /issues/:id/:verb`), the owner's answer (`POST /issues/:id/answer`), the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`), a lead's verbs (`POST /issues/:id/:verb`), the project reads (`GET /projects[/:name]`) and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -643,7 +644,6 @@ export function serveHooks(deps: {
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
-      '/issues/:id/answer': { POST: viaSocket(issueAnswerHandler(deps.sql, deps.clock, { viaSocket: true })) },
       '/issues/:id/:verb': { POST: viaSocket(issueVerbHandler(deps.sql, deps.clock, { requireSession: true })) },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
