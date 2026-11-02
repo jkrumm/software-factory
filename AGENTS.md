@@ -73,7 +73,7 @@ state, roles, process/health/contract/schema/API.
   (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), Issues (`issues/`: `lifecycle.ts` the one writer, `inbox.ts`, `worker.ts`, `effects.ts`,
-  `read.ts`; classify, the lead, its brief, worktree, verbs and send-back: `classify.ts`, `admission.ts`, `lead.ts`, `brief.ts`, `worktree.ts`, `verbs.ts`, `sendback.ts`), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.
+  `read.ts`; classify, the lead, its brief, worktree, verbs and send-back: `classify.ts`, `admission.ts`, `lead.ts`, `leadtree.ts`, `names.ts`, `brief.ts`, `worktree.ts`, `verbs.ts`, `sendback.ts`), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.
 - `packages/contract` — the zod schemas of every response, imported by the server and the CLI, the Issues' (`issues.ts`), and the
   role table's schema and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
 - `project.yaml` — this repo's manifest (`docs/design.md` §9); the schema is `packages/contract/src/projects.ts`.

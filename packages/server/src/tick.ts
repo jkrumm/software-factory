@@ -7,6 +7,7 @@ import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { Classification } from './issues/classify.ts'
+import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
@@ -41,6 +42,8 @@ export interface TickDeps {
   issuePorts?: EffectPorts
   /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
   classification?: Classification
+  /** makes the leads' worktrees off the tick; without it a lead is never started */
+  leadWorktrees?: WorktreeMaker
   /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead (decision 3: off until Wave 4 is live) */
   alertLeads?: boolean
   /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
@@ -353,6 +356,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
         now,
         ports: deps.issuePorts ?? {},
         classification: deps.classification,
+        worktrees: deps.leadWorktrees,
         alertLeads: deps.alertLeads ?? false,
       })),
     )

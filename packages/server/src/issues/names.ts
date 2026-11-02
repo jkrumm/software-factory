@@ -1,0 +1,5 @@
+/** A lead's spawn, pane and session: one per attempt. */
+export const leadKey = (issueId: number, attempt: number): string => `lead-${issueId}-${attempt}`
+export const leadBranch = (issueId: number, attempt: number): string => `factory/${issueId}-${attempt}`
+/** The first prompt of a lead, recorded under the id every prompt of the Issue's lead has. */
+export const briefPromptId = (issueId: number, attempt: number): string => `issue:${issueId}:brief:${attempt}`

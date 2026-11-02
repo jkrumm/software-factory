@@ -640,13 +640,15 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   Held back, and still `queued`: `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, and an `alert`
   while `FACTORY_ALERT_LEADS` is unset (decision 3, until Wave 4 is live; it is left out of the reading, so it does not stand in front of a
   request); `factory status` says which. Requests are not asked.
-- **Attach or start.** `start_lead` makes the worktree `factory/<issue>-<attempt>` of the repo the way `rd fan` does (`issues/worktree.ts`: fetch
-  origin, branch from the default branch, `wtp` where the repo has `.wtp.yml`, outside any transaction, each step under a timeout; the same
-  branch answers its worktree again) and creates the spawn: role `lead`, tier and effort from Classify, key and pane
-  `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
+- **Attach or start.** `start_lead` asks for the worktree `factory/<issue>-<attempt>` of the repo, made the way `rd fan` does (`issues/worktree.ts`:
+  fetch origin, branch from the default branch, `wtp` where the repo has `.wtp.yml`; each step under a timeout; the same branch answers its
+  worktree again) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
+  minutes: the row in `lead_worktrees` is written first (`pending`), at most two are made at once and one at a time per Issue, a failed try
+  backs off (30 s doubling to 5 min) until the retry budget, counted from the first try, is spent (`failed`). The effect waits (`Waiting`, no error) until the
+  worktree is `made`, and a `failed` one parks the Issue as `lead_gone` with the reason. Then it creates the spawn: role `lead`, tier and effort from Classify,
+  key and pane `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
   spawn's `issue_id` goes on its session, and on the lead's session only: a wall parks the Issue from any session with an `issue_id`, so a
-  worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) in the spawn's own transaction, so a create that fails leaves none, and never typed a second time. A GitHub comment carries a marker, a card a key. A lead that cannot be started (no worktree) leaves
-  its effect open and the reason in `factory status`; the effect is tried every pass.
+  worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) in the spawn's own transaction, so a create that fails leaves none, and never typed a second time. A GitHub comment carries a marker, a card a key. A worktree that cannot be made shows in `factory status` with its try and its error.
 - **The lead's verbs.** `factory issue phase|wait|ship|close|block|ask|drop <id>` is one inbox row each, key `<issue>:<attempt>:<verb>:<call id>`, on the
   token API and on the socket (a lead has no token). `FACTORY_SESSION` says which lead: a session may only report on the Issue it works, and only its current lead is heard (409; an earlier attempt's lead, still open, is not). A pane that names another session's id stays inside the trust boundary SF11 accepts: the socket's mode 0600 is the credential, as for `session note` and `wait`. On the socket, which has no token, a verb must name one. The `lead-<issue>-<attempt>` spawn keys are reserved (`POST /spawns` refuses them), and `start_lead` attaches only to a spawn of its own Issue.
   The row is handled by the next tick; `ship` and `close` are recorded with no evidence check yet (Wave 4 puts it in their `refuse`).
