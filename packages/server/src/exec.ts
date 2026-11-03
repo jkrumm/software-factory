@@ -1,6 +1,8 @@
 export interface ProcessResult {
   exitCode: number
   stdout: string
+  /** only with `control.stderr`: what the process said on stderr (empty when it was killed) */
+  stderr?: string
 }
 
 /** Stands in for an exit code when the process had to be killed: a transient failure like any other non-zero exit. */
@@ -57,15 +59,15 @@ export async function runProcess(
   timeoutMs: number,
   env: Record<string, string | undefined> = childEnv(),
   input?: string,
-  control: { group?: boolean; signal?: AbortSignal } = {},
+  control: { group?: boolean; signal?: AbortSignal; stderr?: boolean } = {},
 ): Promise<ProcessResult> {
   if (control.signal?.aborted) return { exitCode: EXIT_STOPPED, stdout: '' }
-  let proc: Bun.Subprocess<Bun.SpawnOptions.Writable, 'pipe', 'ignore'>
+  let proc: Bun.Subprocess<Bun.SpawnOptions.Writable, 'pipe', 'pipe' | 'ignore'>
   try {
     proc = Bun.spawn(cmd, {
       stdin: input === undefined ? 'ignore' : Buffer.from(input),
       stdout: 'pipe',
-      stderr: 'ignore',
+      stderr: control.stderr ? 'pipe' : 'ignore',
       env,
       detached: control.group === true,
     })
@@ -78,7 +80,9 @@ export async function runProcess(
   const deadline = new Promise<'timeout'>((resolve) => {
     timer = setTimeout(() => resolve('timeout'), timeoutMs)
   })
-  const finished = Promise.all([proc.stdout.text(), proc.exited]).then(([stdout, exitCode]) => ({ stdout, exitCode }))
+  const finished = Promise.all([proc.stdout.text(), proc.stderr ? proc.stderr.text() : undefined, proc.exited]).then(
+    ([stdout, stderr, exitCode]) => ({ stdout, exitCode, ...(stderr === undefined ? {} : { stderr }) }),
+  )
   finished.catch(() => {})
   let onAbort = () => {}
   const stopped = new Promise<'stopped'>((resolve) => {
@@ -94,7 +98,11 @@ export async function runProcess(
     const outcome = await Promise.race([finished, deadline, stopped])
     if (outcome !== 'timeout' && outcome !== 'stopped') return outcome
     kill()
-    return { exitCode: outcome === 'timeout' ? EXIT_TIMEOUT : EXIT_STOPPED, stdout: '' }
+    return {
+      exitCode: outcome === 'timeout' ? EXIT_TIMEOUT : EXIT_STOPPED,
+      stdout: '',
+      ...(control.stderr ? { stderr: '' } : {}),
+    }
   } finally {
     clearTimeout(timer)
     groups.delete(proc.pid)

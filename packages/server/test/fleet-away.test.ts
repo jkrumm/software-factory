@@ -1188,8 +1188,7 @@ describe('git: the default head', () => {
     let timeout = false
     const run: typeof realRun = async (cmd, ...rest) => {
       calls.push([...cmd])
-      if (timeout && cmd.includes('for-each-ref'))
-        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      if (timeout && cmd.includes('for-each-ref')) return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' }
       return realRun(cmd, ...rest)
     }
     const git = new GitReader(run)
@@ -1217,8 +1216,7 @@ describe('git timing out in a build', () => {
   test('the previous build’s repo state stays, commits included, with one line in errors', async () => {
     let timeout = false
     const run: typeof realRun = async (cmd, ...rest) => {
-      if (timeout && cmd.includes('for-each-ref'))
-        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      if (timeout && cmd.includes('for-each-ref')) return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' }
       return realRun(cmd, ...rest)
     }
     const slow = new FleetBuilder({
@@ -1244,8 +1242,7 @@ describe('git timing out in a build', () => {
   test('the since reading lists the repos whose commits could not be read as incomplete', async () => {
     let timeout = false
     const run: typeof realRun = async (cmd, ...rest) => {
-      if (timeout && cmd.includes('for-each-ref'))
-        return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>
+      if (timeout && cmd.includes('for-each-ref')) return { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' }
       return realRun(cmd, ...rest)
     }
     const slow = new FleetBuilder({
@@ -1285,9 +1282,7 @@ describe('git timing out in a build', () => {
     const stored = (await good.refreshNow()).repos.find((r) => r.name === 'software-factory')?.git?.recent ?? []
     expect(stored.length).toBeGreaterThan(0)
     const run: typeof realRun = async (cmd, ...rest) =>
-      cmd.includes('for-each-ref')
-        ? ({ exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } as Awaited<ReturnType<typeof realRun>>)
-        : realRun(cmd, ...rest)
+      cmd.includes('for-each-ref') ? { exitCode: EXIT_TIMEOUT, stdout: '', stderr: '' } : realRun(cmd, ...rest)
     const restarted = new FleetBuilder({
       sql: db.sql,
       now: () => clock.now(),
