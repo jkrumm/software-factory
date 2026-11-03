@@ -14,13 +14,13 @@ ALTER TABLE factory.spawns ADD CONSTRAINT spawns_hold_check CHECK (hold IN ('dra
 ALTER TABLE factory.spawns DROP CONSTRAINT spawns_placement_check;
 ALTER TABLE factory.spawns ADD CONSTRAINT spawns_placement_check CHECK (placement IN ('tab', 'child', 'hidden'));
 
--- How a reviewer attempt ended, once: `submitted` (agw took the reply), `refused` (agw refused it), `idle` (the session stopped growing),
+-- How a reviewer attempt ended, once: `submitted` (agw took the reply), `refused` (agw refused it), `idle` (the session stopped growing, never started, or was lost), `walled` (a usage limit stopped it),
 -- `needs_human` (the second attempt failed too), `superseded` (agw says the job is abandoned or another attempt won: final, no retry). The primary key is the deterministic effect key, so a replayed pass records nothing twice.
 CREATE TABLE factory.review_outcomes (
   spawn_key text PRIMARY KEY,
   job_id    text NOT NULL,
   attempt   integer NOT NULL CHECK (attempt > 0),
-  outcome   text NOT NULL CHECK (outcome IN ('submitted', 'refused', 'idle', 'needs_human', 'superseded')),
+  outcome   text NOT NULL CHECK (outcome IN ('submitted', 'refused', 'idle', 'walled', 'needs_human', 'superseded')),
   detail    text,
   at        timestamptz NOT NULL
 );

@@ -233,11 +233,22 @@ export class ReviewTransport {
       const why = 'Your previous session was lost before it replied. Reply with only the JSON.'
       return this.failed(a, 'idle', 'the session was lost before its turn ended', why, result)
     }
+    // Walled: a usage limit stopped it and nothing resumes a reviewer, so the attempt is over at once (it would hold its slot for ever).
+    if (session.state === 'walled') {
+      const why = 'Your previous session hit a usage limit and was closed. Reply with only the JSON.'
+      return this.failed(a, 'walled', 'the session hit a usage limit', why, result)
+    }
+    const idleMs = (this.deps.limits ?? DEFAULT_REVIEW_LIMITS).idleMs
+    // Silent from the start: no first turn within the idle limit of its last event (or its creation).
+    if (session.state === 'starting' || (session.state === 'idle' && session.turn === 0)) {
+      if (now.getTime() - Date.parse(session.lastEventAt) < idleMs) return
+      const why = `Your previous session never started its turn within ${Math.round(idleMs / 60_000)} minutes and was closed. Reply with only the JSON.`
+      return this.failed(a, 'idle', `no turn started within ${Math.round(idleMs / 60_000)} min`, why, result)
+    }
     // The turn is open. No wall-clock cap on the work itself: only a transcript that stopped growing is judged.
     if (session.state !== 'working' && session.state !== 'stuck' && session.state !== 'blocked') return
     const written = session.transcriptPath ? await (this.deps.mtime ?? fileMtime)(session.transcriptPath) : undefined
     const last = Math.max(written?.getTime() ?? 0, Date.parse(session.since ?? session.lastEventAt))
-    const idleMs = (this.deps.limits ?? DEFAULT_REVIEW_LIMITS).idleMs
     if (now.getTime() - last < idleMs) return
     const why = `Your previous session wrote nothing for ${Math.round(idleMs / 60_000)} minutes and was closed. Reply with only the JSON.`
     await this.failed(a, 'idle', `no output for ${Math.round(idleMs / 60_000)} min`, why, result)
@@ -284,7 +295,7 @@ export class ReviewTransport {
   /** The attempt did not produce a review: its terminal is closed, then one more attempt, or a person. */
   private async failed(
     a: Attempt,
-    outcome: 'refused' | 'idle',
+    outcome: 'refused' | 'idle' | 'walled',
     detail: string,
     why: string,
     result: ReviewPassResult,
@@ -337,7 +348,7 @@ export class ReviewTransport {
 
   private async record(
     a: Attempt,
-    outcome: 'submitted' | 'refused' | 'idle' | 'needs_human' | 'superseded',
+    outcome: 'submitted' | 'refused' | 'idle' | 'walled' | 'needs_human' | 'superseded',
     detail: string,
   ): Promise<void> {
     await this.deps.sql`

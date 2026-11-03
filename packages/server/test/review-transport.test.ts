@@ -19,7 +19,7 @@ import {
   type Submitted,
 } from '../src/review/transport.ts'
 import { evaluateRules } from '../src/rules.ts'
-import { liveSessions, recordEvent, RUNNER_SESSION } from '../src/sessions.ts'
+import { getSession, liveSessions, openSession, recordEvent, RUNNER_SESSION } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, TEST_ROLES, type TestApp } from './support/app.ts'
@@ -570,6 +570,48 @@ describe('submit on Stop', () => {
     }
     const status = Status.parse(await (await app.get('/status')).json())
     expect(status.attention.filter((l) => l.includes('needs a human'))).toEqual([])
+  })
+
+  test('a walled reviewer is a failed attempt at once: closed, a2 that says usage limit, its slot back', async () => {
+    const { key } = await attempt('rv_wall', 1, 'open', { since: 5 })
+    await w.emit(key, 'limit_stop', w.at(1))
+    expect((await getSession(db.sql, key, clock.now()))?.state).toBe('walled')
+    expect(await transport.pass()).toMatchObject({ retried: [key], needsHuman: [] })
+    expect(fake.closed).toEqual([key])
+    expect(await outcome(key)).toMatchObject({ outcome: 'walled' })
+    const [next] = await db.sql`SELECT prompt FROM factory.spawns WHERE key = ${reviewKey('rv_wall', 2)}`
+    expect(next?.prompt).toContain('hit a usage limit')
+    expect(next?.prompt).not.toContain('refused')
+    expect(next?.prompt).not.toContain('wrote nothing')
+    expect(await reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))).toBe(0)
+
+    // The second attempt walled too: a person.
+    const again = await attempt('rv_wall', 2, 'open', { since: 5 })
+    await w.emit(again.key, 'limit_stop', w.at(1))
+    expect(await transport.pass()).toMatchObject({ needsHuman: [again.key] })
+    expect(await outcome(again.key)).toMatchObject({
+      outcome: 'needs_human',
+      detail: expect.stringContaining('walled'),
+    })
+  })
+
+  test('a session that never starts its turn is a failed attempt after the idle limit, not before', async () => {
+    const key = reviewKey('rv_silent', 1)
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, session, created_at, placement, review_job, review_tier, review_effort)
+      VALUES (${key}, ${TEST_REPO}, ${jobLine('rv_silent')}, 'reviewer', 'sonnet', 'medium', 'started', 'a', 't9', ${w.at(9)}, 'hidden', 'rv_silent', 'standard', 'medium')`
+    await openSession(db.sql, { id: key, spawnKey: key, pane: 't9', at: w.at(9) })
+    expect((await getSession(db.sql, key, clock.now()))?.state).toBe('starting')
+    expect(await transport.pass()).toMatchObject({ retried: [], needsHuman: [] })
+    expect(fake.closed).toEqual([])
+    expect(await reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))).toBe(1)
+
+    clock.advance(2 * 60_000)
+    expect(await transport.pass()).toMatchObject({ retried: [key] })
+    expect(fake.closed).toEqual([key])
+    expect(await outcome(key)).toMatchObject({ outcome: 'idle' })
+    expect(await reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))).toBe(0)
+    expect(await spawnKeys()).toEqual([key, reviewKey('rv_silent', 2)])
   })
 
   describe('the idle watchdog', () => {
