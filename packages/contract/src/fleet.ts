@@ -107,7 +107,7 @@ export const AskTier = z.enum(['automatic', 'one_click', 'hand_off', 'yours'])
 export type AskTier = z.infer<typeof AskTier>
 
 /** What can be done with an ask (`POST /fleet/asks/:id/act`). */
-export const ActIntent = z.enum(['resolve', 'deny', 'later', 'archive_plan', 'hand_off'])
+export const ActIntent = z.enum(['resolve', 'deny', 'later', 'archive_plan', 'hand_off', 'allow'])
 export type ActIntent = z.infer<typeof ActIntent>
 
 export const FleetSuggestion = z.strictObject({

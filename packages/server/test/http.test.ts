@@ -95,6 +95,7 @@ describe('config (finding 5)', () => {
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
       reaper: 'dry',
+      review: { sessions: 2, deepCap: 15, idleMs: 600_000 },
       probeHosts: new Map(),
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -113,6 +114,19 @@ describe('config (finding 5)', () => {
     for (const bad of ['0', '-1', '2.5', 'many', '65']) {
       expect(() => loadConfig({ ...env, FACTORY_SLOTS: bad })).toThrow('FACTORY_SLOTS')
     }
+  })
+
+  test("the review limits: slots, the day's deep cap and the idle watchdog, and a mistake is refused", () => {
+    expect(
+      loadConfig({
+        ...env,
+        FACTORY_REVIEW_SESSIONS: '3',
+        FACTORY_REVIEW_DEEP_CAP: '5',
+        FACTORY_REVIEW_IDLE_MS: '120000',
+      }).review,
+    ).toEqual({ sessions: 3, deepCap: 5, idleMs: 120_000 })
+    for (const name of ['FACTORY_REVIEW_SESSIONS', 'FACTORY_REVIEW_DEEP_CAP', 'FACTORY_REVIEW_IDLE_MS'])
+      expect(() => loadConfig({ ...env, [name]: '0' })).toThrow(name)
   })
 
   test('FACTORY_ALERT_LEADS is on unless it says 0, and a mistake is refused', () => {

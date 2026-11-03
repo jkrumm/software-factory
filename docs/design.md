@@ -260,7 +260,8 @@ reported, or a live one that is no longer claude (the shell the core puts in a k
 killed if needed, `terminal.rm`'d and the spawn started afresh (a retry may be on another account); an error is a transient
 `RunnerError`. Finding, placing and running go one at a time per runner (two starts never both take an empty space's id).
 **The prompt is the last argument of the program** (`claude --dangerously-skip-permissions --model <tier> --effort <effort>
-[--resume <id>] <prompt>`; `claude --resume <id> "<prompt>"` takes the id as the option's value), `cwd` is always the repo, `keep: true`, the
+[--resume <id>] <prompt>`; a reviewer's is `… --effort <review.effort> --disallowed-tools <the writing tools, comma-separated> --agent reviewer <prompt>`, the
+list-valued option before another option so it cannot swallow the prompt; `claude --resume <id> "<prompt>"` takes the id as the option's value), `cwd` is always the repo, `keep: true`, the
 name an hc-valid `agentName`; so nothing is typed at start. The agent is started when `terminal.get` shows it reported (`reported`,
 a status or `turn >= 1`) inside the deliver window (30 s), else a transient error. `claude-pretrust.sh` runs before every
 spawn (a test pins that a path never seen before is trusted first). A prompt cannot start with `-`. The account is in the `env` of
@@ -281,6 +282,12 @@ that is gone (`not_found`), or a `child` with no parent terminal at all, makes t
 written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
 refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
 `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely; the live document (2026-11-01) confirms it.
+
+**A hidden terminal** (`placement: hidden`, the role default of `reviewer`) is the third placement: `terminal.run` with `no_parent: true` and the single
+label `factory.key=<spawn key>`: no `parent`, no `herdr.space`, no `herdr.tab`, no `factory.tab_name`, nothing seeded in the app's document and no tab named
+(`StartResult.tab` and `workspace` are null). The key label is how the Runner finds and closes it (`Runner.close`). The params are herdr-core 0.1.15's
+`terminal.run` (`no_parent`: "No parent, even when started from a terminal"); whether the Herdr app shows an unlabelled, parentless terminal anywhere is the
+app's choice and is not asserted here. A caller may ask for `hidden` on any role (`--placement hidden`); a reviewer accepts no other.
 
 **A failed spawn leaves its terminal.** It is labelled with the key and `factory spawn requeue` finds it again (an agent already
 running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A finished terminal is
@@ -398,7 +405,7 @@ effect under a key, so a replay records nothing):
 
 **`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
 and spawns, and the Issues' open questions, parks and failures), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
-the accounts' readings, the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
+the accounts' readings, a line `reviews: <live>/<slots> live, deep today <n>/<cap> per account (<account n>, …)` (`Status.reviews`; n is the most any one account has started since 00:00 UTC), the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
 
 #### The spool and the event key
 
@@ -499,7 +506,7 @@ has the same repo: hold `wave`, except a session that has finished (`idle` after
 turn since a life that had finished, whoever resumed it: a chain wave leaves its tab open once it spawned its successor, and must not hold it
 forever, nor a restart that resumed it) (fan workers and other roles are never limited; sessions `rd` starts count by the role their pane reports (`FACTORY_ROLE`, recorded at `session_started`) and by the
 directory they started in; a session belongs to the repo when it started there or below it, or when the repo is a `.claude/worktrees/…` worktree of the directory it started in (a session in a parent folder is in no repo); a `failed` spawn whose agent still runs, and a spawn waiting to retry its start, are live sessions: the tab is kept and the
-agent may run). 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
+agent may run). 3. `pace` and any live session of the project: hold `pace`. (A role `reviewer` is admitted by its own rules, below, right after `drain`.) 4. an account: enabled,
 auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
 weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
 `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
@@ -511,18 +518,56 @@ can show it); a started one holds it until a sample is taken after the moment it
 minute). A burst starts as many spawns as there are open accounts
 and the rest wait for the next sample.
 
+**A reviewer (review v4)** skips `wave` and `pace` (it reads the repo of the very session that asked for it, which `pace` would hold it behind) and is admitted by three
+rules, after `drain`: **`review_slots`**: at most `FACTORY_REVIEW_SESSIONS` (default 2) live reviewer sessions host-wide (a session is live from the claim until its
+attempt has a row in `factory.review_outcomes`, or it is `dead`); **the review ceiling**: an account is eligible only below 70 % of its 5-hour window and below 90 % of
+its week (`REVIEW_FIVE_HOUR_LIMIT`, `REVIEW_WEEKLY_LIMIT`, next to the usual 85/95 in `capacity.ts`; a window with no number counts as unused, so an account with no 5-hour
+reading is judged on its week, and one with neither is not eligible); no eligible account is a `waiting` spawn with `resume_at` the first opening, like any spawn: a review waits and never spills; **`deep_cap`**: a spawn whose
+`review.tier` is `deep` starts only on an account that has started fewer than `FACTORY_REVIEW_DEEP_CAP` (default 15) deep reviewer spawns since 00:00 UTC (counted from the
+first claim of `starting` and `started` rows); with every open account at the cap it is held `deep_cap` and the owner is asked (below). The tier is never lowered. The
+owner's `allow` sets `spawns.deep_allowed` on that one row and makes it due; admission then skips the cap for it and for nothing else.
+
+#### The review transport
+
+**The review transport** (`src/review/`; migration `029`): review v4's hidden transport. agw prepares a review job (no model in agw) and asks the factory for one
+interactive Claude Code session per attempt: `factory spawn create review-<jobId>-a1 --repo <root> --role reviewer --placement hidden --review-job <jobId> --review-tier
+light|standard|deep --effort low|medium|high --prompt '<job line>'` (`POST /spawns` takes `review: {jobId, tier, effort}`). Only role `reviewer` takes `review`, and it
+requires it; the key must be `review-<jobId>-a1` or `-a2`, so the attempt is a function of the key and a replayed request is the same spawn. The row stores `review_job`,
+`review_tier`, `review_effort` (`Spawn.review`); the role table's `reviewer` (`sonnet`, `medium`) is the row's tier and effort, the session's `--effort` is the review's.
+The session runs the global `reviewer` agent (read-only: Read, Grep, Glob, Agent; defined in dotfiles) and `--disallowed-tools` names every built-in that writes or runs
+(`REVIEWER_DISALLOWED_TOOLS` in `hc-runner.ts`: Bash, PowerShell, Monitor, Write, Edit, NotebookEdit, EnterWorktree, Artifact, Workflow, RemoteTrigger).
+
+**Submit on Stop** (`review/transport.ts`, `ReviewTransport`). The Stop hook already ends the session's turn (`turn_ended`, derived state `idle` with a turn); the tick
+kicks the transport after its own work, which runs one pass at a time behind the tick's back, in no transaction, with its ports injected (`Runner.close`, a `ReplyReader`,
+a `ReviewSubmitter`, the transcript's modification time). A pass looks at every `started` reviewer spawn with no outcome row. For one whose turn ended (or whose session is `dead`): the
+**last assistant message** is read from `sessions.transcript_path` (bound by `session_started`) by `fleet/transcript.ts`'s reader: the last `text` of the last `assistant` line
+after the last prompt, the end of a 512 KiB tail, thinking and tool calls skipped; none after a 15 s grace is a failed attempt. It goes **verbatim on stdin** to
+`agw review submit <jobId> --attempt <n> --account <the account the spawn started on> --commit --format json` (`FACTORY_AGW_BIN`, `runProcess`, 60 s, stderr captured). Exit 0:
+`Runner.close(<key>)`, then the outcome `submitted` (row in `factory.review_outcomes`, primary key the spawn key, written last). Non-zero: the attempt is closed and, for `a1`, a
+spawn `review-<jobId>-a2` is made with the same review and the prompt `<original>\n\nYour previous reply was refused by agw review submit: <message, 2,000 characters at
+most>. Reply again with only the JSON.`; `a2` refused is `needs_human`. A timeout or a missing binary is no refusal: the same attempt is asked again after 30 s.
+**Idle watchdog**, in the same pass: a reviewer whose turn is open (`working`, `stuck`, `blocked`) and whose transcript file has not been written for
+`FACTORY_REVIEW_IDLE_MS` (default 10 min; the turn's start when the file cannot be read) is closed, outcome `idle`, then `a2` (with a prompt saying so), then `needs_human`.
+There is no other time limit on a review. Replays are harmless by key: `agw review submit` is idempotent per (job, attempt), `createSpawn` returns the `a2` that exists,
+`close` finds its terminal by label.
+
+**Asks.** `needs_human` is an attention line, `review <jobId> needs a human: attempt 2 failed: …` (3 days), so an ask on `/fleet` (tier `yours`). A deep review held by
+the cap is the line `review <spawn key> held: deep cap reached on every open account today (UTC), started <account n/cap, …>; allow runs it past the cap`, which the triage
+makes a `one_click` ask with the intent **`allow`** (`ActIntent`; `fleet_acts`, closes the occurrence like `resolve`, idempotent: a repeat answers the first). `allow`
+sets `deep_allowed` on the named spawn and wakes it; nothing else.
+
 #### Queue state
 
 **Queue state `run|pace|drain`** (`queue.ts`, table `queue_states`): per scope, global (`project` null) or a project (the
 repo path, resolved like a spawn's); `initiative` is a nullable column for F4, not read yet. No row is `run`. The most
 restrictive scope that applies wins. `drain` starts nothing and never interrupts; `pace` as above. A spawn held by a rule
-stays `queued` with `hold` set (`drain|pace|wave`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
+stays `queued` with `hold` set (`drain|pace|wave|claim|review_slots|deep_cap`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
 `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 
 #### Roles
 
 **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
-model id) and effort (`low|medium|high|xhigh|max`). `deep` is a worker raised for novel hard logic (opus, high): placed like a worker. `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
+model id) and effort (`low|medium|high|xhigh|max`). `deep` is a worker raised for novel hard logic (opus, high): placed like a worker. `reviewer` (sonnet, medium) is review v4's read-only session: placed hidden, admitted by its own rules (above), and it alone takes `review`. `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
 of a known key answers with its row) and
 stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
 at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one), so an edit needs a deploy or restart, and a

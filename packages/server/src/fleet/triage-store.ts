@@ -235,7 +235,8 @@ export async function readActs(sql: SQL, now: Date, askIds: readonly string[]): 
     const set = acted.get(key) ?? new Set<ActIntent>()
     set.add(r.intent)
     acted.set(key, set)
-    if (r.intent === 'resolve' || r.intent === 'deny' || r.intent === 'hand_off') closed.add(key)
+    if (r.intent === 'resolve' || r.intent === 'deny' || r.intent === 'hand_off' || r.intent === 'allow')
+      closed.add(key)
     if (r.intent === 'hand_off' && r.result.spawn && r.at > since)
       handoffs.push({ ask: r.ask_id, spawn: r.result.spawn, at: r.at.toISOString() })
   }

@@ -14,6 +14,7 @@ describe('config/roles.json', () => {
       'deep',
       'implementer',
       'verifier',
+      'reviewer',
       'Explore',
     ])
   })

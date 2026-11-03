@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, realpathSync } from 'node:fs'
 import { copyFile, cp, link, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Effort, Placement, Tier } from '@software-factory/contract'
+import type { Effort, Placement, ReviewMeta, Tier } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 
@@ -13,7 +13,7 @@ export interface StartInput {
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean
-  /** what the caller asked for: `child` a hidden child of `parentTerminal`, `tab` a tab; absent is the role's default (worker roles child) */
+  /** what the caller asked for: `child` a hidden child of `parentTerminal`, `tab` a tab, `hidden` a terminal with no parent, space or tab; absent is the role's default (worker roles child, `reviewer` hidden) */
   placement?: Placement
   /**
    * The space an earlier try of this spawn used, as the spawn row recorded it: kept while it still counts, whatever the
@@ -34,6 +34,8 @@ export interface StartInput {
   fork?: { session: string; archive: string }
   /** the terminal the spawn's parent session runs in, if the factory knows it: a hidden child is started in it */
   parentTerminal?: string
+  /** a reviewer's job (review v4): its effort is the session's `--effort`, and it runs the `reviewer` agent with the writing tools denied */
+  review?: ReviewMeta
 }
 
 export interface StartResult {

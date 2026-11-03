@@ -1,8 +1,9 @@
-import type { HoldReason } from '@software-factory/contract'
+import { type HoldReason, REVIEWER_ROLE, type ReviewMeta } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { currentLoads, latestReadings, nextOpening, pickEligible } from './capacity.ts'
 import { tryClaim } from './projects/claims.ts'
 import { effectiveState, loadQueueStates } from './queue.ts'
+import { DEFAULT_REVIEW_LIMITS, deepStartedToday, type ReviewLimits, reviewSessionsLive } from './review/limits.ts'
 import { type LiveSession, liveSessions } from './sessions.ts'
 
 /** The role that is limited to one live session per repo. */
@@ -28,6 +29,10 @@ export interface Candidate {
   prefer?: string | null
   /** the Issue it works: it waits on the Issue's claim on the project. A fleet spawn has none and takes no claim. */
   issueId?: number | null
+  /** a reviewer's job: its tier decides whether the day's deep cap applies */
+  review?: Pick<ReviewMeta, 'tier'> | null
+  /** the owner's `allow`: this spawn may start past the day's deep cap */
+  deepAllowed?: boolean
 }
 
 const inside = (a: string, b: string): boolean => a === b || a.startsWith(b.endsWith('/') ? b : `${b}/`)
@@ -61,9 +66,11 @@ export async function admit(
   candidate: Candidate,
   now: Date,
   live?: { sessions?: LiveSession[] },
+  limits: ReviewLimits = DEFAULT_REVIEW_LIMITS,
 ): Promise<Decision> {
   const state = effectiveState(await loadQueueStates(tx), candidate.repo)
   if (state === 'drain') return { kind: 'hold', reason: 'drain' }
+  if (candidate.role === REVIEWER_ROLE) return admitReview(tx, candidate, now, live, limits)
 
   const sessions = state === 'pace' || candidate.role === WAVE_ROLE ? await readLive(tx, now, live) : []
   const others = sessions.filter((s) => s.id !== candidate.key && inRepo(s.repo, candidate.repo))
@@ -80,4 +87,33 @@ export async function admit(
   const picked = pickEligible(readings, await currentLoads(tx, readings, candidate.key), options)
   if (picked) return { kind: 'start', account: picked.account }
   return { kind: 'wait', resumeAt: nextOpening(readings, options) ?? null }
+}
+
+/**
+ * A reviewer (review v4) is admitted by its own rules, after `drain`: at most `limits.sessions` live reviewer sessions host-wide
+ * (`review_slots`), then an account under the review ceiling (`capacity.ts`; none is a wait, like any spawn, never a spill), then for a
+ * `deep` review an account that has not started `limits.deepCap` deep reviews today (UTC): all of them spent is `deep_cap`, unless the owner
+ * allowed this spawn. The tier is never lowered. `pace` and the one-wave-per-repo rule do not apply: the reviewer reads the repo of the
+ * session that asked for it, which `pace` (one live session per project) would hold behind that very session.
+ */
+async function admitReview(
+  tx: SQL,
+  candidate: Candidate,
+  now: Date,
+  live: { sessions?: LiveSession[] } | undefined,
+  limits: ReviewLimits,
+): Promise<Decision> {
+  const taken = await reviewSessionsLive(tx, await readLive(tx, now, live), candidate.key)
+  if (taken >= limits.sessions) return { kind: 'hold', reason: 'review_slots' }
+
+  const readings = await latestReadings(tx)
+  const loads = await currentLoads(tx, readings, candidate.key)
+  const options = { now, prefer: candidate.prefer, review: true }
+  const eligible = pickEligible(readings, loads, options)
+  if (!eligible) return { kind: 'wait', resumeAt: nextOpening(readings, options) ?? null }
+  if (candidate.review?.tier !== 'deep' || candidate.deepAllowed) return { kind: 'start', account: eligible.account }
+  const started = await deepStartedToday(tx, now, candidate.key)
+  const room = readings.filter((r) => (started.get(r.account) ?? 0) < limits.deepCap)
+  const picked = pickEligible(room, loads, options)
+  return picked ? { kind: 'start', account: picked.account } : { kind: 'hold', reason: 'deep_cap' }
 }

@@ -93,6 +93,10 @@ function subjectKey(line: string): string {
   if (note) return `note:${note[1]}`
   const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn) return `spawn:${spawn[1]}`
+  const held = /^review (\S+) held: deep cap/.exec(line)
+  if (held) return `review-held:${held[1]}`
+  const human = /^review (\S+) needs a human/.exec(line)
+  if (human) return `review-human:${human[1]}`
   const notification = /^notification (\S+) was not delivered/.exec(line)
   if (notification) return `notification:${notification[1]}`
   const issue = /^Issue (\d+)(.*)$/.exec(line)
@@ -120,7 +124,7 @@ function subjectKey(line: string): string {
 function lineSubject(line: string): { session?: string; spawn?: string; issue?: number } {
   const session = /^(?:blocked|stuck|walled) (\S+)/.exec(line) ?? /^note \S+ to (\S+)/.exec(line)
   if (session?.[1]) return { session: session[1].replace(/:$/, '') }
-  const spawn = /^spawn (\S+) failed/.exec(line)
+  const spawn = /^spawn (\S+) failed/.exec(line) ?? /^review (\S+) held: deep cap/.exec(line)
   if (spawn?.[1]) return { spawn: spawn[1] }
   const issue = /^Issue (\d+)/.exec(line)
   if (issue?.[1]) return { issue: Number(issue[1]) }
@@ -132,7 +136,7 @@ const worksAPlan = (s: { state: string; wait: string | null }) =>
   s.state === 'waiting' ? s.wait !== 'owner' : s.state !== 'idle'
 
 const askKind = (line: string): FleetAsk['kind'] =>
-  /^(blocked|stuck|walled|spawn|Issue) /.test(line) ? 'blocker' : 'note'
+  /^(blocked|stuck|walled|spawn|Issue|review) /.test(line) ? 'blocker' : 'note'
 
 function sessionOrder(a: FleetSession, b: FleetSession): number {
   return STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || a.id.localeCompare(b.id)

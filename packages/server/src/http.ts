@@ -100,6 +100,7 @@ import { declareWait, getSession, listSessions, recordEvent } from './sessions.t
 import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { releaseSlot, touchSlot } from './slots.ts'
+import type { ReviewLimits } from './review/limits.ts'
 import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
@@ -121,6 +122,8 @@ export interface AppDeps {
   projects: Pick<ProjectSync, 'syncNow'>
   /** `FACTORY_ALERT_LEADS`: `factory status` says why an alert Issue starts no lead */
   alertLeads?: boolean
+  /** review v4's limits (slots, deep cap): admission of a reviewer spawn, and the reviews line of `/status`; the defaults without */
+  reviewLimits?: ReviewLimits
   /** the owner's line, for `POST /notifications/test`; without it the line is off */
   notifier?: Notifier
   /** `FACTORY_NOTIFY_TARGET`: `off` is said in the answer to a test */
@@ -315,7 +318,7 @@ const replay = (spawn: Spawn): Response =>
  * repo-roots check, so a pane that can reach the socket asks for no more than a holder of the token.
  */
 const spawnHandler =
-  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[]) =>
+  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[], reviewLimits?: ReviewLimits) =>
   async (req: Request): Promise<Response> => {
     const input = await parseBody(req, SpawnInput)
     // A replay of a known key answers with the row it made, whatever the role table says now. A spent key (its agent is
@@ -334,8 +337,18 @@ const spawnHandler =
     }
     const { spawn, created } = await createSpawn(
       sql,
-      { ...input, repo, space, newSpace: input.new_space, tier: entry.tier, effort: entry.effort },
+      {
+        ...input,
+        repo,
+        space,
+        newSpace: input.new_space,
+        tier: entry.tier,
+        effort: entry.effort,
+        // A reviewer has no tab: the row says so, whatever the caller left out.
+        placement: input.placement ?? (input.review ? 'hidden' : undefined),
+      },
       clock.now(),
+      reviewLimits,
     )
     return created ? respond(Spawn, spawn, 201) : replay(spawn)
   }
@@ -729,6 +742,7 @@ export function routes({
   quota,
   projects,
   alertLeads,
+  reviewLimits,
   notifier = new NullNotifier(),
   notifyTarget = 'off',
   commits = new GitCommits(),
@@ -768,7 +782,9 @@ export function routes({
     },
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
-    '/status': { GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))) },
+    '/status': {
+      GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads, reviewLimits }))),
+    },
     '/fleet': { GET: route(fleetGetHandler(sql, clock)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(sql, clock, fleet)) },
     '/fleet/presence': { POST: route(fleetPresenceHandler(since)) },
@@ -778,7 +794,7 @@ export function routes({
     '/fleet/triage/:id/undo': { POST: route(fleetTriageUndoHandler(sql, clock, fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
-      POST: route(spawnHandler(sql, clock, roles, repoRoots)),
+      POST: route(spawnHandler(sql, clock, roles, repoRoots, reviewLimits)),
     },
     '/spawns/:key': {
       GET: route(spawnGetHandler(sql, clock)),
@@ -891,6 +907,7 @@ export function serveHooks(deps: {
   slots: number
   commits?: Commits
   review?: Review
+  reviewLimits?: ReviewLimits
 }) {
   const commits = deps.commits ?? new GitCommits()
   const open = { open: true }
@@ -911,7 +928,7 @@ export function serveHooks(deps: {
       '/sessions/:id/note': { POST: viaSocket(noteHandler(deps.sql, deps.clock)) },
       '/sessions/:id/stop-check': { POST: viaSocket(stopCheckHandler(deps.sql, deps.clock)) },
       '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
-      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)) },
+      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.reviewLimits)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
       '/issues': {

@@ -5,6 +5,7 @@ import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
 import { notificationAttention } from './notify/outbox.ts'
+import { DEFAULT_REVIEW_LIMITS, type ReviewLimits, reviewAttention, reviewStatus } from './review/limits.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
 import { BLOCKED_AFTER_MS } from './rules.ts'
@@ -55,7 +56,12 @@ async function digestAttention(sql: SQL, now: Date): Promise<string[]> {
 }
 
 /** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, the open Issues, pending notes. */
-export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: boolean } = {}): Promise<Status> {
+export async function buildStatus(
+  sql: SQL,
+  now: Date,
+  options: { alertLeads?: boolean; reviewLimits?: ReviewLimits } = {},
+): Promise<Status> {
+  const limits = options.reviewLimits ?? DEFAULT_REVIEW_LIMITS
   const loaded = (await loadSessions(sql, now)).filter((s) => s.view.state !== 'dead')
   loaded.sort(
     (a, b) =>
@@ -76,6 +82,7 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
       ...(await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })),
       ...(await notificationAttention(sql, now)),
       ...(await digestAttention(sql, now)),
+      ...(await reviewAttention(sql, now, limits)),
     ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
@@ -84,5 +91,6 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
     issuesMore: issues.more,
     notes,
     notesMore,
+    reviews: await reviewStatus(sql, now, limits),
   }
 }

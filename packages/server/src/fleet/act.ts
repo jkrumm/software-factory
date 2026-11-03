@@ -14,6 +14,7 @@ import type { Clock } from '../clock.ts'
 import { fileAnswer } from '../issues/verbs.ts'
 import { RepoRefused, resolveRepo } from '../repos.ts'
 import { createSpawn } from '../spawns.ts'
+import { deepCapHeld } from './triage.ts'
 import { readSnapshot } from './store.ts'
 import { askSourcesAnswered, QueueUnavailable, type QueueActor, type QueueReader } from './sources.ts'
 import { recordAskAct } from './away.ts'
@@ -126,6 +127,9 @@ export class FleetActions {
       case 'hand_off':
         outcome = await this.handOff(snapshot, ask, note, now)
         break
+      case 'allow':
+        outcome = await this.allow(ask, now)
+        break
     }
     if ('ok' in outcome) return outcome
 
@@ -176,6 +180,20 @@ export class FleetActions {
     if (until.getTime() - now.getTime() > LATER_MAX_MS)
       return refuse(422, 'bad_until', 'until is more than 30 days ahead')
     return { detail: `hidden until ${until.toISOString()}`, until }
+  }
+
+  /**
+   * A deep review held by the day's cap (review v4): this spawn, and only it, may start past the cap. Stored on the spawn's row and woken,
+   * so the next tick admits it again (on an account under the review ceiling, at its own tier). Done twice it is the same row.
+   */
+  private async allow(ask: FleetAsk, now: Date): Promise<{ detail: string } | ActOutcome> {
+    const key = ask.source === 'factory' ? deepCapHeld(ask.text) : null
+    if (!key) return refuse(409, 'not_offered', `${ask.source} asks cannot be allowed`)
+    const rows = await this.deps.sql`
+      UPDATE factory.spawns SET deep_allowed = true, resume_at = ${now}
+      WHERE key = ${key} AND role = 'reviewer' AND status IN ('queued', 'waiting') RETURNING key`
+    if (rows.length === 0) return refuse(409, 'not_held', `${key} is not waiting for the deep cap any more`)
+    return { detail: `${key} may start past the day's deep cap` }
   }
 
   /** A queue request marked done (the script only records it); a hand-off's result acknowledged. */

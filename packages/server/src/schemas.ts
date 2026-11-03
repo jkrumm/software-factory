@@ -1,4 +1,13 @@
-import { EVENT_KINDS, Placement, QueueState, RoleName, WaitOn } from '@software-factory/contract'
+import {
+  EVENT_KINDS,
+  Placement,
+  QueueState,
+  REVIEWER_ROLE,
+  ReviewMeta,
+  reviewAttemptOf,
+  RoleName,
+  WaitOn,
+} from '@software-factory/contract'
 import { ACCOUNT_NAME } from '@software-factory/contract/spool'
 import { z } from 'zod'
 
@@ -52,24 +61,39 @@ const RepoPath = z
 /** What a spawn is started as when the caller says nothing. */
 export const DEFAULT_ROLE = 'worker'
 
-export const SpawnInput = z.object({
-  key: SpawnKey,
-  repo: RepoPath,
-  role: RoleName.default(DEFAULT_ROLE),
-  /** the path whose space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
-  space: RepoPath.optional(),
-  /** a space of its own even if the path already has one: for a separate plan or worktree */
-  new_space: z.boolean().default(false),
-  /** `child`: a hidden child of the parent's terminal, `tab`: a tab; absent is the role's default (worker roles child) */
-  placement: Placement.optional(),
-  /** the `FACTORY_SESSION` of the caller: the session this one is a worker of */
-  parent: z.string().min(1).max(256).optional(),
-  prompt: z
-    .string()
-    .min(1)
-    .max(MAX_PROMPT_CHARS)
-    .refine((p) => !p.startsWith('-'), "a prompt cannot start with '-': claude would read it as an option"),
-})
+export const SpawnInput = z
+  .object({
+    key: SpawnKey,
+    repo: RepoPath,
+    role: RoleName.default(DEFAULT_ROLE),
+    /** the path whose space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
+    space: RepoPath.optional(),
+    /** a space of its own even if the path already has one: for a separate plan or worktree */
+    new_space: z.boolean().default(false),
+    /** `child`: a hidden child of the parent's terminal, `tab`: a tab; absent is the role's default (worker roles child) */
+    placement: Placement.optional(),
+    /** the `FACTORY_SESSION` of the caller: the session this one is a worker of */
+    parent: z.string().min(1).max(256).optional(),
+    prompt: z
+      .string()
+      .min(1)
+      .max(MAX_PROMPT_CHARS)
+      .refine((p) => !p.startsWith('-'), "a prompt cannot start with '-': claude would read it as an option"),
+    /** review v4: agw's job, for role `reviewer` only (and it requires it) */
+    review: ReviewMeta.optional(),
+  })
+  .refine((s) => (s.role === REVIEWER_ROLE) === (s.review !== undefined), {
+    message: `role ${REVIEWER_ROLE} requires review, and only that role takes it`,
+    path: ['review'],
+  })
+  .refine((s) => !s.review || reviewAttemptOf(s.key, s.review.jobId) !== null, {
+    message: 'a reviewer key is review-<jobId>-a1 or review-<jobId>-a2',
+    path: ['key'],
+  })
+  .refine((s) => !s.review || s.placement === undefined || s.placement === 'hidden', {
+    message: 'a reviewer is placed hidden',
+    path: ['placement'],
+  })
 export type SpawnInput = z.infer<typeof SpawnInput>
 
 /**

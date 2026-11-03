@@ -1,5 +1,6 @@
 import { DEFAULT_ROLES_FILE, ReaperMode } from '@software-factory/contract'
 import { parseProbeHosts } from './fleet/probes.ts'
+import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './review/limits.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -51,6 +52,8 @@ export interface Config {
   reaper: ReaperMode
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
+  /** review v4's reviewer sessions: `FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS` */
+  review: ReviewLimits
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -102,7 +105,39 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
     reaper: reaperMode(env.FACTORY_REAPER),
+    review: {
+      sessions: wholeNumber(
+        'FACTORY_REVIEW_SESSIONS',
+        env.FACTORY_REVIEW_SESSIONS,
+        DEFAULT_REVIEW_LIMITS.sessions,
+        1,
+        16,
+      ),
+      deepCap: wholeNumber(
+        'FACTORY_REVIEW_DEEP_CAP',
+        env.FACTORY_REVIEW_DEEP_CAP,
+        DEFAULT_REVIEW_LIMITS.deepCap,
+        1,
+        1000,
+      ),
+      idleMs: wholeNumber(
+        'FACTORY_REVIEW_IDLE_MS',
+        env.FACTORY_REVIEW_IDLE_MS,
+        DEFAULT_REVIEW_LIMITS.idleMs,
+        60_000,
+        86_400_000,
+      ),
+    },
   }
+}
+
+/** A whole number within bounds; unset or empty is the default. */
+function wholeNumber(name: string, value: string | undefined, fallback: number, min: number, max: number): number {
+  if (value === undefined || value === '') return fallback
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < min || n > max)
+    throw new Error(`${name} must be a whole number from ${min} to ${max}, got: ${value}`)
+  return n
 }
 
 /** A channel's name is not a secret, and a message to it never makes Hermes answer. */

@@ -1,4 +1,4 @@
-import type { Effort, Placement, Tier } from '@software-factory/contract'
+import type { Effort, Placement, ReviewMeta, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { admit, type Decision, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
@@ -7,6 +7,8 @@ import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { FleetBuilder } from './fleet/index.ts'
 import type { WindowDigest } from './fleet/window.ts'
 import type { TickMonitor } from './health.ts'
+import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './review/limits.ts'
+import type { ReviewTransport } from './review/transport.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { Classification } from './issues/classify.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
@@ -57,6 +59,10 @@ export interface TickDeps {
   fleet?: Pick<FleetBuilder, 'kick'>
   /** the since reading's headline paragraph: the tick starts a pass when a window waits and none runs (behind its back, like the fleet build) */
   windows?: Pick<WindowDigest, 'kick'>
+  /** review v4's limits (slots, deep cap): admission at every claim; the defaults without */
+  reviewLimits?: ReviewLimits
+  /** review v4's transport: the tick starts a pass (submit on Stop, the idle watchdog) behind its back, like the fleet build */
+  reviews?: Pick<ReviewTransport, 'kick'>
 }
 
 export interface TickResult {
@@ -94,6 +100,8 @@ export interface Claim {
   firstClaimedAt: Date
   /** the archived session this spawn forks */
   fork?: { session: string; archive: string }
+  /** a reviewer's job: its effort is the session's `--effort` */
+  review?: ReviewMeta
 }
 
 interface DueRow {
@@ -116,6 +124,10 @@ interface DueRow {
   first_claimed_at: Date | null
   fork_session: string | null
   fork_archive: string | null
+  review_job: string | null
+  review_tier: ReviewMeta['tier'] | null
+  review_effort: ReviewMeta['effort'] | null
+  deep_allowed: boolean
 }
 
 /** One line per spawn that leaves the queue for good, so the reason is in the log whatever else is read. */
@@ -141,7 +153,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive,
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive, review_job, review_tier, review_effort, deep_allowed,
         (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
@@ -177,9 +189,18 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
           ? { kind: 'start', account: row.account }
           : await admit(
               tx,
-              { key: row.key, repo: row.repo, role: row.role, prefer: row.account, issueId: row.issue_id },
+              {
+                key: row.key,
+                repo: row.repo,
+                role: row.role,
+                prefer: row.account,
+                issueId: row.issue_id,
+                review: row.review_tier ? { tier: row.review_tier } : null,
+                deepAllowed: row.deep_allowed,
+              },
               now,
               live,
+              deps.reviewLimits ?? DEFAULT_REVIEW_LIMITS,
             )
       if (decision.kind !== 'start') {
         // Waiting is not failing: the retry clock starts over when the spawn is claimed again.
@@ -221,6 +242,9 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         firstClaimedAt: row.first_claimed_at ?? now,
         ...(row.fork_session && row.fork_archive
           ? { fork: { session: row.fork_session, archive: row.fork_archive } }
+          : {}),
+        ...(row.review_job && row.review_tier && row.review_effort
+          ? { review: { jobId: row.review_job, tier: row.review_tier, effort: row.review_effort } }
           : {}),
       })
     }
@@ -299,6 +323,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       tier: claim.tier,
       effort: claim.effort,
       fork: claim.fork,
+      review: claim.review,
     })
   } catch (error) {
     return recordFailure(deps, claim, error)
@@ -391,6 +416,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   // The fleet model builds behind the tick's back (bounded reads, no transaction); the next pass finds it done or still running.
   deps.fleet?.kick()
   deps.windows?.kick()
+  deps.reviews?.kick()
   return result
 }
 

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
+import { REVIEWER_ROLE } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './exec.ts'
@@ -86,8 +87,28 @@ const ownSpaceId = (root: string, key: string): string => `sp-${basename(root)}-
 /** Whether this role is a hidden child of its parent's terminal unless the caller says otherwise (`deep`: a worker raised for novel hard logic). */
 const isWorker = (role: string): boolean => role === 'worker' || role === 'mechanical' || role === 'deep'
 
-/** What the spawn is placed as: the caller's word, else the role's default. */
-const placementOf = (input: StartInput): 'tab' | 'child' => input.placement ?? (isWorker(input.role) ? 'child' : 'tab')
+/** What the spawn is placed as: the caller's word, else the role's default (a reviewer is hidden). */
+const placementOf = (input: StartInput): 'tab' | 'child' | 'hidden' =>
+  input.placement ?? (input.role === REVIEWER_ROLE ? 'hidden' : isWorker(input.role) ? 'child' : 'tab')
+
+/**
+ * What a reviewer session may not use: every built-in tool that writes a file or runs a command, confirmed from the tools reference
+ * (Bash, PowerShell and Monitor run commands; Write, Edit and NotebookEdit change files; EnterWorktree, Artifact, Workflow and
+ * RemoteTrigger change state outside the conversation). The `reviewer` agent's own tool list (Read, Grep, Glob, Agent) is the first
+ * fence; this is the second, from the command line.
+ */
+export const REVIEWER_DISALLOWED_TOOLS = [
+  'Bash',
+  'PowerShell',
+  'Monitor',
+  'Write',
+  'Edit',
+  'NotebookEdit',
+  'EnterWorktree',
+  'Artifact',
+  'Workflow',
+  'RemoteTrigger',
+]
 
 /** How far up a hidden child's parents its space is looked for. */
 const MAX_ANCESTORS = 8
@@ -97,6 +118,8 @@ type Placement =
   | { kind: 'tab'; space: string; tab: string; params: Record<string, unknown> }
   /** a hidden child of its parent's terminal: no tab, no space of its own */
   | { kind: 'child'; params: Record<string, unknown> }
+  /** no parent, no space, no tab: only the key label, which is how it is found and closed */
+  | { kind: 'hidden'; params: Record<string, unknown> }
 
 /**
  * Starts Claude Code in a herdr-core terminal and types into running ones, over `hc connect` (one short-lived process per
@@ -271,14 +294,16 @@ export class HcRunner implements Runner {
   // --- steps -----------------------------------------------------------------------------------------------------
 
   /** The program and its arguments; the prompt is last. */
-  private argv({ tier, effort, resume, fork, prompt }: StartInput): string[] {
+  private argv({ tier, effort, resume, fork, prompt, review }: StartInput): string[] {
     return [
       this.options.claudeBin ?? 'claude',
       '--dangerously-skip-permissions',
       '--model',
       tier,
       '--effort',
-      effort,
+      review?.effort ?? effort,
+      // `--disallowed-tools` takes a list and would swallow the prompt that follows it: an option comes after it.
+      ...(review ? ['--disallowed-tools', REVIEWER_DISALLOWED_TOOLS.join(','), '--agent', REVIEWER_ROLE] : []),
       ...(resume ? ['--resume', resume] : []),
       ...(fork ? ['--resume', fork.session, '--fork-session'] : []),
       prompt,
@@ -314,6 +339,8 @@ export class HcRunner implements Runner {
 
   /** Where the terminal goes: a hidden child of its parent's terminal (asked for, or a worker by default), else a tab of its own in the path's space. */
   private async place(input: StartInput, root: string, budget: Budget): Promise<Placement> {
+    // The reviewer's terminal has nobody to wake and no tab to show in: `no_parent` and the key label are all it gets.
+    if (placementOf(input) === 'hidden') return { kind: 'hidden', params: { no_parent: true } }
     const parent = input.parentTerminal
     // A spawn that asks for a space of its own is a tab, whatever its role: a hidden child has no space. A child with no
     // known parent terminal is a tab too.

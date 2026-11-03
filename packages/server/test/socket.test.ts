@@ -167,7 +167,7 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
       { key: 'k', repo: 'relative', prompt: 'go' },
       { key: 'k', repo: TEST_REPO, prompt: '-flag' },
       { key: 'k', repo: TEST_REPO, prompt: 'go', new_space: 'yes' },
-      { key: 'k', repo: TEST_REPO, prompt: 'go', placement: 'hidden' },
+      { key: 'k', repo: TEST_REPO, prompt: 'go', placement: 'floating' },
     ]
     for (const body of bad) {
       expect((await viaSocket('POST', '/spawns', body)).status).toBe(400)

@@ -44,9 +44,9 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 - **Placement and sessions.** The Runner looks before it acts: a terminal carries `factory.key=<spawn key>`, and a live one
   running claude is never started twice. One space per repo, keyed by path. A spawn with a parent
   terminal is that terminal's hidden child when `placement` says `child`; `tab` makes it a tab; with none, by role: `worker`,
-  `mechanical` or `deep` child, every other role a tab. State is derived from stored events, never stored.
+  `mechanical` or `deep` child, `reviewer` hidden (`no_parent`, only the key label: no space, no tab), every other role a tab. State is derived from stored events, never stored.
 - **Roles** (`config/roles.json`): role → tier (`haiku|sonnet|opus`, never a model id) and effort. `deep` is a worker raised for
-  novel hard logic (opus, high). `rd --role` depends on `factory role get <role> --format json` printing exactly
+  novel hard logic (opus, high). `reviewer` (sonnet, medium) is review v4's read-only session. `rd --role` depends on `factory role get <role> --format json` printing exactly
   `{"role","tier","effort"}`; unknown is exit 4. Values change only on measured data.
 - **One process.** A session-level Postgres advisory lock is taken first; a second copy exits 1. Every advisory key lives in
   `src/locks.ts` and they stay distinct.
@@ -70,6 +70,8 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
 
 **The reaper** (`src/fleet/reaper.ts`, `git.ts`, `HcCloser` in `sources.ts`; `docs/design.md` §11 "The reaper"): closes a Claude Code session in a worktree of a `FACTORY_REPO_ROOTS` repo that is idle 2 h, clean, has done work that is merged, and is held by no parent or open Issue (`hc kill` + `rm` by address; **the worktree stays**). The fleet build judges (git, database); the closes run **after the snapshot is stored**, one pass at a time, no new step after 60 s, never on the tick. `FACTORY_REAPER=on|dry|off` (default `dry`; `off` judges nothing and only shows closes left unsettled for over an hour); IuRoot is never touched or listed; `reaper { mode, closed, kept }` on `/fleet`; a close is a `fleet_triage_log` row of kind `reaped` (written `closing`, settled after the close), **not undoable** (undo is 409). Migration `028`.
 
+**The review transport** (`src/review/limits.ts`, `transport.ts`; `docs/design.md` §3 "The review transport"): agw asks for one hidden `reviewer` session per review attempt (`spawn create review-<job>-a1 --role reviewer --review-job …`); admission holds it by `review_slots` (`FACTORY_REVIEW_SESSIONS`, 2), waits it under the 70/90 review ceiling (never spills) and holds a `deep` one at `deep_cap` (`FACTORY_REVIEW_DEEP_CAP`, 15 per account per UTC day; the owner's `allow` on /fleet lets that one spawn past it). When its turn ends the transport (behind the tick, in no transaction) pipes the last reply, verbatim, into `agw review submit` and closes the terminal; a refusal gets one `a2`, then a person; a transcript that stops growing for `FACTORY_REVIEW_IDLE_MS` (10 min) is closed the same way. The factory judges nothing in the reply. Migration `029`.
+
 **Behaviour as built** is in `docs/design.md` §3 "As built": the tick, spaces, the runner, hooks and the socket, prompt delivery,
 the rules that act, the spool, derived state, sessions, the witness, panes as clients, test slots, quota, admission, the queue
 state, roles, process/health/contract/schema/API.
@@ -78,7 +80,7 @@ state, roles, process/health/contract/schema/API.
 
 - `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr-core
   adapter (`runner.ts`: the port; `hc-runner.ts`, `hc.ts`, `app-doc.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the witness
-  (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`), the account
+  (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`; a reviewer's rules and the review transport: `review/`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), Issues (`issues/`: `lifecycle.ts` the one writer, `inbox.ts`, `worker.ts`, `effects.ts`,
   `read.ts`; classify, the lead, its brief, worktree, verbs and send-back: `classify.ts`, `admission.ts`, `lead.ts`, `leadtree.ts`, `names.ts`, `brief.ts`, `worktree.ts`, `verbs.ts`, `sendback.ts`; evidence, the hold and finalize: `evidence.ts`, `commits.ts`, `origin.ts`, `hold.ts`, `finalize.ts`, `archive.ts`, `resume.ts`, `offtick.ts`; what `factory status` and `issue show` read: `follow.ts` (the ISSUES section, the timeline), `attention.ts` (its ATTENTION lines)), projects (`projects/`: `project.yaml` v0 sync, the make contract, claims; `docs/design.md` §9 "As built"), `migrations/`.

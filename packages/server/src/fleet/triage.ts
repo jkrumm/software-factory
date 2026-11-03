@@ -42,6 +42,7 @@ const LABEL: Record<ActIntent, string> = {
   later: 'Later',
   archive_plan: 'Archive plan',
   hand_off: 'Hand off',
+  allow: 'Allow',
 }
 const action = (intent: ActIntent) => ({ label: LABEL[intent], intent })
 
@@ -390,6 +391,9 @@ const suggest = (verb: ActIntent, why: string, evidence: string, confidence: num
   confidence,
 })
 
+/** The spawn key of a `review <key> held: deep cap …` attention line (review v4's admission), else null. */
+export const deepCapHeld = (text: string): string | null => /^review (\S+) held: deep cap/.exec(text)?.[1] ?? null
+
 export function decide({ ask, request, finding, repos, now }: DecideInput): Triaged {
   const later = action('later')
   const yours = (...extra: ActIntent[]): Triaged => ({
@@ -458,6 +462,19 @@ export function decide({ ask, request, finding, repos, now }: DecideInput): Tria
         actions: [action('resolve'), later],
       }
     case 'factory': {
+      const held = deepCapHeld(ask.text)
+      if (held) {
+        return {
+          tier: 'one_click',
+          suggestion: suggest(
+            'allow',
+            "the day's deep reviews are spent on every open account; allowing this one runs it past the cap, at its own tier, on an account under the review ceiling",
+            ask.text,
+            0.6,
+          ),
+          actions: [action('allow'), later],
+        }
+      }
       if (ask.kind === 'blocker' && repo && !repo.visible && !businessClass(text)) {
         return { tier: 'hand_off', suggestion: null, actions: [action('hand_off'), later] }
       }
