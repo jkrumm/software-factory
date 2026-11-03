@@ -842,7 +842,7 @@ describe('the fingerprint and NOTIFY', () => {
         '-A',
         '-t',
       ],
-      { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
+      { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, LC_ALL: 'C' } }, // the notice is matched in English
     )
     void proc.stdin.write('LISTEN fleet;\nSELECT pg_sleep(6);\nSELECT 1;\n')
     void proc.stdin.flush()
