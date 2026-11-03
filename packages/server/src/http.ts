@@ -101,7 +101,7 @@ import type { TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { releaseSlot, touchSlot } from './slots.ts'
 import type { ReviewLimits } from './review/limits.ts'
-import { createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
+import { cancelSpawn, createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
   sql: SQL
@@ -301,11 +301,11 @@ const resolveProject = (project: string, repoRoots: readonly string[]): Promise<
 
 /** The answer for a key that already has a spawn: the row, or `key_spent` when its agent is gone. */
 const replay = (spawn: Spawn): Response =>
-  spawn.status === 'ended'
+  spawn.status === 'ended' || spawn.status === 'cancelled'
     ? respond(
         ErrorBody,
         {
-          error: `spawn key ${spawn.key} is spent: its agent ended; create again under another key`,
+          error: `spawn key ${spawn.key} is spent: its agent ${spawn.status === 'cancelled' ? 'never started (cancelled)' : 'ended'}; create again under another key`,
           code: 'key_spent',
           spawn,
         },
@@ -352,6 +352,24 @@ const spawnHandler =
     )
     return created ? respond(Spawn, spawn, 201) : replay(spawn)
   }
+
+/**
+ * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels the review it asked for): a queued or waiting spawn
+ * becomes `cancelled`, the same call again answers the same row; one that was claimed is 409 naming its state.
+ */
+const spawnCancelHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/spawns/:key/cancel'>) => {
+  const result = await cancelSpawn(sql, req.params.key, clock.now())
+  if ('spawn' in result) return respond(Spawn, result.spawn)
+  if (result.problem === 'unknown') return json({ error: 'unknown spawn' }, 404)
+  return respond(
+    ErrorBody,
+    {
+      error: `spawn ${req.params.key} is ${result.status}: only a queued or waiting spawn can be cancelled`,
+      code: 'not_cancellable',
+    },
+    409,
+  )
+}
 
 /** `GET /spawns/:key`. */
 const spawnGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/spawns/:key'>) => {
@@ -799,6 +817,7 @@ export function routes({
     '/spawns/:key': {
       GET: route(spawnGetHandler(sql, clock)),
     },
+    '/spawns/:key/cancel': { POST: route(spawnCancelHandler(sql, clock)) },
     '/spawns/:key/requeue': {
       POST: route(async (req: Bun.BunRequest<'/spawns/:key/requeue'>) => {
         const result = await requeueSpawn(sql, req.params.key, clock.now())
@@ -930,6 +949,7 @@ export function serveHooks(deps: {
       '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
       '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.reviewLimits)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
+      '/spawns/:key/cancel': { POST: viaSocket(spawnCancelHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
       '/issues': {
         GET: viaSocket(issueListHandler(deps.sql)),

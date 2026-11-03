@@ -17,10 +17,10 @@ export { EVENT_KINDS, type EventKind } from './spool.ts'
  */
 
 /**
- * `ended` is never stored: it is a `started` spawn whose agent is gone, derived whenever a spawn is read (its session is
+ * `cancelled` is a queued or waiting spawn that `factory spawn cancel` ended before any claim; its key is spent. `ended` is never stored: it is a `started` spawn whose agent is gone, derived whenever a spawn is read (its session is
  * `dead`, or its pane is no terminal of the current core). An ended spawn's key is spent.
  */
-export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'ended', 'failed'])
+export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'ended', 'failed', 'cancelled'])
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
 /**

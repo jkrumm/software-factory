@@ -176,6 +176,35 @@ export async function createSpawn(
 }
 
 /**
+ * Ends a spawn that was never claimed: `queued` (whatever its hold) or `waiting` becomes `cancelled`, so no agent ever starts for it. Idempotent: a
+ * cancelled spawn answers as it is. A `starting`, `started`, `failed` or `ended` one is not cancelled (`claimed`, naming its state): its agent may
+ * already run, and closing it is the Runner's and the owner's business. Takes the capacity lock, so a claim in the same moment either wins or loses
+ * cleanly.
+ */
+export async function cancelSpawn(
+  sql: SQL,
+  key: string,
+  now: Date,
+): Promise<{ spawn: SpawnView } | { problem: 'unknown' } | { problem: 'claimed'; status: SpawnStatus }> {
+  const row = await sql.begin(async (tx) => {
+    await lockCapacity(tx)
+    const [issue]: { issue_id: number | null }[] = await tx`
+      SELECT issue_id FROM factory.spawns WHERE key = ${key} AND status IN ('queued', 'waiting')`
+    if (issue?.issue_id != null) await releaseIdleClaim(tx, issue.issue_id)
+    const [cancelled]: SpawnRow[] = await tx`
+      UPDATE factory.spawns
+      SET status = 'cancelled', hold = NULL, account = NULL, assigned_at = NULL, resume_at = NULL, claimed_at = NULL
+      WHERE key = ${key} AND status IN ('queued', 'waiting')
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, placement, review_job, review_tier, review_effort`
+    return cancelled
+  })
+  if (row) return { spawn: toView(row) }
+  const current = await getSpawn(sql, key, now)
+  if (!current) return { problem: 'unknown' }
+  return current.status === 'cancelled' ? { spawn: current } : { problem: 'claimed', status: current.status }
+}
+
+/**
  * Puts a `failed` spawn back in the queue with a fresh retry budget: the next tick picks an account and starts it.
  * Anything else is left alone (`not_failed`), so a double click or a replay changes nothing.
  */

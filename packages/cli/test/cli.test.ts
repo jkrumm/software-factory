@@ -206,6 +206,28 @@ beforeAll(() => {
         if (status === 503) return Response.json(health('unhealthy'), { status })
         return Response.json({ error: 'database down' }, { status })
       }
+      if (path.startsWith('/spawns/') && path.endsWith('/cancel') && req.method === 'POST') {
+        const key = decodeURIComponent(path.split('/')[2] ?? '')
+        if (key === 'running')
+          return Response.json(
+            {
+              error: 'spawn running is started: only a queued or waiting spawn can be cancelled',
+              code: 'not_cancellable',
+            },
+            { status: 409 },
+          )
+        if (key === 'unknown') return Response.json({ error: 'unknown spawn' }, { status: 404 })
+        return Response.json({
+          key,
+          status: 'cancelled',
+          account: null,
+          resumeAt: null,
+          attempts: 0,
+          session: null,
+          error: null,
+          ...ROLE,
+        })
+      }
       if (path.startsWith('/spawns/') && path.endsWith('/requeue') && req.method === 'POST') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
           return Response.json({ error: 'unauthorized' }, { status: 401 })
@@ -410,6 +432,19 @@ describe('factory spawn list', () => {
     expect(r.stdout).toBe(
       'b\tstarted\ta\t-\t1\tpane-b\tworker\t-\na\twaiting\t-\t2026-10-30T14:00:00.000Z\t0\t-\tworker\t-\n',
     )
+  })
+})
+
+describe('factory spawn cancel', () => {
+  test('prints the cancelled spawn; a claimed one is conflict (5), an unknown one not_found (4); it needs a key', async () => {
+    const r = await factory(['spawn', 'cancel', 'held'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout)).toMatchObject({ key: 'held', status: 'cancelled' })
+    const conflict = await factory(['spawn', 'cancel', 'running'])
+    expect(conflict.code).toBe(EXIT.conflict)
+    expect(JSON.parse(conflict.stderr)).toMatchObject({ error: { message: expect.stringContaining('is started') } })
+    expect((await factory(['spawn', 'cancel', 'unknown'])).code).toBe(EXIT.not_found)
+    expect((await factory(['spawn', 'cancel'])).code).toBe(EXIT.usage)
   })
 })
 

@@ -73,6 +73,9 @@ commands:
                   hidden: no parent, no tab) is admitted against the review slots, ceiling and the day's deep cap. Uses the token when
                   FACTORY_TOKEN is set and the socket otherwise
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
+  spawn cancel <key>
+                  end a queued or waiting spawn that was never claimed (state cancelled, its key is spent; the same call again is
+                  the same answer; a claimed or started one is exit 5 naming its state). Token or socket, as spawn create
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
@@ -971,6 +974,18 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       body: { id: flags.id ?? `note:${crypto.randomUUID()}`, text },
     })
     return print(body, promptLine(body))
+  }
+
+  if (words[0] === 'spawn' && words[1] === 'cancel') {
+    const target = words[2]
+    if (!target || words.length > 3) throw usage('usage: spawn cancel <key>')
+    const { body } = await call(io, `/spawns/${encodeURIComponent(target)}/cancel`, {
+      method: 'POST',
+      auth: true,
+      socket: 'fallback',
+      schema: Spawn,
+    })
+    return print(body, spawnLine(body))
   }
 
   if (words[0] === 'spawn' && words[1] === 'requeue') {

@@ -228,6 +228,53 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
     }
     expect(await app.get('/queue').then((r) => r.json())).toMatchObject({ effective: 'run' })
   })
+
+  test('cancel: a queued or waiting spawn ends cancelled (the same call again, the same answer); a claimed one is 409 naming its state', async () => {
+    // Held by the queue state: queued with a hold, never claimed.
+    await app.send('PUT', '/queue', { state: 'drain' })
+    await viaSocket('POST', '/spawns', { key: 'held', repo: TEST_REPO, prompt: 'go' })
+    const first = await viaSocket('POST', '/spawns/held/cancel', {})
+    expect(first.status).toBe(200)
+    expect(Spawn.parse(await first.json())).toMatchObject({
+      key: 'held',
+      status: 'cancelled',
+      hold: null,
+      account: null,
+    })
+    const again = await app.send('POST', '/spawns/held/cancel', {})
+    expect(again.status).toBe(200)
+    expect(Spawn.parse(await again.json()).status).toBe('cancelled')
+
+    // Never started later, and its key is spent.
+    await app.send('PUT', '/queue', { state: 'run' })
+    expect((await runTick()).started).toEqual([])
+    expect((await hc.state()).terminals).toEqual([])
+    const replay = await viaSocket('POST', '/spawns', { key: 'held', repo: TEST_REPO, prompt: 'go' })
+    expect(replay.status).toBe(409)
+    expect(await replay.json()).toMatchObject({ code: 'key_spent' })
+    const status = await app.get('/status').then((r) => r.json() as Promise<{ queue: { spawns: unknown[] } }>)
+    expect(status.queue.spawns).toEqual([])
+
+    // Waiting for capacity (no account has room) is cancellable too.
+    await app.send('PUT', '/quota/accounts/a', usage(99, 99, new Date(clock.now().getTime() + 1e9)))
+    await app.send('PUT', '/quota/accounts/b', usage(99, 99, new Date(clock.now().getTime() + 1e9)))
+    await app.send('PUT', '/quota/accounts/c', usage(99, 99, new Date(clock.now().getTime() + 1e9)))
+    await viaSocket('POST', '/spawns', { key: 'waits', repo: TEST_REPO, prompt: 'go' })
+    expect(await (await app.get('/spawns/waits')).json()).toMatchObject({ status: 'waiting' })
+    expect((await viaSocket('POST', '/spawns/waits/cancel', {})).status).toBe(200)
+
+    // Claimed: started, so not cancellable.
+    await app.send('PUT', '/quota/accounts/a', usage(10, 10, new Date(clock.now().getTime() + 1e9)))
+    await viaSocket('POST', '/spawns', { key: 'runs', repo: TEST_REPO, prompt: 'go' })
+    await runTick()
+    const claimed = await app.send('POST', '/spawns/runs/cancel', {})
+    expect(claimed.status).toBe(409)
+    expect(await claimed.json()).toMatchObject({
+      code: 'not_cancellable',
+      error: expect.stringContaining('is started'),
+    })
+    expect((await viaSocket('POST', '/spawns/nope/cancel', {})).status).toBe(404)
+  })
 })
 
 describe('a spawn started in a space shows its pane, tab and space', () => {
