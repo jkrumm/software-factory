@@ -25,8 +25,14 @@ async function freePort(): Promise<number> {
   })
 }
 
+/**
+ * Pinned locale for the cluster's processes: without LANG/LC_* (a launchd-started host, `agw check`) macOS Postgres picks
+ * the system locale and its postmaster turns multithreaded at start (FATAL, "set LC_ALL to a valid locale").
+ */
+const PG_ENV = { ...process.env, LC_ALL: 'C' }
+
 async function run(cmd: string[]): Promise<void> {
-  const proc = Bun.spawn(cmd, { stdout: 'ignore', stderr: 'pipe' })
+  const proc = Bun.spawn(cmd, { stdout: 'ignore', stderr: 'pipe', env: PG_ENV })
   const [stderr, code] = await Promise.all([proc.stderr.text(), proc.exited])
   if (code !== 0) throw new Error(`${cmd.join(' ')} exited ${code}: ${stderr}`)
 }
@@ -61,7 +67,7 @@ export async function startTestDb(options: { migrate?: boolean } = {}): Promise<
   }
 
   try {
-    await run([join(bin, 'initdb'), '-U', 'factory', '--auth=trust', '-D', data])
+    await run([join(bin, 'initdb'), '-U', 'factory', '--locale=C', '-E', 'UTF8', '--auth=trust', '-D', data])
     await run([join(bin, 'pg_ctl'), '-D', data, '-w', '-l', join(root, 'pg.log'), '-o', serverOptions, 'start'])
     started = true
   } catch (error) {
