@@ -226,7 +226,8 @@ export class HcRunner implements Runner {
               ? { 'herdr.space': where.space, 'herdr.tab': where.tab, 'factory.tab_name': input.key }
               : {}),
           },
-          keep: true,
+          // A reviewer is never kept: a kept terminal is resumed (by `hc-resume`) without the reviewer's read-only argv.
+          keep: input.role !== REVIEWER_ROLE,
           name: terminalName(input.key),
           ...where.params,
         },

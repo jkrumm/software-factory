@@ -138,6 +138,8 @@ export interface ReviewPassResult {
   /** attempts that failed and now have, or had, an `a2` */
   retried: string[]
   needsHuman: string[]
+  /** attempts agw no longer wants a reply for (job abandoned, or won by another attempt): closed, nothing more */
+  superseded: string[]
   errors: string[]
 }
 
@@ -145,6 +147,12 @@ const trim = (text: string): string => text.trim().slice(0, MAX_ERROR_CHARS)
 
 /** The prompt of the second attempt: the first's, and why it is asked again. */
 export const retryPrompt = (original: string, why: string): string => `${original}\n\n${why}`
+
+/**
+ * agw's ReviewError texts (host/review/submit.ts) for a job nobody waits for any more: a later `prepare` restarted its round
+ * ("was abandoned"), or another attempt won it ("is already submitted by attempt N"). Retrying cannot change either.
+ */
+export const isSuperseded = (error: string): boolean => /\babandoned\b|already submitted by attempt/i.test(error)
 
 const refusedWhy = (error: string): string =>
   `Your previous reply was refused by agw review submit: ${trim(error)}. Reply again with only the JSON.`
@@ -179,7 +187,7 @@ export class ReviewTransport {
   /** One pass over the reviewer sessions that have no outcome yet. */
   async pass(): Promise<ReviewPassResult> {
     const { sql } = this.deps
-    const result: ReviewPassResult = { submitted: [], retried: [], needsHuman: [], errors: [] }
+    const result: ReviewPassResult = { submitted: [], retried: [], needsHuman: [], superseded: [], errors: [] }
     const rows: {
       key: string
       repo: string
@@ -216,8 +224,15 @@ export class ReviewTransport {
     const now = clock.now()
     const session = await getSession(sql, a.key, now)
     if (!session) return
-    const ended = session.state === 'dead' || (session.state === 'idle' && session.turn >= 1)
-    if (ended) return this.collect(a, session, now, result)
+    // Gone: the terminal is lost (`pane_gone`) or the runner restarted while the turn was open. A reviewer is never resumed (its terminal is not
+    // kept, the rules skip it), so its attempt failed and a fresh session takes the next one. A turn that had ended before is still collected.
+    const closedTurn =
+      session.state === 'idle' ? session.turn >= 1 : session.state === 'dead' && (await this.turnEnded(a.key))
+    if (closedTurn) return this.collect(a, session, now, result)
+    if (session.state === 'dead' || (await this.restartedSince(a.key))) {
+      const why = 'Your previous session was lost before it replied. Reply with only the JSON.'
+      return this.failed(a, 'idle', 'the session was lost before its turn ended', why, result)
+    }
     // The turn is open. No wall-clock cap on the work itself: only a transcript that stopped growing is judged.
     if (session.state !== 'working' && session.state !== 'stuck' && session.state !== 'blocked') return
     const written = session.transcriptPath ? await (this.deps.mtime ?? fileMtime)(session.transcriptPath) : undefined
@@ -252,6 +267,12 @@ export class ReviewTransport {
     if (answer.kind === 'unavailable') {
       this.askAgainAt.set(a.key, now.getTime() + SUBMIT_RETRY_MS)
       result.errors.push(`${a.key}: ${answer.error}`)
+      return
+    }
+    if (answer.kind === 'refused' && isSuperseded(answer.error)) {
+      await this.deps.runner.close(a.key)
+      await this.record(a, 'superseded', trim(answer.error))
+      result.superseded.push(a.key)
       return
     }
     if (answer.kind === 'refused') return this.failed(a, 'refused', answer.error, refusedWhy(answer.error), result)
@@ -296,9 +317,27 @@ export class ReviewTransport {
     result.retried.push(a.key)
   }
 
+  /** Whether the session's last turn event is a `turn_ended`. */
+  private async turnEnded(key: string): Promise<boolean> {
+    const [row]: { kind: string }[] = await this.deps.sql`
+      SELECT kind FROM factory.events WHERE session = ${key} AND kind IN ('turn_started', 'turn_ended') ORDER BY at DESC, id DESC LIMIT 1`
+    return row?.kind === 'turn_ended'
+  }
+
+  /** Whether the runner (herdr-core) restarted after this session's last start: its terminal, not kept, went with it. */
+  private async restartedSince(key: string): Promise<boolean> {
+    const [row]: { restarted: boolean }[] = await this.deps.sql`
+      SELECT EXISTS (
+        SELECT 1 FROM factory.events r
+        WHERE r.session = '_runner' AND r.kind = 'runner_restarted'
+          AND r.at > (SELECT max(at) FROM factory.events WHERE session = ${key} AND kind = 'session_started')
+      ) AS restarted`
+    return row?.restarted === true
+  }
+
   private async record(
     a: Attempt,
-    outcome: 'submitted' | 'refused' | 'idle' | 'needs_human',
+    outcome: 'submitted' | 'refused' | 'idle' | 'needs_human' | 'superseded',
     detail: string,
   ): Promise<void> {
     await this.deps.sql`

@@ -286,7 +286,7 @@ refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is
 **A hidden terminal** (`placement: hidden`, the role default of `reviewer`) is the third placement: `terminal.run` with `no_parent: true` and the single
 label `factory.key=<spawn key>`: no `parent`, no `herdr.space`, no `herdr.tab`, no `factory.tab_name`, nothing seeded in the app's document and no tab named
 (`StartResult.tab` and `workspace` are null). The key label is how the Runner finds and closes it (`Runner.close`). The params are herdr-core 0.1.15's
-`terminal.run` (`no_parent`: "No parent, even when started from a terminal"); whether the Herdr app shows an unlabelled, parentless terminal anywhere is the
+`terminal.run` (`no_parent`: "No parent, even when started from a terminal"); the terminal is **not kept** (`keep: false` for role `reviewer`), so `hc-resume` (which types `claude --resume` into kept terminals) never brings it back; whether the Herdr app shows an unlabelled, parentless terminal anywhere is the
 app's choice and is not asserted here. A caller may ask for `hidden` on any role (`--placement hidden`); a reviewer accepts no other.
 
 **A failed spawn leaves its terminal.** It is labelled with the key and `factory spawn requeue` finds it again (an agent already
@@ -545,10 +545,15 @@ after the last prompt, the end of a 512 KiB tail, thinking and tool calls skippe
 `agw review submit <jobId> --attempt <n> --account <the account the spawn started on> --commit --format json` (`FACTORY_AGW_BIN`, `runProcess`, 60 s, stderr captured). Exit 0:
 `Runner.close(<key>)`, then the outcome `submitted` (row in `factory.review_outcomes`, primary key the spawn key, written last). Non-zero: the attempt is closed and, for `a1`, a
 spawn `review-<jobId>-a2` is made with the same review and the prompt `<original>\n\nYour previous reply was refused by agw review submit: <message, 2,000 characters at
-most>. Reply again with only the JSON.`; `a2` refused is `needs_human`. A timeout or a missing binary is no refusal: the same attempt is asked again after 30 s.
+most>. Reply again with only the JSON.`; `a2` refused is `needs_human`. **Superseded is final:** a refusal whose message says the job was *abandoned* (a later `prepare` restarted its round) or is *already submitted by attempt N*
+(another attempt won; agw's `ReviewError` texts in `host/review/submit.ts`) closes the terminal and records `superseded`: no `a2`, no person. A timeout or a missing binary is no refusal: the same attempt is asked again after 30 s.
 **Idle watchdog**, in the same pass: a reviewer whose turn is open (`working`, `stuck`, `blocked`) and whose transcript file has not been written for
 `FACTORY_REVIEW_IDLE_MS` (default 10 min; the turn's start when the file cannot be read) is closed, outcome `idle`, then `a2` (with a prompt saying so), then `needs_human`.
-There is no other time limit on a review. Replays are harmless by key: `agw review submit` is idempotent per (job, attempt), `createSpawn` returns the `a2` that exists,
+There is no other time limit on a review. **A reviewer is never resumed**, because a resumed session would lack the read-only argv: `rules.ts` leaves role `reviewer` out of every rule (restart resume, watchdog, rotation, blocked, wake), and a `via: resume` prompt for one is refused. A reviewer whose terminal is lost
+(`pane_gone`, so `dead`) or that was open when the runner restarted (a `runner_restarted` after its `session_started`) before its turn ended is a failed attempt like an idle one (`a2` once, a fresh session, then `needs_human`); one that had ended its turn still hands its reply over.
+
+**`factory spawn cancel <key>`** (`POST /spawns/:key/cancel`, token API and socket; `cancelSpawn` in `spawns.ts`): a `queued` (any hold) or `waiting` spawn that was never claimed becomes `cancelled` and no agent ever starts for it; the same call again answers the same row; a `starting`, `started`, `failed` or `ended`
+one is 409 `not_cancellable` naming its state (exit 5). A cancelled key is spent (a create under it is 409 `key_spent`), and the spawn is left out of `factory status`. agw's `scripts/verify.sh` cancels a smoke review that is held, so it does not run later on a deleted fixture. Replays are harmless by key: `agw review submit` is idempotent per (job, attempt), `createSpawn` returns the `a2` that exists,
 `close` finds its terminal by label.
 
 **Asks.** `needs_human` is an attention line, `review <jobId> needs a human: attempt 2 failed: …` (3 days), so an ask on `/fleet` (tier `yours`). A deep review held by

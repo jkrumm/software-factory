@@ -18,7 +18,8 @@ import {
   type SubmitInput,
   type Submitted,
 } from '../src/review/transport.ts'
-import { liveSessions } from '../src/sessions.ts'
+import { evaluateRules } from '../src/rules.ts'
+import { liveSessions, recordEvent, RUNNER_SESSION } from '../src/sessions.ts'
 import { createSpawn } from '../src/spawns.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, TEST_ROLES, type TestApp } from './support/app.ts'
@@ -142,7 +143,7 @@ describe('the reviewer spawn', () => {
     for (const tool of ['Bash', 'Write', 'Edit', 'NotebookEdit']) expect(REVIEWER_DISALLOWED_TOOLS).toContain(tool)
     expect(terminal?.labels).toEqual({ 'factory.key': 'review-rv_a-a1' })
     expect(terminal?.parent).toBeNull()
-    expect(state.runs[0]?.params).toMatchObject({ no_parent: true, keep: true, cwd: TEST_REPO })
+    expect(state.runs[0]?.params).toMatchObject({ no_parent: true, keep: false, cwd: TEST_REPO })
     expect(state.runs[0]?.params.env).toMatchObject({ FACTORY_ROLE: 'reviewer', FACTORY_SESSION: 'review-rv_a-a1' })
     // Hidden: no space was seeded in the app's document and the result has no tab.
     expect(state.docs).toEqual({})
@@ -517,6 +518,58 @@ describe('submit on Stop', () => {
     await w.emit(key, 'pane_gone', w.at(0))
     replies.set(path, 'the reply')
     expect((await transport.pass()).submitted).toEqual([key])
+  })
+
+  test('a runner restart with a live reviewer resumes nothing and starts attempt 2', async () => {
+    const { key } = await attempt('rv_restart', 1, 'open', { since: 10 })
+    await w.spawned('control', { account: 'a', startedMinutesAgo: 30 })
+    await w.emit('control', 'turn_started', w.at(10))
+    await recordEvent(db.sql, {
+      key: 'runner_restarted:new',
+      session: RUNNER_SESSION,
+      kind: 'runner_restarted',
+      at: w.at(6),
+      payload: { from: '1@x', to: '2@y' },
+    })
+    // The rule resumes the worker, and never the reviewer.
+    const { created } = await evaluateRules(db.sql, clock.now())
+    expect(created).toHaveLength(1)
+    expect(created[0]).toContain('control')
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.prompts WHERE session = ${key}`)[0]?.n).toBe(0)
+
+    // The reviewer's attempt failed with its terminal: a fresh session, once.
+    const result = await transport.pass()
+    expect(result).toMatchObject({ retried: [key], needsHuman: [] })
+    expect(fake.closed).toEqual([key])
+    expect(await spawnKeys()).toEqual([key, reviewKey('rv_restart', 2)])
+    expect(calls).toEqual([])
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.prompts WHERE session = ${key}`)[0]?.n).toBe(0)
+  })
+
+  test('a lost terminal mid-turn is a failed attempt; a lost terminal after the turn ended still hands its reply over', async () => {
+    const lost = await attempt('rv_lost', 1, 'open', { since: 10 })
+    await w.emit(lost.key, 'pane_gone', w.at(1))
+    replies.set(lost.path, 'a half-finished thought before a tool call')
+    expect(await transport.pass()).toMatchObject({ retried: [lost.key] })
+    expect(calls).toEqual([])
+  })
+
+  test('a job agw abandoned, or that another attempt won, is final: closed, no attempt 2, no person', async () => {
+    for (const [job, error] of [
+      ['rv_gone', 'job rv_gone was abandoned (a later prepare restarted its round)'],
+      ['rv_won', 'job rv_won is already submitted by attempt 1'],
+    ] as const) {
+      const { key, path } = await attempt(job, 1, 'ended')
+      replies.set(path, '{}')
+      answers.push({ kind: 'refused', error })
+      expect(await transport.pass()).toMatchObject({ superseded: [key], retried: [], needsHuman: [], submitted: [] })
+      expect(fake.closed).toContain(key)
+      expect(await outcome(key)).toMatchObject({ outcome: 'superseded' })
+      expect((await spawnKeys()).filter((k) => k.startsWith(`review-${job}-`))).toEqual([key])
+      expect(await reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))).toBe(0)
+    }
+    const status = Status.parse(await (await app.get('/status')).json())
+    expect(status.attention.filter((l) => l.includes('needs a human'))).toEqual([])
   })
 
   describe('the idle watchdog', () => {
