@@ -641,6 +641,35 @@ describe('submit on Stop', () => {
       expect((await spawnKeys()).filter((k) => k.endsWith('-a3'))).toEqual([])
     })
 
+    test('a wedged reviewer (terminal alive, no output past the window) is killed and its slot freed, a2 starts, and a wedged a2 is for a person', async () => {
+      const live = async () => reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))
+      const { key, path } = await attempt('rv_wedged', 1, 'open', { since: 5 })
+      written.set(path, new Date(clock.now().getTime() - 5 * MIN))
+      // The terminal is alive: no pane_gone, no turn end, the session still counts against the slots.
+      expect((await getSession(db.sql, key, clock.now()))?.state).not.toBe('gone')
+      expect(await live()).toBe(1)
+      expect(await transport.pass()).toMatchObject({ retried: [], needsHuman: [] })
+      expect(fake.closed).toEqual([])
+
+      clock.advance(6 * MIN)
+      expect(await transport.pass()).toMatchObject({ retried: [key] })
+      expect(fake.closed).toEqual([key])
+      expect(await outcome(key)).toMatchObject({ outcome: 'idle' })
+      expect(await live()).toBe(0)
+      const second = reviewKey('rv_wedged', 2)
+      expect(await spawnKeys()).toEqual([key, second])
+
+      // a2 starts, wedges the same way: killed, no a3, a person.
+      const again = await attempt('rv_wedged', 2, 'open')
+      written.set(again.path, new Date(clock.now().getTime() - 11 * MIN))
+      expect(await live()).toBe(1)
+      expect(await transport.pass()).toMatchObject({ needsHuman: [second] })
+      expect(fake.closed).toEqual([key, second])
+      expect(await outcome(second)).toMatchObject({ outcome: 'needs_human' })
+      expect(await live()).toBe(0)
+      expect(await spawnKeys()).toEqual([key, second])
+    })
+
     test('a session that keeps writing is never closed, however long it runs', async () => {
       const { path } = await attempt('rv_busy', 1, 'open', { since: 600 })
       for (let i = 0; i < 4; i++) {
