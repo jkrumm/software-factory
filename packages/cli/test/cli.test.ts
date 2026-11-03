@@ -213,6 +213,16 @@ beforeAll(() => {
             {
               error: 'spawn running is started: only a queued or waiting spawn can be cancelled',
               code: 'not_cancellable',
+              spawn: {
+                key,
+                status: 'started',
+                account: 'a',
+                resumeAt: null,
+                attempts: 1,
+                session: null,
+                error: null,
+                ...ROLE,
+              },
             },
             { status: 409 },
           )
@@ -442,7 +452,13 @@ describe('factory spawn cancel', () => {
     expect(JSON.parse(r.stdout)).toMatchObject({ key: 'held', status: 'cancelled' })
     const conflict = await factory(['spawn', 'cancel', 'running'])
     expect(conflict.code).toBe(EXIT.conflict)
-    expect(JSON.parse(conflict.stderr)).toMatchObject({ error: { message: expect.stringContaining('is started') } })
+    expect(JSON.parse(conflict.stderr)).toMatchObject({
+      error: {
+        code: 'not_cancellable',
+        message: expect.stringContaining('is started'),
+        details: { status: 409, spawn: { key: 'running', status: 'started' } },
+      },
+    })
     expect((await factory(['spawn', 'cancel', 'unknown'])).code).toBe(EXIT.not_found)
     expect((await factory(['spawn', 'cancel'])).code).toBe(EXIT.usage)
   })

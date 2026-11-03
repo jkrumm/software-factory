@@ -75,7 +75,7 @@ commands:
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn cancel <key>
                   end a queued or waiting spawn that was never claimed (state cancelled, its key is spent; the same call again is
-                  the same answer; a claimed or started one is exit 5 naming its state). Token or socket, as spawn create
+                  the same answer; a claimed or started one is exit 5, its row in details.spawn). Token or socket, as spawn create
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]

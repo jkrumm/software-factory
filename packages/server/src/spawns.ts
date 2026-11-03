@@ -185,7 +185,7 @@ export async function cancelSpawn(
   sql: SQL,
   key: string,
   now: Date,
-): Promise<{ spawn: SpawnView } | { problem: 'unknown' } | { problem: 'claimed'; status: SpawnStatus }> {
+): Promise<{ spawn: SpawnView } | { problem: 'unknown' } | { problem: 'claimed'; current: SpawnView }> {
   const row = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const [issue]: { issue_id: number | null }[] = await tx`
@@ -201,7 +201,7 @@ export async function cancelSpawn(
   if (row) return { spawn: toView(row) }
   const current = await getSpawn(sql, key, now)
   if (!current) return { problem: 'unknown' }
-  return current.status === 'cancelled' ? { spawn: current } : { problem: 'claimed', status: current.status }
+  return current.status === 'cancelled' ? { spawn: current } : { problem: 'claimed', current }
 }
 
 /**

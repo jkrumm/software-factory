@@ -272,6 +272,7 @@ describe('POST /spawns on the socket: a pane starts work without a token', () =>
     expect(await claimed.json()).toMatchObject({
       code: 'not_cancellable',
       error: expect.stringContaining('is started'),
+      spawn: { key: 'runs', status: 'started' },
     })
     expect((await viaSocket('POST', '/spawns/nope/cancel', {})).status).toBe(404)
   })

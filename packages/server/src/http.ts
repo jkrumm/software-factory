@@ -355,7 +355,8 @@ const spawnHandler =
 
 /**
  * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels the review it asked for): a queued or waiting spawn
- * becomes `cancelled`, the same call again answers the same row; one that was claimed is 409 naming its state.
+ * becomes `cancelled`, the same call again answers the same row; one that was claimed is 409 `not_cancellable` carrying
+ * the spawn row (`spawn.status`), so a caller reads the state from the body, not from the message.
  */
 const spawnCancelHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/spawns/:key/cancel'>) => {
   const result = await cancelSpawn(sql, req.params.key, clock.now())
@@ -364,8 +365,9 @@ const spawnCancelHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunReques
   return respond(
     ErrorBody,
     {
-      error: `spawn ${req.params.key} is ${result.status}: only a queued or waiting spawn can be cancelled`,
+      error: `spawn ${req.params.key} is ${result.current.status}: only a queued or waiting spawn can be cancelled`,
       code: 'not_cancellable',
+      spawn: result.current,
     },
     409,
   )
