@@ -1,14 +1,30 @@
 # Program lead handoff
 
-Written by the FV lead (`PLAN.md` Wave 7, rotation `software-factory-w7`), 2026-11-03 01:30. Paused on budget; this rotation is spawned after `iu`'s weekly reset (2026-11-04 16:00). State lives in `docs/program.md` and
-`PLAN.md` Wave 7 (one line per landed wave). The previous rotation's page is in git history.
+Written by the FV lead (`PLAN.md` Wave 7, rotation `software-factory-w7`), closed 2026-11-03 07:00 on the owner's call: catch up on fresh
+subscription budget. Nothing is scheduled; the owner starts the next lead by hand after `iu`'s weekly reset (2026-11-04 16:00 UTC), with
+
+```sh
+rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave 7). Read docs/waves/handoff/program.md first. Follow the /wave skill.'
+```
+
+State lives in `docs/program.md` and `PLAN.md` Wave 7 (one line per landed wave). The previous rotation's page is in git history.
+
+## Where the program stands (2026-11-03)
+
+- **Live and reviewed:** F1 (fleet layer, gate passed), F2 (Issue machine, gate passed), FV Waves 1–4 (`/fleet`, digest, asks,
+  presence, `/fleet/since`, the morning reading), FV Wave 5's reaper in `dry`, board Wave 1; around it A1, R0, R1, I1, T, D done;
+  U at Wave 6 (time-gated, the W46 report 2026-11-16). `agw agents` reads `/fleet` (agw `02c0cbe`).
+- **FV left, in order:** Hermes "what needs me?" (W5), board Waves 2 and 3, FV Wave 6 (the gate). Then A2 and IR (both read `/fleet`),
+  then F3 (intake, self-heal) and F4 (orchestrator, the factory builds itself). L is owner-timed.
 
 ## Running now
 
 | Agent | Repo | Work | Next |
 |-|-|-|-|
 | (no worker) | software-factory | FV Wave 5's reaper live in `dry` (`a84152d`, PR #36; deferred findings in the PR's comment) | flip to `on` per the section below once `fleet` lists a would-close entry |
-| Issue leads 48–56 | weatherorb, homelab-private, software-factory, dotfiles | run by the factory | `factory status`; Issue 50's decision answered A (a dedicated tailnet port for Argo, kuma-door's pattern) for 49 and 50 |
+| Issue 49 | homelab-private | KoInsight heartbeat, phase verify, wakes itself | `factory status`; Issue 50's decision was answered A (a dedicated tailnet port for Argo, kuma-door's pattern) for 49 and 50 |
+| Issue 51 `lead-51-1` (pane `t8h`) | software-factory | **stuck:** spawned 2026-11-02 16:52, its brief sits typed in the input box, never submitted (turn 1, no event since) | it holds the software-factory claim, so 52 waits on it and 53–55 queue behind. First act of the next lead: submit it (`hc send t8h` Enter) or close and requeue it. This is the bug class Issue 51 itself names (a spawn whose prompt never started a turn): put this case in its evidence |
+| Issues 52–55 | software-factory | queued: scratch projects, early wake on a queued note, per-account ceiling, Sonnet floor for Issue leads | run after 51 |
 | agw mother `agent-workflows-w1-r4` | agent-workflows | decided `agw agents` becomes a `/fleet` client (their Wave 8, after 17) | nothing from us |
 
 ## The reaper's live proof (FV Wave 5)
@@ -35,14 +51,16 @@ close at most 5; the rows show under "Handled for you" in `factory fleet since`.
 
 ## Open, decide these yourself
 
-- **Budget:** at 01:30 `me2` 56 % (mark 60), `iu` 87 % (mark 90), `me` untouched: no room for a wave plus reviews (5–8 points), so this
-  lead stopped. Start on `iu` after its reset; keep `me2` for the lead's own reviews.
+- **Budget:** at 06:00 `me2` 62 % (mark 60, resets 2026-11-08 18:00), `iu` 89 % (mark 90, resets 2026-11-04 16:00), `me` 95 % (resets
+  2026-11-05 06:00; this program spent none of it). No room for a wave plus reviews (5–8 points), so this lead stopped. Start on `iu`
+  after its reset; keep `me2` for the lead's own reviews; `me` stays untouched.
 - **FV Wave 5 left:** Hermes answers "what needs me?" from `/fleet` asks (hermes-agent, a worker there; Hermes is token-holding, the
   token goes in its env template, never a tracked file). `agw agents` is agw's (done as a decision). A2 and IR have no plans yet; their
   `docs/program.md` track notes now say they read `/fleet`.
 - **Board Wave 2** (dotfiles `docs/waves/fv-board.md`): actions, Apply all, Undo, the away card. Notes for its brief: `caught_up` needs
   `until` (the reading's `until`, `fleet since` prints it); an ask whose repo is a path shows the path (fix: the repo's base name).
 - **FV Wave 6, the gate:** needs one real away window after board Wave 3 reports presence (until then the owner is always away).
+- `rv3-desk` has two failed and two pending notes (`/clear` and an agw rv3 job): agw's, not ours.
 - Two failed agw spawns (`agent-workflows-seats-on-claude`, `-gateway-opencode`) sit in attention; they are agw's mother's.
 
 ## Watch
