@@ -8,6 +8,7 @@ import type {
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Commits } from './commits.ts'
+import type { Review } from './review.ts'
 import { derive, storeEvidence } from './evidence.ts'
 import { enqueue } from './inbox.ts'
 import { leadKey } from './names.ts'
@@ -50,7 +51,15 @@ async function heard(
  */
 export async function fileVerb(
   sql: SQL,
-  input: { issueId: number; verb: IssueVerb; body: VerbBody; now: Date; requireSession?: boolean; commits: Commits },
+  input: {
+    issueId: number
+    verb: IssueVerb
+    body: VerbBody
+    now: Date
+    requireSession?: boolean
+    commits: Commits
+    review?: Review
+  },
 ): Promise<Filed> {
   const { issueId, verb, now } = input
   const { id, session, ...fields } = input.body
@@ -81,6 +90,7 @@ export async function fileVerb(
           attempt: issue.attempt,
           reported,
           merged: verb === 'ship',
+          review: input.review,
         })
       : undefined
   // The attempt the call was filed for: a verb that reaches the Issue after a new attempt began is refused, not applied to it.

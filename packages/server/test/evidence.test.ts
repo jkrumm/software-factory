@@ -18,6 +18,7 @@ import { runProcess } from '../src/exec.ts'
 import { type Effect, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
 import { branchOnBase } from '../src/issues/origin.ts'
 import { GitWorktrees } from '../src/issues/worktree.ts'
+import { FakeReview } from './support/review.ts'
 import { kindOfPath, requiredEvidence } from '../src/issues/evidence.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
 import {
@@ -103,6 +104,7 @@ let db: TestDb
 let clock: FakeClock
 let app: TestApp
 let commits: FakeCommits
+let review: FakeReview
 let proof: FakeProof
 let worktrees: FakeWorktrees
 let maker: WorktreeMaker
@@ -133,6 +135,7 @@ beforeEach(async () => {
   }))
   await new QuotaPoller({ sql: db.sql, clock, source }).poll()
   commits = new FakeCommits()
+  review = new FakeReview()
   proof = new FakeProof()
   worktrees = new FakeWorktrees()
   maker = new WorktreeMaker({ sql: db.sql, worktrees, now: () => clock.now() })
@@ -149,7 +152,7 @@ beforeEach(async () => {
   archive = mkdtempSync('/tmp/factory-archive-')
   copied = []
   await app?.stop()
-  app = startApp({ sql: db.sql, clock, commits, repoRoots: [fixture.root] })
+  app = startApp({ sql: db.sql, clock, commits, review, repoRoots: [fixture.root] })
 })
 
 const ports = (): EffectPorts => ({
@@ -660,6 +663,81 @@ describe('evidence', () => {
   })
 })
 
+describe('review evidence', () => {
+  const standard = (covered: boolean) => ({
+    tier: 'standard' as const,
+    covered,
+    uncovered: covered ? [] : [{ sha: 'a'.repeat(40), subject: 'feat: the change', required: 'standard' as const }],
+  })
+  const lastDerived = async () => {
+    const [row] =
+      await db.sql`SELECT payload->'derived' AS derived FROM factory.issue_inbox WHERE kind = 'ship' ORDER BY id DESC LIMIT 1`
+    return row?.derived as Record<string, unknown>
+  }
+
+  test('tier none: review is not required, and what was asked is on the row', async () => {
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    expect((await ship(id, key)).status).toBe(201)
+    expect(review.asked).toHaveLength(1)
+    expect(review.asked[0]).toMatchObject({ base: '0'.repeat(40), head: 'f'.repeat(40) })
+    expect(await lastDerived()).toMatchObject({
+      review: { tier: 'none', covered: true, uncovered: [], base: '0'.repeat(40), head: 'f'.repeat(40) },
+      reviewProblem: null,
+    })
+  })
+
+  test('standard and covered: ship passes', async () => {
+    review.answer = standard(true)
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    expect((await ship(id, key)).status).toBe(201)
+    expect((await issue(id)).state).toBe('watching')
+  })
+
+  test('uncovered: ship is refused naming the commits and their tiers, and a filed review link does not satisfy it', async () => {
+    review.answer = standard(false)
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    expect((await post(id, 'evidence', { kind: 'review', link: 'rv_abc', session: key })).status).toBe(201)
+    const response = await ship(id, key, { id: 's1' })
+    expect(response.status).toBe(409)
+    const body = (await response.json()) as { error: string }
+    expect(body.error).toContain('review missing')
+    expect(body.error).toContain(`${'a'.repeat(12)} feat: the change (needs standard)`)
+    expect((await issue(id)).state).toBe('working')
+
+    review.answer = standard(true)
+    expect((await ship(id, key, { id: 's1' })).status).toBe(201)
+  })
+
+  test('agw failing refuses the ship, and the next call asks again', async () => {
+    review.failure = new Error('agw review covered exited 1')
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    const response = await ship(id, key, { id: 's1' })
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as { error: string }).error).toContain(
+      'review could not be read: agw review covered exited 1',
+    )
+    review.failure = undefined
+    expect((await ship(id, key, { id: 's1' })).status).toBe(201)
+  })
+
+  test('close is not asked for review', async () => {
+    review.failure = new Error('down')
+    commits.paths = ['docs/a.md']
+    const { id, key } = await lead()
+    expect((await post(id, 'close', { summary: 'done', commits: [SHA], session: key })).status).toBe(201)
+    expect(review.asked).toHaveLength(0)
+  })
+
+  test('the kind is accepted by the evidence route', async () => {
+    const { id, key } = await lead()
+    expect((await post(id, 'evidence', { kind: 'review', link: 'rv_abc', session: key })).status).toBe(201)
+  })
+})
+
 describe('close', () => {
   test('refused when the commits touch deployable paths', async () => {
     const { id, key } = await lead()
@@ -1106,6 +1184,11 @@ describe('the deployed version', () => {
 
   async function holdOver(repo: string, landedAt: string | null, between: () => Promise<void> = async () => {}) {
     commits.landedAt = landedAt
+    if (landedAt === null) {
+      // Review cannot be asked without a landed commit (ship is refused on it); these tests are about the hold, so they bring no review.
+      await app.stop()
+      app = startApp({ sql: db.sql, clock, commits, repoRoots: [fixture.root] })
+    }
     const issuePorts = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
     const { id, key } = await lead(repo)
     await prove(id, key, 'service')

@@ -13,6 +13,7 @@ import { projectOfPath } from '../projects/claims.ts'
 import { getProject } from '../projects/store.ts'
 import { type Commits, CommitsRefused } from './commits.ts'
 import { leadBranch } from './names.ts'
+import type { Review, ReviewTier, UncoveredCommit } from './review.ts'
 import type { Context } from './shared.ts'
 
 /** §5's table, what each kind asks for: the words the lead reads when it is missing. */
@@ -21,6 +22,7 @@ export const EVIDENCE_MEANS: Record<EvidenceKind, string> = {
   service: '`make verify`, error rate and p95 of the changed endpoints, before and after',
   infra: "the service's status and logs after the change",
   data: 'the queries that show the data is right',
+  review: 'review v4 at the tier `agw review route` requires, with no open important finding (`agw review covered`)',
 }
 
 // The manifest names only `deploy.migrations`. The rest is how repos here are laid out, and a path none of these names is a service.
@@ -94,6 +96,17 @@ export function requiredEvidence(paths: readonly string[], manifest: ProjectMani
   return EVIDENCE_KINDS.filter((kind) => kinds.has(kind))
 }
 
+/** What review v4 said of `base..head` when `derive` asked; `covered` is agw's judgment, never the factory's. */
+export interface DerivedReview {
+  tier: ReviewTier
+  covered: boolean
+  uncovered: UncoveredCommit[]
+  /** the sha the lead's worktree was cut at */
+  base: string
+  /** `landedAt` */
+  head: string
+}
+
 /** The answer of `derive`, carried on the verb's inbox row: the lifecycle decides inside a transaction, where no git can run. */
 export interface Derived {
   /** `origin/<default>` when the work was proven landed: what the hold requires the deployed version to hold (`CommitRead.landedAt`) */
@@ -106,6 +119,10 @@ export interface Derived {
   holdMs: number
   /** why the commits cannot count */
   problem: string | null
+  /** `ship` only, and only where a review port is wired: null where review was not asked */
+  review: DerivedReview | null
+  /** why review could not be asked or answered: `ship` is refused on it (fail closed), `close` does not need review */
+  reviewProblem: string | null
 }
 
 const MAX_RECORDED = 100
@@ -117,7 +134,14 @@ const MAX_RECORDED = 100
 export async function derive(
   sql: SQL,
   commits: Commits,
-  input: { issueId: number; repo: string; attempt: number; reported: readonly string[]; merged: boolean },
+  input: {
+    issueId: number
+    repo: string
+    attempt: number
+    reported: readonly string[]
+    merged: boolean
+    review?: Review
+  },
 ): Promise<Derived> {
   const { issueId, repo, attempt, reported, merged } = input
   const owner = await projectOfPath(sql, repo)
@@ -126,7 +150,17 @@ export async function derive(
   const holdMs = durationMs(manifest.deploy.hold) ?? DEFAULT_HOLD_MS
   const [tree]: { sha: string | null }[] = await sql`
     SELECT sha FROM factory.lead_worktrees WHERE issue_id = ${issueId} AND attempt = ${attempt}`
-  const none = { landedAt: null, commits: [], paths: [], required: [], mergedAt: null, holdMs, problem: null }
+  const none = {
+    landedAt: null,
+    commits: [],
+    paths: [],
+    required: [],
+    mergedAt: null,
+    holdMs,
+    problem: null,
+    review: null,
+    reviewProblem: null,
+  }
   if (reported.length === 0 && !tree?.sha) return none
   try {
     const read = await commits.read({
@@ -136,6 +170,10 @@ export async function derive(
       reported,
       merged,
     })
+    const asked =
+      merged && input.review && read.commits.length > 0
+        ? await askReview(input.review, repo, tree?.sha ?? null, read.landedAt)
+        : { review: null, reviewProblem: null }
     return {
       landedAt: read.landedAt,
       commits: read.commits.slice(0, MAX_RECORDED),
@@ -144,10 +182,33 @@ export async function derive(
       mergedAt: read.mergedAt?.toISOString() ?? null,
       holdMs,
       problem: null,
+      ...asked,
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     return { ...none, problem: error instanceof CommitsRefused ? reason : `the commits could not be read: ${reason}` }
+  }
+}
+
+/**
+ * Review v4 over what the Issue's work added to the base: from the sha its worktree was cut at to `origin/<default>` as `derive` found
+ * it. Commits others landed in between are in the range too: stricter, never lighter. Every failure is a `reviewProblem`.
+ */
+async function askReview(
+  review: Review,
+  repo: string,
+  base: string | null,
+  head: string | null,
+): Promise<Pick<Derived, 'review' | 'reviewProblem'>> {
+  if (!base)
+    return { review: null, reviewProblem: 'no cut sha is on record for this attempt, so what to review is not known' }
+  if (!head)
+    return { review: null, reviewProblem: 'the landed commit on origin is not known, so what to review is not known' }
+  try {
+    return { review: { ...(await review.read({ repo, base, head })), base, head }, reviewProblem: null }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return { review: null, reviewProblem: `review could not be read: ${reason}` }
   }
 }
 
@@ -206,6 +267,20 @@ async function missingEvidence({ tx, issue }: Context, derived: Derived): Promis
   )
 }
 
+/** Review is met by coverage, never by a filed link: required when the tier is not `none`. */
+function reviewRefusal(issueId: number, derived: Derived): string | undefined {
+  if (derived.reviewProblem) return `ship refused, ${derived.reviewProblem}`
+  const { review } = derived
+  if (!review || review.tier === 'none' || review.covered) return undefined
+  const named = review.uncovered
+    .map(
+      (commit) =>
+        `${commit.sha.slice(0, 12)} ${commit.subject} (needs ${commit.required}${commit.reason ? `, ${commit.reason}` : ''})`,
+    )
+    .join('; ')
+  return `ship refused, review missing: ${EVIDENCE_MEANS.review}. Uncovered: ${named || `the range ${review.base.slice(0, 12)}..${review.head.slice(0, 12)} needs ${review.tier}`}. Review them (\`/review\`, \`agw review\`), then ship ${issueId} again; a filed link alone does not satisfy it.`
+}
+
 interface InlineEvidence {
   kind: EvidenceKind
   link?: string
@@ -243,6 +318,8 @@ export async function gateShip(context: Context): Promise<string | undefined> {
     })
   }
   const missing = await missingEvidence(context, derived)
+  const unreviewed = reviewRefusal(issue.id, derived)
+  if (unreviewed) return unreviewed
   if (missing.length === 0) return undefined
   const since = derived.mergedAt ? ` recorded after the merged commit (${derived.mergedAt})` : ''
   return `ship refused, evidence missing${since}: ${missing.join('; ')}. File each with \`factory issue evidence ${issue.id} --kind <kind> --link <url>\`, then ship again.`

@@ -8,6 +8,7 @@ import type { FleetActions } from '../../src/fleet/act.ts'
 import type { FleetBuilder } from '../../src/fleet/index.ts'
 import type { SinceReader } from '../../src/fleet/since.ts'
 import type { Commits } from '../../src/issues/commits.ts'
+import type { Review } from '../../src/issues/review.ts'
 import { serve } from '../../src/http.ts'
 import type { Notifier } from '../../src/notify/port.ts'
 import { ProjectSync } from '../../src/projects/sync.ts'
@@ -55,6 +56,7 @@ export function startApp(deps: {
   notifier?: Notifier
   notifyTarget?: string
   commits?: Commits
+  review?: Review
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   fleetActions?: Pick<FleetActions, 'act'>
   since?: SinceReader

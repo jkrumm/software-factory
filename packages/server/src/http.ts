@@ -66,6 +66,7 @@ import { readSince, type SinceReader } from './fleet/since.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
 import { listEntries, undoEntry } from './fleet/triage-store.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
+import type { Review } from './issues/review.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
@@ -126,6 +127,8 @@ export interface AppDeps {
   notifyTarget?: string
   /** reads the commits a `ship` or a `close` names; git on the host unless a test says otherwise */
   commits?: Commits
+  /** review v4's router and coverage (`agw review`), asked by `ship`; main always brings it, a test without one is not asked */
+  review?: Review
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   /** the owner's intents on the fleet's asks (`POST /fleet/asks/:id/act`); without it that route is 503 */
@@ -454,14 +457,14 @@ const notificationTestHandler = (sql: SQL, clock: Clock, notifier: Notifier, tar
  * `<issue>:<verb>:<call id>`; the same call again is 200 `duplicate`, the first 201. A `session` must work this Issue (409).
  */
 const issueVerbHandler =
-  (sql: SQL, clock: Clock, commits: Commits, options: { requireSession: boolean }) =>
+  (sql: SQL, clock: Clock, commits: Commits, review: Review | undefined, options: { requireSession: boolean }) =>
   async (req: Bun.BunRequest<'/issues/:id/:verb'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     // The owner's `answer` is no verb of a lead: the token API serves it on its own route, and here it is no route at all.
     if (req.params.verb === 'answer') return json({ error: 'not found' }, 404)
     const verb = parseParam(IssueVerb, req.params.verb)
     const body = await parseBody(req, IssueVerbBody[verb])
-    const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now(), commits, ...options })
+    const filed = await fileVerb(sql, { issueId, verb, body, now: clock.now(), commits, review, ...options })
     if (!filed.ok) {
       return filed.problem === 'unknown_issue'
         ? json({ error: 'unknown issue' }, 404)
@@ -729,6 +732,7 @@ export function routes({
   notifier = new NullNotifier(),
   notifyTarget = 'off',
   commits = new GitCommits(),
+  review,
   fleet,
   fleetActions,
   since,
@@ -799,7 +803,7 @@ export function routes({
     '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen')) },
     '/issues/:id/stop': { POST: route(issueOwnerHandler(sql, clock, 'stop')) },
     '/issues/:id/resume': { POST: route(issueResumeHandler(sql, clock, roles, repoRoots)) },
-    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, commits, { requireSession: false })) },
+    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, commits, review, { requireSession: false })) },
     '/notifications': { GET: route(notificationListHandler(sql)) },
     '/notifications/test': { POST: route(notificationTestHandler(sql, clock, notifier, notifyTarget)) },
     '/projects': { GET: route(projectListHandler(sql)) },
@@ -886,6 +890,7 @@ export function serveHooks(deps: {
   roles: RoleTable
   slots: number
   commits?: Commits
+  review?: Review
 }) {
   const commits = deps.commits ?? new GitCommits()
   const open = { open: true }
@@ -921,7 +926,7 @@ export function serveHooks(deps: {
         POST: viaSocket(issueResumeHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots)),
       },
       '/issues/:id/:verb': {
-        POST: viaSocket(issueVerbHandler(deps.sql, deps.clock, commits, { requireSession: true })),
+        POST: viaSocket(issueVerbHandler(deps.sql, deps.clock, commits, deps.review, { requireSession: true })),
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },

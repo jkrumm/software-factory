@@ -15,6 +15,7 @@ import { TickMonitor } from './health.ts'
 import { serve, serveHooks } from './http.ts'
 import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
+import { AgwReview } from './issues/review.ts'
 import { finalizePorts } from './issues/finalize.ts'
 import { holdPorts, MakeAndProbes, VERIFY_SETTLE_MS } from './issues/hold.ts'
 import { leadPorts } from './issues/lead.ts'
@@ -125,6 +126,8 @@ const runner = new HcRunner({
   accountsFile: config.accountsFile,
 })
 // A pass that runs a start may outlast several intervals; one past its lease is wedged.
+// Review v4's router and coverage, asked by `ship`: agw owns both judgments, the factory only reads them.
+const review = new AgwReview({ bin: config.agwBin })
 const monitor = new TickMonitor(clock, TICK_INTERVAL_MS, DEFAULT_LEASE_MS)
 // Bind first: a port that is taken must fail the boot before the ticker claims anything.
 const server = serve({
@@ -141,6 +144,7 @@ const server = serve({
   alertLeads: config.alertLeads,
   notifier,
   notifyTarget: config.notifyTarget,
+  review,
   fleet,
   fleetActions,
   since,
@@ -162,6 +166,7 @@ try {
     repoRoots: config.repoRoots,
     roles,
     slots: config.slots,
+    review,
   })
 } finally {
   process.umask(umask)

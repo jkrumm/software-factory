@@ -140,7 +140,7 @@ commands:
   notify list [--pending]
                   what the factory told the owner, newest first: key, kind, status, attempts, text (--pending: not yet sent)
   notify test     send one line through the live path (the outbox and Hermes) and say whether it arrived; exit 1 if not (token)
-  issue evidence <id> --kind ui|service|infra|data (--link <url> | --file <path> | --stdin) [--id <call id>]
+  issue evidence <id> --kind ui|service|infra|data|review (--link <url> | --file <path> | --stdin) [--id <call id>]
                   record evidence, a link or up to 32 KiB of text; it counts for a ship when it is no older than the merged commit
   issue reopen <id> --reason <text> [--id <call id>]
                   the same fault within 30 days of closing: a new attempt in a fresh worktree. Past 30 days it is refused: issue new

@@ -146,7 +146,7 @@ const At = z.iso.datetime({ offset: true }).refine((text) => {
 const common = { id: CallId.optional(), session: z.string().min(1).max(256).optional() }
 
 /** What §5's table asks of a change, by what it touched. `factory issue evidence --kind`; the factory's own rows have kinds of their own. */
-export const EVIDENCE_KINDS = ['ui', 'service', 'infra', 'data'] as const
+export const EVIDENCE_KINDS = ['ui', 'service', 'infra', 'data', 'review'] as const
 export const EvidenceKind = z.enum(EVIDENCE_KINDS)
 export type EvidenceKind = z.infer<typeof EvidenceKind>
 
