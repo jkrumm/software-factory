@@ -48,6 +48,11 @@ describe('scripts/env-file.sh', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
+  test('the review limits are listed keys, so a deploy can set them', () => {
+    const { out } = load('FACTORY_REVIEW_SESSIONS=3\nFACTORY_REVIEW_DEEP_CAP=5\nFACTORY_REVIEW_IDLE_MS=120000\n')
+    expect(out).toBe('code=0 probe= every=')
+  })
+
   test('a file of comments only, or an empty one, is valid under set -u (macOS bash 3.2)', () => {
     for (const content of ['# nothing yet\n', '', '\n\n']) {
       const file = join(dir, 'env')

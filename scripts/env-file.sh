@@ -6,7 +6,7 @@
 # listed (a secret, PATH, the port, a program the server would run, a typo) or a symlink refuses the start (exit 78): a setting that is silently ignored is worse than
 # a launch that says why it will not run. Secrets stay in .env.tpl. Read at launch only: an edit takes a LaunchAgent restart.
 
-EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_ALERT_LEADS FACTORY_NOTIFY_TARGET FACTORY_DIGEST_AT FACTORY_DIGEST_TZ FACTORY_REAPER "
+EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_ALERT_LEADS FACTORY_NOTIFY_TARGET FACTORY_DIGEST_AT FACTORY_DIGEST_TZ FACTORY_REAPER FACTORY_REVIEW_SESSIONS FACTORY_REVIEW_DEEP_CAP FACTORY_REVIEW_IDLE_MS "
 
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
 load_env_file() {
