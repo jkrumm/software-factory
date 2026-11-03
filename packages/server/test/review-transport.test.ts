@@ -670,6 +670,54 @@ describe('submit on Stop', () => {
   })
 })
 
+describe('the account of a review, end to end', () => {
+  test('admission judges, the Runner launches and agw is told the same account; an account over the ceiling is never used', async () => {
+    // `a`: no 5-hour reading, week 94 (over the 90 ceiling, under a worker's 95). `b`: week 72, 5 h at 0.
+    await reading('a', 94, null)
+    await reading('b', 72, 0)
+    const w = world(db.sql, clock)
+    const key = reviewKey('rv_acct', 1)
+    await post(reviewerBody('rv_acct'))
+    expect(await spawnRow(key)).toMatchObject({ status: 'queued', account: 'b' })
+    expect((await runTick()).started).toEqual([key])
+    expect(await spawnRow(key)).toMatchObject({ status: 'started', account: 'b' })
+
+    // The Runner: that account's config directory and name, not another's.
+    const env = (await hc.state()).runs[0]?.params.env as Record<string, string>
+    expect(env).toMatchObject({ CLAUDE_ACCOUNT_PICKED: 'b', CLAUDE_CONFIG_DIR: '/home/me/.claude-b' })
+
+    // The hook reports whatever account the pane says; the spawn's own wins, and that is what `--account` carries.
+    const path = '/home/me/.claude-b/projects/-x/s.jsonl'
+    await w.emit(key, 'session_started', w.at(3), { account: 'b', transcriptPath: path, claudeSessionId: 's' })
+    await w.emit(key, 'turn_started', w.at(2))
+    await w.emit(key, 'turn_ended', w.at(1))
+    const calls: SubmitInput[] = []
+    const transport = new ReviewTransport({
+      sql: db.sql,
+      clock,
+      runner: new FakeRunner(),
+      roles: TEST_ROLES,
+      replies: { lastReply: async () => '{"ok":true}' },
+      submitter: {
+        submit: async (input) => {
+          calls.push(input)
+          return { kind: 'accepted', output: '{}' }
+        },
+      },
+    })
+    clock.advance(REPLY_GRACE_MS + 1_000)
+    await transport.pass()
+    expect(calls).toMatchObject([{ jobId: 'rv_acct', attempt: 1, account: 'b' }])
+
+    // With only the over-ceiling account fresh, a review waits; it never starts there.
+    await db.reset()
+    await reading('a', 94, null)
+    await post(reviewerBody('rv_over'))
+    expect(await spawnRow(reviewKey('rv_over', 1))).toMatchObject({ status: 'waiting', account: null })
+    expect((await runTick()).started).toEqual([])
+  })
+})
+
 describe('agw review submit', () => {
   let dir: string
   let bin: string
