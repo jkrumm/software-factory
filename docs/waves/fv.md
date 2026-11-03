@@ -67,7 +67,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
 - [ ] While away nothing but the *Yours* tier is pushed: the notifier (N) and Hermes go through this rule; the 07:30 digest
   becomes this model's morning reading.
 
-## Wave 5 — Consumers            <!-- status: pending -->
+## Wave 5 — Consumers            <!-- status: active -->
 - [ ] Hermes answers "what needs me?" from `asks`. `agw agents` becomes a client of `/fleet` or retires (agw and dotfiles
   `AGENTS.md` change with it; agw's mother decides which).
 - [ ] A2 and IR plans are rewritten to read `/fleet` (their own collectors dropped); `docs/program.md` reorders them after FV.

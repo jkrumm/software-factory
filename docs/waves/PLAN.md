@@ -149,5 +149,11 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] FV Wave 5, `agw agents`: agw's mother decided 2026-11-02: a client of `/fleet` (`factory fleet --format json` under secrets-run), keeping only its
   recommendations and Max quota for Hermes, brain and Argo; its collectors go, agw's and dotfiles' `AGENTS.md` name the factory as the one producer in the
   same change (agw PLAN Wave 8, after its Wave 17). A2 and IR read `/fleet` (`docs/program.md` track notes, `100c286`).
+- [x] FV Wave 5, the reaper (PR #36, `a84152d`): 1 h 55 wall, `worker` Sonnet on `me2` (context ~60 %); the lead's three `/code-review high` found
+  10 + 10 + 10 (worst: a reset onto a merged commit would have reaped unpushed work; `dry` still removed terminals; a reused pane address);
+  the third round's ten keep more or are cosmetic, deferred in the PR's comment. Live in `dry` (default): 0 would close, 1 kept
+  (agent-workflows `shop-amazon-2`, 3 unmerged commits); `on` waits for a would-close entry checked by hand (handoff).
+- [ ] FV Wave 5 left: Hermes "what needs me?" from `/fleet` asks (hermes-agent). Stopped 2026-11-03 01:30 on budget (`me2` 56 %, `iu` 87 %):
+  the next rotation starts after `iu`'s reset 2026-11-04 16:00.
 - [ ] FV Waves 5–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.

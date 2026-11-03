@@ -1,13 +1,13 @@
 # Program lead handoff
 
-Written by the FV lead (`PLAN.md` Wave 7, rotation `software-factory-w7`), 2026-11-03 01:00. State lives in `docs/program.md` and
+Written by the FV lead (`PLAN.md` Wave 7, rotation `software-factory-w7`), 2026-11-03 01:30. Paused on budget; this rotation is spawned after `iu`'s weekly reset (2026-11-04 16:00). State lives in `docs/program.md` and
 `PLAN.md` Wave 7 (one line per landed wave). The previous rotation's page is in git history.
 
 ## Running now
 
 | Agent | Repo | Work | Next |
 |-|-|-|-|
-| `software-factory-fv-w5-reaper` (t9p, hidden child) | software-factory | FV Wave 5, the reaper, PR #36; second fix round (10 findings of the lead's second `/code-review high`, `/tmp/fv-w5-fix2.md` text is in the worker's prompt) | `/code-review high` on its new fix commits in `.claude/worktrees/review-w5` (detached; diff from `302f459`), merge on green CI, `make deploy`, `make verify`, live proof in `dry` (below), `hc kill t9p` |
+| (no worker) | software-factory | FV Wave 5's reaper live in `dry` (`a84152d`, PR #36; deferred findings in the PR's comment) | flip to `on` per the section below once `fleet` lists a would-close entry |
 | Issue leads 48–56 | weatherorb, homelab-private, software-factory, dotfiles | run by the factory | `factory status`; Issue 50's decision answered A (a dedicated tailnet port for Argo, kuma-door's pattern) for 49 and 50 |
 | agw mother `agent-workflows-w1-r4` | agent-workflows | decided `agw agents` becomes a `/fleet` client (their Wave 8, after 17) | nothing from us |
 
@@ -35,8 +35,8 @@ close at most 5; the rows show under "Handled for you" in `factory fleet since`.
 
 ## Open, decide these yourself
 
-- **Budget:** at 01:00 `me2` 55 % (mark 60), `iu` 86 % (mark 90), `me` untouched. The reaper's landing fits; after it, start nothing more
-  on `me2` unless `quota get` leaves room for a whole wave plus reviews (a wave has cost 5–8 points with its reviews).
+- **Budget:** at 01:30 `me2` 56 % (mark 60), `iu` 87 % (mark 90), `me` untouched: no room for a wave plus reviews (5–8 points), so this
+  lead stopped. Start on `iu` after its reset; keep `me2` for the lead's own reviews.
 - **FV Wave 5 left:** Hermes answers "what needs me?" from `/fleet` asks (hermes-agent, a worker there; Hermes is token-holding, the
   token goes in its env template, never a tracked file). `agw agents` is agw's (done as a decision). A2 and IR have no plans yet; their
   `docs/program.md` track notes now say they read `/fleet`.
