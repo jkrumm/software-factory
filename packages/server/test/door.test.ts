@@ -1,5 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { DoorRoute, DoorRouteList, DoorUnroutedList, IntakeAck, Issue } from '@software-factory/contract'
 import { createDoor, fileViaSocket } from '../../door/src/door.ts'
@@ -630,6 +640,7 @@ describe('factory door', () => {
   test('token new refuses a tokens file with loose mode and a name that is no source', async () => {
     const file = join(dir, 'loose.json')
     writeFileSync(file, '{}', { mode: 0o644 })
+    chmodSync(file, 0o644) // the umask of the caller (077 under agw check) must not tighten it
     expect(existsSync(file)).toBe(true)
     const loose = await factory(['door', 'token', 'new', 'kuma'], { FACTORY_DOOR_TOKENS_FILE: file })
     expect(loose.code).toBe(1)
