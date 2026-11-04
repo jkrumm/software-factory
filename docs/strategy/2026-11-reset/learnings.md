@@ -59,8 +59,11 @@ evidence (a sha, a log line, a number); no narrative.
   older than this attempt" and "commit e498857 is not on origin/master". A's lead turned that into a `decision` ask ("How should
   a no-change Issue be reported?"), B's lead made a commit only to have one. Change: `reset.md` Wave 4 step 1 — the brief's
   operating contract names the no-change end (`factory issue drop <id> --reason`), so it is neither an ask nor a fake commit.
-- **The Stop send-back fired for a background subagent.** With the fan worker idle and only the in-session `reviewer`
-  subagent running, the Stop hook answered "1 worker still running". Evidence for row 4's `background_tasks` step; until it
-  lands, a lead declares `wait --on workers` before ending a turn on a background review.
+- **The Stop send-back fired for a finished worker.** With the fan worker idle and the in-session `reviewer` subagent
+  running, the Stop hook answered "1 worker still running". The cause is the workers rule, not the subagent: `stopCheck`
+  (`rules.ts`) counts every child that is not `dead`, so an idle fan worker counts until `rd close`, while the `/wave` skill
+  says a finished child counts as done. Change: the lead closes a worker (`rd close`) as soon as its diff is read, before
+  ending a turn; the skill/rule mismatch goes to row 7 (dotfiles `/wave`). Row 4's `background_tasks` step stays (it is
+  about the Issue send-back, `issueStop`).
 - **The task notification showed the reviewer's reply HTML-escaped** (`&lt;id&gt;`, `->&gt;`). Submitting "verbatim" meant
   restoring `<`/`>`; agw accepted it. Candidate for `/review`: run the reviewer in the foreground so the reply is raw.
