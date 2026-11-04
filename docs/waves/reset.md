@@ -19,15 +19,15 @@ The lead does this itself; no worker.
 - [x] learnings entry.
 **Left behind:** 51–55 closed `dropped`, 51's pane and worktree gone (no unlanded commit). No open software-factory Issue; asks 7. No drain: this loop spawns through the queue (learnings).
 
-## Wave 2 — Dependencies (row 3)            <!-- status: active -->
-- [ ] `factory issue new --after <id>` (repeatable) writes `issue_deps` in the create transaction; an unknown or closed id is refused.
-- [ ] Admission (`issues/admission.ts`) admits only Issues with no open dependency; `releaseDependents` on close stays.
-- [ ] `factory issue prio <id> <n>` writes the `prio` event; admission orders by the latest priority, then id.
-- [ ] Tests at the lifecycle and admission level; design.md §4 "As built" and AGENTS.md updated in the same commit.
-- [ ] Live proof: two scratch Issues, B `--after` A; B stays queued until A closes.
-**Left behind:**
+## Wave 2 — Dependencies (row 3)            <!-- status: done -->
+- [x] `factory issue new --after <id>` (repeatable) writes `issue_deps` in the create transaction; an unknown or closed id is refused.
+- [x] Admission (`issues/admission.ts`) admits only Issues with no open dependency; `releaseDependents` on close stays.
+- [x] `factory issue prio <id> <n>` writes the `prio` event; admission orders by the latest priority, then id.
+- [x] Tests at the lifecycle and admission level; design.md §4 "As built" and AGENTS.md updated in the same commit.
+- [x] Live proof: two scratch Issues, B `--after` A; B stays queued until A closes.
+**Left behind:** PR #37 merged (`7e616c0`, `272be2f`), deployed `272be2fb1429`, verify green; deep review clean (1 nit fixed), `covered` true. Proof: Issue 60 `--after 59` admitted 6 s after 59 closed; `--after 58` (closed) exit 2. Found: a lead has no no-change end (Wave 4 step 1 now names it).
 
-## Wave 3 — Parks end (row 4)            <!-- status: pending -->
+## Wave 3 — Parks end (row 4)            <!-- status: active -->
 - [ ] The lead's own `turn_started` ends an `unreported` wait (back to `working`).
 - [ ] `lead_gone` starts the next attempt, at most two per Issue; then the Issue parks with a health line and one notification.
 - [ ] The Stop send-back (`issues/sendback.ts`) is skipped while the Stop input's `background_tasks` lists a running subagent;
@@ -37,7 +37,8 @@ The lead does this itself; no worker.
 **Left behind:**
 
 ## Wave 4 — The lead (row 5)            <!-- status: pending -->
-- [ ] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`).
+- [ ] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
+  and the no-change end: work that needs no commit ends with `factory issue drop <id> --reason`, never an ask or a made-up commit (learnings, Wave 2).
 - [ ] `config/roles.json`: `lead` → sonnet/high (keep every other role until Wave 8 of the design's order).
 - [ ] Lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`, default 2) in admission, counted over live lead sessions.
 - [ ] `SessionStart(compact)` re-injection: the hook names the Issue; the brief says to re-read it after a compaction.

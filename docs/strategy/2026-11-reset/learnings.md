@@ -44,3 +44,23 @@ evidence (a sha, a log line, a number); no narrative.
   `issue_facts` carries the attempt's branch and its commits beyond the base.
 - **Two of the seven remaining asks are machine failures** (the agw spawns failed 2026-11-02, `hand_off`). Step 0 stops
   new ones; these two expire by 2026-11-09. Row 6 moves such lines to the health line.
+
+## Wave 2, dependencies (row 3), 2026-11-05 00:30
+
+- **Built as one Sonnet worker in 6 min; deep review clean.** PR #37 (`7e616c0`, docs fix `272be2f`): `issue new --after`,
+  admission skips an Issue with a `issue_deps` row and picks a project's first by the latest `prio` event then id, `issue prio`.
+  `make check` 1703 pass in 348 s at load 6–10. Review routed deep (sensitive `http.ts`), Sonnet high, 105 s, 89k tokens,
+  1 nit (stale "oldest" in design.md §4), fixed in a docs-only commit that routes none; `covered` true at once. `rd merge
+  --no-check`: the only delta after the green check was that docs line. Deployed `272be2fb1429`, `make verify` all passed.
+- **Live proof held.** Issue 59 (A) admitted 10 s after create; Issue 60 (B, `--after 59`) stayed `queued` while A was open
+  and was admitted at 23:27:48.8Z, 6 s after `issue stop 59` at 23:27:42.5Z. `--after 58` (closed) was exit 2, `Issue 58 is
+  closed already`, nothing stored.
+- **A lead cannot end a no-change Issue.** Both scratch leads printed `ok` and then hit `close`: refused, "commit 5ca6423 is
+  older than this attempt" and "commit e498857 is not on origin/master". A's lead turned that into a `decision` ask ("How should
+  a no-change Issue be reported?"), B's lead made a commit only to have one. Change: `reset.md` Wave 4 step 1 — the brief's
+  operating contract names the no-change end (`factory issue drop <id> --reason`), so it is neither an ask nor a fake commit.
+- **The Stop send-back fired for a background subagent.** With the fan worker idle and only the in-session `reviewer`
+  subagent running, the Stop hook answered "1 worker still running". Evidence for row 4's `background_tasks` step; until it
+  lands, a lead declares `wait --on workers` before ending a turn on a background review.
+- **The task notification showed the reviewer's reply HTML-escaped** (`&lt;id&gt;`, `->&gt;`). Submitting "verbatim" meant
+  restoring `<`/`>`; agw accepted it. Candidate for `/review`: run the reviewer in the foreground so the reply is raw.
