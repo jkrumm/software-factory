@@ -10,6 +10,7 @@ import type { Derived } from './evidence.ts'
 import { enqueue } from './inbox.ts'
 import type { OffTick } from './offtick.ts'
 import { deployedHolds } from './origin.ts'
+import { markEvent } from './shared.ts'
 
 /** One check of the proof: pass or fail, never averaged. `detail` is data, whatever the check printed. */
 export interface HoldCheck {
@@ -202,10 +203,15 @@ async function versionCheck(
   return { landedAt: derived.landedAt }
 }
 
+/** The key of the second check of a hold: the first red one asks for it, and only a red second one is a regression. */
+export const rerunKey = (verifyKey: string): string => `${verifyKey}:rerun`
+
 /**
- * The check after the hold, off the tick (`make verify` can take minutes): `verified` when every check passes, else a `regression`
- * naming its hold, which goes back to the same lead. Both are keyed by the hold, and a check whose answer is filed already, or whose hold
- * is over, runs nothing: a crash anywhere replays to one answer.
+ * The check after the hold, off the tick (`make verify` can take minutes): `verified` when every check passes. A red first check is not
+ * yet an answer: it files a second `verify` effect (`<key>:rerun`, once) and a line in the Issue's events, because a flaky probe or a
+ * deploy still settling must not send a lead back to work. Only a red second check is a `regression` naming its hold, which goes back to
+ * the same lead. The answers are keyed by the hold, and a check whose answer is filed already, or whose hold is over, runs nothing: a
+ * crash anywhere replays to one answer.
  */
 async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signal: AbortSignal): Promise<void> {
   const issueId = effect.issueId
@@ -236,6 +242,17 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   // A check takes minutes: a stop or a regression may have ended the hold since.
   if (!(await current())) return
   const green = checks.every((check) => check.ok)
+  if (!green && effect.payload?.rerun !== true) {
+    const now = clock.now()
+    await sql.begin(async (tx) => {
+      await markEvent(tx, issueId, `verify_red:${issueId}:${hold}`, 'verify_red', now, { hold, checks })
+      await tx`
+        INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
+        VALUES (${issueId}, ${rerunKey(effect.key)}, 'verify', ${{ ...effect.payload, rerun: true }}, ${now})
+        ON CONFLICT (key) DO NOTHING`
+    })
+    return
+  }
   await enqueue(sql, {
     issueId,
     key: green ? greenKey : redKey,

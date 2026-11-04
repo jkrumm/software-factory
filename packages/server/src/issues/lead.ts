@@ -9,7 +9,7 @@ import { recordPrompt } from '../prompts.ts'
 import { RepoRefused, resolveRepo } from '../repos.ts'
 import { MAX_PROMPT_CHARS } from '../schemas.ts'
 import { createSpawn, getSpawn, IssueClosed } from '../spawns.ts'
-import { buildBrief } from './brief.ts'
+import { type BriefInput, buildBrief } from './brief.ts'
 import { leadLevel } from './classify.ts'
 import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import { enqueue } from './inbox.ts'
@@ -82,7 +82,10 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
       key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
-      payload: { detail: `the worktree could not be made after ${tree.tries} tries: ${tree.error ?? 'unknown'}` },
+      payload: {
+        attempt,
+        detail: `the worktree could not be made after ${tree.tries} tries: ${tree.error ?? 'unknown'}`,
+      },
     })
     // No spawn will ever exist for the failed-spawn sweep to release the claim by: an abandoned attempt gives its place back.
     await sql.begin(async (tx) => {
@@ -115,6 +118,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const prompt = buildBrief({
     issue,
     attempt,
+    previous: await previousAttempt(sql, issue.id, attempt),
     worktree: { path, branch },
     project: {
       name,
@@ -196,6 +200,16 @@ async function unsentNotes(
   return { shown, more: Math.max(0, Number(rows[0]?.total ?? 0) - shown.length) }
 }
 
+/** The attempt before this one, if its finalize kept its branch (work not on the base, or uncommitted changes) and said where. */
+async function previousAttempt(sql: SQL, issueId: number, attempt: number): Promise<BriefInput['previous']> {
+  if (attempt < 2) return undefined
+  const [kept]: { path: string | null; why: string | null }[] = await sql`
+    SELECT payload->>'path' AS path, payload->>'kept' AS why FROM factory.issue_events
+    WHERE key = ${`worktree_kept:${issueId}:${attempt - 1}`}`
+  if (!kept?.why) return undefined
+  return { attempt: attempt - 1, branch: leadBranch(issueId, attempt - 1), worktree: kept.path, why: kept.why }
+}
+
 const MAX_BRIEF_NOTES = 20
 /** A note is up to 4,000 characters, which can be 12 KB: twenty would crowd a process argument. */
 const MAX_BRIEF_NOTE_BYTES = 24_000
@@ -253,7 +267,7 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
       key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
-      payload: { detail },
+      payload: { attempt: attemptOf(effect), detail },
     })
     return
   }
@@ -291,7 +305,7 @@ export async function parkGoneLeads(sql: SQL, now: Date): Promise<void> {
   await sql`
     INSERT INTO factory.issue_inbox (issue_id, key, kind, at, payload)
     SELECT i.id, 'lead_gone:sweep:' || i.id || ':' || i.revision, 'lead_gone', ${now},
-           jsonb_build_object('detail', 'spawn ' || s.key || ' failed' || COALESCE(': ' || s.error, ''))
+           jsonb_build_object('attempt', i.attempt, 'detail', 'spawn ' || s.key || ' failed' || COALESCE(': ' || s.error, ''))
     FROM factory.issues i JOIN factory.spawns s ON s.key = 'lead-' || i.id || '-' || i.attempt
     WHERE i.state = 'working' AND s.status = 'failed'
     ON CONFLICT (key) DO NOTHING`

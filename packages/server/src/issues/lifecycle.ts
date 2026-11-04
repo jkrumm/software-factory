@@ -27,7 +27,11 @@ interface Step {
   /** applies only to an Issue waiting for this reason */
   only?: WaitReason
   /** applies only then: otherwise the event is as if the state had no entry */
-  when?: (context: Context) => boolean
+  when?: (context: Context) => boolean | Promise<boolean>
+  /** the step taken instead when the Issue's stored events say so (a restart that has been spent): its edge is the table's too */
+  otherwise?: { when: (context: Context) => Promise<boolean>; step: Step }
+  /** a line for the Issue's events (and the owner's, for a park) beyond what the event carried */
+  detail?: string
   /** a new lead: the next attempt */
   newAttempt?: true
   /** starts a new hold */
@@ -76,6 +80,47 @@ const thisHold = ({ issue, row }: Context): string | undefined =>
 const heldNow = (context: Context): string | undefined =>
   context.row.payload?.hold === undefined ? undefined : thisHold(context)
 
+/**
+ * The session that parked the Issue is past it when its next turn starts: a wall's own session, or the lead whose second unreported
+ * stop parked it (the `unreported` row carries it). A worker's turn says nothing about its lead, nor an older turn about the park.
+ */
+async function parkIsOver({ tx, issue, row }: Context): Promise<boolean> {
+  if (older(row, issue)) return false
+  if (issue.reason === 'wall') return row.session === issue.wall_session
+  if (issue.reason !== 'unreported') return false
+  const [parked]: { session: string | null }[] = await tx`
+    SELECT session FROM factory.issue_inbox
+    WHERE issue_id = ${issue.id} AND kind = 'unreported' AND result = 'applied' ORDER BY id DESC LIMIT 1`
+  return parked?.session != null && parked.session === row.session
+}
+
+/** How many times an event of this kind moved the Issue (a refusal has no `to_state`), counted from its events: nothing is stored. */
+async function movedBefore({ tx, issue }: Context, kind: string, to?: IssueState): Promise<number> {
+  const [counted]: { n: number }[] = await tx`
+    SELECT count(*)::int AS n FROM factory.issue_events
+    WHERE issue_id = ${issue.id} AND kind = ${kind} AND ${to ? tx`to_state = ${to}` : tx`to_state IS NOT NULL`}`
+  return counted?.n ?? 0
+}
+
+/** A lead is gone at most this many times before the Issue parks: the next attempt is made for the first two. */
+export const MAX_LEAD_RESTARTS = 2
+/** The third regression of one Issue parks it. */
+export const MAX_REGRESSIONS = 2
+
+/** `lead_gone` is for the attempt that lost its lead: a late one from an earlier attempt says nothing about this one. */
+const goneIsCurrent = ({ issue, row }: Context): string | undefined => {
+  const filedFor = row.payload?.attempt
+  return typeof filedFor === 'number' && filedFor !== issue.attempt
+    ? `lead_gone was filed for attempt ${filedFor}, the Issue is on attempt ${issue.attempt}`
+    : undefined
+}
+
+const restartsSpent = async (context: Context): Promise<boolean> =>
+  (await movedBefore(context, 'lead_gone', 'queued')) >= MAX_LEAD_RESTARTS
+
+const regressionsSpent = async (context: Context): Promise<boolean> =>
+  (await movedBefore(context, 'regression')) >= MAX_REGRESSIONS
+
 const stopped: Step = { to: 'closed', outcome: 'dropped' }
 const recorded: Step = {}
 const noted: Step = { effects: ['note_lead'] }
@@ -104,8 +149,16 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   block: { working: { to: 'waiting', reason: 'blocked' } },
   // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
   unreported: { working: { to: 'waiting', reason: 'unreported', apply: stopIsNews } },
-  // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to.
-  lead_gone: { working: { to: 'waiting', reason: 'lead_gone' } },
+  // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to. The attempt is finalized and admission makes
+  // the next one, twice; the third time is a park.
+  lead_gone: {
+    working: {
+      to: 'queued',
+      effects: ['finalize'],
+      refuse: goneIsCurrent,
+      otherwise: { when: restartsSpent, step: { to: 'waiting', reason: 'lead_gone', refuse: goneIsCurrent } },
+    },
+  },
   ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
   // The evidence derived from the commits decides these two; the check runs here, in the transition's transaction, on what `derive` found.
   ship: { working: { to: 'watching', hold: true, apply: gateShip } },
@@ -114,12 +167,8 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   // session events
   limit_stop: { working: { to: 'waiting', reason: 'wall', apply: wallIsNews } },
   turn_started: {
-    waiting: {
-      to: 'working',
-      only: 'wall',
-      // The session that hit the wall is past it; a worker's turn says nothing about its lead, nor an older turn about the wall.
-      when: ({ issue, row }) => row.session === issue.wall_session && !older(row, issue),
-    },
+    // The end of a park that needs nobody: the wall, and a lead that stopped unreported, once that session starts a turn again.
+    waiting: { to: 'working', when: parkIsOver },
   },
   // dedup: a repeat is recorded; `regression` is a signal whose payload says so
   signal: {
@@ -130,7 +179,18 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     watching: recorded,
     closed: recorded,
   },
-  regression: { watching: { to: 'working', effects: ['note_lead'], refuse: heldNow } },
+  // The third regression of an Issue parks it: another round with the lead would be the same round.
+  regression: {
+    watching: {
+      to: 'working',
+      effects: ['note_lead'],
+      refuse: heldNow,
+      otherwise: {
+        when: regressionsSpent,
+        step: { to: 'waiting', reason: 'parked', refuse: heldNow, detail: 'regressed three times' },
+      },
+    },
+  },
   // the tick and the proof after the hold
   hold_over: { watching: { effects: ['verify'], refuse: thisHold } },
   verified: { watching: { to: 'closed', outcome: 'done', refuse: thisHold, apply: recordProof } },
@@ -240,8 +300,11 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
   const kind = regressed ? 'regression' : row.kind
   const context = { tx, issue, row, now }
   const found = TABLE[kind]?.[issue.state]
-  const fits = found && (!found.only || found.only === issue.reason) && (!found.when || found.when(context))
-  const step = fits ? found : undefined
+  const fits = found && (!found.only || found.only === issue.reason) && (!found.when || (await found.when(context)))
+  // The table's step, or the one it names for an Issue whose stored events have spent it.
+  const spent = fits && found.otherwise ? await found.otherwise.when(context) : false
+  const step: Step | undefined = spent ? found?.otherwise?.step : fits ? found : undefined
+  const payload = step?.detail ? { ...row.payload, detail: step.detail } : row.payload
   const refused = async (detail: string): Promise<Handled> => {
     await logEvent(
       tx,
@@ -267,10 +330,10 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
   await logEvent(
     tx,
     { issueId: issue.id, key: row.key, kind, from: issue.state, to: step.to ?? null, at: row.at },
-    row.payload,
+    payload,
   )
   // The owner hears of a park by the factory itself and of a regression, in the transaction that decided it.
-  await notifyMove(tx, { issue: moved, kind, payload: row.payload, now })
+  await notifyMove(tx, { issue: moved, kind, payload, now })
   if (step.to === 'closed') {
     // A closed Issue wants no lead, no note and no check: an older `finalize` still has work to do.
     await tx`

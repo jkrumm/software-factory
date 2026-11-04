@@ -113,7 +113,11 @@ async function working(): Promise<number> {
 
 describe('the transition table', () => {
   const edges = Object.entries(TABLE)
-    .flatMap(([, states]) => Object.entries(states).flatMap(([from, s]) => (s.to ? [`${from}→${s.to}`] : [])))
+    .flatMap(([, states]) =>
+      Object.entries(states).flatMap(([from, s]) =>
+        [s.to, s.otherwise?.step.to].flatMap((to) => (to ? [`${from}→${to}`] : [])),
+      ),
+    )
     .filter((edge, i, all) => all.indexOf(edge) === i)
     .sort()
 
@@ -128,8 +132,10 @@ describe('the transition table', () => {
         'waiting→closed',
         'waiting→working',
         'watching→closed',
+        'watching→waiting',
         'watching→working',
         'working→closed',
+        'working→queued',
         'working→waiting',
         'working→watching',
       ].sort(),

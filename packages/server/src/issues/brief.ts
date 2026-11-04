@@ -90,6 +90,8 @@ export interface BriefInput {
   worktree: { path: string; branch: string }
   project: { name: string; manifest: ProjectManifest; makeTargets: MakeTargets | null }
   history?: readonly HistoryItem[]
+  /** the attempt before this one, when finalize kept its work: a lead that was lost leaves its branch and worktree behind */
+  previous?: { attempt: number; branch: string; worktree: string | null; why: string }
   /** the owner's notes filed while no lead was running, oldest first */
   notes?: readonly string[]
   /** notes beyond the ones listed */
@@ -150,6 +152,18 @@ function notesSection(notes: readonly string[], more: number, issueId: number): 
     '',
     fenced(notes.map((note, i) => `${i + 1}. ${note.replace(/\n+/g, ' ')}`).join('\n'), 'text'),
     ...(more > 0 ? ['', `${more} more not shown: \`factory issue show ${issueId}\` has them.`] : []),
+  ].join('\n')
+}
+
+/** What the attempt before left, so this lead picks the work up rather than starts over. Path and branch are quoted strings. */
+function previousSection({ attempt, branch, worktree, why }: NonNullable<BriefInput['previous']>): string {
+  return [
+    '## The previous attempt',
+    '',
+    `Attempt ${attempt} ended before it reported, and its work was kept (${why}). Look at it first: continue from it if it is sound, and say in your phase notes if you start over.`,
+    '',
+    `- Branch: ${JSON.stringify(branch)}`,
+    ...(worktree ? [`- Worktree: ${JSON.stringify(worktree)}`] : []),
   ].join('\n')
 }
 
@@ -226,6 +240,7 @@ export function buildBrief(input: BriefInput): string {
     `# Issue ${input.issue.id}`,
     askSection(input.issue),
     factsBlock(input.issue),
+    ...(input.previous ? [previousSection(input.previous)] : []),
     ...(input.notes && input.notes.length > 0 ? [notesSection(input.notes, input.notesMore ?? 0, input.issue.id)] : []),
     historySection(input.history ?? []),
     projectSection(input),

@@ -37,7 +37,7 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
   const parked: { id: number; reason: string; since: Date; why: string | null }[] = await sql`
     SELECT i.id, i.reason, i.updated_at AS since,
       (SELECT COALESCE(e.payload->>'reason', e.payload->>'detail') FROM factory.issue_events e
-       WHERE e.issue_id = i.id AND e.kind IN ('block', 'lead_gone') ORDER BY e.id DESC LIMIT 1) AS why
+       WHERE e.issue_id = i.id AND e.kind IN ('block', 'lead_gone', 'regression') ORDER BY e.id DESC LIMIT 1) AS why
     FROM factory.issues i WHERE i.state = 'waiting' AND i.reason IN ('unreported', 'blocked', 'parked', 'lead_gone') ORDER BY i.id LIMIT ${PER_KIND}`
   for (const issue of parked) {
     if (issue.reason === 'unreported')
@@ -46,7 +46,7 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
       lines.push(`Issue ${issue.id} parked: its lead is gone${issue.why ? ` (${oneLine(issue.why)})` : ''}`)
     else if (issue.reason === 'blocked')
       lines.push(`Issue ${issue.id} blocked${issue.why ? `: ${oneLine(issue.why)}` : ''}`)
-    else lines.push(`Issue ${issue.id} parked`)
+    else lines.push(`Issue ${issue.id} parked${issue.why ? `: ${oneLine(issue.why)}` : ''}`)
   }
 
   if (!options.alertLeads) {

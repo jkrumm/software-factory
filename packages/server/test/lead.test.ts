@@ -180,6 +180,13 @@ async function lead(repo = newRepo(), source = 'request') {
   return { id, key: leadKey(id, 1), repo }
 }
 
+/** The Issue's two restarts are spent, as its events say: the next `lead_gone` is the third and parks. */
+const restartsSpent = (id: number) =>
+  db.sql`
+    INSERT INTO factory.issue_events (issue_id, key, kind, from_state, to_state, at)
+    VALUES (${id}, ${`seed:${id}:1`}, 'lead_gone', 'working', 'queued', ${clock.now()}),
+           (${id}, ${`seed:${id}:2`}, 'lead_gone', 'working', 'queued', ${clock.now()})`
+
 let events = 0
 const emit = (session: string, kind: EventKind, at: Date = clock.now(), payload?: Record<string, unknown>) =>
   recordEvent(db.sql, { key: `e${++events}`, session, kind, at, payload })
@@ -355,6 +362,7 @@ describe('classify, then admission', () => {
   test('a note with no lead to go to parks the Issue as lead_gone, with a line for the owner', async () => {
     for (const how of ['failed', 'ended'] as const) {
       const { id, key } = await lead()
+      await restartsSpent(id)
       await post(id, 'ask', { question: 'Which?', session: key })
       await pass()
       // The lead's spawn failed, or its agent is gone from the core: nothing can be told the answer.
@@ -391,6 +399,7 @@ describe('classify, then admission', () => {
 
   test('a lead whose spawn failed parks the Issue without a note to find it, and again when woken with it still failed', async () => {
     const { id, key } = await lead()
+    await restartsSpent(id)
     await db.sql`UPDATE factory.spawns SET status = 'failed', error = 'the runner refused' WHERE key = ${key}`
     await pass()
     await pass()
@@ -404,6 +413,80 @@ describe('classify, then admission', () => {
     })
     await drive(3)
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
+  })
+
+  describe('a lead that is gone', () => {
+    const fail = (key: string) =>
+      db.sql`UPDATE factory.spawns SET status = 'failed', error = 'the runner refused' WHERE key = ${key}`
+    const notifications = async () =>
+      (await db.sql`SELECT key FROM factory.notifications ORDER BY key`).map((row: { key: string }) => row.key)
+
+    test('gets the next attempt, twice, with no message to the owner; the third time the Issue parks, with one', async () => {
+      const { id, key, repo } = await lead()
+      await fail(key)
+      await drive(6)
+      expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2, reason: null })
+      expect(await trail(id)).toContain('lead_gone working→queued')
+      // The ended attempt was finalized (its tab closed, its worktree asked to go) before the next lead was made.
+      expect(runner.closed).toContain(key)
+      expect(worktrees.removed).toEqual([{ repo, branch: `factory/${id}-1`, reported: [] }])
+      expect(worktrees.made.map((made) => made.branch)).toEqual([`factory/${id}-1`, `factory/${id}-2`])
+      expect((await spawns()).map((spawn: { key: string }) => spawn.key)).toEqual([`lead-${id}-1`, `lead-${id}-2`])
+      expect(await notifications()).toEqual([])
+
+      // A lead_gone filed late for the attempt that was replaced says nothing about the one running.
+      await enqueue(db.sql, {
+        issueId: id,
+        key: `late-gone:${id}`,
+        kind: 'lead_gone',
+        at: clock.now(),
+        payload: { attempt: 1, detail: 'late' },
+      })
+      await drive(3)
+      expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2 })
+
+      await fail(leadKey(id, 2))
+      await drive(6)
+      expect(await issue(id)).toMatchObject({ state: 'working', attempt: 3 })
+      expect(await notifications()).toEqual([])
+
+      await fail(leadKey(id, 3))
+      await drive(6)
+      expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone', attempt: 3 })
+      const parked = (await notifications()).filter((k: string) => k.startsWith('notify:parked:'))
+      expect(parked).toHaveLength(1)
+      expect((await trail(id)).filter((line) => line.startsWith('lead_gone'))).toEqual([
+        'lead_gone working→queued',
+        'lead_gone working→queued',
+        'lead_gone working→waiting',
+      ])
+      // Replays and later passes make no fourth attempt.
+      await drive(4)
+      expect((await spawns()).map((spawn: { key: string }) => spawn.key)).toEqual([
+        `lead-${id}-1`,
+        `lead-${id}-2`,
+        `lead-${id}-3`,
+      ])
+    })
+
+    test('the next brief names the previous attempt’s branch and kept worktree, and says nothing when finalize removed it', async () => {
+      worktrees.removal = { kept: 'it has uncommitted changes', path: '/work/tree-1' }
+      const kept = await lead()
+      await fail(kept.key)
+      await drive(6)
+      const next = (await spawns()).find((spawn: { key: string }) => spawn.key === leadKey(kept.id, 2))
+      expect(next?.prompt).toContain('## The previous attempt')
+      expect(next?.prompt).toContain(`"factory/${kept.id}-1"`)
+      expect(next?.prompt).toContain('"/work/tree-1"')
+      expect(next?.prompt).toContain('it has uncommitted changes')
+
+      worktrees.removal = { removed: true }
+      const clean = await lead()
+      await fail(clean.key)
+      await drive(6)
+      const again = (await spawns()).find((spawn: { key: string }) => spawn.key === leadKey(clean.id, 2))
+      expect(again?.prompt).not.toContain('The previous attempt')
+    })
   })
 
   test('a note to a lead that is gone does not disturb an Issue that waits', async () => {
@@ -506,6 +589,7 @@ describe('classify, then admission', () => {
     maker = new WorktreeMaker({ sql: db.sql, worktrees, now: () => clock.now(), retryBudgetMs: 10 * 60_000 })
     worktrees.failure = new Error('no origin')
     const id = await file(newRepo())
+    await restartsSpent(id)
     for (let i = 0; i < 20; i++) {
       await drive(1)
       clock.advance(60_000)
@@ -1179,6 +1263,52 @@ describe('the lead’s send-back', () => {
     // Replayed, the stop records nothing more.
     await stop(key, true)
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'unreported'`).toHaveLength(1)
+  })
+
+  test('a stop with a background task running is neither sent back nor parked; the same stop without one is', async () => {
+    const { id, key } = await running()
+    const busy = (active: boolean) =>
+      stopCheck(db.sql, key, { stopHookActive: active, backgroundTasks: true }, clock.now())
+    expect(await busy(false)).toEqual({ sendBack: false, message: null })
+    expect(await busy(true)).toEqual({ sendBack: false, message: null })
+    await pass()
+    expect((await issue(id)).state).toBe('working')
+    expect(await db.sql`SELECT 1 FROM factory.effects WHERE rule = 'issue-sendback'`).toHaveLength(0)
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'unreported'`).toHaveLength(0)
+    // The task ended, the session woke and stopped again: nothing was spent, so the stop is sent back as any other.
+    expect((await stop(key)).sendBack).toBe(true)
+  })
+
+  test('an unreported park ends when the lead that parked it starts a turn again, and not for a worker or an older turn', async () => {
+    const { id, key } = await running()
+    expect((await stop(key)).sendBack).toBe(true)
+    expect(await stop(key, true)).toEqual({ sendBack: false, message: null })
+    await pass()
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'unreported' })
+    const parkedAt = (await issue(id)).updated_at as Date
+
+    // A turn that began before the park, and a worker's turn after it, say nothing about the lead.
+    await emit(key, 'turn_started', new Date(parkedAt.getTime() - 500))
+    await openSession(db.sql, { id: 'helper', spawnKey: 'helper', pane: 't98', issueId: id, at: clock.now() })
+    await emit('helper', 'session_started', clock.now(), {})
+    clock.advance(1_000)
+    await emit('helper', 'turn_started')
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'unreported' })
+
+    // The lead's own next turn (the owner typed into the pane, or a note woke it) ends the park, with no message to the owner.
+    clock.advance(1_000)
+    await emit(key, 'turn_started')
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'working', reason: null })
+    expect(await trail(id)).toContain('turn_started waiting→working')
+    expect(
+      (await db.sql`SELECT key FROM factory.notifications`).map((row: { key: string }) => row.key.split(':')[1]),
+    ).toEqual(['parked'])
+    // That turn is the owner's, so it is not sent back; and a replay of the event moves nothing.
+    expect(await stop(key)).toEqual({ sendBack: false, message: null })
+    await drive(2)
+    expect((await issue(id)).state).toBe('working')
   })
 
   test('a report made before the stop, handled or not, lets it through', async () => {

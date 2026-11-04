@@ -113,6 +113,12 @@ describe('what goes out, each kind once', () => {
     const a = await working()
     await step(a, 'unreported')
     const b = await working()
+    // A lead that is gone is first a new attempt, and only its third loss is a park (and so a message).
+    await step(b, 'lead_gone', { detail: 'spawn lead-2-1 failed: no account' })
+    expect((await rows()).map((r) => r.issueId)).toEqual([a])
+    await step(b, 'admitted')
+    await step(b, 'lead_gone', { detail: 'again' })
+    await step(b, 'admitted')
     await step(b, 'lead_gone', { detail: 'spawn lead-2-1 failed: no account' })
     const texts = Object.fromEntries((await rows()).map((r) => [r.issueId, r.text]))
     expect(texts[a]).toBe(`Issue ${a} (repo) parked: its lead stopped twice with nothing reported`)

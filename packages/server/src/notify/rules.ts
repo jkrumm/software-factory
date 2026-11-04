@@ -36,9 +36,10 @@ export async function notifyMove(
   },
 ): Promise<void> {
   const { issue, kind, payload, now } = input
-  if (issue.state === 'waiting' && (kind === 'unreported' || kind === 'lead_gone')) {
+  if (issue.state === 'waiting' && (kind === 'unreported' || kind === 'lead_gone' || kind === 'regression')) {
     const detail = typeof payload?.detail === 'string' ? payload.detail : null
-    await record(tx, parkedMessage({ issue, revision: issue.revision, reason: kind, detail }), now)
+    const reason = kind === 'regression' ? 'regressed' : kind
+    await record(tx, parkedMessage({ issue, revision: issue.revision, reason, detail }), now)
   } else if (kind === 'regression') {
     const title = typeof payload?.title === 'string' ? payload.title : null
     await record(tx, regressionMessage({ issue, hold: issue.hold, title }), now)

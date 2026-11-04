@@ -618,16 +618,18 @@ stateDiagram-v2
   queued --> working: a lead starts
   queued --> closed: stopped
   working --> waiting: a decision, a wall, a dependency
+  working --> queued: a lead is gone (twice)
   waiting --> working
   waiting --> closed: stopped
   working --> watching: shipped with evidence
   working --> closed: closed or dropped with a reason
   watching --> closed: holds, or stopped
   watching --> working: regression
+  watching --> waiting: the third regression
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to). A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to, for the third time). **Every park can end without a drop** (RS3): a `wall` and an `unreported` end by themselves when the session that caused them starts a turn again (below), a `lead_gone` is a new attempt twice before it is a park, and a `parked` by the third regression is the owner's. A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
 is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
@@ -637,7 +639,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   line in `issue_events`. No entry leads to `settling` and a create is always `queued`, so a request cannot reach it (F3).
 - **One inbox.** Everything that concerns an Issue is a row in `issue_inbox` with a unique key. A session event on
   a session with an `issue_id` is copied in by the same transaction that stores it (`recordIn`, the only writer of session
-  events, so the live post, the spool replay and the witness all pass there). A `turn_started` takes back only what a wall parked, and only from the session that hit the wall (`wall_session`).
+  events, so the live post, the spool replay and the witness all pass there). A `turn_started` takes back what a wall or an `unreported` stop parked, and only from the session that caused it: the one that hit the wall (`wall_session`), or the one the park's `unreported` row names, and only a turn that began after the park (a worker's turn, or an older one, says nothing). The owner heard of an `unreported` park already; its end sends no message. The lead's turn is then the owner's or a note's, so the send-back does not ask about it.
 
 | Event | Sent by | Key |
 |-|-|-|
@@ -647,7 +649,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
 | `reopen` | `factory issue reopen` (`POST /issues/:id/reopen`, token or socket) | `reopen:<issue>:<call id>` |
 | `stop` | `factory issue stop` (`POST /issues/:id/stop`, token only) | `stop:<issue>:<call id>` |
-| `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>` |
+| `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed; each names the `attempt` that lost its lead, and one for an earlier attempt than the Issue is on is refused | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>` |
 | session events | hooks, live or from the spool | as in §3 |
 | `hold_over`, `wake`, `answer`, `lapsed` | the tick, when `wake_at` passes (`answer` with the default of a question whose expiry passed; `lapsed` when it had none) | `hold:<issue>:<attempt>:<hold>`, `wake:<issue>:<waits>`, `answer:<issue>:expired:<decision>`, `lapse:<issue>:<decision>`: `hold` counts the ships and `waits` the timed waits, as a second ship or a second wait for the same time is a timer of its own |
 | `verified`, `regression` | the check after the hold, green or red, each naming its `hold`: an answer for an earlier hold is refused. A `regression` is also a `signal` with `regression: true` (F3), which names none | `verified:<issue>:<hold>`, `regression:<issue>:<hold>` |
@@ -709,6 +711,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   last attempt is not finalized, and an `alert` while `FACTORY_ALERT_LEADS` is off (it is left out of the reading, so it does not stand in front of a
   request); `factory status` says which. Requests are not asked. Decision 3 held alert leads back until evidence and the hold were live: since
   Wave 4 the switch defaults on (`config.ts`), and `FACTORY_ALERT_LEADS=0` turns it off.
+- **A lead that is gone starts the next attempt, at most twice** (RS3). The first two `lead_gone` of an Issue (counted from its `issue_events`: those that moved it to `queued`, so nothing is stored) move it `working → queued` and plan `finalize` for the attempt that lost its lead (its tab closed, its transcripts archived, the claim given back, the worktree removed or kept with a `worktree_kept` line); admission then waits for that finalize and makes `admit:<issue>:<attempt+1>` through the usual path, so a replayed tick makes one attempt. No message goes out for a restart. The brief of the next attempt has a "The previous attempt" section when finalize kept the branch: the branch and the kept worktree's path and why, so the new lead can pick the work up (nothing is said when it was removed, as it held nothing). The third `lead_gone` parks the Issue (`waiting`, `lead_gone`) with the one message every park gets.
 - **Attach or start.** `start_lead` asks for the worktree `factory/<issue>-<attempt>` of the repo, made the way `rd fan` does (`issues/worktree.ts`:
   fetch origin, branch from the default branch, `wtp` where `origin/<default>` has a `.wtp.yml`; each step under a timeout; the same branch answers its
   worktree again, with the sha it was cut from, if a marker in its git directory says the setup finished; one without it is removed and made again unless the branch has commits, and a failed setup removes what it made) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
@@ -728,7 +731,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   started (the brief, or a prompt the prompt loop typed: not one the owner typed), with no `ship|close|block|ask|wait|drop` from that session
   since the turn began but a refused one, is sent back with one line (`issue-sendback:<session>:<turn>`). The next stop of that turn, which arrives with
   `stop_hook_active` (the hook asks on every stop and forwards the flag), files `unreported:<issue>:<session>:<turn>`: the Issue is `waiting` for `unreported`, with a line in `factory status`. The same stop
-  asked again records nothing.
+  asked again records nothing. **A background task running is not a stop to send back.** Claude Code's `Stop` input carries `background_tasks`, the work still in flight in the session (running or pending shells, subagents, monitors, workflows; empty when there is none). `factory hook stop` sends whether the list is not empty as `backgroundTasks` in the stop-check body and in the `turn_ended` payload (never the entries: they hold commands), and `issueStop` then neither sends back nor parks: the session pauses until the task wakes it, and the stop that follows is asked about as any other. The workers rule is unchanged (it counts factory children, which background tasks are not).
 - **Claims.** `repo:<name>` admits as many leads as the manifest's `leads` allows (one by default) plus one urgent.
 - **The evidence gate.** `ship` names its merged commits (`--commit`, required) and `close` may. Before the row is filed, outside any
   transaction, `derive` (`issues/evidence.ts`) has `GitCommits` (`issues/commits.ts`) resolve them: each must exist and be on `origin/<default>`
@@ -751,9 +754,9 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 - **The hold.** `ship` moves it to `watching` with `wake_at` at now plus the manifest's `hold`. A passed `wake_at` is `hold_over`, which plans `verify`:
   no check for two minutes after the server starts (`make deploy` writes what `make verify` compares only once `/health` answers, so a hold ending in a deploy would read as a regression), then off the tick. Under `deploy.mode: make`, when the ship that started this hold changed something that deploys (its `derived.required` is not empty; the ship row is the newest applied one of this attempt), the first check is `make version` in the repo (`deployed version`, 30 s, read-only, always run: only make knows whether the target exists). It must print one line, the deployed commit sha, and that commit must be `derived.landedAt` or hold it as an ancestor (`deployedHolds`, `issues/origin.ts`; a deployed commit the repo has not seen is fetched for, which writes remote refs and objects only). `landedAt` is `origin/<default>` as `derive` found it when the ship proved the work landed (`CommitRead.landedAt`): one sha that holds everything on the branch and every commit named, so a lead that names only an early commit, a squash, a rebase and the 100-entry cut of `commits` change nothing. `merge-base --is-ancestor` exit 1 is "not deployed"; any other exit is `could not compare: <reason>`. The check is closed on every gap: no ship of this attempt on record, no `derived`, no `landedAt`, or no project row at hold time (checked first, whatever the ship row holds) is a red check with that reason. Only a ship whose commits require no evidence skips it, as do the modes `auto`, `agentic` and `none`. A missing target is make's own top-level `make: *** No rule to make target 'version'` line (read under `LC_ALL=C`; not a sub-make's, and not one followed by a failed recipe's `[version] Error`) and reds with a line saying `make version` is a probe: the owner adds it, a lead does not, and the lead answers with `factory issue block`. Any other failure shows `stdout: … / stderr: …` (the end of each, 1,500 characters) in the detail; the shell catches stderr through the pipe, so a kill leaves no file behind. **The factory never writes a checkout:** it does not pull, fast-forward or clean one, and deploying from the main checkout is the lead's job (§5). The probes and `make verify` run whether the version check is red or not, so the lead sees every signal. Then `make verify` in the repo where the make contract has it (10 min, `childEnv()`, stdout and stderr kept, the last 1,500 characters) and
   an HTTP GET per probe (15 s, redirects are answers), pass or fail, never averaged. No check at all is green. Green files `verified`: closed, the
-  results in `evidence` (kind `hold`, author `factory`). Red files `regression` naming the hold: back to `working`, one note to the same lead under
+  results in `evidence` (kind `hold`, author `factory`). A red check is not yet an answer: the first red of a hold files a line (`verify_red:<issue>:<hold>`, the checks as data) and a second `verify` effect (`<verify key>:rerun`, once), and only a red second check files `regression`, so a flaky probe or a deploy still settling does not send a lead back. A green second check files `verified`. Red twice files `regression` naming the hold: back to `working`, one note to the same lead under
   `issue:<id>:regression:<hold>` with the results as JSON on one line, data, and `notify:regression:<issue>:<hold>` on the owner's line. A check whose hold ended meanwhile files nothing, and one whose answer is filed
-  runs nothing.
+  runs nothing. **The third regression of an Issue** (counted from `issue_events`, the `signal` kind included) does not go back to the lead: the Issue is `waiting` as `parked`, its line says "regressed three times", the lead gets no note, and the owner gets the one park message (`notify:parked:<issue>:<revision>`) instead of a regression message.
 - **Finalize once,** from every exit path (`issues/finalize.ts`), in this order: on the tick, so no check can hold a project's place, the claim is given back, a lead's spawn that never started fails, and
   whoever waited for the place is looked at now, unless a later attempt holds the claim by now (a finalize planned before its port existed); off it, the terminals of the lead and the workers it spawned are killed and removed (`Runner.close`, by their label); the attempt's transcripts, the
   lead's and those workers', if they really lie under the account's Claude projects directory (the path is the pane's word; otherwise a `transcript_missing` line), are copied to `FACTORY_ARCHIVE_DIR` (default `~/.local/share/factory/archive`)`/<issue>/<attempt>/<claude session>.jsonl`, with the
@@ -871,13 +874,14 @@ false confidence; the probes are the check that does not depend on it.
   Those that reached no session (no prompt `issue:<issue>:note:<call id>` of a session that exists and is `sent` or `delivered`), so a lead that never started,
   and the notes a brief had no room for, come again in the next one. Each is recorded as a `delivered` prompt of the new lead in the spawn's
   transaction (a prompt still pending for an earlier lead, or one of a session that never existed, moves to it; one being typed right now stays, and the brief carries the text all the same), so a `note_lead` for the same call never types it a second time. At most 20 are shown and within 24 KB, with a count of the rest.
+- **The previous attempt:** only for an attempt after the first whose predecessor's worktree finalize kept: its branch and worktree path and why it was kept, as quoted strings (a lead that was lost leaves its work behind).
 - **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.
 - **Standing orders:** decide alone except the business classes; ask through `factory issue ask`; workers stay on
   Max; never end a turn on a background shell; every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
   by a test), so they are a prompt-cache hit. For that the brief opens with the standing orders and the done-means text, which are the same
-  in every brief, and then comes what is this Issue's: the ask, the facts, the owner's notes, the history, the project.
+  in every brief, and then comes what is this Issue's: the ask, the facts, the previous attempt, the owner's notes, the history, the project.
 
 Classification sets labels and routing, never a cause. The brief shows just kind and class.
 

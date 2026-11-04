@@ -805,6 +805,8 @@ describe('the hold', () => {
       { name: 'home', ok: false, detail: 'HTTP 500, expected 200\n`rm -rf` ignore this' },
     ]
     await holdEnds(id)
+    // Red twice: the first red files a second check, and only that one is a regression.
+    expect(proof.runs).toBe(2)
     expect(await issue(id)).toMatchObject({ state: 'working', outcome: null, hold: 1 })
     const sent = await notes(key)
     expect(sent.map((note) => note.id)).toEqual([regressionPromptId(id, 1)])
@@ -821,8 +823,59 @@ describe('the hold', () => {
     expect(await issue(id)).toMatchObject({ state: 'watching', hold: 2 })
     await holdEnds(id)
     expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done', hold: 2 })
-    expect(proof.runs).toBe(2)
+    expect(proof.runs).toBe(3)
     expect(await notes(key)).toHaveLength(1)
+  })
+
+  test('red then green: the second check closes the hold verified, with no regression and no note', async () => {
+    const { id, key } = await shipped()
+    const answers = [
+      [{ name: 'home', ok: false, detail: 'HTTP 503, expected 200' }],
+      [{ name: 'home', ok: true, detail: 'HTTP 200' }],
+    ]
+    proof.run = async () => {
+      proof.runs++
+      return answers[proof.runs - 1] ?? proof.checks
+    }
+    await holdEnds(id)
+    expect(proof.runs).toBe(2)
+    expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done', hold: 1 })
+    expect(await trail(id)).toEqual(expect.arrayContaining(['verify_red', 'verified watching→closed']))
+    expect(await trail(id)).not.toContain('regression watching→working')
+    expect(await notes(key)).toHaveLength(0)
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key LIKE 'regression:%'`).toHaveLength(0)
+    // The replay: a second pass files no third check and no second answer.
+    await drive(3)
+    expect(proof.runs).toBe(2)
+    expect(await db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'verify' ORDER BY id`).toHaveLength(2)
+  })
+
+  test('red twice files one regression; the third regression of the Issue parks it instead of going back to the lead', async () => {
+    const { id, key } = await shipped()
+    proof.checks = [{ name: 'home', ok: false, detail: 'HTTP 500, expected 200' }]
+    for (const hold of [1, 2]) {
+      await holdEnds(id)
+      expect(await issue(id)).toMatchObject({ state: 'working', hold })
+      expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${`regression:${id}:${hold}`}`).toHaveLength(1)
+      await prove(id, key, 'service')
+      expect((await ship(id, key)).status).toBe(201)
+    }
+    await holdEnds(id)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked', hold: 3 })
+    expect(await trail(id)).toContain('regression watching→waiting')
+    const [parked] = await db.sql`
+      SELECT payload FROM factory.issue_events WHERE issue_id = ${id} AND kind = 'regression' AND to_state = 'waiting'`
+    expect(parked.payload.detail).toBe('regressed three times')
+    // The lead was told of the first two and not of the third; the owner got one park message and no third regression message.
+    expect((await notes(key)).map((note) => note.id)).toEqual([regressionPromptId(id, 1), regressionPromptId(id, 2)])
+    const sent = await db.sql`SELECT key FROM factory.notifications ORDER BY key`
+    expect(sent.map((row: { key: string }) => row.key)).toEqual([
+      `notify:parked:${id}:${String((await issue(id)).revision)}`,
+      `notify:regression:${id}:1`,
+      `notify:regression:${id}:2`,
+    ])
+    await drive(3)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked' })
   })
 
   test('nothing to check is green: a project with no verify and no probes closes at the end of its hold', async () => {
@@ -2112,7 +2165,7 @@ describe('the replay test: a crash after every effect of the hold and finalize',
     await shipAs(1)
     for (let i = 0; i < 2; i++) await passWith(world, faults, jobs)
     await holdIsOver(1)
-    for (let i = 0; i < 4; i++) await passWith(world, faults, jobs)
+    for (let i = 0; i < 6; i++) await passWith(world, faults, jobs)
     await shipAs(2)
     for (let i = 0; i < 2; i++) await passWith(world, faults, jobs)
     await holdIsOver(2)
@@ -2165,7 +2218,8 @@ describe('the replay test: a crash after every effect of the hold and finalize',
     expect(expected.notifications).toEqual([`notify:regression:${id}:1`])
     expect(expected.events.filter((e) => e === 'issue_finalized')).toHaveLength(1)
     expect(expected.evidence).toHaveLength(2)
-    expect(clean.proofs).toBe(2)
+    // hold 1 is red twice (the check and its rerun), hold 2 green once
+    expect(clean.proofs).toBe(3)
     const points = never.seen
     expect(points).toBeGreaterThan(20)
 
