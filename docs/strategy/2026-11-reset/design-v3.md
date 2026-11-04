@@ -202,7 +202,7 @@ Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5
 
 | # | Issue | After |
 |-|-|-|
-| 0 | Cutover: `queue set drain`; finish or stop in-flight work; Issue 51 closed, 52–55 dropped or re-filed | — |
+| 0 | Cutover: finish or stop in-flight work; Issue 51 closed, 52–55 dropped or re-filed (`queue set drain` only when no loop of its own runs through the queue) | — |
 | 1 | Step 0: no false failure for a live terminal, confirmed delivery, machine failures never asks, ask expiry | — (built tonight) |
 | 2 | Review: router recalibration, one verifier, `omitClaudeMd` (agw + dotfiles) | — (built tonight) |
 | 3 | Dependencies: `--after`, admission respects `issue_deps`; `factory issue prio` | 0 |

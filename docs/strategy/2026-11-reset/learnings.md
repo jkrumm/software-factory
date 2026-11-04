@@ -28,3 +28,19 @@ evidence (a sha, a log line, a number); no narrative.
   reset; reviewing it again would only spend quota. The lead was spawned through the factory directly
   (`factory spawn create software-factory-w8 --role lead`, pane t12x), the path `rd wave` itself takes. Change for row 7:
   the gate checks coverage of the wave's own commits only when they are still on the code path, or goes with `wave-gate.py`.
+
+## Wave 1, cutover (row 0), 2026-11-05 00:05
+
+- **The cutover took five calls and lost nothing.** `factory issue stop 51` (reason "superseded by the reset (RS8)") and
+  `stop 52`..`55` ("dropped in the reset (RS8)") closed all five as `dropped`; finalize closed 51's pane `t8h` and removed
+  its worktree `factory-51-1`, whose branch had no commit beyond master and a clean tree. After: no open Issue of
+  software-factory; one open Issue in the estate (49, homelab-private, parked `lead_gone`); asks 7 (the handoff counted 9:
+  the WeatherOrb iPhone, the Wave 8 cutover, the MacBook core, Issue 49, review `rv_kmnj…`, the two failed agw spawns).
+- **Row 0's `queue set drain` was left out on purpose.** The reset loop itself spawns its workers through the queue; a drain
+  would stop it. Change: `reset.md` Wave 1 never had the drain, design v3 §13 row 0 now says the drain is for a cutover
+  that runs no loop of its own.
+- **`issue show` does not say what an attempt holds.** The JSON has no worktree, branch or pane; finding out whether 51 had
+  unlanded work took `spawn list` (pane), `git worktree list` and `git log master..factory/51-1`. Candidate for row 12:
+  `issue_facts` carries the attempt's branch and its commits beyond the base.
+- **Two of the seven remaining asks are machine failures** (the agw spawns failed 2026-11-02, `hand_off`). Step 0 stops
+  new ones; these two expire by 2026-11-09. Row 6 moves such lines to the health line.

@@ -11,15 +11,15 @@ its row of §13 plus the design section it implements; the program lead reviews 
 and proves it. One wave at a time: the mini is the bottleneck (load reached 385 on 12 cores on 2026-11-04 from parallel checks
 and the iOS simulator). One `make check` or `agw check` at a time; no `xcodebuild` or simulator run before 07:00.
 
-## Wave 1 — Cutover (row 0)            <!-- status: active -->
+## Wave 1 — Cutover (row 0)            <!-- status: done -->
 The lead does this itself; no worker.
-- [ ] Issue 51: `factory issue stop 51` with the reason "superseded by the reset (RS8)"; its pane `t8h` closed by finalize.
-- [ ] Issues 52–55: `factory issue stop <id>` each, reason "dropped in the reset (RS8)".
-- [ ] `factory status` and `factory fleet` show no open Issue of software-factory and the asks count; record both.
-- [ ] learnings entry.
-**Left behind:**
+- [x] Issue 51: `factory issue stop 51` with the reason "superseded by the reset (RS8)"; its pane `t8h` closed by finalize.
+- [x] Issues 52–55: `factory issue stop <id>` each, reason "dropped in the reset (RS8)".
+- [x] `factory status` and `factory fleet` show no open Issue of software-factory and the asks count; record both.
+- [x] learnings entry.
+**Left behind:** 51–55 closed `dropped`, 51's pane and worktree gone (no unlanded commit). No open software-factory Issue; asks 7. No drain: this loop spawns through the queue (learnings).
 
-## Wave 2 — Dependencies (row 3)            <!-- status: pending -->
+## Wave 2 — Dependencies (row 3)            <!-- status: active -->
 - [ ] `factory issue new --after <id>` (repeatable) writes `issue_deps` in the create transaction; an unknown or closed id is refused.
 - [ ] Admission (`issues/admission.ts`) admits only Issues with no open dependency; `releaseDependents` on close stays.
 - [ ] `factory issue prio <id> <n>` writes the `prio` event; admission orders by the latest priority, then id.
