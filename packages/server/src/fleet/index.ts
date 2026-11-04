@@ -328,6 +328,7 @@ export class FleetBuilder {
       }
     }
 
+    const expired = new Map<string, string>()
     const base = assemble({
       now,
       roots,
@@ -339,6 +340,7 @@ export class FleetBuilder {
       decisions: db.decisions,
       queue,
       firstSeen: this.firstSeen,
+      expired,
       errors,
     })
     // The digest's text comes from its cache, for the repos and sessions it may read (IuRoot's stay as the plan wrote them).
@@ -383,7 +385,11 @@ export class FleetBuilder {
     const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
     // Every ask the sources raised, also one the triage folded or the owner snoozed: it keeps its time for when it comes back.
     // A build that could not read a source leaves what it knew of that source's asks (they did not leave, they were not listed).
-    const listed = timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const)
+    // An expired factory ask keeps its time too, or it would come back as new at the next build.
+    const listed = [
+      ...timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const),
+      ...expired,
+    ]
     this.firstSeen = complete ? new Map(listed) : new Map([...this.firstSeen, ...listed])
     this.since = new Map(
       [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>

@@ -263,7 +263,7 @@ killed if needed, `terminal.rm`'d and the spawn started afresh (a retry may be o
 [--resume <id>] <prompt>`; a reviewer's is `… --effort <review.effort> --disallowed-tools <the writing tools, comma-separated> --agent reviewer <prompt>`, the
 list-valued option before another option so it cannot swallow the prompt; `claude --resume <id> "<prompt>"` takes the id as the option's value), `cwd` is always the repo, `keep: true`, the
 name an hc-valid `agentName`; so nothing is typed at start. The agent is started when `terminal.get` shows it reported (`reported`,
-a status or `turn >= 1`) inside the deliver window (30 s), else a transient error. `claude-pretrust.sh` runs before every
+a status or `turn >= 1`) inside the deliver window (30 s). A terminal that is live but silent after the window is started, unconfirmed (the hooks and the witness confirm it later), never a failed start: a load-slow Claude Code is not a failure. A terminal that ended or cannot be read is a transient error. `claude-pretrust.sh` runs before every
 spawn (a test pins that a path never seen before is trusted first). A prompt cannot start with `-`. The account is in the `env` of
 `terminal.run` (`accountEnv`): `CLAUDE_CONFIG_DIR` only for a non-default account, never empty, never inherited, plus
 `CLAUDE_ACCOUNT_PICKED`, `USAGE_LANE`, `FACTORY_SESSION`, `FACTORY_ROLE`.
@@ -340,7 +340,7 @@ the factory knows the account of a session no spawn describes (`rd`'s); a spawn'
 `Runner.type` (`terminal.send`; `busy` while the runner says `working`) once the derived state is `idle`, `waiting` or
 `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
 before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
-No turn within a minute: typed once more (`MAX_SENDS` 2), then `failed` with the reason, which stays in `factory status` for
+No turn within a minute: Enter is pressed once more for a typed prompt (`Runner.type` with `enterOnly`; the text is never pasted twice; a resume is started again), `MAX_SENDS` 2, then `failed` with an `unconfirmed: ... not delivered` reason, which stays in `factory status` for
 a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
 (`UncertainTyping`: hc timed out or died after the call) counts as sent and waits for a turn; the one retry after a
 minute without one is the only second typing, as for a claim left `typing` by a crashed tick (after the start budget plus a minute).
@@ -1219,7 +1219,9 @@ in a session's last message. Wave 3 (below, "Triage and actions") adds `tier`, `
   `for 5 min` does not change the id, two different lines of one subject do not collapse), `decision:<key>` (an open decision of an open Issue,
   `question`) and `queue:<id>` (the human queue through `ask-human.sh list --json`, `human`; the script is dotfiles', at
   `FACTORY_ASK_HUMAN`; a script that does not print the JSON array yet is an `errors[]` line). An ask with no time of its own (hc, a wait, an attention line) has the time of the first build that saw it, kept across builds and
-  restarts. Oldest first.
+  restarts. Oldest first. **Machine failures are not asks** (`isMachineNoise`; they stay in `factory status`): a note to a terminal the model no longer has or whose delivery is `unconfirmed`, a failed
+  spawn whose agent is a working session, a kept-worktree line of an Issue that is not open, and `Issue N waits for the claim`. A `factory:` ask older than 7 days expires
+  (left out, its time kept so it does not return as new); the queue, decisions, hc and waits never expire here.
 - **CLI.** `factory fleet [--format json|plain] [--refresh]`: plain is the summary line, the asks, then the repos with a running plan
   and their sessions, then the errors.
 

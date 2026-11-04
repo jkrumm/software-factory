@@ -18,6 +18,8 @@ import type { HcTerminal, QueueRequest } from './sources.ts'
 
 /** An ask older than this counts in `summary.staleAsks`. */
 export const STALE_ASK_MS = 24 * 3_600_000
+/** A factory-raised ask this old resolves itself as expired: it is bookkeeping, not a decision waiting on the owner. */
+export const EXPIRE_FACTORY_ASK_MS = 7 * 24 * 3_600_000
 
 /** A session as the merge left it: what the model shows, and what the plan lookup and the asks need besides. */
 export interface MergedSession {
@@ -68,6 +70,8 @@ export interface ModelInput {
   queue: QueueRequest[]
   /** when an ask that has no time of its own (hc, a wait's fallback, an attention line) was first seen: the first build that saw it */
   firstSeen: ReadonlyMap<string, string>
+  /** out: the factory asks that expired this build (id to first-seen time), so the builder keeps their time and they stay gone */
+  expired?: Map<string, string>
   errors: string[]
 }
 
@@ -129,6 +133,28 @@ function lineSubject(line: string): { session?: string; spawn?: string; issue?: 
   const issue = /^Issue (\d+)/.exec(line)
   if (issue?.[1]) return { issue: Number(issue[1]) }
   return {}
+}
+
+/**
+ * Whether an attention line is the factory's own bookkeeping and holds no owner decision: it stays in `factory status`, never an ask.
+ * A note to a terminal that no longer exists (it expired, or was never confirmed), a spawn marked failed while its terminal works on, a
+ * kept worktree of a closed Issue, and the informational "waits for the claim".
+ */
+export function isMachineNoise(
+  line: string,
+  facts: {
+    /** the session the line names, when the model has it */
+    session: string | null
+    /** the spawn's agent is a live, working session */
+    spawnWorking: boolean
+    /** the Issue the line names is open */
+    issueOpen: boolean
+  },
+): boolean {
+  if (/^note \S+ to \S+/.test(line)) return facts.session === null || /\bunconfirmed:/.test(line)
+  if (/^spawn \S+ failed/.test(line)) return facts.spawnWorking
+  if (/^Issue \d+: its worktree was kept/.test(line)) return !facts.issueOpen
+  return /^Issue \d+ waits for the claim/.test(line)
 }
 
 /** Whether a session counts as working a plan: running, or stopped mid-turn (blocked, stuck, walled), or waiting on workers or a deploy; not an idle or done tab, nor one that waits on the owner. */
@@ -276,10 +302,30 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     const id = `factory:${lineKey(line)}`
     if (asks.some((a) => a.id === id)) continue
     const session = subject.session && bySession.has(subject.session) ? subject.session : null
+    const spawnRow = subject.spawn ? status.queue.spawns.find((x) => x.key === subject.spawn) : undefined
+    const agent = spawnRow ? (spawnRow.pane ?? spawnRow.session) : null
+    const spawned = agent
+      ? input.sessions.find((m) => m.session.id === agent || m.session.terminal === agent)
+      : undefined
+    const issue = subject.issue === undefined ? undefined : status.issues.find((i) => i.id === subject.issue)
+    if (
+      isMachineNoise(line, {
+        session,
+        spawnWorking: spawned !== undefined && isWorking(spawned.session),
+        issueOpen: issue !== undefined && issue.state !== 'closed',
+      })
+    ) {
+      continue
+    }
     const repo =
       (session ? bySession.get(session)?.repo : undefined) ??
       (subject.spawn ? spawnRepo.get(subject.spawn) : undefined) ??
       (subject.issue === undefined ? undefined : issueRepo.get(subject.issue))
+    const at = seen(id)
+    if (now.getTime() - Date.parse(at) >= EXPIRE_FACTORY_ASK_MS) {
+      input.expired?.set(id, at)
+      continue
+    }
     ask({
       id,
       kind: askKind(line),
@@ -287,7 +333,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
       session,
       text: line,
       source: 'factory',
-      at: seen(id),
+      at,
     })
   }
 

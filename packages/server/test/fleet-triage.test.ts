@@ -653,9 +653,10 @@ describe('automatic: bookkeeping, logged and undoable', () => {
   })
 
   test('a note nobody looked at for a day is dismissed; undo brings it back', async () => {
+    await w.spawned('rb-waits', { repo: `${estate.src}/rb`, role: 'wave' })
     await db.sql`
       INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count, error)
-      VALUES ('n1', 'rb-gone', 'note', 'type', 'hi', 'pending', ${w.at(10)}, ${w.at(10)}, 2, 'the pane is busy')`
+      VALUES ('n1', 'rb-waits', 'note', 'type', 'hi', 'pending', ${w.at(10)}, ${w.at(10)}, 2, 'the pane is busy')`
     let fleet = await build()
     const note = fleet.asks.find((a) => a.id.startsWith('factory:note:n1'))
     if (!note) throw new Error('the failed note is no ask; the test setup is wrong')
@@ -951,9 +952,10 @@ describe('the lead’s review', () => {
   })
 
   test('2: a restart does not make an old ask look new: its time comes from the table', async () => {
+    await w.spawned('rb-waits', { repo: `${estate.src}/rb`, role: 'wave' })
     await db.sql`
       INSERT INTO factory.prompts (id, session, source, via, text, status, created_at, next_at, sent_count, error)
-      VALUES ('n1', 'rb-gone', 'note', 'type', 'hi', 'pending', ${w.at(10)}, ${w.at(10)}, 2, 'the pane is busy')`
+      VALUES ('n1', 'rb-waits', 'note', 'type', 'hi', 'pending', ${w.at(10)}, ${w.at(10)}, 2, 'the pane is busy')`
     const first = ask(await build(), (await get()).asks.find((a) => a.id.startsWith('factory:note:n1'))?.id ?? '')
     if (!first) throw new Error('the note is no ask')
     clock.advance(25 * 3_600_000)
