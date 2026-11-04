@@ -174,20 +174,16 @@ describe('one space per repo, keyed by path', () => {
     expect((await start('b', '/work/app')).workspace).toBe(own.workspace)
   })
 
-  test('a failed try reports its space, and a retry given it goes back there instead of making another', async () => {
+  test('a live but silent try is started unconfirmed in its space, and a retry given it goes back there instead of making another', async () => {
     await start('a', '/work/app')
     await hc.plan('terminal.run:silent')
-    const first = (await start('b', '/work/app', { newSpace: true }).catch((e: unknown) => e)) as RunnerError
-    expect(first).toBeInstanceOf(RunnerError)
-    expect(first.workspace).toBeDefined()
-    // Its terminal is alive but silent: the second try waits for it again, in the same space.
-    const second = (await start('b', '/work/app', { newSpace: true, workspace: first.workspace }).catch(
-      (e: unknown) => e,
-    )) as RunnerError
-    expect(second.workspace).toBe(first.workspace as string)
+    const first = await start('b', '/work/app', { newSpace: true })
+    // Its terminal is alive but silent: the second try finds it again, in the same space.
+    const second = await start('b', '/work/app', { newSpace: true, workspace: first.workspace })
+    expect(second.workspace).toBe(first.workspace)
     await hc.setStatus('t2', 'working')
     const third = await start('b', '/work/app', { newSpace: true, workspace: second.workspace })
-    expect(third.workspace).toBe(first.workspace as string)
+    expect(third.workspace).toBe(first.workspace)
     expect(await spaces()).toHaveLength(2)
   })
 

@@ -446,11 +446,12 @@ describe('hc adapter: idempotence by looking, not by exit code', () => {
     expect(await count('terminal.run')).toBe(1)
   })
 
-  test('a terminal that is alive but has said nothing yet is waited for, not started again', async () => {
+  test('a live terminal slow to report is started unconfirmed, not failed, and never started again', async () => {
     await hc.plan('terminal.run:silent')
-    expect((await failure()).message).toContain('reported nothing')
+    const result = await runner.start(input)
+    expect(result.session).toBe('t1')
     await hc.setStatus('t1', 'working')
-    await runner.start(input)
+    expect(await runner.start(input)).toEqual(result)
     expect(await count('terminal.run')).toBe(1)
   })
 
@@ -497,7 +498,7 @@ describe('hc adapter: idempotence by looking, not by exit code', () => {
     // Also when it only has a finished turn on record.
     await hc.reset()
     await hc.plan('terminal.run:silent')
-    await failure()
+    await runner.start(input)
     await hc.mutate((state) => {
       const t = state.terminals[0]
       if (t) Object.assign(t, { state: 'finished', turn: 1, status: null })
@@ -508,7 +509,7 @@ describe('hc adapter: idempotence by looking, not by exit code', () => {
 
   test('a finished terminal that never reported is removed and the spawn started again', async () => {
     await hc.plan('terminal.run:silent')
-    await failure()
+    await runner.start(input)
     await hc.finish('t1', 1)
     const again = await runner.start(input)
     const state = await hc.state()
@@ -521,7 +522,7 @@ describe('hc adapter: idempotence by looking, not by exit code', () => {
 
   test('the same key on another account after the first one ended runs with that account', async () => {
     await hc.plan('terminal.run:silent')
-    await failure(runner, { ...input, account: 'a' })
+    await runner.start({ ...input, account: 'a' })
     await hc.finish('t1', 1)
     await runner.start({ ...input, account: 'b' })
     expect((await run(1)).env).toMatchObject({ CLAUDE_ACCOUNT_PICKED: 'b', CLAUDE_CONFIG_DIR: '/home/me/.claude-b' })
@@ -530,7 +531,7 @@ describe('hc adapter: idempotence by looking, not by exit code', () => {
 
   test('a terminal still alive keeps the account it started on', async () => {
     await hc.plan('terminal.run:silent')
-    await failure(runner, { ...input, account: 'a' })
+    await runner.start({ ...input, account: 'a' })
     await runner.start({ ...input, account: 'b' }).catch(() => {})
     expect(await count('terminal.run')).toBe(1)
     expect((await run()).env).toMatchObject({ CLAUDE_ACCOUNT_PICKED: 'a' })
@@ -618,7 +619,7 @@ describe('hc adapter: failures are transient errors for the tick to retry', () =
 
   test('a finished terminal stays until the pre-trust has passed', async () => {
     await hc.plan('terminal.run:silent')
-    await failure()
+    await runner.start(input)
     await hc.finish('t1', 1)
     await hc.setPretrustExit(1)
     await failure()
@@ -684,7 +685,7 @@ describe('hc adapter: type', () => {
 
   test('is busy for a program that has said nothing', async () => {
     await hc.plan('terminal.run:silent')
-    await failure()
+    await runner.start(input)
     expect(await ask()).toBe('busy')
     expect(await count('terminal.send')).toBe(0)
   })

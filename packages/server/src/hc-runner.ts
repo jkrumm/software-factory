@@ -248,7 +248,7 @@ export class HcRunner implements Runner {
     return { terminal: created, proven: false }
   }
 
-  async type(input: { pane: string; text: string }): Promise<'typed' | 'busy'> {
+  async type(input: { pane: string; text: string; enterOnly?: boolean }): Promise<'typed' | 'busy'> {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     let status: string | undefined
     try {
@@ -266,7 +266,12 @@ export class HcRunner implements Runner {
     try {
       // `if` can name idle or working only: for `done` the core's own refusal of a blocked program is the guard.
       const guard = status === 'idle' ? { if: 'idle' } : {}
-      await this.rpc('terminal.send', { terminal: input.pane, text: input.text, ...guard }, Sent, budget)
+      await this.rpc(
+        'terminal.send',
+        { terminal: input.pane, text: input.enterOnly ? '' : input.text, ...guard },
+        Sent,
+        budget,
+      )
       return 'typed'
     } catch (error) {
       if (!(error instanceof HcError)) throw asRunnerError(error)
@@ -417,7 +422,7 @@ export class HcRunner implements Runner {
     }
   }
 
-  /** The agent started when its terminal reports: a status, a report or a turn within the window; else an error. */
+  /** The agent started when its terminal reports (a status, a report or a turn) within the window, or is live but silent (unconfirmed); else an error. */
   private async prove(address: string, budget: Budget): Promise<void> {
     const waitMs = this.options.deliverWaitMs ?? DEFAULT_DELIVER_WAIT_MS
     const polls = Math.max(1, Math.ceil(waitMs / DELIVER_POLL_MS))
@@ -436,12 +441,10 @@ export class HcRunner implements Runner {
       }
       if (i < polls - 1) await this.options.clock.sleep(DELIVER_POLL_MS)
     }
-    throw new RunnerError(
-      observed
-        ? `${address} is running but reported nothing within ${waitMs} ms`
-        : `${address}'s state is unreadable; the agent is unconfirmed`,
-      false,
-    )
+    // A live terminal that is slow to report (a loaded machine) is started, unconfirmed: the hooks and the witness confirm it.
+    // Only a terminal that could not be read, or that ended, is a failed start.
+    if (observed) return
+    throw new RunnerError(`${address}'s state is unreadable; the agent is unconfirmed`, false)
   }
 
   /** `undefined` when the core does not answer: unreadable is never read as started. */
