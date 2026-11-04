@@ -154,10 +154,10 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
   10 + 10 + 10 (worst: a reset onto a merged commit would have reaped unpushed work; `dry` still removed terminals; a reused pane address);
   the third round's ten keep more or are cosmetic, deferred in the PR's comment. Live in `dry` (default): 0 would close, 1 kept
   (agent-workflows `shop-amazon-2`, 3 unmerged commits); `on` waits for a would-close entry checked by hand (handoff).
-- [ ] FV Wave 5 left: Hermes "what needs me?" from `/fleet` asks (hermes-agent). Stopped 2026-11-03 01:30 on budget (`me2` 56 %, `iu` 87 %):
+- [x] (superseded by the reset, RS4; not built) FV Wave 5 left: Hermes "what needs me?" from `/fleet` asks (hermes-agent). Stopped 2026-11-03 01:30 on budget (`me2` 56 %, `iu` 87 %):
   the next rotation starts after `iu`'s reset 2026-11-04 16:00.
-- [ ] FV Waves 5–6 in order, the board's waves after the factory's they read.
-- [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
+- [x] (superseded by the reset, RS4; not built) FV Waves 5–6 in order, the board's waves after the factory's they read.
+- [x] (superseded by the reset, RS4; not built) Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
 
 **Left behind:** FV stops here, superseded by the reset (`docs/decisions.md` RS1–RS9, 2026-11-05): FV Wave 5's Hermes step, board
 Waves 2–3 and FV Wave 6 are not built; the fleet-view modules are deleted in the reset's later rows. Issue 51 and 52–55 are closed
