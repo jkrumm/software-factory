@@ -340,7 +340,7 @@ the factory knows the account of a session no spawn describes (`rd`'s); a spawn'
 `Runner.type` (`terminal.send`; `busy` while the runner says `working`) once the derived state is `idle`, `waiting` or
 `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
 before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
-No turn within a minute: Enter is pressed once more for a typed prompt (`Runner.type` with `enterOnly`; the text is never pasted twice; a resume is started again), `MAX_SENDS` 2, then `failed` with an `unconfirmed: ... not delivered` reason, which stays in `factory status` for
+No turn within a minute: Enter is pressed once more for a prompt whose typing was confirmed (`Runner.type` with `enterOnly`), otherwise the text is typed again; a resume is started again, `MAX_SENDS` 2, then `failed` with an `unconfirmed: ... not delivered` reason, which stays in `factory status` for
 a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
 (`UncertainTyping`: hc timed out or died after the call) counts as sent and waits for a turn; the one retry after a
 minute without one types the text again, as for a claim left `typing` by a crashed tick (after the start budget plus a minute): only

@@ -202,7 +202,7 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
     SET status = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
         failed_at = CASE WHEN p.sent_count < ${MAX_SENDS} THEN NULL ELSE ${now}::timestamptz END,
         error = CASE WHEN p.sent_count < ${MAX_SENDS}
-                     THEN CASE WHEN p.via = 'type' THEN 'no turn started within a minute of typing it: Enter pressed again'
+                     THEN CASE WHEN p.via = 'type' AND p.typed_at IS NOT NULL THEN 'no turn started within a minute of typing it: Enter pressed again'
                                ELSE 'no turn started within a minute of typing it: typed again' END
                      ELSE 'unconfirmed: no turn started within a minute of the retry; not delivered' END
     WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND NOT EXISTS (
