@@ -96,7 +96,7 @@ describe('prompt delivery', () => {
     expect(await db.sql`SELECT id FROM factory.prompts`).toHaveLength(1)
   })
 
-  test('with no turn_started within a minute it is typed once more, then given up with a line in status', async () => {
+  test('with no turn_started within a minute Enter is pressed once more (the text is not pasted again), then it is unconfirmed with a line in status', async () => {
     await working()
     await endTurn()
     await note('n1')
@@ -110,12 +110,14 @@ describe('prompt delivery', () => {
     clock.advance(2_000)
     await deliver()
     expect(runner.typed).toHaveLength(2)
+    expect(runner.typed[1]).toMatchObject({ enterOnly: true })
     expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 2 })
 
     clock.advance(CONFIRM_MS + 1_000)
     const result = await deliver()
     expect(result.sent).toEqual([])
     expect(await row('n1')).toMatchObject({ status: 'failed', sent_count: 2 })
+    expect((await row('n1')).error).toContain('unconfirmed')
     expect((await row('n1')).error).toContain('not delivered')
     expect(runner.typed).toHaveLength(2)
     await deliver()

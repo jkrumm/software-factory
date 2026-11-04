@@ -6,7 +6,7 @@ import type { FakeClock } from './clock.ts'
 
 /** A Runner the test drives: what it typed and started is recorded, what it answers is set. */
 export class FakeRunner implements Runner {
-  typed: { pane: string; text: string }[] = []
+  typed: { pane: string; text: string; enterOnly?: boolean }[] = []
   started: StartInput[] = []
   closed: string[] = []
   answer: 'typed' | 'busy' = 'typed'
@@ -14,7 +14,7 @@ export class FakeRunner implements Runner {
   /** runs inside `start`, after it has begun: what else the factory does while an agent is being started */
   onStart?: (input: StartInput) => Promise<void>
 
-  async type(input: { pane: string; text: string }): Promise<'typed' | 'busy'> {
+  async type(input: { pane: string; text: string; enterOnly?: boolean }): Promise<'typed' | 'busy'> {
     if (this.failure) throw this.failure
     if (this.answer === 'typed') this.typed.push(input)
     return this.answer

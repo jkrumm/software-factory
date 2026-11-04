@@ -51,10 +51,11 @@ export interface StartResult {
 export interface Runner {
   start(input: StartInput): Promise<StartResult>
   /**
-   * Submits `text` to the agent in `pane`. `busy` unless the agent is idle or done: a prompt typed into a working session only
+   * Submits `text` to the agent in `pane`; `enterOnly` presses Enter with nothing typed, the nudge for a prompt that sits
+   * unsubmitted (harmless twice: an empty prompt submits nothing). `busy` unless the agent is idle or done: a prompt typed into a working session only
    * queues in Claude Code and one typed into a blocked session answers its dialog, so nothing was sent. An error means nothing is known to have arrived.
    */
-  type(input: { pane: string; text: string }): Promise<'typed' | 'busy'>
+  type(input: { pane: string; text: string; enterOnly?: boolean }): Promise<'typed' | 'busy'>
   /** Ends the spawn's agent and takes its terminal away, found by the key like a start. No terminal left is what was asked for. */
   close(key: string): Promise<void>
 }

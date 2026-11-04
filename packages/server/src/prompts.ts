@@ -13,7 +13,7 @@ import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
 import { clearAnsweredWait, getSession, HOOK_KINDS, RESUME_LEAD_MS } from './sessions.ts'
 
-/** A typed prompt is proven by the next `turn_started`; none within this long and it is typed once more. */
+/** A typed prompt is proven by the next `turn_started`; none within this long and Enter is pressed once more (a resume is started again). */
 export const CONFIRM_MS = 60_000
 /** The first typing and one retry; after the second the prompt is `failed` and shows in status. */
 export const MAX_SENDS = 2
@@ -200,8 +200,10 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
     UPDATE factory.prompts p
     SET status = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
         failed_at = CASE WHEN p.sent_count < ${MAX_SENDS} THEN NULL ELSE ${now}::timestamptz END,
-        error = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'no turn started within a minute of typing it: typed again'
-                     ELSE 'no turn started within a minute of the retry: not delivered' END
+        error = CASE WHEN p.sent_count < ${MAX_SENDS}
+                     THEN CASE WHEN p.via = 'type' THEN 'no turn started within a minute of typing it: Enter pressed again'
+                               ELSE 'no turn started within a minute of typing it: typed again' END
+                     ELSE 'unconfirmed: no turn started within a minute of the retry; not delivered' END
     WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND NOT EXISTS (
       SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
   await sql`
@@ -430,7 +432,11 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
 
     let outcome: 'typed' | 'busy'
     try {
-      outcome = await attempt(deps, prompt, target)
+      // The text is already in the pane after the first typing: the retry of a typed prompt only presses Enter, never pastes it again.
+      outcome =
+        prompt.via === 'type' && prompt.sent_count > 0
+          ? await deps.runner.type({ pane: target.pane as string, text: prompt.text, enterOnly: true })
+          : await attempt(deps, prompt, target)
     } catch (error) {
       await release()
       const message = error instanceof Error ? error.message : String(error)
