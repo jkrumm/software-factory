@@ -46,6 +46,13 @@ function pick(entries: Record<string, unknown>): Record<string, unknown> | undef
   return defined.length ? Object.fromEntries(defined) : undefined
 }
 
+/**
+ * Whether Claude Code lists background work still in flight on this Stop (`background_tasks`: running or pending shells, subagents,
+ * monitors; empty when nothing is). Only whether, never what: the entries hold commands and descriptions.
+ */
+const backgroundTasks = (input: Input): boolean =>
+  Array.isArray(input.background_tasks) && input.background_tasks.length > 0
+
 /** The §3 event a hook payload stands for, or nothing when the factory has no use for it. */
 export function toEvent(
   event: string,
@@ -73,7 +80,13 @@ export function toEvent(
     case 'user-prompt-submit':
       return { kind: 'turn_started', payload: pick({ claudeSessionId: text(input.session_id, 128) }) }
     case 'stop':
-      return { kind: 'turn_ended', payload: pick({ stopHookActive: input.stop_hook_active === true || undefined }) }
+      return {
+        kind: 'turn_ended',
+        payload: pick({
+          stopHookActive: input.stop_hook_active === true || undefined,
+          backgroundTasks: backgroundTasks(input) || undefined,
+        }),
+      }
     case 'stop-failure':
       // Only a rate limit is a wall; the other errors (overloaded, server_error, ...) end a turn the session recovers from.
       return input.error === 'rate_limit'
@@ -132,13 +145,17 @@ export const STOP_CHECK_TIMEOUT_MS = 300
  * Whether the server wants this stop turned back (FL5): the line to print, or nothing. Any failure, a slow answer or a
  * body that is not the expected one is nothing: a session is never held by a server that cannot say why.
  */
-async function askStopCheck(socket: string, session: string, stopHookActive: boolean): Promise<string | undefined> {
+async function askStopCheck(
+  socket: string,
+  session: string,
+  input: { stopHookActive: boolean; backgroundTasks: boolean },
+): Promise<string | undefined> {
   try {
     const response = await fetch(`http://localhost/sessions/${encodeURIComponent(session)}/stop-check`, {
       unix: socket,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ stopHookActive }),
+      body: JSON.stringify(input),
       signal: AbortSignal.timeout(STOP_CHECK_TIMEOUT_MS),
     })
     if (!response.ok) {
@@ -177,7 +194,10 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
   // passed on, and the server never sends a worker rule's stop back twice in a turn; an Issue's lead stopping a second time
   // unreported is parked there (and let through). A server that cannot answer lets the stop through too.
   if (event === 'stop' && socket) {
-    const sendBack = await askStopCheck(socket, session, input.stop_hook_active === true)
+    const sendBack = await askStopCheck(socket, session, {
+      stopHookActive: input.stop_hook_active === true,
+      backgroundTasks: backgroundTasks(input),
+    })
     if (sendBack) return sendBack
   }
 

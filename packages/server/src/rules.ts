@@ -301,7 +301,7 @@ export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
 export async function stopCheck(
   sql: SQL,
   id: string,
-  input: { stopHookActive: boolean },
+  input: { stopHookActive: boolean; backgroundTasks?: boolean },
   now: Date,
 ): Promise<StopCheck> {
   const letThrough: StopCheck = { sendBack: false, message: null }

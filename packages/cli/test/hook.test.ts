@@ -89,6 +89,16 @@ describe('the payload becomes the §3 event', () => {
     ],
     ['stop', { stop_hook_active: false, last_assistant_message: 'long text' }, { kind: 'turn_ended' }],
     ['stop', { stop_hook_active: true }, { kind: 'turn_ended', payload: { stopHookActive: true } }],
+    // Only whether work is in flight, never what: the entries hold commands and descriptions.
+    [
+      'stop',
+      {
+        stop_hook_active: false,
+        background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'x', command: 'sleep 99' }],
+      },
+      { kind: 'turn_ended', payload: { backgroundTasks: true } },
+    ],
+    ['stop', { stop_hook_active: false, background_tasks: [], session_crons: [] }, { kind: 'turn_ended' }],
     [
       'stop-failure',
       { error: 'rate_limit', error_details: '429 Too Many Requests', last_assistant_message: 'API Error' },
@@ -395,10 +405,10 @@ describe('send-back (FL5)', () => {
     stopAnswer = { sendBack: false, message: null }
     expect(await stop({ stop_hook_active: true })).toEqual({ code: 0, err: [] })
     expect(stopChecks).toEqual(['/sessions/s/stop-check'])
-    expect(stopBodies.at(-1)).toEqual({ stopHookActive: true })
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: true, backgroundTasks: false })
     stopAnswer = { sendBack: true, message: line }
     expect(await stop({})).toMatchObject({ code: 2 })
-    expect(stopBodies.at(-1)).toEqual({ stopHookActive: false })
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: false, backgroundTasks: false })
     stopChecks.length = 0
     for (const event of ['user-prompt-submit', 'session-start', 'session-end']) {
       expect(
@@ -411,6 +421,18 @@ describe('send-back (FL5)', () => {
       ).toBe(0)
     }
     expect(stopChecks).toEqual([])
+  })
+
+  test('a stop with background tasks listed says so to the server and in the spool; an empty list says nothing', async () => {
+    stopAnswer = { sendBack: false, message: null }
+    const task = { id: 'b1', type: 'subagent', status: 'running', description: 'review', agent_type: 'reviewer' }
+    expect(await stop({ stop_hook_active: false, background_tasks: [task] })).toEqual({ code: 0, err: [] })
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: false, backgroundTasks: true })
+    expect(lines('s').at(-1)).toMatchObject({ kind: 'turn_ended', payload: { backgroundTasks: true } })
+    expect(JSON.stringify(lines('s'))).not.toContain('review')
+    expect(await stop({ background_tasks: [] })).toEqual({ code: 0, err: [] })
+    expect(stopBodies.at(-1)).toEqual({ stopHookActive: false, backgroundTasks: false })
+    expect(lines('s').at(-1)?.payload).toBeUndefined()
   })
 
   test('fails open: a server that is down, slow, wrong or silent lets the session end', async () => {

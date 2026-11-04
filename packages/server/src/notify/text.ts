@@ -82,13 +82,15 @@ export function askMessage(input: {
 export function parkedMessage(input: {
   issue: IssueRef
   revision: number
-  reason: 'unreported' | 'lead_gone'
+  reason: 'unreported' | 'lead_gone' | 'regressed'
   detail?: string | null
 }): Message {
   const what =
     input.reason === 'unreported'
       ? 'its lead stopped twice with nothing reported'
-      : `its lead is gone${input.detail ? ` ${quote(input.detail)}` : ''}`
+      : input.reason === 'regressed'
+        ? 'it regressed three times after its ship'
+        : `its lead is gone${input.detail ? ` ${quote(input.detail)}` : ''}`
   return {
     key: `notify:parked:${input.issue.id}:${input.revision}`,
     kind: 'parked',

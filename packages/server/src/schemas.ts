@@ -153,4 +153,8 @@ export const SlotInput = z.object({ name: z.string().min(1).max(128).default('ru
 export const SlotId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/, 'not a valid slot id')
 
 /** What the `Stop` hook tells the server about the stop it is asking on behalf of. */
-export const StopCheckInput = z.object({ stopHookActive: z.boolean().default(false) })
+export const StopCheckInput = z.object({
+  stopHookActive: z.boolean().default(false),
+  /** Claude Code lists background work still in flight on the Stop input; the hook sends whether the list is not empty */
+  backgroundTasks: z.boolean().default(false),
+})

@@ -30,15 +30,19 @@ async function factoryTurn(sql: SQL, session: string, turnAt: Date): Promise<boo
  * and nothing has been reported since it began (a verb in the Issue's inbox from this session, handled or not, so a report made
  * a moment before the stop counts; a refused one says nothing, so a lead that stops on a refused `ship` hears of it). Sent back once, keyed `issue-sendback:<session>:<turn>`; the next stop of that turn, which
  * arrives with `stopHookActive`, parks the Issue (`unreported`, one inbox row keyed by the turn) with a line for the owner in
- * `factory status`. The same stop asked again (a retried hook: no `stopHookActive`) is let through and records nothing.
+ * `factory status`. The same stop asked again (a retried hook: no `stopHookActive`) is let through and records nothing. A stop with a
+ * background task running (`backgroundTasks`, from Claude Code's `background_tasks` on the Stop input) is none of this.
  * Undefined: this rule has nothing to say.
  */
 export async function issueStop(
   sql: SQL,
   session: { id: string; turn: number },
-  input: { stopHookActive: boolean },
+  input: { stopHookActive: boolean; backgroundTasks?: boolean },
   now: Date,
 ): Promise<StopCheck | undefined> {
+  // A background task still running (a shell, a subagent, a monitor) wakes the session when it ends: this stop is a pause, not a
+  // report that was forgotten, so it is neither sent back nor parked. The stop that follows the wake is asked about again.
+  if (input.backgroundTasks === true) return undefined
   const [lead]: { issue_id: number | null; state: string | null }[] = await sql`
     SELECT s.issue_id, i.state FROM factory.sessions s LEFT JOIN factory.issues i ON i.id = s.issue_id WHERE s.id = ${session.id}`
   if (lead?.issue_id == null || lead.state !== 'working') return undefined
