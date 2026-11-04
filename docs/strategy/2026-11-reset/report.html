@@ -168,7 +168,7 @@ html[data-mantine-color-scheme='light'] {
 <h3>Parallelism</h3>
 <table>
 <tr><th>Level</th><th>How</th><th>Limit</th></tr>
-<tr><td>Across items</td><td>One lead tab each, each in its own worktree; several leads may work in the same repo</td><td>Admission per account (70 % of the 5 h window, 90 % of the week) plus a global lead cap (start at 4)</td></tr>
+<tr><td>Across items</td><td>One lead tab each, each in its own worktree; several leads may work in the same repo</td><td>Admission per account (85 % of the 5 h window, 95 % of the week) plus a lead cap per account</td></tr>
 <tr><td>Shipping</td><td>A per-repo ship lock: rebase on master, check, merge, deploy, verify, release the lock</td><td>One ship per repo at a time</td></tr>
 <tr><td>Inside an item</td><td>Background implementer subagents; <code>isolation: worktree</code> only for disjoint file groups, sequential otherwise</td><td>Claude Code caps at 20 concurrent subagents; we start at 3</td></tr>
 </table>

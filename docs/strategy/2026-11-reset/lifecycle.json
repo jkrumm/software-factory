@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "Issue lifecycle in v3",
+    "output": "lifecycle.html",
+    "viewBox": [
+      980,
+      566
+    ],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main",
+        "label": "Main path",
+        "focus": [
+          "filed",
+          "queued",
+          "working",
+          "watching",
+          "closed"
+        ],
+        "note": "Filed, admitted, built by one lead, watched through the hold, verified."
+      },
+      {
+        "id": "waits",
+        "label": "Asks and parks",
+        "focus": [
+          "working",
+          "ask",
+          "park"
+        ],
+        "note": "Only an ask reaches the owner; a park is a machine reason on the health line."
+      },
+      {
+        "id": "exits",
+        "label": "Regression and drop",
+        "focus": [
+          "watching",
+          "working",
+          "dropped"
+        ],
+        "note": "A red verify sends the Issue back to the same lead; a drop ends it."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Main path"
+    },
+    {
+      "id": "waiting",
+      "label": "Waiting"
+    }
+  ],
+  "states": [
+    {
+      "id": "filed",
+      "type": "start",
+      "label": "Filed",
+      "sublabel": "request or signal",
+      "lane": "main",
+      "col": 0,
+      "step": "01"
+    },
+    {
+      "id": "queued",
+      "type": "waiting",
+      "label": "Queued",
+      "sublabel": "deps, priority, age",
+      "lane": "main",
+      "col": 1,
+      "step": "02"
+    },
+    {
+      "id": "working",
+      "type": "active",
+      "label": "Working",
+      "sublabel": "one lead tab, subagents",
+      "lane": "main",
+      "col": 2,
+      "step": "03"
+    },
+    {
+      "id": "watching",
+      "type": "decision",
+      "label": "Watching",
+      "sublabel": "hold, make verify",
+      "lane": "main",
+      "col": 3,
+      "step": "04"
+    },
+    {
+      "id": "closed",
+      "type": "success",
+      "label": "Closed",
+      "sublabel": "verified in production",
+      "lane": "main",
+      "col": 4,
+      "step": "05"
+    },
+    {
+      "id": "ask",
+      "type": "waiting",
+      "label": "Ask",
+      "sublabel": "owner decision only",
+      "lane": "waiting",
+      "col": 0,
+      "tag": "you"
+    },
+    {
+      "id": "park",
+      "type": "waiting",
+      "label": "Park",
+      "sublabel": "wall, lead gone, silent",
+      "lane": "waiting",
+      "col": 1,
+      "tag": "health line"
+    },
+    {
+      "id": "dropped",
+      "type": "failure",
+      "label": "Dropped",
+      "sublabel": "stop or drop",
+      "lane": "waiting",
+      "col": 2
+    }
+  ],
+  "transitions": [
+    {
+      "id": "admit",
+      "from": "queued",
+      "to": "working",
+      "label": "admitted",
+      "labelDy": -25
+    },
+    {
+      "id": "file",
+      "from": "filed",
+      "to": "queued"
+    },
+    {
+      "id": "ship",
+      "from": "working",
+      "to": "watching",
+      "label": "ship accepted",
+      "variant": "emphasis",
+      "labelDy": -25
+    },
+    {
+      "id": "verify",
+      "from": "watching",
+      "to": "closed",
+      "label": "verified",
+      "variant": "emphasis",
+      "labelDy": -25
+    },
+    {
+      "id": "to-ask",
+      "from": "working",
+      "to": "ask",
+      "label": "ask",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        420,
+        232
+      ]
+    },
+    {
+      "id": "to-park",
+      "from": "working",
+      "to": "park",
+      "label": "park",
+      "route": "drop"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "One lead per Issue",
+      "items": [
+        "A plan is Issues linked with after:",
+        "No lead starts or waits for another"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "What reaches you",
+      "items": [
+        "Ask: product, spend, data loss, people, security, verify: owner",
+        "Everything else parks with a reason"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Back and out",
+      "items": [
+        "Red verify: back to the same lead",
+        "Reopen within 30 days; drop ends it"
+      ]
+    }
+  ]
+}

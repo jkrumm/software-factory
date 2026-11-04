@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en" data-mantine-color-scheme="light">
+<script>if(matchMedia("(prefers-color-scheme: dark)").matches)document.documentElement.dataset.mantineColorScheme="dark"</script>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design v3 — one Issue, one lead, one loop</title>
+<style>
+/* basalt-ui 2.29.0 tokens:css (themed colour blocks) */
+:root,
+html[data-mantine-color-scheme='dark'] {
+  --vx-status-excellent: #43bf4d;
+  --vx-status-good: #52c07c;
+  --vx-status-warn: #e6a53d;
+  --vx-status-bad: #fe8178;
+  --vx-status-neutral: #a1a1aa;
+  --vx-good-solid: #52c07c;
+  --vx-bad-solid: #fe8178;
+  --vx-warn-solid: #e6a53d;
+  --vx-neutral: #d4d4d8;
+  --vx-line: #e4e4e7;
+  --vx-line2: #a1a1aa;
+  --vx-axis: #a7a7aa;
+  --vx-axis-stroke: rgba(255, 255, 255, 0.12);
+  --vx-grid: rgba(255, 255, 255, 0.06);
+  --vx-crosshair: rgba(255, 255, 255, 0.42);
+  --vx-dot-stroke: #27272a;
+  --vx-tooltip-bg: rgba(39, 39, 42, 0.96);
+  --vx-tooltip-text: rgba(255, 255, 255, 0.88);
+  --vx-tooltip-muted: rgba(255, 255, 255, 0.5);
+  --vx-tooltip-border: none;
+  --vx-tooltip-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --vx-legend-text: rgba(255, 255, 255, 0.92);
+  --vx-ink: #e5e5e9;
+  --vx-ink2: #dddde1;
+  --vx-muted: #d4d4d8;
+  --vx-faint: #a7a7aa;
+  --vx-accent: #a2c3f0;
+  --vx-accent-hover: #65a2e3;
+  --vx-accent-fill: #4374a6;
+  --vx-accent-fill-hover: #2d5b88;
+  --vx-on-accent: #ffffff;
+  --vx-divider: rgba(255, 255, 255, 0.08);
+  --vx-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 1px color-mix(in srgb, #ffffff 4%, transparent);
+  --vx-shadow-ctrl: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --vx-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent);
+  --vx-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --vx-surface-bg: #27272a;
+  --vx-surface-panel: #2b2b2e;
+  --vx-surface-panel-hover: #38383b;
+  --vx-surface-row-hover: #38383b;
+  --vx-surface-row-selected: #3c3c3f;
+  --vx-surface-elevated: #38383b;
+  --vx-surface-subtle: #323235;
+  --vx-surface-overlay: color-mix(in srgb, #3f3f46 50%, #27272a);
+  --vx-surface-field: #27272a;
+  --vx-surface-border: #444447;
+  --vx-surface-hairline: #4e4e51;
+}
+html[data-mantine-color-scheme='light'] {
+  --vx-status-excellent: #29a634;
+  --vx-status-good: #2f774b;
+  --vx-status-warn: #935f00;
+  --vx-status-bad: #b5403d;
+  --vx-status-neutral: #71717a;
+  --vx-good-solid: #2f774b;
+  --vx-bad-solid: #b5403d;
+  --vx-warn-solid: #935f00;
+  --vx-neutral: #525255;
+  --vx-line: #52525c;
+  --vx-line2: #71717a;
+  --vx-axis: #69696c;
+  --vx-axis-stroke: rgba(38, 38, 41, 0.12);
+  --vx-grid: rgba(38, 38, 41, 0.07);
+  --vx-crosshair: rgba(38, 38, 41, 0.32);
+  --vx-dot-stroke: #ffffff;
+  --vx-tooltip-bg: #ffffff;
+  --vx-tooltip-text: rgba(38, 38, 41, 0.88);
+  --vx-tooltip-muted: rgba(38, 38, 41, 0.5);
+  --vx-tooltip-border: 1px solid #e4e4e7;
+  --vx-tooltip-shadow: 0 2px 8px rgba(38, 38, 41, 0.1);
+  --vx-legend-text: rgba(38, 38, 41, 0.82);
+  --vx-ink: #262629;
+  --vx-ink2: #404043;
+  --vx-muted: #525255;
+  --vx-faint: #69696c;
+  --vx-accent: #4374a6;
+  --vx-accent-hover: #2d5b88;
+  --vx-accent-fill: #4374a6;
+  --vx-accent-fill-hover: #2d5b88;
+  --vx-on-accent: #ffffff;
+  --vx-divider: rgba(38, 38, 41, 0.09);
+  --vx-shadow-card: 0 1px 2px rgba(28, 25, 23, 0.05), 0 0 0 1px var(--vx-surface-hairline);
+  --vx-shadow-ctrl: 0 1px 2px rgba(28, 25, 23, 0.12);
+  --vx-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.1);
+  --vx-shadow-overlay: 0 8px 24px rgba(28, 25, 23, 0.1);
+  --vx-surface-bg: #f2f2f5;
+  --vx-surface-panel: #fafafd;
+  --vx-surface-panel-hover: #ffffff;
+  --vx-surface-row-hover: #efeff2;
+  --vx-surface-row-selected: #eaeaed;
+  --vx-surface-elevated: #ffffff;
+  --vx-surface-subtle: #f4f4f8;
+  --vx-surface-overlay: #ffffff;
+  --vx-surface-field: #ffffff;
+  --vx-surface-border: #e2e2e5;
+  --vx-surface-hairline: #eaeaee;
+}
+
+  :root { --bg:var(--vx-surface-bg); --fg:var(--vx-ink); --mut:var(--vx-status-neutral); --card:var(--vx-surface-panel); --line:var(--vx-surface-border); --acc:var(--vx-status-good); --warn:var(--vx-status-warn); --bad:var(--vx-status-bad); --vio:var(--vx-accent-fill); }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1080px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:28px; margin:0 0 4px } h2 { font-size:20px; margin:44px 0 12px; padding-top:12px; border-top:1px solid var(--line) }
+  h3 { font-size:16px; margin:20px 0 8px }
+  .meta { color:var(--mut); font-size:13px }
+  .tldr { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--acc); border-radius:var(--vx-radius-card,10px); padding:16px 20px; margin:20px 0 }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); overflow:hidden; margin:8px 0 16px; font-size:14px }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); font-weight:600 }
+  tr:last-child td { border-bottom:0 }
+  code { font:13px ui-monospace,SFMono-Regular,Menlo,monospace; background:color-mix(in srgb,var(--line) 60%,transparent); padding:1px 5px; border-radius:4px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); padding:14px 16px }
+  .card b.k { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); margin-bottom:6px }
+  .num { font-size:26px; font-weight:700 }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0 16px }
+  .steps span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:13px }
+  .steps i { color:var(--mut); font-style:normal }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px; color:var(--vx-on-accent,#fff); vertical-align:1px }
+  .del { background:var(--bad) } .keep { background:var(--acc) } .new { background:var(--vio) } .chg { background:var(--warn) }
+  iframe { width:100%; height:1000px; border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); background:var(--card) }
+  ul { padding-left:20px } li { margin:3px 0 }
+  .q { border-left:4px solid var(--vio) }
+
+  main h2 { counter-increment: none }
+  iframe.diagram { width:100%; height:960px; border:1px solid var(--line); border-radius:10px; background:var(--card) }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto }
+  ol li, ul li { margin:4px 0 }
+  p strong:first-child { color:var(--fg) }
+  a { color:var(--vx-accent) }
+</style></head>
+<body><main>
+<p class="meta">Software factory · design v3 draft · <a href="report.html">strategy report</a> · <a href="architecture.html">architecture</a> · <a href="lifecycle.html">lifecycle</a> · source <code>design-v3.md</code></p>
+<h1>Design v3: one Issue, one lead, one loop</h1>
+<p><strong>Status:</strong> draft for the owner&#39;s review, 2026-11-05. Builds on <code>report.html</code> (the strategy) and replaces the parts of
+<code>docs/design.md</code> it names. Checked against the code at <code>c39f76b</code> and challenged by an adversarial review (§14 lists what
+it changed). &quot;Exists&quot; means read in the code; &quot;new&quot; means a change.</p>
+<p><strong>Verdict.</strong> An Issue is the only unit of work. One lead session runs one attempt of it in one visible Herdr tab, works
+through subagents, and reports with the <code>factory issue</code> verbs. The factory stays deterministic: it files, orders, admits,
+opens the tab, watches the hooks, checks the evidence and closes. One lead per repo at a time, as many repos in parallel as
+the accounts allow. v3 is mostly subtraction; the additions are dependencies that admission respects, parks that can end,
+and a health line that shows a stuck lead.</p>
+<h2>1. Words</h2>
+<p>One word per thing, in code, CLI, docs and the sidebar. &quot;Wave&quot; retires as a runtime word.</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Means</th>
+<th>Not</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Signal</strong></td>
+<td>An observation from a source: a Kuma monitor down, a HyperDX alert, a failed job, a red check</td>
+<td>work you asked for</td>
+</tr>
+<tr>
+<td><strong>Request</strong></td>
+<td>Work someone asked for: <code>factory issue new</code>, a planner&#39;s plan, a GitHub issue labelled <code>factory</code></td>
+<td>an observation</td>
+</tr>
+<tr>
+<td><strong>Issue</strong></td>
+<td>One unit: one repo, one branch, one review, one ship</td>
+<td>a ticket across repos</td>
+</tr>
+<tr>
+<td><strong>Plan</strong></td>
+<td>Issues a planner filed, linked with <code>--after</code></td>
+<td>a chain of terminals</td>
+</tr>
+<tr>
+<td><strong>Lead</strong></td>
+<td>The Claude Code session running one attempt of one Issue, in its own tab</td>
+<td>an orchestrator of leads</td>
+</tr>
+<tr>
+<td><strong>Attempt</strong></td>
+<td>Lead number <em>n</em> of an Issue; a new attempt after a lost lead or a reopen</td>
+<td>a retry of a start</td>
+</tr>
+<tr>
+<td><strong>Ask</strong></td>
+<td>A question for the owner, with options and a default: <code>decision</code> and <code>blocked</code> waits</td>
+<td>a machine failure</td>
+</tr>
+<tr>
+<td><strong>Park</strong></td>
+<td>A wait for a machine reason (<code>wall</code>, <code>lead_gone</code>, <code>unreported</code>): on the health line, never an ask</td>
+<td>normal flow</td>
+</tr>
+<tr>
+<td><strong>Evidence</strong></td>
+<td>What the ship gate checks: commits landed, review covered, verify green, the owner&#39;s confirmation</td>
+<td>a lead&#39;s claim</td>
+</tr>
+<tr>
+<td><strong>Planner</strong></td>
+<td>The owner&#39;s own session in a space, where plans are made</td>
+<td>a factory role</td>
+</tr>
+</tbody></table>
+<h2>2. The loop</h2>
+<iframe src="lifecycle.html" title="Issue lifecycle" class="diagram"></iframe>
+
+<p>The states and their one writer exist (<code>issues/lifecycle.ts</code>). Three changes:</p>
+<ul>
+<li><strong>What reaches the owner.</strong> <code>decision</code> and <code>blocked</code> are asks. <code>wall</code>, <code>lead_gone</code> and <code>unreported</code> are parks.
+<code>wait</code> and <code>dependency</code> are normal flow: neither an ask nor a park.</li>
+<li><strong>New: every park can end.</strong> Today <code>lead_gone</code>, <code>unreported</code> and <code>parked</code> leave <code>waiting</code> only by <code>stop</code>, which drops the
+Issue (<code>lifecycle.ts:101-109</code>). v3: the lead&#39;s own <code>turn_started</code> ends <code>unreported</code>; <code>lead_gone</code> starts the next
+attempt, at most two, then the Issue parks with a health line and one notification.</li>
+<li><strong>New: dependencies are respected.</strong> <code>issue_deps</code> exists, but nothing writes it from the CLI and admission ignores it
+(<code>issues/admission.ts:39-55</code> admits each project&#39;s lowest id). v3 adds <code>factory issue new --after &lt;id&gt;</code> (written in the
+create transaction) and <code>NOT EXISTS (open dependency)</code> to the admission query.</li>
+</ul>
+<h2>3. The lead</h2>
+<p><strong>Placement.</strong> One tab per attempt, named <code>#&lt;id&gt; &lt;short title&gt;</code>, in its repo&#39;s space. Worktree
+<code>factory/&lt;id&gt;-&lt;attempt&gt;</code> (exists, <code>names.ts</code>, <code>leadtree.ts</code>).</p>
+<p><strong>One lead per repo.</strong> The project claim with <code>leads: 1</code> (exists, today&#39;s default) serialises a repo: one branch merges and
+deploys at a time, review ranges stay clean, <code>make deploy</code> never runs twice. Parallelism is across repos, capped by the
+accounts. <code>leads: N</code> stays unused until a measured need.</p>
+<p><strong>Model.</strong> <code>lead</code> becomes Sonnet high (<code>config/roles.json</code> says Opus high today). Opus for a lead only when the planner
+names the reason in the Issue, and only after measuring it.</p>
+<p><strong>Subagents only.</strong> The lead&#39;s subagents and their seats live in the dotfiles agent files, not the role table: Explore
+(Haiku high, per call), implementer (Sonnet medium), reviewer and review-verifier (seat from <code>agw review prepare</code>). The lead
+opens no terminals: no <code>rd fan</code>, no <code>rd wave</code>, no hidden children.</p>
+<p><strong>New: background work and Stop.</strong> The Stop hook&#39;s send-back (<code>issues/sendback.ts</code>) is skipped while the Stop input&#39;s
+<code>background_tasks</code> lists a running subagent. A lead that ends its turn to wait for its implementers is waiting, not silent.</p>
+<p><strong>Context.</strong> <code>autoCompactWindow</code> is 600k. The brief and <code>factory issue show &lt;id&gt;</code> are the state; a <code>SessionStart(compact)</code>
+hook re-injects &quot;re-read the brief and the Issue&quot;. An Issue too big for one context is a planning error: split it.</p>
+<p><strong>The operating contract</strong>, the brief&#39;s fixed part (<code>brief.ts</code>):</p>
+<ol>
+<li>You own Issue #id from cause to verified production. The brief quotes the original request; never rewrite it.</li>
+<li>Decide yourself. Take the reversible default and record it: <code>factory issue phase &lt;id&gt; --phase &lt;name&gt; --note &quot;&lt;decision, why&gt;&quot;</code>.</li>
+<li>Ask only for product direction, spend, irreversible data loss, other people or security:
+<code>factory issue ask &lt;id&gt; --question &quot;…&quot; --option … --default …</code>. Asking again replaces the question.</li>
+<li>Stop by impact, not effort. A broken caller contract or a needed redesign is <code>factory issue block &lt;id&gt;</code> with a pushed
+draft branch and the reason; many files or failing tests are not.</li>
+<li>Reading and writing go to subagents; your context is for decisions.</li>
+<li>Ship: static gate green → <code>/review</code> → fix → <code>factory issue ship &lt;id&gt;</code>. A refusal names what is missing.</li>
+<li>After a restart: check git, the PR and production before repeating anything that left the machine.</li>
+</ol>
+<h2>4. Review</h2>
+<p>Proven in the POC (<code>report.html</code> §3): <code>/review</code> calls <code>agw review prepare --context &quot;&lt;intent&gt;&quot;</code>, copies <code>seat.model</code> and
+<code>seat.effort</code> into the <code>reviewer</code> subagent call, submits, and the lead fixes or disposes every finding. Rules only:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>When</th>
+<th>Seat</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>none</td>
+<td>docs only (<code>docs/**</code>, <code>.md/.mdx/.txt</code>), REVIEW.md <code>none</code> globs, renames</td>
+<td>—</td>
+</tr>
+<tr>
+<td>light</td>
+<td>tests only, small or default code, a manifest, agent instructions (AGENTS.md, SKILL.md, rules, agents)</td>
+<td>Sonnet medium</td>
+</tr>
+<tr>
+<td>deep</td>
+<td>a REVIEW.md sensitive path, &gt; 800 production lines, &gt; 3 packages</td>
+<td>Sonnet high + one verifier per important finding</td>
+</tr>
+</tbody></table>
+<p>The code keeps the <code>standard</code> name with the light seat for ledger compatibility. At most 2 rounds per Issue; the ship gate
+reads <code>agw review covered</code> over the Issue&#39;s range. The factory&#39;s review transport and its hidden sessions are deleted.</p>
+<h2>5. The ship gate</h2>
+<p>The factory knows no pipeline; it runs what <code>project.yaml</code> declares (exists, <code>packages/contract/src/projects.ts</code>):</p>
+<table>
+<thead>
+<tr>
+<th><code>deploy.mode</code></th>
+<th>Ship means</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>none</code></td>
+<td>merged on <code>origin/&lt;default&gt;</code></td>
+<td>brain, docs repos</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>merged; a push deploys; each target&#39;s <code>verify</code> green within the hold</td>
+<td>iris server, RollHook apps</td>
+</tr>
+<tr>
+<td><code>make</code></td>
+<td>merged, <code>make deploy</code> run by the lead, <code>make version</code> matches, <code>make verify</code> green</td>
+<td>software-factory, agent-workflows</td>
+</tr>
+<tr>
+<td><code>agentic</code></td>
+<td>merged, deployed by the lead&#39;s own steps, targets&#39; <code>verify</code> green</td>
+<td>one-off infra</td>
+</tr>
+</tbody></table>
+<p><strong>New: a red verify is re-run once</strong> before it counts as a regression; the third regression of one Issue parks it.</p>
+<p><strong>New: <code>verify: owner</code></strong> for targets only a person can check (the iOS and Mac apps). At ship the factory finalizes the lead
+and releases the claim, then keeps the Issue in <code>watching</code> with one owner check: &quot;confirm <target> works&quot;, <code>yes</code> or
+<code>no + what broke</code>. No default: an unanswered check parks after its expiry, it is never assumed green.</p>
+<p><strong>The make contract</strong> every repo keeps: <code>check</code>, <code>test</code>, <code>deploy</code>, <code>verify</code>, <code>version</code>, <code>logs</code>. A repo without them is
+<code>deploy.mode: none</code> until it has them; the audit is one Issue per repo.</p>
+<h2>6. The health line</h2>
+<p><strong>New.</strong> One line per Issue that needs attention without needing a decision, on <code>factory status</code>, the sidebar and <code>GET /fleet</code>:</p>
+<ul>
+<li>a park, with its reason and age;</li>
+<li>a lead with no hook event for 20 minutes while <code>working</code>;</li>
+<li>an Issue <code>working</code> longer than the budget for its size (s 2 h, m 6 h, l 1 day);</li>
+<li>a regression count of 2.</li>
+</ul>
+<p>The health line never becomes an ask. A Kuma heartbeat on &quot;the tick advanced and the queue moved within 30 minutes&quot; covers
+the factory itself; <code>make rollback</code> swaps back to the previous release.</p>
+<h2>7. Admission</h2>
+<p>Exists: per-account limits (85 % of the 5 h window, 95 % of the week, never spill), <code>drain|pace|run</code>, the per-project
+claim. <strong>New:</strong> dependencies (§2) and a lead cap per account, <code>FACTORY_LEADS_PER_ACCOUNT</code> (start 2), counted over live
+lead sessions. Deleted: the <code>wave</code> hold and the review holds (<code>review_slots</code>, <code>deep_cap</code>). Priority is derived from the
+latest <code>prio</code> event; <strong>new:</strong> <code>factory issue prio &lt;id&gt; &lt;n&gt;</code> writes it (the event exists, no producer does).</p>
+<h2>8. Herdr layout</h2>
+<p>The owner wants every space in a fixed place with a planner tab ready. <strong>New: <code>~/.config/factory/spaces.json</code></strong>, an
+ordered list of <code>{name, path}</code>, written by dotfiles <code>make setup</code>. On start and every ten minutes the factory reconciles: a
+space per entry keyed by real path (exists), in that order, with a first tab carrying <code>factory.key=plan:&lt;repo&gt;</code> (a login
+shell; the owner starts the planner there). A repo not in the list gets a space on first use, appended. The factory never
+closes a <code>plan:</code> tab and never touches a tab without a <code>factory.key</code>: those are the owner&#39;s own sessions.</p>
+<h2>9. Closing</h2>
+<p>Finalize exists: release the claim, close the lead&#39;s terminal, archive the transcripts as evidence, remove a clean
+worktree. v3 makes it the only closer. Deleted: the fleet reaper, hc-reap&#39;s agent rules (it keeps only orphaned shells older
+than 7 days and <code>claude --bg</code> leftovers), <code>rd close</code> for factory tabs. A kept worktree of a closed Issue is a health line.
+<code>factory issue resume &lt;id&gt;</code> (exists) forks the archived session into a new tab to read or continue by hand; it reports
+nothing to the Issue.</p>
+<h2>10. Intake, dedup and order (Step 3, its own plan)</h2>
+<p>From v2.4 §4 and §8, after the loop above runs:</p>
+<ul>
+<li><strong>Sources:</strong> Kuma, HyperDX, GitHub issues labelled <code>factory</code> and red checks, failed launchd jobs; the door (exists) for
+pushes. A label starts work, never authorship.</li>
+<li><strong>Settle:</strong> a grace timer and the manifest&#39;s <code>heal:</code> runbook before any lead (today <code>heal:</code> is accepted and dropped,
+<code>projects.ts:84</code>).</li>
+<li><strong>Dedup:</strong> symptom at intake by rules (one episode per subject for stateful sources, a fingerprint window for stateless
+ones); cause in the lead (<code>factory issue merge|split</code>). A judge on Haiku high runs in shadow only when the rules leave
+enough ambiguous pairs to matter, measured against the golden set (<code>docs/evidence/golden/</code>).</li>
+<li><strong>Order:</strong> stop the line, urgent, dependencies, priority, age.</li>
+</ul>
+<h2>11. Telemetry</h2>
+<p>Facts stay facts. <strong>New: <code>factory.issue_facts</code></strong>, a SQL view over <code>issues</code>, <code>issue_events</code>, <code>evidence</code>, <code>decisions</code> and
+<code>sessions</code>, one row per attempt: timestamps (filed, admitted, first commit, shipped, verified, closed), outcome, asks, parks
+by reason, review tier and rounds, verify first pass, reopened, the lead&#39;s session ids. Argo joins it with usage-tracker&#39;s
+<code>usage.session_window_share</code> by session id; the factory never reads <code>usage.*</code>.</p>
+<table>
+<thead>
+<tr>
+<th>KPI</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Owner asks per Issue</td>
+<td>≤ 0.05</td>
+</tr>
+<tr>
+<td>Issues verified with zero owner touch</td>
+<td>≥ 90 %</td>
+</tr>
+<tr>
+<td>Verify green on the first hold</td>
+<td>≥ 80 %</td>
+</tr>
+<tr>
+<td>Window points per Issue, by role and size</td>
+<td>tracked; the optimisation target</td>
+</tr>
+</tbody></table>
+<h2>12. What goes</h2>
+<table>
+<thead>
+<tr>
+<th>Repo</th>
+<th>Deleted</th>
+<th>Kept</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>software-factory</td>
+<td><code>fleet/</code> triage, act, undo, probes, presence, away, since, window, digest, transcript, reaper; <code>review/</code> transport and limits; placement <code>child</code> and <code>hidden</code>; holds <code>wave</code>, <code>review_slots</code>, <code>deep_cap</code>; then roles <code>mother</code>, <code>wave</code>, <code>worker</code>, <code>mechanical</code>, <code>deep</code>; then the tables <code>fleet_digest*</code>, <code>fleet_triage_log</code>, <code>fleet_ask_seen</code>, <code>fleet_acts</code>, <code>fleet_presence_acts</code>, <code>fleet_seen</code>, <code>fleet_windows</code>, <code>review_outcomes</code> and <code>spawns.review_*</code></td>
+<td>tick, runner, hooks, spool, witness, sessions, queue, admission, quota, roles <code>lead</code> and <code>reviewer</code>, slots, prompts, Issues, evidence, hold, finalize, resume, projects, door, notify, a slim <code>GET /fleet</code> (Issues, leads, asks, health line)</td>
+</tr>
+<tr>
+<td>dotfiles</td>
+<td><code>rd wave</code>, <code>rd fan</code>, <code>rd merge</code> for factory work and their hc fallback; <code>wave-gate.py</code>; hc-reap&#39;s agent rules; the <code>/wave</code> skill as a terminal chain</td>
+<td><code>rd</code> as a thin <code>factory issue new</code>; the <code>/wave</code> skill rewritten as the lead&#39;s playbook; <code>ask-human.sh</code>; the board on the slim <code>/fleet</code></td>
+</tr>
+<tr>
+<td>agent-workflows</td>
+<td><code>agw review request</code> (the hidden-session path)</td>
+<td>`review route</td>
+</tr>
+</tbody></table>
+<p>Expand, then contract: callers go first (dotfiles), then the server code, then one migration drops tables and columns.
+Rollback is the tag <code>pre-reset-2026-11</code> plus <code>make rollback</code>.</p>
+<h2>13. Build order</h2>
+<p>Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5 the factory builds itself under v3.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Issue</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>Cutover: <code>queue set drain</code>; finish or stop in-flight work; Issue 51 closed, 52–55 dropped or re-filed</td>
+<td>—</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Step 0: no false failure for a live terminal, confirmed delivery, machine failures never asks, ask expiry</td>
+<td>— (built tonight)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Review: router recalibration, one verifier, <code>omitClaudeMd</code> (agw + dotfiles)</td>
+<td>— (built tonight)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Dependencies: <code>--after</code>, admission respects <code>issue_deps</code>; <code>factory issue prio</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Parks end: <code>turn_started</code> ends <code>unreported</code>; <code>lead_gone</code> → next attempt (≤ 2); send-back skipped while background tasks run; re-run a red verify once, third regression parks</td>
+<td>1</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Lead contract in <code>brief.ts</code>; <code>lead</code> → Sonnet high; lead cap per account (roles kept)</td>
+<td>2, 3, 4</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Asks vs parks in <code>/fleet</code> and the sidebar; the health line; the factory heartbeat</td>
+<td>4</td>
+</tr>
+<tr>
+<td>7</td>
+<td>dotfiles: <code>rd</code> thin client, <code>/wave</code> → lead playbook, hc-reap trimmed, <code>wave-gate.py</code> gone</td>
+<td>5</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Delete fleet triage/presence/away/digest/reaper, the review transport, placement modes, holds, roles (code)</td>
+<td>6, 7</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Contract migration: drop the deleted tables and columns</td>
+<td>8</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>verify: owner</code></td>
+<td>5</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Herdr layout and the <code>plan:</code> tabs</td>
+<td>5</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>issue_facts</code> view; its Argo page</td>
+<td>6</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Repo contract audit: <code>project.yaml</code> and make targets, one Issue per repo</td>
+<td>5</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Intake: sources, settle, rule dedup, order (its own plan)</td>
+<td>12, 13</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Surfaces: Iris pushes and chat, ntfy for machines, Hermes off Slack, Slack retired</td>
+<td>14</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Docs and skills sweep under <code>rules/writing-for-agents.md</code></td>
+<td>8</td>
+</tr>
+</tbody></table>
+<h2>14. What the adversarial review changed</h2>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--after</code> and dependency admission do not exist</td>
+<td>row 3, before anything is filed as a plan</td>
+</tr>
+<tr>
+<td>Parks never leave <code>waiting</code> except by drop; background subagents trigger <code>unreported</code></td>
+<td>row 4; send-back reads <code>background_tasks</code></td>
+</tr>
+<tr>
+<td>Removing roles first breaks <code>rd</code>, which builds the later rows</td>
+<td>roles go in row 8, after dotfiles (row 7)</td>
+</tr>
+<tr>
+<td>The &quot;deploy slot&quot; is a fail-open shared pool; <code>leads: N</code> breaks review ranges</td>
+<td>one lead per repo; slot and <code>leads: N</code> cut</td>
+</tr>
+<tr>
+<td><code>verify: owner</code> cannot ask from <code>watching</code> and would hold the claim</td>
+<td>finalize at ship, claimless owner check, no default</td>
+</tr>
+<tr>
+<td>A flaky verify loops forever</td>
+<td>re-run once, third regression parks</td>
+</tr>
+<tr>
+<td>Nothing shows a stuck lead</td>
+<td>the health line, §6</td>
+</tr>
+<tr>
+<td>No cutover or rollback</td>
+<td>row 0, the heartbeat, <code>make rollback</code></td>
+</tr>
+<tr>
+<td><code>issue_facts</code> reading <code>usage.*</code> breaks the one-way dependencies</td>
+<td>Argo joins</td>
+</tr>
+<tr>
+<td>A <code>priority</code> column is stored state</td>
+<td>derived from the latest <code>prio</code> event</td>
+</tr>
+<tr>
+<td>A <code>plan</code> tab without a key would be duplicated by the reconcile</td>
+<td><code>factory.key=plan:&lt;repo&gt;</code></td>
+</tr>
+</tbody></table>
+<h2>15. Decisions for the owner</h2>
+<ol>
+<li><strong>One lead per repo</strong> (parallel across repos only), instead of the parallel leads within a repo the strategy proposed.</li>
+<li><strong>The <code>plan:</code> tab</strong> is a shell you start the planner in, not a live session waiting in every space.</li>
+<li><strong><code>verify: owner</code></strong> is the one always-legitimate ask, with no default.</li>
+<li><strong>Row 0 drops Issues 52–55</strong> unless you want any of them re-filed; Issue 51 closes with what it has.</li>
+</ol>
+
+</main></body></html>
