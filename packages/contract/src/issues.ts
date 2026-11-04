@@ -64,6 +64,8 @@ export const IssueInput = z.strictObject({
   source: IssueSource.default('request'),
   source_key: IssueSourceKey,
   facts: IssueFacts,
+  /** Issues this one waits for (`issue new --after`): open ones that exist, else the create is refused (422) and stores nothing. */
+  after: z.array(z.number().int().min(1).max(2_147_483_647)).max(20).optional(),
 })
 export type IssueInput = z.output<typeof IssueInput>
 
@@ -310,6 +312,25 @@ export const IssueNoteAck = z.object({
   state: IssueState,
 })
 export type IssueNoteAck = z.infer<typeof IssueNoteAck>
+
+/** The most a `prio` can say either way; higher is admitted first. */
+export const PRIO_LIMIT = 1000
+
+/** `POST /issues/:id/prio`: the owner's order among an Issue's project-mates; a repeated `id` is one call. */
+export const IssuePrioBody = z.strictObject({
+  id: CallId.optional(),
+  value: z.number().int().min(-PRIO_LIMIT).max(PRIO_LIMIT),
+})
+export type IssuePrioBody = z.output<typeof IssuePrioBody>
+
+export const IssuePrioAck = z.object({
+  issue: z.number().int(),
+  /** the inbox key, `<issue>:prio:<call id>` */
+  key: z.string(),
+  duplicate: z.boolean(),
+  state: IssueState,
+})
+export type IssuePrioAck = z.infer<typeof IssuePrioAck>
 
 /** One line of an Issue's story: an `issue_events` row, or an inbox row no event came of yet. `at` orders them, oldest first. */
 export const TimelineEntry = z.object({

@@ -12,6 +12,8 @@ import {
   IssueAnswerAck,
   IssueList,
   IssueNoteAck,
+  IssuePrioAck,
+  PRIO_LIMIT,
   type IssueSummary,
   IssueView,
   type StatusIssue,
@@ -113,11 +115,15 @@ commands:
                   type <text> into the session once it is at its prompt (held while it works), confirmed by its next
                   turn; --id makes a repeated call one note (default: a fresh id per call). Use -- before text that
                   starts with a dash
-  issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source request|alert]
-                  file an Issue. --facts is JSON up to 32 KiB, from a file or stdin, kept as data. --key makes a replay one
+  issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source request|alert] [--after <id> …]
+                  file an Issue. --after (repeatable, up to 20) holds it until those Issues are closed: each must exist and be open, else
+                  nothing is filed (exit 2). A repeat of --key returns the stored Issue and ignores --after. --facts is JSON up to 32 KiB, from a file or stdin, kept as data. --key makes a replay one
                   Issue, whatever became of it (default: a fresh key per call). A repo must be inside the allowed roots
                   (token or socket, as spawn create)
   issue list      the Issues, newest first (token or socket)
+  issue prio <id> <n> [--id <call id>]   (a negative n goes after --: issue prio 7 -- -5)
+                  the owner's order among a project's queued Issues (token only): n is an integer -1000..1000, higher is admitted first,
+                  the latest call wins, none is 0. A blocked Issue (--after) waits whatever its prio. A closed Issue is refused (exit 5)
   issue show <id> one Issue: its facts, its story from the lifecycle's events and the inbox oldest first, its evidence and its
                   questions (token or socket). What senders filed is data: --format plain shows it on one cut line each
   issue note <id> <text> [--id <call id>]
@@ -193,9 +199,9 @@ commands:
 --on <what>      session wait: workers, deploy or owner
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
---id <id>        session note: the note's idempotency key
+--id <id>        session note, issue note|prio: the call's idempotency key
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
---title, --facts, --key, --source  issue new
+--title, --facts, --key, --source, --after  issue new
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
 --pending       notify list: only what is not sent
@@ -588,6 +594,7 @@ interface Flags {
   why?: string
   summary?: string
   evidence?: string[]
+  after?: string[]
   commit?: string[]
   document?: string
   kind?: string
@@ -1036,9 +1043,15 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
 
   if (key === 'issue new') {
     if (!flags.repo || !flags.title) {
-      throw usage('usage: issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source <source>]')
+      throw usage(
+        'usage: issue new --repo <path> --title <text> [--facts @file|-] [--key <key>] [--source <source>] [--after <id> …]',
+      )
     }
     const facts = flags.facts === undefined ? undefined : await readFacts(flags.facts, io)
+    const after = (flags.after ?? []).map((id) => {
+      if (!/^[1-9][0-9]{0,9}$/.test(id)) throw usage(`--after takes an Issue id, not ${id}`)
+      return Number(id)
+    })
     const { body } = await call(io, '/issues', {
       method: 'POST',
       auth: true,
@@ -1049,6 +1062,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         title: flags.title,
         source_key: flags.key ?? crypto.randomUUID(),
         ...(flags.source ? { source: flags.source } : {}),
+        ...(after.length > 0 ? { after } : {}),
         ...(facts === undefined ? {} : { facts }),
       },
     })
@@ -1090,6 +1104,31 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       body: { text, ...(flags.id ? { id: flags.id } : {}) },
     })
     return print(body, [body.issue, 'note', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
+  }
+
+  if (words[0] === 'issue' && words[1] === 'prio') {
+    const [, , target, value] = words
+    const n = Number(value)
+    if (
+      !target ||
+      !/^[1-9][0-9]{0,9}$/.test(target) ||
+      words.length !== 4 ||
+      !/^-?[0-9]+$/.test(value ?? '') ||
+      Math.abs(n) > PRIO_LIMIT
+    )
+      throw usage(`usage: issue prio <id> <n> [--id <call id>] (n an integer, -${PRIO_LIMIT}..${PRIO_LIMIT})`)
+    if (!io.env.FACTORY_TOKEN) {
+      throw new FactoryError('auth', "issue prio needs FACTORY_TOKEN: it is the owner's order, a pane has none", {
+        hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+      })
+    }
+    const { body } = await call(io, `/issues/${target}/prio`, {
+      method: 'POST',
+      auth: true,
+      schema: IssuePrioAck,
+      body: { value: n, ...(flags.id ? { id: flags.id } : {}) },
+    })
+    return print(body, [body.issue, 'prio', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
   }
 
   if (words[0] === 'issue' && words[1] === 'answer') {
@@ -1377,6 +1416,7 @@ const OPTIONS = {
   facts: { type: 'string' },
   key: { type: 'string' },
   source: { type: 'string' },
+  after: { type: 'string', multiple: true },
   rotate: { type: 'boolean' },
   phase: { type: 'string' },
   note: { type: 'string' },

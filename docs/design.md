@@ -676,6 +676,15 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   check's `verified` or `regression` moves the Issue.
 - **Dependencies.** `dep` refuses a closed Issue, itself and a cycle, and locks the blocker's row so a close in flight is seen. A
   close removes every `issue_deps` row on and of the Issue: a row is a dep still open, and a blocker that reopens holds nobody back.
+  Every way to close (`close`, `drop`, `stop`, `verified`, `healed`) is the one `to: closed` branch of `applyEvent`, which calls
+  `releaseDependents`. `factory issue new --after <id>` (repeatable, at most 20; `after` in the `POST /issues` body) writes the rows in the create's
+  transaction, through the same blocker check as `dep` (`blockerRefusal`, `deps.ts`): an unknown or closed id is 422 with the reason and nothing is stored (a new
+  Issue cannot close a cycle). The ids are in the `created` event's payload (`after`). A repeat of the same `(source, key)` is a read: it returns the stored
+  Issue and neither checks nor writes `after`, so a repeat with another `--after` changes nothing. A plan is Issues linked this way (decision RS1).
+- **Priority.** `factory issue prio <id> <n>` (token only, `POST /issues/:id/prio {value, id?}`, `value` an integer −1000..1000) files one `prio`
+  inbox event keyed `<issue>:prio:<call id>` (a repeated call id is 200 `duplicate`; a closed Issue is 409). The lifecycle records it as an
+  `issue_events` row; nothing is stored on the Issue. Admission derives an Issue's priority from its latest such event (by `at`, then `id`; none is 0).
+  Applied by the next pass that handles the inbox, so it counts from the pass after that.
 - **Intake.** `POST /issues` (token and socket, `factory issue new`; `GET /issues[/:id]`, `issue list|show`) and `createIssue`
   for what the server files itself. An Issue has `source` (`request|alert` through the API, open in the table), `source_key` (unique per
   source, required: the CLI makes one per call unless `--key` says otherwise), `repo` (resolved and checked like a spawn's,
@@ -691,9 +700,11 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   are cut to the role table's `lead` entry and never above `opus/high`, and a risky or business class or an incident is never below `sonnet/high`; the lead starts at that level worked out again against the table of that moment. A classify that fails, times out, does not parse or whose
   command is missing stores the `lead` entry as the defaults: the Issue is admitted all the same, never stuck. A restart loses what was in
   flight and the next pass asks again. Only an Issue with `classified_at` is admitted.
-- **Admission.** Each pass, under the capacity lock, the oldest classified `queued` Issue of each project and any urgent one (an incident, or
-  the owner's `urgent` class: Classify never answers `urgent`) are looked at; those the project's claim has room for hold the claim and get
-  `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. The rest of a project cannot go before its oldest and are not read.
+- **Admission.** Each pass, under the capacity lock, of the classified `queued` Issues **with no `issue_deps` row** (an open dependency), the first
+  of each project and any urgent one (an incident, or the owner's `urgent` class: Classify never answers `urgent`) are looked at. First is the highest
+  `prio`, then the oldest id, chosen among the unblocked ones: a blocked Issue is no candidate, so it never holds back an unblocked one of its project.
+  Urgent ones go before the rest, then by prio and id. Those the project's claim has room for hold the claim and get
+  `admitted` (key `admit:<issue>:<attempt>`), which plans `start_lead`. The rest of a project cannot go before its first and are not read.
   Held back, and still `queued`: `drain` for the repo or globally, a paused project, a project not synced yet, a full claim, a reopened Issue whose
   last attempt is not finalized, and an `alert` while `FACTORY_ALERT_LEADS` is off (it is left out of the reading, so it does not stand in front of a
   request); `factory status` says which. Requests are not asked. Decision 3 held alert leads back until evidence and the hold were live: since

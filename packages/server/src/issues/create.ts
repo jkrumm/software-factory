@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Issue } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { RepoRefused, resolveRepo } from '../repos.ts'
+import { blockerRefusal } from './deps.ts'
 import { findIssue, type IssueRow, toIssue } from './read.ts'
 import { logEvent } from './shared.ts'
 
@@ -17,6 +18,8 @@ export interface NewIssue {
   repo: string
   title: string
   facts: unknown
+  /** Issues this one waits for (`--after`); each must exist and be open. Written with the row, or nothing is. */
+  after?: readonly number[]
 }
 
 const namesIuRoot = (path: string): boolean => path.split('/').some((part) => part.toLowerCase() === 'iuroot')
@@ -40,8 +43,10 @@ const UNSTORABLE_JSON = new Set(['22P02', '22P05', '54001'])
 
 /**
  * Stores a new Issue, always `queued`, with its first `issue_events` row. A repeated `(source, sourceKey)` answers the stored
- * row whatever it became, a closed one too: this wave reopens nothing, and the policy has nothing to add to a row it let in.
- * Refused: a repo outside `repoRoots` (as a spawn's), and an alert in IuRoot. Both throw `RepoRefused`.
+ * row whatever it became, a closed one too: this wave reopens nothing, and the policy has nothing to add to a row it let in. A
+ * repeat is a read: its `after` is neither checked nor written, so the stored deps stand whatever the repeat says.
+ * Refused: a repo outside `repoRoots` (as a spawn's), an alert in IuRoot, and an `after` that names an unknown or closed Issue.
+ * All throw `RepoRefused`, and nothing is stored. A cycle cannot happen: no Issue waits for one that does not exist yet.
  */
 export async function createIssueIn(
   tx: SQL,
@@ -62,6 +67,12 @@ export async function createIssueIn(
   const repo = await resolveRepo(input.repo, context.repoRoots)
   await refuseAlert(repo)
 
+  const after = [...new Set(input.after ?? [])].sort((a, b) => a - b)
+  for (const on of after) {
+    const refusal = await blockerRefusal(tx, on)
+    if (refusal) throw new IssueRefused(refusal)
+  }
+
   const facts = JSON.stringify(input.facts)
   const rows: IssueRow[] = await tx`
     INSERT INTO factory.issues (state, source, source_key, repo, title, facts, created_at, updated_at)
@@ -80,10 +91,13 @@ export async function createIssueIn(
     if (!winner) throw new Error(`issue ${input.source}:${input.sourceKey} was not stored`)
     return { issue: winner, created: false }
   }
+  for (const on of after) {
+    await tx`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${row.id}, ${on})`
+  }
   await logEvent(
     tx,
     { issueId: row.id, key: `created:${row.id}`, kind: 'created', from: null, to: 'queued', at: now },
-    { source: row.source },
+    { source: row.source, ...(after.length > 0 ? { after } : {}) },
   )
   return { issue: toIssue(row), created: true }
 }

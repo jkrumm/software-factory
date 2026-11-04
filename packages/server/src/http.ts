@@ -23,6 +23,8 @@ import {
   IssueNoteAck,
   IssueNoteBody,
   IssueOwnerInput,
+  IssuePrioAck,
+  IssuePrioBody,
   IssueResumeInput,
   IsoTime,
   IssueVerb,
@@ -73,7 +75,7 @@ import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './
 import { getIssueView } from './issues/follow.ts'
 import { getIssue, listIssues } from './issues/read.ts'
 import { resumeArchived } from './issues/resume.ts'
-import { fileAnswer, fileEvidence, fileNote, fileVerb, GATED_VERBS } from './issues/verbs.ts'
+import { fileAnswer, fileEvidence, fileNote, filePrio, fileVerb, GATED_VERBS } from './issues/verbs.ts'
 import { answerNow } from './issues/worker.ts'
 import { getNotification, listNotifications, sendNow } from './notify/outbox.ts'
 import { NullNotifier, type Notifier } from './notify/port.ts'
@@ -387,15 +389,16 @@ const sessionGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest
 
 /**
  * `POST /issues`, on the port and on the socket, like a spawn: the first create of a `(source, source_key)` is 201, a replay
- * 200 with the stored row, closed or not. A repo outside the roots and an alert in IuRoot are 422, nothing stored.
+ * 200 with the stored row, closed or not (its `after` is not looked at again). A repo outside the roots, an alert in IuRoot and an
+ * `after` naming an unknown or closed Issue are 422, nothing stored.
  */
 const issueCreateHandler =
   (sql: SQL, clock: Clock, repoRoots: readonly string[]) =>
   async (req: Request): Promise<Response> => {
-    const { source, source_key: sourceKey, repo, title, facts } = await parseBody(req, IssueInput)
+    const { source, source_key: sourceKey, repo, title, facts, after } = await parseBody(req, IssueInput)
     const { issue, created } = await createIssue(
       sql,
-      { source, sourceKey, repo, title, facts },
+      { source, sourceKey, repo, title, facts, ...(after ? { after } : {}) },
       { repoRoots, now: clock.now() },
     ).catch((error) => {
       throw error instanceof RepoRefused ? new Refusal(error.message, 422) : error
@@ -437,6 +440,25 @@ const issueNoteHandler =
     }
     const ack = { issue: issueId, key: filed.key, duplicate: filed.duplicate, state: filed.state }
     return respond(IssueNoteAck, ack, filed.duplicate ? 200 : 201)
+  }
+
+/**
+ * `POST /issues/:id/prio {value, id?}`, on the token API only, like a note: the owner's order among an Issue's project-mates. One
+ * inbox row keyed `<issue>:prio:<call id>`; the same call again is 200 `duplicate`, the first 201. A closed Issue is 409.
+ */
+const issuePrioHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Bun.BunRequest<'/issues/:id/prio'>): Promise<Response> => {
+    const issueId = parseParam(IssueId, req.params.id)
+    const body = await parseBody(req, IssuePrioBody)
+    const filed = await filePrio(sql, { issueId, body, now: clock.now() })
+    if (!filed.ok) {
+      return filed.problem === 'unknown_issue'
+        ? json({ error: 'unknown issue' }, 404)
+        : json({ error: 'the Issue is closed: reopen it first' }, 409)
+    }
+    const ack = { issue: issueId, key: filed.key, duplicate: filed.duplicate, state: filed.state }
+    return respond(IssuePrioAck, ack, filed.duplicate ? 200 : 201)
   }
 
 /**
@@ -835,6 +857,7 @@ export function routes({
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
     '/issues/:id/timeline': { GET: route(issueTimelineHandler(sql)) },
     '/issues/:id/note': { POST: route(issueNoteHandler(sql, clock)) },
+    '/issues/:id/prio': { POST: route(issuePrioHandler(sql, clock)) },
     '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock)) },
     '/issues/:id/evidence': { POST: route(issueEvidenceHandler(sql, clock, { requireSession: false })) },
     '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen')) },

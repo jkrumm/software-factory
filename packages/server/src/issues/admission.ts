@@ -23,10 +23,12 @@ interface Waiting {
 }
 
 /**
- * Admission for Issues: of the classified, `queued` Issues, each project's oldest and any urgent one (an incident, or the owner's
- * `urgent` class) are looked at, and the claim hands out its places in that order: the project's claim has room, the Issue holds
- * it and gets `admitted` (key `admit:<issue>:<attempt>`, so a second admission is the same row). The lead's spawn is made by the
- * `start_lead` effect that event plans, and finds its claim held. The others of a project cannot be admitted before the oldest, so
+ * Admission for Issues: of the classified, `queued` Issues with no open dependency (a close deletes its dep rows, so a row means
+ * open), each project's first and any urgent one (an incident, or the owner's `urgent` class) are looked at. First is the highest
+ * `prio` (the value of the Issue's latest applied `prio` event, none = 0), then the oldest; a blocked Issue is not a candidate, so
+ * it never holds back an unblocked one of its project. Urgent ones go first, then by the same order, and the claim hands out its
+ * places in that order: the project's claim has room, the Issue holds it and gets `admitted` (key `admit:<issue>:<attempt>`, so a
+ * second admission is the same row). The lead's spawn is made by the `start_lead` effect that event plans, and finds its claim held. The others of a project cannot be admitted before the first, so
  * they are not read. Held back, and still `queued`: `drain` (for the repo or globally), a paused project, a project not synced yet,
  * a full claim, an `alert` while its switch is off (left out of the reading, so it does not stand in front of a request behind
  * it), and a reopened Issue whose last attempt is not finalized: its lead closes before a new one is admitted. Under the capacity lock
@@ -37,7 +39,10 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
     await lockCapacity(tx)
     const queued: Waiting[] = await tx`
       WITH q AS (
-        SELECT i.id, i.repo, i.attempt, p.name AS project, COALESCE(i.class = 'urgent' OR i.kind = 'incident', false) AS urgent
+        SELECT i.id, i.repo, i.attempt, p.name AS project, COALESCE(i.class = 'urgent' OR i.kind = 'incident', false) AS urgent,
+          COALESCE((
+            SELECT (e.payload->>'value')::int FROM factory.issue_events e
+            WHERE e.issue_id = i.id AND e.kind = 'prio' ORDER BY e.at DESC, e.id DESC LIMIT 1), 0) AS prio
         FROM factory.issues i
         CROSS JOIN LATERAL (
           SELECT name, paused FROM factory.projects
@@ -46,13 +51,14 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
         ) p
         WHERE i.state = 'queued' AND i.classified_at IS NOT NULL AND NOT p.paused
           AND (i.source <> 'alert' OR ${options.alertLeads})
+          AND NOT EXISTS (SELECT 1 FROM factory.issue_deps d WHERE d.issue_id = i.id)
           AND NOT EXISTS (
             SELECT 1 FROM factory.issue_effects e
             WHERE e.issue_id = i.id AND e.kind = 'finalize' AND e.done_at IS NULL AND e.cancelled_at IS NULL)
       )
       SELECT id, repo, attempt FROM q
-      WHERE urgent OR id = (SELECT min(o.id) FROM q o WHERE o.project = q.project AND NOT o.urgent)
-      ORDER BY urgent DESC, id`
+      WHERE urgent OR id = (SELECT o.id FROM q o WHERE o.project = q.project AND NOT o.urgent ORDER BY o.prio DESC, o.id LIMIT 1)
+      ORDER BY urgent DESC, prio DESC, id`
     if (queued.length === 0) return 0
     const states = await loadQueueStates(tx)
     let admitted = 0
