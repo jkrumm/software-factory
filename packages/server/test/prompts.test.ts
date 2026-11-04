@@ -41,8 +41,8 @@ const deliver = () => deliverPrompts({ sql: db.sql, runner, clock })
 const note = (id: string, text = 'please look at the failing test', session = 's') =>
   recordPrompt(db.sql, { id, session, source: 'note', text }, clock.now())
 const row = async (id: string) => {
-  const [r] = await db.sql`SELECT status, sent_count, failures, error FROM factory.prompts WHERE id = ${id}`
-  return r as { status: string; sent_count: number; failures: number; error: string | null }
+  const [r] = await db.sql`SELECT status, sent_count, failures, error, typed_at FROM factory.prompts WHERE id = ${id}`
+  return r as { status: string; sent_count: number; failures: number; error: string | null; typed_at: Date | null }
 }
 /** A session that is mid-turn. */
 const working = async () => {
@@ -111,6 +111,7 @@ describe('prompt delivery', () => {
     await deliver()
     expect(runner.typed).toHaveLength(2)
     expect(runner.typed[1]).toMatchObject({ enterOnly: true })
+    expect((await row('n1')).typed_at).not.toBeNull()
     expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 2 })
 
     clock.advance(CONFIRM_MS + 1_000)
@@ -182,6 +183,7 @@ describe('prompt delivery', () => {
     clock.advance(CONFIRM_MS + 1_000)
     await deliver()
     expect(runner.typed).toHaveLength(1)
+    expect(runner.typed[0]).toEqual({ pane: 'w1:s', text: 'please look at the failing test' })
     expect(await row('n1')).toMatchObject({ status: 'sent', sent_count: 2 })
   })
 
@@ -279,6 +281,20 @@ describe('prompt delivery: guards', () => {
     await startTurn()
     await deliver()
     expect((await row('n1')).status).toBe('delivered')
+  })
+
+  test('the retry after an uncertain typing types the text again (after a confirmed typing it only presses Enter: see above)', async () => {
+    await working()
+    await endTurn()
+    await note('n1')
+    runner.failure = new UncertainTyping('hc terminal.send: timed out')
+    await deliver()
+    runner.failure = undefined
+    expect((await row('n1')).typed_at).toBeNull()
+    clock.advance(CONFIRM_MS + 1_000)
+    await deliver()
+    expect(runner.typed).toEqual([{ pane: 'w1:s', text: 'please look at the failing test' }])
+    expect((await row('n1')).typed_at).not.toBeNull()
   })
 
   test('a resume is not made once the session has shown life since the prompt was recorded', async () => {

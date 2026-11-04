@@ -470,6 +470,27 @@ describe('a restart and what a start text names', () => {
     expect(second.fingerprint).toBe(first.fingerprint)
   })
 
+  test('a factory ask that expired stays expired after a restart: its first-seen time is in the table', async () => {
+    await factoryRows()
+    await builder.refreshNow()
+    clock.advance(8 * 24 * 3_600_000)
+    terminals = terminals.map((t) => ({ ...t, statusAt: clock.now().toISOString() }))
+    const expired = await builder.refreshNow()
+    const hidden = expired.asks.filter((a) => a.source === 'factory').map((a) => a.id)
+    const restarted = new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+    })
+    const after = await restarted.refreshNow()
+    expect(after.asks.filter((a) => a.source === 'factory').map((a) => a.id)).toEqual(hidden)
+    expect(after.asks.filter((a) => a.source === 'factory').every((a) => a.at !== clock.now().toISOString())).toBe(true)
+  })
+
   test('a plan path outside the roots, or a file that is not a plan, is not followed', async () => {
     terminals = terminals.map((t) =>
       t.address === 't7d'

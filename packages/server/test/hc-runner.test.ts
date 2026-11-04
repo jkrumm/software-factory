@@ -675,6 +675,13 @@ describe('hc adapter: type', () => {
     expect((await hc.state()).sent).toEqual([{ terminal: 't1', text: 'carry on' }])
   })
 
+  test('enterOnly sends an empty text: Enter is pressed and nothing is pasted again', async () => {
+    await runner.start(input)
+    await hc.setStatus('t1', 'idle')
+    expect(await runner.type({ pane: 't1', text: 'carry on', enterOnly: true })).toBe('typed')
+    expect((await hc.state()).sent).toMatchObject([{ terminal: 't1', text: '' }])
+  })
+
   test.each(['working', 'blocked', 'error'])('is busy while the agent is %s, and types nothing', async (word) => {
     await runner.start(input)
     await hc.setStatus('t1', word)

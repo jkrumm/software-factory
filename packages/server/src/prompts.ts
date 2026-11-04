@@ -48,6 +48,7 @@ interface PromptRow {
   claimed_at: Date | null
   sent_at: Date | null
   sent_count: number
+  typed_at: Date | null
   failures: number
   delivered_at: Date | null
   failed_at: Date | null
@@ -104,7 +105,7 @@ export async function recordPrompt(
             ${input.failed ? now : null})
     ON CONFLICT (id) DO UPDATE
       SET status = 'pending', created_at = EXCLUDED.created_at, next_at = EXCLUDED.next_at, claimed_at = NULL,
-          sent_at = NULL, sent_count = 0, failures = 0, failed_at = NULL, error = NULL
+          sent_at = NULL, sent_count = 0, typed_at = NULL, failures = 0, failed_at = NULL, error = NULL
       WHERE ${options.rearm === true} AND factory.prompts.status = 'failed' AND EXCLUDED.status = 'pending'
         AND factory.prompts.failed_at <= ${rearmable}
     RETURNING *`
@@ -432,9 +433,10 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
 
     let outcome: 'typed' | 'busy'
     try {
-      // The text is already in the pane after the first typing: the retry of a typed prompt only presses Enter, never pastes it again.
+      // The text is in the pane once the runner answered `typed`: the retry of that only presses Enter, never pastes it again.
+      // After an uncertain typing or an abandoned claim nothing says it arrived, so the text is typed again.
       outcome =
-        prompt.via === 'type' && prompt.sent_count > 0
+        prompt.via === 'type' && prompt.sent_count > 0 && prompt.typed_at !== null
           ? await deps.runner.type({ pane: target.pane as string, text: prompt.text, enterOnly: true })
           : await attempt(deps, prompt, target)
     } catch (error) {
@@ -469,7 +471,8 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     await sql`
       UPDATE factory.prompts
-      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0
+      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0,
+          typed_at = COALESCE(typed_at, ${clock.now()})
       WHERE id = ${prompt.id} AND status = 'typing'`
     result.sent.push(prompt.id)
   }

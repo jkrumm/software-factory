@@ -362,6 +362,7 @@ export class FleetBuilder {
         now,
         queue,
         firstSeen: this.firstSeen,
+        expired,
         roots,
         complete,
       })

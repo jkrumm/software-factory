@@ -589,6 +589,8 @@ export class Triage {
     now: Date
     queue: readonly QueueRequest[]
     firstSeen: ReadonlyMap<string, string>
+    /** The factory asks that expired this build: kept as listed rows, so a restart restores their time and they stay gone. */
+    expired?: ReadonlyMap<string, string>
     roots: readonly string[]
     complete: boolean
   }): Promise<{ model: Model; timed: FleetAsk[] }> {
@@ -608,7 +610,8 @@ export class Triage {
       if (spawn) handoffs.push({ ask: h.ask, spawn })
     }
     const listed = [...input.model.asks, ...handoffAsks(handoffs, input.firstSeen, now)]
-    const occurrences = await trackSeen(sql, listed, now, input.complete)
+    const kept = [...listed, ...[...(input.expired ?? [])].map(([id, at]) => ({ id, at }))]
+    const occurrences = await trackSeen(sql, kept, now, input.complete)
     const timed = listed.map((a) => ({ ...a, occurrence: occurrences.get(a.id) ?? 1 }))
     const closed = (a: FleetAsk) =>
       acts.closed.has(occKey(a.id, a.occurrence)) || acts.later.has(occKey(a.id, a.occurrence))
