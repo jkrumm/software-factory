@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en" data-mantine-color-scheme="light">
+<script>if(matchMedia("(prefers-color-scheme: dark)").matches)document.documentElement.dataset.mantineColorScheme="dark"</script>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software factory reset — strategy, 2026-11-04</title>
+<style>
+/* basalt-ui 2.29.0 tokens:css (themed colour blocks) */
+:root,
+html[data-mantine-color-scheme='dark'] {
+  --vx-status-excellent: #43bf4d;
+  --vx-status-good: #52c07c;
+  --vx-status-warn: #e6a53d;
+  --vx-status-bad: #fe8178;
+  --vx-status-neutral: #a1a1aa;
+  --vx-good-solid: #52c07c;
+  --vx-bad-solid: #fe8178;
+  --vx-warn-solid: #e6a53d;
+  --vx-neutral: #d4d4d8;
+  --vx-line: #e4e4e7;
+  --vx-line2: #a1a1aa;
+  --vx-axis: #a7a7aa;
+  --vx-axis-stroke: rgba(255, 255, 255, 0.12);
+  --vx-grid: rgba(255, 255, 255, 0.06);
+  --vx-crosshair: rgba(255, 255, 255, 0.42);
+  --vx-dot-stroke: #27272a;
+  --vx-tooltip-bg: rgba(39, 39, 42, 0.96);
+  --vx-tooltip-text: rgba(255, 255, 255, 0.88);
+  --vx-tooltip-muted: rgba(255, 255, 255, 0.5);
+  --vx-tooltip-border: none;
+  --vx-tooltip-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --vx-legend-text: rgba(255, 255, 255, 0.92);
+  --vx-ink: #e5e5e9;
+  --vx-ink2: #dddde1;
+  --vx-muted: #d4d4d8;
+  --vx-faint: #a7a7aa;
+  --vx-accent: #a2c3f0;
+  --vx-accent-hover: #65a2e3;
+  --vx-accent-fill: #4374a6;
+  --vx-accent-fill-hover: #2d5b88;
+  --vx-on-accent: #ffffff;
+  --vx-divider: rgba(255, 255, 255, 0.08);
+  --vx-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 1px color-mix(in srgb, #ffffff 4%, transparent);
+  --vx-shadow-ctrl: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --vx-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent);
+  --vx-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --vx-surface-bg: #27272a;
+  --vx-surface-panel: #2b2b2e;
+  --vx-surface-panel-hover: #38383b;
+  --vx-surface-row-hover: #38383b;
+  --vx-surface-row-selected: #3c3c3f;
+  --vx-surface-elevated: #38383b;
+  --vx-surface-subtle: #323235;
+  --vx-surface-overlay: color-mix(in srgb, #3f3f46 50%, #27272a);
+  --vx-surface-field: #27272a;
+  --vx-surface-border: #444447;
+  --vx-surface-hairline: #4e4e51;
+}
+html[data-mantine-color-scheme='light'] {
+  --vx-status-excellent: #29a634;
+  --vx-status-good: #2f774b;
+  --vx-status-warn: #935f00;
+  --vx-status-bad: #b5403d;
+  --vx-status-neutral: #71717a;
+  --vx-good-solid: #2f774b;
+  --vx-bad-solid: #b5403d;
+  --vx-warn-solid: #935f00;
+  --vx-neutral: #525255;
+  --vx-line: #52525c;
+  --vx-line2: #71717a;
+  --vx-axis: #69696c;
+  --vx-axis-stroke: rgba(38, 38, 41, 0.12);
+  --vx-grid: rgba(38, 38, 41, 0.07);
+  --vx-crosshair: rgba(38, 38, 41, 0.32);
+  --vx-dot-stroke: #ffffff;
+  --vx-tooltip-bg: #ffffff;
+  --vx-tooltip-text: rgba(38, 38, 41, 0.88);
+  --vx-tooltip-muted: rgba(38, 38, 41, 0.5);
+  --vx-tooltip-border: 1px solid #e4e4e7;
+  --vx-tooltip-shadow: 0 2px 8px rgba(38, 38, 41, 0.1);
+  --vx-legend-text: rgba(38, 38, 41, 0.82);
+  --vx-ink: #262629;
+  --vx-ink2: #404043;
+  --vx-muted: #525255;
+  --vx-faint: #69696c;
+  --vx-accent: #4374a6;
+  --vx-accent-hover: #2d5b88;
+  --vx-accent-fill: #4374a6;
+  --vx-accent-fill-hover: #2d5b88;
+  --vx-on-accent: #ffffff;
+  --vx-divider: rgba(38, 38, 41, 0.09);
+  --vx-shadow-card: 0 1px 2px rgba(28, 25, 23, 0.05), 0 0 0 1px var(--vx-surface-hairline);
+  --vx-shadow-ctrl: 0 1px 2px rgba(28, 25, 23, 0.12);
+  --vx-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.1);
+  --vx-shadow-overlay: 0 8px 24px rgba(28, 25, 23, 0.1);
+  --vx-surface-bg: #f2f2f5;
+  --vx-surface-panel: #fafafd;
+  --vx-surface-panel-hover: #ffffff;
+  --vx-surface-row-hover: #efeff2;
+  --vx-surface-row-selected: #eaeaed;
+  --vx-surface-elevated: #ffffff;
+  --vx-surface-subtle: #f4f4f8;
+  --vx-surface-overlay: #ffffff;
+  --vx-surface-field: #ffffff;
+  --vx-surface-border: #e2e2e5;
+  --vx-surface-hairline: #eaeaee;
+}
+
+  :root { --bg:var(--vx-surface-bg); --fg:var(--vx-ink); --mut:var(--vx-status-neutral); --card:var(--vx-surface-panel); --line:var(--vx-surface-border); --acc:var(--vx-status-good); --warn:var(--vx-status-warn); --bad:var(--vx-status-bad); --vio:var(--vx-accent-fill); }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1080px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:28px; margin:0 0 4px } h2 { font-size:20px; margin:44px 0 12px; padding-top:12px; border-top:1px solid var(--line) }
+  h3 { font-size:16px; margin:20px 0 8px }
+  .meta { color:var(--mut); font-size:13px }
+  .tldr { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--acc); border-radius:var(--vx-radius-card,10px); padding:16px 20px; margin:20px 0 }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); overflow:hidden; margin:8px 0 16px; font-size:14px }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); font-weight:600 }
+  tr:last-child td { border-bottom:0 }
+  code { font:13px ui-monospace,SFMono-Regular,Menlo,monospace; background:color-mix(in srgb,var(--line) 60%,transparent); padding:1px 5px; border-radius:4px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); padding:14px 16px }
+  .card b.k { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); margin-bottom:6px }
+  .num { font-size:26px; font-weight:700 }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0 16px }
+  .steps span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 12px; font-size:13px }
+  .steps i { color:var(--mut); font-style:normal }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px; color:var(--vx-on-accent,#fff); vertical-align:1px }
+  .del { background:var(--bad) } .keep { background:var(--acc) } .new { background:var(--vio) } .chg { background:var(--warn) }
+  iframe { width:100%; height:1000px; border:1px solid var(--line); border-radius:var(--vx-radius-card,10px); background:var(--card) }
+  ul { padding-left:20px } li { margin:3px 0 }
+  .q { border-left:4px solid var(--vio) }
+</style>
+</head>
+<body>
+<main>
+<h1>Software factory reset</h1>
+<div class="meta">Strategy draft · 2026-11-04 · built from eight read-only audits of the factory, dotfiles, brain, agw, Hermes, Iris, Argo and the live fleet, plus external research (DeepSeek super-agent, pr-agent, Claude Code docs, issue 97074)</div>
+
+<div class="tldr"><b>Verdict.</b> One item in the queue gets exactly one visible lead tab. The lead plans, delegates to subagents (Explore, implementer, reviewer), ships, deploys and verifies. The factory shrinks to a deterministic loop around that tab: queue, admission, hooks, asks, ship gate and one closer. Hidden sessions, a tab per wave, the review transport and the fleet-triage machinery go. Order: lean review → the lead foundation → orchestration and surfaces on top.</div>
+
+<h2>1. Where we are</h2>
+<div class="grid">
+  <div class="card"><b class="k">Factory server</b><span class="num">19k</span> lines of source (45k with tests), 29 migrations, 28 settings, ~25 concepts, built in 5 days</div>
+  <div class="card"><b class="k">Issues closed</b><span class="num">~10</span> real requests; Issue 51 stuck since 2026-11-02 on a brief typed but never submitted, 52–55 queued behind it</div>
+  <div class="card"><b class="k">Asks waiting</b><span class="num">13</span> — 3 from the human queue, 10 the factory's own failure reports; 9 of them hold no decision for you</div>
+  <div class="card"><b class="k">Closers</b><span class="num">4</span> (hc-reap, factory reaper in dry mode, <code>rd close</code>, <code>rd fan --clean</code>) — and none closes a "done" parent whose background implementers still run</div>
+</div>
+<p>Root causes, by evidence: a 30-second report timeout marks live work as failed; prompts are delivered without confirming the turn started; machine failures become owner asks; "done" is read from the screen, not from <code>background_tasks</code>; the same work has four fleet views, three wait mechanisms and two spawn paths that pick different models.</p>
+
+<h2>2. The model</h2>
+<iframe src="architecture.html" title="Architecture"></iframe>
+<p class="meta">Open <code>architecture.html</code> directly for pan, zoom, guided views and export.</p>
+
+<h3>The life of one item</h3>
+<div class="steps">
+  <span>Plan with you (planner tab, Opus)</span><i>→</i><span>decision doc reviewed in Argo</span><i>→</i><span><code>factory issue new --plan</code></span><i>→</i><span>admitted</span><i>→</i><span>lead tab opens in its worktree</span><i>→</i><span>build with subagents</span><i>→</i><span>static gate</span><i>→</i><span>review at the tier</span><i>→</i><span>merge, deploy</span><i>→</i><span>factory re-runs <code>make verify</code></span><i>→</i><span>achieved; tab and worktree closed</span>
+</div>
+<ul>
+  <li><b>One tab per item, no rotation.</b> <code>autoCompactWindow</code> is already 600k; the plan file is the state, and a <code>SessionStart(compact)</code> hook re-injects "re-read the plan". Work that needs more than one context is split into child items, each with its own lead.</li>
+  <li><b>Questions.</b> A lead files one structured question per item with <code>factory issue ask</code>; asking again replaces it. It appears in the Herdr sidebar and as an Iris push. Your answer, from Iris, the sidebar or the tab itself, goes to that lead. Follow-ups on a running item go straight to its lead, never through the planner (DeepSeek's "subscription pass-through").</li>
+  <li><b>Machine failures never reach you.</b> They retry within their budget, then the item is <em>parked</em> with a reason on a health line. An ask older than 7 days expires to parked.</li>
+  <li><b>Done means verified.</b> Merged, deployed, the factory's own <code>make verify</code> green, review covered at its tier. Only then is the item achieved and the factory, the single closer, kills the tab and removes the worktree.</li>
+</ul>
+
+<h3>Parallelism</h3>
+<table>
+<tr><th>Level</th><th>How</th><th>Limit</th></tr>
+<tr><td>Across items</td><td>One lead tab each, each in its own worktree; several leads may work in the same repo</td><td>Admission per account (70 % of the 5 h window, 90 % of the week) plus a global lead cap (start at 4)</td></tr>
+<tr><td>Shipping</td><td>A per-repo ship lock: rebase on master, check, merge, deploy, verify, release the lock</td><td>One ship per repo at a time</td></tr>
+<tr><td>Inside an item</td><td>Background implementer subagents; <code>isolation: worktree</code> only for disjoint file groups, sequential otherwise</td><td>Claude Code caps at 20 concurrent subagents; we start at 3</td></tr>
+</table>
+
+<h2>3. Review: one agent, three settings</h2>
+<p>agw stays model-free for review: <code>agw review route</code> decides the tier from rules, <code>prepare</code> packs the diff with the plan's acceptance criteria and the static results, <code>submit</code>/<code>dispose</code> keep the ledger and <code>covered</code> proves it. The model runs as the lead's own <code>reviewer</code> subagent; the <code>/review</code> skill passes model and effort per call (Claude Code ≥ 2.1.292 supports both; installed 2.1.318).</p>
+<table>
+<tr><th>Tier</th><th>When (rules, no model)</th><th>Who</th><th>Passes</th></tr>
+<tr><td><b>none</b></td><td>Docs, plans, lockfiles, tests only, generated files; or under ~40 added lines outside risky paths with the static gate green</td><td>—</td><td>Static gate only</td></tr>
+<tr><td><b>light</b></td><td>Normal code</td><td>reviewer · Sonnet medium</td><td>1 pass, important findings only, nits capped at 3</td></tr>
+<tr><td><b>deep</b></td><td>Auth, secrets, migrations, deploy, hooks, admission, CI; or more than 600 lines; or a high revert floor</td><td>reviewer · Opus high, then review-verifier · Sonnet medium per important finding</td><td>1 pass + 1 verifier per finding (not a 3-vote)</td></tr>
+</table>
+<ul>
+  <li><b>Intent first.</b> The reviewer answers two questions before any line comment: does the diff do something the plan did not ask for, and is something the plan asked for missing?</li>
+  <li><b>When.</b> Once per branch at ship, not per wave. The wave gate's <code>covered</code> requirement goes; the factory's ship gate keeps it.</li>
+  <li><b>Static gate before the model.</b> <code>make check</code>, <code>fallow audit</code> (blocks only what the change adds), <code>gitleaks</code>; ast-grep rules for AGENTS.md invariants later. Their results enter the prompt as "known, do not report".</li>
+  <li><b>Convergence.</b> At most 2 rounds; round 2 sees only the fix delta and the open fingerprints (file + anchor text + claim). After that the lead records a disposition; you see only security-class findings.</li>
+  <li><b>Measured.</b> Acted-on rate per tier from the dispositions, window share per review from usage-tracker. Thresholds move on those numbers only.</li>
+</ul>
+
+<h2>4. Models</h2>
+<table>
+<tr><th>Role</th><th>Model · effort</th><th>AA index · $/task</th><th>Why</th></tr>
+<tr><td>Planner (with you)</td><td>Opus high</td><td>52 · $3.46</td><td>Judgment, low volume, you are in the loop</td></tr>
+<tr><td>Lead</td><td>Sonnet high; Opus medium when the plan marks the item deep</td><td>42 · $1.64 (Opus medium 48 · $2.45)</td><td>An Opus wave lead costs 2.16–3.24 window points per spawn against 0.66–1.10 on Sonnet (usage-tracker, 2026-10-30)</td></tr>
+<tr><td>Explore</td><td>Haiku high</td><td>30 · $0.16</td><td>Anthropic's own Haiku pairing; ~0 window share</td></tr>
+<tr><td>Implementer</td><td>Sonnet medium; high for bug fixes</td><td>31 · $0.78</td><td>The landed usage finding (dotfiles <code>0b0e61d</code>); Sonnet 5.5 leads Terminal-Bench 4.0 at 70.6 %</td></tr>
+<tr><td>Reviewer light / deep</td><td>Sonnet medium / Opus high</td><td>31 / 52</td><td>Haiku agreed with the review verdict in 0.17 of cases — code reading stays on Sonnet or above</td></tr>
+<tr><td>Review verifier</td><td>Sonnet medium</td><td>31</td><td>One finding against the code, read-only</td></tr>
+</table>
+<p class="meta">AA = Artificial Analysis Intelligence Index, fetched 2026-11-04. Fable 5.1 is dominated (xhigh 50 at $10.85 vs Opus high 52 at $3.46); modelpick's "Fable as orchestrator" pick should be refreshed. To measure next: implementer medium vs high pass rate, Sonnet vs Opus review agreement on the paired set.</p>
+
+<h2>5. Surfaces and decommissioning</h2>
+<table>
+<tr><th>Surface</th><th>Job</th><th>Change</th></tr>
+<tr><td>Herdr sidebar</td><td>Live tabs and real decisions</td><td><span class="tag chg">slim</span> reads a slim <code>/fleet</code>: items, leads, asks, health line</td></tr>
+<tr><td>Iris</td><td>Conversation with agents; asks and done reports as pushes</td><td><span class="tag new">new</span> inbound notify route + APNs; replaces Slack <code>#agents</code></td></tr>
+<tr><td>Argo</td><td>History, throughput, review acted-on rate, cost; HTML/Markdown document review with inline comments back to the lead</td><td><span class="tag chg">refocus</span> <code>/agents</code> reads the factory; the agw overview push, Hermes narratives push and Warden page go</td></tr>
+<tr><td>ntfy</td><td>Machine alerts: Kuma, job failures, HyperDX</td><td><span class="tag new">new</span> takes over Slack <code>#alerts</code>; ntfy-mac on the MacBook, ntfy on the phone</td></tr>
+<tr><td>Hermes</td><td>Iris's chat backend (49 Slack messages and ~47 Iris chats in the last 7 days — it is used)</td><td><span class="tag chg">shrink</span> loses Slack and crons; replace it later only if an agw chat workflow or a planner tab proves better</td></tr>
+<tr><td>Slack</td><td>—</td><td><span class="tag del">retire</span> in this order: factory notifier → ntfy adapter; Kuma and <code>jobs-grade</code> → ntfy; <code>ask-human</code> notify and the podcast notifier → ntfy; Hermes chat → Iris only; Argo's Slack client and page out; archive the workspace</td></tr>
+</table>
+<p>Hermes crons: <code>claude-release-watch</code> (never delivered anything) and both paused briefings are dropped; project narratives, the weekly usage report and the brain drift audit become agw workflows under <code>jobrun</code>, delivering to Iris or ntfy.</p>
+
+<h2>6. What the factory keeps and loses</h2>
+<table>
+<tr><th>Keeps</th><th>Loses</th></tr>
+<tr><td>
+<span class="tag keep">keep</span> tick, hc runner, hooks, spool, witness, derived session state<br>
+<span class="tag keep">keep</span> queue, admission, quota, roles, test slots, prompt delivery (now confirmed by <code>UserPromptSubmit</code>)<br>
+<span class="tag keep">keep</span> Issues: lifecycle, lead, brief, worktree, verbs, evidence, finalize, ship gate<br>
+<span class="tag keep">keep</span> the door, projects, notifier (+ ntfy adapter), status<br>
+<span class="tag new">new</span> park state, ask expiry, per-repo ship lock, the single closer
+</td><td>
+<span class="tag del">delete</span> fleet triage, actions, undo, probes (~1.5k lines)<br>
+<span class="tag del">delete</span> presence, away, since, window (~1k)<br>
+<span class="tag del">delete</span> digest and transcript summaries (~1.1k)<br>
+<span class="tag del">delete</span> the reaper (~0.5k) — the closer replaces it<br>
+<span class="tag del">delete</span> review transport and limits, hidden reviewer spawns, <code>child</code>/<code>hidden</code>/<code>no_parent</code> placement<br>
+<span class="tag del">delete</span> in dotfiles: wave tabs per wave, <code>wave-gate.py</code>'s review requirement, hc-reap's agent rules, the hc fallback spawn path in <code>rd</code>
+</td></tr>
+</table>
+<p class="meta">About 30 % of the server's source, plus its tests. The <code>/wave</code> skill survives as "how a lead works through a plan in phases", not as a terminal chain.</p>
+
+<h2>7. Sequence</h2>
+<table>
+<tr><th>Step</th><th>Scope</th><th>Done when</th></tr>
+<tr><td><b>0 · Stop the bleeding</b> (~1 day)</td><td>Resolve the 9 noise asks; machine failures park instead of asking; fix the 30 s false failure (Issue 51); confirm delivered prompts; close stale tabs; freeze fleet-view work</td><td>Sidebar shows only real decisions; no item stuck without a reason</td></tr>
+<tr><td><b>1 · Lean review</b></td><td>agw tier rules and prompt (intent, fingerprints, 2 rounds); <code>/review</code> skill passes model/effort; reviewer and verifier agents; static gate with fallow; delete the review transport</td><td>Ten real ships reviewed at their tier on Max, acted-on rate recorded, zero API tokens spent on review</td></tr>
+<tr><td><b>2 · The lead foundation</b></td><td>One tab per item, subagent-only work, compaction hook, park and ask expiry, ship lock, single closer, <code>background_tasks</code>-aware state; factory subtraction; <code>rd</code> becomes a thin client</td><td>A week of items from queue to verified production with zero hidden terminals and zero owner asks that were not decisions</td></tr>
+<tr><td><b>3 · Orchestration and surfaces</b></td><td>Planner → issue handoff with decision docs in Argo; Iris pushes and chat; ntfy for machines; Slack retired in the order above; then intake sources (F3)</td><td>Slack archived; you work from the planner tab, the sidebar and Iris</td></tr>
+<tr><td><b>Docs</b></td><td>factory <code>docs/decisions.md</code>, <code>program.md</code>, <code>design.md</code>; dotfiles <code>agent-platform.md</code>; brain agent-platform and software-factories notes; jkrumm.com</td><td>No doc describes a removed mechanism</td></tr>
+</table>
+
+<h2>8. Still open</h2>
+<div class="card q">
+<ul>
+  <li><b>Global lead cap.</b> 4 to start, then raised from measured window share.</li>
+  <li><b>Hermes' end state.</b> Kept as Iris's chat backend now; decided after two weeks of Iris-first use.</li>
+  <li><b>Unverified Claude Code behaviour to test in Step 2:</b> a new <code>session_id</code> and transcript after compaction; <code>Stop</code> carrying <code>background_tasks</code> while subagents run; <code>CLAUDE_CODE_ENTRYPOINT</code> not inherited by hc terminals (issue 97074: <code>sdk-cli</code> burns the 5 h window ~1.8× faster).</li>
+</ul>
+</div>
+</main>
+</body>
+</html>

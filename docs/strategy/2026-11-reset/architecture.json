@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Software factory reset: one item, one visible lead",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1300,
+      620
+    ],
+    "views": [
+      {
+        "id": "plan-to-lead",
+        "label": "Plan to lead",
+        "focus": [
+          "owner",
+          "planner",
+          "factory",
+          "lead"
+        ],
+        "note": "You plan with Opus; the plan becomes a queued item; the factory opens one visible lead tab."
+      },
+      {
+        "id": "inside-lead",
+        "label": "Inside the lead",
+        "focus": [
+          "lead",
+          "explore",
+          "implementer",
+          "reviewer",
+          "agw",
+          "prod"
+        ],
+        "note": "All work happens in subagents of the lead; review once at ship; the lead deploys and verifies."
+      },
+      {
+        "id": "surfaces",
+        "label": "Where you look",
+        "focus": [
+          "factory",
+          "iris",
+          "herdr",
+          "argo"
+        ],
+        "note": "One producer (the factory), three readers."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "owner",
+      "type": "external",
+      "label": "You",
+      "sublabel": "plan, decide",
+      "pos": [
+        40,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "iris",
+      "type": "frontend",
+      "label": "Iris",
+      "sublabel": "chat, asks, pushes",
+      "pos": [
+        1090,
+        200
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "herdr",
+      "type": "frontend",
+      "label": "Herdr sidebar",
+      "sublabel": "live tabs, decisions",
+      "pos": [
+        560,
+        40
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "argo",
+      "type": "frontend",
+      "label": "Argo",
+      "sublabel": "history, doc review",
+      "pos": [
+        850,
+        40
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "planner",
+      "type": "backend",
+      "label": "Planner tab",
+      "sublabel": "Opus, one per space",
+      "pos": [
+        300,
+        200
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "factory",
+      "type": "backend",
+      "label": "Factory",
+      "sublabel": "queue, asks, ship gate, closer",
+      "pos": [
+        560,
+        200
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "deterministic"
+    },
+    {
+      "id": "lead",
+      "type": "backend",
+      "label": "Lead tab",
+      "sublabel": "Sonnet high, own worktree",
+      "pos": [
+        560,
+        360
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "one per item"
+    },
+    {
+      "id": "explore",
+      "type": "backend",
+      "label": "Explore",
+      "sublabel": "Haiku high",
+      "pos": [
+        300,
+        520
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "implementer",
+      "type": "backend",
+      "label": "Implementer",
+      "sublabel": "Sonnet medium",
+      "pos": [
+        560,
+        520
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "reviewer",
+      "type": "security",
+      "label": "Reviewer",
+      "sublabel": "tier: none, light, deep",
+      "pos": [
+        850,
+        520
+      ],
+      "size": [
+        180,
+        64
+      ]
+    },
+    {
+      "id": "agw",
+      "type": "cloud",
+      "label": "agw review",
+      "sublabel": "route, prepare, ledger",
+      "pos": [
+        1090,
+        520
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "no model"
+    },
+    {
+      "id": "prod",
+      "type": "cloud",
+      "label": "Production",
+      "sublabel": "make deploy + verify",
+      "pos": [
+        1090,
+        360
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "One visible Herdr tab: the lead and its subagents",
+      "wraps": [
+        "lead",
+        "explore",
+        "implementer",
+        "reviewer"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "owner-plans",
+      "from": "owner",
+      "to": "planner",
+      "label": "plan together",
+      "variant": "emphasis"
+    },
+    {
+      "id": "planner-files",
+      "from": "planner",
+      "to": "factory",
+      "label": "issue + plan",
+      "variant": "emphasis"
+    },
+    {
+      "id": "factory-spawns",
+      "from": "factory",
+      "to": "lead",
+      "label": "open tab, answers",
+      "variant": "emphasis",
+      "labelAt": [
+        660,
+        312
+      ]
+    },
+    {
+      "id": "lead-explore",
+      "from": "lead",
+      "to": "explore",
+      "label": "search"
+    },
+    {
+      "id": "lead-implement",
+      "from": "lead",
+      "to": "implementer",
+      "label": "build",
+      "labelAt": [
+        660,
+        472
+      ]
+    },
+    {
+      "id": "lead-review",
+      "from": "lead",
+      "to": "reviewer",
+      "label": "at ship"
+    },
+    {
+      "id": "review-agw",
+      "from": "reviewer",
+      "to": "agw",
+      "label": "submit"
+    },
+    {
+      "id": "lead-prod",
+      "from": "lead",
+      "to": "prod",
+      "label": "deploy, verify",
+      "variant": "emphasis"
+    },
+    {
+      "id": "factory-herdr",
+      "from": "factory",
+      "to": "herdr",
+      "label": "fleet"
+    },
+    {
+      "id": "factory-iris",
+      "from": "factory",
+      "to": "iris",
+      "label": "asks"
+    },
+    {
+      "id": "factory-argo",
+      "from": "factory",
+      "to": "argo",
+      "label": "history"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Models",
+      "items": [
+        "Planner: Opus high, with you",
+        "Lead: Sonnet high; Opus when the plan says deep",
+        "Explore Haiku high, implementer Sonnet medium",
+        "Review light Sonnet medium, deep Opus high + Sonnet verifier"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Removed",
+      "items": [
+        "Hidden reviewer sessions and the review transport",
+        "A tab per wave; four closers become one",
+        "Fleet triage, presence, away, digest",
+        "Slack: agents go to Iris, machines to ntfy"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Rules",
+      "items": [
+        "Only a lead's ask reaches you; machine failures retry, then park",
+        "Review once per branch, tier by rules, at most 2 rounds",
+        "Done = merged, deployed, verified; then the factory closes the tab"
+      ]
+    }
+  ]
+}
