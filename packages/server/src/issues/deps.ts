@@ -7,15 +7,23 @@ const isIssueId = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2_147_483_647
 
 /**
- * Only an open Issue can be waited on: a closed one would never wake this one. The blocker's row is locked, so a close in flight
- * finishes first and is seen here, and one that comes later sees the new row. A dep that closes a cycle would wake nobody.
+ * Only an open Issue can be waited on: a closed one would never wake the waiter. The blocker's row is locked, so a close in
+ * flight finishes first and is seen here, and one that comes later sees the new row. Shared by a `dep` event and by a create's
+ * `--after`.
  */
-export async function addDependency({ tx, issue, row }: Context): Promise<string | undefined> {
-  const on = row.payload?.on
-  if (!isIssueId(on) || on === issue.id) return 'a dep needs another Issue in `on`'
+export async function blockerRefusal(tx: SQL, on: number): Promise<string | undefined> {
   const [blocker]: Pick<IssueRow, 'state'>[] = await tx`SELECT state FROM factory.issues WHERE id = ${on} FOR SHARE`
   if (!blocker) return `no Issue ${on}`
   if (blocker.state === 'closed') return `Issue ${on} is closed already`
+  return undefined
+}
+
+/** A dep that closes a cycle would wake nobody. */
+export async function addDependency({ tx, issue, row }: Context): Promise<string | undefined> {
+  const on = row.payload?.on
+  if (!isIssueId(on) || on === issue.id) return 'a dep needs another Issue in `on`'
+  const refusal = await blockerRefusal(tx, on)
+  if (refusal) return refusal
   const [cycle] = await tx`
     WITH RECURSIVE reached (id) AS (
       SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${on}

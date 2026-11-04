@@ -13,6 +13,7 @@ import { WorktreeMaker } from '../src/issues/leadtree.ts'
 import { briefPromptId, leadKey } from '../src/issues/names.ts'
 import { OffTick } from '../src/issues/offtick.ts'
 import { enqueue } from '../src/issues/inbox.ts'
+import { processInbox } from '../src/issues/worker.ts'
 import { ProjectSync } from '../src/projects/sync.ts'
 import { QuotaPoller } from '../src/quota.ts'
 import { stopCheck } from '../src/rules.ts'
@@ -147,10 +148,10 @@ const drive = async (passes = 4) => {
 let repos = 0
 const newRepo = (files: Record<string, string> = {}) => fixture.repo(`repo${++repos}`, files)
 
-async function file(repo: string, source = 'request', title = 'the title'): Promise<number> {
+async function file(repo: string, source = 'request', title = 'the title', after?: number[]): Promise<number> {
   const { issue } = await createIssue(
     db.sql,
-    { source, sourceKey: `k${++n}`, repo, title, facts: { note: 'data' } },
+    { source, sourceKey: `k${++n}`, repo, title, facts: { note: 'data' }, ...(after ? { after } : {}) },
     { repoRoots: [fixture.root], now: clock.now() },
   )
   return issue.id
@@ -905,6 +906,89 @@ describe('what the review found', () => {
       { issue_id: second, urgent: false, held: false },
       { issue_id: third, urgent: true, held: true },
     ])
+  })
+
+  describe('dependencies and priority', () => {
+    /** Classified already, so only admission decides what happens. */
+    const classified = () =>
+      db.sql`UPDATE factory.issues SET classified_at = ${clock.now()}, lead_tier = 'sonnet', lead_effort = 'high', kind = 'bug' WHERE classified_at IS NULL`
+    const stopIssue = (id: number) =>
+      enqueue(db.sql, {
+        issueId: id,
+        key: `stop:${id}:${++n}`,
+        kind: 'stop',
+        at: clock.now(),
+        payload: { reason: 'test' },
+      })
+    /** Filed and applied: a tick admits before it handles the inbox, so a prio counts from the next one. */
+    const prio = async (id: number, value: number) => {
+      await enqueue(db.sql, {
+        issueId: id,
+        key: `${id}:prio:${++n}`,
+        kind: 'prio',
+        at: clock.now(),
+        payload: { value },
+      })
+      await processInbox(db.sql, () => clock.now())
+    }
+
+    test('an Issue that waits `--after` another stays queued while it is open, and is admitted once it closes', async () => {
+      const repo = newRepo()
+      const a = await file(repo)
+      const b = await file(repo, 'request', 'b', [a])
+      await classified()
+      await drive(4)
+      expect((await issue(a)).state).toBe('working')
+      expect((await issue(b)).state).toBe('queued')
+      // Even a free claim would not be enough: a project's one place is held by A, and B is not a candidate at all.
+      await stopIssue(a)
+      await drive(4)
+      expect((await issue(a)).state).toBe('closed')
+      expect((await issue(b)).state).toBe('working')
+    })
+
+    test('a blocked oldest does not hold back a younger Issue of its project that is free', async () => {
+      const repo = newRepo()
+      const blocker = await file(newRepo())
+      const blocked = await file(repo, 'request', 'blocked', [blocker])
+      const free = await file(repo, 'request', 'free')
+      await db.sql`UPDATE factory.issues SET classified_at = ${clock.now()}, lead_tier = 'sonnet', lead_effort = 'high', kind = 'bug'`
+      await db.sql`UPDATE factory.issues SET state = 'waiting', reason = 'blocked' WHERE id = ${blocker}`
+      await drive(4)
+      expect((await issue(blocked)).state).toBe('queued')
+      expect((await issue(free)).state).toBe('working')
+    })
+
+    test('a higher prio is admitted before an older Issue of the same project, and the latest prio wins', async () => {
+      const repo = newRepo()
+      const older = await file(repo)
+      const younger = await file(repo)
+      await classified()
+      await prio(older, 5)
+      await prio(younger, 9)
+      clock.advance(1_000)
+      await prio(older, 20)
+      await prio(younger, -3)
+      clock.advance(1_000)
+      await prio(younger, 50)
+      await drive(4)
+      expect((await issue(younger)).state).toBe('working')
+      expect((await issue(older)).state).toBe('queued')
+    })
+
+    test('without a prio the oldest goes first, and an urgent Issue stays ahead of a prio', async () => {
+      const repo = newRepo()
+      const first = await file(repo)
+      const second = await file(repo)
+      const urgent = await file(repo)
+      await classified()
+      await db.sql`UPDATE factory.issues SET kind = 'incident' WHERE id = ${urgent}`
+      await prio(second, 1000)
+      await drive(4)
+      expect((await issue(urgent)).state).toBe('working')
+      expect((await issue(second)).state).toBe('working')
+      expect((await issue(first)).state).toBe('queued')
+    })
   })
 
   test('Issues the claim cannot take do not starve the ones behind them', async () => {

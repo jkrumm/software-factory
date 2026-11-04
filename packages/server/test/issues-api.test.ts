@@ -103,6 +103,48 @@ describe('POST /issues', () => {
     ).toHaveLength(0)
   })
 
+  test('`after` is bounded and is 422 for an unknown or closed Issue, storing nothing', async () => {
+    const { id } = Issue.parse(await (await post()).json())
+    const ok = await post({ source_key: 'k2', after: [id] })
+    expect(ok.status).toBe(201)
+    expect(await db.sql`SELECT issue_id, on_issue FROM factory.issue_deps`).toEqual([
+      { issue_id: Issue.parse(await ok.json()).id, on_issue: id },
+    ])
+    expect((await post({ source_key: 'k3', after: [id, 9999] })).status).toBe(422)
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${id}`
+    expect((await post({ source_key: 'k4', after: [id] })).status).toBe(422)
+    for (const bad of [[0], [1.5], ['1'], Array.from({ length: 21 }, (_, i) => i + 1)]) {
+      expect((await post({ source_key: 'k5', after: bad })).status).toBe(400)
+    }
+    expect(await stored()).toBe(2)
+  })
+
+  test('a repeat of a key with another `after` is 200 with the stored Issue and its deps untouched', async () => {
+    const { id } = Issue.parse(await (await post()).json())
+    const dependent = await post({ source_key: 'k2', after: [id] })
+    expect(dependent.status).toBe(201)
+    const again = await post({ source_key: 'k2', after: [9999] })
+    expect(again.status).toBe(200)
+    expect(await db.sql`SELECT on_issue FROM factory.issue_deps`).toEqual([{ on_issue: id }])
+  })
+
+  test('POST /issues/:id/prio files one prio event per call id, and a closed Issue is 409', async () => {
+    const { id } = Issue.parse(await (await post()).json())
+    const first = await app.send('POST', `/issues/${id}/prio`, { value: 7, id: 'p1' })
+    expect(first.status).toBe(201)
+    expect(await first.json()).toMatchObject({ issue: id, key: `${id}:prio:p1`, duplicate: false, state: 'queued' })
+    expect((await app.send('POST', `/issues/${id}/prio`, { value: 8, id: 'p1' })).status).toBe(200)
+    for (const bad of [{ value: 1001 }, { value: -1001 }, { value: 1.5 }, { value: '3' }, {}]) {
+      expect((await app.send('POST', `/issues/${id}/prio`, bad)).status).toBe(400)
+    }
+    expect((await app.send('POST', '/issues/9999/prio', { value: 1 })).status).toBe(404)
+    const filed = await db.sql`SELECT payload FROM factory.issue_inbox WHERE kind = 'prio'`
+    expect(filed).toHaveLength(1)
+    expect(filed[0].payload).toMatchObject({ value: 7 })
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${id}`
+    expect((await app.send('POST', `/issues/${id}/prio`, { value: 2, id: 'p2' })).status).toBe(409)
+  })
+
   test('a repo outside the roots, or missing, is 422 and stores nothing', async () => {
     const outside = mkdtempSync('/tmp/factory-outside-')
     expect((await post({ repo: outside })).status).toBe(422)
@@ -275,6 +317,12 @@ describe('the socket', () => {
     expect(IssueList.parse(await (await viaSocket('GET', '/issues')).json()).issues).toHaveLength(1)
     expect(Issue.parse(await (await viaSocket('GET', '/issues/1')).json()).repo).toBe(TEST_REPO)
   })
+
+  test("the owner's prio is not served on the socket", async () => {
+    await viaSocket('POST', '/issues', body())
+    expect((await viaSocket('POST', '/issues/1/prio', { value: 1 })).ok).toBe(false)
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'prio'`).toHaveLength(0)
+  })
 })
 
 describe('factory issue', () => {
@@ -311,6 +359,38 @@ describe('factory issue', () => {
     expect(plain.stdout).toBe(`1\tqueued\t-\trequest\t${TEST_REPO}\ta thing\n`)
     const show = await factory(['issue', 'show', '1'])
     expect(Issue.parse(JSON.parse(show.stdout)).sourceKey).toBe('k1')
+  })
+
+  test('--after is repeatable, an unknown or closed id is exit 2 and files nothing, a bad value is exit 2', async () => {
+    const a = Issue.parse(JSON.parse((await factory([...NEW, '--key', 'a'])).stdout))
+    const b = Issue.parse(JSON.parse((await factory([...NEW, '--key', 'b'])).stdout))
+    const made = await factory([...NEW, '--key', 'c', '--after', String(a.id), '--after', String(b.id)])
+    expect(made.code).toBe(0)
+    const c = Issue.parse(JSON.parse(made.stdout))
+    expect(await db.sql`SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${c.id} ORDER BY on_issue`).toEqual([
+      { on_issue: a.id },
+      { on_issue: b.id },
+    ])
+    const unknown = await factory([...NEW, '--key', 'd', '--after', '999'])
+    expect(unknown.code).toBe(2)
+    expect(unknown.stderr).toContain('no Issue 999')
+    expect((await factory([...NEW, '--key', 'e', '--after', 'x'])).code).toBe(2)
+    expect(await stored()).toBe(3)
+  })
+
+  test('issue prio files one event per --id, needs the token, takes a negative n after --, refuses a bad n', async () => {
+    const { id } = Issue.parse(JSON.parse((await factory([...NEW, '--key', 'p'])).stdout))
+    const first = await factory(['issue', 'prio', String(id), '7', '--id', 'p1'])
+    expect(first.code).toBe(0)
+    expect(JSON.parse(first.stdout)).toMatchObject({ issue: id, key: `${id}:prio:p1`, duplicate: false })
+    expect(JSON.parse((await factory(['issue', 'prio', String(id), '7', '--id', 'p1'])).stdout).duplicate).toBe(true)
+    expect((await factory(['issue', 'prio', String(id), '--id', 'p2', '--', '-5'])).code).toBe(0)
+    expect((await factory(['issue', 'prio', String(id), '1001'])).code).toBe(2)
+    expect((await factory(['issue', 'prio', String(id), 'high'])).code).toBe(2)
+    expect((await factory(['issue', 'prio', String(id), '1'], { env: { FACTORY_TOKEN: '' } })).code).toBe(3)
+    expect((await factory(['issue', 'prio', '999', '1'])).code).toBe(4)
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()} WHERE id = ${id}`
+    expect((await factory(['issue', 'prio', String(id), '1'])).code).toBe(5)
   })
 
   test('without --key every call is an Issue of its own', async () => {

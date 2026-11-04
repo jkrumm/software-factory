@@ -28,10 +28,10 @@ beforeEach(async () => {
 
 const now = () => clock.now()
 
-async function file(key = `k${++n}`): Promise<Issue> {
+async function file(key = `k${++n}`, after?: number[]): Promise<Issue> {
   const made = await createIssue(
     db.sql,
-    { source: 'request', sourceKey: key, repo: TEST_REPO, title: 'a title', facts: {} },
+    { source: 'request', sourceKey: key, repo: TEST_REPO, title: 'a title', facts: {}, ...(after ? { after } : {}) },
     { repoRoots: [TEST_ROOT], now: clock.now() },
   )
   return made.issue
@@ -411,6 +411,83 @@ describe('golden paths: transitions and effects', () => {
     await step(other, 'drop')
     await pass()
     expect((await state(id)).state).toBe('working')
+  })
+
+  test('a create with `after` stores the deps with the row and says so in its created event', async () => {
+    const a = await file()
+    const b = await file()
+    const c = await file(undefined, [b.id, a.id, a.id])
+    expect(await db.sql`SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${c.id} ORDER BY on_issue`).toEqual([
+      { on_issue: a.id },
+      { on_issue: b.id },
+    ])
+    expect(c.state).toBe('queued')
+    const [created] =
+      await db.sql`SELECT payload FROM factory.issue_events WHERE issue_id = ${c.id} AND kind = 'created'`
+    expect(created.payload).toEqual({ source: 'request', after: [a.id, b.id] })
+  })
+
+  test('an `after` on an unknown or a closed Issue refuses the whole create and stores nothing', async () => {
+    const open = await file()
+    const closed = await working()
+    await step(closed, 'close')
+    const before = (await db.sql`SELECT 1 FROM factory.issues`).length
+    const refusal = async (key: string, after: number[]) => (await file(key, after).catch((e: Error) => e)).toString()
+    expect(await refusal('x1', [open.id, 999])).toContain('no Issue 999')
+    expect(await refusal('x2', [open.id, closed])).toContain(`Issue ${closed} is closed already`)
+    expect(await db.sql`SELECT 1 FROM factory.issues`).toHaveLength(before)
+    expect(await db.sql`SELECT 1 FROM factory.issues WHERE source_key IN ('x1', 'x2')`).toHaveLength(0)
+    expect(await db.sql`SELECT 1 FROM factory.issue_deps`).toHaveLength(0)
+  })
+
+  test('a repeated key answers the stored Issue: a different `after` neither adds nor changes its deps, nor is checked', async () => {
+    const a = await file()
+    const b = await file()
+    const first = await file('same', [a.id])
+    const again = await file('same', [b.id, 999])
+    expect(again.id).toBe(first.id)
+    expect(await db.sql`SELECT on_issue FROM factory.issue_deps WHERE issue_id = ${first.id}`).toEqual([
+      { on_issue: a.id },
+    ])
+    const none = await file('bare')
+    await file('bare', [a.id])
+    expect(await db.sql`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${none.id}`).toHaveLength(0)
+  })
+
+  test('every way an Issue closes takes the deps that wait on it with it', async () => {
+    const ways: [string, (id: number) => Promise<void>][] = [
+      [
+        'close',
+        async (id) => {
+          await step(id, 'admitted')
+          await step(id, 'close')
+        },
+      ],
+      [
+        'drop',
+        async (id) => {
+          await step(id, 'admitted')
+          await step(id, 'drop')
+        },
+      ],
+      ['stop', (id) => step(id, 'stop')],
+      [
+        'verified',
+        async (id) => {
+          await step(id, 'admitted')
+          await step(id, 'ship')
+          await step(id, 'verified', { hold: 1 })
+        },
+      ],
+    ]
+    for (const [way, close] of ways) {
+      const blocker = await file()
+      const waiter = await file(undefined, [blocker.id])
+      expect(await db.sql`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${waiter.id}`, way).toHaveLength(1)
+      await close(blocker.id)
+      expect((await state(blocker.id)).state, way).toBe('closed')
+      expect(await db.sql`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${waiter.id}`, way).toHaveLength(0)
+    }
   })
 
   test('a dep on an unknown Issue, on itself or on a closed one is refused: nothing would wake it', async () => {

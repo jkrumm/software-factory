@@ -2,6 +2,7 @@ import type {
   IssueAnswerBody,
   IssueEvidenceInput,
   IssueNoteBody,
+  IssuePrioBody,
   IssueState,
   IssueVerb,
   IssueVerbBody,
@@ -165,6 +166,35 @@ export async function fileEvidence(
     author: body.session ?? 'owner',
   })
   return { ok: true, key, duplicate, at: now }
+}
+
+/**
+ * `factory issue prio`: the owner's order among an Issue's project-mates, one inbox row keyed `<issue>:prio:<call id>`. The lifecycle
+ * records it as a `prio` event; admission reads the latest value (none = 0), higher first. Answered as `fileNote` is: a call made
+ * before as it was, a closed Issue refused.
+ */
+export async function filePrio(
+  sql: SQL,
+  input: { issueId: number; body: IssuePrioBody; now: Date },
+): Promise<
+  { ok: true; key: string; duplicate: boolean; state: IssueState } | { ok: false; problem: 'unknown_issue' | 'closed' }
+> {
+  const { issueId, now } = input
+  const [issue]: { state: IssueState }[] = await sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+  if (!issue) return { ok: false, problem: 'unknown_issue' }
+  const call = input.body.id ?? crypto.randomUUID()
+  const key = `${issueId}:prio:${call}`
+  const [filedBefore] = await sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${key}`
+  if (filedBefore) return { ok: true, key, duplicate: true, state: issue.state }
+  if (issue.state === 'closed') return { ok: false, problem: 'closed' }
+  const { duplicate } = await enqueue(sql, {
+    issueId,
+    key,
+    kind: 'prio',
+    at: now,
+    payload: { value: input.body.value, call, who: 'owner' },
+  })
+  return { ok: true, key, duplicate, state: issue.state }
 }
 
 /**
