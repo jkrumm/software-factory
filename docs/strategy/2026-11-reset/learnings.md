@@ -23,3 +23,8 @@ evidence (a sha, a log line, a number); no narrative.
   in the asks. Change for the health line: a wait with a known end time is not an ask.
 - **The adversarial review caught three blockers in design v3** (dependencies not respected by admission, parks that only
   end by drop, a build order that broke `rd`). Change: rows 3 and 4 come first; roles go after dotfiles.
+- **The wave gate failed closed on history.** `rd wave` refused the program lead because Wave 7's FV commits were reviewed
+  under the old process (`/code-review high`), not agw v4, so `agw review covered` lists them. That code is deleted in the
+  reset; reviewing it again would only spend quota. The lead was spawned through the factory directly
+  (`factory spawn create software-factory-w8 --role lead`, pane t12x), the path `rd wave` itself takes. Change for row 7:
+  the gate checks coverage of the wave's own commits only when they are still on the code path, or goes with `wave-gate.py`.
