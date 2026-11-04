@@ -772,7 +772,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   (and a closed one, for 24 hours, whose finalize failed) with its state, repo, the lead's session (the current attempt's, once it exists), the
   lead's last `phase` of this attempt, when the factory looks again (`wakeAt`: a timed wait, an expiry, the end of a hold), what it waits for (`waiting`: the reason; a `queued` Issue the project's claim has no room for:
   `claim`), the evidence still missing, and the open questions. Most urgent first (a failed finalize, `waiting`, `working`, `watching`,
-  `queued`), at most 40, the rest counted (`issuesMore`). `claim` is shown for the Issue admission looked at (a claim row exists, not held: the oldest of its project); Issues queued behind it have no claim row and show nothing. Read from stored rows only, never git: the evidence missing is what the last `ship`
+  `queued`), at most 40, the rest counted (`issuesMore`). `claim` is shown for the Issue admission looked at (a claim row exists, not held: the first of its project, highest prio then oldest, among the unblocked); Issues queued behind it have no claim row and show nothing. Read from stored rows only, never git: the evidence missing is what the last `ship`
   or `close` of this attempt derived from its commits (`derived.required`, on its inbox row), less the rows in `evidence` that are
   fresh by the gate's own rule (`unmetKinds`), so until a lead has tried one, nothing is known and nothing is listed.
   Those that need a look (an open question, a park, a lead or worktree that did not start, a finalize that failed) also have a line in ATTENTION (§3 "`factory status`"). `factory issue show <id>` (`GET /issues/:id/timeline`, token or socket) is the
