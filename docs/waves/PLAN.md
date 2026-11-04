@@ -124,7 +124,7 @@ live; every wave reviewed by the lead's `/code-review high` and retro'd in `docs
 holds the proposals with numbers. Budget marks held (`me2` 31 %, `iu` 79 %). Open: the defects listed there wait for the owner's call
 (Issues now, or F3/F4); the door tokens go into 1Password (owner); FV started under this lead (Wave 7).
 
-## Wave 7 — FV, the fleet view            <!-- status: active -->
+## Wave 7 — FV, the fleet view            <!-- status: done -->
 The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md` (merged by agw's lead), dotfiles `docs/waves/fv-board.md`.
 
 - [x] dotfiles `ask-human.sh list --json` (`370ed24`..`94c0b98`).
@@ -158,3 +158,24 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
   the next rotation starts after `iu`'s reset 2026-11-04 16:00.
 - [ ] FV Waves 5–6 in order, the board's waves after the factory's they read.
 - [ ] Keep `docs/program.md` current; rotate at about 60 % context with the handoff.
+
+**Left behind:** FV stops here, superseded by the reset (`docs/decisions.md` RS1–RS9, 2026-11-05): FV Wave 5's Hermes step, board
+Waves 2–3 and FV Wave 6 are not built; the fleet-view modules are deleted in the reset's later rows. Issue 51 and 52–55 are closed
+by the reset's cutover.
+
+## Wave 8 — Program lead: the reset            <!-- status: active -->
+Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handoff/program.md`,
+`docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
+
+- [ ] Run `docs/waves/reset.md` wave by wave: Wave 1 yourself, Waves 2–7 each as one `rd fan` worker, sequentially. Review each
+  diff yourself, land with `rd merge`, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick it in `reset.md`.
+- [ ] Review with the new flow (`/review`: the router's tier, the `reviewer` subagent with the seat, at most 2 rounds, then your
+  disposition); `agw review covered` over each merged range.
+- [ ] Machine discipline: one wave, one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40,
+  wait before starting the next check.
+- [ ] Learnings: every place the plan falls apart goes to `docs/strategy/2026-11-reset/learnings.md` with evidence, and the plan
+  (`reset.md`, design v3) is adjusted in the same commit.
+- [ ] Rotate at about 60 % context: write `docs/waves/handoff/program.md`, commit, push, spawn the next rotation as a new wave
+  of this PLAN.md (chain mode, a tab).
+- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
+

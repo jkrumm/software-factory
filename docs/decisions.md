@@ -92,3 +92,28 @@ Hermes is behind iris, not Slack; cards and push go to iris, not Argo web push; 
 - **weatherorb's alert issues** stay as they are for now.
 - **TDD v2.4 and the rest of `dotfiles/docs/factory/`** are archived in `dotfiles/docs/archive/factory-v2.4/`
   (2026-10-30); the evidence the factory still uses (golden set, intervention KPIs) is in `docs/evidence/` here.
+
+## The reset (owner, 2026-11-05)
+
+Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-11-reset/design-v3.md`, history
+`brain/wiki/engineering/software-factory-history.md`. Tag `pre-reset-2026-11` holds the code before it.
+
+- **RS1 One Issue, one lead, one visible tab.** The lead works through subagents (Explore, implementer, reviewer) and opens
+  no terminals. A plan is Issues linked with `--after`; no lead starts or waits for another lead. "Wave" retires as a
+  runtime word.
+- **RS2 Review once per Issue, tier by rule.** `agw review route` decides none, light (Sonnet medium) or deep (Sonnet high
+  plus one verifier per important finding); the lead's own `reviewer` subagent runs it on Max; at most 2 rounds. The
+  factory's review transport and hidden reviewer sessions go.
+- **RS3 Only decisions reach the owner.** `decision` and `blocked` are asks; `wall`, `lead_gone` and `unreported` are parks
+  on a health line, and every park can end without a drop.
+- **RS4 The factory shrinks.** Fleet triage, presence, away, digest, the reaper, the review transport, placement modes and
+  the wave-era roles are deleted; finalize is the only closer.
+- **RS5 One lead per repo first; parallel leads in one repo later.** Parallel implementation in one project is the goal
+  (`leads: N`, review ranges from the merge-base, a real deploy lock), built only after the one-lead loop has run stably.
+- **RS6 Spaces are fixed and ready.** One space per repo in a fixed order with a `plan:` tab (a shell) that is never closed;
+  the factory keeps them clean.
+- **RS7 Apple apps are verified on the mini.** The iOS and Mac apps are deployed to the owner's devices, but verified on the
+  mini: simulator and Mac app runs, checked visually by a verifier with screenshots. No owner-verify ask.
+- **RS8 The cutover:** Issue 51 closes with what it has; Issues 52–55 are dropped.
+- **RS9 Learn on the way.** Every wave of the reset appends to `docs/strategy/2026-11-reset/learnings.md` where it fell
+  apart and what the plan changed.

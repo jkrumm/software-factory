@@ -227,9 +227,10 @@ create transaction) and <code>NOT EXISTS (open dependency)</code> to the admissi
 <h2>3. The lead</h2>
 <p><strong>Placement.</strong> One tab per attempt, named <code>#&lt;id&gt; &lt;short title&gt;</code>, in its repo&#39;s space. Worktree
 <code>factory/&lt;id&gt;-&lt;attempt&gt;</code> (exists, <code>names.ts</code>, <code>leadtree.ts</code>).</p>
-<p><strong>One lead per repo.</strong> The project claim with <code>leads: 1</code> (exists, today&#39;s default) serialises a repo: one branch merges and
-deploys at a time, review ranges stay clean, <code>make deploy</code> never runs twice. Parallelism is across repos, capped by the
-accounts. <code>leads: N</code> stays unused until a measured need.</p>
+<p><strong>One lead per repo first (RS5).</strong> The project claim with <code>leads: 1</code> (exists, today&#39;s default) serialises a repo: one branch
+merges and deploys at a time, review ranges stay clean, <code>make deploy</code> never runs twice. Parallelism is across repos, capped
+by the accounts. <strong>Parallel leads in one repo are the goal</strong> and come once this loop runs stably (row 17): <code>leads: N</code>, review
+ranges from the merge-base instead of the cut sha, and a deploy lock that fails closed.</p>
 <p><strong>Model.</strong> <code>lead</code> becomes Sonnet high (<code>config/roles.json</code> says Opus high today). Opus for a lead only when the planner
 names the reason in the Issue, and only after measuring it.</p>
 <p><strong>Subagents only.</strong> The lead&#39;s subagents and their seats live in the dotfiles agent files, not the role table: Explore
@@ -312,9 +313,9 @@ reads <code>agw review covered</code> over the Issue&#39;s range. The factory&#3
 </tr>
 </tbody></table>
 <p><strong>New: a red verify is re-run once</strong> before it counts as a regression; the third regression of one Issue parks it.</p>
-<p><strong>New: <code>verify: owner</code></strong> for targets only a person can check (the iOS and Mac apps). At ship the factory finalizes the lead
-and releases the claim, then keeps the Issue in <code>watching</code> with one owner check: &quot;confirm <target> works&quot;, <code>yes</code> or
-<code>no + what broke</code>. No default: an unanswered check parks after its expiry, it is never assumed green.</p>
+<p><strong>Apple apps are verified on the mini (RS7).</strong> The iOS and Mac apps are deployed to the owner&#39;s devices, but their <code>verify</code>
+runs on the mini: simulator and Mac app runs under the test slot, checked visually by the <code>verifier</code> agent with screenshots
+(<code>make verify-apple</code> or the repo&#39;s own target). No owner-verify ask.</p>
 <p><strong>The make contract</strong> every repo keeps: <code>check</code>, <code>test</code>, <code>deploy</code>, <code>verify</code>, <code>version</code>, <code>logs</code>. A repo without them is
 <code>deploy.mode: none</code> until it has them; the audit is one Issue per repo.</p>
 <h2>6. The health line</h2>
@@ -474,7 +475,7 @@ Rollback is the tag <code>pre-reset-2026-11</code> plus <code>make rollback</cod
 </tr>
 <tr>
 <td>10</td>
-<td><code>verify: owner</code></td>
+<td>Apple verify on the mini (simulator and Mac app, screenshots by <code>verifier</code>)</td>
 <td>5</td>
 </tr>
 <tr>
@@ -506,6 +507,11 @@ Rollback is the tag <code>pre-reset-2026-11</code> plus <code>make rollback</cod
 <td>16</td>
 <td>Docs and skills sweep under <code>rules/writing-for-agents.md</code></td>
 <td>8</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Parallel leads in one repo: <code>leads: N</code>, merge-base review ranges, a fail-closed deploy lock</td>
+<td>9, a stable week</td>
 </tr>
 </tbody></table>
 <h2>14. What the adversarial review changed</h2>
@@ -561,12 +567,9 @@ Rollback is the tag <code>pre-reset-2026-11</code> plus <code>make rollback</cod
 <td><code>factory.key=plan:&lt;repo&gt;</code></td>
 </tr>
 </tbody></table>
-<h2>15. Decisions for the owner</h2>
-<ol>
-<li><strong>One lead per repo</strong> (parallel across repos only), instead of the parallel leads within a repo the strategy proposed.</li>
-<li><strong>The <code>plan:</code> tab</strong> is a shell you start the planner in, not a live session waiting in every space.</li>
-<li><strong><code>verify: owner</code></strong> is the one always-legitimate ask, with no default.</li>
-<li><strong>Row 0 drops Issues 52–55</strong> unless you want any of them re-filed; Issue 51 closes with what it has.</li>
-</ol>
+<h2>15. Decisions (owner, 2026-11-05)</h2>
+<p>Recorded as RS1–RS9 in <code>docs/decisions.md</code>: one lead per repo first and parallel leads in one repo later (row 17); the
+<code>plan:</code> tab is a shell and the spaces are always there and clean; Apple apps are verified on the mini, not by an owner
+ask; Issue 51 closes, 52–55 are dropped; learnings are captured on the way.</p>
 
 </main></body></html>

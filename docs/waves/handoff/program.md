@@ -1,69 +1,54 @@
-# Program lead handoff
+# Program lead handoff: the reset
 
-Written by the FV lead (`PLAN.md` Wave 7, rotation `software-factory-w7`), closed 2026-11-03 07:00 on the owner's call: catch up on fresh
-subscription budget. Nothing is scheduled; the owner starts the next lead by hand after `iu`'s weekly reset (2026-11-04 16:00 UTC), with
+Written 2026-11-05 ~00:00 by the planning session (t14) that ran the owner's re-plan. You are the program lead for the reset:
+`PLAN.md` Wave 8, track plan `docs/waves/reset.md`. The owner is asleep and reads `learnings.md` and this file in the morning.
+The previous handoff (FV) is in git history.
+
+## Read first
+
+1. `docs/decisions.md` RS1–RS9: what the owner decided tonight.
+2. `docs/strategy/2026-11-reset/design-v3.md`: the design. §13 is the build order, §14 what the adversarial review changed.
+3. `docs/strategy/2026-11-reset/review-poc.md`: how review runs now (it is the flow you use for every wave).
+4. `docs/strategy/2026-11-reset/learnings.md`: what already fell apart; add to it.
+
+## Done tonight (verified)
+
+| What | Where | Proof |
+|-|-|-|
+| Review router: docs-only → none, light seat Sonnet medium, deep one verifier | agw `6cb7961`, deployed | `make deploy` OK, six reviews in `review-poc.md` |
+| Reviewer agents: one verifier, `omitClaudeMd`, Agent tool only at deep | dotfiles `854b82c`, `d991ef0` | used for every review since |
+| Step 0: no false failure for a live terminal, Enter-only retry only after a confirmed typing (`prompts.typed_at`, migration 030), machine failures not asks, factory asks expire after 7 days | `7b0cb25`..`0c2e777`, deployed | `make verify` all passed; asks 13 → 9; deep review 2 rounds, `covered` true |
+| Tag `pre-reset-2026-11` | software-factory, dotfiles, agent-workflows | `git tag` |
+| History page | brain `6fcef42` | `wiki/engineering/software-factory-history.md` |
+
+## Running now (not yours to drive)
+
+| Agent | What | Note |
+|-|-|-|
+| `iris-w21-lead` (t127) and workers t12g, t12k | iris Wave 21 | asked to start no `xcodebuild`/simulator run until 07:00; it waits on a timer to 07:02. Its input line holds an unsubmitted "run the A1 and P1 validation now": leave it, the owner decides |
+| t11q (agent-workflows) | gateway plan, review lanes for PRs 83/133/134 | not part of the reset |
+| IuRoot sessions | read-only for the factory | never touch |
+
+## The asks right now (9)
+
+Decisions: Issue 49 (one tailnet port for KoInsight → Argo, a security call), the MacBook herdr-core stuck after 0.1.17.
+Owner's stale: WeatherOrb iPhone (20 days), Wave 8 cutover (3 days). Machine leftovers that expire by 2026-11-09: the two failed
+spawns `agent-workflows-seats-on-claude`/`-gateway-opencode`, review `rv_kmnj…` needing a human. `hc:t126` (IuRoot permission
+prompt). `iris-w21-lead` waiting on the owner (the pause). Do not answer the owner's decisions; record the count after Wave 5.
+
+## Known sharp edges
+
+- `/review --scope HEAD` reviews nothing; use `head` or an explicit `a..b` range.
+- Coverage is per commit: a fix commit after round 2 needs its own (light) review before `covered` is true.
+- `make check` under load fails tests by timeout; rerun the failing file alone before calling it red.
+- `factory issue stop` drops an Issue (outcome `dropped`); that is the intended cutover for 51–55.
+- The live database rejects review outcome `walled` (migration 029 was edited after it was applied). It dies with the review
+  transport in a later row; do not fix it in this run.
+- dotfiles `make check` is red on unmapped launchd labels (`home-nacht`, `athena-repo-sync`, `soloist-speaker`) from other
+  sessions: not yours; land dotfiles changes with the failure named in the merge note.
+
+## Start
 
 ```sh
-rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave 7). Read docs/waves/handoff/program.md first. Follow the /wave skill.'
+rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave 8). Read docs/waves/handoff/program.md first. Follow the /wave skill.'
 ```
-
-State lives in `docs/program.md` and `PLAN.md` Wave 7 (one line per landed wave). The previous rotation's page is in git history.
-
-## Where the program stands (2026-11-03)
-
-- **Live and reviewed:** F1 (fleet layer, gate passed), F2 (Issue machine, gate passed), FV Waves 1–4 (`/fleet`, digest, asks,
-  presence, `/fleet/since`, the morning reading), FV Wave 5's reaper in `dry`, board Wave 1; around it A1, R0, R1, I1, T, D done;
-  U at Wave 6 (time-gated, the W46 report 2026-11-16). `agw agents` reads `/fleet` (agw `02c0cbe`).
-- **FV left, in order:** Hermes "what needs me?" (W5), board Waves 2 and 3, FV Wave 6 (the gate). Then A2 and IR (both read `/fleet`),
-  then F3 (intake, self-heal) and F4 (orchestrator, the factory builds itself). L is owner-timed.
-
-## Running now
-
-| Agent | Repo | Work | Next |
-|-|-|-|-|
-| (no worker) | software-factory | FV Wave 5's reaper live in `dry` (`a84152d`, PR #36; deferred findings in the PR's comment) | flip to `on` per the section below once `fleet` lists a would-close entry |
-| Issue 49 | homelab-private | KoInsight heartbeat, phase verify, wakes itself | `factory status`; Issue 50's decision was answered A (a dedicated tailnet port for Argo, kuma-door's pattern) for 49 and 50 |
-| Issue 51 `lead-51-1` (pane `t8h`) | software-factory | **stuck:** spawned 2026-11-02 16:52, its brief sits typed in the input box, never submitted (turn 1, no event since) | it holds the software-factory claim, so 52 waits on it and 53–55 queue behind. First act of the next lead: submit it (`hc send t8h` Enter) or close and requeue it. This is the bug class Issue 51 itself names (a spawn whose prompt never started a turn): put this case in its evidence |
-| Issues 52–55 | software-factory | queued: scratch projects, early wake on a queued note, per-account ceiling, Sonnet floor for Issue leads | run after 51 |
-| agw mother `agent-workflows-w1-r4` | agent-workflows | decided `agw agents` becomes a `/fleet` client (their Wave 8, after 17) | nothing from us |
-
-## The reaper's live proof (FV Wave 5)
-
-Deployed it runs `FACTORY_REAPER=dry` (default). Read `factory fleet --format plain` REAPER block: every `closed (dry)` entry must be a
-worktree session idle 2 h, clean, every commit it made on master, parent not waiting. Check two by hand (`git -C <worktree> log`, `hc get`).
-Only then set `FACTORY_REAPER=on` in `~/.config/factory/env` (allowlisted key), `make deploy` (a restart reads it), and watch one pass
-close at most 5; the rows show under "Handled for you" in `factory fleet since`. Wrong one: set `dry` again, restart.
-
-## How this lead worked, keep it
-
-- As the previous lead: hidden `rd fan` workers, one server wave at a time, `factory quota refresh` + `get` before each spawn, the lead's own
-  `/code-review high` in a detached worktree on every server PR and on each round of fix commits, `gh pr merge --rebase --delete-branch`
-  on green CI, `make deploy`, `make verify`, a live proof, `hc kill`.
-- **Fix rounds breed bugs.** FV Wave 4 took four rounds (8 + 10 + 9 + 8); round 3's fix (a cursor pinned to the oldest git read) froze the
-  cursor. When a round's findings come from the previous fix, send a simplification, not another patch, and read that diff yourself.
-- Send review findings with `rd say <worker> "$(cat file)"`, numbered, each with the fix decided. The wake after an `rd say` fires early:
-  read the worker's screen (`hc read <pane>`), re-declare `factory session wait --on workers`, end the turn.
-- A killed worker still wakes you once (`dead`); collect finished workers with `hc kill` before the wait or the Stop hook refuses.
-- dotfiles `make check` is red on `herdr-core-guard-test` while the mini (0.1.15) and MacBook (0.1.16) cores differ (the daily
-  `herdr-core-update` converges them); `rd merge --no-check` is right only when that is the one red target. `rd merge` needs a PR.
-- The board deploys on the MacBook: `ssh iumac 'cd ~/SourceRoot/dotfiles && git pull --ff-only && make herdr-app-setup'`, proof
-  `herdr-app check <mod>` and `herdr-app shot /tmp/x.png` (scp it back and look).
-
-## Open, decide these yourself
-
-- **Budget:** at 06:00 `me2` 62 % (mark 60, resets 2026-11-08 18:00), `iu` 89 % (mark 90, resets 2026-11-04 16:00), `me` 95 % (resets
-  2026-11-05 06:00; this program spent none of it). No room for a wave plus reviews (5–8 points), so this lead stopped. Start on `iu`
-  after its reset; keep `me2` for the lead's own reviews; `me` stays untouched.
-- **FV Wave 5 left:** Hermes answers "what needs me?" from `/fleet` asks (hermes-agent, a worker there; Hermes is token-holding, the
-  token goes in its env template, never a tracked file). `agw agents` is agw's (done as a decision). A2 and IR have no plans yet; their
-  `docs/program.md` track notes now say they read `/fleet`.
-- **Board Wave 2** (dotfiles `docs/waves/fv-board.md`): actions, Apply all, Undo, the away card. Notes for its brief: `caught_up` needs
-  `until` (the reading's `until`, `fleet since` prints it); an ask whose repo is a path shows the path (fix: the repo's base name).
-- **FV Wave 6, the gate:** needs one real away window after board Wave 3 reports presence (until then the owner is always away).
-- `rv3-desk` has two failed and two pending notes (`/clear` and an agw rv3 job): agw's, not ours.
-- Two failed agw spawns (`agent-workflows-seats-on-claude`, `-gateway-opencode`) sit in attention; they are agw's mother's.
-
-## Watch
-
-- Load on the mini runs 25–55; tests time out locally, CI on GitHub is the judge.
-- Prompt suggestions in finished workers' input boxes are nobody's words; never act on them.

@@ -58,9 +58,10 @@ The states and their one writer exist (`issues/lifecycle.ts`). Three changes:
 **Placement.** One tab per attempt, named `#<id> <short title>`, in its repo's space. Worktree
 `factory/<id>-<attempt>` (exists, `names.ts`, `leadtree.ts`).
 
-**One lead per repo.** The project claim with `leads: 1` (exists, today's default) serialises a repo: one branch merges and
-deploys at a time, review ranges stay clean, `make deploy` never runs twice. Parallelism is across repos, capped by the
-accounts. `leads: N` stays unused until a measured need.
+**One lead per repo first (RS5).** The project claim with `leads: 1` (exists, today's default) serialises a repo: one branch
+merges and deploys at a time, review ranges stay clean, `make deploy` never runs twice. Parallelism is across repos, capped
+by the accounts. **Parallel leads in one repo are the goal** and come once this loop runs stably (row 17): `leads: N`, review
+ranges from the merge-base instead of the cut sha, and a deploy lock that fails closed.
 
 **Model.** `lead` becomes Sonnet high (`config/roles.json` says Opus high today). Opus for a lead only when the planner
 names the reason in the Issue, and only after measuring it.
@@ -114,9 +115,9 @@ The factory knows no pipeline; it runs what `project.yaml` declares (exists, `pa
 
 **New: a red verify is re-run once** before it counts as a regression; the third regression of one Issue parks it.
 
-**New: `verify: owner`** for targets only a person can check (the iOS and Mac apps). At ship the factory finalizes the lead
-and releases the claim, then keeps the Issue in `watching` with one owner check: "confirm <target> works", `yes` or
-`no + what broke`. No default: an unanswered check parks after its expiry, it is never assumed green.
+**Apple apps are verified on the mini (RS7).** The iOS and Mac apps are deployed to the owner's devices, but their `verify`
+runs on the mini: simulator and Mac app runs under the test slot, checked visually by the `verifier` agent with screenshots
+(`make verify-apple` or the repo's own target). No owner-verify ask.
 
 **The make contract** every repo keeps: `check`, `test`, `deploy`, `verify`, `version`, `logs`. A repo without them is
 `deploy.mode: none` until it has them; the audit is one Issue per repo.
@@ -211,13 +212,14 @@ Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5
 | 7 | dotfiles: `rd` thin client, `/wave` → lead playbook, hc-reap trimmed, `wave-gate.py` gone | 5 |
 | 8 | Delete fleet triage/presence/away/digest/reaper, the review transport, placement modes, holds, roles (code) | 6, 7 |
 | 9 | Contract migration: drop the deleted tables and columns | 8 |
-| 10 | `verify: owner` | 5 |
+| 10 | Apple verify on the mini (simulator and Mac app, screenshots by `verifier`) | 5 |
 | 11 | Herdr layout and the `plan:` tabs | 5 |
 | 12 | `issue_facts` view; its Argo page | 6 |
 | 13 | Repo contract audit: `project.yaml` and make targets, one Issue per repo | 5 |
 | 14 | Intake: sources, settle, rule dedup, order (its own plan) | 12, 13 |
 | 15 | Surfaces: Iris pushes and chat, ntfy for machines, Hermes off Slack, Slack retired | 14 |
 | 16 | Docs and skills sweep under `rules/writing-for-agents.md` | 8 |
+| 17 | Parallel leads in one repo: `leads: N`, merge-base review ranges, a fail-closed deploy lock | 9, a stable week |
 
 ## 14. What the adversarial review changed
 
@@ -235,9 +237,8 @@ Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5
 | A `priority` column is stored state | derived from the latest `prio` event |
 | A `plan` tab without a key would be duplicated by the reconcile | `factory.key=plan:<repo>` |
 
-## 15. Decisions for the owner
+## 15. Decisions (owner, 2026-11-05)
 
-1. **One lead per repo** (parallel across repos only), instead of the parallel leads within a repo the strategy proposed.
-2. **The `plan:` tab** is a shell you start the planner in, not a live session waiting in every space.
-3. **`verify: owner`** is the one always-legitimate ask, with no default.
-4. **Row 0 drops Issues 52–55** unless you want any of them re-filed; Issue 51 closes with what it has.
+Recorded as RS1–RS9 in `docs/decisions.md`: one lead per repo first and parallel leads in one repo later (row 17); the
+`plan:` tab is a shell and the spaces are always there and clean; Apple apps are verified on the mini, not by an owner
+ask; Issue 51 closes, 52–55 are dropped; learnings are captured on the way.
