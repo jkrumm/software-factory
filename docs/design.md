@@ -1151,7 +1151,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   |-|-|-|
   | `notify:ask:<decision id>` | a `decisions` row is new | names `factory issue answer <id> "<text>" --decision <n>` |
   | `notify:parked:<issue>:<revision>` | an Issue moved to `waiting` as `unreported` or `lead_gone` | a lead's own `block` or `park` is its report and sends nothing |
-  | `notify:failed:spawn:<spawn key>` | a lead spawn failed for good and its Issue is open | a spawn has no time of its failure, so there is no window |
+  | `notify:failed:spawn:<spawn key>` | a lead spawn failed for good and its Issue is open, not `queued` for a restart, not parked `lead_gone` (the park sends its own), and the spawn is of the current attempt | a spawn has no time of its failure, so there is no window |
   | `notify:failed:<start_lead\|finalize>:<effect key>` | an effect failed 3 times and is still open | |
   | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
   | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |
