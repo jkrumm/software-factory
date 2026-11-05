@@ -245,3 +245,18 @@ evidence (a sha, a log line, a number); no narrative.
   (`worker-round` with three processes ~200 % CPU, `worker-ingest` ~40 % since 01:31), a booted iPhone simulator (`PosterBoard`
   ~98 %), the shared Postgres. Colima's VMs (default 4 CPU/6 GiB, teamchat 4/4) reserve memory, not CPU: a vCPU costs the host
   only while the guest runs. Change: row 7b, the machine budget (RS10 (b)).
+
+## Wave 8, row 7 expand (dotfiles), 2026-11-05 09:15
+
+- **Row 7 could not be one step.** The inventory found six repos with a wave marked `active` in PLAN.md (iris live on `rd wave --child`,
+  `rd fan`, `rd merge`; basalt-ui, modelpick, ntfy-mac, basalt-expr-trial, -v1 stale, 2 days to 3 weeks), software-factory's own
+  `scripts/gate-run` and `scripts/gameday` teardown on `rd close`, and `test/brief.test.ts` pinning "no `rd fan`". Change: row 7 is expand
+  (Wave 8, done) then contract (Wave 8b) after the live chain closes and the stale ones are converted.
+- **The worker built the shell rule on age.** hc exposes no activity time for a shell, so the first build closed any keyless shell 7 days
+  after creation, the owner's daily ones too. The program lead's read caught it, not a test or the brief; fixed to an unchanged `turn` over
+  7 days of hc-reap's own observations. Change for briefs: name the signal a rule judges by, not only the outcome.
+- **A worker ran `make -k check` twice in parallel** and load reached 578 (5-min average) at 08:40Z; the implementer brief said "once at the
+  end". Change: row 7b's slot (Issues 71, 72) makes a second check wait instead of trusting the brief.
+- **`/review` from an owner session works as designed:** prepare, a foreground-less background `reviewer` subagent, the reply restored from
+  the notification's HTML escapes (`&gt;`, `&amp;`), submit; deep 164 s, light 42 s. The escaped reply is the third sighting; candidate for
+  `/review`: write the reply to a file from the agent itself.

@@ -78,13 +78,14 @@ The lead does this itself; no worker.
 The owner read the learnings and the handoff and let the loop run on (RS10). From here the program lead is the owner's
 session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
 
-## Wave 8 — dotfiles: the Issue path beside the wave path (row 7, expand)            <!-- status: active -->
-- [ ] Brief `briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
+## Wave 8 — dotfiles: the Issue path beside the wave path (row 7, expand)            <!-- status: done -->
+- [x] Brief `briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
   the plan playbook (Issues with `--after`; the chain modes under Legacy), hc-reap's orphaned-shell rule, the lanes docs. Built by one
   `implementer` in a dotfiles worktree (this session is not a factory session, so `rd fan` would go hc-direct).
-- [ ] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
+- [x] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
 **Why expand:** six repos have a wave marked active; iris runs one on `rd wave --child`, `rd fan`, `rd merge` (the inventory of 2026-11-05).
 **Repos:** dotfiles
+**Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.athena-repo-sync`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
 
 ## Wave 8b — the contract of row 7            <!-- status: todo -->
 - [ ] iris's running wave closes; its mother and lead handoffs, agent-workflows' handoffs and software-factory's `scripts/gate-run` and
@@ -93,9 +94,12 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 - [ ] Then delete `rd wave|fan|merge|close` for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and
   tests, hc-reap's agent rules; keep `rd work|agents|read|say|issue`.
 
-## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: todo -->
+## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
   IuRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
+- [ ] Filed: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
+  (agent-workflows: `agw check` inside the slot, capped test workers; `--after 71`). iris (`xcodebuild` in the slot, a simulator shut down
+  after its verify) is filed when iris's running wave closes (Wave 8b).
 - [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: todo -->
