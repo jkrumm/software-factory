@@ -1,5 +1,7 @@
 # F1 gate run, 2026-10-30
 
+> The harness (`scripts/gate-run`) was removed with the wave path (reset RS11, Issue 80); this README and the other files here are the record.
+
 **Verdict, both runs against the claim: pass on everything the claim observes, one thing not proven.** Nine chains of four waves
 in nine scratch repos: eight ran to their end (two of them after the first run's operator closed their walled tabs) with nobody typing anything into any pane (owner inputs 0; the factory typed the first
 prompt of each spawn and three `continue` from the resume watchdog), five limit walls were injected (three walls behaved as
