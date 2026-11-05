@@ -299,7 +299,8 @@ describe('the outbox', () => {
       'notification notify:test:1 was not delivered: hermes send exited 1',
     ])
     const status = await buildStatus(db.sql, new Date(now().getTime() - 20 * 3600_000))
-    expect(status.attention).toContain('notification notify:test:1 was not delivered: hermes send exited 1')
+    expect(status.health).toContain('notification notify:test:1 was not delivered: hermes send exited 1')
+    expect(status.attention).toEqual([])
   })
 
   test('a send that fails and then recovers is sent once', async () => {

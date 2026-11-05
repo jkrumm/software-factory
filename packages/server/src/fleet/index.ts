@@ -110,6 +110,8 @@ export class FleetBuilder {
   private queued: Promise<Fleet> | undefined
   private seeded = false
   private firstSeen = new Map<string, string>()
+  /** the health lines of the last build, by id, with the time each was first seen */
+  private healthSeen = new Map<string, string>()
   /** when a terminal the factory does not know was first seen in its state: hc's own time moves with every message */
   private since = new Map<string, string>()
   private readonly git: GitReader
@@ -205,6 +207,7 @@ export class FleetBuilder {
         // read that fails is tried again.
         const seen = await readSeen(sql)
         this.seeded = true
+        for (const h of stored?.health ?? []) this.healthSeen.set(h.id, h.since)
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
         for (const [id, at] of seen) if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
         // What a build whose git times out falls back to: the previous build's repo state, also after a restart.
@@ -340,6 +343,7 @@ export class FleetBuilder {
       decisions: db.decisions,
       queue,
       firstSeen: this.firstSeen,
+      healthSeen: this.healthSeen,
       expired,
       errors,
     })
@@ -392,6 +396,7 @@ export class FleetBuilder {
       ...expired,
     ]
     this.firstSeen = complete ? new Map(listed) : new Map([...this.firstSeen, ...listed])
+    this.healthSeen = new Map(fleet.health.map((h) => [h.id, h.since]))
     this.since = new Map(
       [...fleet.repos.flatMap((r) => r.sessions), ...fleet.unplaced].flatMap((x) =>
         x.since ? [[`${x.id}\0${x.state}`, x.since] as const] : [],

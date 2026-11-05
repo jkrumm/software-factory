@@ -99,6 +99,7 @@ const PROMPT = {
 const STATUS = {
   now: '2026-10-30T12:05:00.000Z',
   attention: ['blocked sess-2 for 3 min: Dangerous rm', 'Issue 7 asks: a\u202eb\u200bc'],
+  health: ['Issue 9 parked for 5 min: its lead is gone', 'Issue 9: no hook event for 25 min'],
   sessions: [{ ...SESSION, id: 'sess-2', state: 'blocked', role: 'wave', account: 'me' }, SESSION],
   queue: { effective: 'pace', spawns: [{ ...SPAWNS[1], hold: 'pace' }] },
   accounts: [QUOTA],
@@ -201,6 +202,12 @@ beforeAll(() => {
           version: 'abc123',
           reason: state === 'ok' ? null : 'no successful tick for 20s (limit 15s)',
           tick: { lastSuccessAt: '2026-10-30T12:00:00.000Z', lastError: null },
+          heartbeat: {
+            ok: state === 'ok',
+            reason: state === 'ok' ? null : 'no successful tick for 20s (limit 15s)',
+            tickAt: '2026-10-30T12:00:00.000Z',
+            queueMovedAt: null,
+          },
         })
         if (status === 200) return Response.json(health('ok'))
         if (status === 503) return Response.json(health('unhealthy'), { status })
@@ -366,7 +373,12 @@ describe('factory health', () => {
   test('prints the server answer', async () => {
     const r = await factory(['health'])
     expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
-    expect(JSON.parse(r.stdout)).toMatchObject({ status: 'ok', version: 'abc123', reason: null })
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      status: 'ok',
+      version: 'abc123',
+      reason: null,
+      heartbeat: { ok: true, reason: null, tickAt: '2026-10-30T12:00:00.000Z', queueMovedAt: null },
+    })
   })
 
   test('plain', async () => {
@@ -635,6 +647,7 @@ describe('factory status', () => {
     const lines = r.stdout.trimEnd().split('\n')
     expect(lines.filter((l) => !l.startsWith(' '))).toEqual([
       'ATTENTION',
+      'HEALTH',
       'ISSUES',
       'SESSIONS',
       'QUEUE (pace)',
@@ -644,6 +657,10 @@ describe('factory status', () => {
     expect(lines[1]).toBe('  blocked sess-2 for 3 min: Dangerous rm')
     // A lead's question is text from elsewhere: nothing in it reorders the line.
     expect(lines[2]).toBe('  Issue 7 asks: a b c')
+    // The health line comes after the asks, and is its own section.
+    expect(lines[3]).toBe('HEALTH')
+    expect(lines[4]).toBe('  Issue 9 parked for 5 min: its lead is gone')
+    expect(lines[5]).toBe('  Issue 9: no hook event for 25 min')
     // oxlint-disable-next-line no-control-regex -- exactly what must be absent
     expect(r.stdout).not.toMatch(/[\u202a-\u202e\u200b-\u200f]/)
     expect(lines).toContain(

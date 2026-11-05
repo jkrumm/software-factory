@@ -1,5 +1,7 @@
-import type { Health } from '@software-factory/contract'
+import type { Health, HealthKind, Heartbeat } from '@software-factory/contract'
+import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
+import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
 
 /** Unhealthy once no pass has succeeded for this many intervals. */
 export const STALE_INTERVALS = 3
@@ -64,4 +66,109 @@ export class TickMonitor {
     if (age <= limit) return null
     return `no successful tick for ${Math.round(age / 1000)}s (limit ${Math.round(limit / 1000)}s)`
   }
+}
+
+// --- the heartbeat (`GET /health` `heartbeat`, polled by the dotfiles pusher for Uptime Kuma) ---------------------------
+
+/** The heartbeat fails when the last successful tick is older than this, or a spawn has been due this long with no change of status. */
+export const HEARTBEAT_STALE_MS = 30 * 60_000
+/** `queueMovedAt` looks at the spawns of this window, and at every spawn still pending. */
+const QUEUE_WINDOW_MS = 7 * 86_400_000
+
+const minutes = (ms: number): number => Math.floor(ms / 60_000)
+
+/**
+ * "The tick advanced and the queue moved within 30 minutes", with the field names the pusher reads (`ok`, `reason`, `tickAt`,
+ * `queueMovedAt`). A spawn's status change has no column of its own: the newest of `created_at`, `assigned_at` and `claimed_at` stands for it
+ * (a claim is the tick moving the spawn). A spawn is due when it is `queued` with no hold, or `waiting` with its `resume_at` past; one
+ * bounded query, no new table.
+ */
+export async function heartbeat(sql: SQL, now: Date, tickAt: string | null): Promise<Heartbeat> {
+  const [row]: { moved: Date | null; due_key: string | null; due_since: Date | null }[] = await sql`
+    WITH s AS (
+      SELECT key, status, hold, resume_at, GREATEST(created_at, assigned_at, claimed_at) AS changed FROM factory.spawns
+      WHERE status IN ('queued', 'waiting', 'starting') OR created_at > ${new Date(now.getTime() - QUEUE_WINDOW_MS)}
+    ), due AS (
+      SELECT key, CASE WHEN status = 'waiting' THEN GREATEST(resume_at, changed) ELSE changed END AS since FROM s
+      WHERE (status = 'queued' AND hold IS NULL) OR (status = 'waiting' AND resume_at IS NOT NULL AND resume_at <= ${now})
+    )
+    SELECT (SELECT max(changed) FROM s) AS moved,
+      (SELECT key FROM due ORDER BY since, key LIMIT 1) AS due_key,
+      (SELECT since FROM due ORDER BY since, key LIMIT 1) AS due_since`
+  const reasons: string[] = []
+  if (!tickAt) reasons.push('no tick has succeeded yet')
+  else if (now.getTime() - Date.parse(tickAt) >= HEARTBEAT_STALE_MS) {
+    reasons.push(`no successful tick for ${minutes(now.getTime() - Date.parse(tickAt))} min`)
+  }
+  if (row?.due_since && now.getTime() - row.due_since.getTime() >= HEARTBEAT_STALE_MS) {
+    reasons.push(
+      `spawn ${row.due_key} due for ${minutes(now.getTime() - row.due_since.getTime())} min without a change of status`,
+    )
+  }
+  return {
+    ok: reasons.length === 0,
+    reason: reasons.length === 0 ? null : reasons.join('; '),
+    tickAt,
+    queueMovedAt: row?.moved?.toISOString() ?? null,
+  }
+}
+
+// --- the health line (design v3 §6) ---------------------------------------------------------------------------------------
+
+/** An Issue `working` whose lead has stored no event for this long. */
+export const SILENT_AFTER_MS = 20 * 60_000
+/** How long an Issue may stay `working` by its size (Classify's `s|m|l`); no size counts as `m`. */
+export const BUDGET_HOURS = { s: 2, m: 6, l: 24 } as const
+export const DEFAULT_SIZE = 'm'
+
+const hoursOf = (ms: number): number => Math.round(ms / 360_000) / 10
+
+/**
+ * The health lines facts alone make, derived when read: a silent lead, an Issue over its size's budget, and an open Issue on its
+ * last regression before the park (the third parks it, and that is a park line). `lead-<id>-<attempt>` is the lead's session name
+ * (`issues/names.ts`); its last event is any kind in `factory.events`.
+ */
+export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
+  const lines: string[] = []
+
+  const working: {
+    id: number
+    size: string | null
+    since: Date
+    last_event: Date | null
+  }[] = await sql`
+    SELECT i.id, i.size,
+      COALESCE((SELECT max(e.at) FROM factory.issue_events e WHERE e.issue_id = i.id AND e.to_state = 'working'), i.updated_at) AS since,
+      (SELECT max(v.at) FROM factory.events v WHERE v.session = 'lead-' || i.id || '-' || i.attempt) AS last_event
+    FROM factory.issues i WHERE i.state = 'working' ORDER BY i.id`
+  for (const issue of working) {
+    // A lead that has stored nothing yet is silent from the moment the Issue began working.
+    const quiet = now.getTime() - (issue.last_event ?? issue.since).getTime()
+    if (quiet >= SILENT_AFTER_MS) lines.push(`Issue ${issue.id}: no hook event for ${minutes(quiet)} min`)
+    const size = issue.size && issue.size in BUDGET_HOURS ? (issue.size as keyof typeof BUDGET_HOURS) : DEFAULT_SIZE
+    const budget = BUDGET_HOURS[size]
+    const spent = now.getTime() - issue.since.getTime()
+    if (spent > budget * 3_600_000) {
+      lines.push(`Issue ${issue.id}: working ${hoursOf(spent)} h, budget ${budget} h (size ${issue.size ?? 'unknown'})`)
+    }
+  }
+
+  const regressing: { id: number }[] = await sql`
+    SELECT i.id FROM factory.issues i
+    WHERE i.state <> 'closed' AND i.reason IS DISTINCT FROM 'parked'
+      AND (SELECT count(*)::int FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'regression' AND e.to_state IS NOT NULL) = ${MAX_REGRESSIONS}
+    ORDER BY i.id`
+  for (const issue of regressing) {
+    lines.push(`Issue ${issue.id}: ${MAX_REGRESSIONS} regressions, the next one parks it`)
+  }
+  return lines
+}
+
+/** Which kind of health line a line is (the one place that decides; `/fleet` carries it). */
+export function healthKind(line: string): HealthKind {
+  if (/^Issue \d+ parked/.test(line)) return 'park'
+  if (/^Issue \d+: no hook event/.test(line)) return 'silent'
+  if (/^Issue \d+: working .* budget /.test(line)) return 'over_budget'
+  if (/^Issue \d+: \d+ regressions/.test(line)) return 'regressions'
+  return 'machine'
 }

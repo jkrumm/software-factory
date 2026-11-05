@@ -482,7 +482,8 @@ describe('submit on Stop', () => {
     expect(await outcome(key)).toMatchObject({ outcome: 'needs_human', detail: 'refused: missing field verdict' })
     expect(await spawnKeys()).toEqual([reviewKey('rv_two', 1), key])
     const status = Status.parse(await (await app.get('/status')).json())
-    expect(status.attention).toContain('review rv_two needs a human: attempt 2 failed: refused: missing field verdict')
+    expect(status.health).toContain('review rv_two needs a human: attempt 2 failed: refused: missing field verdict')
+    expect(status.attention.filter((l) => l.includes('needs a human'))).toEqual([])
   })
 
   test('agw not answering is no refusal: the same attempt is asked again after a pause', async () => {
@@ -569,7 +570,7 @@ describe('submit on Stop', () => {
       expect(await reviewSessionsLive(db.sql, await liveSessions(db.sql, clock.now()))).toBe(0)
     }
     const status = Status.parse(await (await app.get('/status')).json())
-    expect(status.attention.filter((l) => l.includes('needs a human'))).toEqual([])
+    expect(status.health.filter((l) => l.includes('needs a human'))).toEqual([])
   })
 
   test('a walled reviewer is a failed attempt at once: closed, a2 that says usage limit, its slot back', async () => {

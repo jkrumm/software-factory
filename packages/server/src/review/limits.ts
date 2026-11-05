@@ -14,7 +14,7 @@ export interface ReviewLimits {
 
 export const DEFAULT_REVIEW_LIMITS: ReviewLimits = { sessions: 2, deepCap: 15, idleMs: 600_000 }
 
-/** How long a `needs_human` stays an attention line (and so an ask on /fleet). */
+/** How long a `needs_human` stays a health line. */
 export const NEEDS_HUMAN_SHOWN_MS = 3 * 86_400_000
 
 const oneLine = (text: string, max: number): string => text.replace(/\s+/g, ' ').trim().slice(0, max)
@@ -56,28 +56,33 @@ export async function reviewStatus(sql: SQL, now: Date, limits: ReviewLimits): P
 }
 
 /**
- * The attention lines of the reviews: a job both attempts failed (`needs a human`), and a deep review held by the day's cap, whose line
- * is what the fleet view's `allow` ask is made from (the spawn key is the second word; the ask reads it back).
+ * The review lines of `factory status`. `health`: a job both attempts failed (`needs a human`: a machine failure, not a decision).
+ * `asks`: a deep review held by the day's cap, whose `allow` is the owner's call (the spawn key is the second word; the ask reads it back).
  */
-export async function reviewAttention(sql: SQL, now: Date, limits: ReviewLimits): Promise<string[]> {
-  const lines: string[] = []
+export async function reviewAttention(
+  sql: SQL,
+  now: Date,
+  limits: ReviewLimits,
+): Promise<{ asks: string[]; health: string[] }> {
+  const health: string[] = []
+  const asks: string[] = []
   const since = new Date(now.getTime() - NEEDS_HUMAN_SHOWN_MS)
   const human: { job_id: string; attempt: number; detail: string | null }[] = await sql`
     SELECT job_id, attempt, detail FROM factory.review_outcomes WHERE outcome = 'needs_human' AND at > ${since} ORDER BY at, spawn_key`
   for (const r of human) {
-    lines.push(
+    health.push(
       `review ${r.job_id} needs a human: attempt ${r.attempt} failed${r.detail ? `: ${oneLine(r.detail, 300)}` : ''}`,
     )
   }
   const held: { key: string }[] = await sql`
     SELECT key FROM factory.spawns WHERE role = ${REVIEWER_ROLE} AND hold = 'deep_cap' AND status = 'queued' AND NOT deep_allowed ORDER BY created_at, key`
-  if (held.length === 0) return lines
+  if (held.length === 0) return { asks, health }
   const today = [...(await deepStartedToday(sql, now))].sort(([a], [b]) => a.localeCompare(b))
   const counts = today.map(([account, n]) => `${account} ${n}/${limits.deepCap}`).join(', ')
   for (const { key } of held) {
-    lines.push(
+    asks.push(
       `review ${key} held: deep cap reached on every open account today (UTC), started ${counts || 'none'}; allow runs it past the cap`,
     )
   }
-  return lines
+  return { asks, health }
 }

@@ -407,8 +407,11 @@ effect under a key, so a replay records nothing):
 
 #### `factory status`
 
-**`factory status`** (`status.ts`, `GET /status`, token): attention lines (blocked 2+ minutes, stuck, walled, failed notes
-and spawns, and the Issues' open questions, parks and failures), sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
+**`factory status`** (`status.ts`, `GET /status`, token): two lists of lines (RS3, §11 "The health line"). `attention` is the asks, the decisions only: a session `blocked` 2+ minutes, an
+Issue's open question (`Issue N asks`), an Issue its lead blocked (`Issue N blocked`) and a review held at the deep cap. `health` is everything else that needs a look and no decision: every
+park (`Issue N parked for <age>: …`, reasons `wall`, `lead_gone`, `unreported`, `parked`), stuck and walled sessions, failed notes and spawns, notifications not delivered, a review that
+needs a human, an alert that starts no lead, a wait for the claim, a lead that did not start, a worktree not made or kept, a finalize that failed, the digest's failed passes, and the three
+lines below. A line is in one list only. Sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
 the accounts' readings, a line `reviews: <live>/<slots> live, deep today <n>/<cap> per account (<account n>, …)` (`Status.reviews`; n is the most any one account has started since 00:00 UTC), the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
 
 #### The spool and the event key
@@ -560,8 +563,8 @@ There is no other time limit on a review. **A reviewer is never resumed**, becau
 one is 409 `not_cancellable` naming its state and carrying the spawn row (`spawn`; the CLI's error line has it as `details.spawn`, exit 5), so a caller reads `spawn.status`, never the message. A cancelled key is spent (a create under it is 409 `key_spent`), and the spawn is left out of `factory status`. agw's `scripts/verify.sh` cancels a smoke review that is held, so it does not run later on a deleted fixture. Replays are harmless by key: `agw review submit` is idempotent per (job, attempt), `createSpawn` returns the `a2` that exists,
 `close` finds its terminal by label.
 
-**Asks.** `needs_human` is an attention line, `review <jobId> needs a human: attempt 2 failed: …` (3 days), so an ask on `/fleet` (tier `yours`). A deep review held by
-the cap is the line `review <spawn key> held: deep cap reached on every open account today (UTC), started <account n/cap, …>; allow runs it past the cap`, which the triage
+**Asks.** `needs_human` is a health line, `review <jobId> needs a human: attempt 2 failed: …` (3 days): a machine failure, not a decision. A deep review held by
+the cap is the attention line `review <spawn key> held: deep cap reached on every open account today (UTC), started <account n/cap, …>; allow runs it past the cap`, an ask on `/fleet`, which the triage
 makes a `one_click` ask with the intent **`allow`** (`ActIntent`; `fleet_acts`, closes the occurrence like `resolve`, idempotent: a repeat answers the first). `allow`
 sets `deep_allowed` on the named spawn and wakes it; nothing else.
 
@@ -596,7 +599,19 @@ if its connection loses it; a second copy exits 1. Every
 advisory key lives in `src/locks.ts` and they must stay distinct.
 
 **`/health` is the ticker's pulse:** the last successful tick and the last tick error; no success within three
-intervals (or a pass past its lease) is 503, which fails `make verify` and the deploy health check.
+intervals (or a pass past its lease) is 503, which fails `make verify` and the deploy health check. It also carries the
+**heartbeat** (`health.ts` `heartbeat`, `Heartbeat` in the contract), the four names a dotfiles pusher posts to Uptime Kuma, which stay as they are:
+`heartbeat: { ok, reason, tickAt, queueMovedAt }`. `ok` is true when the last successful tick (`tickAt`, null until one) is under 30 minutes old
+(`HEARTBEAT_STALE_MS`) **and** no spawn has been due for 30 minutes without a change of status: due is `queued` with no hold, or `waiting` with `resume_at`
+past. `reason` is null when `ok`, else names the failing half (`no successful tick for N min`, `spawn <key> due for N min without a change of status`; both,
+joined by `; `). `queueMovedAt` is the newest status change of any spawn (null: none). A spawn's status change has no column of its own, so the newest of
+`created_at`, `assigned_at` and `claimed_at` stands for it (a claim is the tick moving the spawn); the one query reads the pending spawns and those created in the last
+7 days. The heartbeat never changes the HTTP status, which stays the ticker's alone.
+
+**`make rollback`** (`scripts/deploy.sh rollback`) swaps back to the release in `data/previous-sha`, with a deploy's own steps and nothing built or fetched: the previous
+release is on disk (its `.complete` marker) or the rollback is refused (exit 1, one line). It stops the service, renders the plist for that release, starts it and waits for `/health` at
+its sha; only then are `current`, the CLI link, `deployed-sha`, the door and `previous-sha` written, and the two shas trade places, so a second rollback goes forward again.
+A release that does not become healthy puts the live one back (exit 1). `DRY_RUN=1 make rollback` prints the plan and the plist and changes nothing.
 
 **One contract.** Response shapes are zod schemas in `packages/contract`; the server builds every body through its
 schema and the CLI parses with the same one (a body that does not parse is exit 9).
@@ -1241,15 +1256,22 @@ in a session's last message. Wave 3 (below, "Triage and actions") adds `tier`, `
   factory does not know (an `rd` session, IuRoot's) is its own entry, its state from hc's status, its parent through the parent
   terminal's name. A session outside every root is left out. `wave` is the `Wave <n>` its start text names, when its plan has it.
 - **Asks** (deterministic sources only; `id` is `<source>:<key>`): `hc:<session>` (hc `blocked` for 2 min from hc's own status time, kind `permission`),
-  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>:<verb>:<hash>` (a `factory status` attention line keyed by what it is about, `stuck:<session>`, `note:<id>`,
-  `spawn:<key>`, `notification:<key>` or `issue:<id>:<kind>`, plus a short hash of the line with its digits removed: a counter such as
-  `for 5 min` does not change the id, two different lines of one subject do not collapse), `decision:<key>` (an open decision of an open Issue,
+  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>:<verb>:<hash>` (a `factory status` attention line, now only `blocked:<session>`, `issue:<id>:blocked` and `review-held:<key>`, plus a short hash of the line with its digits removed: a counter such as
+  `for 5 min` or `for 3 h` does not change the id, two different lines of one subject do not collapse), `decision:<key>` (an open decision of an open Issue,
   `question`) and `queue:<id>` (the human queue through `ask-human.sh list --json`, `human`; the script is dotfiles', at
   `FACTORY_ASK_HUMAN`; a script that does not print the JSON array yet is an `errors[]` line). An ask with no time of its own (hc, a wait, an attention line) has the time of the first build that saw it, kept across builds and
-  restarts. Oldest first. **Machine failures are not asks** (`isMachineNoise`; they stay in `factory status`): a note to a terminal the model no longer has or whose delivery is `unconfirmed`, a failed
-  spawn whose agent is a working session, a kept-worktree line of an Issue that is not open, and `Issue N waits for the claim`. A `factory:` ask older than 7 days expires
+  restarts. Oldest first. **Machine failures are not asks.** They are `health` (below), and a health line never becomes an ask. A `factory:` ask older than 7 days expires
   (left out, its time kept in `fleet_ask_seen` as a listed row, so it does not return as new, also after a restart); the queue, decisions, hc and waits never expire here.
-- **CLI.** `factory fleet [--format json|plain] [--refresh]`: plain is the summary line, the asks, then the repos with a running plan
+- **The health line.** `Fleet.health[]` (`FleetHealth`: `id`, `kind`, `text`, `repo`, `issue?`, `session?`, `since`) is `factory status`'s `health` lines, one per line, `id` = `health:` + `lineKey`
+  (the subject, then a short hash of the line without its digits, so an age does not change it), `since` the first build that saw the id (kept in the snapshot across builds and restarts; a line that leaves the list starts again when it
+  returns). `kind` (`healthKind`, one place): `park` (`Issue N parked for <age>: …`), `silent`, `over_budget`, `regressions`, else `machine`. The model drops what is bookkeeping and no line for the owner
+  (`isMachineNoise`; it stays in `factory status`): a note to a terminal the model no longer has or whose delivery is `unconfirmed`, a failed spawn whose agent is a working session, a kept-worktree line of an Issue that is
+  not open, and `Issue N waits for the claim`. The three derived lines (`health.ts` `healthLines`, facts stored and state derived, no migration, one place for the constants):
+  **silent lead**, an Issue `working` whose lead session `lead-<id>-<attempt>` has stored no event of any kind for 20 minutes (`SILENT_AFTER_MS`; a lead that stored none counts from the Issue's latest `working` transition):
+  `Issue <id>: no hook event for <n> min`; **over budget**, an Issue `working` longer than its size's budget (`BUDGET_HOURS`: s 2 h, m 6 h, l 24 h; no size counts as m), counted from the latest transition to `working`:
+  `Issue <id>: working <n> h, budget <b> h (size <s>)`; **regressions**, an open Issue with exactly `MAX_REGRESSIONS` (2) `regression` events (counted from `issue_events` as `lifecycle.ts` counts them; the third parks it,
+  and then it is a park line): `Issue <id>: 2 regressions, the next one parks it`. `summary.asks` counts asks only.
+- **CLI.** `factory fleet [--format json|plain] [--refresh]`: plain is the summary line, the asks, the health lines, then the repos with a running plan
   and their sessions, then the errors.
 
 **The digest (FV Wave 2).** `src/fleet/digest.ts` (the pass, the cache, the one `agw digest` call), `digest-model.ts` (what the digest may read, and what its
@@ -1309,7 +1331,7 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
   The result comes back as a new ask: when a hand-off's worker has ended, `handoff:<spawn key>` (`source: handoff`, `kind: note`); one that failed to start is the `spawn … failed` ask of `factory status`, again handable.
 - **Automatic is bookkeeping only** (`fleet_triage_log`: kind, subject, what, why, evidence, `at`, `undone_at`; unique on `(kind, subject, fingerprint)`, so what the owner undid is not made again for the same fact): a stale plan marked
   (`plan_stale`; undo reads that plan as `planned` until its text changes), an ask folded under the newer ask about the same subject (`fold`: factory asks of one subject; queue requests whose text and command are both the same; the older leaves `asks` and the newer lists it in
-  `folded`; it holds only while the newer one is listed), an expired note dismissed (`dismiss_note`: a factory note ask 24 h old). `GET /fleet/triage` lists the log, `POST /fleet/triage/:id/undo` takes a row back (201, 200 when already undone, 404). None
+  `folded`; it holds only while the newer one is listed), (`dismiss_note` is no longer made: a note is a health line, not an ask; old rows stay in the log). `GET /fleet/triage` lists the log, `POST /fleet/triage/:id/undo` takes a row back (201, 200 when already undone, 404). None
   of it runs a command, denies an ask, or touches the queue: a folded request stays in the queue.
 - **CLI.** `factory fleet act <ask> <intent> [--note] [--until]`, `factory fleet triage [--undo <id>]`; the plain screen shows each ask's tier, suggestion and actions.
 - **Occurrences** (`factory.fleet_ask_seen`): an ask is one occurrence while its source lists it; a build in which every source answered and that does not list it ends the occurrence, and a return is the next

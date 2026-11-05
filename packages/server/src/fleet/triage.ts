@@ -28,8 +28,6 @@ import {
 
 /** A queue request this old is stale: denied, never run with its command. */
 export const OLD_REQUEST_MS = 7 * 86_400_000
-/** A note that was not delivered and was not looked at for this long has expired. */
-export const NOTE_EXPIRES_MS = STALE_ASK_MS
 /** Probes made by one build: oldest requests first; the rest wait for the next. */
 export const MAX_PROBES_PER_BUILD = 40
 /** A build spends at most this long on probes; the next one starts at the next request, so none starves. */
@@ -216,20 +214,6 @@ export function automaticSteps(
     }
   }
 
-  for (const ask of model.asks) {
-    if (ask.source !== 'factory' || !ask.id.startsWith('factory:note:')) continue
-    const age = now.getTime() - Date.parse(ask.at)
-    if (age < NOTE_EXPIRES_MS) continue
-    rows.push({
-      kind: 'dismiss_note',
-      subject: ask.id,
-      fingerprint: ask.id,
-      what: `Dismissed the expired note ${ask.id}`,
-      why: 'a note that was not delivered and was not looked at for 24 hours has expired',
-      evidence: `raised ${ask.at}, ${days(age)} days ago`,
-      payload: { askAt: ask.at },
-    })
-  }
   return rows
 }
 

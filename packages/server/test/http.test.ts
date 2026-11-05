@@ -55,6 +55,7 @@ describe('routing (finding 8)', () => {
       version: 'test',
       reason: null,
       tick: { lastSuccessAt: '2026-10-30T12:00:00.000Z', lastError: null },
+      heartbeat: { ok: true, reason: null, tickAt: '2026-10-30T12:00:00.000Z', queueMovedAt: null },
     })
   })
 })

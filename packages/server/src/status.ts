@@ -1,6 +1,7 @@
 import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
+import { healthLines } from './health.ts'
 import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
@@ -18,33 +19,40 @@ const ORDER: readonly SessionState[] = ['walled', 'blocked', 'stuck', 'working',
 const minutesSince = (since: string | null, now: Date): number =>
   since ? Math.max(0, Math.floor((now.getTime() - Date.parse(since)) / 60_000)) : 0
 
-/** What needs a look, one line each. A blocked session shows only once it has waited the two minutes. */
+/** What needs the owner (`asks`) and what needs a look and no decision (`health`), one line each. */
+interface Lines {
+  asks: string[]
+  health: string[]
+}
+
+/** A blocked session is an ask, and shows only once it has waited the two minutes; stuck, walled, notes and failed spawns are health. */
 function attention(
   sessions: readonly { view: Session; facts: readonly Fact[] }[],
   notes: Status['notes'],
   spawns: Status['queue']['spawns'],
   now: Date,
-): string[] {
-  const lines: string[] = []
+): Lines {
+  const lines: Lines = { asks: [], health: [] }
   for (const { view, facts } of sessions) {
     const age = minutesSince(view.since, now)
     if (view.state === 'blocked' && now.getTime() - Date.parse(view.since ?? '') >= BLOCKED_AFTER_MS) {
       const why = facts.findLast((f) => f.kind === 'prompt_blocked')?.detail
-      lines.push(`blocked ${view.id} for ${age} min${why ? `: ${why}` : ''}`)
+      lines.asks.push(`blocked ${view.id} for ${age} min${why ? `: ${why}` : ''}`)
     }
-    if (view.state === 'stuck') lines.push(`stuck ${view.id}: nothing moved for ${age} min`)
+    if (view.state === 'stuck') lines.health.push(`stuck ${view.id}: nothing moved for ${age} min`)
     if (view.state === 'walled') {
-      lines.push(
+      lines.health.push(
         `walled ${view.id} for ${age} min${view.account ? ` on ${view.account}` : ': account unknown, the watchdog cannot act'}`,
       )
     }
   }
   for (const note of notes) {
-    if (note.status === 'failed') lines.push(`note ${note.id} to ${note.session} failed: ${note.error ?? 'unknown'}`)
-    else if (note.sentCount > 0 && note.error) lines.push(`note ${note.id} to ${note.session}: ${note.error}`)
+    if (note.status === 'failed')
+      lines.health.push(`note ${note.id} to ${note.session} failed: ${note.error ?? 'unknown'}`)
+    else if (note.sentCount > 0 && note.error) lines.health.push(`note ${note.id} to ${note.session}: ${note.error}`)
   }
   for (const spawn of spawns) {
-    if (spawn.status === 'failed') lines.push(`spawn ${spawn.key} failed: ${spawn.error ?? 'unknown'}`)
+    if (spawn.status === 'failed') lines.health.push(`spawn ${spawn.key} failed: ${spawn.error ?? 'unknown'}`)
   }
   return lines
 }
@@ -75,14 +83,19 @@ export async function buildStatus(
     .filter((s) => s.status !== 'started' && s.status !== 'ended' && s.status !== 'cancelled')
     .sort((a, b) => Number(a.status === 'failed') - Number(b.status === 'failed'))
   const issues = await statusIssues(sql, now)
+  const own = attention(loaded, notes, spawns, now)
+  const byIssue = await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })
+  const byReview = await reviewAttention(sql, now, limits)
   return {
     now: now.toISOString(),
-    attention: [
-      ...attention(loaded, notes, spawns, now),
-      ...(await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })),
+    attention: [...own.asks, ...byIssue.asks, ...byReview.asks],
+    health: [
+      ...own.health,
+      ...byIssue.health,
+      ...(await healthLines(sql, now)),
       ...(await notificationAttention(sql, now)),
       ...(await digestAttention(sql, now)),
-      ...(await reviewAttention(sql, now, limits)),
+      ...byReview.health,
     ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },

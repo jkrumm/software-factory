@@ -99,7 +99,7 @@ import {
 } from './schemas.ts'
 import { buildStatus } from './status.ts'
 import { declareWait, getSession, listSessions, recordEvent } from './sessions.ts'
-import type { TickMonitor } from './health.ts'
+import { heartbeat, type TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { releaseSlot, touchSlot } from './slots.ts'
 import type { ReviewLimits } from './review/limits.ts'
@@ -801,7 +801,12 @@ export function routes({
         token,
         async () => {
           await sql`SELECT 1`
-          const health = { version, ...monitor.snapshot() }
+          const snapshot = monitor.snapshot()
+          const health = {
+            version,
+            ...snapshot,
+            heartbeat: await heartbeat(sql, clock.now(), snapshot.tick.lastSuccessAt),
+          }
           return respond(Health, health, health.status === 'ok' ? 200 : 503)
         },
         { open: true },

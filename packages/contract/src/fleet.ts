@@ -150,6 +150,23 @@ export const FleetAsk = z.strictObject({
 })
 export type FleetAsk = z.infer<typeof FleetAsk>
 
+export const HealthKind = z.enum(['park', 'silent', 'over_budget', 'regressions', 'machine'])
+export type HealthKind = z.infer<typeof HealthKind>
+
+/** A line of the health line: what needs a look and no decision. It never becomes an ask. */
+export const FleetHealth = z.strictObject({
+  /** `health:<subject>:<hash>`, the same for the same line on every build (the digits of a counter do not change it) */
+  id: z.string(),
+  kind: HealthKind,
+  text: z.string(),
+  repo: z.string().nullable(),
+  issue: z.number().int().optional(),
+  session: z.string().optional(),
+  /** the first build that saw the line */
+  since: z.string(),
+})
+export type FleetHealth = z.infer<typeof FleetHealth>
+
 export const FleetSummary = z.strictObject({
   /** the sessions listed under a repo, `working` or `starting`; the three counts do not overlap */
   working: z.number().int(),
@@ -326,6 +343,8 @@ export const FleetBody = z.strictObject({
   fingerprint: z.string(),
   summary: FleetSummary,
   asks: z.array(FleetAsk),
+  /** a snapshot stored before the health line has none */
+  health: z.array(FleetHealth).default([]),
   repos: z.array(FleetRepo),
   /** live sessions with no repo of the model (outside every root, or in a directory that is no git repo): not in `summary` */
   unplaced: z.array(FleetSession),

@@ -1,11 +1,12 @@
 .DEFAULT_GOAL := help
-.PHONY: help check test fmt deploy verify version
+.PHONY: help check test fmt deploy rollback verify version
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, tests (the merge gate)"
 	@echo "make test    the tests only"
 	@echo "make fmt     apply formatting"
 	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
+	@echo "make rollback swap back to the previous release (data/previous-sha): service, /health at the old sha, current, CLI, door (DRY_RUN=1 prints the plan)"
 	@echo "make version print the deployed commit sha (one line; what the hold checks the shipped commits against)"
 	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF), and the factory CLI against it"
 
@@ -37,6 +38,9 @@ fmt:
 # A release (~/.software-factory/releases/<sha>, live via `current`) is what runs, never this checkout; scripts/deploy.sh owns the steps.
 deploy:
 	@DRY_RUN="$(DRY_RUN)" /bin/bash scripts/deploy.sh
+
+rollback:
+	@DRY_RUN="$(DRY_RUN)" /bin/bash scripts/deploy.sh rollback
 
 verify:
 	@/bin/bash scripts/verify.sh

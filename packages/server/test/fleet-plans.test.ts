@@ -135,9 +135,24 @@ describe('lineKey', () => {
     expect(base('spawn k failed: no pane')).toBe('spawn:k')
     expect(base('notification notify:x was not delivered: down')).toBe('notification:notify:x')
     expect(base('Issue 7 blocked: the reason')).toBe('issue:7:blocked')
-    expect(base('Issue 7 parked: its lead is gone (x)')).toBe('issue:7:lead-gone')
+    expect(base('Issue 7 parked for 5 min: its lead is gone (x)')).toBe('issue:7:lead-gone')
+    expect(base('Issue 7 parked for 5 min: its lead stopped twice with nothing reported')).toBe('issue:7:unreported')
+    expect(base('Issue 7 parked for 5 min: its account hit a limit wall')).toBe('issue:7:wall')
+    expect(base('Issue 7 parked for 5 min: reason')).toBe('issue:7:parked')
+    expect(base('Issue 7: no hook event for 25 min')).toBe('issue:7:silent')
+    expect(base('Issue 7: working 2.5 h, budget 2 h (size s)')).toBe('issue:7:over-budget')
+    expect(base('Issue 7: 2 regressions, the next one parks it')).toBe('issue:7:regressions')
     expect(base('Issue 7: its worktree could not be made (try 3), trying again: e')).toBe('issue:7:worktree')
-    expect(lineKey('Issue 7 parked: its lead is gone (x)')).not.toBe(lineKey('Issue 8 parked: its lead is gone (x)'))
+    expect(lineKey('Issue 7 parked for 5 min: its lead is gone (x)')).not.toBe(
+      lineKey('Issue 8 parked for 5 min: its lead is gone (x)'),
+    )
+  })
+
+  test('the age of a park or a silence does not change the id, in minutes or in hours', () => {
+    expect(lineKey('Issue 7 parked for 5 min: its lead is gone (x)')).toBe(
+      lineKey('Issue 7 parked for 3 h: its lead is gone (x)'),
+    )
+    expect(lineKey('Issue 7: no hook event for 25 min')).toBe(lineKey('Issue 7: no hook event for 300 min'))
   })
 
   test('two different lines of one subject and verb do not collapse', () => {

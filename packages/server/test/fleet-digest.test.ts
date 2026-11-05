@@ -338,7 +338,7 @@ describe('failure is quiet', () => {
     expect(after.errors).toEqual([])
     expect(after.digest.lastError).toContain('agw digest exited 1')
     expect(after.digest.days[0]).toMatchObject({ calls: 2, failed: 1 })
-    expect((await buildStatus(db.sql, clock.now())).attention).toContain('digest: 1 failed pass in the last 24 h')
+    expect((await buildStatus(db.sql, clock.now())).health).toContain('digest: 1 failed pass in the last 24 h')
     // and it is not an ask
     expect(after.asks.some((a) => a.text.startsWith('digest:'))).toBe(false)
 

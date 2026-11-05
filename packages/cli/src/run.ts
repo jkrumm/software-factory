@@ -81,7 +81,7 @@ commands:
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
-                  the fleet read model (plain: asks first, then the repos with a running plan, then the presence, the digest and the reaper; --format json: all of it, the digest's spend per day under "digest").
+                  the fleet read model (plain: asks first, then the health line, then the repos with a running plan, then the presence, the digest and the reaper; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
   fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]
@@ -324,13 +324,17 @@ const reviewsLine = (r: NonNullable<Status['reviews']>): string => {
   return `reviews: ${r.live}/${r.slots} live, deep today ${most}/${r.deepCap} per account${each ? ` (${each})` : ''}`
 }
 
-/** The status screen: attention first, then each section a header and tab-separated rows. */
+/** The status screen: the asks first (ATTENTION), the health line after them, then each section a header and tab-separated rows. */
 export function statusScreen(s: Status): string {
   const section = (title: string, rows: string[]) => [title, ...(rows.length ? rows.map((r) => `  ${r}`) : ['  -'])]
   return [
     ...section(
       'ATTENTION',
       s.attention.map((line) => oneLine(line, 1_000)),
+    ),
+    ...section(
+      'HEALTH',
+      s.health.map((line) => oneLine(line, 1_000)),
     ),
     ...section('ISSUES', [
       ...s.issues.map(statusIssueLine),
@@ -393,6 +397,11 @@ export function fleetScreen(f: Fleet): string {
       out.push(`    suggest ${a.suggestion.verb} (${a.suggestion.confidence})\t${oneLine(a.suggestion.evidence, 160)}`)
     }
     if (a.actions.length > 0) out.push(`    actions ${a.actions.map((x) => x.intent).join(' ')}`)
+  }
+  out.push('HEALTH')
+  if (f.health.length === 0) out.push('  -')
+  for (const h of f.health) {
+    out.push(`  ${h.id}\t${h.kind}\t${h.repo?.split('/').at(-1) ?? '-'}\t${h.since}\t${oneLine(h.text, 160)}`)
   }
   out.push('REPOS')
   const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))

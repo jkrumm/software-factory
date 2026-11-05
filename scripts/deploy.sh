@@ -15,6 +15,10 @@
 # server is healthy. It never fails the deploy: a door that cannot start (no tokens file yet) is a warning here and a failed
 # line in `make verify`, and the server it files into is untouched.
 #
+# `make rollback` (`deploy.sh rollback`) swaps back to the previous release (data/previous-sha) with the same steps as a deploy's switch:
+# the plist, the service, /health at the old sha, then `current`, the CLI link, deployed-sha, the door. The two shas trade places, so a
+# second rollback swaps forward again. Nothing is fetched or built: the previous release is on disk or the rollback is refused.
+#
 # DRY_RUN=1 prints the plan and the rendered plist and touches nothing (no fetch, no launchd, no ~/.local/bin).
 #
 # Everything lives inside `main`, called on the last line when the file is run (not when it is sourced): this file is
@@ -268,7 +272,79 @@ check_refs() { # $1 release dir
   [[ -z "$missing" ]] || die "cannot read${missing} through secrets-run (seed them: make secrets-seed on the MacBook); nothing was changed"
 }
 
+# The release before the live one, back. Refuses (one line, exit 1) without a complete previous release on disk.
+rollback() {
+  local live prev release unload_secs tool
+  live=$(read_sha "$SHA_FILE")
+  prev=$(read_sha "$PREV_FILE")
+  [[ -n "$prev" ]] || die "no previous release recorded ($PREV_FILE is missing or empty); nothing to roll back to"
+  is_sha "$prev" || die "$PREV_FILE does not hold a 40-hex sha"
+  release="$RELEASES/$prev"
+  [[ -f "$release/.complete" ]] || die "the previous release ${prev:0:12} is not on disk ($release); nothing to roll back to"
+  [[ -f "$(template_of "$release")" ]] || die "$(template_of "$release") missing: ${prev:0:12} cannot be started"
+  [[ "$prev" != "$live" ]] || die "the previous release is the live one (${prev:0:12}); nothing to roll back to"
+  unload_secs=$(unload_wait_secs "$(template_of "$release")")
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log "DRY RUN: nothing is stopped, started or written"
+    log "would roll back ${live:-none} -> ${prev:0:12} (release $release)"
+    log "rendered $PLIST (points at the release, not at current):"
+    render_plist "$(template_of "$release")" "$release" "$prev"
+    act "launchctl bootout $LABEL, wait up to ${unload_secs}s for the unload"
+    act launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $prev"
+    act "on failure: boot ${live:-none} again, exit 1"
+    act ln -sfn "$release" "$CURRENT"
+    act ln -sf "$CURRENT/packages/cli/bin/factory.ts" "$CLI_LINK"
+    act "write $SHA_FILE ($prev) and $PREV_FILE (${live:-none}): the two trade places"
+    act "launchctl bootout $DOOR_LABEL if loaded, then bootstrap it from $release"
+    return 0
+  fi
+
+  for tool in curl jq launchctl plutil; do
+    command -v "$tool" >/dev/null 2>&1 || die "$tool not found on PATH"
+  done
+  if [[ -e "$CLI_LINK" && ! -L "$CLI_LINK" ]]; then die "$CLI_LINK is a regular file; refusing to replace it"; fi
+  if [[ -e "$CURRENT" && ! -L "$CURRENT" ]]; then die "$CURRENT exists and is not a symlink; remove it, then roll back again"; fi
+
+  # one deploy or rollback at a time
+  mkdir -p "$DATA_DIR" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    local holder
+    holder=$(cat "$LOCK/pid" 2>/dev/null)
+    if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then die "a deploy or rollback is running (pid $holder)"; fi
+    rm -rf "$LOCK"; mkdir "$LOCK" || die "cannot take $LOCK"
+  fi
+  echo $$ > "$LOCK/pid"
+  trap 'rm -rf "$LOCK"' EXIT
+
+  log "rolling back ${live:-none} -> ${prev:0:12}, stopping the service"
+  stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
+  if start_service "$release" "$prev" && wait_healthy "$prev"; then
+    ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
+    ln -sf "$CURRENT/packages/cli/bin/factory.ts" "$CLI_LINK" || die "linking $CLI_LINK failed"
+    [[ -z "$live" ]] || write_atomic "$PREV_FILE" "$live"
+    write_atomic "$SHA_FILE" "$prev" || die "writing $SHA_FILE failed"
+    deploy_door "$release" "$prev"
+    log "rollback OK: ${prev:0:12} healthy; factory -> $CLI_LINK"
+    return 0
+  fi
+  echo "[deploy] ERROR: ${prev:0:12} did not become healthy within ${HEALTH_WAIT_SECS}s" >&2
+  tail_logs
+  stop_service "$unload_secs" || echo "[deploy] WARNING: could not unload the service" >&2
+  if [[ -n "$live" && -f "$(template_of "$RELEASES/$live")" ]] && start_service "$RELEASES/$live" "$live" && wait_healthy "$live"; then
+    echo "[deploy] ROLLBACK FAILED: ${live:0:12} is running again. deployed-sha unchanged." >&2
+  else
+    stop_service "$unload_secs" || true
+    remove_failed_plist "$prev"
+    [[ -z "$live" ]] || remove_failed_plist "$live"
+    echo "[deploy] ROLLBACK FAILED: neither ${prev:0:12} nor the live release became healthy; left booted out, plist removed." >&2
+  fi
+  return 1
+}
+
 main() {
+  if [[ "${1:-}" == "rollback" ]]; then rollback; return; fi
   local repo_url sha old prev="" release unload_secs tool
 
   # --- preflight: everything that can refuse does so before anything is built, stopped or written

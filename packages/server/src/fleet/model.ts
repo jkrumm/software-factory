@@ -4,6 +4,7 @@ import type {
   Fleet,
   FleetAsk,
   FleetGit,
+  FleetHealth,
   FleetPlan,
   FleetRepo,
   FleetSession,
@@ -11,6 +12,7 @@ import type {
   Status,
 } from '@software-factory/contract'
 import { NO_REAPER } from '@software-factory/contract'
+import { healthKind } from '../health.ts'
 import { BLOCKED_AFTER_MS } from '../rules.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import { parsePlan, planState } from './plans.ts'
@@ -70,6 +72,8 @@ export interface ModelInput {
   queue: QueueRequest[]
   /** when an ask that has no time of its own (hc, a wait's fallback, an attention line) was first seen: the first build that saw it */
   firstSeen: ReadonlyMap<string, string>
+  /** when a health line (by id) was first seen: the previous build's `since`, so a restart keeps it */
+  healthSeen?: ReadonlyMap<string, string>
   /** out: the factory asks that expired this build (id to first-seen time), so the builder keeps their time and they stay gone */
   expired?: Map<string, string>
   errors: string[]
@@ -84,10 +88,10 @@ const hash = (text: string, length = 12): string => createHash('sha256').update(
 /**
  * What an attention line is about, as the key of its ask: the session and the verb, the note, the spawn, the notification, the
  * Issue and what is wrong with it, then a short hash of the line with its digits removed: two different lines of one subject do not
- * collapse, and a counter (`for 5 min`) does not change the id.
+ * collapse, and a counter (`for 5 min`, `for 3 h`) does not change the id.
  */
 export function lineKey(line: string): string {
-  return `${subjectKey(line)}:${hash(line.replace(/\d+/g, ''), 6)}`
+  return `${subjectKey(line)}:${hash(line.replace(/\d+ h\b/g, '0 min').replace(/\d+/g, ''), 6)}`
 }
 
 function subjectKey(line: string): string {
@@ -107,10 +111,14 @@ function subjectKey(line: string): string {
   if (issue) {
     const rest = issue[2] ?? ''
     const kinds: [RegExp, string][] = [
-      [/^ parked: its lead stopped twice/, 'unreported'],
-      [/^ parked: its lead is gone/, 'lead-gone'],
+      [/^ parked for [^:]+: its lead stopped twice/, 'unreported'],
+      [/^ parked for [^:]+: its lead is gone/, 'lead-gone'],
+      [/^ parked for [^:]+: its account hit/, 'wall'],
       [/^ blocked/, 'blocked'],
       [/^ parked/, 'parked'],
+      [/^: no hook event/, 'silent'],
+      [/^: working /, 'over-budget'],
+      [/^: \d+ regressions/, 'regressions'],
       [/^ is an alert/, 'alert-off'],
       [/^ waits for the claim/, 'claim'],
       [/^: its lead did not start/, 'lead-not-started'],
@@ -136,7 +144,7 @@ function lineSubject(line: string): { session?: string; spawn?: string; issue?: 
 }
 
 /**
- * Whether an attention line is the factory's own bookkeeping and holds no owner decision: it stays in `factory status`, never an ask.
+ * Whether a health line is the factory's own bookkeeping and worth no line on `/fleet`: it stays in `factory status`'s health list.
  * A note to a terminal that no longer exists (it expired, or was never confirmed), a spawn marked failed while its terminal works on, a
  * kept worktree of a closed Issue, and the informational "waits for the claim".
  */
@@ -161,8 +169,7 @@ export function isMachineNoise(
 const worksAPlan = (s: { state: string; wait: string | null }) =>
   s.state === 'waiting' ? s.wait !== 'owner' : s.state !== 'idle'
 
-const askKind = (line: string): FleetAsk['kind'] =>
-  /^(blocked|stuck|walled|spawn|Issue|review) /.test(line) ? 'blocker' : 'note'
+const askKind = (line: string): FleetAsk['kind'] => (/^(blocked|Issue|review) /.test(line) ? 'blocker' : 'note')
 
 function sessionOrder(a: FleetSession, b: FleetSession): number {
   return STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || a.id.localeCompare(b.id)
@@ -292,15 +299,41 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     }
   }
 
-  // The factory's own attention lines. Open decisions have their own asks below, and a blocked session its hc ask.
+  // The factory's own asks: a lead's `blocked` Issue and a review held at the deep cap. Open decisions have their own asks below, and a
+  // blocked session its hc ask.
   for (const line of status.attention) {
     if (/^Issue \d+ asks: /.test(line)) continue
-    // The digest's own counter (`factory status` shows it): about the model's text, not something waiting on the owner.
-    if (line.startsWith('digest: ')) continue
     const subject = lineSubject(line)
     if (subject.session && /^blocked /.test(line) && hcBlocked.has(subject.session)) continue
     const id = `factory:${lineKey(line)}`
     if (asks.some((a) => a.id === id)) continue
+    const session = subject.session && bySession.has(subject.session) ? subject.session : null
+    const repo =
+      (session ? bySession.get(session)?.repo : undefined) ??
+      (subject.spawn ? spawnRepo.get(subject.spawn) : undefined) ??
+      (subject.issue === undefined ? undefined : issueRepo.get(subject.issue))
+    const at = seen(id)
+    if (now.getTime() - Date.parse(at) >= EXPIRE_FACTORY_ASK_MS) {
+      input.expired?.set(id, at)
+      continue
+    }
+    ask({
+      id,
+      kind: askKind(line),
+      repo: repo ?? null,
+      session,
+      text: line,
+      source: 'factory',
+      at,
+    })
+  }
+
+  // The health line: parks, a silent or over-budget lead, regressions, machine failures. Never an ask.
+  const health: FleetHealth[] = []
+  for (const line of status.health) {
+    const id = `health:${lineKey(line)}`
+    if (health.some((h) => h.id === id)) continue
+    const subject = lineSubject(line)
     const session = subject.session && bySession.has(subject.session) ? subject.session : null
     const spawnRow = subject.spawn ? status.queue.spawns.find((x) => x.key === subject.spawn) : undefined
     const agent = spawnRow ? (spawnRow.pane ?? spawnRow.session) : null
@@ -321,21 +354,17 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
       (session ? bySession.get(session)?.repo : undefined) ??
       (subject.spawn ? spawnRepo.get(subject.spawn) : undefined) ??
       (subject.issue === undefined ? undefined : issueRepo.get(subject.issue))
-    const at = seen(id)
-    if (now.getTime() - Date.parse(at) >= EXPIRE_FACTORY_ASK_MS) {
-      input.expired?.set(id, at)
-      continue
-    }
-    ask({
+    health.push({
       id,
-      kind: askKind(line),
-      repo: repo ?? null,
-      session,
+      kind: healthKind(line),
       text: line,
-      source: 'factory',
-      at,
+      repo: repo ?? null,
+      ...(subject.issue === undefined ? {} : { issue: subject.issue }),
+      ...(session ? { session } : {}),
+      since: input.healthSeen?.get(id) ?? now.toISOString(),
     })
   }
+  health.sort((a, b) => Date.parse(a.since) - Date.parse(b.since) || a.id.localeCompare(b.id))
 
   for (const d of input.decisions) {
     ask({
@@ -369,6 +398,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     builtAt: now.toISOString(),
     summary,
     asks,
+    health,
     repos,
     unplaced,
     quota: status.accounts,

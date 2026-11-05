@@ -106,7 +106,7 @@ async function setup() {
 }
 beforeEach(setup)
 
-const statusOf = async () => (await (await app.get('/status')).json()) as { attention: string[] }
+const statusOf = async () => (await (await app.get('/status')).json()) as { attention: string[]; health: string[] }
 
 const ports = () => ({
   ...leadPorts({ sql: db.sql, clock, roles: TEST_ROLES, repoRoots: [fixture.root] }),
@@ -302,7 +302,7 @@ describe('classify, then admission', () => {
     expect(worktrees.made).toHaveLength(1)
     // It says why in `factory status`.
     const status = await statusOf()
-    expect(status.attention).toContain(`Issue ${second} waits for the claim on ${repo.split('/').pop()}`)
+    expect(status.health).toContain(`Issue ${second} waits for the claim on ${repo.split('/').pop()}`)
 
     const stop = await app.send('POST', `/issues/${first}/drop`, { reason: 'not needed' })
     expect(stop.status).toBe(201)
@@ -322,14 +322,14 @@ describe('classify, then admission', () => {
     expect((await issue(request)).state).toBe('working')
     expect(await trail(alert)).toEqual(['created -→queued', 'classified'])
     const status = await statusOf()
-    expect(status.attention).toContain(`Issue ${alert} is an alert and starts no lead: FACTORY_ALERT_LEADS is off`)
+    expect(status.health).toContain(`Issue ${alert} is an alert and starts no lead: FACTORY_ALERT_LEADS is off`)
 
     alerts = true
     await drive(4)
     expect((await issue(alert)).state).toBe('working')
     expect(worktrees.made.map((w) => w.repo)).toContain(repo)
     const after = await statusOf()
-    expect(after.attention.some((line: string) => line.includes('starts no lead'))).toBe(false)
+    expect(after.health.some((line: string) => line.includes('starts no lead'))).toBe(false)
   })
 
   test('a drain and a paused project hold admission back', async () => {
@@ -463,10 +463,14 @@ describe('classify, then admission', () => {
       await drive(3)
       expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone' })
       expect(await trail(id)).toContain('lead_gone working→waiting')
-      const attention = (await statusOf()).attention
+      const { attention, health } = await statusOf()
       expect(
-        attention.some((line) => line.startsWith(`Issue ${id} parked: its lead is gone (spawn ${key} ${how}`)),
+        health.some(
+          (line) =>
+            line.startsWith(`Issue ${id} parked for `) && line.includes(`its lead is gone (spawn ${key} ${how}`),
+        ),
       ).toBe(true)
+      expect(attention).toEqual([])
       expect(await db.sql`SELECT 1 FROM factory.prompts WHERE source = 'note' AND session = ${key}`).toHaveLength(0)
       // The owner wakes it with the lead still gone: it parks again, and does not sit working with nobody to work.
       await enqueue(db.sql, {
@@ -764,7 +768,7 @@ describe('classify, then admission', () => {
     const tries = async () => (await db.sql`SELECT tries FROM factory.lead_worktrees`)[0]?.tries as number
     // 5 passes of 5 s: one try, and the next is 30 s on.
     expect(await tries()).toBe(1)
-    expect((await statusOf()).attention).toContain(
+    expect((await statusOf()).health).toContain(
       `Issue ${id}: its worktree could not be made (try 1), trying again: git fetch origin failed (exit 128)`,
     )
     clock.advance(31_000)
@@ -796,9 +800,7 @@ describe('classify, then admission', () => {
     // The abandoned attempt gave its place on the project back.
     expect(await db.sql`SELECT 1 FROM factory.claims`).toHaveLength(0)
     expect(
-      (await statusOf()).attention.some((line) =>
-        line.includes('its lead is gone (the worktree could not be made after'),
-      ),
+      (await statusOf()).health.some((line) => line.includes('its lead is gone (the worktree could not be made after')),
     ).toBe(true)
   })
 
@@ -1300,7 +1302,7 @@ describe('what the review found', () => {
     await drive(4)
     expect(runner.started.some((start) => start.prompt.includes('# Operating contract'))).toBe(false)
     const status = await statusOf()
-    expect(status.attention.some((line) => line.includes("is not this Issue's lead"))).toBe(true)
+    expect(status.health.some((line) => line.includes("is not this Issue's lead"))).toBe(true)
   })
 
   test('on the socket a verb needs a session that works the Issue; the port does not', async () => {
@@ -1454,7 +1456,12 @@ describe('the lead’s send-back', () => {
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'unreported' })
     expect(await trail(id)).toContain('unreported working→waiting')
     const status = await statusOf()
-    expect(status.attention).toContain(`Issue ${id} parked: its lead stopped twice with nothing reported`)
+    expect(
+      status.health.some(
+        (l) => l.startsWith(`Issue ${id} parked for `) && l.endsWith(': its lead stopped twice with nothing reported'),
+      ),
+    ).toBe(true)
+    expect(status.attention).toEqual([])
     // Replayed, the stop records nothing more.
     await stop(key, true)
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'unreported'`).toHaveLength(1)
@@ -1468,9 +1475,10 @@ describe('the lead’s send-back', () => {
     await enqueue(db.sql, { issueId: id, key: `park:${id}`, kind: 'park', at: clock.now() })
     await pass()
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked' })
-    const attention = (await statusOf()).attention
-    expect(attention).toContain(`Issue ${id} parked`)
-    expect(attention.some((line) => line.includes('old news'))).toBe(false)
+    const { attention, health } = await statusOf()
+    expect(health.some((line) => line.startsWith(`Issue ${id} parked for `))).toBe(true)
+    expect(health.some((line) => line.includes('old news'))).toBe(false)
+    expect(attention).toEqual([])
   })
 
   test('a stop with a background task running is neither sent back nor parked; the same stop without one is', async () => {

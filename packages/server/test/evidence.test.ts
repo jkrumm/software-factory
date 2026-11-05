@@ -1424,8 +1424,9 @@ describe('finalize', () => {
     worktrees.removal = { kept: 'it has uncommitted changes', path: '/work/tree' }
     await post(id, 'drop', { reason: 'no', session: key })
     await drive(3)
-    const status = (await (await app.get('/status')).json()) as { attention: string[] }
-    expect(status.attention).toContain(`Issue ${id}: its worktree was kept (it has uncommitted changes): /work/tree`)
+    const status = (await (await app.get('/status')).json()) as { attention: string[]; health: string[] }
+    expect(status.attention).toEqual([])
+    expect(status.health).toContain(`Issue ${id}: its worktree was kept (it has uncommitted changes): /work/tree`)
     expect(await trail(id)).toContain('issue_finalized')
     expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
   })
@@ -1438,8 +1439,8 @@ describe('finalize', () => {
     await post(id, 'drop', { reason: 'no', session: key })
     await drive(3)
     expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
-    const status = (await (await app.get('/status')).json()) as { attention: string[] }
-    expect(status.attention).toContain(`Issue ${id}: it cannot be finalized: hc is down`)
+    const status = (await (await app.get('/status')).json()) as { attention: string[]; health: string[] }
+    expect(status.health).toContain(`Issue ${id}: it cannot be finalized: hc is down`)
     expect(await trail(id)).not.toContain('issue_finalized')
     runner.failure = undefined
     clock.advance(60_000)

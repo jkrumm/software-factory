@@ -175,6 +175,19 @@ export const QueueView = z.object({
 export type QueueView = z.infer<typeof QueueView>
 
 /**
+ * What the Uptime Kuma heartbeat posts (a pusher reads these four names; they stay): `ok` is true when the last successful tick is under
+ * 30 minutes old and no spawn has been due for 30 minutes without a change of status. `reason` names the failing half, `tickAt` is the
+ * last successful tick (null until one), `queueMovedAt` the newest status change of any spawn (null: none).
+ */
+export const Heartbeat = z.object({
+  ok: z.boolean(),
+  reason: z.string().nullable(),
+  tickAt: z.string().nullable(),
+  queueMovedAt: z.string().nullable(),
+})
+export type Heartbeat = z.infer<typeof Heartbeat>
+
+/**
  * `GET /health`: 200 with `status: ok`, or 503 with `status: unhealthy` and the reason, in the same shape. A tick
  * that has not succeeded within three intervals (or a pass that has run past its limit) makes the server unhealthy.
  */
@@ -186,6 +199,7 @@ export const Health = z.object({
     lastSuccessAt: z.string().nullable(),
     lastError: z.object({ at: z.string(), message: z.string() }).nullable(),
   }),
+  heartbeat: Heartbeat,
 })
 export type Health = z.infer<typeof Health>
 
@@ -221,8 +235,10 @@ export type StopCheck = z.infer<typeof StopCheck>
 /** `GET /status`: one screen. Sessions are ordered walled, blocked, stuck first; dead ones are left out. */
 export const Status = z.object({
   now: z.string(),
-  /** what needs a decision or a look, one line each */
+  /** the asks: what waits on a decision of the owner, one line each (RS3) */
   attention: z.array(z.string()),
+  /** the health line: parks, a silent or over-budget lead, regressions and machine failures, one line each; never an ask */
+  health: z.array(z.string()).default([]),
   sessions: z.array(Session),
   queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
   accounts: z.array(Quota),

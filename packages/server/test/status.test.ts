@@ -84,11 +84,12 @@ describe('factory status', () => {
     expect(s.sessions[0]).toMatchObject({ role: 'worker', account: 'a', since: w.at(30).toISOString() })
   })
 
-  test('lists what needs a look: a blocked session only after two minutes, walls, failed notes and spawns', async () => {
+  test('asks: a blocked session, only after two minutes; health: walls, failed notes and spawns', async () => {
     await scene()
-    expect((await status()).attention).toEqual([
+    const s = await status()
+    expect(s.attention).toEqual(['blocked stopped for 3 min: Dangerous rm of /tmp/x'])
+    expect(s.health).toEqual([
       'walled walled for 30 min on a',
-      'blocked stopped for 3 min: Dangerous rm of /tmp/x',
       'note n-failed to quiet failed: cannot be resumed',
       'spawn broken failed: hc terminal.run: exited 1',
     ])
@@ -124,7 +125,9 @@ describe('factory status', () => {
     await w.emit('anon', 'session_started', w.at(60), { claudeSessionId: 'c' })
     await w.emit('anon', 'turn_started', w.at(40))
     await w.emit('anon', 'limit_stop', w.at(30))
-    expect((await status()).attention).toEqual(['walled anon for 30 min: account unknown, the watchdog cannot act'])
+    const s = await status()
+    expect(s.attention).toEqual([])
+    expect(s.health).toEqual(['walled anon for 30 min: account unknown, the watchdog cannot act'])
   })
 
   test('delivered notes and failures older than a day are gone from it', async () => {

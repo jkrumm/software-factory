@@ -281,7 +281,15 @@ describe('the estate', () => {
     expect(ids).toContain('wait:rb-waits')
     expect(ids).toContain('decision:q1:dec')
     expect(ids).toContain('queue:20261027T230130-2786')
-    expect(ids.filter((id) => id.startsWith('factory:'))).toHaveLength(2)
+    // a failed spawn and an undelivered notification are machine failures: health lines, never asks
+    expect(ids.filter((id) => id.startsWith('factory:'))).toHaveLength(0)
+    expect(fleet.health.map((h) => [h.kind, h.id.replace(/:[0-9a-f]{6}$/, ''), h.repo])).toEqual(
+      expect.arrayContaining([
+        ['machine', 'health:spawn:lw-fix', join(estate.src, 'linewatch')],
+        ['machine', 'health:notification:notify:failed:x', null],
+      ]),
+    )
+    expect(fleet.health).toHaveLength(2)
     const by = (id: string) => fleet.asks.find((a) => a.id === id)
     expect(by('hc:prometheus-epx-w1')).toMatchObject({
       kind: 'permission',
@@ -304,19 +312,11 @@ describe('the estate', () => {
       repo: null,
       at: '2026-11-01T21:26:07.000Z',
     })
-    const factory = fleet.asks.filter((a) => a.source === 'factory')
-    expect(factory.map((a) => a.id.replace(/:[0-9a-f]{6}$/, '')).sort()).toEqual([
-      'factory:notification:notify:failed:x',
-      'factory:spawn:lw-fix',
-    ])
-    expect(factory.map((a) => a.text).sort()).toEqual([
+    expect(fleet.health.map((h) => h.text).sort()).toEqual([
       'notification notify:failed:x was not delivered: Hermes did not answer',
       'spawn lw-fix failed: the pane never came up',
     ])
-    expect(factory.find((a) => a.text?.startsWith('spawn'))).toMatchObject({
-      kind: 'blocker',
-      repo: join(estate.src, 'linewatch'),
-    })
+    expect(fleet.health.find((h) => h.text.startsWith('spawn'))?.repo).toBe(join(estate.src, 'linewatch'))
     // the open decision is an ask of its own, not twice
     expect(fleet.asks.filter((a) => a.text?.includes('Benchmark'))).toHaveLength(1)
     // oldest first; only the October request is older than a day
@@ -702,12 +702,12 @@ describe('the lead’s review', () => {
     expect((await builder.refreshNow()).asks.find((a) => a.id === 'hc:software-factory-w6')?.at).toBe(ask?.at)
   })
 
-  test('2, 8: an attention line keeps its id and its time across builds', async () => {
+  test('2, 8: a health line keeps its id and its time across builds', async () => {
     await factoryRows()
     const first = await builder.refreshNow()
     clock.advance(45 * 60_000)
     const second = await builder.refreshNow()
-    const pick = (f: Fleet) => f.asks.filter((a) => a.source === 'factory').map((a) => [a.id, a.at])
+    const pick = (f: Fleet) => f.health.map((h) => [h.id, h.since])
     expect(pick(second)).toEqual(pick(first))
     expect(pick(first).length).toBe(2)
   })
