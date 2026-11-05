@@ -131,3 +131,7 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   no factory space or `plan:` tab; image-gateway (retired by I1), rollhook-action, ntfy-mac and prometheus-scripts leave the sidebar,
   tinycast-extensions gets no space on the mini (dotfiles `159d27c`). (e) basalt-ui is paused. (f) A1's VPS socket-proxy path over the
   tailnet is acceptable, built later when a surface needs it.
+- **RS12 The factory governs itself (owner, 2026-11-05 night).** A stalled Issue is the factory's to resolve, not the owner's: a deterministic
+  steward in the server acts first (wake, re-check, requeue, deliver), an agw workflow on the cheapest route judges an ask or a spent escalation
+  against the plan, and only taste and big decisions reach the owner. Issues 100 (steward), 101 (agw workflow), 102 (wiring, `--after 100 101`),
+  ahead of row 8. A watcher in the owner's session is the stopgap this ends. RS3 "every park can end" now means ends by itself.

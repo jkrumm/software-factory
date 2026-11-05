@@ -121,3 +121,8 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
   The lead writes the spec first (`docs/design.md`), asks the owner to sign it (`factory issue ask`), then builds it. Surfaces (row 15)
   build on it, nothing earlier. Filed: Issue 85 (`--after 84`).
+
+## Wave 8c — The factory governs itself (RS12), as Issues            <!-- status: active -->
+- [ ] Issue 100: the deterministic steward (blocked and parked re-checks on a backoff, lifted waits, notes that reach a mid-turn lead, one owner line after retries).
+- [ ] Issue 101: agent-workflows, a cheap-route workflow judging whether an ask is the owner's or answerable from the plan, failing closed.
+- [ ] Issue 102 (`--after 100 101`): asks and spent escalations pass that judgment first. Ahead of row 8 by `issue prio`; row 9b's spec sign-off stays the owner's.
