@@ -166,8 +166,7 @@ function supersessionKey(ask: FleetAsk, cmds: ReadonlyMap<string, string | null>
 }
 
 /**
- * What the triage may do without asking: a stale plan marked, an ask folded under the newer one about the same subject, an expired
- * note dismissed. Each is a row (what, why, evidence) the owner can undo; none runs a command or denies anything.
+ * What the triage may do without asking: a stale plan marked, an ask folded under the newer one about the same subject. Each is a row (what, why, evidence) the owner can undo; none runs a command or denies anything.
  */
 export function automaticSteps(
   model: Model,

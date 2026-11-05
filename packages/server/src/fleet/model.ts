@@ -91,7 +91,7 @@ const hash = (text: string, length = 12): string => createHash('sha256').update(
  * collapse, and a counter (`for 5 min`, `for 3 h`) does not change the id.
  */
 export function lineKey(line: string): string {
-  return `${subjectKey(line)}:${hash(line.replace(/\d+ h\b/g, '0 min').replace(/\d+/g, ''), 6)}`
+  return `${subjectKey(line)}:${hash(line.replace(/\d+(\.\d+)?( h\b| min\b)?/g, ''), 6)}`
 }
 
 function subjectKey(line: string): string {

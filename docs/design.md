@@ -1304,8 +1304,8 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
 - **IuRoot never goes.** The feed is built by `scopeOf` and nothing else: no heading of a visible repo or plan, no session whose repo, spawn repo, directory,
   terminal directory or plan is visible (a session in an ordinary repo that works an IuRoot plan is IuRoot's), no session outside every repo. `applyDigest` gates by the same scope (the repos, plans and sessions it offered),
   so text is added to nothing else. Their `short` stays the plan's own comment or the heading cut at 8 words, their `headline` null, and the cache holds nothing of them.
-- **Failure is quiet.** A failed call stores nothing and the model keeps the cached text. `factory status` shows `digest: N failed passes in the last 24 h` in
-  its attention (only when N > 0; the fleet model leaves that line out of the asks). `factory fleet --format json` has `digest { enabled, pending, lastAt, lastError, days[] }`, the
+- **Failure is quiet.** A failed call stores nothing and the model keeps the cached text. `factory status` shows `digest: N failed passes in the last 24 h` as
+  a health line (`health` on `factory status`, `health[]` on `/fleet`; only when N > 0, never an ask). `factory fleet --format json` has `digest { enabled, pending, lastAt, lastError, days[] }`, the
   days UTC, newest first, each with calls, failed calls, items and `costUsd`; `digest` is not in the fingerprint, so a call that changes no text does not `NOTIFY`.
 - **Not done:** the `visible` marker still filters nothing in the (token-only) model.
 
@@ -1335,7 +1335,7 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
   of it runs a command, denies an ask, or touches the queue: a folded request stays in the queue.
 - **CLI.** `factory fleet act <ask> <intent> [--note] [--until]`, `factory fleet triage [--undo <id>]`; the plain screen shows each ask's tier, suggestion and actions.
 - **Occurrences** (`factory.fleet_ask_seen`): an ask is one occurrence while its source lists it; a build in which every source answered and that does not list it ends the occurrence, and a return is the next
-  one (`occurrence` on the ask) with a new first-seen time. What the owner did (a close, a snooze, a hand-off, its spawn key) is of one occurrence, so a `stuck` session that sticks again days later is a new ask. The table is also
+  one (`occurrence` on the ask) with a new first-seen time. What the owner did (a close, a snooze, a hand-off, its spawn key) is of one occurrence, so a session that sticks again days later (a `stuck` health line) is a new occurrence. The table is also
   what the builder restarts with for the first-seen time of every ask (also the ones the triage hid), so a restart does not make an old ask look new and turn a fold round. A build reads the acts it needs once (the listed asks'
   and the hand-offs of the last day), writes the new automatic decisions in one statement, and looks only at the unresolved hand-offs of the last day for their worker's end.
 - **A queue write whose record failed converges.** `ask-human.sh resolve` exits 2 for every refusal; the adapter then reads `ask-human.sh status <id>` and, when the request shows a result (an earlier call, the owner's own), the act is

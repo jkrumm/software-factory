@@ -155,6 +155,15 @@ describe('lineKey', () => {
     expect(lineKey('Issue 7: no hook event for 25 min')).toBe(lineKey('Issue 7: no hook event for 300 min'))
   })
 
+  test('a decimal hour count does not change the id', () => {
+    expect(lineKey('Issue 7: working 7 h, budget 6 h (size m)')).toBe(
+      lineKey('Issue 7: working 7.1 h, budget 6 h (size m)'),
+    )
+    expect(lineKey('Issue 7 parked for 12 min: its lead is gone (x)')).toBe(
+      lineKey('Issue 7 parked for 3.5 h: its lead is gone (x)'),
+    )
+  })
+
   test('two different lines of one subject and verb do not collapse', () => {
     expect(lineKey('Issue 7 blocked: the reason one')).not.toBe(lineKey('Issue 7 blocked: another reason'))
     expect(lineKey('note n-1 to w1 failed: boom')).not.toBe(lineKey('note n-1 to w1: sent twice'))

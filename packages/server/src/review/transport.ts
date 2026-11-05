@@ -20,7 +20,7 @@ import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './limits.ts'
  * The review transport (docs/design.md §3 "The review transport"): agw prepares a review job and asks for one hidden reviewer session per
  * attempt (`factory spawn create review-<job>-a<n> --role reviewer …`). This is the other half: when the session's turn ends its last reply
  * goes to `agw review submit` verbatim, and the terminal is closed. A refusal gets one more attempt (`a2`) with agw's message in its prompt;
- * the second refusal, or a session that stops writing, is for a person (`needs_human`, an attention line, so an ask on /fleet). The
+ * the second refusal, or a session that stops writing, is for a person (`needs_human`, a health line). The
  * factory judges nothing in the reply; agw does.
  *
  * It runs behind the tick's back (`kick`), never inside a transaction. Every effect has a deterministic key: `agw review submit` is
