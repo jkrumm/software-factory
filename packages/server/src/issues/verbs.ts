@@ -222,7 +222,7 @@ export async function fileNote(
     key,
     kind: 'note',
     at: now,
-    payload: { text: input.body.text, call, who: 'owner' },
+    payload: { text: input.body.text, call, who: 'owner', ...(input.body.wake ? { wake: true } : {}) },
   })
   return { ok: true, key, duplicate, state: issue.state }
 }

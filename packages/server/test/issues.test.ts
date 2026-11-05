@@ -130,6 +130,8 @@ describe('the transition table', () => {
         'settling→closed',
         'settling→queued',
         'waiting→closed',
+        'waiting→waiting',
+        'waiting→watching',
         'waiting→working',
         'watching→closed',
         'watching→waiting',
@@ -593,6 +595,79 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'wake', { for: 'wait' })
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'decision' })
     expect((await trail(id)).at(-1)).toBe('refused')
+  })
+
+  test('a timed wait ends early: the lead ships from it, and its own timer then ends nothing', async () => {
+    const id = await working()
+    await step(id, 'wait', { until: new Date(clock.now().getTime() + 3_600_000).toISOString() })
+    await step(id, 'ship')
+    expect(await state(id)).toMatchObject({ state: 'watching', reason: null })
+    clock.advance(3_600_000 - 1)
+    await pass()
+    expect((await state(id)).state).toBe('watching')
+  })
+
+  test.each(['phase', 'drop'] as const)("a timed wait ends early by the lead's %s", async (verb) => {
+    const id = await working()
+    await step(id, 'wait', { until: new Date(clock.now().getTime() + 3_600_000).toISOString() })
+    await step(id, verb, verb === 'phase' ? { phase: 'build' } : undefined)
+    expect((await state(id)).state).toBe(verb === 'phase' ? 'working' : 'closed')
+  })
+
+  test('a lead waits again from a timed wait, for a new time', async () => {
+    const id = await working()
+    const first = new Date(clock.now().getTime() + 3_600_000).toISOString()
+    await step(id, 'wait', { until: first })
+    await step(id, 'wait', { until: new Date(clock.now().getTime() + 60_000).toISOString() })
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    clock.advance(60_000)
+    await pass()
+    expect((await state(id)).state).toBe('working')
+  })
+
+  test('a blocked or decision wait does not end by a lead verb', async () => {
+    const blocked = await working()
+    await step(blocked, 'block')
+    await step(blocked, 'phase', { phase: 'build' })
+    expect(await state(blocked)).toMatchObject({ state: 'waiting', reason: 'blocked' })
+    const asked = await working()
+    await step(asked, 'ask', { question: 'which?' })
+    await step(asked, 'ship')
+    expect(await state(asked)).toMatchObject({ state: 'waiting', reason: 'decision' })
+  })
+
+  test("the owner's note with wake ends a timed wait", async () => {
+    const id = await working()
+    await step(id, 'wait', { until: new Date(clock.now().getTime() + 3_600_000).toISOString() })
+    await step(id, 'note', { text: 'go on' })
+    expect((await state(id)).state).toBe('waiting')
+    await step(id, 'note', { text: 'go on', wake: true })
+    expect((await state(id)).state).toBe('working')
+    expect(await effects(id)).toEqual(['start_lead', 'note_lead', 'note_lead'])
+  })
+
+  test("the owner's note with wake takes a blocked or parked Issue back to working, and not a question, a dependency or a lost lead", async () => {
+    const blocked = await working()
+    await step(blocked, 'block')
+    await step(blocked, 'note', { text: 'go on', wake: true })
+    expect((await state(blocked)).state).toBe('working')
+
+    const parked = await working()
+    await step(parked, 'park')
+    expect(await state(parked)).toMatchObject({ state: 'waiting', reason: 'parked' })
+    await step(parked, 'note', { text: 'go on', wake: true })
+    expect((await state(parked)).state).toBe('working')
+
+    const asked = await working()
+    await step(asked, 'ask', { question: 'which?' })
+    await step(asked, 'note', { text: 'go on', wake: true })
+    expect(await state(asked)).toMatchObject({ state: 'waiting', reason: 'decision' })
+
+    const blocker = await working()
+    const waiting = await working()
+    await step(waiting, 'dep', { on: blocker })
+    await step(waiting, 'note', { text: 'go on', wake: true })
+    expect(await state(waiting)).toMatchObject({ state: 'waiting', reason: 'dependency' })
   })
 
   test('a late wake of an earlier wait does not end a later one', async () => {

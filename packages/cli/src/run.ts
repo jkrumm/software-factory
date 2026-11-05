@@ -134,13 +134,17 @@ commands:
                   the latest call wins, none is 0. A blocked Issue (--after) waits whatever its prio. A closed Issue is refused (exit 5)
   issue show <id> one Issue: its facts, its story from the lifecycle's events and the inbox oldest first, its evidence and its
                   questions (token or socket). What senders filed is data: --format plain shows it on one cut line each
-  issue note <id> <text> [--id <call id>]
+  issue note <id> <text> [--wake] [--id <call id>]
                   a note for the Issue's lead (token only): typed into its pane through the session notes, once per call id
                   (--id makes a repeated call one note). An Issue with no lead running keeps it and the next brief carries it.
+                  --wake also takes a waiting Issue back to working when it waits on a time, is blocked or is parked (not a
+                  question: that is issue answer; not a dependency or a lost lead); otherwise it is a plain note.
                   Use -- before text that starts with a dash
   issue phase|wait|ship|close|block|ask|drop <id> [--id <call id>] [verb flags]
                   a lead's report on its Issue (token, or the socket from a lead's pane: $FACTORY_SESSION says which lead,
                   and it may only report on the Issue it works). One event per call; --id makes a repeated call one event.
+                  Any of them ends a timed wait early (a wait Issue's lead need not wait it out); blocked and decision waits keep their rules
+                  (the owner's way out of a block is issue note --wake).
                     phase  --phase <name> [--note <text>]
                     wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
                     ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
@@ -209,6 +213,7 @@ commands:
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note, issue note|prio: the call's idempotency key
+--wake           issue note: also end a timed wait, a block or a park
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
 --title, --facts, --key, --source, --after  issue new
 --rotate         door token new: replace the source's token
@@ -655,6 +660,7 @@ interface Flags {
   link?: string
   file?: string
   stdin?: boolean
+  wake?: boolean
   attempt?: string
   reason?: string
   question?: string
@@ -1155,7 +1161,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const target = words[2]
     const text = words.slice(3).join(' ')
     if (!target || !/^[1-9][0-9]{0,9}$/.test(target) || !text)
-      throw usage('usage: issue note <id> <text> [--id <call id>]')
+      throw usage('usage: issue note <id> <text> [--wake] [--id <call id>]')
     if (!io.env.FACTORY_TOKEN) {
       throw new FactoryError('auth', "issue note needs FACTORY_TOKEN: it is the owner's note, a pane has none", {
         hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
@@ -1165,7 +1171,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
       method: 'POST',
       auth: true,
       schema: IssueNoteAck,
-      body: { text, ...(flags.id ? { id: flags.id } : {}) },
+      body: { text, ...(flags.wake ? { wake: true } : {}), ...(flags.id ? { id: flags.id } : {}) },
     })
     return print(body, [body.issue, 'note', body.duplicate ? 'duplicate' : 'filed', body.key, body.state].join('\t'))
   }
@@ -1494,6 +1500,7 @@ const OPTIONS = {
   link: { type: 'string' },
   file: { type: 'string' },
   stdin: { type: 'boolean' },
+  wake: { type: 'boolean' },
   attempt: { type: 'string' },
   reason: { type: 'string' },
   question: { type: 'string' },
