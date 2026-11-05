@@ -18,6 +18,7 @@ import {
   IssueId,
   IssueEvidenceAck,
   IssueEvidenceInput,
+  IssueFactsRead,
   IssueInput,
   IssueList,
   IssueNoteAck,
@@ -72,6 +73,7 @@ import type { Review } from './issues/review.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
+import { listFacts, kpis } from './issues/facts.ts'
 import { getIssueView } from './issues/follow.ts'
 import { getIssue, listIssues } from './issues/read.ts'
 import { resumeArchived } from './issues/resume.ts'
@@ -408,6 +410,15 @@ const issueCreateHandler =
 
 /** `GET /issues`: newest first, without facts. */
 const issueListHandler = (sql: SQL) => async () => respond(IssueList, { issues: await listIssues(sql) })
+
+/** `GET /issues/facts?since=<iso>`: one row per attempt of the Issues filed since, and the KPIs over them; a malformed `since` is 400. */
+const issueFactsHandler = (sql: SQL) => async (req: Request) => {
+  const raw = new URL(req.url).searchParams.get('since')
+  if (raw !== null && !IsoTime.safeParse(raw).success) throw new BadRequest('since must be an ISO 8601 time')
+  const input = raw === null ? {} : { since: new Date(raw) }
+  const [rows, kpi] = await Promise.all([listFacts(sql, input), kpis(sql, input)])
+  return respond(IssueFactsRead, { rows, kpi })
+}
 
 /** `GET /issues/:id`. */
 const issueGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/issues/:id'>) => {
@@ -859,6 +870,7 @@ export function routes({
       GET: route(issueListHandler(sql)),
       POST: route(issueCreateHandler(sql, clock, repoRoots)),
     },
+    '/issues/facts': { GET: route(issueFactsHandler(sql)) },
     '/issues/:id': { GET: route(issueGetHandler(sql)) },
     '/issues/:id/timeline': { GET: route(issueTimelineHandler(sql)) },
     '/issues/:id/note': { POST: route(issueNoteHandler(sql, clock)) },
@@ -985,6 +997,7 @@ export function serveHooks(deps: {
         GET: viaSocket(issueListHandler(deps.sql)),
         POST: viaSocket(issueCreateHandler(deps.sql, deps.clock, deps.repoRoots)),
       },
+      '/issues/facts': { GET: viaSocket(issueFactsHandler(deps.sql)) },
       '/issues/:id': { GET: viaSocket(issueGetHandler(deps.sql)) },
       '/issues/:id/timeline': { GET: viaSocket(issueTimelineHandler(deps.sql)) },
       '/issues/:id/evidence': { POST: viaSocket(issueEvidenceHandler(deps.sql, deps.clock, { requireSession: true })) },

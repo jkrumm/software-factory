@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Issue, IssueList, MAX_FACTS_BYTES } from '@software-factory/contract'
+import { Issue, IssueFactsRead, IssueList, MAX_FACTS_BYTES } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
@@ -294,6 +294,29 @@ describe('GET /issues', () => {
     expect((await app.get('/issues/99')).status).toBe(404)
     expect((await app.get('/issues/abc')).status).toBe(400)
     expect((await app.get('/issues/99999999999')).status).toBe(400)
+  })
+})
+
+describe('GET /issues/facts', () => {
+  test('a row per attempt and the KPIs, on the token API and the socket; since filters, a bad one is 400', async () => {
+    await post()
+    clock.advance(60_000)
+    await post({ source_key: 'k2' })
+    const all = IssueFactsRead.parse(await (await app.get('/issues/facts')).json())
+    expect(all.rows.map((r) => [r.issueId, r.attempt, r.outcome])).toEqual([
+      [1, 0, null],
+      [2, 0, null],
+    ])
+    expect(all.kpi.ownerAsksPerIssue).toEqual({ value: 0, numerator: 0, denominator: 2 })
+
+    const since = encodeURIComponent(new Date(clock.now().getTime()).toISOString())
+    const recent = IssueFactsRead.parse(await (await app.get(`/issues/facts?since=${since}`)).json())
+    expect(recent.rows.map((r) => r.issueId)).toEqual([2])
+
+    expect((await app.get('/issues/facts?since=yesterday')).status).toBe(400)
+    expect((await app.bare('/issues/facts')).status).toBe(401)
+    const viaSocket = await fetch('http://localhost/issues/facts', { unix: socket })
+    expect(IssueFactsRead.parse(await viaSocket.json()).rows).toHaveLength(2)
   })
 })
 

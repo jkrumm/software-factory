@@ -140,6 +140,46 @@ const STATUS = {
   notesMore: 4,
 }
 
+const FACT_ROW = {
+  issueId: 7,
+  attempt: 2,
+  repo: '/work/repo',
+  kind: 'bug',
+  size: 's',
+  leadTier: 'sonnet',
+  leadEffort: 'high',
+  filedAt: '2026-10-30T12:00:00.000Z',
+  admittedAt: '2026-10-30T12:05:00.000Z',
+  landedAt: null,
+  shippedAt: '2026-10-30T13:00:00.000Z',
+  verifiedAt: '2026-10-30T14:00:00.000Z',
+  closedAt: '2026-10-30T14:00:00.000Z',
+  outcome: 'done',
+  asks: 0,
+  parks: { wall: 0, lead_gone: 0, unreported: 0, parked: 0 },
+  ownerTouches: 0,
+  reviewTier: 'standard',
+  holds: 1,
+  verifyFirstPass: true,
+  reopened: false,
+  leadSessionIds: ['c-1'],
+}
+const ratio = (numerator: number, denominator: number) => ({
+  value: denominator === 0 ? null : numerator / denominator,
+  numerator,
+  denominator,
+})
+const FACTS = {
+  rows: [FACT_ROW],
+  kpi: {
+    ownerAsksPerIssue: ratio(0, 12),
+    zeroTouch: ratio(11, 12),
+    verifyFirstHold: ratio(10, 12),
+    windowPointsPerIssue: { value: null, source: 'usage-tracker' },
+  },
+}
+const factsQueries: string[] = []
+
 let fake: ReturnType<typeof Bun.serve>
 let sock: ReturnType<typeof Bun.serve>
 let sockDir: string
@@ -295,6 +335,10 @@ beforeAll(() => {
         if (!id) return Response.json({ sessions: url.searchParams.get('all') ? [SESSION, DEAD] : [SESSION] })
         if (id === 'nope') return Response.json({ error: 'unknown session' }, { status: 404 })
         return Response.json({ ...SESSION, id })
+      }
+      if (path === '/issues/facts') {
+        factsQueries.push(url.search)
+        return Response.json(FACTS)
       }
       if (path === '/status') {
         if (req.headers.get('authorization') !== `Bearer ${TOKEN}`)
@@ -454,6 +498,32 @@ describe('factory spawn list', () => {
     expect(r.stdout).toBe(
       'b\tstarted\ta\t-\t1\tpane-b\tworker\t-\na\twaiting\t-\t2026-10-30T14:00:00.000Z\t0\t-\tworker\t-\n',
     )
+  })
+})
+
+describe('factory issue facts', () => {
+  test('json is the body, and --since goes to the server', async () => {
+    const r = await factory(['issue', 'facts', '--since', '2026-10-01T00:00:00Z'])
+    expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
+    expect(JSON.parse(r.stdout)).toEqual(JSON.parse(JSON.stringify(FACTS)))
+    expect(factsQueries.at(-1)).toBe('?since=2026-10-01T00%3A00%3A00Z')
+  })
+
+  test('plain is a line per attempt, then the KPI line', async () => {
+    const r = await factory(['issue', 'facts', '--format', 'plain'])
+    expect(r.stdout).toBe(
+      [
+        '7\t2\tdone\t2026-10-30T12:00:00.000Z\t2026-10-30T12:05:00.000Z\t-\t2026-10-30T14:00:00.000Z\t2026-10-30T14:00:00.000Z\t0\t0\t1\ttrue\tstandard',
+        'asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12)  window -',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  test('a malformed --since is a usage error before any request', async () => {
+    const before = factsQueries.length
+    expect((await factory(['issue', 'facts', '--since', 'yesterday'])).code).toBe(EXIT.usage)
+    expect(factsQueries.length).toBe(before)
   })
 })
 

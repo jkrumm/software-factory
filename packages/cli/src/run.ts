@@ -10,6 +10,9 @@ import {
   Health,
   Issue,
   IssueAnswerAck,
+  type IssueFactRow,
+  IssueFactsRead,
+  type IssueKpi,
   IssueList,
   IssueNoteAck,
   IssuePrioAck,
@@ -121,6 +124,11 @@ commands:
                   Issue, whatever became of it (default: a fresh key per call). A repo must be inside the allowed roots
                   (token or socket, as spawn create)
   issue list      the Issues, newest first (token or socket)
+  issue facts [--since <iso>]
+                  one row per attempt of the Issues filed since --since (default: all) and the four KPIs over them: owner asks per
+                  Issue, Issues verified with zero owner touch, verify green on the first hold, window points (the usage tracker's: -).
+                  plain: one tab-separated line per attempt (issue, attempt, outcome, filed, admitted, landed, verified, closed, asks,
+                  owner touches, holds, first pass, review tier), then the KPI line (token or socket)
   issue prio <id> <n> [--id <call id>]   (a negative n goes after --: issue prio 7 -- -5)
                   the owner's order among a project's queued Issues (token only): n is an integer -1000..1000, higher is admitted first,
                   the latest call wins, none is 0. A blocked Issue (--after) waits whatever its prio. A closed Issue is refused (exit 5)
@@ -207,6 +215,7 @@ commands:
 --pending       notify list: only what is not sent
 --undo <id>     fleet triage: take an automatic decision back
 --t <iso>        fleet since: the window's start
+--since <iso>    issue facts: only Issues filed at or after it
 --until <iso>    fleet seen (required), fleet presence caught_up: the until of the reading that was seen (fleet since prints it)
 --place <place> fleet seen, fleet act: desk (default) or phone
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
@@ -504,6 +513,39 @@ const issueLine = (i: IssueSummary) =>
     .map((value) => (typeof value === 'string' ? oneLine(value, 1000) : cell(value)))
     .join('\t')
 
+/** `issue facts`, one line per attempt: Issue, attempt, outcome, the times, asks, owner touches, holds, first-pass, review tier. */
+export const factLine = (r: IssueFactRow): string =>
+  [
+    r.issueId,
+    r.attempt,
+    r.outcome,
+    r.filedAt,
+    r.admittedAt,
+    r.landedAt,
+    r.verifiedAt,
+    r.closedAt,
+    r.asks,
+    r.ownerTouches,
+    r.holds,
+    r.verifyFirstPass,
+    r.reviewTier,
+  ]
+    .map(cell)
+    .join('\t')
+
+const count = (r: IssueKpi['ownerAsksPerIssue']): string => `(${r.numerator}/${r.denominator})`
+const percent = (r: IssueKpi['zeroTouch']): string =>
+  `${r.value === null ? '-' : Math.round(r.value * 100)} % ${count(r)}`
+
+/** The four KPIs on one line; a rate over nothing is `-`, and the window points are the usage tracker's, so always `-` here. */
+export const kpiLine = (k: IssueKpi): string =>
+  [
+    `asks/issue ${k.ownerAsksPerIssue.value === null ? '-' : k.ownerAsksPerIssue.value.toFixed(2)} ${count(k.ownerAsksPerIssue)}`,
+    `zero-touch ${percent(k.zeroTouch)}`,
+    `first-hold ${percent(k.verifyFirstHold)}`,
+    `window ${k.windowPointsPerIssue.value ?? '-'}`,
+  ].join('  ')
+
 /** Longest a value of a payload is shown: what a note or a refusal says is whole up to what a verb accepts. */
 const WORDS_MAX = 4_000
 
@@ -620,6 +662,7 @@ interface Flags {
   pending?: boolean
   undo?: string
   t?: string
+  since?: string
   place?: string
 }
 
@@ -1085,6 +1128,15 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     return print(body, lines.join('\n'))
   }
 
+  if (key === 'issue facts') {
+    if (flags.since !== undefined && !IsoTime.safeParse(flags.since).success) {
+      throw usage('--since takes an ISO 8601 time with a Z or an offset, like 2026-11-02T07:30:00Z')
+    }
+    const query = flags.since === undefined ? '' : `?since=${encodeURIComponent(flags.since)}`
+    const { body } = await call(io, `/issues/facts${query}`, { auth: true, socket: 'fallback', schema: IssueFactsRead })
+    return print(body, [...body.rows.map(factLine), kpiLine(body.kpi)].join('\n'))
+  }
+
   if (words[0] === 'issue' && words[1] === 'show') {
     const target = words[2]
     if (!target || words.length > 3) throw usage('usage: issue show <id>')
@@ -1449,6 +1501,7 @@ const OPTIONS = {
   pending: { type: 'boolean' },
   undo: { type: 'string' },
   t: { type: 'string' },
+  since: { type: 'string' },
   place: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

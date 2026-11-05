@@ -114,6 +114,65 @@ export type Issue = z.infer<typeof Issue>
 export const IssueList = z.object({ issues: z.array(IssueSummary) })
 export type IssueList = z.infer<typeof IssueList>
 
+/** One attempt of an Issue as `factory.issue_facts` reads it (`docs/design.md` §4 "The Issue facts"); times are ISO, `null` when it did not happen. */
+export const IssueFactRow = z.object({
+  issueId: z.number().int(),
+  /** 0 for an Issue never admitted */
+  attempt: z.number().int(),
+  repo: z.string(),
+  kind: z.string().nullable(),
+  size: z.string().nullable(),
+  leadTier: z.string().nullable(),
+  leadEffort: z.string().nullable(),
+  filedAt: z.string(),
+  admittedAt: z.string().nullable(),
+  /** the `mergedAt` of the attempt's first ship: the time of its newest commit, no earlier one is stored */
+  landedAt: z.string().nullable(),
+  shippedAt: z.string().nullable(),
+  verifiedAt: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  /** `issues.outcome` for the last attempt, `retried` for an earlier one */
+  outcome: z.string().nullable(),
+  asks: z.number().int(),
+  parks: z.object({
+    wall: z.number().int(),
+    lead_gone: z.number().int(),
+    unreported: z.number().int(),
+    parked: z.number().int(),
+  }),
+  ownerTouches: z.number().int(),
+  reviewTier: z.string().nullable(),
+  holds: z.number().int(),
+  verifyFirstPass: z.boolean(),
+  reopened: z.boolean(),
+  /** Claude session ids of the attempt's lead: what a consumer joins with its own session windows */
+  leadSessionIds: z.array(z.string()),
+})
+export type IssueFactRow = z.infer<typeof IssueFactRow>
+
+/** A rate with the counts it was made of; `value` is `null` over nothing. */
+export const Ratio = z.object({
+  value: z.number().nullable(),
+  numerator: z.number().int(),
+  denominator: z.number().int(),
+})
+export type Ratio = z.infer<typeof Ratio>
+
+/** The four KPIs of design v3 §11. The window points per Issue are not the factory's: they are read from the usage tracker by a consumer. */
+export const IssueKpi = z.object({
+  /** asks and blocks per Issue */
+  ownerAsksPerIssue: Ratio,
+  /** of the Issues with a verified attempt, those with no ask, block or owner touch in any attempt */
+  zeroTouch: Ratio,
+  /** of the attempts that were held, those whose first hold ended verified with no red check before it */
+  verifyFirstHold: Ratio,
+  windowPointsPerIssue: z.object({ value: z.null(), source: z.literal('usage-tracker') }),
+})
+export type IssueKpi = z.infer<typeof IssueKpi>
+
+export const IssueFactsRead = z.object({ rows: z.array(IssueFactRow), kpi: IssueKpi })
+export type IssueFactsRead = z.infer<typeof IssueFactsRead>
+
 /**
  * What `agw factory-classify` answers. `project` is the classifier's reading and is only stored: the Issue's repo, which the request
  * named, decides the project. `class` `business` is what only the owner decides.

@@ -836,6 +836,22 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   **next brief carries it** (§5 "The brief"). A lead that is gone, whose Issue is not `working`, is not parked for it: the note stays in the
   timeline. An Issue that is not `working` and whose lead never got a spawn (the worktree failed: `lead_gone`) ends the effect quietly, so it holds back no later
   note, wake or answer, and the note comes again in the next brief.
+- **Issue facts** (reset row 12, design v3 §11). `factory.issue_facts` (migration `031`, the schema's first view) is one row per attempt of an Issue,
+  derived from `issues`, `issue_events`, `sessions` and nothing else: nothing is stored, no writer changed, and it reads no usage table (a consumer
+  joins `lead_session_ids`, the Claude session ids of `lead-<issue>-<attempt>`, with its own session windows). `attempt` is stored on no event, so it is
+  derived: attempt *n* starts at the *n*-th `admitted` event (by `at, id`) and runs to the next; an event belongs to the attempt whose window holds it,
+  what came before the first admission is the first attempt's, and an Issue never admitted is attempt 0 with all its events. Columns: `filed_at`,
+  `admitted_at`, `landed_at` (the first ship's `derived.mergedAt`, the newest commit's time: the events keep no earlier one), `shipped_at`,
+  `verified_at`, `closed_at`; `outcome` (`issues.outcome` for the last attempt, `retried` for an earlier one); `asks` (`ask` and `block` events);
+  `parks` (`wall`, `lead_gone`, `unreported`, `parked` as event counts: every `lead_gone` counts, whether it queued the next attempt or parked);
+  `owner_touches` (`note`, `retier`, `reopen`, and an `answer` whose `who` is not `default` or `closed`); `review_tier` (the last ship's); `holds`
+  (ships); `verify_first_pass` (the first hold ended `verified` with no `verify_red` or `regression` before it); `reopened`. **Review rounds are not a
+  column:** the factory keeps only `derived.review` (tier, covered), the rounds are agw's. `GET /issues/facts?since=<iso>` (token or socket, a malformed
+  `since` is 400, filters on `filed_at`) answers `{rows, kpi}` (`IssueFactsRead`), and `factory issue facts [--since <iso>]` prints it: plain is a line per
+  attempt, then `asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12)  window -`. The four KPIs come from one query over the view
+  (`issues/facts.ts`), each with numerator and denominator: owner asks per Issue (asks over Issues), Issues verified with no ask, block or owner touch in any
+  attempt (over Issues with a verified attempt), attempts whose first hold was green (over attempts with a hold; one still in its first hold counts
+  against), and the window points per Issue, which are the usage tracker's and read `null` here.
 - **Ids and a restore.** Not built for Issues. `issues.id` is a sequence, and nothing moves it past the ids in pane names (`lead-<issue>-<attempt>`) or the
   spool after a restore, nor rebuilds an Issue the dump lost from the spool: the F1 gameday proved it for sessions and spawns, whose keys are not
   sequences. The F2 gamedays of §13 (Wave 6) decide it.
