@@ -361,7 +361,7 @@ export const StatusIssue = z.object({
 })
 export type StatusIssue = z.infer<typeof StatusIssue>
 
-/** `POST /issues/:id/note`: the owner's text for the Issue's lead; a repeated `id` is one note. `wake` also ends a timed wait. */
+/** `POST /issues/:id/note`: the owner's text for the Issue's lead; a repeated `id` is one note. `wake` also ends a timed wait, a block or a park. */
 export const IssueNoteBody = z.strictObject({
   id: CallId.optional(),
   text: Words(4000),
