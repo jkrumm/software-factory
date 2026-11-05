@@ -30,6 +30,8 @@ export interface Config {
   askHumanBin: string
   /** the machines the fleet triage's probes may look at (`FACTORY_PROBE_HOSTS`, `<name>=<ssh alias|local>,…`; none by default): a probe on any other machine says nothing */
   probeHosts: Map<string, string>
+  /** the repos that get a space and a `plan:` tab, in the owner's order (`FACTORY_SPACES_FILE`, written by dotfiles `make setup`) */
+  spacesFile: string
   /** where the hooks append their events (`FACTORY_SPOOL_DIR`) */
   spoolDir: string
   /** the unix socket the hooks post to (`FACTORY_SOCKET`) */
@@ -94,6 +96,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     visibleRoots: visibleRoots(env.FACTORY_VISIBLE_ROOTS, env.HOME),
     probeHosts: parseProbeHosts(env.FACTORY_PROBE_HOSTS),
     askHumanBin: env.FACTORY_ASK_HUMAN || `${required('HOME')}/${DOTFILES}/scripts/ask-human.sh`,
+    spacesFile: env.FACTORY_SPACES_FILE || `${required('HOME')}/.config/factory/spaces.json`,
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
     hookSocket: env.FACTORY_SOCKET || defaultHookSocket(required('HOME')),
     slots: slots(env.FACTORY_SLOTS),

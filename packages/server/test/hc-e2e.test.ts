@@ -135,6 +135,39 @@ describe.skipIf(!enabled)('HcRunner against a real herdr-core (HC_E2E=1)', () =>
     expect(got.labels).toEqual({ 'factory.key': 'e2e-kid' })
   }, 60_000)
 
+  test("a plan tab is the machine's own login shell, kept, found again by its key, and started afresh once it ended", async () => {
+    const repo = await mkdtemp(join(dir, 'plan-repo-'))
+    expect(await runner.ensurePlan({ name: 'e2e-plan', repo })).toBe('started')
+    const list = JSON.parse(await hc('ls', '--json')) as { address: string }[] | { terminals: { address: string }[] }
+    const [terminal] = (Array.isArray(list) ? list : list.terminals).slice(-1)
+    const read = async (address: string) =>
+      JSON.parse(await hc('get', address)) as {
+        labels: Record<string, string>
+        cwd: string
+        keep: boolean
+        parent: string | null
+        argv: string[]
+        state: string
+      }
+    const got = await read(terminal?.address ?? '')
+    // No argv was sent: the core ran the machine's shell as a login shell.
+    expect(got.argv.at(-1)).toBe('-l')
+    expect(got.parent).toBeNull()
+    expect(got.keep).toBe(true)
+    expect(got.cwd).toBe(repo)
+    expect(got.labels).toMatchObject({ 'factory.key': 'plan:e2e-plan', 'factory.tab_name': 'plan' })
+    expect(got.labels['herdr.space']).toMatch(/^sp-/)
+
+    expect(await runner.ensurePlan({ name: 'e2e-plan', repo })).toBe('present')
+    // oxlint-disable-next-line typescript/await-thenable -- bun types `rejects` matchers as void; they return a promise
+    await expect(runner.close('plan:e2e-plan')).rejects.toThrow('never closes')
+    expect((await read(terminal?.address ?? '')).state).toBe('live')
+
+    // It ended: the next look starts one again, in the same space and tab.
+    await hc('kill', terminal?.address ?? '')
+    expect(await runner.ensurePlan({ name: 'e2e-plan', repo })).toBe('started')
+  }, 60_000)
+
   describe('the witness on the event stream', () => {
     const until = async (check: () => boolean | Promise<boolean>, ms = 15_000) => {
       const end = Date.now() + ms

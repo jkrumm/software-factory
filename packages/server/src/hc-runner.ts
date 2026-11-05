@@ -75,6 +75,10 @@ export function terminalName(key: string): string {
   return /^t\d/.test(name) ? `f-${sha(key).slice(0, 6)}-${name.slice(0, 22)}` : name
 }
 
+/** The owner's planner shell of a repo, `factory.key=plan:<repo>`: not a spawn, never closed by the factory. */
+export const PLAN_PREFIX = 'plan:'
+export const isPlanKey = (key: string): boolean => key.startsWith(PLAN_PREFIX)
+
 /** The tab a key always gets, so a retry finds the same one. */
 export const tabId = (key: string): string => `tb-${sha(key)}`
 
@@ -144,6 +148,7 @@ export class HcRunner implements Runner {
   }
 
   async start(input: StartInput): Promise<StartResult> {
+    if (isPlanKey(input.key)) throw new RunnerError(`${input.key} is a plan key, not a spawn`, true)
     // A prompt that begins with `-` would be read as an option of claude.
     if (input.prompt.startsWith('-')) throw new RunnerError('a prompt cannot start with "-"', true)
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
@@ -287,6 +292,8 @@ export class HcRunner implements Runner {
 
   /** Every terminal of the spawn, killed if it runs and removed; one that went meanwhile is what was wanted. */
   async close(key: string): Promise<void> {
+    // The planner shell is the owner's: nothing the factory does ends it.
+    if (isPlanKey(key)) throw new RunnerError(`${key} is a plan tab; the factory never closes it`, true)
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     try {
       for (const terminal of await this.find(key, budget)) {
@@ -295,6 +302,49 @@ export class HcRunner implements Runner {
           if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
         })
       }
+    } catch (error) {
+      throw asRunnerError(error)
+    }
+  }
+
+  /**
+   * Makes sure the repo's planner shell exists: a live terminal labelled `factory.key=plan:<name>` is left alone; none starts one
+   * (a login shell: no argv, so the core runs the machine's own shell) in the repo's space, seeding the space first when the app
+   * has none. Through the same lock as a start, so a spawn and the reconcile never both take an empty space's id. A finished
+   * plan terminal is removed (it is dead, nothing is closed) and started afresh. Returns whether a terminal was started.
+   */
+  async ensurePlan(input: { name: string; repo: string }): Promise<'present' | 'started'> {
+    const key = `${PLAN_PREFIX}${input.name}`
+    try {
+      return await this.serialized(async () => {
+        // The budget runs from the turn at the lock, not from the call: a start ahead of it may take its whole budget.
+        const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
+        const found = await this.find(key, budget)
+        if (found.some((t) => t.state === 'live')) return 'present'
+        const root = real(input.repo)
+        const { id, seed } = await this.spaceId({ key }, root, budget)
+        if (seed) await seedSpace(this.docRpc(budget), { id, folder: root })
+        for (const dead of found) {
+          await this.rpc('terminal.rm', { terminal: dead.address }, Removed, budget).catch((error: unknown) => {
+            if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
+          })
+        }
+        const tab = tabId(key)
+        await this.rpc(
+          'terminal.run',
+          {
+            cwd: input.repo,
+            keep: true,
+            no_parent: true,
+            name: terminalName(key),
+            labels: { 'factory.key': key, 'herdr.space': id, 'herdr.tab': tab, 'factory.tab_name': 'plan' },
+          },
+          Terminal,
+          budget,
+        )
+        await nameTab(this.docRpc(budget), tab, 'plan')
+        return 'started'
+      })
     } catch (error) {
       throw asRunnerError(error)
     }
@@ -392,7 +442,11 @@ export class HcRunner implements Runner {
    * space of its own gets one only when the path already has a space. `seed`: the id is the factory's own, so the app's
    * document may have no entry for it yet.
    */
-  private async spaceId(input: StartInput, root: string, budget: Budget): Promise<{ id: string; seed: boolean }> {
+  private async spaceId(
+    input: Pick<StartInput, 'key' | 'workspace' | 'newSpace'>,
+    root: string,
+    budget: Budget,
+  ): Promise<{ id: string; seed: boolean }> {
     const recorded = input.workspace
     if (recorded && /^sp/.test(recorded)) return { id: recorded, seed: recorded.startsWith('sp-') }
     if (recorded && (await this.occupied(recorded, budget))) return { id: recorded, seed: false }

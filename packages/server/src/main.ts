@@ -31,6 +31,7 @@ import { HcClient } from './hc.ts'
 import { HcEvents } from './hc-events.ts'
 import { HcRunner } from './hc-runner.ts'
 import { claudeProjectsDir, DEFAULT_START_BUDGET_MS } from './runner.ts'
+import { Spaces } from './spaces.ts'
 import { SpoolReplayer } from './spool.ts'
 import { DEFAULT_LEASE_MS, startTicker, TICK_INTERVAL_MS } from './tick.ts'
 import { gitProbe, startWitness } from './witness.ts'
@@ -127,6 +128,7 @@ const runner = new HcRunner({
   pretrustBin: config.pretrustBin,
   accountsFile: config.accountsFile,
 })
+const spaces = new Spaces({ file: config.spacesFile, roots: config.repoRoots, runner, now: () => clock.now() })
 // A pass that runs a start may outlast several intervals; one past its lease is wedged.
 // Review v4's router and coverage, asked by `ship`: agw owns both judgments, the factory only reads them.
 const review = new AgwReview({ bin: config.agwBin })
@@ -239,6 +241,7 @@ const ticker = startTicker(
     windows,
     reviewLimits: config.review,
     reviews: reviewTransport,
+    spaces,
     alertLeads: config.alertLeads,
     notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz, visible },
   },
@@ -267,6 +270,7 @@ async function shutdown(signal: string): Promise<void> {
     await fleet.settled()
     await windows?.settled(15_000)
     await reviewTransport.settled()
+    await spaces.settled()
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)
     await witnessLoop.stop()

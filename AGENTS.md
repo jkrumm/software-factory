@@ -42,7 +42,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   session's context. The one exception is a `session-start` with `source: compact` in an Issue lead's session (`lead-<issue>-<attempt>`): one line telling it to re-read the Issue. The socket (mode 0600) is the hook's credential; the witness alone records `runner_restarted` and
   `pane_gone`.
 - **Placement and sessions.** The Runner looks before it acts: a terminal carries `factory.key=<spawn key>`, and a live one
-  running claude is never started twice. One space per repo, keyed by path. A spawn with a parent
+  running claude is never started twice. One space per repo, keyed by path; every repo in `FACTORY_SPACES_FILE` (inside `FACTORY_REPO_ROOTS`) has a `plan:<name>` shell tab, a reconcile (`spaces.ts`, every 10 min) that never closes it (`HcRunner.close` refuses a `plan:` key; it is no spawn). A spawn with a parent
   terminal is that terminal's hidden child when `placement` says `child`; `tab` makes it a tab; with none, by role: `worker`,
   `mechanical` or `deep` child, `reviewer` hidden (`no_parent`, only the key label: no space, no tab), every other role a tab. State is derived from stored events, never stored.
 - **Roles** (`config/roles.json`): role → tier (`haiku|sonnet|opus`, never a model id) and effort. `lead` (sonnet, high) is the level every Issue lead runs at, whatever Classify asked; `deep` is a worker raised for
@@ -81,7 +81,7 @@ state, roles, process/health/contract/schema/API.
 ## Layout
 
 - `packages/server` — the lifecycle server: HTTP (`http.ts`), the tick (`tick.ts`), the `Runner` port and its herdr-core
-  adapter (`runner.ts`: the port; `hc-runner.ts`, `hc.ts`, `app-doc.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the witness
+  adapter (`runner.ts`: the port; `hc-runner.ts`, `hc.ts`, `app-doc.ts`; the fixed spaces: `spaces.ts`), derived session state (`sessions.ts`), the hooks' spool (`spool.ts`), the witness
   (`witness.ts`, `hc-events.ts`), the queue (`spawns.ts`, `queue.ts`), admission and capacity (`admission.ts`, `capacity.ts`; a reviewer's rules and the review transport: `review/`), the account
   picker's readings (`quota.ts`), prompt delivery (`prompts.ts`), the rules that act (`rules.ts`), the status screen
   (`status.ts`), the test slots (`slots.ts`), Issues (`issues/`: `lifecycle.ts` the one writer, `inbox.ts`, `worker.ts`, `effects.ts`,

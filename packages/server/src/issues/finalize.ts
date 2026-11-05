@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
+import { isPlanKey } from '../hc-runner.ts'
 import { releaseClaim } from '../projects/claims.ts'
 import type { Runner } from '../runner.ts'
 import { dropEmptySession } from '../sessions.ts'
@@ -81,7 +82,10 @@ async function finalize(deps: FinalizeDeps, effect: Effect): Promise<void> {
     if (!issue) throw new Error(`issue ${issueId} is gone`)
     const lead = leadKey(issueId, attempt)
     const workers: { key: string }[] = await sql`SELECT key FROM factory.spawns WHERE parent = ${lead}`
-    for (const key of [lead, ...workers.map((worker) => worker.key)]) await deps.runner.close(key)
+    // Only the lead's own keys are closed; a `plan:` key is the owner's shell and is never passed on.
+    for (const key of [lead, ...workers.map((worker) => worker.key)].filter((key) => !isPlanKey(key))) {
+      await deps.runner.close(key)
+    }
     await archiveAttempt(
       {
         sql,

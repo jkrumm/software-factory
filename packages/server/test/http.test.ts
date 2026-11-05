@@ -84,6 +84,7 @@ describe('config (finding 5)', () => {
       repoRoots: ['/home/me/SourceRoot', '/home/me/IuRoot'],
       visibleRoots: ['/home/me/IuRoot'],
       askHumanBin: '/home/me/SourceRoot/dotfiles/scripts/ask-human.sh',
+      spacesFile: '/home/me/.config/factory/spaces.json',
       spoolDir: '/home/me/.local/share/factory/spool',
       hookSocket: '/home/me/.local/share/factory/hook.sock',
       slots: 2,

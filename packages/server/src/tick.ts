@@ -21,6 +21,7 @@ import { deliverPrompts } from './prompts.ts'
 import type { QuotaPoller } from './quota.ts'
 import { evaluateRules } from './rules.ts'
 import { dropEmptySession, type LiveSession, openSession } from './sessions.ts'
+import type { Spaces } from './spaces.ts'
 import type { SpoolReplayer } from './spool.ts'
 
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
@@ -63,6 +64,8 @@ export interface TickDeps {
   reviewLimits?: ReviewLimits
   /** review v4's transport: the tick starts a pass (submit on Stop, the idle watchdog) behind its back, like the fleet build */
   reviews?: Pick<ReviewTransport, 'kick'>
+  /** the fixed spaces (`spaces.ts`): its own interval, behind the tick's back */
+  spaces?: Pick<Spaces, 'kick'>
 }
 
 export interface TickResult {
@@ -417,6 +420,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   deps.fleet?.kick()
   deps.windows?.kick()
   deps.reviews?.kick()
+  deps.spaces?.kick()
   return result
 }
 

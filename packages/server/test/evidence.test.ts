@@ -1477,6 +1477,17 @@ describe('finalize', () => {
     expect(next?.status).toBe('failed')
   })
 
+  test('a plan: key is never passed to close', async () => {
+    const { id, key, repo } = await lead()
+    await db.sql`
+      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, created_at, parent)
+      VALUES ('plan:lookalike', ${repo}, 'x', 'worker', 'sonnet', 'high', 'started', ${clock.now()}, ${key})`
+    await post(id, 'drop', { reason: 'no', session: key })
+    await drive(4)
+    expect(await trail(id)).toContain('issue_finalized')
+    expect(runner.closed).toEqual([key])
+  })
+
   test('the place is back on the tick, whatever fills the off-tick jobs', async () => {
     const { id, key } = await lead()
     offTick = newJobs(0)

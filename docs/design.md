@@ -249,6 +249,28 @@ the space (`spawns.session|tab|workspace`; `Spawn.pane` is `session`). A try tha
 (`RunnerError.workspace`), the tick records it, and a retry or a runner-restart resume passes it back as `StartInput.workspace`:
 it wins when it is an id the Runner made (`sp…`) or a live terminal is in it.
 
+**The fixed spaces (RS6, `spaces.ts`).** Every repo in `~/.config/factory/spaces.json` (`FACTORY_SPACES_FILE`;
+`{"spaces": [{"name", "path"}]}`, written by dotfiles `make setup`) has a space and a `plan:<name>` tab, the owner's planner shell.
+`Spaces.kick()` is the tick's call, with its own ten-minute interval (the first tick runs the first pass), behind the tick's back:
+never throws, one pass at a time, never in a transaction. Per entry, in file order: the path goes through the spawn's own
+`resolveRepo` (real path inside `FACTORY_REPO_ROOTS`, else skipped with the reason; so an IuRoot repo or a missing path is
+skipped, and a link out of the roots is too); then `HcRunner.ensurePlan`, through the same `serialized` lock as a start. It finds the space as
+a spawn does (`spaceId`: the app's entry whose folder is the real path, else the stable id, seeded), and a live terminal labelled
+`factory.key=plan:<name>` means nothing to do. A missing or finished one (a finished one is removed first; nothing live is ever
+closed) starts with **no argv** (the core runs the machine's own shell: verified on a scratch core 0.1.17 as `/bin/zsh -l`, a
+login shell), `cwd` the repo, `keep`, `no_parent`, labels `factory.key=plan:<name>`, `herdr.space`, `herdr.tab` (`tabId('plan:<name>')`) and
+`factory.tab_name=plan` (the tab is also named `plan` in the document when the app has an entry). So a second pass with nothing
+changed reads (`terminal.list`, `doc.get`) and writes nothing. An absent or invalid file is logged once and does nothing (zod at
+the boundary); one entry failing is a line in the pass's `errors` and holds nothing back.
+**Order is not the factory's:** the sidebar order is dotfiles' `groups.json`, applied by the app's `jk-spaces` mod; the factory
+never reorders the document and never moves a tab. A new space is seeded with `tabs: []`, so the plan tab, its first terminal, is
+its first tab; a space that already has tabs gets its plan tab after them (no pre-written tab entry: whether the app adopts one is
+unverified and it is the fragile path).
+**A `plan:` key is not a spawn:** no `spawns` row, no session, no hook, no Claude Code until the owner starts one (that session
+is the owner's). `HcRunner.close` refuses it (a permanent `RunnerError`), `start` refuses it as a spawn key, and `finalize` only
+closes the lead's own and its workers' keys, never one that starts with `plan:`. **A repo that is not listed** still gets its space
+on first use, appended by `seedSpace`, as before.
+
 #### The runner
 
 **The runner looks before it acts.** `HcRunner` (`hc-runner.ts`, herdr-core 0.1.15 over `hc connect`; `HcClient` in `hc.ts` is one
