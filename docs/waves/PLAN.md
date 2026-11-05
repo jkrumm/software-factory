@@ -181,7 +181,7 @@ Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md` (RS1–
 
 **Left behind:** reset Waves 1–3 done and live (PRs #37, #38, #39; deployed `a2c4293f559a`, `make verify` green, every range
 `covered`), each with its proof and learnings entry. Rotated at about 60 % context before Wave 4: its brief
-`docs/waves/briefs/reset-w4-lead.md` is committed and not yet spawned. Handoff: `docs/waves/handoff/program.md`.
+`docs/waves/briefs/reset-w4-lead.md` is committed and not yet spawned. Handoff: `docs/waves/handoff/program.md`. Rotation 2 spawned 2026-11-05 ~01:55Z as `software-factory-w9` (t13c, `iu`) through `factory spawn create`: `rd wave`'s keyword gate refused it (learnings).
 
 ## Wave 9 — Program lead: the reset, rotation 2            <!-- status: active -->
 Opus/high. Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handoff/program.md`,

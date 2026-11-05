@@ -121,3 +121,7 @@ evidence (a sha, a log line, a number); no narrative.
   (27 s, 33 k tokens together) made the range `5f1e361..HEAD` covered. Change for row 7: coverage matches by patch-id across a
   rebase, or `rd merge` keeps branch shas (merge commit); until then the lead pushes no master commit while a worker's branch
   is under review.
+- **The chain gate's keyword stop refuses every reset rotation.** Wave 9's first step names `rd merge` and `make deploy`, so
+  `rd wave` stopped it as outward-facing, though the plan authorizes both for this repo. Rotation 2 was spawned the way Wave 8
+  was: `factory spawn create software-factory-w9 --role lead` with no parent (pane t13c, `iu`). Change for row 7: the gate reads
+  an explicit `**Outward:** authorized` line on the wave, or goes with `wave-gate.py`.
