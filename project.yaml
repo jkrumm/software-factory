@@ -5,7 +5,7 @@ deploy:
   mode: make # `make deploy` on the mini, `make verify` proves it
   targets:
     - { name: mini, host: mini, verify: make verify }
-  hold: 30m
+  hold: 5m
   migrations: [packages/server/migrations/]
 ship:
   - { paths: ['**'], via: pr }
