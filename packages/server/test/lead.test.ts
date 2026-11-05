@@ -9,7 +9,7 @@ import type { Commits } from '../src/issues/commits.ts'
 import { notifyFailures } from '../src/notify/rules.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
-import { leadPorts } from '../src/issues/lead.ts'
+import { LEAD_GONE_GRACE_MS, leadPorts, parkGoneLeads } from '../src/issues/lead.ts'
 import { WorktreeMaker } from '../src/issues/leadtree.ts'
 import { briefPromptId, leadKey } from '../src/issues/names.ts'
 import { OffTick } from '../src/issues/offtick.ts'
@@ -421,6 +421,67 @@ describe('classify, then admission', () => {
       db.sql`UPDATE factory.spawns SET status = 'failed', error = 'the runner refused' WHERE key = ${key}`
     const notifications = async () =>
       (await db.sql`SELECT key FROM factory.notifications ORDER BY key`).map((row: { key: string }) => row.key)
+
+    describe('whose terminal is gone (the spawn ended)', () => {
+      const killed = async (key: string) => {
+        await emit(key, 'session_started')
+        await emit(key, 'session_ended')
+      }
+
+      test('starts the next attempt with no note, once it has been dead past the grace', async () => {
+        const { id, key } = await lead()
+        await killed(key)
+        clock.advance(LEAD_GONE_GRACE_MS + 1_000)
+        await drive(6)
+        expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2, reason: null })
+        expect(await trail(id)).toContain('lead_gone working→queued')
+        const [row] = await db.sql`SELECT payload FROM factory.issue_inbox WHERE key LIKE ${`lead_gone:ended:${id}:%`}`
+        expect(row.payload).toEqual({ attempt: 1, detail: `spawn ${key} ended` })
+      })
+
+      test('does nothing inside the grace', async () => {
+        const { id, key } = await lead()
+        await killed(key)
+        clock.advance(LEAD_GONE_GRACE_MS - 60_000)
+        await drive(3)
+        expect(await issue(id)).toMatchObject({ state: 'working', attempt: 1 })
+        expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'lead_gone'`).toHaveLength(0)
+      })
+
+      test('does nothing within the grace after the runner restarted', async () => {
+        const { id, key } = await lead()
+        await killed(key)
+        clock.advance(2 * LEAD_GONE_GRACE_MS)
+        await emit('_runner', 'runner_restarted', clock.now(), { to: 'core-2' })
+        clock.advance(LEAD_GONE_GRACE_MS - 60_000)
+        await drive(3)
+        expect(await issue(id)).toMatchObject({ state: 'working', attempt: 1 })
+        expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'lead_gone'`).toHaveLength(0)
+        clock.advance(2 * LEAD_GONE_GRACE_MS)
+        await drive(6)
+        expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2 })
+      })
+
+      test('never for a lead that is alive', async () => {
+        const { id, key } = await lead()
+        await emit(key, 'session_started')
+        clock.advance(3 * LEAD_GONE_GRACE_MS)
+        await drive(3)
+        expect(await issue(id)).toMatchObject({ state: 'working', attempt: 1 })
+        expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'lead_gone'`).toHaveLength(0)
+      })
+
+      test('a replayed sweep files one event', async () => {
+        const { id, key } = await lead()
+        await killed(key)
+        clock.advance(LEAD_GONE_GRACE_MS + 1_000)
+        await parkGoneLeads(db.sql, clock.now())
+        await parkGoneLeads(db.sql, clock.now())
+        expect(
+          await db.sql`SELECT 1 FROM factory.issue_inbox WHERE issue_id = ${id} AND kind = 'lead_gone'`,
+        ).toHaveLength(1)
+      })
+    })
 
     test('gets the next attempt, twice, with no message to the owner; the third time the Issue parks, with one', async () => {
       const { id, key, repo } = await lead()

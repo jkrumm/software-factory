@@ -8,6 +8,7 @@ import { getProject } from '../projects/store.ts'
 import { recordPrompt } from '../prompts.ts'
 import { RepoRefused, resolveRepo } from '../repos.ts'
 import { MAX_PROMPT_CHARS } from '../schemas.ts'
+import { RUNNER_SESSION } from '../sessions.ts'
 import { createSpawn, getSpawn, IssueClosed } from '../spawns.ts'
 import { type BriefInput, buildBrief } from './brief.ts'
 import { leadLevel } from './classify.ts'
@@ -319,10 +320,16 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   )
 }
 
+/** How long a lead's session must have been dead, and the runner not restarted, before the sweep calls its spawn gone. */
+export const LEAD_GONE_GRACE_MS = 10 * 60_000
+
 /**
- * A working Issue whose lead's spawn failed before it ever reported is found here, without waiting for a note to find it: it parks as
- * `lead_gone`. One event per Issue revision, so a woken Issue whose spawn is still failed parks again. (A spawn that ended is found
- * only by a note, for now.)
+ * A working Issue whose lead is gone is found here, without waiting for a note to find it: `lead_gone`. Two kinds:
+ * the lead's spawn failed, or it is `started` but reads as `ended` (`withEnded`: its session is dead, or its pane is no terminal
+ * of the current core). An ended one counts only once it has been dead for `LEAD_GONE_GRACE_MS` (its last `session_ended` or
+ * `pane_gone`, else the spawn's start) and never within that long after a `runner_restarted`: a core restart brings terminals back
+ * through hc-resume, and a restart of the Issue would put a second lead beside a resumed one. One event per Issue revision, so a woken
+ * Issue whose spawn is still gone files again. No `news`: no note is involved.
  */
 export async function parkGoneLeads(sql: SQL, now: Date): Promise<void> {
   await sql`
@@ -332,6 +339,33 @@ export async function parkGoneLeads(sql: SQL, now: Date): Promise<void> {
     FROM factory.issues i JOIN factory.spawns s ON s.key = 'lead-' || i.id || '-' || i.attempt
     WHERE i.state = 'working' AND s.status = 'failed'
     ON CONFLICT (key) DO NOTHING`
+  await parkEndedLeads(sql, now)
+}
+
+async function parkEndedLeads(sql: SQL, now: Date): Promise<void> {
+  const cut = new Date(now.getTime() - LEAD_GONE_GRACE_MS)
+  const [restart] = await sql`
+    SELECT 1 FROM factory.events WHERE session = ${RUNNER_SESSION} AND kind = 'runner_restarted' AND at > ${cut} LIMIT 1`
+  if (restart) return
+  const candidates: { id: number; attempt: number; revision: number; since: Date }[] = await sql`
+    SELECT i.id, i.attempt, i.revision,
+           COALESCE((SELECT max(e.at) FROM factory.events e WHERE e.session = s.key AND e.kind IN ('session_ended', 'pane_gone')),
+                    s.claimed_at, s.created_at) AS since
+    FROM factory.issues i JOIN factory.spawns s ON s.key = 'lead-' || i.id || '-' || i.attempt
+    WHERE i.state = 'working' AND s.status = 'started'`
+  const old = candidates.filter((c) => c.since <= cut)
+  if (old.length === 0) return
+  const views = await Promise.all(old.map((c) => getSpawn(sql, leadKey(c.id, c.attempt), now)))
+  for (const [i, c] of old.entries()) {
+    if (views[i]?.status !== 'ended') continue
+    await enqueue(sql, {
+      issueId: c.id,
+      key: `lead_gone:ended:${c.id}:${c.revision}`,
+      kind: 'lead_gone',
+      at: now,
+      payload: { attempt: c.attempt, detail: `spawn ${leadKey(c.id, c.attempt)} ended` },
+    })
+  }
 }
 
 /** The lead's ports: it starts, and it hears. */
