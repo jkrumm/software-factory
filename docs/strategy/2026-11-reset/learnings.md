@@ -112,3 +112,12 @@ evidence (a sha, a log line, a number); no narrative.
   Issue 63's lead t138 killed at 01:23:28Z with no note; `lead_gone` "spawn lead-63-1 ended" at 01:33:29Z (`working → queued`),
   finalized 01:33:30, attempt 2 admitted 01:33:39. Wave 3 cost: one worker run, one fix subagent, one follow-up worker and
   five reviews (deep ×2, standard, light ×2).
+
+## Rotation 1 close-out, 2026-11-05 01:50Z
+
+- **`rd merge` rebases, and coverage is by sha.** The chain gate refused rotation 2: three fix commits reviewed clean on their
+  branches (`c0b91c8`, `c868256`, the grace fix) landed on master as `6695e5f`, `14c4c71`, `a2c4293` because master had moved
+  (the lead's own docs commits) and `rd merge` rebased them; `agw review covered` counted them uncovered. Two light re-reviews
+  (27 s, 33 k tokens together) made the range `5f1e361..HEAD` covered. Change for row 7: coverage matches by patch-id across a
+  rebase, or `rd merge` keeps branch shas (merge commit); until then the lead pushes no master commit while a worker's branch
+  is under review.
