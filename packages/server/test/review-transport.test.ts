@@ -422,6 +422,34 @@ describe('submit on Stop', () => {
     expect(calls).toEqual([])
   })
 
+  test('a Stop with background work running is not the reply: nothing is submitted until a later Stop without it', async () => {
+    const { key, path } = await attempt('rv_bg', 1, 'open', { since: 2 })
+    await w.emit(key, 'turn_ended', w.at(1), { backgroundTasks: true })
+    replies.set(path, 'The verifier is still running, so I have no verdict yet.')
+    written.set(path, w.at(1))
+    expect(await transport.pass()).toMatchObject({ submitted: [], retried: [], needsHuman: [] })
+    expect(calls).toEqual([])
+
+    // The session resumed when the verifier finished and stopped again, this time for good.
+    await w.emit(key, 'turn_started', w.at(0.5))
+    await w.emit(key, 'turn_ended', w.at(0.2))
+    replies.set(path, '{"verdict":"pass"}')
+    clock.advance(REPLY_GRACE_MS + 1)
+    expect((await transport.pass()).submitted).toEqual([key])
+    expect(calls).toEqual([{ jobId: 'rv_bg', attempt: 1, account: 'a', reply: '{"verdict":"pass"}' }])
+  })
+
+  test('a Stop with background work that never resumes is judged by the idle limit', async () => {
+    const { key, path } = await attempt('rv_bg_idle', 1, 'open', { since: 40 })
+    await w.emit(key, 'turn_ended', w.at(39), { backgroundTasks: true })
+    replies.set(path, 'waiting for the verifier')
+    written.set(path, w.at(39))
+    const result = await transport.pass()
+    expect(result).toMatchObject({ submitted: [], retried: [key] })
+    expect(calls).toEqual([])
+    expect(await outcome(key)).toMatchObject({ outcome: 'idle' })
+  })
+
   test('a refusal starts attempt 2 once, with agw’s message (2,000 characters at most) after the original prompt', async () => {
     const { key, path } = await attempt('rv_no', 1, 'ended')
     replies.set(path, 'not json')

@@ -226,9 +226,13 @@ export class ReviewTransport {
     if (!session) return
     // Gone: the terminal is lost (`pane_gone`) or the runner restarted while the turn was open. A reviewer is never resumed (its terminal is not
     // kept, the rules skip it), so its attempt failed and a fresh session takes the next one. A turn that had ended before is still collected.
+    // A Stop with background work still running (a review-verifier subagent) is a pause, not the reply: the session resumes when the task
+    // ends and stops again. Its last words so far ("waiting for the verifier") are not a review, and a dead session left no better one.
+    const last = await this.lastTurnEvent(a.key)
+    const paused = last?.kind === 'turn_ended' && last.background
     const closedTurn =
-      session.state === 'idle' ? session.turn >= 1 : session.state === 'dead' && (await this.turnEnded(a.key))
-    if (closedTurn) return this.collect(a, session, now, result)
+      session.state === 'idle' ? session.turn >= 1 : session.state === 'dead' && last?.kind === 'turn_ended'
+    if (closedTurn && !paused) return this.collect(a, session, now, result)
     if (session.state === 'dead' || (await this.restartedSince(a.key))) {
       const why = 'Your previous session was lost before it replied. Reply with only the JSON.'
       return this.failed(a, 'idle', 'the session was lost before its turn ended', why, result)
@@ -238,18 +242,47 @@ export class ReviewTransport {
       const why = 'Your previous session hit a usage limit and was closed. Reply with only the JSON.'
       return this.failed(a, 'walled', 'the session hit a usage limit', why, result)
     }
-    const idleMs = (this.deps.limits ?? DEFAULT_REVIEW_LIMITS).idleMs
+    await this.judgeSilence(a, session, now, paused, result)
+  }
+
+  /** The session has not replied: an attempt whose session wrote nothing for the idle limit is over; any other is left to work. */
+  private async judgeSilence(
+    a: Attempt,
+    session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+    now: Date,
+    paused: boolean,
+    result: ReviewPassResult,
+  ): Promise<void> {
     // Silent from the start: no first turn within the idle limit of its last event (or its creation).
-    if (session.state === 'starting' || (session.state === 'idle' && session.turn === 0)) {
-      if (now.getTime() - Date.parse(session.lastEventAt) < idleMs) return
-      const why = `Your previous session never started its turn within ${Math.round(idleMs / 60_000)} minutes and was closed. Reply with only the JSON.`
-      return this.failed(a, 'idle', `no turn started within ${Math.round(idleMs / 60_000)} min`, why, result)
-    }
-    // The turn is open. No wall-clock cap on the work itself: only a transcript that stopped growing is judged.
-    if (session.state !== 'working' && session.state !== 'stuck' && session.state !== 'blocked') return
+    if (session.state === 'starting' || (session.state === 'idle' && session.turn === 0))
+      return this.judgeStart(a, session, now, result)
+    // The turn is open, or paused on background work. No wall-clock cap on the work itself: only a transcript that stopped growing is judged.
+    const open = ['working', 'stuck', 'blocked'].includes(session.state)
+    if (open || (session.state === 'idle' && paused)) return this.judgeStall(a, session, now, result)
+  }
+
+  private async judgeStart(
+    a: Attempt,
+    session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+    now: Date,
+    result: ReviewPassResult,
+  ): Promise<void> {
+    const idleMs = (this.deps.limits ?? DEFAULT_REVIEW_LIMITS).idleMs
+    if (now.getTime() - Date.parse(session.lastEventAt) < idleMs) return
+    const why = `Your previous session never started its turn within ${Math.round(idleMs / 60_000)} minutes and was closed. Reply with only the JSON.`
+    await this.failed(a, 'idle', `no turn started within ${Math.round(idleMs / 60_000)} min`, why, result)
+  }
+
+  private async judgeStall(
+    a: Attempt,
+    session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+    now: Date,
+    result: ReviewPassResult,
+  ): Promise<void> {
+    const idleMs = (this.deps.limits ?? DEFAULT_REVIEW_LIMITS).idleMs
     const written = session.transcriptPath ? await (this.deps.mtime ?? fileMtime)(session.transcriptPath) : undefined
-    const last = Math.max(written?.getTime() ?? 0, Date.parse(session.since ?? session.lastEventAt))
-    if (now.getTime() - last < idleMs) return
+    const wrote = Math.max(written?.getTime() ?? 0, Date.parse(session.since ?? session.lastEventAt))
+    if (now.getTime() - wrote < idleMs) return
     const why = `Your previous session wrote nothing for ${Math.round(idleMs / 60_000)} minutes and was closed. Reply with only the JSON.`
     await this.failed(a, 'idle', `no output for ${Math.round(idleMs / 60_000)} min`, why, result)
   }
@@ -328,11 +361,12 @@ export class ReviewTransport {
     result.retried.push(a.key)
   }
 
-  /** Whether the session's last turn event is a `turn_ended`. */
-  private async turnEnded(key: string): Promise<boolean> {
-    const [row]: { kind: string }[] = await this.deps.sql`
-      SELECT kind FROM factory.events WHERE session = ${key} AND kind IN ('turn_started', 'turn_ended') ORDER BY at DESC, id DESC LIMIT 1`
-    return row?.kind === 'turn_ended'
+  /** The session's last turn event, and whether that Stop left background work running (`backgroundTasks` on the hook's payload). */
+  private async lastTurnEvent(key: string): Promise<{ kind: string; background: boolean } | undefined> {
+    const [row]: { kind: string; background: boolean }[] = await this.deps.sql`
+      SELECT kind, COALESCE((payload->>'backgroundTasks')::boolean, false) AS background FROM factory.events
+      WHERE session = ${key} AND kind IN ('turn_started', 'turn_ended') ORDER BY at DESC, id DESC LIMIT 1`
+    return row
   }
 
   /** Whether the runner (herdr-core) restarted after this session's last start: its terminal, not kept, went with it. */
