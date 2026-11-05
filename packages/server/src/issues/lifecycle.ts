@@ -29,7 +29,7 @@ interface Step {
   /** applies only then: otherwise the event is as if the state had no entry */
   when?: (context: Context) => boolean | Promise<boolean>
   /** the step taken instead when the Issue's stored events say so (a restart that has been spent): its edge is the table's too */
-  otherwise?: { when: (context: Context) => Promise<boolean>; step: Step }
+  otherwise?: { when: (context: Context) => boolean | Promise<boolean>; step: Step }
   /** a line for the Issue's events (and the owner's, for a park) beyond what the event carried */
   detail?: string
   /** a new lead: the next attempt */
@@ -71,6 +71,9 @@ async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefine
   const [open] = await tx`SELECT 1 FROM factory.issue_deps WHERE issue_id = ${issue.id} LIMIT 1`
   return open ? 'an Issue it depends on is open' : undefined
 }
+
+/** The owner's note that asks for the wake (`factory issue note --wake`): it ends a timed wait, and is typed to the lead as any note. */
+const noteWakes = ({ issue, row }: Context): boolean => issue.reason === 'wait' && row.payload?.wake === true
 
 /** The end of a hold and its proof count only for the hold still running: a regression and a second ship started a new one. */
 const thisHold = ({ issue, row }: Context): string | undefined =>
@@ -121,6 +124,23 @@ const restartsSpent = async (context: Context): Promise<boolean> =>
 const regressionsSpent = async (context: Context): Promise<boolean> =>
   (await movedBefore(context, 'regression')) >= MAX_REGRESSIONS
 
+/** A lead's verb on a timed wait it no longer needs to keep (the cap lifted, the dependency landed): it does what it does when working. */
+const fromWait = (step: Step): Step => ({ ...step, only: 'wait' })
+
+const waitStep: Step = {
+  to: 'waiting',
+  reason: 'wait',
+  // A wait with no time has no way out but a stop: what has none is `block` or `ask`.
+  refuse: ({ row }) =>
+    text(row.payload, 'until') === null || badTime(row.payload, 'until') ? 'a wait needs a time in `until`' : undefined,
+}
+const blockStep: Step = { to: 'waiting', reason: 'blocked' }
+const askStep: Step = { to: 'waiting', reason: 'decision', apply: recordDecision }
+// The evidence derived from the commits decides these two; the check runs here, in the transition's transaction, on what `derive` found.
+const shipStep: Step = { to: 'watching', hold: true, apply: gateShip }
+const closeStep: Step = { to: 'closed', outcome: 'done', apply: gateClose }
+const dropStep: Step = { to: 'closed', outcome: 'dropped' }
+
 const stopped: Step = { to: 'closed', outcome: 'dropped' }
 const recorded: Step = {}
 const noted: Step = { effects: ['note_lead'] }
@@ -134,19 +154,9 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   // the admission tick
   admitted: { queued: { to: 'working', newAttempt: true, effects: ['start_lead'] } },
   // the lead
-  phase: { working: recorded },
-  wait: {
-    working: {
-      to: 'waiting',
-      reason: 'wait',
-      // A wait with no time has no way out but a stop: what has none is `block` or `ask`.
-      refuse: ({ row }) =>
-        text(row.payload, 'until') === null || badTime(row.payload, 'until')
-          ? 'a wait needs a time in `until`'
-          : undefined,
-    },
-  },
-  block: { working: { to: 'waiting', reason: 'blocked' } },
+  phase: { working: recorded, waiting: fromWait({ to: 'working' }) },
+  wait: { working: waitStep, waiting: fromWait(waitStep) },
+  block: { working: blockStep, waiting: fromWait(blockStep) },
   // The factory's own: a lead that stopped twice with nothing reported (§5, "Following a lead").
   unreported: { working: { to: 'waiting', reason: 'unreported', apply: stopIsNews } },
   // The factory's own: the lead's spawn failed or ended, and a note had nobody to go to. The attempt is finalized and admission makes
@@ -159,11 +169,10 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
       otherwise: { when: restartsSpent, step: { to: 'waiting', reason: 'lead_gone', refuse: goneIsCurrent } },
     },
   },
-  ask: { working: { to: 'waiting', reason: 'decision', apply: recordDecision } },
-  // The evidence derived from the commits decides these two; the check runs here, in the transition's transaction, on what `derive` found.
-  ship: { working: { to: 'watching', hold: true, apply: gateShip } },
-  close: { working: { to: 'closed', outcome: 'done', apply: gateClose } },
-  drop: { working: { to: 'closed', outcome: 'dropped' } },
+  ask: { working: askStep, waiting: fromWait(askStep) },
+  ship: { working: shipStep, waiting: fromWait(shipStep) },
+  close: { working: closeStep, waiting: fromWait(closeStep) },
+  drop: { working: dropStep, waiting: fromWait(dropStep) },
   // session events
   limit_stop: { working: { to: 'waiting', reason: 'wall', apply: wallIsNews } },
   turn_started: {
@@ -198,7 +207,13 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   // A question past its expiry with no default: it stays open (an answer is still taken), and the line is for the owner.
   lapsed: { waiting: { only: 'decision' } },
   // the owner or the orchestrator
-  note: { queued: recorded, working: noted, waiting: noted, watching: noted },
+  // `note --wake` is the owner's way to end a timed wait early; the lead is typed the note either way.
+  note: {
+    queued: recorded,
+    working: noted,
+    waiting: { ...noted, otherwise: { when: noteWakes, step: { to: 'working', effects: ['note_lead'] } } },
+    watching: noted,
+  },
   answer: { waiting: { to: 'working', only: 'decision', effects: ['note_lead'], apply: answerDecision } },
   park: { working: { to: 'waiting', reason: 'parked' } },
   stop: { settling: stopped, queued: stopped, working: stopped, waiting: stopped, watching: stopped },

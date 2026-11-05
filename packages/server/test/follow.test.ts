@@ -551,6 +551,21 @@ describe('factory issue note', () => {
   const note = (id: number, body: Record<string, unknown> = { text: 'use the other table' }) =>
     app.send('POST', `/issues/${id}/note`, body)
 
+  test('--wake ends a timed wait and types the note; without it the note leaves the wait alone', async () => {
+    const { id, key } = await lead()
+    const until = new Date(clock.now().getTime() + 3_600_000).toISOString()
+    await post(id, 'wait', { until, session: key })
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    await note(id, { id: 'plain', text: 'still waiting' })
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    expect((await note(id, { id: 'go', text: 'cap is lifted', wake: true })).status).toBe(201)
+    await drive(2)
+    expect(await issue(id)).toMatchObject({ state: 'working', reason: null, wake_at: null })
+    expect((await promptsOf(key)).map((p) => p.id)).toContain(`issue:${id}:note:go`)
+  })
+
   test('a running lead is typed it through the session notes, under issue:<id>:note:<call id>', async () => {
     const { id, key } = await lead()
     const response = await note(id, { id: 'n1', text: 'use the other table' })

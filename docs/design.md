@@ -666,7 +666,9 @@ stateDiagram-v2
   working --> waiting: a decision, a wall, a dependency
   working --> queued: a lead is gone (twice)
   waiting --> working
-  waiting --> closed: stopped
+  waiting --> waiting: a timed wait, re-filed or turned into a block or a question
+  waiting --> watching: a timed wait, the lead ships
+  waiting --> closed: stopped, or a timed wait, the lead closes or drops
   working --> watching: shipped with evidence
   working --> closed: closed or dropped with a reason
   watching --> closed: holds, or stopped
@@ -675,7 +677,7 @@ stateDiagram-v2
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to, for the third time). **Every park can end without a drop** (RS3): a `wall` and an `unreported` end by themselves when the session that caused them starts a turn again (below), a `lead_gone` is a new attempt twice before it is a park, and a `parked` by the third regression is the owner's. A `wait` needs a time in `until`, which sets `wake_at`. A stopped Issue
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to, for the third time). **Every park can end without a drop** (RS3): a `wall` and an `unreported` end by themselves when the session that caused them starts a turn again (below), a `lead_gone` is a new attempt twice before it is a park, and a `parked` by the third regression is the owner's. A `wait` needs a time in `until`, which sets `wake_at`. **A timed wait can be ended early**: by its lead, whose `phase` (back to `working`), `wait` (a new time), `ship`, `close`, `drop`, `block` and `ask` then act as they do while `working` (they are refused on every other reason: a `blocked` or `decision` wait keeps its rules), and by the owner, whose `factory issue note <id> <text> --wake` ends it like a wake and types the text to the lead as any note (on any other reason `--wake` is a plain note). The timer's own `wake` for the ended wait finds the Issue changed and ends nothing. A stopped Issue
 is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
