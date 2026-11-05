@@ -201,9 +201,9 @@ a hook; that gap stays until a measured failure says otherwise.
 **One space per repo (FL6).** A space is keyed by path; a second space for the same path is explicit (`new_space`), for a separate plan or worktree; the full rules are under "Spaces (FL6)" in *As built* below.
 
 **Test slots (FL7).** `factory slot run -- <cmd>` wraps `make check` and test runs in a host-wide semaphore: a
-leased row, two slots to start and tuned from the load record, released on exit or lease expiry. It fails open: with the server down
-or the wait over its limit, the command runs anyway, because a slot exists to reduce flakes and must never block
-work.
+leased row, two slots to start and tuned from the load record, released on exit or lease expiry. It is closed on
+contention and open only on an outage (RS10 (b)): with the server down the command runs anyway, because a dead factory must
+not block the work that repairs it; with the server up the caller keeps waiting, and a wait over its limit exits 75 without running.
 
 **The role table (FL4).** One table for mother, lead, worker, mechanical and the subagent types, giving tier and
 effort. `rd --role` and agent frontmatter read it; values move only on data from track U. Model ids stay in agw's
@@ -508,8 +508,9 @@ until it is granted (once a second), renews the lease every 10 s while the comma
 loses it at the next call of anyone), and gives it back with `DELETE` on exit or `SIGTERM`/`SIGHUP`/`SIGINT`. `FACTORY_SLOTS` slots
 (default 2; a signal sent to the wrapper is passed on to the command, and a renewal answered "wait" says once that the lease lapsed), granted to callers in the order they first asked (a waiter that stops polling for 15 s leaves the line), all behind
 one advisory lock. The exit code, stdout and stderr are the command's own (killed by a signal: 128 plus it; can't start: 127).
-**Fails open:** no answer from the server, or no slot within `FACTORY_SLOT_WAIT_MS` (client side, default 600000), runs the
-command anyway with one stderr line. `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
+**Open only on an outage:** no answer from the server runs the command anyway with one stderr line. **Closed on contention:** no
+slot within `FACTORY_SLOT_WAIT_MS` (client side, default 2700000, 45 min) is one stderr line and exit 75 (`EX_TEMPFAIL`) without
+running the command; `FACTORY_SLOT_OPEN=1` runs it anyway instead. `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
 is installed, and bare otherwise (CI).
 
 #### Quota
