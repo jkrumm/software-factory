@@ -8,7 +8,7 @@ help:
 	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
 	@echo "make rollback swap back to the previous release (data/previous-sha): service, /health at the old sha, current, CLI, door (DRY_RUN=1 prints the plan)"
 	@echo "make version print the deployed commit sha (one line; what the hold checks the shipped commits against)"
-	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF), and the factory CLI against it"
+	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF; behind it only by docs/tests is fine), and the factory CLI against it"
 
 # Tests start a private Postgres cluster (initdb) in a temp dir: PG_BIN_DIR points at the binaries when they are not on PATH.
 check:

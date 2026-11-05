@@ -1,6 +1,6 @@
 #!/bin/bash
 # software-factory verify (`make verify`): exit 0 only if the deployed server is healthy, is the commit that was
-# deployed, that commit is origin/master, and the installed `factory` CLI reaches the server.
+# deployed, that commit is origin/master (or only behind it by changes that need no deploy), and the installed `factory` CLI reaches the server.
 
 set -u
 
@@ -20,6 +20,16 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 fail() { echo "verify: FAIL: $*" >&2; exit 1; }
 ok() { echo "verify: ok: $*"; }
 
+# A path nothing deploys. Mirrors INERT in packages/server/src/issues/evidence.ts (the list `issue close` refuses on): keep them equal.
+inert_path() {
+  case "$1" in
+    docs/* | *.md | *.mdx | *.txt | LICENSE* | */LICENSE* | .gitignore | */.gitignore) return 0 ;;
+    test/* | */test/* | tests/* | */tests/* | __tests__/* | */__tests__/*) return 0 ;;
+    *.test.* | *.spec.*) return 0 ;;
+  esac
+  return 1
+}
+
 for tool in git curl jq factory secrets-run; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool not found on PATH"
 done
@@ -34,9 +44,23 @@ ok "/health ok (version ${version:0:12})"
 deployed=$(cat "$SHA_FILE" 2>/dev/null) || fail "$SHA_FILE missing: nothing was deployed"
 remote=$(git -C "$REPO_DIR" ls-remote origin "refs/heads/$REF" | awk '{print $1}')
 [[ -n "$remote" ]] || fail "cannot read origin/$REF from $REPO_DIR (run make deploy first)"
-[[ "$deployed" == "$remote" ]] || fail "deployed ${deployed:0:12} is not origin/$REF ${remote:0:12}"
 [[ "$version" == "$deployed" ]] || fail "the running server reports ${version:0:12}, deployed is ${deployed:0:12}"
-ok "deployed sha is origin/$REF (${deployed:0:12})"
+if [[ "$deployed" == "$remote" ]]; then
+  ok "deployed sha is origin/$REF (${deployed:0:12})"
+else
+  # origin/$REF moved past the deploy. That is fine when every changed path needs no deploy (the factory's own INERT list,
+  # packages/server/src/issues/evidence.ts: docs, markdown, text, licences, tests); a deployable path not deployed still fails.
+  git -C "$REPO_DIR" fetch --quiet origin "$REF" || fail "git fetch origin $REF failed in $REPO_DIR"
+  git -C "$REPO_DIR" cat-file -e "$remote^{commit}" 2>/dev/null || fail "origin/$REF ${remote:0:12} is not in $REPO_DIR after a fetch"
+  git -C "$REPO_DIR" merge-base --is-ancestor "$deployed" "$remote" 2>/dev/null \
+    || fail "deployed ${deployed:0:12} is not an ancestor of origin/$REF ${remote:0:12}"
+  changed=$(git -C "$REPO_DIR" diff --name-only "$deployed" "$remote") || fail "cannot diff ${deployed:0:12}..${remote:0:12}"
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    inert_path "$path" || fail "deployed ${deployed:0:12} is not origin/$REF ${remote:0:12}: $path changed and needs a deploy"
+  done <<<"$changed"
+  ok "deployed ${deployed:0:12} is behind origin/$REF ${remote:0:12} only by changes that need no deploy (docs, markdown, tests)"
+fi
 
 # 3. the API refuses a caller without the token
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/spawns")

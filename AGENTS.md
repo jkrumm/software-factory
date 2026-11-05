@@ -105,7 +105,7 @@ state, roles, process/health/contract/schema/API.
 `make check` — install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, `bun test`. The tests start a
 private Postgres cluster with `initdb` in a temp dir (on PATH, or `PG_BIN_DIR`, or `/usr/lib/postgresql/<major>/bin`
 as on GitHub's runners); nothing touches a real database. `make test` runs the tests, `make fmt` formats.
-`make deploy`, `make rollback` (back to `data/previous-sha`, health-checked) and `make verify` act on the mini only; `DRY_RUN=1 make deploy|rollback` prints the plan. `FACTORY_REF=<branch>` on
+`make deploy`, `make rollback` (back to `data/previous-sha`, health-checked) and `make verify` (the deployed sha is origin/master, or behind it only by docs, markdown or test paths, the `INERT` list of `issues/evidence.ts` mirrored in `scripts/verify.sh`) act on the mini only; `DRY_RUN=1 make deploy|rollback` prints the plan. `FACTORY_REF=<branch>` on
 both proves a branch live before it is merged (default `master`). The hc fake for the tests is
 `packages/server/test/support/fake-hc.ts` (shapes taken from a scratch core, hc 0.1.15); `HC_E2E=1 bun test packages/server/test/hc-e2e.test.ts` runs the runner and the witness against a scratch core. CI runs `make check` on
 `ubuntu-latest`.
