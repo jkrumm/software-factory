@@ -260,3 +260,6 @@ evidence (a sha, a log line, a number); no narrative.
 - **`/review` from an owner session works as designed:** prepare, a foreground-less background `reviewer` subagent, the reply restored from
   the notification's HTML escapes (`&gt;`, `&amp;`), submit; deep 164 s, light 42 s. The escaped reply is the third sighting; candidate for
   `/review`: write the reply to a file from the agent itself.
+- **A green Issue is not its acceptance.** Issue 67 closed `done` on `make verify` while its own acceptance ("one real deep review through
+  the hidden transport is submitted") had not happened: the only hidden review since the fix was light. The ship gate checks deploy and
+  verify, not the Issue's stated proof. Candidate for the lead's contract: an acceptance that needs a future event is a `wait`, not a close.

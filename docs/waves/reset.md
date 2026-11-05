@@ -89,8 +89,10 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 
 ## Wave 8b — the contract of row 7            <!-- status: todo -->
 - [ ] iris's running wave closes; its mother and lead handoffs, agent-workflows' handoffs and software-factory's `scripts/gate-run` and
-  `scripts/gameday` teardown move off `rd wave|close`; the stale active waves (basalt-ui, modelpick, ntfy-mac, basalt-expr-trial,
-  basalt-expr-trial-v1) become Issues or are archived.
+  `scripts/gameday` teardown move off `rd wave|close`.
+- [x] The stale active waves (2026-11-05): basalt-expr-trial and -v1 archived (local-only repos, pages built 10-18); modelpick Wave 5 →
+  Issue 73, ntfy-mac Wave 6 → Issue 74 (closed `done`); basalt-ui Wave 55 back to `pending` (PR #570, `6f1007a8`), held by its handoff for
+  the owner's phase-1 sign-off.
 - [ ] Then delete `rd wave|fan|merge|close` for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and
   tests, hc-reap's agent rules; keep `rd work|agents|read|say|issue`.
 
