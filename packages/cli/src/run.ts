@@ -146,7 +146,7 @@ commands:
                   Any of them ends a timed wait early (a wait Issue's lead need not wait it out); blocked and decision waits keep their rules
                   (the owner's way out of a block is issue note --wake).
                     phase  --phase <name> [--note <text>]
-                    wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
+                    wait   --until <ISO time> [--why <text>] [--on deep_cap]  a timed wait; the Issue wakes then (--on names the cause the steward may lift early: deep_cap wakes it when the deep review cap has room)
                     ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
                            the merged commits; refused (exit 5, saying what is missing) until the evidence they require is on record
                            deploy mode make: deploy from the repo's main checkout first (git pull --ff-only, make deploy, make verify, make version);
@@ -209,7 +209,7 @@ commands:
                   session-end); reads the hook JSON on stdin, spools it, tells the server, always exits 0
 
 --all            list: include dead sessions
---on <what>      session wait: workers, deploy or owner
+--on <what>      session wait: workers, deploy or owner; issue wait: deep_cap
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note, issue note|prio: the call's idempotency key
@@ -340,6 +340,10 @@ const reviewsLine = (r: NonNullable<Status['reviews']>): string => {
   return `reviews: ${r.live}/${r.slots} live, deep today ${most}/${r.deepCap} per account${each ? ` (${each})` : ''}`
 }
 
+/** `steward: 3 acts in 24 h, 1 handed to the owner`: what the steward did, nothing when it did nothing. */
+const stewardLine = (r: NonNullable<Status['steward']>): string =>
+  `steward: ${r.acts} act${r.acts === 1 ? '' : 's'} in 24 h, ${r.exhausted} handed to the owner`
+
 /** The status screen: the asks first (ATTENTION), the health line after them, then each section a header and tab-separated rows. */
 export function statusScreen(s: Status): string {
   const section = (title: string, rows: string[]) => [title, ...(rows.length ? rows.map((r) => `  ${r}`) : ['  -'])]
@@ -389,6 +393,7 @@ export function statusScreen(s: Status): string {
     ),
     ...section('ACCOUNTS', s.accounts.map(quotaLine)),
     ...(s.reviews ? [reviewsLine(s.reviews)] : []),
+    ...(s.steward && (s.steward.acts > 0 || s.steward.exhausted > 0) ? [stewardLine(s.steward)] : []),
     ...section('NOTES', [
       ...s.notes.map(promptLine),
       ...(s.notesMore > 0 ? [`... ${s.notesMore} more not shown`] : []),
@@ -798,7 +803,7 @@ function verbBody(verb: IssueVerb, flags: Flags, io: Io): Record<string, unknown
     case 'phase':
       return { ...common, phase: need('phase'), ...optional('note') }
     case 'wait':
-      return { ...common, until: need('until'), ...optional('why') }
+      return { ...common, until: need('until'), ...optional('why'), ...optional('on') }
     case 'ship':
       if (!flags.commit?.length) throw usage('issue ship needs --commit <merged sha>, once per commit')
       return {

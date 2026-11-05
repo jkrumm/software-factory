@@ -16,12 +16,13 @@ export const LEASE_MS = 120_000
 
 /**
  * The away rule (FV Wave 4), decided at send time from presence: why a message is folded instead of sent, or `null` when it goes out.
- * A decision (`notify:ask:*`, the `yours` tier) goes out unless the desk is present; the morning reading and a test always go out; every
+ * A decision (`notify:ask:*`, the `yours` tier) and the steward's spent retries (`notify:steward:*`) go out unless the desk is present; the morning reading and a test always go out; every
  * other message goes out only while the phone is present and the desk is not. Before the board reports presence the owner is away.
  */
 export function foldReason(key: string, presence: Pick<Presence, 'desk' | 'phone'>): string | null {
   if (key.startsWith('notify:digest:') || key.startsWith('notify:test:')) return null
-  if (key.startsWith('notify:ask:'))
+  // The steward's line is a machine that gave up on an Issue and needs the owner now, like an ask: only a present desk, which shows it live, folds it.
+  if (key.startsWith('notify:ask:') || key.startsWith('notify:steward:'))
     return presence.desk.present ? 'the desk is present: the board shows it live' : null
   if (presence.desk.present) return 'the desk is present: the board shows it live'
   return presence.phone.present

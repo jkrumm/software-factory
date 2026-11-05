@@ -203,6 +203,19 @@ async function versionCheck(
   return { landedAt: derived.landedAt }
 }
 
+/** What the proof of an Issue's hold checks: its repo's `make verify`, the deployed version where its ship deployed something, and the manifest's probes. */
+export async function proofInputOf(
+  sql: SQL,
+  issue: { id: number; repo: string; attempt: number },
+): Promise<ProofInput> {
+  const owner = await projectOfPath(sql, issue.repo)
+  const project = owner ? await getProject(sql, owner.name) : undefined
+  const targets: MakeTargets | null = project?.makeTargets ?? null
+  const manifest = project?.manifest ?? defaultManifest(basename(issue.repo))
+  const version = await versionCheck(sql, issue.id, issue.attempt, project ? manifest.deploy : undefined)
+  return { repo: issue.repo, makeVerify: targets?.verify === true, version, probes: manifest.deploy.probes }
+}
+
 /** The key of the second check of a hold: the first red one asks for it, and only a red second one is a regression. */
 export const rerunKey = (verifyKey: string): string => `${verifyKey}:rerun`
 
@@ -228,15 +241,7 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   const [answered] = await sql`SELECT 1 FROM factory.issue_inbox WHERE key IN ${sql([greenKey, redKey])}`
   if (answered) return
 
-  const owner = await projectOfPath(sql, issue.repo)
-  const project = owner ? await getProject(sql, owner.name) : undefined
-  const targets: MakeTargets | null = project?.makeTargets ?? null
-  const manifest = project?.manifest ?? defaultManifest(basename(issue.repo))
-  const version = await versionCheck(sql, issueId, issue.attempt, project ? manifest.deploy : undefined)
-  const checks = await proof.run(
-    { repo: issue.repo, makeVerify: targets?.verify === true, version, probes: manifest.deploy.probes },
-    signal,
-  )
+  const checks = await proof.run(await proofInputOf(sql, { ...issue, id: issueId }), signal)
   // A check the server killed on its way down says nothing about production: the next server asks again.
   if (signal.aborted) throw new Waiting('the server is stopping')
   // A check takes minutes: a stop or a regression may have ended the hold since.

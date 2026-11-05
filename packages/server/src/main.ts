@@ -198,12 +198,13 @@ const leadWorktrees = new WorktreeMaker({
   retryBudgetMs: config.retryBudgetMs,
 })
 const offTick = new OffTick({ now: () => clock.now().getTime() })
+const proof = new MakeAndProbes()
 const issuePorts = {
   ...leadPorts({ sql, clock, roles, repoRoots: config.repoRoots }),
   ...holdPorts({
     sql,
     clock,
-    proof: new MakeAndProbes(),
+    proof,
     offTick,
     settledAt: new Date(clock.now().getTime() + VERIFY_SETTLE_MS),
   }),
@@ -235,6 +236,7 @@ const ticker = startTicker(
     quota,
     projects,
     issuePorts,
+    steward: { verify: { proof, offTick } },
     classification,
     leadWorktrees,
     fleet,

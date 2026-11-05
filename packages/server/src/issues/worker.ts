@@ -7,6 +7,7 @@ import type { WorktreeMaker } from './leadtree.ts'
 import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
 import type { InboxRow } from './shared.ts'
+import { runSteward, type StewardDeps } from './steward.ts'
 import { fireTimers } from './timers.ts'
 
 /** Most rows of one Issue in one transaction, and most Issues in one pass: the rest wait for the next. */
@@ -119,7 +120,7 @@ export async function answerNow(
 /**
  * One tick's work on Issues: Classify is started for the Issues that have none and the leads' worktrees that are due are started (each
  * runs on its own), passed timers become inbox
- * rows, Issues the claim has room for are admitted, the inbox moves Issues, and the effects they asked for run.
+ * rows, the steward files what a stalled Issue needs (so the inbox handles it in this pass), Issues the claim has room for are admitted, the inbox moves Issues, and the effects they asked for run.
  */
 export async function issuePass(
   sql: SQL,
@@ -129,11 +130,14 @@ export async function issuePass(
     classification?: Classification
     worktrees?: WorktreeMaker
     alertLeads?: boolean
+    /** the steward (`steward.ts`); without it none runs */
+    steward?: StewardDeps
   },
 ): Promise<string[]> {
   await input.classification?.start()
   await input.worktrees?.start()
   await fireTimers(sql, input.now())
+  if (input.steward) await runSteward(sql, input.now(), input.steward)
   await parkGoneLeads(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)

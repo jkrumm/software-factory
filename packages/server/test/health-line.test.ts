@@ -208,6 +208,10 @@ describe('asks and health are two lists', () => {
   })
 
   test('a review that needs a human is health; one held at the deep cap is an ask', async () => {
+    // Unfinished work: the reviewer's repo has an open Issue (a finished job's line is gone: `steward.test.ts`).
+    await issue('working')
+    await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, review_job, review_tier, review_effort, created_at)
+      VALUES ('review-j1-a2', '/r', 'p', 'started', 'reviewer', 'j1', 'light', 'low', ${clock.now()})`
     await sql()`INSERT INTO factory.review_outcomes (spawn_key, job_id, attempt, outcome, detail, at)
       VALUES ('review-j1-a2', 'j1', 2, 'needs_human', 'refused', ${clock.now()})`
     await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, hold, review_job, review_tier, review_effort, created_at)

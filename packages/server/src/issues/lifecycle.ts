@@ -72,8 +72,8 @@ async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefine
   return open ? 'an Issue it depends on is open' : undefined
 }
 
-/** The reasons the owner's note can end: a decision stays on `issue answer`, a dependency ends with its blockers and a `lead_gone` is a new attempt's. */
-const WAKEABLE: readonly (WaitReason | null)[] = ['wait', 'blocked', 'parked']
+/** The reasons a note with `wake` can end (the owner's, or the steward's): a decision stays on `issue answer`, a dependency ends with its blockers and a `lead_gone` is a new attempt's. */
+export const WAKEABLE: readonly (WaitReason | null)[] = ['wait', 'blocked', 'parked', 'unreported']
 
 /** The owner's note that asks for the wake (`factory issue note --wake`): it ends a timed wait, a block or a park, and is typed to the lead as any note. */
 const noteWakes = ({ issue, row }: Context): boolean => WAKEABLE.includes(issue.reason) && row.payload?.wake === true
@@ -172,6 +172,8 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
       otherwise: { when: restartsSpent, step: { to: 'waiting', reason: 'lead_gone', refuse: goneIsCurrent } },
     },
   },
+  // The steward's: a `lead_gone` park whose lead is still gone gets the next attempt, as the first two `lead_gone` did (finalize first).
+  restart: { waiting: { to: 'queued', only: 'lead_gone', effects: ['finalize'], refuse: goneIsCurrent } },
   ask: { working: askStep, waiting: fromWait(askStep) },
   ship: { working: shipStep, waiting: fromWait(shipStep) },
   close: { working: closeStep, waiting: fromWait(closeStep) },

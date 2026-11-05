@@ -254,7 +254,7 @@ export class HcRunner implements Runner {
     return { terminal: created, proven: false }
   }
 
-  async type(input: { pane: string; text: string; enterOnly?: boolean }): Promise<'typed' | 'busy'> {
+  async type(input: { pane: string; text: string; enterOnly?: boolean; force?: true }): Promise<'typed' | 'busy'> {
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
     let status: string | undefined
     try {
@@ -266,12 +266,13 @@ export class HcRunner implements Runner {
     } catch (error) {
       throw asRunnerError(error)
     }
-    // Only an agent at its prompt takes text: a working one queues it, a blocked one reads it as the answer to its dialog.
-    if (status !== 'idle' && status !== 'done') return 'busy'
+    // Only an agent at its prompt takes text: a working one queues it (typed anyway when forced), a blocked one reads it as the answer to its dialog.
+    const forced = input.force === true && status === 'working'
+    if (status !== 'idle' && status !== 'done' && !forced) return 'busy'
 
     try {
       // `if` can name idle or working only: for `done` the core's own refusal of a blocked program is the guard.
-      const guard = status === 'idle' ? { if: 'idle' } : {}
+      const guard = status === 'idle' ? { if: 'idle' } : forced ? { if: 'working' } : {}
       await this.rpc(
         'terminal.send',
         { terminal: input.pane, text: input.enterOnly ? '' : input.text, ...guard },

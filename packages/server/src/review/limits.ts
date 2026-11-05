@@ -15,7 +15,7 @@ export interface ReviewLimits {
 export const DEFAULT_REVIEW_LIMITS: ReviewLimits = { sessions: 2, deepCap: 15, idleMs: 600_000 }
 
 /** How long a `needs_human` stays a health line. */
-export const NEEDS_HUMAN_SHOWN_MS = 3 * 86_400_000
+export const NEEDS_HUMAN_SHOWN_MS = 86_400_000
 
 const oneLine = (text: string, max: number): string => text.replace(/\s+/g, ' ').trim().slice(0, max)
 
@@ -56,7 +56,9 @@ export async function reviewStatus(sql: SQL, now: Date, limits: ReviewLimits): P
 }
 
 /**
- * The review lines of `factory status`. `health`: a job both attempts failed (`needs a human`: a machine failure, not a decision).
+ * The review lines of `factory status`. `health`: a job both attempts failed (`needs a human`: a machine failure, not a decision) while its
+ * work is unfinished: no attempt of the job was later taken or superseded (agw has its verdict), its reviewer's repo still has an open
+ * Issue, and it is under a day old. Anything else is finished work and no line.
  * `asks`: a deep review held by the day's cap, whose `allow` is the owner's call (the spawn key is the second word; the ask reads it back).
  */
 export async function reviewAttention(
@@ -68,7 +70,15 @@ export async function reviewAttention(
   const asks: string[] = []
   const since = new Date(now.getTime() - NEEDS_HUMAN_SHOWN_MS)
   const human: { job_id: string; attempt: number; detail: string | null }[] = await sql`
-    SELECT job_id, attempt, detail FROM factory.review_outcomes WHERE outcome = 'needs_human' AND at > ${since} ORDER BY at, spawn_key`
+    SELECT o.job_id, o.attempt, o.detail FROM factory.review_outcomes o
+    WHERE o.outcome = 'needs_human' AND o.at > ${since}
+      AND NOT EXISTS (
+        SELECT 1 FROM factory.review_outcomes d WHERE d.job_id = o.job_id AND d.outcome IN ('submitted', 'superseded'))
+      AND EXISTS (
+        SELECT 1 FROM factory.spawns s JOIN factory.issues i ON i.state <> 'closed'
+          AND (i.repo = s.repo OR starts_with(s.repo, i.repo || '/') OR starts_with(i.repo, s.repo || '/'))
+        WHERE s.key = o.spawn_key)
+    ORDER BY o.at, o.spawn_key`
   for (const r of human) {
     health.push(
       `review ${r.job_id} needs a human: attempt ${r.attempt} failed${r.detail ? `: ${oneLine(r.detail, 300)}` : ''}`,
