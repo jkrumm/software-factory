@@ -27,7 +27,8 @@ What failure looks like here:
   inside `FACTORY_REPO_ROOTS` after `realpath` (`repos.ts`); the API is loopback only, bearer-authenticated, JSON only, 64 KiB
   (`http.ts`); the door holds no factory token and takes the repo from `door_routes`, never the payload.
 - **A hook breaks the session or loses facts.** `factory hook` exits 0 whatever happens (except the Stop send-back) and keeps
-  stdout empty, because Claude Code injects it into context; `src/hook.ts` imports only `node:fs` and `contract/spool`.
+  stdout empty, because Claude Code injects it into context (one exception: a `session-start` with `source: compact` in an
+  Issue lead's session, `lead-<issue>-<attempt>`, prints one re-read line); `src/hook.ts` imports only `node:fs` and `contract/spool`.
 - **An Issue is shipped without proof.** `issues/lifecycle.ts` is the one writer of `issues.state`; evidence, the hold and
   finalize (`evidence.ts`, `hold.ts`, `finalize.ts`) must fail closed on a git that does not answer, and shipped means deployed.
 - **Facts get stored as state, or a migration corrupts them.** State is derived from events, never stored. Migrations are
