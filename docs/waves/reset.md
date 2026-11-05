@@ -119,7 +119,7 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 ## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: todo -->
 - [ ] `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
   behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
-  The lead writes the spec first (`docs/design.md`), asks the owner to sign it (`factory issue ask`), then builds it. Surfaces (row 15)
+  The lead writes a short spec (`docs/design.md`) and builds a proof of concept, no sign-off (RS13). Surfaces (row 15)
   build on it, nothing earlier. Filed: Issue 85 (`--after 84`).
 
 ## Wave 8c — The factory governs itself (RS12), as Issues            <!-- status: active -->

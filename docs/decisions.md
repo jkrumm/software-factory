@@ -135,3 +135,7 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   steward in the server acts first (wake, re-check, requeue, deliver), an agw workflow on the cheapest route judges an ask or a spent escalation
   against the plan, and only taste and big decisions reach the owner. Issues 100 (steward), 101 (agw workflow), 102 (wiring, `--after 100 101`),
   ahead of row 8. A watcher in the owner's session is the stopgap this ends. RS3 "every park can end" now means ends by itself.
+- **RS13 Build and learn (owner, 2026-11-05 night).** No evals or benchmarks for this work: build it and improve it from real use. Row 9b needs no signed spec: a
+  short spec and a working proof of concept, then continuous improvement. Its purpose is ongoing visualizations in the Herdr sidebar and Iris (Argo takes what it can
+  get): short titles and summaries in precise plain words with no IDs as display text, and insights on tokens, times and tool calls. Cheap summaries through agw are
+  fine, so row 8 keeps the digest code and row 9 its tables until row 9b reuses or removes them. Replaces RS11 (b)'s sign-off.

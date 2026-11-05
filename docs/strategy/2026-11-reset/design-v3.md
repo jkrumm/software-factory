@@ -213,7 +213,7 @@ Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5
 | 7b | Machine budget (RS10): one fail-closed test slot for every check on the mini (`make check`, `agw check`, `xcodebuild`, IuRoot), worker caps on test runners, a booted simulator shut down after its verify, production LaunchAgents niced | — |
 | 8 | Delete fleet triage/presence/away/digest/reaper, the review transport, placement modes, holds, roles (code); a health line about something finished ends after 72 h | 6, 7 |
 | 9 | Contract migration: drop the deleted tables and columns | 8 |
-| 9b | One read API (RS11): Issues, leads, Claude Code sessions, herdr terminals, asks, health, one change stream; spec signed by the owner first | 9 |
+| 9b | One read API (RS11): Issues, leads, Claude Code sessions, herdr terminals, asks, health, one change stream; proof of concept first, no sign-off (RS13) | 9 |
 | 10 | Apple verify on the mini (simulator and Mac app, screenshots by `verifier`) | 5, 7b |
 | 11 | Herdr layout and the `plan:` tabs | 5 |
 | 12 | `issue_facts` view; its Argo page | 6 |
