@@ -15,7 +15,7 @@ export interface Worktree {
 export type Removal = { removed: true } | { kept: string; path: string | null }
 
 /**
- * Makes and removes a lead's worktree (the steps of dotfiles' `fan-worktree.sh`, which `rd fan` uses). `create` is idempotent per branch: a
+ * Makes and removes a lead's worktree (the steps of dotfiles' `fan-worktree.sh`, which the old fan path used). `create` is idempotent per branch: a
  * branch whose worktree was made whole answers that worktree, so a start that crashed after it and before its spawn finds its work; one
  * left half made is removed and made again. `remove` takes it away only when nothing would be lost. A port: no call of it is inside a
  * transaction.

@@ -107,7 +107,7 @@ const inside = (path: string, roots: readonly string[]) => roots.some((root) => 
 /**
  * The reaper (FV Wave 5, docs/design.md §11 "The reaper"): closes a finished worker session, `hc kill` then `hc rm`, when everything
  * says it is done: Claude Code in a worktree of an ordinary repo, idle two hours, the worktree clean, the branch merged into the
- * default branch, nobody waiting on it. The worktree stays (`rd fan --clean` owns worktrees). It runs in the fleet build (off the tick, in no
+ * default branch, nobody waiting on it. The worktree stays (removing a worktree is not the reaper's job). It runs in the fleet build (off the tick, in no
  * transaction, git bounded) and acts through `HcCloser`. One row per close in `fleet_triage_log` (kind `reaped`, not undoable).
  * `dry` lists what it would close and closes nothing; `off` reads nothing.
  */

@@ -226,7 +226,7 @@ async function build(): Promise<World> {
   await hook('e', 'session_ended')
   const ended = paneOf(await view(), 'e')
   if (ended) await hc.finish(ended)
-  // Claude Code ends, then the terminal is closed (`rd close`, an operator's `hc rm`): the core no longer knows it.
+  // Claude Code ends, then the terminal is closed (an operator's `hc rm`): the core no longer knows it.
   const gone = paneOf(await view(), 'c')
   if (gone) {
     await hc.finish(gone)
