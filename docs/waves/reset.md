@@ -73,8 +73,26 @@ The lead does this itself; no worker.
 - [x] Live proof: the rows for every Issue since 2026-11-01, and the KPI line.
 **Left behind:** PR #45 (`e4fc6a6`, `b7d749a`, deep: 2 nits fixed in round 1, round 2 clean, `covered`), `make check` green (1796 pass), deployed `b7d749a7ed2c`, verify green. Proof: 39 rows for 37 Issues since 2026-11-01 (Issues 62 and 63 have two attempts each, `retried` then `dropped`); `asks/issue 0.05 (2/37)  zero-touch 94 % (15/16)  first-hold 81 % (13/16)  window -`, checked by hand against the rows. As built against the brief: `landed_at` (the first ship's `mergedAt`) instead of `first_commit_at`, the events hold no earlier commit time; no review rounds column (stored nowhere); a `first_hold_decided` column, so an attempt still in its first hold is `open`, not a failure; `parks.lead_gone` counts every `lead_gone`, the requeues too. Window points per Issue is `null` and Argo's (its page is not built).
 
-## Stop for the owner
+## The owner's read (2026-11-05 08:00)
 
-The next rows change the machinery this loop itself runs on (dotfiles `rd`, `/wave`, `wave-gate.py`, hc-reap: row 7) and
-then delete server code (rows 8–9). They start after the owner has read the night's learnings. Write the stop into the last
-wave's **Left behind** and the handoff.
+The owner read the learnings and the handoff and let the loop run on (RS10). From here the program lead is the owner's
+session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
+
+## Wave 8 — dotfiles: `rd`, `/wave`, hc-reap, `wave-gate.py` (row 7)            <!-- status: active -->
+- [ ] Brief `briefs/reset-w8-dotfiles.md` from design v3 §3, §8, §12 and an inventory of every caller; one `rd fan` worker in dotfiles.
+- [ ] `rd` a thin `factory issue new`; the `/wave` skill the Issue lead's playbook (in-session `/review`, never `agw review request`'s
+  hidden transport); hc-reap keeps only orphaned shells older than 7 days and `claude --bg` leftovers; `wave-gate.py` and its callers gone.
+- [ ] Cut-over: other repos' chains still running on `rd fan` (iris) are told first and land after their current wave closes.
+- [ ] Live proof: `rd` files an Issue that a lead ships; no `rd fan|wave|merge` caller left (`rg`).
+**Repos:** dotfiles
+
+## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: todo -->
+- [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
+  IuRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
+- [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
+
+## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: todo -->
+- [ ] Row 8 as Issues `--after` row 7: the fleet triage/presence/away/digest/reaper, the review transport (after Issue 67's fix is
+  no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
+  finished ends after 72 h.
+- [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.

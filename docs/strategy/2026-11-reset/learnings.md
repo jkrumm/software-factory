@@ -225,3 +225,23 @@ evidence (a sha, a log line, a number); no narrative.
   Change for the next view or KPI brief: name the denominator of every ratio and what an undecided case is.
 - **The plain output has no header line.** `factory issue facts --format plain` prints bare tab-separated rows; the column names are only
   in `--format json` and design.md §4. Left as is (the CLI contract keeps data on stdout); a reader needs the JSON.
+
+## The owner's read, 2026-11-05 08:00
+
+- **A turn end with background work is not an end, again.** 4 of 5 iris deep reviews through the hidden transport (06:30–07:55Z:
+  `rv_4jmu…`, `rv_4szp…`, `rv_mde4…`, `rv_tsrh…`) gave up on both attempts with "the reply holds no JSON object"; the one standard
+  review submitted. The deep reviewer starts its `review-verifier` as a background subagent and ends its turn with "The verifier is
+  still running … waiting before I give the final reply"; `review/transport.ts` collects on `idle && turn >= 1` and never reads the
+  `backgroundTasks` the hook already stores on `turn_ended`. Third time this class bit (the Stop send-back in Wave 2, Monitors in
+  Wave 6). Change: Issue 67 (the factory builds it); RS10 (a): every consumer of a turn's end honours `background_tasks`.
+- **Issue 49 was half fixed by Issue 50.** Issue 50 reversed the direction (Argo pushes the shelf and pulls stats over Tailscale SSH)
+  and Wishlist Sync has been up since 2026-11-02; the KoInsight push cron on the homelab still pushes every 6 h and times out, and the
+  Kuma push monitor has no other feed. 49 parked `lead_gone` before parks could end and had no way back but a stop; stopped and
+  replaced by Issue 69 with the remainder.
+- **The plan tabs doubled the sidebar.** Every space that had an idle tab-"1" shell now has it beside its `plan` tab, and five
+  unnamed `~/IuRoot` spaces from opening the app there remain; the owner also wants fewer repos listed (`groups.json` trimmed, done by
+  the owner's session). Change: none in the design; a listed repo's space is its `plan` tab plus the work.
+- **The mini's baseline is not idle.** At 08:04 load 35–51 with no check running: WeatherOrb's production LaunchAgents
+  (`worker-round` with three processes ~200 % CPU, `worker-ingest` ~40 % since 01:31), a booted iPhone simulator (`PosterBoard`
+  ~98 %), the shared Postgres. Colima's VMs (default 4 CPU/6 GiB, teamchat 4/4) reserve memory, not CPU: a vCPU costs the host
+  only while the guest runs. Change: row 7b, the machine budget (RS10 (b)).

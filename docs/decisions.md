@@ -117,3 +117,9 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
 - **RS8 The cutover:** Issue 51 closes with what it has; Issues 52–55 are dropped.
 - **RS9 Learn on the way.** Every wave of the reset appends to `docs/strategy/2026-11-reset/learnings.md` where it fell
   apart and what the plan changed.
+
+- **RS10 The owner's read (2026-11-05 morning).** The loop runs on through rows 7–9 without another stop, led from the
+  owner's session. Changed with it: (a) everything that acts on a turn's end honours `background_tasks` (the Issue send-back
+  did, the review transport did not: Issue 67); (b) a new row 7b, the machine budget, before row 10 (design v3 §13);
+  (c) a health line about something finished (a failed spawn, an expired note, a dead review) ends after 72 h (row 8);
+  (d) row 7 removes `rd fan`, so rows 7b, 8 and 9 are factory Issues chained with `--after`, built and shipped by leads.

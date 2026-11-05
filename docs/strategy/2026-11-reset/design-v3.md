@@ -210,9 +210,10 @@ Each row is one Issue. Rows 0–4 are built by leads the current way; from row 5
 | 5 | Lead contract in `brief.ts`; `lead` → Sonnet high; lead cap per account (roles kept) | 2, 3, 4 |
 | 6 | Asks vs parks in `/fleet` and the sidebar; the health line; the factory heartbeat | 4 |
 | 7 | dotfiles: `rd` thin client, `/wave` → lead playbook, hc-reap trimmed, `wave-gate.py` gone | 5 |
-| 8 | Delete fleet triage/presence/away/digest/reaper, the review transport, placement modes, holds, roles (code) | 6, 7 |
+| 7b | Machine budget (RS10): one fail-closed test slot for every check on the mini (`make check`, `agw check`, `xcodebuild`, IuRoot), worker caps on test runners, a booted simulator shut down after its verify, production LaunchAgents niced | — |
+| 8 | Delete fleet triage/presence/away/digest/reaper, the review transport, placement modes, holds, roles (code); a health line about something finished ends after 72 h | 6, 7 |
 | 9 | Contract migration: drop the deleted tables and columns | 8 |
-| 10 | Apple verify on the mini (simulator and Mac app, screenshots by `verifier`) | 5 |
+| 10 | Apple verify on the mini (simulator and Mac app, screenshots by `verifier`) | 5, 7b |
 | 11 | Herdr layout and the `plan:` tabs | 5 |
 | 12 | `issue_facts` view; its Argo page | 6 |
 | 13 | Repo contract audit: `project.yaml` and make targets, one Issue per repo | 5 |
