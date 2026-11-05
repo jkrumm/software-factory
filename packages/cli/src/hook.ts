@@ -46,12 +46,22 @@ function pick(entries: Record<string, unknown>): Record<string, unknown> | undef
   return defined.length ? Object.fromEntries(defined) : undefined
 }
 
+const FINISHED_TASK = new Set(['completed', 'failed', 'killed', 'cancelled', 'stopped', 'done', 'error'])
+
 /**
- * Whether Claude Code lists background work still in flight on this Stop (`background_tasks`: running or pending shells, subagents,
- * monitors; empty when nothing is). Only whether, never what: the entries hold commands and descriptions.
+ * Whether Claude Code lists background work still in flight on this Stop (`background_tasks`: shells, subagents, monitors). An entry
+ * counts unless its `status` says it finished; one with no status counts. Only whether, never what: the entries hold commands and descriptions.
  */
-const backgroundTasks = (input: Input): boolean =>
-  Array.isArray(input.background_tasks) && input.background_tasks.length > 0
+const backgroundTasks = (input: Input): boolean => {
+  const tasks = input.background_tasks
+  if (!Array.isArray(tasks)) return false
+  for (const task of tasks) {
+    if (typeof task !== 'object' || task === null) continue
+    const status = (task as { status?: unknown }).status
+    if (typeof status !== 'string' || !FINISHED_TASK.has(status)) return true
+  }
+  return false
+}
 
 /** The §3 event a hook payload stands for, or nothing when the factory has no use for it. */
 export function toEvent(

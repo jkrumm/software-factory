@@ -52,12 +52,14 @@ const EFFECT_WHAT: Record<string, string> = { start_lead: 'its lead did not star
 
 /**
  * Lead spawns that failed for good while their Issue is open (a spawn has no time of its failure, and a closed Issue's is history), and
- * effects that keep failing.
+ * effects that keep failing. A failed lead that `lead_gone` restarts (the Issue is `queued` for its next attempt, or already on a later one) is no failure for good, and the park that ends the restarts sends its own message, so neither is told here.
  */
 export async function notifyFailures(sql: SQL, now: Date): Promise<void> {
   const spawns: { key: string; error: string | null; issue_id: number; repo: string }[] = await sql`
     SELECT s.key, s.error, i.id AS issue_id, i.repo FROM factory.spawns s JOIN factory.issues i ON i.id = s.issue_id
     WHERE s.status = 'failed' AND s.role = 'lead' AND i.state <> 'closed'
+      AND i.state <> 'queued' AND NOT (i.state = 'waiting' AND i.reason = 'lead_gone')
+      AND substring(s.key from '[0-9]+$')::int >= i.attempt
       AND NOT EXISTS (SELECT 1 FROM factory.notifications n WHERE n.key = 'notify:failed:spawn:' || s.key)
     ORDER BY s.created_at, s.key LIMIT 20`
   for (const spawn of spawns) {

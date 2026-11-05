@@ -36,8 +36,8 @@ export async function issueAttention(sql: SQL, now: Date, options: { alertLeads:
 
   const parked: { id: number; reason: string; since: Date; why: string | null }[] = await sql`
     SELECT i.id, i.reason, i.updated_at AS since,
-      (SELECT COALESCE(e.payload->>'reason', e.payload->>'detail') FROM factory.issue_events e
-       WHERE e.issue_id = i.id AND e.kind IN ('block', 'lead_gone', 'regression') ORDER BY e.id DESC LIMIT 1) AS why
+      (SELECT CASE WHEN e.kind IN ('block', 'lead_gone', 'regression') THEN COALESCE(e.payload->>'reason', e.payload->>'detail') END
+       FROM factory.issue_events e WHERE e.issue_id = i.id AND e.to_state = 'waiting' ORDER BY e.id DESC LIMIT 1) AS why
     FROM factory.issues i WHERE i.state = 'waiting' AND i.reason IN ('unreported', 'blocked', 'parked', 'lead_gone') ORDER BY i.id LIMIT ${PER_KIND}`
   for (const issue of parked) {
     if (issue.reason === 'unreported')

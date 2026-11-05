@@ -99,6 +99,23 @@ describe('the payload becomes the §3 event', () => {
       { kind: 'turn_ended', payload: { backgroundTasks: true } },
     ],
     ['stop', { stop_hook_active: false, background_tasks: [], session_crons: [] }, { kind: 'turn_ended' }],
+    // A list of finished entries is no work in flight; an entry with no status is.
+    [
+      'stop',
+      {
+        stop_hook_active: false,
+        background_tasks: [
+          { id: 'b1', status: 'completed' },
+          { id: 'b2', status: 'killed' },
+        ],
+      },
+      { kind: 'turn_ended' },
+    ],
+    [
+      'stop',
+      { stop_hook_active: false, background_tasks: [{ id: 'b1', status: 'completed' }, { id: 'b2' }] },
+      { kind: 'turn_ended', payload: { backgroundTasks: true } },
+    ],
     [
       'stop-failure',
       { error: 'rate_limit', error_details: '429 Too Many Requests', last_assistant_message: 'API Error' },

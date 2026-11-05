@@ -6,6 +6,7 @@ import { IssueVerbAck, type StopCheck } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
 import { Classification } from '../src/issues/classify.ts'
 import type { Commits } from '../src/issues/commits.ts'
+import { notifyFailures } from '../src/notify/rules.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
 import { leadPorts } from '../src/issues/lead.ts'
@@ -425,6 +426,7 @@ describe('classify, then admission', () => {
       const { id, key, repo } = await lead()
       await fail(key)
       await drive(6)
+      await notifyFailures(db.sql, clock.now())
       expect(await issue(id)).toMatchObject({ state: 'working', attempt: 2, reason: null })
       expect(await trail(id)).toContain('lead_gone working→queued')
       // The ended attempt was finalized (its tab closed, its worktree asked to go) before the next lead was made.
@@ -447,14 +449,18 @@ describe('classify, then admission', () => {
 
       await fail(leadKey(id, 2))
       await drive(6)
+      await notifyFailures(db.sql, clock.now())
       expect(await issue(id)).toMatchObject({ state: 'working', attempt: 3 })
       expect(await notifications()).toEqual([])
 
       await fail(leadKey(id, 3))
       await drive(6)
+      await notifyFailures(db.sql, clock.now())
       expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'lead_gone', attempt: 3 })
       const parked = (await notifications()).filter((k: string) => k.startsWith('notify:parked:'))
       expect(parked).toHaveLength(1)
+      // The park is the one message: the failed spawn behind it adds none.
+      expect(await notifications()).toEqual(parked)
       expect((await trail(id)).filter((line) => line.startsWith('lead_gone'))).toEqual([
         'lead_gone working→queued',
         'lead_gone working→queued',
@@ -467,6 +473,51 @@ describe('classify, then admission', () => {
         `lead-${id}-2`,
         `lead-${id}-3`,
       ])
+    })
+
+    test('the news a note could not type to the gone lead is in the next attempt’s brief', async () => {
+      const gone = (key: string) => db.sql`UPDATE factory.sessions SET pane = 'w9:p9' WHERE id = ${key}`
+      const briefOf = async (id: number) =>
+        (await spawns()).find((spawn: { key: string }) => spawn.key === leadKey(id, 2))?.prompt as string | undefined
+
+      const regressed = await lead()
+      await emit(regressed.key, 'session_started', clock.now(), { claudeSessionId: 'c1' })
+      await post(regressed.id, 'ship', { summary: 'shipped', commits: [SHA], session: regressed.key })
+      await pass()
+      await gone(regressed.key)
+      await enqueue(db.sql, {
+        issueId: regressed.id,
+        key: `sig:${regressed.id}`,
+        kind: 'signal',
+        at: clock.now(),
+        payload: { regression: true, summary: '500s on /login' },
+      })
+      await drive(8)
+      expect(await issue(regressed.id)).toMatchObject({ state: 'working', attempt: 2 })
+      expect(await briefOf(regressed.id)).toContain('## What happened before this attempt')
+      expect(await briefOf(regressed.id)).toContain('a regression was reported after your ship: 500s on /login')
+    })
+
+    test('an answer the gone lead could not hear is in the next attempt’s brief', async () => {
+      const gone = (key: string) => db.sql`UPDATE factory.sessions SET pane = 'w9:p9' WHERE id = ${key}`
+      const briefOf = async (id: number) =>
+        (await spawns()).find((spawn: { key: string }) => spawn.key === leadKey(id, 2))?.prompt as string | undefined
+
+      const asked = await lead()
+      await emit(asked.key, 'session_started', clock.now(), { claudeSessionId: 'c2' })
+      await post(asked.id, 'ask', { question: 'Which?', session: asked.key })
+      await pass()
+      await gone(asked.key)
+      await enqueue(db.sql, {
+        issueId: asked.id,
+        key: `answer:${asked.id}:o`,
+        kind: 'answer',
+        at: clock.now(),
+        payload: { answer: 'this one' },
+      })
+      await drive(8)
+      expect(await issue(asked.id)).toMatchObject({ state: 'working', attempt: 2 })
+      expect(await briefOf(asked.id)).toContain('your question was answered: this one')
     })
 
     test('the next brief names the previous attempt’s branch and kept worktree, and says nothing when finalize removed it', async () => {
@@ -1263,6 +1314,19 @@ describe('the lead’s send-back', () => {
     // Replayed, the stop records nothing more.
     await stop(key, true)
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'unreported'`).toHaveLength(1)
+  })
+
+  test('a park by the lead shows no reason from an older lead_gone', async () => {
+    const { id } = await lead()
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, from_state, to_state, at, payload)
+      VALUES (${id}, ${`stale:${id}`}, 'lead_gone', 'working', 'queued', ${clock.now()}, ${{ detail: 'old news' }})`
+    await enqueue(db.sql, { issueId: id, key: `park:${id}`, kind: 'park', at: clock.now() })
+    await pass()
+    expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked' })
+    const attention = (await statusOf()).attention
+    expect(attention).toContain(`Issue ${id} parked`)
+    expect(attention.some((line) => line.includes('old news'))).toBe(false)
   })
 
   test('a stop with a background task running is neither sent back nor parked; the same stop without one is', async () => {
