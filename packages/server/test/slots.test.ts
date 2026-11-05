@@ -191,18 +191,34 @@ describe('factory slot run, against the real socket', () => {
     expect(out.stderr).toContain('running without one')
   })
 
-  test('fail open: with no slot within FACTORY_SLOT_WAIT_MS it runs the command anyway', async () => {
+  test('closed on contention: with no slot within FACTORY_SLOT_WAIT_MS it exits 75 without running the command', async () => {
     const a = slotRun(['--', 'sleep', '4'])
     const b = slotRun(['--', 'sleep', '4'])
     await until(async () => (await held()) === 2)
     const late = await finish(slotRun(['--', 'echo', 'anyway'], { FACTORY_SLOT_WAIT_MS: '600' }))
-    expect(late.stdout).toBe('anyway\n')
-    expect(late.code).toBe(0)
+    expect(late.stdout).toBe('')
+    expect(late.code).toBe(75)
     expect(late.stderr.trim().split('\n')).toHaveLength(1)
     expect(late.stderr).toContain('no test slot within')
     // The one that gave up is out of the line, not a holder.
     expect(await held()).toBe(2)
     expect((await listSlots(db.sql)).filter((s) => s.slot === null)).toEqual([])
+    a.kill()
+    b.kill()
+    await Promise.all([a.exited, b.exited])
+  }, 30_000)
+
+  test('FACTORY_SLOT_OPEN=1: with no slot within the wait it runs the command anyway', async () => {
+    const a = slotRun(['--', 'sleep', '4'])
+    const b = slotRun(['--', 'sleep', '4'])
+    await until(async () => (await held()) === 2)
+    const late = await finish(
+      slotRun(['--', 'echo', 'anyway'], { FACTORY_SLOT_WAIT_MS: '600', FACTORY_SLOT_OPEN: '1' }),
+    )
+    expect(late.stdout).toBe('anyway\n')
+    expect(late.code).toBe(0)
+    expect(late.stderr.trim().split('\n')).toHaveLength(1)
+    expect(late.stderr).toContain('running without one')
     a.kill()
     b.kill()
     await Promise.all([a.exited, b.exited])

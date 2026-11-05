@@ -3,10 +3,12 @@ import { Slot, SlotRelease } from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { call, type Io } from './client.ts'
 
-/** How long a caller waits for a slot before it runs without one (`FACTORY_SLOT_WAIT_MS`). */
-export const DEFAULT_SLOT_WAIT_MS = 600_000
+/** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
+const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
+/** The exit code of a wait that ran out: sysexits `EX_TEMPFAIL`, "try again later". The command did not run. */
+const EX_TEMPFAIL = 75
 /** How often a waiter asks again (`FACTORY_SLOT_POLL_MS`). */
-export const DEFAULT_SLOT_POLL_MS = 1_000
+const DEFAULT_SLOT_POLL_MS = 1_000
 /** The lease is renewed this often while the command runs; the server lets it lapse after 30 s. */
 const RENEW_MS = 10_000
 
@@ -25,11 +27,45 @@ function exitCodeOf(proc: { exitCode: number | null; signalCode: NodeJS.Signals 
 }
 
 /**
+ * Asks until the slot is granted. `granted`: it is ours. `open`: run without one (the wait ran out under
+ * `FACTORY_SLOT_OPEN=1`). `stopped`: this process was told to stop. A number is the exit code of a wait that ran out, `EX_TEMPFAIL`:
+ * the command does not run. A server that does not answer throws, and the caller runs the command anyway.
+ */
+async function acquire(input: {
+  ask: () => Promise<{ body: { granted: boolean } }>
+  io: Io
+  waitMs: number
+  pollMs: number
+  open: boolean
+  engage: () => void
+  stopped: () => boolean
+}): Promise<'granted' | 'open' | 'stopped' | number> {
+  const { ask, io, waitMs, pollMs, open } = input
+  const deadline = Date.now() + waitMs
+  const seconds = Math.round(waitMs / 1000)
+  for (;;) {
+    input.engage()
+    const { body } = await ask()
+    if (body.granted) return 'granted'
+    if (input.stopped()) return 'stopped'
+    if (Date.now() >= deadline) break
+    await sleep(pollMs)
+  }
+  if (open) {
+    io.err(`factory: no test slot within ${seconds}s; running without one (FACTORY_SLOT_OPEN=1)\n`)
+    return 'open'
+  }
+  io.err(`factory: no test slot within ${seconds}s; not running (set FACTORY_SLOT_OPEN=1 to run anyway)\n`)
+  return EX_TEMPFAIL
+}
+
+/**
  * `factory slot run [--name <label>] -- <cmd> [args…]` (FL7): takes one of the host's test slots through the socket, runs
  * the command with this process's own stdin, stdout and stderr, renews the lease while it runs and gives the slot back when it
- * ends or this process is told to stop. The exit code is the command's. Fails open: a server that does not answer, or no
- * slot within `FACTORY_SLOT_WAIT_MS`, runs the command anyway with one line on stderr, because a slot is there to cut
- * flakes and must never block work.
+ * ends or this process is told to stop. The exit code is the command's. Open only on an outage: a server that does not
+ * answer runs the command anyway with one line on stderr (a dead factory must not block the work that repairs it). On
+ * contention it keeps waiting; no slot within `FACTORY_SLOT_WAIT_MS` (45 min) is one stderr line and exit 75 without running
+ * the command, unless `FACTORY_SLOT_OPEN=1` says to run it anyway.
  */
 export async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
   const [program, ...args] = input.command
@@ -38,6 +74,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const name = input.name ?? program
   const id = `${process.pid}-${crypto.randomUUID()}`
   const waitMs = number(io.env.FACTORY_SLOT_WAIT_MS, DEFAULT_SLOT_WAIT_MS)
+  const open = io.env.FACTORY_SLOT_OPEN === '1'
   const pollMs = number(io.env.FACTORY_SLOT_POLL_MS, DEFAULT_SLOT_POLL_MS)
   const path = `/slots/${encodeURIComponent(id)}`
   const ask = () => call(io, path, { method: 'PUT', auth: false, socket: true, schema: Slot, body: { name } })
@@ -60,26 +97,25 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   for (const signal of signals) process.on(signal, onSignal)
 
   try {
-    const deadline = Date.now() + waitMs
-    let holding = false
+    let outcome: Awaited<ReturnType<typeof acquire>>
     try {
-      for (;;) {
-        engaged = true
-        const { body } = await ask()
-        if (body.granted) {
-          holding = true
-          break
-        }
-        if (stopped) return 128 + (constants.signals[stopped] ?? 1)
-        if (Date.now() >= deadline) {
-          io.err(`factory: no test slot within ${Math.round(waitMs / 1000)}s; running without one\n`)
-          break
-        }
-        await sleep(pollMs)
-      }
+      outcome = await acquire({
+        ask,
+        io,
+        waitMs,
+        pollMs,
+        open,
+        engage: () => {
+          engaged = true
+        },
+        stopped: () => stopped !== undefined,
+      })
     } catch (error) {
       io.err(`factory: no test slot (${error instanceof Error ? error.message : String(error)}); running without one\n`)
+      outcome = 'open'
     }
+    if (typeof outcome === 'number') return outcome
+    const holding = outcome === 'granted'
     if (!holding) await release()
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
 
