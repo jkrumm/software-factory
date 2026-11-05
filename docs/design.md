@@ -831,7 +831,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   applied or refused, with the state it moved from and to) and the inbox rows no event came of (still unhandled, with the error of a row
   that failed; a session's silent events are `factory session get`'s), the newest 500 with the rest counted (`timelineCut`), and the newest 200 pieces of evidence with the rest counted (`evidenceCut`). Every payload
   is data as its sender filed it: on a terminal, one cut line, `key=value`, control characters gone. `--format json` is the whole.
-- **Notes.** `factory issue note <id> <text> [--id <call id>]` is the owner's way to reach a lead (`POST /issues/:id/note`, token only: a pane
+- **Notes.** `factory issue note <id> <text> [--wake] [--id <call id>]` is the owner's way to reach a lead (`--wake` also ends a timed wait) (`POST /issues/:id/note`, token only: a pane
   can already type into a session with `session note`, and what a brief carries is the owner's). One inbox row `<issue>:note:<call id>`;
   an Issue that is `queued`, `working`, `waiting` or `watching` takes it, a closed one is 409. The lifecycle records it, and for an Issue with
   a lead plans `note_lead`, which types it through the session notes of §3 (`recordPrompt`, source `note`, prompt id `issue:<issue>:note:<call id>`,
