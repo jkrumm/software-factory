@@ -125,3 +125,30 @@ evidence (a sha, a log line, a number); no narrative.
   `rd wave` stopped it as outward-facing, though the plan authorizes both for this repo. Rotation 2 was spawned the way Wave 8
   was: `factory spawn create software-factory-w9 --role lead` with no parent (pane t13c, `iu`). Change for row 7: the gate reads
   an explicit `**Outward:** authorized` line on the wave, or goes with `wave-gate.py`.
+
+## Wave 4, the lead (row 5), 2026-11-05 02:50 — the build and the proof
+
+- **Built by one Sonnet worker in 12 min; review clean in one deep round.** PR #40 (`29530e2`, REVIEW.md fix `4a93d6b`): deep
+  round 1 found 0 important and 3 nits (`docs/program.md` still said the program lead spawns with `--role lead`, REVIEW.md's hook
+  rule missed the new stdout line, the lead's first admission uses the default cap), a light pass covered the REVIEW.md fix. Landed
+  as a fast-forward push of the branch (it already sat on `origin/master`), so the reviewed shas are master's; `covered` true.
+  Deployed `4a93d6b3da21`, `make verify` all passed, `factory role get lead` = sonnet/high.
+- **Two deviations, both kept.** "Asking again replaces the question" is not what the code does (each `ask` inserts a new decision),
+  so the brief does not say it. The lead cap waits (a timed 30 s recheck) instead of a `lead_cap` hold reason: the hold reasons are a
+  CHECK constraint (migration 029), and a migration for a reason only a status line shows is not worth it before row 9 rewrites it.
+- **`rd merge` failed on an untouched file:** `evidence.test.ts` "a note reaches the lead while the check runs" failed once in the
+  merge train's full run (load ~17) and passed 3 of 3 alone. A load flake, recorded; the merge went as a fast-forward push.
+- **The proof: a real bug, zero touch, 16 minutes.** Issue 64 "Fix the hc-spaces 'two starts at once' timing flake" (filed
+  02:12:35Z, Classify `bug`, size `l`, `routine`, asked a different level: `clamped=true`), admitted 9 s later, lead `lead-64-1` on
+  `iu` at **Sonnet high**. The lead found a real race, not a test bug: `HcRunner.start` took its start lock in the order the account
+  registry reads finished, not in call order (3 of 10 runs failed before, 25 of 25 green after). PR #41, review **deep** (the runner
+  is a sensitive path, `covered` true), merged, `make deploy` and `make verify` by the lead from the main checkout, shipped 02:28:31Z.
+  One ship refusal (no `service` evidence after the merge), which the lead answered itself in 9 s. Attempts 1, owner touches 0.
+  Window points: not attributable yet (`usage-tracker window --by issue` shows no Issue row; `iu` reports no 5 h reading).
+- **The shared Postgres went down under the run, and nothing paged.** At about 02:40Z the default Colima VM died (its SSH refused,
+  `docker` gone, `colima status`: "empty value"), taking the shared Postgres on :5432 with it; the factory exited on its lock
+  ("terminating connection due to administrator command") and agw answered 500 to every `review` call. 25 min earlier the 02:15Z
+  `vps-pg-backup` had failed in `pg_dump` with "could not resize shared memory segment … No space left on device". `colima-start.sh`'s
+  supervisor did not restart a VM whose `colima start -f` process stayed alive; `make colima-restart` (dotfiles) brought it back in
+  50 s and launchd relaunched the factory. Change: none in this plan (the VM is dotfiles' and vps's); for the owner: the supervisor
+  watches the process, not `docker info`, and the container's shm is 64 MB under `max_locks_per_transaction=1024`.

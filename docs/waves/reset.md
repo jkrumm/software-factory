@@ -36,17 +36,17 @@ The lead does this itself; no worker.
 - [x] Tests per rule; live proof with a scratch Issue whose lead is killed once.
 **Left behind:** PR #38 (`3c9b5c0`..`c868256`) and the follow-up PR #39 (`afa38a9`), deployed `a2c4293f559a`, verify green, `covered` true. Proof: a killed lead restarts the Issue after a 10-minute grace with no note (Issue 63), a note finds it at once (Issue 62); attempt 2 carries the owner's note. The `background_tasks` field is real (Claude Code 2.1.318 Stop schema); finished entries do not count. Machine: an IuRoot test storm (load 558) took the server down twice; it recovered by itself (learnings).
 
-## Wave 4 — The lead (row 5)            <!-- status: active -->
+## Wave 4 — The lead (row 5)            <!-- status: done -->
 - [x] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
   and the no-change end: work that needs no commit ends with `factory issue drop <id> --reason`, never an ask or a made-up commit (learnings, Wave 2).
 - [x] `config/roles.json`: `lead` → sonnet/high (keep every other role until Wave 8 of the design's order).
 - [x] Lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`, default 2) in admission, counted over live lead sessions.
 - [x] `SessionStart(compact)` re-injection: the hook names the Issue; the brief says to re-read it after a compaction.
-- [ ] Live proof: a small real Issue (pick one from the owner's backlog in `docs/program.md`, or a docs fix) runs end to end
+- [x] Live proof: a small real Issue (pick one from the owner's backlog in `docs/program.md`, or a docs fix) runs end to end
   on Sonnet high with zero owner touch; record wall time, attempts, review tier, window points.
-**Left behind:**
+**Left behind:** PR #40 (`29530e2`, `4a93d6b`) landed as a fast-forward, deployed `4a93d6b3da21`, verify green, deep review clean (3 nits: 2 fixed, 1 intentional), `covered` true. The lead cap waits (30 s recheck) instead of a `lead_cap` hold (the reasons are a CHECK constraint); "asking again replaces the question" is not built and not claimed. Proof: Issue 64 (the hc-spaces flake) ran on Sonnet high, found a real race in `HcRunner.start` (PR #41, deep review, deployed `7245836`), shipped in 16 min, 1 attempt, 0 owner touches; window points not attributable yet. The shared Postgres died under the run (Colima VM), recovered by `make colima-restart` (learnings).
 
-## Wave 5 — Asks vs parks, the health line (row 6)            <!-- status: pending -->
+## Wave 5 — Asks vs parks, the health line (row 6)            <!-- status: active -->
 - [ ] `/fleet` and `factory status`: asks are `decision` and `blocked` waits, the human queue and `hc` permission prompts;
   parks and the rest go to a health line (design v3 §6: park with reason and age, no hook event for 20 min while working,
   working past the size budget, regression count 2).
