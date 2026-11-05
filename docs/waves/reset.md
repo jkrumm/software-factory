@@ -37,11 +37,11 @@ The lead does this itself; no worker.
 **Left behind:** PR #38 (`3c9b5c0`..`c868256`) and the follow-up PR #39 (`afa38a9`), deployed `a2c4293f559a`, verify green, `covered` true. Proof: a killed lead restarts the Issue after a 10-minute grace with no note (Issue 63), a note finds it at once (Issue 62); attempt 2 carries the owner's note. The `background_tasks` field is real (Claude Code 2.1.318 Stop schema); finished entries do not count. Machine: an IuRoot test storm (load 558) took the server down twice; it recovered by itself (learnings).
 
 ## Wave 4 — The lead (row 5)            <!-- status: active -->
-- [ ] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
+- [x] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
   and the no-change end: work that needs no commit ends with `factory issue drop <id> --reason`, never an ask or a made-up commit (learnings, Wave 2).
-- [ ] `config/roles.json`: `lead` → sonnet/high (keep every other role until Wave 8 of the design's order).
-- [ ] Lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`, default 2) in admission, counted over live lead sessions.
-- [ ] `SessionStart(compact)` re-injection: the hook names the Issue; the brief says to re-read it after a compaction.
+- [x] `config/roles.json`: `lead` → sonnet/high (keep every other role until Wave 8 of the design's order).
+- [x] Lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`, default 2) in admission, counted over live lead sessions.
+- [x] `SessionStart(compact)` re-injection: the hook names the Issue; the brief says to re-read it after a compaction.
 - [ ] Live proof: a small real Issue (pick one from the owner's backlog in `docs/program.md`, or a docs fix) runs end to end
   on Sonnet high with zero owner touch; record wall time, attempts, review tier, window points.
 **Left behind:**

@@ -10,7 +10,7 @@ code itself.
 
 - **State is this file** (the Tracks table and each track's Status line) plus `docs/waves/handoff/program.md`.
   Rotate at about 60 % context: write the handoff, commit, push, spawn the next rotation
-  (`rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill.'`; `RD_WAVE_MODEL` does not reach a factory spawn)
+  (`rd wave --role deep software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill.'`; `RD_WAVE_MODEL` does not reach a factory spawn)
   after flipping this repo's PLAN.md to the next rotation.
 - **Per track:** write or update the plan in the target repo (`/wave` skill, "Authoring a plan"), commit and
   push it, spawn with `RD_ORCHESTRATED=1 rd wave <repo> 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill, but do NOT spawn the next wave — the orchestrator tab does that after reviewing your close-out.'`,
@@ -21,7 +21,7 @@ code itself.
   reserve: a spawn without room is queued and starts by itself, never spills.
 - **Inside this repo** the lead's checkout holds docs only. Code waves here run as `rd fan` worktrees and land
   with `rd merge`, so the lead's doc commits never race a worker's.
-- **Models:** program lead Opus/high; wave agents Sonnet (the `rd` default); mechanical sweeps Haiku; Opus for a
+- **Models:** program lead Opus/high (role `deep`: since reset Wave 4 the `lead` row is Sonnet high, the Issue leads' level); wave agents Sonnet (the `rd` default); mechanical sweeps Haiku; Opus for a
   worker only for novel hard logic, named in the plan with the reason.
 - **Owner contact:** only for the four business classes (product direction, spend, irreversible data loss,
   other people) and security policy, through `ask-human.sh ask`. Own-repo pushes, merges and deploys are
