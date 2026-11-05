@@ -94,7 +94,7 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 - [ ] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off `rd wave|close`. agent-workflows: `agw review request` (the
   hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete `rd wave|fan|merge|close`
   for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and tests, hc-reap's agent rules; keep
-  `rd work|agents|read|say|issue`. Issue numbers in the Left behind.
+  `rd work|agents|read|say|issue`. Filed: Issue 80 (software-factory), 81 (agent-workflows), 82 (dotfiles, `--after 80 81`).
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
@@ -109,9 +109,10 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
 - [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
+- [ ] Filed: Issue 83 (row 8, `--after 80 81 82`), 84 (row 9, `--after 83`).
 
 ## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: todo -->
 - [ ] `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
   behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
   The lead writes the spec first (`docs/design.md`), asks the owner to sign it (`factory issue ask`), then builds it. Surfaces (row 15)
-  build on it, nothing earlier.
+  build on it, nothing earlier. Filed: Issue 85 (`--after 84`).
