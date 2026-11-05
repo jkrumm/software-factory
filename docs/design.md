@@ -1244,7 +1244,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 ### The fleet view (FV Wave 1, 2026-11-02)
 
 One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
-`docs/waves/fv.md`). Wave 1 is the deterministic half; Wave 2 (below, "The digest") adds the model text: `short`, `headline` and the asks found
+`docs/waves/archive/fv.md`). Wave 1 is the deterministic half; Wave 2 (below, "The digest") adds the model text: `short`, `headline` and the asks found
 in a session's last message. Wave 3 (below, "Triage and actions") adds `tier`, `suggestion` and `actions` to every ask.
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,

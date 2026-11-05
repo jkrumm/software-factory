@@ -1,6 +1,6 @@
 # FV: the fleet view, one read model for every surface
 
-**Status:** approved by the owner 2026-11-02; planned in `docs/waves/fv.md`.
+**Status:** approved by the owner 2026-11-02; planned in `docs/waves/archive/fv.md`.
 
 **TLDR.** The factory serves one fleet read model (`GET /fleet`, `factory fleet --format json`, `NOTIFY` on change):
 every repo with its plan, every live session with a one-line headline, and every **ask** (anything waiting on the

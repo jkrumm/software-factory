@@ -1,32 +1,18 @@
 # The program: every track from the re-plan, and who runs it
 
-**TLDR.** One program lead (an Opus session in this repo's herdr space) runs all tracks of
-`docs/decisions.md` to done. It is not a wave: it holds this page as state, authors each track's
-`docs/waves/PLAN.md` in the repo that track changes, spawns those waves in orchestrated mode, reviews every
-close-out, and runs tracks in parallel wherever their repos and files are disjoint. It writes no product
-code itself.
+**TLDR.** Since RS11 (2026-11-05) the program runs as factory Issues: the owner's session files each row with
+`factory issue new --after …` (or `rd issue`), and the Issue's lead builds, reviews, ships and verifies it. There are no
+program-lead rotations or wave plans in this repo any more; the earlier ones are in `docs/waves/archive/`.
 
-## The program lead
+## How the program runs
 
-- **State is this file** (the Tracks table and each track's Status line) plus `docs/waves/handoff/program.md`.
-  Rotate at about 60 % context: write the handoff, commit, push, spawn the next rotation
-  (`rd wave --role deep software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill.'`; `RD_WAVE_MODEL` does not reach a factory spawn)
-  after flipping this repo's PLAN.md to the next rotation.
-- **Per track:** write or update the plan in the target repo (`/wave` skill, "Authoring a plan"), commit and
-  push it, spawn with `RD_ORCHESTRATED=1 rd wave <repo> 'Read docs/waves/PLAN.md. Execute the active wave (Wave <n>). Follow the /wave skill, but do NOT spawn the next wave — the orchestrator tab does that after reviewing your close-out.'`,
-  then `factory session wait --on workers` and end the turn: the factory's wake note ("workers done: …") starts the
-  next one (the `/wave` skill's waiting pattern). Review the close-out (Left behind, `git log`, the diff:
-  a wave's report is a claim, the diff is the proof), then spawn the next wave or fix forward.
-- **Parallel:** one active wave per repo; across repos as many as capacity allows. Admission keeps each account's
-  reserve: a spawn without room is queued and starts by itself, never spills.
-- **Inside this repo** the lead's checkout holds docs only. Code waves here run as `rd fan` worktrees and land
-  with `rd merge`, so the lead's doc commits never race a worker's.
-- **Models:** program lead Opus/high (role `deep`: since reset Wave 4 the `lead` row is Sonnet high, the Issue leads' level); wave agents Sonnet (the `rd` default); mechanical sweeps Haiku; Opus for a
-  worker only for novel hard logic, named in the plan with the reason.
-- **Owner contact:** only for the four business classes (product direction, spend, irreversible data loss,
-  other people) and security policy, through `ask-human.sh ask`. Own-repo pushes, merges and deploys are
-  routine. Everything you write for the owner is short and verdict-first.
-- **Stale docs are part of done.** A track that leaves an outdated plan, doc or diagram behind has not closed.
+- **State** is this file's Tracks table, `docs/waves/reset.md` (the reset's rows and their Issues) and the factory itself:
+  `factory issue list`, `factory status`.
+- **A row is an Issue** with `why`, `what`, `change`, `acceptance` facts, chained with `--after`; `factory issue prio` orders a
+  project's queue. One lead per repo at a time.
+- **Owner contact:** a lead asks only for the four business classes and security policy (`factory issue ask`); everything else is a
+  health line. Own-repo pushes, merges and deploys are routine.
+- **Stale docs are part of done.** A row that leaves an outdated plan, doc or diagram behind has not closed.
 
 ## Tracks
 
@@ -46,14 +32,14 @@ code itself.
 | F4 | Capacity classes and the orchestrator; initiatives as child Issues; from here the factory builds itself | software-factory | F3 | pending |
 | D | Archive `dotfiles/docs/factory/` (TDD v2.4, report, panel, spikes with their `node_modules`); move the golden set and intervention KPIs here; point `agent-workflows/docs/factory-input.md` and dotfiles docs at this repo | dotfiles, agent-workflows | F0's `docs/design.md`; R0 done (the dotfiles checkout is busy until then) | Done 2026-10-30, reviewed: archived to `dotfiles/docs/archive/factory-v2.4/`, evidence in `docs/evidence/`. `agent-workflows/docs/factory-input.md` repointed too |
 | T | oxlint and oxfmt replace Biome (owner, 2026-10-30) | software-factory, agent-workflows | a boundary per repo: `f1-w3-capacity` landed; `agent-workflows-w2` closed and `research-self-improve` idle | software-factory done (PR #5: oxlint 1.90.0 type-aware, oxfmt 0.75.0, zero reformat diff). agent-workflows done 2026-10-30 (PR #71: oxfmt 0.75.0 with Biome's options, an 11-file reformat; oxlint 1.89.0 maps every enforced Biome rule, `noNonNullAssertion` and `useLiteralKeys` dropped as info-level), deployed `74521f1224fb`, `make verify` PASS. Track done |
-| FV | (superseded by RS 2026-11-05) Fleet view: one read model (`GET /fleet`) for the board, Iris, Argo and Hermes; digest of short titles, headlines and asks; triage of the human queue and stale plans | software-factory, agent-workflows (digest capability), dotfiles (board, `agw agents` pointer) | F1 | active 2026-11-02; Waves 1–4 live, Wave 5's reaper live in `dry` (`a84152d`), the board's Wave 1 live (dotfiles `753af8b`); paused on budget until `iu` resets 2026-11-04 16:00 (Hermes, board Wave 2 next); plan `docs/waves/fv.md` (six waves, after the F2 gate, before A2 and IR), agw `docs/waves/fv-digest.md`, dotfiles `docs/waves/fv-board.md`. IuRoot visible read-only, deterministic, no IuRoot text to a model |
-| RS | The reset: one Issue, one lead, one loop (design v3, decisions RS1–RS9) | software-factory, agent-workflows, dotfiles, homelab | — | stopped for the owner 2026-11-05 ~04:50Z: rows 0–6, 11 and 12 live (reset Waves 1–7, PRs #37–#45, dotfiles #61–#62, homelab #19; deployed `b7d749a7ed2c`); review router and Step 0 live (agw `6cb7961`, `0c2e777`); plan `docs/waves/reset.md`, handoff `docs/waves/handoff/program.md`; row 7 (dotfiles `rd`, `/wave`, `wave-gate.py`) and the deletions (rows 8–9) wait for the owner's read of `docs/strategy/2026-11-reset/learnings.md` |
+| FV | (superseded by RS 2026-11-05) Fleet view: one read model (`GET /fleet`) for the board, Iris, Argo and Hermes; digest of short titles, headlines and asks; triage of the human queue and stale plans | software-factory, agent-workflows (digest capability), dotfiles (board, `agw agents` pointer) | F1 | superseded by RS: the triage, presence, digest and reaper go in reset row 8; the board and surfaces wait for the read API (row 9b) |
+| RS | The reset: one Issue, one lead, one loop (design v3, decisions RS1–RS11) | software-factory, agent-workflows, dotfiles, homelab | — | active: rows 0–7, 11, 12 live (reset Waves 1–8); row 7b (the machine budget) in flight as Issues 70–72; from Wave 8b on every row is an Issue, then the new row 9b, one read API, before any surface (`docs/waves/reset.md`) |
 | L | Later, owner-timed: finances on the mini behind Touch ID; calendar and mail via email-gateway | finances (MacBook), argo, email-gateway | A1 | not started |
 
 ## Track notes (the findings each track inherits)
 
 ### R0, R1
-Plans: `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md`. R0 Wave 2 carries both close-outs' leftovers.
+Plans (archived where done): `dotfiles/docs/waves/PLAN.md`, `argo/docs/waves/PLAN.md`. R0 Wave 2 carries both close-outs' leftovers.
 dotfiles `make check` is green again since F1 Wave 2 mapped the new agents (2026-10-30); `drift-check` (collie pin,
 tailscale daemon) is still red and outside `make check`. Open after R0: the Hermes API to loopback (`hermes-agent/.env.tpl` `API_SERVER_HOST` and `iris/.env.local.tpl`
 `HERMES_HOST` together, then `verify.sh`, the `hermes-validate` probe, restarts, a memo routed to Hermes) waits until

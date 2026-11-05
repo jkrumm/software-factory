@@ -6,7 +6,8 @@ alone is a load flake: record the rerun); `/review` over the wave's range at its
 `agw review covered` true; merged on master; `make deploy` and `make verify` green; the wave's own live proof; one entry in
 `docs/strategy/2026-11-reset/learnings.md`.
 
-Decisions: `docs/decisions.md` RS1–RS9. Each code wave is one `rd fan` worker (`worker`, Sonnet) in a worktree, briefed with
+Decisions: `docs/decisions.md` RS1–RS11. **From Wave 8b on (RS11) every row is a factory Issue chained with `--after`**, filed from
+the owner's session and built, reviewed, shipped and verified by its lead; there is no program-lead rotation. Waves 1–8: each code wave was one `rd fan` worker (`worker`, Sonnet) in a worktree, briefed with
 its row of §13 plus the design section it implements; the program lead reviews the diff, lands it with `rd merge`, deploys
 and proves it. One wave at a time: the mini is the bottleneck (load reached 385 on 12 cores on 2026-11-04 from parallel checks
 and the iOS simulator). One `make check` or `agw check` at a time; no `xcodebuild` or simulator run before 07:00.
@@ -58,7 +59,7 @@ The lead does this itself; no worker.
 **Left behind:** software-factory PR #42 (`5e8d49d`, `c7081b8`, deep then standard, `covered`), deployed `c7081b8615c0`; dotfiles #61 (`3cc0248`), homelab #19 (`055d9cd`, Kuma `Software Factory - Push` id 269, the URL file on the mini). `factory status`: 7 asks before, 0 asks and 7 health lines after; `/fleet` asks are the human queue plus one digest `reply` (goes in row 8). Heartbeat live (pusher `✓ factory monitor`). `make rollback` tested with `DRY_RUN=1` only. The board's HEALTH section is not seen in the app yet. Found: a docs-only master commit turns a hold's `make verify` red (Issue 66 fixes it; until then no master push during a hold).
 
 ## Wave 6 — Spaces (row 11)            <!-- status: done -->
-- [x] `~/.config/factory/spaces.json` (`{name, path}`), written by dotfiles `make setup` from `config/herdr-app/groups.json` (the one list; it already orders the sidebar through `jk-spaces`, so the factory never reorders the app doc). Briefs `briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`.
+- [x] `~/.config/factory/spaces.json` (`{name, path}`), written by dotfiles `make setup` from `config/herdr-app/groups.json` (the one list; it already orders the sidebar through `jk-spaces`, so the factory never reorders the app doc). Briefs `archive/briefs/reset-w6-spaces.md`, `archive/briefs/reset-w6-dotfiles.md`.
 - [x] The factory reconciles on start and every 10 min: one space per entry by real path (inside `FACTORY_REPO_ROOTS`), a first tab with
   `factory.key=plan:<repo>` (a login shell), never closed; unknown repos appended on first use.
 - [x] hc-reap and finalize never touch a `plan:` tab or a tab without `factory.key`.
@@ -68,7 +69,7 @@ The lead does this itself; no worker.
 
 ## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: done -->
 - [x] Migration: the view `factory.issue_facts` over issues, issue_events, evidence, decisions and sessions (design v3 §11);
-  no read of `usage.*`. Brief `briefs/reset-w7-issue-facts.md`.
+  no read of `usage.*`. Brief `archive/briefs/reset-w7-issue-facts.md`.
 - [x] `factory issue facts [--since]` prints it; the four KPIs of §11 computed from it in one query.
 - [x] Live proof: the rows for every Issue since 2026-11-01, and the KPI line.
 **Left behind:** PR #45 (`e4fc6a6`, `b7d749a`, deep: 2 nits fixed in round 1, round 2 clean, `covered`), `make check` green (1796 pass), deployed `b7d749a7ed2c`, verify green. Proof: 39 rows for 37 Issues since 2026-11-01 (Issues 62 and 63 have two attempts each, `retried` then `dropped`); `asks/issue 0.05 (2/37)  zero-touch 94 % (15/16)  first-hold 81 % (13/16)  window -`, checked by hand against the rows. As built against the brief: `landed_at` (the first ship's `mergedAt`) instead of `first_commit_at`, the events hold no earlier commit time; no review rounds column (stored nowhere); a `first_hold_decided` column, so an attempt still in its first hold is `open`, not a failure; `parks.lead_gone` counts every `lead_gone`, the requeues too. Window points per Issue is `null` and Argo's (its page is not built).
@@ -79,7 +80,7 @@ The owner read the learnings and the handoff and let the loop run on (RS10). Fro
 session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
 
 ## Wave 8 — dotfiles: the Issue path beside the wave path (row 7, expand)            <!-- status: done -->
-- [x] Brief `briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
+- [x] Brief `archive/briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
   the plan playbook (Issues with `--after`; the chain modes under Legacy), hc-reap's orphaned-shell rule, the lanes docs. Built by one
   `implementer` in a dotfiles worktree (this session is not a factory session, so `rd fan` would go hc-direct).
 - [x] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
@@ -87,14 +88,13 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 **Repos:** dotfiles
 **Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.athena-repo-sync`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
 
-## Wave 8b — the contract of row 7            <!-- status: todo -->
-- [ ] iris's running wave closes; its mother and lead handoffs, agent-workflows' handoffs and software-factory's `scripts/gate-run` and
-  `scripts/gameday` teardown move off `rd wave|close`.
+## Wave 8b — the contract of row 7, as Issues            <!-- status: active -->
 - [x] The stale active waves (2026-11-05): basalt-expr-trial and -v1 archived (local-only repos, pages built 10-18); modelpick Wave 5 →
-  Issue 73, ntfy-mac Wave 6 → Issue 74 (closed `done`); basalt-ui Wave 55 back to `pending` (PR #570, `6f1007a8`), held by its handoff for
-  the owner's phase-1 sign-off.
-- [ ] Then delete `rd wave|fan|merge|close` for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and
-  tests, hc-reap's agent rules; keep `rd work|agents|read|say|issue`.
+  Issue 73, ntfy-mac Wave 6 → Issue 74 (closed `done`); basalt-ui Wave 55 back to `pending` (PR #570, `6f1007a8`), paused by the owner (RS11).
+- [ ] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off `rd wave|close`. agent-workflows: `agw review request` (the
+  hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete `rd wave|fan|merge|close`
+  for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and tests, hc-reap's agent rules; keep
+  `rd work|agents|read|say|issue`. Issue numbers in the Left behind.
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
@@ -109,3 +109,9 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
 - [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
+
+## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: todo -->
+- [ ] `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
+  behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
+  The lead writes the spec first (`docs/design.md`), asks the owner to sign it (`factory issue ask`), then builds it. Surfaces (row 15)
+  build on it, nothing earlier.

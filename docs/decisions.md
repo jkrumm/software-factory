@@ -123,3 +123,11 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   did, the review transport did not: Issue 67); (b) a new row 7b, the machine budget, before row 10 (design v3 §13);
   (c) a health line about something finished (a failed spawn, an expired note, a dead review) ends after 72 h (row 8);
   (d) row 7 removes `rd fan`, so rows 7b, 8 and 9 are factory Issues chained with `--after`, built and shipped by leads.
+- **RS11 Onto the new setup (owner, 2026-11-05 midday).** (a) Everything in design v3 §12 goes, the hidden reviewer included: leads
+  review in-session with `/review`, so the transport's refusals ("the reply holds no JSON object") end with it, not with a fix.
+  (b) A new row 9b after the contract migration: one read API (Issues, leads, Claude Code sessions, herdr terminals, asks, health,
+  one change stream), its spec signed by the owner before it is built; Argo, Iris, Hermes and the sidebar integrate only through it.
+  (c) The program runs as Issues from here; no program-lead rotations, the old plans are in `docs/waves/archive/`. (d) IuRoot repos get
+  no factory space or `plan:` tab; image-gateway (retired by I1), rollhook-action, ntfy-mac and prometheus-scripts leave the sidebar,
+  tinycast-extensions gets no space on the mini (dotfiles `159d27c`). (e) basalt-ui is paused. (f) A1's VPS socket-proxy path over the
+  tailnet is acceptable, built later when a surface needs it.
