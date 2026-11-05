@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
+  isProjectDirName,
   MAX_MANIFEST_BYTES,
   type MakeTargets,
   type ProjectManifest,
@@ -18,6 +19,8 @@ export const SYNC_INTERVAL_MS = 10 * 60_000
 const GIT_TIMEOUT_MS = 5_000
 const FETCH_TIMEOUT_MS = 30_000
 const CONCURRENCY = 8
+/** How long `factory project sync` waits for the remotes in all: the server's idle timeout is 120 s and the CLI's 100 s, and a pass still follows. */
+export const SYNC_FETCH_BUDGET_MS = 40_000
 
 export interface SyncDeps {
   sql: SQL
@@ -28,6 +31,8 @@ export interface SyncDeps {
   run?: typeof runProcess
   /** ask each project's remote what it has: a repo's default branch moves on GitHub without touching this checkout */
   fetch?: boolean
+  /** `SYNC_FETCH_BUDGET_MS`: how long `syncNow` waits for the fetches */
+  fetchBudgetMs?: number
 }
 
 interface Row {
@@ -87,9 +92,19 @@ export class ProjectSync {
     return this.exclusive(() => this.pass(due || fresh))
   }
 
-  /** `factory project sync`: what the remotes have, then a full pass. */
+  /**
+   * `factory project sync`: what the remotes have, then a full pass. The wait for the remotes is bounded (`fetchBudgetMs`): what is not
+   * fetched by then is read as it is, and the one fetch behind the tick's back is joined, not started a second time.
+   */
   async syncNow(): Promise<ProjectSyncResult> {
-    await this.fetchAll()
+    const budget = this.deps.fetchBudgetMs ?? SYNC_FETCH_BUDGET_MS
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const expired = new Promise<void>((resolve) => (timer = setTimeout(resolve, budget)))
+    try {
+      await Promise.race([this.fetching ?? this.fetchAll(budget), expired])
+    } finally {
+      clearTimeout(timer)
+    }
     return this.exclusive(() => this.pass(true))
   }
 
@@ -106,21 +121,28 @@ export class ProjectSync {
     await this.fetching
   }
 
-  /** A failed fetch (a repo with no remote, a network that is away) leaves the refs as they were: what they say is read all the same. */
-  private async fetchAll(): Promise<void> {
+  /**
+   * A failed fetch (a repo with no remote, a network that is away) leaves the refs as they were: what they say is read all the same. The
+   * repos are fetched `CONCURRENCY` at a time, each as soon as a place frees (one slow remote holds up one place, not a batch). With a
+   * `budgetMs` no fetch starts after it is spent and none runs past it.
+   */
+  private async fetchAll(budgetMs?: number): Promise<void> {
     if (!this.deps.fetch) return
     const run = this.deps.run ?? runProcess
     const env = childEnv({ GIT_TERMINAL_PROMPT: '0' })
+    const deadline = budgetMs === undefined ? Infinity : Date.now() + budgetMs
     const known: { repo: string }[] = await this.deps.sql`SELECT repo FROM factory.projects`.catch(() => [])
-    for (let i = 0; i < known.length; i += CONCURRENCY) {
-      await Promise.all(
-        known
-          .slice(i, i + CONCURRENCY)
-          .map(({ repo }) =>
-            run(['git', '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, env).catch(() => undefined),
-          ),
-      )
+    let next = 0
+    const worker = async () => {
+      for (let repo = known[next++]; repo; repo = known[next++]) {
+        const left = deadline - Date.now()
+        if (left <= 0) return
+        await run(['git', '-C', repo.repo, 'fetch', '-q', 'origin'], Math.min(FETCH_TIMEOUT_MS, left), env).catch(
+          () => undefined,
+        )
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, known.length) }, worker))
   }
 
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -140,7 +162,8 @@ export class ProjectSync {
         for (const dir of await this.repoDirs(root)) scanned.add(dir)
       }
       const known: { repo: string }[] = await sql`SELECT repo FROM factory.projects`
-      for (const { repo } of known) paths.add(repo)
+      // A stored row whose directory is no valid name (kept from before) is left alone and silent: it is not listed either.
+      for (const { repo } of known) if (isProjectDirName(basename(repo))) paths.add(repo)
     }
     const named: { repo: string }[] = await sql`
       SELECT r.repo FROM (SELECT repo FROM factory.issues UNION SELECT repo FROM factory.spawns) r
@@ -257,6 +280,11 @@ export class ProjectSync {
   ): Promise<{ name: string; broken: boolean; issue: number | null } | undefined> {
     const { sql } = this.deps
     const dirName = basename(repo)
+    if (!isProjectDirName(dirName)) {
+      throw new Error(
+        `the directory name is not a valid project name (letters, digits, dot, dash, underscore; no leading dot)`,
+      )
+    }
     const [prev]: Row[] = await sql`
       SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
     if (!prev && (text === null || text === undefined) && skipEmpty) return undefined

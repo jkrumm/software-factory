@@ -1,4 +1,10 @@
-import { defaultManifest, type Project, type ProjectManifest, type MakeTargets } from '@software-factory/contract'
+import {
+  defaultManifest,
+  isProjectDirName,
+  type Project,
+  type ProjectManifest,
+  type MakeTargets,
+} from '@software-factory/contract'
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
 
@@ -49,9 +55,12 @@ const select = (sql: SQL, name: string | null) => sql`
   WHERE ${name}::text IS NULL OR p.name = ${name}
   ORDER BY p.name`
 
+/** A row stored before sync refused such names: its directory cannot be a project's name, so it is not listed and `GET /projects/:name` is a 404, rather than the response failing its schema. The server's own reads (`getProject`) still see it. */
+export const listable = (row: { repo: string }): boolean => isProjectDirName(basename(row.repo))
+
 export async function listProjects(sql: SQL): Promise<Project[]> {
   const rows: ProjectRow[] = await select(sql, null)
-  return rows.map(toProject)
+  return rows.filter(listable).map(toProject)
 }
 
 export async function getProject(sql: SQL, name: string): Promise<Project | undefined> {

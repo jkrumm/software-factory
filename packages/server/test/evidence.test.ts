@@ -850,6 +850,44 @@ describe('the hold', () => {
     expect(await db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'verify' ORDER BY id`).toHaveLength(2)
   })
 
+  describe('a hold of 0m: no artificial wait', () => {
+    const NOW = SERVICE.replace('hold: 45m', 'hold: 0m')
+
+    test('green: the hold ends on the next timer pass, the check runs at once, the Issue closes and the claim is free', async () => {
+      const { id, key, repo } = await lead(newRepo(NOW))
+      await prove(id, key, 'service')
+      const shippedAt = clock.now().getTime()
+      expect((await ship(id, key)).status).toBe(201)
+      expect((await issue(id)).wake_at?.getTime()).toBe(shippedAt)
+      expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(1)
+
+      await drive(4)
+      expect(proof.runs).toBe(1)
+      expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done', hold: 1 })
+      expect(await trail(id)).toEqual(expect.arrayContaining(['hold_over', 'verified watching→closed']))
+      expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
+      expect(repo).toBeTruthy()
+    })
+
+    test('red: re-run once, then a regression to the lead; the third regression parks', async () => {
+      const { id, key } = await lead(newRepo(NOW))
+      proof.checks = [{ name: 'home', ok: false, detail: 'HTTP 500, expected 200' }]
+      await prove(id, key, 'service')
+      expect((await ship(id, key)).status).toBe(201)
+      for (const hold of [1, 2]) {
+        await drive(4)
+        expect(proof.runs).toBe(hold * 2)
+        expect(await issue(id)).toMatchObject({ state: 'working', hold })
+        expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(1)
+        await prove(id, key, 'service')
+        expect((await ship(id, key)).status).toBe(201)
+      }
+      await drive(4)
+      expect(proof.runs).toBe(6)
+      expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked', hold: 3 })
+    })
+  })
+
   test('red twice files one regression; the third regression of the Issue parks it instead of going back to the lead', async () => {
     const { id, key } = await shipped()
     proof.checks = [{ name: 'home', ok: false, detail: 'HTTP 500, expected 200' }]

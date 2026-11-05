@@ -3,7 +3,7 @@ import { mkdirSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { Project, ProjectList, ProjectSyncResult, type Project as ProjectView } from '@software-factory/contract'
 import { claimDue } from '../src/tick.ts'
-import { runProcess } from '../src/exec.ts'
+import { EXIT_TIMEOUT, runProcess } from '../src/exec.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { releaseClaim } from '../src/projects/claims.ts'
 import { makeTargetsOf, readMakefile } from '../src/projects/make.ts'
@@ -236,6 +236,54 @@ describe('which commit is read', () => {
     expect(fetches).toBe(before)
   })
 
+  describe('the sync a person waits for is bounded', () => {
+    /** Twelve projects with rows, and a git whose fetches hang until their own timeout. */
+    async function hanging(fetchBudgetMs: number) {
+      for (let i = 0; i < 12; i++) fixture.repo(`slow${i}`, {})
+      for (let i = 0; i < 12; i++) await fileIssue(join(fixture.root, `slow${i}`), `s${i}`)
+      await runSync()
+      const timeouts: number[] = []
+      const run: typeof runProcess = async (cmd, timeoutMs, ...rest) => {
+        if (!cmd.includes('fetch')) return runProcess(cmd, timeoutMs, ...rest)
+        timeouts.push(timeoutMs ?? 0)
+        await Bun.sleep(Math.min(timeoutMs ?? 0, 5_000))
+        return { exitCode: EXIT_TIMEOUT, stdout: '' }
+      }
+      const syncing = new ProjectSync({
+        sql: db.sql,
+        roots: [fixture.root],
+        now: () => clock.now(),
+        fetch: true,
+        fetchBudgetMs,
+        run,
+      })
+      return { syncing, timeouts }
+    }
+
+    test('hung remotes cost the budget, not their timeouts one batch after the other; the pass still reads every repo', async () => {
+      const { syncing, timeouts } = await hanging(300)
+      const started = Date.now()
+      const result = await syncing.syncNow()
+      expect(Date.now() - started).toBeLessThan(3_000)
+      expect(result).toMatchObject({ synced: 12, errors: [] })
+      // Every fetch was cut to what was left of the budget, and the repos behind the first places were never started.
+      expect(timeouts.length).toBeGreaterThan(0)
+      expect(timeouts.length).toBeLessThan(12)
+      expect(Math.max(...timeouts)).toBeLessThanOrEqual(300)
+    })
+
+    test('a fetch of the tick that never ends is joined for the budget, not waited for', async () => {
+      const { syncing } = await hanging(200)
+      const hung = Promise.withResolvers<void>()
+      ;(syncing as unknown as { fetching: Promise<void> }).fetching = hung.promise
+      const started = Date.now()
+      const result = await syncing.syncNow()
+      expect(Date.now() - started).toBeLessThan(3_000)
+      expect(result.synced).toBe(12)
+      hung.resolve()
+    })
+  })
+
   test('a repo whose default branch cannot be found keeps what its row has', async () => {
     const path = fixture.repo('renamed', { 'project.yaml': MANIFEST.replace('alpha', 'renamed') })
     await runSync()
@@ -287,6 +335,51 @@ describe('which commit is read', () => {
   })
 })
 
+describe('a directory that cannot be a project’s name', () => {
+  const insertBad = (name: string) => {
+    const repo = join(fixture.root, name)
+    return db.sql`
+      INSERT INTO factory.projects (name, repo, manifest, make_targets, synced_at, created_at)
+      VALUES (${name}, ${repo}, NULL, NULL, ${clock.now()}, ${clock.now()})`
+  }
+
+  test('an Issue naming such a repo makes no project: the sync says so, and every other project is listed', async () => {
+    fixture.repo('good', { 'README.md': 'hi' })
+    const hidden = fixture.repo('.hidden', { 'README.md': 'hi' })
+    const spaced = fixture.repo('has space', { 'README.md': 'hi' })
+    await fileIssue(join(fixture.root, 'good'), 'g1')
+    await fileIssue(hidden, 'h1')
+    await fileIssue(spaced, 's1')
+
+    const result = await runSync()
+    expect(result.synced).toBe(1)
+    expect(result.errors.sort()).toEqual([
+      '.hidden: the directory name is not a valid project name (letters, digits, dot, dash, underscore; no leading dot)',
+      'has space: the directory name is not a valid project name (letters, digits, dot, dash, underscore; no leading dot)',
+    ])
+    expect(await db.sql`SELECT name FROM factory.projects ORDER BY name`).toEqual([{ name: 'good' }])
+    const list = await app.get('/projects')
+    expect(list.status).toBe(200)
+    expect(ProjectList.parse(await list.json()).projects.map((p) => p.name)).toEqual(['good'])
+  })
+
+  test('a row stored before that rule does not fail the list or the show, and later syncs leave it alone and silent', async () => {
+    fixture.repo('good', { 'README.md': 'hi' })
+    await fileIssue(join(fixture.root, 'good'), 'g1')
+    await insertBad('.agw-verify')
+    await runSync()
+
+    const list = await app.get('/projects')
+    expect(list.status).toBe(200)
+    expect(ProjectList.parse(await list.json()).projects.map((p) => p.name)).toEqual(['good'])
+    expect((await app.get('/projects/.agw-verify')).status).toBe(400)
+    expect((await app.get('/projects/good')).status).toBe(200)
+    const again = await runSync()
+    expect(again.errors).toEqual([])
+    expect(await db.sql`SELECT name FROM factory.projects WHERE name = '.agw-verify'`).toHaveLength(1)
+  })
+})
+
 describe('no manifest', () => {
   test('a repo that nothing names is no project; a repo an Issue names gets the defaults', async () => {
     const quiet = fixture.repo('quiet', { 'README.md': 'hi' })
@@ -300,7 +393,7 @@ describe('no manifest', () => {
     expect(project.manifest).toEqual({
       apiVersion: 'factory/v2',
       name: 'named',
-      deploy: { mode: 'none', targets: [], hold: '30m', migrations: [], probes: [] },
+      deploy: { mode: 'none', targets: [], hold: '0m', migrations: [], probes: [] },
       ship: [{ paths: ['**'], via: 'push' }],
       leads: 1,
     })
