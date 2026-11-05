@@ -147,7 +147,9 @@ export class HcRunner implements Runner {
     // A prompt that begins with `-` would be read as an option of claude.
     if (input.prompt.startsWith('-')) throw new RunnerError('a prompt cannot start with "-"', true)
     const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
-    const env = await accountEnv(this.options, input)
+    // Read at once, used inside the lock: the registry read must not decide who gets the lock first.
+    const env = accountEnv(this.options, input)
+    env.catch(() => {})
     let known: string | undefined
     try {
       return await this.startIn(input, env, budget, (space) => (known = space))
@@ -160,11 +162,12 @@ export class HcRunner implements Runner {
 
   private async startIn(
     input: StartInput,
-    env: Record<string, string>,
+    env: Promise<Record<string, string>>,
     budget: Budget,
     noteSpace: (space: string) => void,
   ): Promise<StartResult> {
-    const outcome = await this.serialized(() => this.findOrRun(input, env, budget, noteSpace))
+    // The lock is taken here, in the order the starts were called: the order of the tick's claims is the order they run in.
+    const outcome = await this.serialized(async () => this.findOrRun(input, await env, budget, noteSpace))
     // Proving takes as long as the agent does to report: outside the lock, other starts go on.
     if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
     return this.resultOf(outcome.terminal, budget)
