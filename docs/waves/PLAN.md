@@ -198,15 +198,17 @@ Opus/high. Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handof
 
 **Left behind:** reset Waves 4–5 done and live (PRs #40, #42; dotfiles #61; homelab #19; Issue 64 shipped by a Sonnet-high lead with zero touch), each with its proof and learnings entry. Wave 6 is `active` in `reset.md` with both briefs written (`briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`), not spawned. Issue 66 (verify vs docs-only commits) is queued for the factory. Rotated at about 60 % context; handoff `docs/waves/handoff/program.md`. Rotation 3 spawned at 03:33Z as `factory spawn create software-factory-w10 --role deep --placement tab` with no parent (pane t13p, `me2`): `rd wave` refused it on the keyword gate again ("deploy" in Wave 10's first step; learnings, rotation 1 close-out).
 
-## Wave 10 — Program lead: the reset, rotation 3            <!-- status: active -->
+## Wave 10 — Program lead: the reset, rotation 3            <!-- status: done -->
 Opus/high (spawned with `--role deep`: `lead` is Sonnet high since reset Wave 4). Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9),
 `docs/waves/handoff/program.md`, `docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
 
-- [ ] Run `docs/waves/reset.md` Waves 6–7 as before: `rd fan` workers from the written briefs (Wave 6: software-factory and dotfiles, in
+- [x] Run `docs/waves/reset.md` Waves 6–7 as before: `rd fan` workers from the written briefs (Wave 6: software-factory and dotfiles, in
   parallel, disjoint repos), review each diff, land, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick `reset.md`.
-- [ ] Follow Issue 66 (and Issue 64 if it is not `closed`) to the end; no master push of this repo while one of its Issues is in its hold
+- [x] Follow Issue 66 (and Issue 64 if it is not `closed`) to the end; no master push of this repo while one of its Issues is in its hold
   until Issue 66 is live.
-- [ ] Review with the new flow (`/review`, at most 2 rounds, then your disposition); `agw review covered` over each merged range.
-- [ ] Machine discipline: one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40, wait.
-- [ ] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
-- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff; rotate earlier at about 60 % context.
+- [x] Review with the new flow (`/review`, at most 2 rounds, then your disposition); `agw review covered` over each merged range.
+- [x] Machine discipline: one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40, wait.
+- [x] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
+- [x] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff; rotate earlier at about 60 % context.
+
+**Left behind:** reset Waves 6–7 done and live: software-factory #44 (spaces, `ed175476713c`) and #45 (`issue_facts`, `b7d749a7ed2c`), dotfiles #62; every range `covered`, every `make verify` green. Issue 64 and Issue 66 closed `done` (66 on its first hold), so the no-push-during-a-hold rule is retired. First KPI line: asks/issue 0.05, zero-touch 94 %, first-hold 81 %. **Stopped: `reset.md`'s "Stop for the owner"** — rows 7–9 (dotfiles `rd`, `/wave`, `wave-gate.py`, then the deletions) change the machinery this loop runs on and wait for the owner's read of the learnings; no next wave is spawned and none is `active`. Handoff `docs/waves/handoff/program.md` (incl. the two doubled spaces and the IuRoot plan tabs, the owner's).
