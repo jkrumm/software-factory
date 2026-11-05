@@ -97,8 +97,9 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   `rd work|agents|read|say|issue`. Filed: Issue 80 (software-factory), 81 (agent-workflows), 82 (dotfiles, `--after 80 81`).
 - [x] Issue 80 closed `done` (62fc594 verified); 81 closed `done` (the hidden review transport gone from agw, a6b9271).
 - [ ] Issue 82: merged and deployed (dotfiles 96ed564, `rd wave` gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
-  unrelated verify rows forward (0622894), but it sits `waiting blocked`: no transition leaves `blocked` but a drop. Issue 98 (every park can
-  end: `issue answer` takes a blocked or parked Issue back to working) is the exit; then answer 82, it ships, 83 to 85 move.
+  unrelated verify rows forward (0622894), but it sits `waiting blocked`: no transition leaves `blocked` but a drop. Issue 97 (Issue 98 was
+  dropped into it) is the exit: `factory issue note <id> --wake` takes a blocked, parked or timed-wait Issue back to working; then wake 82,
+  its lead ships it, 83 to 85 move.
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,

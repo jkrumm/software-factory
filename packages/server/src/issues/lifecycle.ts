@@ -72,8 +72,11 @@ async function wakeIsDue({ tx, issue, row }: Context): Promise<string | undefine
   return open ? 'an Issue it depends on is open' : undefined
 }
 
-/** The owner's note that asks for the wake (`factory issue note --wake`): it ends a timed wait, and is typed to the lead as any note. */
-const noteWakes = ({ issue, row }: Context): boolean => issue.reason === 'wait' && row.payload?.wake === true
+/** The reasons the owner's note can end: a decision stays on `issue answer`, a dependency ends with its blockers and a `lead_gone` is a new attempt's. */
+const WAKEABLE: readonly (WaitReason | null)[] = ['wait', 'blocked', 'parked']
+
+/** The owner's note that asks for the wake (`factory issue note --wake`): it ends a timed wait, a block or a park, and is typed to the lead as any note. */
+const noteWakes = ({ issue, row }: Context): boolean => WAKEABLE.includes(issue.reason) && row.payload?.wake === true
 
 /** The end of a hold and its proof count only for the hold still running: a regression and a second ship started a new one. */
 const thisHold = ({ issue, row }: Context): string | undefined =>
@@ -207,7 +210,7 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
   // A question past its expiry with no default: it stays open (an answer is still taken), and the line is for the owner.
   lapsed: { waiting: { only: 'decision' } },
   // the owner or the orchestrator
-  // `note --wake` is the owner's way to end a timed wait early; the lead is typed the note either way.
+  // `note --wake` is the owner's way out of a timed wait, a block or a park; the lead is typed the note either way.
   note: {
     queued: recorded,
     working: noted,

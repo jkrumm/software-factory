@@ -636,7 +636,7 @@ describe('golden paths: transitions and effects', () => {
     expect(await state(asked)).toMatchObject({ state: 'waiting', reason: 'decision' })
   })
 
-  test("the owner's note with wake ends a timed wait, and only that", async () => {
+  test("the owner's note with wake ends a timed wait", async () => {
     const id = await working()
     await step(id, 'wait', { until: new Date(clock.now().getTime() + 3_600_000).toISOString() })
     await step(id, 'note', { text: 'go on' })
@@ -644,10 +644,30 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'note', { text: 'go on', wake: true })
     expect((await state(id)).state).toBe('working')
     expect(await effects(id)).toEqual(['start_lead', 'note_lead', 'note_lead'])
+  })
+
+  test("the owner's note with wake takes a blocked or parked Issue back to working, and not a question, a dependency or a lost lead", async () => {
     const blocked = await working()
     await step(blocked, 'block')
     await step(blocked, 'note', { text: 'go on', wake: true })
-    expect(await state(blocked)).toMatchObject({ state: 'waiting', reason: 'blocked' })
+    expect((await state(blocked)).state).toBe('working')
+
+    const parked = await working()
+    await step(parked, 'park')
+    expect(await state(parked)).toMatchObject({ state: 'waiting', reason: 'parked' })
+    await step(parked, 'note', { text: 'go on', wake: true })
+    expect((await state(parked)).state).toBe('working')
+
+    const asked = await working()
+    await step(asked, 'ask', { question: 'which?' })
+    await step(asked, 'note', { text: 'go on', wake: true })
+    expect(await state(asked)).toMatchObject({ state: 'waiting', reason: 'decision' })
+
+    const blocker = await working()
+    const waiting = await working()
+    await step(waiting, 'dep', { on: blocker })
+    await step(waiting, 'note', { text: 'go on', wake: true })
+    expect(await state(waiting)).toMatchObject({ state: 'waiting', reason: 'dependency' })
   })
 
   test('a late wake of an earlier wait does not end a later one', async () => {

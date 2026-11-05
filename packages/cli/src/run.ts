@@ -137,12 +137,14 @@ commands:
   issue note <id> <text> [--wake] [--id <call id>]
                   a note for the Issue's lead (token only): typed into its pane through the session notes, once per call id
                   (--id makes a repeated call one note). An Issue with no lead running keeps it and the next brief carries it.
-                  --wake also ends a timed wait (reason wait) now; on any other Issue it is a plain note.
+                  --wake also takes a waiting Issue back to working when it waits on a time, is blocked or is parked (not a
+                  question: that is issue answer; not a dependency or a lost lead); otherwise it is a plain note.
                   Use -- before text that starts with a dash
   issue phase|wait|ship|close|block|ask|drop <id> [--id <call id>] [verb flags]
                   a lead's report on its Issue (token, or the socket from a lead's pane: $FACTORY_SESSION says which lead,
                   and it may only report on the Issue it works). One event per call; --id makes a repeated call one event.
-                  Any of them ends a timed wait early (a wait Issue's lead need not wait it out); blocked and decision waits keep their rules.
+                  Any of them ends a timed wait early (a wait Issue's lead need not wait it out); blocked and decision waits keep their rules
+                  (the owner's way out of a block is issue note --wake).
                     phase  --phase <name> [--note <text>]
                     wait   --until <ISO time> [--why <text>]            a timed wait; the Issue wakes then
                     ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
@@ -211,7 +213,7 @@ commands:
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note, issue note|prio: the call's idempotency key
---wake           issue note: also end a timed wait
+--wake           issue note: also end a timed wait, a block or a park
 --repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
 --title, --facts, --key, --source, --after  issue new
 --rotate         door token new: replace the source's token
