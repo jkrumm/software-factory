@@ -350,7 +350,7 @@ async function parkEndedLeads(sql: SQL, now: Date): Promise<void> {
   const candidates: { id: number; attempt: number; revision: number; since: Date }[] = await sql`
     SELECT i.id, i.attempt, i.revision,
            COALESCE((SELECT max(e.at) FROM factory.events e WHERE e.session = s.key AND e.kind IN ('session_ended', 'pane_gone')),
-                    s.claimed_at, s.created_at) AS since
+                    s.assigned_at, s.created_at) AS since
     FROM factory.issues i JOIN factory.spawns s ON s.key = 'lead-' || i.id || '-' || i.attempt
     WHERE i.state = 'working' AND s.status = 'started'`
   const old = candidates.filter((c) => c.since <= cut)
