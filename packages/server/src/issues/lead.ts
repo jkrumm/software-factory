@@ -282,11 +282,14 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
       key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
-      // The news the note carried is not lost with the lead: the next attempt's brief shows it.
+      // The news the note carried is not lost with the lead: the next attempt's brief shows it. An owner's note is not news here:
+      // the brief's notes section (`unsentNotes`) carries it already.
       payload: {
         attempt: attemptOf(effect),
         detail,
-        news: noteText(effect.issueId, effect.payload).slice(0, MAX_NEWS_CHARS),
+        ...(effect.payload?.cause === 'note'
+          ? {}
+          : { news: noteText(effect.issueId, effect.payload).slice(0, MAX_NEWS_CHARS) }),
       },
     })
     return
