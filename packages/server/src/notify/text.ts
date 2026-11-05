@@ -115,6 +115,21 @@ export function failedMessage(input: {
   }
 }
 
+/** The steward's one line per Issue and cause once its retries are spent: what it tried, with the times and what came of each. */
+export function stewardMessage(input: {
+  issue: IssueRef
+  cause: string
+  tried: readonly string[]
+  detail?: string | null
+}): Message {
+  return {
+    key: `notify:steward:${input.issue.id}:${input.cause}`,
+    kind: 'failed',
+    issueId: input.issue.id,
+    text: `${issueHead(input.issue)} is stuck (${input.cause}) and the steward's retries are spent: ${input.tried.join('; ')}${input.detail ? ` ${quote(input.detail)}` : ''}. Look: factory issue show ${input.issue.id}`,
+  }
+}
+
 export function regressionMessage(input: { issue: IssueRef; hold: number; title?: string | null }): Message {
   return {
     key: `notify:regression:${input.issue.id}:${input.hold}`,

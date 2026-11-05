@@ -499,6 +499,9 @@ describe('submit on Stop', () => {
   })
 
   test('attempt 2 refused too is for a person: closed, no attempt 3, an attention line naming the job', async () => {
+    // Unfinished work: an Issue of the reviewer's repo is open.
+    await db.sql`INSERT INTO factory.issues (state, source, source_key, repo, title, facts, created_at, updated_at)
+      VALUES ('working', 'request', 'rv-two', ${TEST_REPO}, 't', '{}'::jsonb, ${clock.now()}, ${clock.now()})`
     await attempt('rv_two', 1, 'ended')
     await db.sql`INSERT INTO factory.review_outcomes (spawn_key, job_id, attempt, outcome, at) VALUES (${reviewKey('rv_two', 1)}, 'rv_two', 1, 'refused', ${clock.now()})`
     const { key, path } = await attempt('rv_two', 2, 'ended')

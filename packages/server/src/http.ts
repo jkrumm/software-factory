@@ -81,7 +81,7 @@ import { fileAnswer, fileEvidence, fileNote, filePrio, fileVerb, GATED_VERBS } f
 import { answerNow } from './issues/worker.ts'
 import { getNotification, listNotifications, sendNow } from './notify/outbox.ts'
 import { NullNotifier, type Notifier } from './notify/port.ts'
-import { getProject, listProjects } from './projects/store.ts'
+import { getProject, listable, listProjects } from './projects/store.ts'
 import type { ProjectSync } from './projects/sync.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
 import { getQueue, setQueue } from './queue.ts'
@@ -625,7 +625,7 @@ const projectListHandler = (sql: SQL) => async () => respond(ProjectList, { proj
 /** `GET /projects/:name`. */
 const projectGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/projects/:name'>) => {
   const project = await getProject(sql, parseParam(ProjectName, req.params.name))
-  return project ? respond(Project, project) : json({ error: 'unknown project' }, 404)
+  return project && listable(project) ? respond(Project, project) : json({ error: 'unknown project' }, 404)
 }
 
 /** A refused repo is the caller's 422, with the reason; anything else is the server's. */

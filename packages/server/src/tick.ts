@@ -14,6 +14,7 @@ import type { Classification } from './issues/classify.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { type NotifyDeps, notifyPass } from './notify/index.ts'
+import type { StewardDeps } from './issues/steward.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
 import type { ProjectSync } from './projects/sync.ts'
@@ -46,6 +47,8 @@ export interface TickDeps {
   quota?: QuotaPoller
   /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
   issuePorts?: EffectPorts
+  /** the steward's verifier; its limits are `reviewLimits`. Without it no steward runs */
+  steward?: Pick<StewardDeps, 'verify'>
   /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
   classification?: Classification
   /** makes the leads' worktrees off the tick; without it a lead is never started */
@@ -403,6 +406,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
         classification: deps.classification,
         worktrees: deps.leadWorktrees,
         alertLeads: deps.alertLeads ?? false,
+        steward: deps.steward && { ...deps.steward, limits: deps.reviewLimits ?? DEFAULT_REVIEW_LIMITS },
       })),
     )
   } catch (error) {

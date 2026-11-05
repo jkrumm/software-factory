@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_HOLD_MS, type Issue } from '@software-factory/contract'
+import type { Issue } from '@software-factory/contract'
 import { type Effect, type EffectKind, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { createIssue } from '../src/issues/create.ts'
@@ -11,6 +11,9 @@ import { openSession, recordEvent } from '../src/sessions.ts'
 import { TEST_REPO, TEST_ROOT } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
+
+/** An explicit hold: these tests move the clock around its end, which the default (0m) has none of. */
+const HOLD_MS = 30 * 60_000
 
 let db: TestDb
 let clock: FakeClock
@@ -43,7 +46,7 @@ const NOTHING_REQUIRED = {
   paths: ['docs/x.md'],
   required: [],
   mergedAt: null,
-  holdMs: DEFAULT_HOLD_MS,
+  holdMs: HOLD_MS,
   problem: null,
 }
 const GATED = new Set(['ship', 'close'])
@@ -130,6 +133,7 @@ describe('the transition table', () => {
         'settling→closed',
         'settling→queued',
         'waiting→closed',
+        'waiting→queued',
         'waiting→waiting',
         'waiting→watching',
         'waiting→working',
@@ -182,9 +186,9 @@ describe('golden paths: transitions and effects', () => {
     const watching = await state(id)
     expect(watching.state).toBe('watching')
     expect(watching.attempt).toBe(1)
-    expect(watching.wakeAt).toBe(new Date(clock.now().getTime() + DEFAULT_HOLD_MS).toISOString())
+    expect(watching.wakeAt).toBe(new Date(clock.now().getTime() + HOLD_MS).toISOString())
 
-    clock.advance(DEFAULT_HOLD_MS - 1)
+    clock.advance(HOLD_MS - 1)
     await pass(world.ports)
     expect((await effects(id)).includes('verify')).toBe(false)
 
@@ -360,11 +364,11 @@ describe('golden paths: transitions and effects', () => {
   test('a second ship of the same attempt gets a hold of its own', async () => {
     const id = await working()
     await step(id, 'ship')
-    clock.advance(DEFAULT_HOLD_MS)
+    clock.advance(HOLD_MS)
     await pass()
     await step(id, 'regression')
     await step(id, 'ship')
-    clock.advance(DEFAULT_HOLD_MS)
+    clock.advance(HOLD_MS)
     await pass()
     expect((await state(id)).attempt).toBe(1)
     expect((await effects(id)).filter((k) => k === 'verify')).toHaveLength(2)
@@ -1098,7 +1102,7 @@ describe('the inbox', () => {
   test('timers fire once, and a timer of an Issue that moved on fires nothing', async () => {
     const id = await working()
     await step(id, 'ship')
-    clock.advance(DEFAULT_HOLD_MS)
+    clock.advance(HOLD_MS)
     expect(await fireTimers(db.sql, clock.now())).toBe(1)
     expect(await fireTimers(db.sql, clock.now())).toBe(0)
     await db.sql`UPDATE factory.issues SET wake_at = ${clock.now()} WHERE id = ${id}`
@@ -1302,7 +1306,7 @@ describe('the replay test: a crash after every effect', () => {
     { send: 'ship' },
     { send: 'signal', payload: { regression: true } },
     { send: 'ship' },
-    { advance: DEFAULT_HOLD_MS },
+    { advance: HOLD_MS },
     { send: 'verified', payload: { hold: 2 } },
   ]
 

@@ -6,7 +6,7 @@ export const MANIFEST_API_VERSION = 'factory/v2'
 /** The file is read from the default branch of a repo; a larger one is a broken manifest, not a memory problem. */
 export const MAX_MANIFEST_BYTES = 64 * 1024
 
-export const DEFAULT_HOLD = '30m'
+export const DEFAULT_HOLD = '0m'
 
 const DURATION = /^(\d+)(s|m|h|d)$/
 const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
@@ -28,6 +28,9 @@ const Verify = z
   .regex(/^(https?:\/\/\S+|make [A-Za-z0-9][A-Za-z0-9_.-]*)$/, 'a URL (http or https) or `make <target>`')
 
 const Slug = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'letters, digits, dot, dash and underscore')
+
+/** Whether a repo directory's name can be a project (and its default manifest's name): the one test sync and the store share. */
+export const isProjectDirName = (name: string): boolean => Slug.safeParse(name).success
 
 const Target = z.strictObject({ name: Slug, host: Slug, verify: Verify })
 

@@ -365,7 +365,7 @@ the factory knows the account of a session no spawn describes (`rd`'s); a spawn'
 `Runner.type` (`terminal.send`; `busy` while the runner says `working`) once the derived state is `idle`, `waiting` or
 `walled`, so a `working`, `blocked`, `starting` or `dead` session holds it until its turn ends; the claim is committed
 before the call and the result recorded after it. `sent` becomes `delivered` on the next `turn_started` after the claim.
-No turn within a minute: Enter is pressed once more for a prompt whose typing was confirmed (`Runner.type` with `enterOnly`), otherwise the text is typed again; a resume is started again, `MAX_SENDS` 2, then `failed` with an `unconfirmed: ... not delivered` reason, which stays in `factory status` for
+**A lead's note is not held for ever by a long turn** (`FORCE_NOTE_AFTER_MS`, 5 min): a `note` prompt for a session `lead-…` (the owner's note and the steward's) still pending that long while the session is `working` is typed anyway (`Runner.type` with `force`: an agent that is `working` takes it, one that is blocked on a dialog is still `busy`); Claude Code queues it for the next turn. It may start no turn of its own, so for such a prompt a `turn_ended` after the claim proves delivery too (as a `turn_started` does). Rules' prompts and every other session wait for their prompt as before; the 24 h `PENDING_TTL` never matters here. A forced note stays `sent` while its lead is still `working` (only that turn's end proves it: no retry, no `failed`); once the lead is not working and nothing proves it, the rule below applies from then. No turn within a minute: Enter is pressed once more for a prompt whose typing was confirmed (`Runner.type` with `enterOnly`), otherwise the text is typed again; a resume is started again, `MAX_SENDS` 2, then `failed` with an `unconfirmed: ... not delivered` reason, which stays in `factory status` for
 a day from when it failed. A Runner error that says nothing was typed is retried every 30 s, five times; one that cannot say
 (`UncertainTyping`: hc timed out or died after the call) counts as sent and waits for a turn; the one retry after a
 minute without one types the text again, as for a claim left `typing` by a crashed tick (after the start budget plus a minute): only
@@ -586,7 +586,7 @@ There is no other time limit on a review. **A reviewer is never resumed**, becau
 one is 409 `not_cancellable` naming its state and carrying the spawn row (`spawn`; the CLI's error line has it as `details.spawn`, exit 5), so a caller reads `spawn.status`, never the message. A cancelled key is spent (a create under it is 409 `key_spent`), and the spawn is left out of `factory status`. agw's `scripts/verify.sh` cancels a smoke review that is held, so it does not run later on a deleted fixture. Replays are harmless by key: `agw review submit` is idempotent per (job, attempt), `createSpawn` returns the `a2` that exists,
 `close` finds its terminal by label.
 
-**Asks.** `needs_human` is a health line, `review <jobId> needs a human: attempt 2 failed: …` (3 days): a machine failure, not a decision. A deep review held by
+**Asks.** `needs_human` is a health line, `review <jobId> needs a human: attempt 2 failed: …`: a machine failure, not a decision, and only for unfinished work (no later `submitted` or `superseded` outcome of the job, an open Issue in the reviewer's repo, under a day old; else no line). A deep review held by
 the cap is the attention line `review <spawn key> held: deep cap reached on every open account today (UTC), started <account n/cap, …>; allow runs it past the cap`, an ask on `/fleet`, which the triage
 makes a `one_click` ask with the intent **`allow`** (`ActIntent`; `fleet_acts`, closes the occurrence like `resolve`, idempotent: a repeat answers the first). `allow`
 sets `deep_allowed` on the named spawn and wakes it; nothing else.
@@ -665,6 +665,7 @@ stateDiagram-v2
   queued --> closed: stopped
   working --> waiting: a decision, a wall, a dependency
   working --> queued: a lead is gone (twice)
+  waiting --> queued: the steward restarts a lead_gone park
   waiting --> working: also the owner's note --wake on a wait, a block or a park
   waiting --> waiting: a timed wait, re-filed or turned into a block or a question
   waiting --> watching: a timed wait, the lead ships
@@ -695,6 +696,8 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `admitted` | the admission tick | `admit:<issue>:<attempt>` |
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
+| `restart` | the steward: a `lead_gone` park whose lead is still gone (`waiting` → `queued`, finalize first) | `steward:<issue>:lead_gone:<n>` |
+| `note`, `wake` | also the steward's, `payload.who = 'steward'` | `steward:<issue>:<cause>:<n>`; a deep-cap wait's wake has the timer's `wake:<issue>:<waits>` |
 | `reopen` | `factory issue reopen` (`POST /issues/:id/reopen`, token or socket) | `reopen:<issue>:<call id>` |
 | `stop` | `factory issue stop` (`POST /issues/:id/stop`, token only) | `stop:<issue>:<call id>` |
 | `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed, or ended (see below); each names the `attempt` that lost its lead, and one for an earlier attempt than the Issue is on is refused | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>`, `lead_gone:ended:<issue>:<revision>` |
@@ -847,7 +850,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   `admitted_at`, `landed_at` (the first ship's `derived.mergedAt`, the newest commit's time: the events keep no earlier one), `shipped_at`,
   `verified_at`, `closed_at`; `outcome` (`issues.outcome` for the last attempt, `retried` for an earlier one); `asks` (`ask` and `block` events);
   `parks` (`wall`, `lead_gone`, `unreported`, `parked` as event counts: every `lead_gone` counts, whether it queued the next attempt or parked);
-  `owner_touches` (`note`, `retier`, `reopen`, and an `answer` whose `who` is not `default` or `closed`); `review_tier` (the last ship's); `holds`
+  `owner_touches` (`note` unless its `who` is `steward` (migration `032`: the factory's own wake or nudge is no owner touch), `retier`, `reopen`, and an `answer` whose `who` is not `default` or `closed`); `review_tier` (the last ship's); `holds`
   (ships); `verify_first_pass` (the first hold ended `verified` with no `verify_red` or `regression` before it); `first_hold_decided` (the attempt has a `verified`, `verify_red` or `regression` event); `reopened`. **Review rounds are not a
   column:** the factory keeps only `derived.review` (tier, covered), the rounds are agw's. `GET /issues/facts?since=<iso>` (token or socket, a malformed
   `since` is 400, filters on `filed_at`) answers `{rows, kpi}` (`IssueFactsRead`), and `factory issue facts [--since <iso>]` prints it: plain is a line per
@@ -864,6 +867,23 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 
 Reversal condition: the lifecycle module passes about 500 lines, or the replay test finds a race the per-Issue lock
 cannot close.
+
+### The steward
+
+Nothing used to act on an Issue that stalled: a block, a park, a timed wait whose cause lifted, a long turn that never read its note. The steward (`issues/steward.ts`) is that, deterministically: no model, no `agw` call, no port inside a transaction. Once per tick, after the timers and before the inbox (`issuePass`), it reads stored rows and files **inbox events**, so every state move is still the lifecycle's TABLE (one new edge: `restart`, `waiting`/`lead_gone` → `queued`) and every act is a row in `factory issue show <id>`. The counts are read back from the inbox rows (keys `steward:<issue>:<cause>:<n>`), nothing is stored. At most one act per Issue per pass; a pass twice in the same instant files nothing new, because an act is due only when its backoff, counted from when the cause began, has elapsed.
+
+| Cause | Holds when | Act (inbox event) |
+|-|-|-|
+| `blocked`, `parked`, `unreported` | `waiting` for that reason with a live lead (`lead-<id>-<attempt>` not dead) | `note` with `wake: true`, `who: steward`: "recheck your block against the current state; ship, continue, or block again with what changed" |
+| `lead_gone` | `waiting` for it, no live lead | `restart`: a new attempt, finalize first |
+| `claim` | a `waiting` holder in a wakeable reason (`wait`, `blocked`, `parked`, `unreported`) with a live lead, another Issue `queued` behind the project's claim 15+ min and no holder `working` | the same wake, to the holder |
+| `silent` | `working`, no event of the lead for 20 min (since the last wake) | `note` without `wake`: "report: continue, ship, block, or narrow" |
+| `over_budget` | `working` past the size's budget (`BUDGET_HOURS`) | the same nudge |
+| `deep_cap` (a wait) | `waiting`/`wait` declared `factory issue wait --on deep_cap` (stored as `on` on the wait event; a `why` matching `deep[ _-]?cap` counts too) and a deep review has room today (some account under `FACTORY_REVIEW_DEEP_CAP`) | `wake` `{for: wait, wait: <waits>}` with the timer's own key `wake:<issue>:<waits>`, so the timer at `until` and the steward are one event |
+
+A wait with another or no cause is left to its timer; **a `decision` wait (a question) is never touched.** **Backoff:** act `n` of a cause is due 30 min, 2 h, 6 h after the cause began (the Issue's entry into that wait, block or park; the lead's last word for `silent`, whose first act is at 20 min; the first queued Issue's claim for `claim`, at 15 min; the end of the budget for `over_budget`), at most 3 per Issue and cause. The `deep_cap` wake is one act per wait and not counted. **A block that names the verification** (its `reason` matches `/verif/i` and the Issue has shipped) re-runs the hold's check first, off the tick through `OffTick` keyed by the act (`proofInputOf` of `hold.ts`, the same `Proof` as the hold; the answer is an `issue_events` row `steward_verify:<issue>:<n>`), and the note carries one line, "verify re-run just now: green|red …"; the act waits until the run has answered, and with no verifier wired the line says it was not re-run. **Retries spent:** 3 acts for a cause, 6 h (the last backoff) after the last one, the Issue still in that state: an `issue_events` row `steward_exhausted:<issue>:<cause>` and one outbox line `notify:steward:<issue>:<cause>` (kind `failed`) with every act's time and result, once per Issue and cause even over replayed ticks. The away rule treats it as a decision, not as a park: only a present desk folds it. A block or park with **no live lead** is not woken (nobody to type to; the health line shows it).
+
+`factory status` has `steward { acts, exhausted }`, the last 24 h counted from the inbox rows with `payload.who = 'steward'` and the `steward_exhausted` events, and prints `steward: N acts in 24 h, M handed to the owner` when either is not zero. Edge: `note` with `wake` now also ends an `unreported` park (the lead's own next turn did already).
 
 ## 5. The loop
 
@@ -1060,7 +1080,7 @@ name: weatherorb
 deploy:
   mode: auto                 # auto: a push deploys · make · agentic · none
   targets: [{ name: prod, host: vps, verify: https://example.com/health }]
-  hold: 30m
+  hold: 10m                  # default 0m: no artificial wait, a ship is verified at once
   migrations: [apps/api/drizzle/]
   probes:
     - { name: forecast-loads, http: https://example.com/api/forecast?q=berlin, expect: 200 }
@@ -1095,9 +1115,9 @@ ticktick: { list: WeatherOrb }
 
 - **The schema.** `apiVersion: factory/v2`, `name`, `deploy {mode auto|make|agentic|none, targets[{name, host, verify}], hold,
   migrations[], probes[{name, http, expect}]}`, `ship[{paths[], via push|pr}]`, `leads`. `verify` is an `http(s)` URL or `make <target>`; `hold` is
-  `30s`, `30m`, `2h` or `1d`, at most `7d`, default `30m`; `expect` defaults to 200; `leads` is 1 to 8. Objects are strict: a key
+  `30s`, `30m`, `2h` or `1d`, at most `7d`, default `0m` (no artificial wait: the hold ends on the next timer pass, the check runs at once and a green one closes the Issue and frees the claim; a red one keeps the re-run and regression rules); `expect` defaults to 200; `leads` is 1 to 8. Objects are strict: a key
   that is not in the schema is an error (a typo is not read as a default), except `signals`, `heal`, `jobs` and `ticktick`, which
-  are accepted and dropped. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
+  are accepted and dropped. `project sync` names a project only from a valid directory name (letters, digits, dot, dash, underscore, no leading dot; else a line in the result's `errors`), waits at most 40 s for the remotes before it reads what is there, and `project list` hides a legacy row with an invalid name. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
   most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
   `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
   says so in a manifest), done means the commit or the document.
@@ -1222,11 +1242,12 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   | `notify:failed:<start_lead\|finalize>:<effect key>` | an effect failed 3 times and is still open | |
   | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
   | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |
+  | `notify:steward:<issue>:<cause>` | the steward spent its 3 acts for a cause and the Issue is still in that state (kind `failed`) | a decision's away rule, not a park's: only a present desk folds it |
   | `notify:digest:<date>` | 07:30 local | the morning reading, below |
   | `notify:test:...` | `factory notify test` | |
 
-- **The away rule (FV Wave 4)** is decided at send time, in the claim's transaction, from presence ("Away and back" below): `notify:ask:*` (a decision, the `yours` tier)
-  goes out unless the desk is present; `notify:digest:*` and `notify:test:*` always go out; every other message (`parked`, `failed`, `regression`) goes out only while the phone
+- **The away rule (FV Wave 4)** is decided at send time, in the claim's transaction, from presence ("Away and back" below): `notify:ask:*` (a decision, the `yours` tier) and `notify:steward:*` (the steward gave up on an Issue)
+  go out unless the desk is present (`foldReason` folds both only for a present desk, whatever the phone says); `notify:digest:*` and `notify:test:*` always go out; every other message (`parked`, `failed`, `regression`) goes out only while the phone
   is present and the desk is not. Any other message is **`folded`** (`folded_at`, `folded_reason`; `status: folded` in `factory notify list`): it is never sent later, its
   facts are in the since reading, and its `next_at` is `infinity`, so a release that does not know the column never finds it due. A delivery wins over a fold made while the send was in flight (a lease that ran out): the delivery clears the fold, as a delivery is always recorded. Before the board reports presence the owner is always away,
   so only decisions and the morning reading reach Slack: intended. The rule reads the clock when the row is claimed, not when it was recorded.

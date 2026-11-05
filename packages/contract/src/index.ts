@@ -250,6 +250,8 @@ export const Status = z.object({
   notes: z.array(Prompt),
   /** prompts beyond the ones listed */
   notesMore: z.number().int(),
+  /** the steward's acts of the last 24 h, counted from the Issues' inbox and events: wakes, nudges and requeues, and Issues whose retries ran out and went to the owner. A server of before the steward sends none */
+  steward: z.object({ acts: z.number().int(), exhausted: z.number().int() }).nullish(),
   /** review v4's reviewer sessions: live against the slots, and the deep reviews started today (UTC) per account. A server of before review v4 sends none */
   reviews: z
     .object({

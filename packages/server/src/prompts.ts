@@ -35,6 +35,15 @@ export const DELIVER_BATCH = 10
  * time-sensitive; a note may wait for a long turn to end.
  */
 export const PENDING_TTL_MS = { note: 24 * 3_600_000, rule: 6 * 3_600_000 }
+/**
+ * A note for an Issue's lead (`lead-…`, source `note`: the owner's and the steward's) that has waited this long for the lead to reach its
+ * prompt is typed into the working lead anyway: Claude Code queues it for the lead's next turn, and a long turn must not hold the factory's
+ * word back for hours. No other session and no rule's prompt is ever forced.
+ */
+export const FORCE_NOTE_AFTER_MS = 5 * 60_000
+
+const isLeadNote = (prompt: Pick<PromptRow, 'source' | 'session'>): boolean =>
+  prompt.source === 'note' && prompt.session.startsWith('lead-')
 
 interface PromptRow {
   id: string
@@ -176,7 +185,7 @@ export async function settleDelivered(sql: SQL, now: Date, session?: string): Pr
     const delivered: DeliveredRow[] = await tx`
       UPDATE factory.prompts p SET status = 'delivered', delivered_at = ${now}, error = NULL
       WHERE p.status = 'sent' AND (${session ?? null}::text IS NULL OR p.session = ${session ?? null}) AND EXISTS (
-        SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)
+        SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.at >= p.claimed_at AND (e.kind = 'turn_started' OR (e.kind = 'turn_ended' AND p.source = 'note' AND p.session LIKE 'lead-%')))
       RETURNING p.id, p.session, p.source, p.claimed_at`
     await endAnsweredWaits(tx, delivered, now)
   })
@@ -197,6 +206,14 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   // above is a delivery, not a reason to type the text twice. (What starts inside this very statement is the window
   // `deliverPrompts` closes once more right before a retry is typed.)
   const stale = new Date(now.getTime() - CONFIRM_MS)
+  // A forced lead note waits in the working turn it was typed into: only that turn's end proves it, so it is neither retyped nor failed
+  // while the lead is still `working`. Once the lead is not, the rule below applies from then.
+  const queued: PromptRow[] = await sql`
+    SELECT id, session, source FROM factory.prompts WHERE status = 'sent' AND sent_at <= ${stale} AND source = 'note' AND session LIKE 'lead-%'`
+  const inTurn: string[] = []
+  for (const prompt of queued) {
+    if ((await getSession(sql, prompt.session, now))?.state === 'working') inTurn.push(prompt.id)
+  }
   await sql`
     UPDATE factory.prompts p
     SET status = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
@@ -205,8 +222,8 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
                      THEN CASE WHEN p.via = 'type' AND p.typed_at IS NOT NULL THEN 'no turn started within a minute of typing it: Enter pressed again'
                                ELSE 'no turn started within a minute of typing it: typed again' END
                      ELSE 'unconfirmed: no turn started within a minute of the retry; not delivered' END
-    WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND NOT EXISTS (
-      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.kind = 'turn_started' AND e.at >= p.claimed_at)`
+    WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND p.id NOT IN (SELECT jsonb_array_elements_text(${JSON.stringify(inTurn)}::text::jsonb)) AND NOT EXISTS (
+      SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.at >= p.claimed_at AND (e.kind = 'turn_started' OR (e.kind = 'turn_ended' AND p.source = 'note' AND p.session LIKE 'lead-%')))`
   await sql`
     UPDATE factory.prompts
     SET status = 'failed', failed_at = ${now}, error = 'expired: the session never took it'
@@ -295,10 +312,16 @@ export interface DeliverResult {
   failed: string[]
 }
 
-/** Whether a turn_started followed `since`: the proof that a typed prompt arrived. */
-async function provedSince(sql: SQL, session: string, since: Date): Promise<boolean> {
+/**
+ * Whether a turn_started followed `since`: the proof that a typed prompt arrived. A note typed into a working lead may start no turn of its
+ * own (Claude Code queues it into the one running), so for a lead's note the end of a turn proves it too.
+ */
+async function provedSince(sql: SQL, prompt: Pick<PromptRow, 'source' | 'session'>, since: Date): Promise<boolean> {
   const [row] = await sql`
-    SELECT EXISTS (SELECT 1 FROM factory.events WHERE session = ${session} AND kind = 'turn_started' AND at >= ${since}) AS proved`
+    SELECT EXISTS (
+      SELECT 1 FROM factory.events
+      WHERE session = ${prompt.session} AND at >= ${since}
+        AND (kind = 'turn_started' OR (kind = 'turn_ended' AND ${isLeadNote(prompt)}))) AS proved`
   return row?.proved === true
 }
 
@@ -394,7 +417,7 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     // A retry is typed only if nothing proves the first typing since the settle above looked. Checked before the session is
     // ready: the turn it proves may still be running, and the answered wait should not stay open until it ends.
-    if (prompt.sent_count > 0 && prompt.claimed_at && (await provedSince(sql, prompt.session, prompt.claimed_at))) {
+    if (prompt.sent_count > 0 && prompt.claimed_at && (await provedSince(sql, prompt, prompt.claimed_at))) {
       await sql.begin(async (tx) => {
         const delivered: DeliveredRow[] = await tx`
           UPDATE factory.prompts SET status = 'delivered', delivered_at = ${clock.now()}, error = NULL
@@ -403,7 +426,15 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       })
       continue
     }
-    if (prompt.via === 'type' && !(target.pane && READY_STATES.has(target.state))) continue
+    const ready = target.pane !== null && READY_STATES.has(target.state)
+    // A lead's note that waited for a long turn is typed into it anyway; it queues there and the end of a turn proves it.
+    const force =
+      !ready &&
+      target.pane !== null &&
+      target.state === 'working' &&
+      isLeadNote(prompt) &&
+      clock.now().getTime() - prompt.created_at.getTime() >= FORCE_NOTE_AFTER_MS
+    if (prompt.via === 'type' && !ready && !force) continue
 
     // A resume starts an agent, so it is admitted like a spawn claim: held under `drain`, `pace` and a full account, and
     // only on the account the conversation lives in.
@@ -437,8 +468,13 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
       // After an uncertain typing or an abandoned claim nothing says it arrived, so the text is typed again.
       outcome =
         prompt.via === 'type' && prompt.sent_count > 0 && prompt.typed_at !== null
-          ? await deps.runner.type({ pane: target.pane as string, text: prompt.text, enterOnly: true })
-          : await attempt(deps, prompt, target)
+          ? await deps.runner.type({
+              pane: target.pane as string,
+              text: prompt.text,
+              enterOnly: true,
+              ...(force ? { force: true as const } : {}),
+            })
+          : await attempt(deps, prompt, target, force)
     } catch (error) {
       await release()
       const message = error instanceof Error ? error.message : String(error)
@@ -480,9 +516,18 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
 }
 
 /** The port call for one prompt: typed into the pane, or the session started again by id with the text as its first prompt. */
-async function attempt(deps: DeliverDeps, prompt: PromptRow, target: Target): Promise<'typed' | 'busy'> {
+async function attempt(
+  deps: DeliverDeps,
+  prompt: PromptRow,
+  target: Target,
+  force: boolean,
+): Promise<'typed' | 'busy'> {
   if (prompt.via === 'type') {
-    return deps.runner.type({ pane: target.pane as string, text: prompt.text })
+    return deps.runner.type({
+      pane: target.pane as string,
+      text: prompt.text,
+      ...(force ? { force: true as const } : {}),
+    })
   }
   const { spawn, claudeSessionId } = target
   if (!spawn?.account || !claudeSessionId) {

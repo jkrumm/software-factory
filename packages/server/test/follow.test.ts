@@ -746,6 +746,27 @@ describe('factory issue note: what a brief carries', () => {
     expect((await promptsOf(leadKey(id, 2))).map((p) => p.id)).toEqual([`issue:${id}:note:one`])
   })
 
+  test('the steward’s note is not shown as the owner’s in a later attempt’s brief', async () => {
+    const id = await file(newRepo(SERVICE))
+    await note(id, { id: 'one', text: 'owner words' })
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `${id}:note:steward`,
+      kind: 'note',
+      at: clock.now(),
+      payload: { who: 'steward', cause: 'blocked', n: 1, text: 'steward nudge words', call: 'steward' },
+    })
+    await drive(4)
+    await db.sql`UPDATE factory.prompts SET session = 'ghost' WHERE session = ${leadKey(id, 1)}`
+    await post(id, 'drop', { reason: 'x' })
+    await drive(3)
+    clock.advance(1_000)
+    await post(id, 'reopen', { reason: 'back' })
+    await drive(4)
+    expect(runner.started[1]?.prompt).toContain('owner words')
+    expect(runner.started[1]?.prompt).not.toContain('steward nudge words')
+  })
+
   test('a note still pending for the old lead moves to the new one with the brief that carries it', async () => {
     const { id, key } = await lead()
     runner.answer = 'busy'

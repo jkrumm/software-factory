@@ -170,7 +170,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
 }
 
 /**
- * The owner's notes (`factory issue note`) that no lead was typed: applied, and without a prompt under their call id that reached a
+ * The owner's notes (`factory issue note`, not the steward's wake or nudge) that no lead was typed: applied, and without a prompt under their call id that reached a
  * session that exists (typed or delivered). A note a brief or a lead took is therefore never carried twice, and one that reached nobody
  * (a lead that never started, a prompt still pending for a dead one, the notes a brief had no room for) comes again. Oldest first, a few;
  * the rest are counted.
@@ -183,6 +183,7 @@ async function unsentNotes(
     SELECT b.payload->>'call' AS call, b.payload->>'text' AS text, count(*) OVER () AS total FROM factory.issue_inbox b
     WHERE b.issue_id = ${issueId} AND b.kind = 'note' AND b.result = 'applied'
       AND b.payload->>'call' IS NOT NULL AND b.payload->>'text' IS NOT NULL
+      AND coalesce(b.payload->>'who', '') <> 'steward'
       AND NOT EXISTS (
         SELECT 1 FROM factory.prompts p JOIN factory.sessions s ON s.id = p.session
         WHERE p.id = 'issue:' || b.issue_id || ':note:' || (b.payload->>'call') AND p.status IN ('sent', 'delivered'))

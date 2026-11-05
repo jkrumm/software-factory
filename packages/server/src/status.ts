@@ -5,6 +5,7 @@ import { healthLines } from './health.ts'
 import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
+import { stewardStatus } from './issues/steward.ts'
 import { notificationAttention } from './notify/outbox.ts'
 import { DEFAULT_REVIEW_LIMITS, type ReviewLimits, reviewAttention, reviewStatus } from './review/limits.ts'
 import { listOpenPrompts } from './prompts.ts'
@@ -104,6 +105,7 @@ export async function buildStatus(
     issuesMore: issues.more,
     notes,
     notesMore,
+    steward: await stewardStatus(sql, now),
     reviews: await reviewStatus(sql, now, limits),
   }
 }

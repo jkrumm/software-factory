@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import {
   CONFIRM_MS,
   deliverPrompts,
+  FORCE_NOTE_AFTER_MS,
   FAILURE_RETRY_MS,
   listOpenPrompts,
   STATUS_PROMPTS,
@@ -327,6 +328,80 @@ describe('prompt delivery: guards', () => {
   })
 })
 
+describe('a note for a working Issue lead', () => {
+  const lead = async () => {
+    await w.spawned('lead-1-1', { role: 'lead' })
+    await w.emit('lead-1-1', 'turn_started', w.at(10))
+  }
+  const leadNote = (id = 'issue:1:note:c1', source = 'note') =>
+    recordPrompt(db.sql, { id, session: 'lead-1-1', source, text: 'recheck your block' }, clock.now())
+
+  test('is typed into the working lead after five minutes and not before, and a turn_ended proves it', async () => {
+    await lead()
+    await leadNote()
+    clock.advance(FORCE_NOTE_AFTER_MS - 1_000)
+    expect((await deliver()).sent).toEqual([])
+    expect(runner.typed).toEqual([])
+
+    clock.advance(1_000)
+    expect((await deliver()).sent).toEqual(['issue:1:note:c1'])
+    expect(runner.typed).toEqual([{ pane: 'w1:lead-1-1', text: 'recheck your block', force: true }])
+    expect((await row('issue:1:note:c1')).status).toBe('sent')
+
+    // the note queued into the running turn: no turn_started follows, the turn's end proves it
+    clock.advance(20_000)
+    await w.emit('lead-1-1', 'turn_ended', clock.now())
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'delivered', sent_count: 1 })
+    clock.advance(CONFIRM_MS * 2)
+    await deliver()
+    expect(runner.typed).toHaveLength(1)
+  })
+
+  test('a forced note stays sent while the lead is still in that turn, and a turn_ended then proves it', async () => {
+    await lead()
+    await leadNote()
+    clock.advance(FORCE_NOTE_AFTER_MS)
+    await deliver()
+    clock.advance(10 * 60_000)
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'sent', sent_count: 1 })
+    expect(runner.typed).toHaveLength(1)
+
+    await w.emit('lead-1-1', 'turn_ended', clock.now())
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'delivered', sent_count: 1 })
+  })
+
+  test('a forced note whose lead stopped without proof is retried once like any other, then it gives up', async () => {
+    await lead()
+    await leadNote()
+    clock.advance(FORCE_NOTE_AFTER_MS)
+    await deliver()
+    clock.advance(CONFIRM_MS + 1_000)
+    await w.emit('lead-1-1', 'session_ended', clock.now())
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'pending', sent_count: 1 })
+    expect((await row('issue:1:note:c1')).error).toContain('Enter pressed again')
+
+    await db.sql`UPDATE factory.prompts SET status = 'sent', sent_at = ${clock.now()}, sent_count = 2 WHERE id = 'issue:1:note:c1'`
+    clock.advance(CONFIRM_MS + 1_000)
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'failed' })
+    expect(PENDING_TTL_MS.note).toBeGreaterThan(FORCE_NOTE_AFTER_MS)
+  })
+
+  test("only a lead's notes are forced: not another session's note, not a rule's prompt", async () => {
+    await lead()
+    await working()
+    await note('other')
+    await leadNote('issue:1:rule', 'blocked')
+    clock.advance(FORCE_NOTE_AFTER_MS * 2)
+    expect((await deliver()).sent).toEqual([])
+    expect(runner.typed).toEqual([])
+  })
+})
+
 describe('prompt delivery: one at a time, and resumes are admitted', () => {
   test('a later prompt waits across passes while an earlier one is sent and unproven', async () => {
     await working()
@@ -536,6 +611,16 @@ describe('the hc adapter types into the agent', () => {
 
     await hc.setStatus(pane, 'idle')
     expect(await r.type({ pane, text: 'second' })).toBe('typed')
+    expect(await sent()).toEqual(['second'])
+  })
+
+  test('a forced note is typed into a working agent, and still not into a blocked one', async () => {
+    const { r, pane } = await start()
+    await hc.setStatus(pane, 'working')
+    expect(await r.type({ pane, text: 'second', force: true })).toBe('typed')
+    expect(await sent()).toEqual(['second'])
+    await hc.setStatus(pane, 'blocked')
+    expect(await r.type({ pane, text: 'third', force: true })).toBe('busy')
     expect(await sent()).toEqual(['second'])
   })
 
