@@ -119,6 +119,7 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
     issue,
     attempt,
     previous: await previousAttempt(sql, issue.id, attempt),
+    news: await newsOfPreviousAttempt(sql, issue.id, attempt),
     worktree: { path, branch },
     project: {
       name,
@@ -210,6 +211,20 @@ async function previousAttempt(sql: SQL, issueId: number, attempt: number): Prom
   return { attempt: attempt - 1, branch: leadBranch(issueId, attempt - 1), worktree: kept.path, why: kept.why }
 }
 
+/** The news a note carried to a lead that was gone, as the next attempt's brief shows it. */
+const MAX_NEWS_CHARS = 4_000
+
+/** What a note brought to the attempt before this one, which had no lead left to hear it (the `news` of its `lead_gone`). */
+async function newsOfPreviousAttempt(sql: SQL, issueId: number, attempt: number): Promise<string | undefined> {
+  if (attempt < 2) return undefined
+  const [row]: { news: string }[] = await sql`
+    SELECT payload->>'news' AS news FROM factory.issue_events
+    WHERE issue_id = ${issueId} AND kind = 'lead_gone' AND payload->>'attempt' = ${String(attempt - 1)}
+      AND payload->>'news' IS NOT NULL
+    ORDER BY id DESC LIMIT 1`
+  return row?.news
+}
+
 const MAX_BRIEF_NOTES = 20
 /** A note is up to 4,000 characters, which can be 12 KB: twenty would crowd a process argument. */
 const MAX_BRIEF_NOTE_BYTES = 24_000
@@ -267,7 +282,12 @@ async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
       key: `lead_gone:${effect.key}`,
       kind: 'lead_gone',
       at: clock.now(),
-      payload: { attempt: attemptOf(effect), detail },
+      // The news the note carried is not lost with the lead: the next attempt's brief shows it.
+      payload: {
+        attempt: attemptOf(effect),
+        detail,
+        news: noteText(effect.issueId, effect.payload).slice(0, MAX_NEWS_CHARS),
+      },
     })
     return
   }
