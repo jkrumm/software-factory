@@ -95,13 +95,17 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete `rd wave|fan|merge|close`
   for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and tests, hc-reap's agent rules; keep
   `rd work|agents|read|say|issue`. Filed: Issue 80 (software-factory), 81 (agent-workflows), 82 (dotfiles, `--after 80 81`).
+- [x] Issue 80 closed `done` (62fc594 verified); 81 closed `done` (the hidden review transport gone from agw, a6b9271).
+- [ ] Issue 82: merged and deployed (dotfiles 96ed564, `rd wave` gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
+  unrelated verify rows forward (0622894), but it sits `waiting blocked`: no transition leaves `blocked` but a drop. Issue 98 (every park can
+  end: `issue answer` takes a blocked or parked Issue back to working) is the exit; then answer 82, it ships, 83 to 85 move.
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
   IuRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
-- [ ] Filed: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
+- [x] Filed and closed `done`: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
   (agent-workflows: `agw check` inside the slot, capped test workers; `--after 71`). iris (`xcodebuild` in the slot, a simulator shut down
-  after its verify) is filed when iris's running wave closes (Wave 8b).
+  after its verify) is Issue 86, queued behind iris's claim (Issue 77, waiting for the deep-cap day to turn).
 - [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: todo -->
