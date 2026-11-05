@@ -67,3 +67,43 @@ evidence (a sha, a log line, a number); no narrative.
   about the Issue send-back, `issueStop`).
 - **The task notification showed the reviewer's reply HTML-escaped** (`&lt;id&gt;`, `->&gt;`). Submitting "verbatim" meant
   restoring `<`/`>`; agw accepted it. Candidate for `/review`: run the reviewer in the foreground so the reply is raw.
+
+## Wave 3, parks end (row 4), 2026-11-05 00:30 — the spawn
+
+- **Under load the spawn fell back to hc-direct on the wrong account.** At load 68–124 (an IuRoot `athena-l2` vitest run,
+  not the reset's), `factory spawn create` timed out ("server unreachable … The operation timed out") and `rd fan` went
+  hc-direct: pane t131 on `me`, at 95 % of its week (`picked=me reason=home`), outside the factory's wake. Killed after 26 s
+  with no work, worktree removed, respawned through the factory on `iu` (t132). Change for row 7: `rd` retries the factory
+  once before the fallback, and the fallback's picker honours the 94 % week mark. Machine discipline cannot hold the load
+  down while other sessions run their own checks: the 40-load rule only gates this loop's checks.
+- **A stale wake arrived while the next worker ran.** At 23:32Z the lead got "workers done: software-factory-reset-w2-deps
+  idle", after that worker was `rd close`d and while `reset-w3-parks` (t132) was `working`: the note queued for Wave 2's
+  wait was typed once the session was at its prompt. This is dropped Issue 53 ("a queued note makes an early wake"); it
+  costs one turn and a re-declared wait. Change: none in the reset rows yet; row 7's lead playbook says to check
+  `factory session list` on every wake before acting on it.
+
+## Wave 3, parks end (row 4), 2026-11-05 02:00 — the build and the proof
+
+- **Built by one Sonnet worker in 20 min; review took three passes.** PR #38 (`3c9b5c0`, fixes `407df59`, `c0b91c8`, docs
+  `c868256`): deep round 1 found 2 important (a restart still told the owner "failed for good"; a gone lead's regression or
+  answer was lost on restart) and 2 nits, round 2 confirmed the fixes and left 2 nits, a light pass covered the nit fixes.
+  `covered` true; `rd merge` ran `make check` (1721 pass, 439 s). Deployed `14c4c7197ca0`, `make verify` all passed. The
+  worker went outside its owned files three times (notify rule and text, the stop-check schema), each needed; it said so
+  instead of stopping as the brief asked.
+- **`make check` had one flake in an untouched file:** `hc-spaces.test.ts` "two starts at once" failed once in the full run
+  and once in three runs alone at load ~10; it is a timing race, not load alone.
+- **The restart works; the trigger had a gap.** Issue 62's lead pane t135 was `hc kill`ed at 00:30:44Z. `spawn list` read
+  `lead-62-1 ended`, but the Issue stayed `working` for 29 min: `parkGoneLeads` sweeps only failed spawns ("a spawn that ended
+  is found only by a note, for now"). An owner note at 00:59:19Z found it: `lead_gone` 01:00:00 (`working → queued`), finalized
+  01:00:06, attempt 2 admitted 01:00:15 (t136), its brief carried the note once under "Notes from the owner", and the lead
+  ended it with `drop` ("no change"). Change: a follow-up worker in this wave (`briefs/reset-w3b-ended-lead.md`): the sweep files
+  `lead_gone` for an ended lead spawn after a 10-minute grace, never within 10 minutes of a `runner_restarted`.
+- **An IuRoot test storm took the factory down twice.** ~120 vitest workers across `athena-a1..a7` worktrees drove the load to
+  558 on 12 cores (00:35–00:58Z). The server lost its database lock ("the lock connection did not answer within 5000 ms;
+  exiting"), and the launchd relaunch failed once on `secrets-run` ("only 0/2 refs of .env.tpl resolved; refusing to start");
+  the next relaunch came up, its first tick ran 577 s (limit 240 s; `git did not answer in time` for 33 projects), then ticks
+  succeeded from 00:57:42Z. It recovered without a hand. Change for row 10/RS7 and the machine: one test slot for every repo,
+  IuRoot included (today `slot run` is fail-open and other sessions do not take it); until then the reset cannot keep the
+  mini under 40 by its own discipline alone.
+- **A Haiku lead cannot wait in the foreground.** The proof asked attempt 2 to `sleep 300`; the harness guard blocked a bare
+  sleep and the lead dropped the Issue instead. Proofs that need a live lead use a long real command, not a sleep.
