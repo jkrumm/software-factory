@@ -27,16 +27,16 @@ The lead does this itself; no worker.
 - [x] Live proof: two scratch Issues, B `--after` A; B stays queued until A closes.
 **Left behind:** PR #37 merged (`7e616c0`, `272be2f`), deployed `272be2fb1429`, verify green; deep review clean (1 nit fixed), `covered` true. Proof: Issue 60 `--after 59` admitted 6 s after 59 closed; `--after 58` (closed) exit 2. Found: a lead has no no-change end (Wave 4 step 1 now names it).
 
-## Wave 3 — Parks end (row 4)            <!-- status: active -->
-- [ ] The lead's own `turn_started` ends an `unreported` wait (back to `working`).
-- [ ] `lead_gone` starts the next attempt, at most two per Issue; then the Issue parks with a health line and one notification.
-- [ ] The Stop send-back (`issues/sendback.ts`) is skipped while the Stop input's `background_tasks` lists a running subagent;
+## Wave 3 — Parks end (row 4)            <!-- status: done -->
+- [x] The lead's own `turn_started` ends an `unreported` wait (back to `working`).
+- [x] `lead_gone` starts the next attempt, at most two per Issue; then the Issue parks with a health line and one notification.
+- [x] The Stop send-back (`issues/sendback.ts`) is skipped while the Stop input's `background_tasks` lists a running subagent;
   the hook (`packages/cli/src/hook.ts`, zod-free) carries the field through the spool.
-- [ ] A red verify is re-run once before it counts as a regression; the third regression of one Issue parks it.
-- [ ] Tests per rule; live proof with a scratch Issue whose lead is killed once.
-**Left behind:**
+- [x] A red verify is re-run once before it counts as a regression; the third regression of one Issue parks it.
+- [x] Tests per rule; live proof with a scratch Issue whose lead is killed once.
+**Left behind:** PR #38 (`3c9b5c0`..`c868256`) and the follow-up PR #39 (`afa38a9`), deployed `a2c4293f559a`, verify green, `covered` true. Proof: a killed lead restarts the Issue after a 10-minute grace with no note (Issue 63), a note finds it at once (Issue 62); attempt 2 carries the owner's note. The `background_tasks` field is real (Claude Code 2.1.318 Stop schema); finished entries do not count. Machine: an IuRoot test storm (load 558) took the server down twice; it recovered by itself (learnings).
 
-## Wave 4 — The lead (row 5)            <!-- status: pending -->
+## Wave 4 — The lead (row 5)            <!-- status: active -->
 - [ ] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
   and the no-change end: work that needs no commit ends with `factory issue drop <id> --reason`, never an ask or a made-up commit (learnings, Wave 2).
 - [ ] `config/roles.json`: `lead` → sonnet/high (keep every other role until Wave 8 of the design's order).

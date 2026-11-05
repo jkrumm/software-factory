@@ -107,3 +107,8 @@ evidence (a sha, a log line, a number); no narrative.
   mini under 40 by its own discipline alone.
 - **A Haiku lead cannot wait in the foreground.** The proof asked attempt 2 to `sleep 300`; the harness guard blocked a bare
   sleep and the lead dropped the Issue instead. Proofs that need a live lead use a long real command, not a sleep.
+- **The follow-up closed the gap.** PR #39 (`afa38a9`, grace fix from its standard review's one nit: the fallback read
+  `claimed_at`, which a start clears; now `assigned_at`), `make check` green, deployed `a2c4293f559a`, verify green. Live:
+  Issue 63's lead t138 killed at 01:23:28Z with no note; `lead_gone` "spawn lead-63-1 ended" at 01:33:29Z (`working → queued`),
+  finalized 01:33:30, attempt 2 admitted 01:33:39. Wave 3 cost: one worker run, one fix subagent, one follow-up worker and
+  five reviews (deep ×2, standard, light ×2).
