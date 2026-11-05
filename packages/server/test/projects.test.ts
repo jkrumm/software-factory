@@ -363,6 +363,16 @@ describe('a directory that cannot be a project’s name', () => {
     expect(ProjectList.parse(await list.json()).projects.map((p) => p.name)).toEqual(['good'])
   })
 
+  test('a git directory with an odd name and no manifest, row or Issue is no project and no error', async () => {
+    fixture.repo('good', { 'README.md': 'hi' })
+    fixture.repo('has space', { 'README.md': 'hi' })
+    await fileIssue(join(fixture.root, 'good'), 'g1')
+
+    const result = await runSync()
+    expect(result.errors).toEqual([])
+    expect(await db.sql`SELECT name FROM factory.projects ORDER BY name`).toEqual([{ name: 'good' }])
+  })
+
   test('a row stored before that rule does not fail the list or the show, and later syncs leave it alone and silent', async () => {
     fixture.repo('good', { 'README.md': 'hi' })
     await fileIssue(join(fixture.root, 'good'), 'g1')

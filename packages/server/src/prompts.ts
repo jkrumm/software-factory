@@ -206,6 +206,14 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
   // above is a delivery, not a reason to type the text twice. (What starts inside this very statement is the window
   // `deliverPrompts` closes once more right before a retry is typed.)
   const stale = new Date(now.getTime() - CONFIRM_MS)
+  // A forced lead note waits in the working turn it was typed into: only that turn's end proves it, so it is neither retyped nor failed
+  // while the lead is still `working`. Once the lead is not, the rule below applies from then.
+  const queued: PromptRow[] = await sql`
+    SELECT id, session, source FROM factory.prompts WHERE status = 'sent' AND sent_at <= ${stale} AND source = 'note' AND session LIKE 'lead-%'`
+  const inTurn: string[] = []
+  for (const prompt of queued) {
+    if ((await getSession(sql, prompt.session, now))?.state === 'working') inTurn.push(prompt.id)
+  }
   await sql`
     UPDATE factory.prompts p
     SET status = CASE WHEN p.sent_count < ${MAX_SENDS} THEN 'pending' ELSE 'failed' END, next_at = ${now},
@@ -214,7 +222,7 @@ export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
                      THEN CASE WHEN p.via = 'type' AND p.typed_at IS NOT NULL THEN 'no turn started within a minute of typing it: Enter pressed again'
                                ELSE 'no turn started within a minute of typing it: typed again' END
                      ELSE 'unconfirmed: no turn started within a minute of the retry; not delivered' END
-    WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND NOT EXISTS (
+    WHERE p.status = 'sent' AND p.sent_at <= ${stale} AND p.id NOT IN (SELECT jsonb_array_elements_text(${JSON.stringify(inTurn)}::text::jsonb)) AND NOT EXISTS (
       SELECT 1 FROM factory.events e WHERE e.session = p.session AND e.at >= p.claimed_at AND (e.kind = 'turn_started' OR (e.kind = 'turn_ended' AND p.source = 'note' AND p.session LIKE 'lead-%')))`
   await sql`
     UPDATE factory.prompts

@@ -358,14 +358,36 @@ describe('a note for a working Issue lead', () => {
     expect(runner.typed).toHaveLength(1)
   })
 
-  test('a forced note with no proof is retried once like any other: Enter, then it gives up', async () => {
+  test('a forced note stays sent while the lead is still in that turn, and a turn_ended then proves it', async () => {
+    await lead()
+    await leadNote()
+    clock.advance(FORCE_NOTE_AFTER_MS)
+    await deliver()
+    clock.advance(10 * 60_000)
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'sent', sent_count: 1 })
+    expect(runner.typed).toHaveLength(1)
+
+    await w.emit('lead-1-1', 'turn_ended', clock.now())
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'delivered', sent_count: 1 })
+  })
+
+  test('a forced note whose lead stopped without proof is retried once like any other, then it gives up', async () => {
     await lead()
     await leadNote()
     clock.advance(FORCE_NOTE_AFTER_MS)
     await deliver()
     clock.advance(CONFIRM_MS + 1_000)
+    await w.emit('lead-1-1', 'session_ended', clock.now())
     await deliver()
-    expect(runner.typed.at(-1)).toMatchObject({ enterOnly: true, force: true })
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'pending', sent_count: 1 })
+    expect((await row('issue:1:note:c1')).error).toContain('Enter pressed again')
+
+    await db.sql`UPDATE factory.prompts SET status = 'sent', sent_at = ${clock.now()}, sent_count = 2 WHERE id = 'issue:1:note:c1'`
+    clock.advance(CONFIRM_MS + 1_000)
+    await deliver()
+    expect(await row('issue:1:note:c1')).toMatchObject({ status: 'failed' })
     expect(PENDING_TTL_MS.note).toBeGreaterThan(FORCE_NOTE_AFTER_MS)
   })
 

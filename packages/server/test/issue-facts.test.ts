@@ -161,6 +161,14 @@ describe('issue_facts: the attempts of an Issue', () => {
     expect(await rowsOf(id)).toMatchObject([{ asks: 2, ownerTouches: 2 }])
   })
 
+  test('the steward’s note is not an owner touch, an owner’s still is', async () => {
+    const id = await working()
+    await step(id, 'note', { text: 'wake', who: 'steward', cause: 'blocked', n: 1 })
+    expect(await rowsOf(id)).toMatchObject([{ ownerTouches: 0 }])
+    await step(id, 'note', { text: 'look', who: 'owner' })
+    expect(await rowsOf(id)).toMatchObject([{ ownerTouches: 1 }])
+  })
+
   test('the default answer of an expired question is not an owner touch', async () => {
     const id = await working()
     await step(id, 'ask', { question: 'which?', default: 'a' })

@@ -280,14 +280,14 @@ export class ProjectSync {
   ): Promise<{ name: string; broken: boolean; issue: number | null } | undefined> {
     const { sql } = this.deps
     const dirName = basename(repo)
+    const [prev]: Row[] = await sql`
+      SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
+    if (!prev && (text === null || text === undefined) && skipEmpty) return undefined
     if (!isProjectDirName(dirName)) {
       throw new Error(
         `the directory name is not a valid project name (letters, digits, dot, dash, underscore; no leading dot)`,
       )
     }
-    const [prev]: Row[] = await sql`
-      SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
-    if (!prev && (text === null || text === undefined) && skipEmpty) return undefined
 
     const now = this.deps.now()
     const name = prev?.name ?? (await this.freeName(dirName, repo))
