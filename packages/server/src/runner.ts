@@ -105,6 +105,10 @@ const Registry = z.object({ accounts: z.record(z.string(), z.object({ dir: z.str
 export const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t[0-9a-z]+$/
 export const LOCAL_TERMINAL = /^t[0-9a-z]+$/
 
+/** The owner's planner shell of a repo, `factory.key=plan:<repo>`: not a spawn, never closed by the factory. */
+export const PLAN_PREFIX = 'plan:'
+export const isPlanKey = (key: string): boolean => key.startsWith(PLAN_PREFIX)
+
 /** A terminal name: a leading lowercase letter, then `[a-z0-9-]`, at most 32 characters (herdr-core takes more, this is the narrow subset). */
 export function agentName(key: string): string {
   const clean = key

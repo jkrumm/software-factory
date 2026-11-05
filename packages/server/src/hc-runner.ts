@@ -12,7 +12,9 @@ import {
   Budget,
   DEFAULT_DELIVER_WAIT_MS,
   DEFAULT_START_BUDGET_MS,
+  isPlanKey,
   LOCAL_TERMINAL,
+  PLAN_PREFIX,
   real,
   type Runner,
   RunnerError,
@@ -74,10 +76,6 @@ export function terminalName(key: string): string {
   const name = agentName(key)
   return /^t\d/.test(name) ? `f-${sha(key).slice(0, 6)}-${name.slice(0, 22)}` : name
 }
-
-/** The owner's planner shell of a repo, `factory.key=plan:<repo>`: not a spawn, never closed by the factory. */
-export const PLAN_PREFIX = 'plan:'
-export const isPlanKey = (key: string): boolean => key.startsWith(PLAN_PREFIX)
 
 /** The tab a key always gets, so a retry finds the same one. */
 export const tabId = (key: string): string => `tb-${sha(key)}`
