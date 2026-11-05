@@ -46,23 +46,23 @@ The lead does this itself; no worker.
   on Sonnet high with zero owner touch; record wall time, attempts, review tier, window points.
 **Left behind:** PR #40 (`29530e2`, `4a93d6b`) landed as a fast-forward, deployed `4a93d6b3da21`, verify green, deep review clean (3 nits: 2 fixed, 1 intentional), `covered` true. The lead cap waits (30 s recheck) instead of a `lead_cap` hold (the reasons are a CHECK constraint); "asking again replaces the question" is not built and not claimed. Proof: Issue 64 (the hc-spaces flake) ran on Sonnet high, found a real race in `HcRunner.start` (PR #41, deep review, deployed `7245836`), shipped in 16 min, 1 attempt, 0 owner touches; window points not attributable yet. The shared Postgres died under the run (Colima VM), recovered by `make colima-restart` (learnings).
 
-## Wave 5 — Asks vs parks, the health line (row 6)            <!-- status: active -->
-- [ ] `/fleet` and `factory status`: asks are `decision` and `blocked` waits, the human queue and `hc` permission prompts;
+## Wave 5 — Asks vs parks, the health line (row 6)            <!-- status: done -->
+- [x] `/fleet` and `factory status`: asks are `decision` and `blocked` waits, the human queue and `hc` permission prompts;
   parks and the rest go to a health line (design v3 §6: park with reason and age, no hook event for 20 min while working,
   working past the size budget, regression count 2).
-- [ ] The sidebar (`dotfiles` board, `config/herdr-app/mods/jk-board`) shows the health line under the asks.
-- [ ] A Kuma push heartbeat "tick advanced and the queue moved within 30 min" (homelab `uptime-kuma/monitors.yaml`), and
+- [x] The sidebar (`dotfiles` board, `config/herdr-app/mods/jk-board`) shows the health line under the asks.
+- [x] A Kuma push heartbeat "tick advanced and the queue moved within 30 min" (homelab `uptime-kuma/monitors.yaml`), and
   `make rollback` documented and tested once with `DRY_RUN=1`.
-- [ ] Live proof: the counts before and after; every remaining ask is a decision.
+- [x] Live proof: the counts before and after; every remaining ask is a decision.
 **Repos:** dotfiles, homelab
-**Left behind:**
+**Left behind:** software-factory PR #42 (`5e8d49d`, `c7081b8`, deep then standard, `covered`), deployed `c7081b8615c0`; dotfiles #61 (`3cc0248`), homelab #19 (`055d9cd`, Kuma `Software Factory - Push` id 269, the URL file on the mini). `factory status`: 7 asks before, 0 asks and 7 health lines after; `/fleet` asks are the human queue plus one digest `reply` (goes in row 8). Heartbeat live (pusher `✓ factory monitor`). `make rollback` tested with `DRY_RUN=1` only. The board's HEALTH section is not seen in the app yet. Found: a docs-only master commit turns a hold's `make verify` red (Issue 66 fixes it; until then no master push during a hold).
 
-## Wave 6 — Spaces (row 11)            <!-- status: pending -->
-- [ ] `~/.config/factory/spaces.json` (ordered `{name, path}`), written by dotfiles `make setup` from a tracked list.
-- [ ] The factory reconciles on start and every 10 min: one space per entry by real path, in order, a first tab with
+## Wave 6 — Spaces (row 11)            <!-- status: active -->
+- [ ] `~/.config/factory/spaces.json` (`{name, path}`), written by dotfiles `make setup` from `config/herdr-app/groups.json` (the one list; it already orders the sidebar through `jk-spaces`, so the factory never reorders the app doc). Briefs `briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`.
+- [ ] The factory reconciles on start and every 10 min: one space per entry by real path (inside `FACTORY_REPO_ROOTS`), a first tab with
   `factory.key=plan:<repo>` (a login shell), never closed; unknown repos appended on first use.
 - [ ] hc-reap and finalize never touch a `plan:` tab or a tab without `factory.key`.
-- [ ] Live proof: the app shows every space in order with its `plan` tab; a second reconcile changes nothing.
+- [ ] Live proof: every listed space has its `plan` tab (`hc` labels; the app's order is `groups.json`'s); a second reconcile changes nothing.
 **Repos:** dotfiles
 **Left behind:**
 

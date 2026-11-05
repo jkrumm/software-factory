@@ -152,3 +152,30 @@ evidence (a sha, a log line, a number); no narrative.
   supervisor did not restart a VM whose `colima start -f` process stayed alive; `make colima-restart` (dotfiles) brought it back in
   50 s and launchd relaunched the factory. Change: none in this plan (the VM is dotfiles' and vps's); for the owner: the supervisor
   watches the process, not `docker info`, and the container's shm is 64 MB under `max_locks_per_transaction=1024`.
+
+## Wave 5, asks vs parks (row 6), 2026-11-05 03:10 — the build and the proof
+
+- **Three workers, three repos, 25 + 2 + 2 min.** software-factory PR #42 (`5e8d49d`, fix `c7081b8`): deep round 1 found 1 important
+  (a health line's id changed when its hour count turned decimal, so its `since` restarted every hour) and 1 nit (stale docs), a
+  standard round 2 was clean; `make check` green twice (1756, 1757 pass); landed as a fast-forward after the lead rebased the branch
+  onto Issue 64's merge **before** review, so the reviewed shas survived. Deployed `c7081b8615c0`, verify green. dotfiles PR #61
+  (`3cc0248`, standard, clean) and homelab PR #19 (`055d9cd`, light, 1 nit kept: the rule file mandates `maxretries: 0`). The homelab
+  worker merged its own PR before review (its `make uk-sync` pulls master on the server); reviewed after, `covered` true.
+- **The split, live.** Before: `factory status` had 7 attention lines, every one an ask on `/fleet` (2 expired notes, 2 failed spawns
+  from 2026-11-02, Issue 49's park, Issue 36's kept worktree, a review needing a human). After: `attention` 0, `health` 7; `/fleet` asks
+  are the 5 human-queue entries and 1 `reply` ask (a question the digest found in the previous rotation's last message), health 4
+  (`isMachineNoise` still hides 3 on `/fleet`). Every remaining ask is the owner's; the `reply` source goes with the digest in row 8.
+- **The heartbeat is real end to end.** `/health` `heartbeat.ok` true after the first tick (null before it, by design); Kuma
+  `Software Factory - Push` (id 269) took a manual push and then the pusher's (`✓ factory monitor: tick …`). `DRY_RUN=1 make rollback`
+  printed the swap to `7245836d93f2`; the real rollback is untested (it would take the live server down for a proof).
+- **A docs commit made a healthy hold red.** The program lead pushed docs-only `a0c93a3` while Issue 64 was in its hold; `make verify`
+  checks "deployed sha is origin/master" exactly, so the hold's verify and its re-run failed (`deployed c7081b8615c0 is not origin/master
+  a0c93a381f56`) and the Issue regressed. The lead redeployed and shipped again in 25 s, but one of its three regressions is spent on
+  nothing. Change: Issue 66 (filed, the factory builds it): a commit range that needs no deploy is not an undeployed release. Until it
+  lands the program lead pushes no master commit while an Issue of this repo is in its hold.
+- **The board is not seen.** The HEALTH section is checked by its pure-function tests only; the Herdr app runs on the MacBook and nobody
+  looked at it tonight.
+- **Plan change for Wave 6 (row 11):** the "ordered" `spaces.json` would duplicate dotfiles `config/herdr-app/groups.json`, which already
+  is the sidebar order (`jk-spaces` files every space under its group, in order), and reordering the app doc with `doc.set` is the path
+  `herdr-core.md` calls fragile. `spaces.json` is rendered from `groups.json`; the factory only makes sure each listed space (inside
+  `FACTORY_REPO_ROOTS`) exists with its `plan:` tab, and never reorders. `reset.md` Wave 6 and its briefs say so.

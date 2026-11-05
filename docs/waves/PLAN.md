@@ -183,15 +183,30 @@ Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md` (RS1–
 `covered`), each with its proof and learnings entry. Rotated at about 60 % context before Wave 4: its brief
 `docs/waves/briefs/reset-w4-lead.md` is committed and not yet spawned. Handoff: `docs/waves/handoff/program.md`. Rotation 2 spawned 2026-11-05 ~01:55Z as `software-factory-w9` (t13c, `iu`) through `factory spawn create`: `rd wave`'s keyword gate refused it (learnings).
 
-## Wave 9 — Program lead: the reset, rotation 2            <!-- status: active -->
+## Wave 9 — Program lead: the reset, rotation 2            <!-- status: done -->
 Opus/high. Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handoff/program.md`,
 `docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
 
-- [ ] Run `docs/waves/reset.md` Waves 4–7 as in Wave 8: one `rd fan` worker each, sequentially; review each diff, land with
+- [x] (Waves 4–5; 6–7 move to Wave 10) Run `docs/waves/reset.md` Waves 4–7 as in Wave 8: one `rd fan` worker each, sequentially; review each diff, land with
   `rd merge`, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick it in `reset.md`.
+- [x] Review with the new flow (`/review`, at most 2 rounds, then your disposition); `agw review covered` over each merged range.
+- [x] Machine discipline: one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40, wait.
+- [x] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
+- [x] Rotate at about 60 % context (handoff, commit, push, a new wave of this PLAN.md; after Wave 4 merges, spawn with
+  `--role deep`: `lead` is Sonnet then).
+- [x] (moves to Wave 10) Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
+
+**Left behind:** reset Waves 4–5 done and live (PRs #40, #42; dotfiles #61; homelab #19; Issue 64 shipped by a Sonnet-high lead with zero touch), each with its proof and learnings entry. Wave 6 is `active` in `reset.md` with both briefs written (`briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`), not spawned. Issue 66 (verify vs docs-only commits) is queued for the factory. Rotated at about 60 % context; handoff `docs/waves/handoff/program.md`.
+
+## Wave 10 — Program lead: the reset, rotation 3            <!-- status: active -->
+Opus/high (spawned with `--role deep`: `lead` is Sonnet high since reset Wave 4). Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9),
+`docs/waves/handoff/program.md`, `docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
+
+- [ ] Run `docs/waves/reset.md` Waves 6–7 as before: `rd fan` workers from the written briefs (Wave 6: software-factory and dotfiles, in
+  parallel, disjoint repos), review each diff, land, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick `reset.md`.
+- [ ] Follow Issue 66 (and Issue 64 if it is not `closed`) to the end; no master push of this repo while one of its Issues is in its hold
+  until Issue 66 is live.
 - [ ] Review with the new flow (`/review`, at most 2 rounds, then your disposition); `agw review covered` over each merged range.
 - [ ] Machine discipline: one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40, wait.
 - [ ] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
-- [ ] Rotate at about 60 % context (handoff, commit, push, a new wave of this PLAN.md; after Wave 4 merges, spawn with
-  `--role deep`: `lead` is Sonnet then).
-- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
+- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff; rotate earlier at about 60 % context.
