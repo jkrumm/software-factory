@@ -1,54 +1,66 @@
-# Program lead handoff: the reset
+# Program lead handoff: the reset, rotation 2
 
-Written 2026-11-05 ~00:00 by the planning session (t14) that ran the owner's re-plan. You are the program lead for the reset:
-`PLAN.md` Wave 8, track plan `docs/waves/reset.md`. The owner is asleep and reads `learnings.md` and this file in the morning.
-The previous handoff (FV) is in git history.
+Written 2026-11-05 ~01:40Z by rotation 1 of the reset (PLAN.md Wave 8, pane t12x), rotated at about 60 % context. You are
+the program lead for the reset: `PLAN.md` Wave 9, track plan `docs/waves/reset.md`, starting at its **Wave 4**. The owner
+reads `docs/strategy/2026-11-reset/learnings.md` and this file in the morning.
 
 ## Read first
 
-1. `docs/decisions.md` RS1–RS9: what the owner decided tonight.
-2. `docs/strategy/2026-11-reset/design-v3.md`: the design. §13 is the build order, §14 what the adversarial review changed.
-3. `docs/strategy/2026-11-reset/review-poc.md`: how review runs now (it is the flow you use for every wave).
-4. `docs/strategy/2026-11-reset/learnings.md`: what already fell apart; add to it.
+1. `docs/decisions.md` RS1–RS9.
+2. `docs/strategy/2026-11-reset/design-v3.md` (§3 the lead, §6 the health line, §13 the build order).
+3. `docs/waves/reset.md` (Waves 1–3 done with their Left behind; Wave 4 `active`).
+4. `docs/strategy/2026-11-reset/learnings.md`: everything below with evidence.
 
-## Done tonight (verified)
+## Done in rotation 1 (verified live)
 
-| What | Where | Proof |
-|-|-|-|
-| Review router: docs-only → none, light seat Sonnet medium, deep one verifier | agw `6cb7961`, deployed | `make deploy` OK, six reviews in `review-poc.md` |
-| Reviewer agents: one verifier, `omitClaudeMd`, Agent tool only at deep | dotfiles `854b82c`, `d991ef0` | used for every review since |
-| Step 0: no false failure for a live terminal, Enter-only retry only after a confirmed typing (`prompts.typed_at`, migration 030), machine failures not asks, factory asks expire after 7 days | `7b0cb25`..`0c2e777`, deployed | `make verify` all passed; asks 13 → 9; deep review 2 rounds, `covered` true |
-| Tag `pre-reset-2026-11` | software-factory, dotfiles, agent-workflows | `git tag` |
-| History page | brain `6fcef42` | `wiki/engineering/software-factory-history.md` |
+| Wave | What | PRs, deploy | Proof |
+|-|-|-|-|
+| 1 cutover | Issues 51–55 dropped, 51's pane and worktree gone | docs `3d6ac33` | no open software-factory Issue |
+| 2 deps | `issue new --after`, admission respects deps, `issue prio` | #37, `272be2f` | Issue 60 `--after 59` admitted 6 s after 59 closed |
+| 3 parks | `unreported` ends on the lead's turn, `lead_gone` restarts (≤ 2), send-back skips background tasks, red verify re-run once | #38, #39, deployed `a2c4293f559a` | Issue 62 (note finds the lead gone), Issue 63 (sweep finds it after 10 min) |
 
-## Running now (not yours to drive)
+Every merged range `covered` true; every deploy `make verify` all passed.
 
-| Agent | What | Note |
-|-|-|-|
-| `iris-w21-lead` (t127) and workers t12g, t12k | iris Wave 21 | asked to start no `xcodebuild`/simulator run until 07:00; it waits on a timer to 07:02. Its input line holds an unsubmitted "run the A1 and P1 validation now": leave it, the owner decides |
-| t11q (agent-workflows) | gateway plan, review lanes for PRs 83/133/134 | not part of the reset |
-| IuRoot sessions | read-only for the factory | never touch |
+## Start here: reset Wave 4
+
+The brief is written and committed: `docs/waves/briefs/reset-w4-lead.md` (operating contract in `brief.ts` with the no-change
+end, `lead` → Sonnet high in `config/roles.json` and `leadLevel`, `FACTORY_LEADS_PER_ACCOUNT` cap in spawn admission, the
+`SessionStart(compact)` re-read line in the hook). Spawn it: `rd fan software-factory --role worker docs/waves/briefs/reset-w4-lead.md`,
+then `factory session wait --on workers`. Its live proof needs a small real Issue end to end on Sonnet high with zero touch:
+pick one from the owner's backlog (`docs/program.md`) or a docs fix; record wall time, attempts, review tier.
+
+**After Wave 4 merges, `role get lead` is Sonnet high.** Your own next rotation then spawns with `rd wave --role deep …`
+(Opus high), not `--role lead`.
+
+## How this loop runs (what worked)
+
+- Per wave: brief → `rd fan … --role worker` → wait → `rd read` → read the diff → `rd close <worker>` **at once** (an idle child
+  makes the Stop hook send you back: `stopCheck` counts every non-dead child) → `make check` in the worktree → `/review` (prepare,
+  `reviewer` subagent with the seat, submit verbatim) → fixes by `@implementer` in the worktree → round 2 → a light review of any
+  later fix commit (coverage is per commit) → `agw review covered` → `rd merge` → `make deploy` → `make verify` → live proof →
+  learnings → tick `reset.md`.
+- The reviewer's reply arrives HTML-escaped in the task notification (`&lt;`, `-&gt;`): restore `<`/`>` when submitting.
+- Live proofs use `~/SourceRoot/dispatch-scratch` scratch Issues; a Haiku lead drops a `sleep` task, so kill the lead right after
+  `spawn list` shows it `started`.
+
+## Sharp edges found tonight
+
+- **Load from other sessions.** IuRoot `athena-a*` vitest runs (~120 workers) pushed the load to 558; the factory lost its DB lock
+  and exited twice, one relaunch failed on `secrets-run` (0/2 refs), and it recovered by itself. Under load `factory spawn create`
+  times out and `rd fan` falls back to hc-direct on `me` (95 % week): if `rd` prints "using hc directly", kill that worker and
+  respawn once the server answers.
+- **Stale wakes.** A "workers done" note for an already-closed worker can arrive while the next worker runs: check
+  `factory session list` before acting on a wake, and declare the wait again.
+- `hc-spaces.test.ts` "two starts at once" is a timing flake (fails ~1 in 3 alone at low load); rerun the file.
+- Accounts at handoff: `iu` 11 % week, `me` 95 % (resets 2026-11-05 06:00Z), `me2` 79 %. Keep workers off `me` until its reset.
+- No `xcodebuild` or simulator before 07:00.
 
 ## The asks right now (9)
 
-Decisions: Issue 49 (one tailnet port for KoInsight → Argo, a security call), the MacBook herdr-core stuck after 0.1.17.
-Owner's stale: WeatherOrb iPhone (20 days), Wave 8 cutover (3 days). Machine leftovers that expire by 2026-11-09: the two failed
-spawns `agent-workflows-seats-on-claude`/`-gateway-opencode`, review `rv_kmnj…` needing a human. `hc:t126` (IuRoot permission
-prompt). `iris-w21-lead` waiting on the owner (the pause). Do not answer the owner's decisions; record the count after Wave 5.
+The 7 of rotation 1's start (WeatherOrb iPhone, the old Wave 8 cutover, the MacBook core, Issue 49, review `rv_kmnj…`, the two
+failed agw spawns) plus two IuRoot teamchat deploy-gate entries (not ours). Open Issues: 49 (homelab-private, parked
+`lead_gone`, a security decision), 61 (weatherorb alert, `watching`, its own lead). Do not answer the owner's decisions.
 
-## Known sharp edges
+## Running now, not yours
 
-- `/review --scope HEAD` reviews nothing; use `head` or an explicit `a..b` range.
-- Coverage is per commit: a fix commit after round 2 needs its own (light) review before `covered` is true.
-- `make check` under load fails tests by timeout; rerun the failing file alone before calling it red.
-- `factory issue stop` drops an Issue (outcome `dropped`); that is the intended cutover for 51–55.
-- The live database rejects review outcome `walled` (migration 029 was edited after it was applied). It dies with the review
-  transport in a later row; do not fix it in this run.
-- dotfiles `make check` is red on unmapped launchd labels (`home-nacht`, `athena-repo-sync`, `soloist-speaker`) from other
-  sessions: not yours; land dotfiles changes with the failure named in the merge note.
-
-## Start
-
-```sh
-rd wave --role lead software-factory 'Read docs/waves/PLAN.md. Execute the active wave (Wave 8). Read docs/waves/handoff/program.md first. Follow the /wave skill.'
-```
+iris Wave 21/22 workers (idle), agent-workflows PR lanes (idle), IuRoot sessions (never touch).

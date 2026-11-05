@@ -163,19 +163,35 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 Waves 2–3 and FV Wave 6 are not built; the fleet-view modules are deleted in the reset's later rows. Issue 51 and 52–55 are closed
 by the reset's cutover.
 
-## Wave 8 — Program lead: the reset            <!-- status: active -->
+## Wave 8 — Program lead: the reset            <!-- status: done -->
 Opus/high (`rd wave --role lead`). Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handoff/program.md`,
 `docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
 
-- [ ] Run `docs/waves/reset.md` wave by wave: Wave 1 yourself, Waves 2–7 each as one `rd fan` worker, sequentially. Review each
+- [x] (Waves 1–3; 4–7 move to Wave 9) Run `docs/waves/reset.md` wave by wave: Wave 1 yourself, Waves 2–7 each as one `rd fan` worker, sequentially. Review each
   diff yourself, land with `rd merge`, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick it in `reset.md`.
-- [ ] Review with the new flow (`/review`: the router's tier, the `reviewer` subagent with the seat, at most 2 rounds, then your
+- [x] Review with the new flow (`/review`: the router's tier, the `reviewer` subagent with the seat, at most 2 rounds, then your
   disposition); `agw review covered` over each merged range.
-- [ ] Machine discipline: one wave, one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40,
+- [x] Machine discipline: one wave, one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40,
   wait before starting the next check.
-- [ ] Learnings: every place the plan falls apart goes to `docs/strategy/2026-11-reset/learnings.md` with evidence, and the plan
+- [x] Learnings: every place the plan falls apart goes to `docs/strategy/2026-11-reset/learnings.md` with evidence, and the plan
   (`reset.md`, design v3) is adjusted in the same commit.
-- [ ] Rotate at about 60 % context: write `docs/waves/handoff/program.md`, commit, push, spawn the next rotation as a new wave
+- [x] Rotate at about 60 % context: write `docs/waves/handoff/program.md`, commit, push, spawn the next rotation as a new wave
   of this PLAN.md (chain mode, a tab).
-- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
+- [x] (moves to Wave 9) Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
 
+**Left behind:** reset Waves 1–3 done and live (PRs #37, #38, #39; deployed `a2c4293f559a`, `make verify` green, every range
+`covered`), each with its proof and learnings entry. Rotated at about 60 % context before Wave 4: its brief
+`docs/waves/briefs/reset-w4-lead.md` is committed and not yet spawned. Handoff: `docs/waves/handoff/program.md`.
+
+## Wave 9 — Program lead: the reset, rotation 2            <!-- status: active -->
+Opus/high. Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handoff/program.md`,
+`docs/strategy/2026-11-reset/design-v3.md` and `docs/waves/reset.md` first.
+
+- [ ] Run `docs/waves/reset.md` Waves 4–7 as in Wave 8: one `rd fan` worker each, sequentially; review each diff, land with
+  `rd merge`, `make deploy`, `make verify`, the wave's live proof, a learnings entry, tick it in `reset.md`.
+- [ ] Review with the new flow (`/review`, at most 2 rounds, then your disposition); `agw review covered` over each merged range.
+- [ ] Machine discipline: one check at a time; no `xcodebuild` or simulator before 07:00; if load stays above 40, wait.
+- [ ] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
+- [ ] Rotate at about 60 % context (handoff, commit, push, a new wave of this PLAN.md; after Wave 4 merges, spawn with
+  `--role deep`: `lead` is Sonnet then).
+- [ ] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
