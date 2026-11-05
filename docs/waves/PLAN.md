@@ -196,7 +196,7 @@ Opus/high. Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9), `docs/waves/handof
   `--role deep`: `lead` is Sonnet then).
 - [x] (moves to Wave 10) Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff.
 
-**Left behind:** reset Waves 4–5 done and live (PRs #40, #42; dotfiles #61; homelab #19; Issue 64 shipped by a Sonnet-high lead with zero touch), each with its proof and learnings entry. Wave 6 is `active` in `reset.md` with both briefs written (`briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`), not spawned. Issue 66 (verify vs docs-only commits) is queued for the factory. Rotated at about 60 % context; handoff `docs/waves/handoff/program.md`.
+**Left behind:** reset Waves 4–5 done and live (PRs #40, #42; dotfiles #61; homelab #19; Issue 64 shipped by a Sonnet-high lead with zero touch), each with its proof and learnings entry. Wave 6 is `active` in `reset.md` with both briefs written (`briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`), not spawned. Issue 66 (verify vs docs-only commits) is queued for the factory. Rotated at about 60 % context; handoff `docs/waves/handoff/program.md`. Rotation 3 spawned at 03:33Z as `factory spawn create software-factory-w10 --role deep --placement tab` with no parent (pane t13p, `me2`): `rd wave` refused it on the keyword gate again ("deploy" in Wave 10's first step; learnings, rotation 1 close-out).
 
 ## Wave 10 — Program lead: the reset, rotation 3            <!-- status: active -->
 Opus/high (spawned with `--role deep`: `lead` is Sonnet high since reset Wave 4). Read `AGENTS.md`, `docs/decisions.md` (RS1–RS9),
