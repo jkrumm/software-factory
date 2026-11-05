@@ -208,3 +208,20 @@ evidence (a sha, a log line, a number); no narrative.
 - **Monitors at a worker's end.** The dotfiles worker ended a turn on two `Monitor`s over a backgrounded `make -k check`, against its
   brief; the factory reported it idle, a stale `workers done` note arrived while its second, foreground check ran. Re-declaring the wait
   worked. The brief's "never end a turn on a background shell or a wait" did not hold on Sonnet; the hook does not catch a Monitor.
+
+## Wave 7, `issue_facts` (row 12), 2026-11-05 04:50 — the build and the proof
+
+- **One worker, 6 min; deep review 2 nits, both fixed by an implementer in 1 min, round 2 clean.** PR #45 (`e4fc6a6`, `b7d749a`), `make check`
+  green (1796 pass, 420 s), landed as a fast-forward, deployed `b7d749a7ed2c`, verify green, `covered` true. Spawned while Wave 6 waited
+  for Issue 66's hold: the plan's "one wave at a time" is about the machine's checks, and a worker runs only its own test files; the two
+  `make check` runs still went one after the other.
+- **The first measurement of the KPIs (since 2026-11-01, 37 Issues):** owner asks per Issue 0.05 (target ≤ 0.05; Issues 50 and 59),
+  verified with zero owner touch 94 % (15/16, target ≥ 90 %), verify green on the first hold 81 % (13/16, target ≥ 80 %: Issue 40 is the
+  seeded-regression gameday, 50 regressed three times, 64 went red on the program lead's docs push that Issue 66 has since fixed). All
+  three at the target line, none with margin; window points are Argo's and not built.
+- **The brief's column list did not survive contact with the events.** No event holds a first commit time (only `mergedAt`, the newest),
+  and nothing stores review rounds; the worker said so instead of inventing them. The review caught what the brief left open: the
+  first-hold denominator counted an Issue in its hold as a failure (it would read 11/13 for a healthy fleet with one ship in flight).
+  Change for the next view or KPI brief: name the denominator of every ratio and what an undecided case is.
+- **The plain output has no header line.** `factory issue facts --format plain` prints bare tab-separated rows; the column names are only
+  in `--format json` and design.md §4. Left as is (the CLI contract keeps data on stdout); a reader needs the JSON.

@@ -66,12 +66,12 @@ The lead does this itself; no worker.
 **Repos:** dotfiles
 **Left behind:** software-factory PR #44 (`ba7984a`, `ed17547`, deep, nit fixed, `covered`), deployed `ed175476713c`, verify green; dotfiles #62 (`241d7c8`, standard, clean, `covered`), `make deploy` done. Proof: 40 `plan:` login shells (`t13t`..`t153`), one per `spaces.json` entry incl. the 8 IuRoot ones (`FACTORY_REPO_ROOTS` defaults to both workspaces; the briefs were wrong to say IuRoot is skipped); the second pass changed nothing. Gaps: in a space that had tabs the plan tab is last, not first (no tab moves); the app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have folder `~/IuRoot`, so the reconcile seeded correct ones beside them and the sidebar shows both twice until the owner closes the old ones; the app was not connected at the proof, so the sidebar is not seen yet.
 
-## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: active -->
-- [ ] Migration: the view `factory.issue_facts` over issues, issue_events, evidence, decisions and sessions (design v3 §11);
+## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: done -->
+- [x] Migration: the view `factory.issue_facts` over issues, issue_events, evidence, decisions and sessions (design v3 §11);
   no read of `usage.*`. Brief `briefs/reset-w7-issue-facts.md`.
-- [ ] `factory issue facts [--since]` prints it; the four KPIs of §11 computed from it in one query.
-- [ ] Live proof: the rows for every Issue since 2026-11-01, and the KPI line.
-**Left behind:**
+- [x] `factory issue facts [--since]` prints it; the four KPIs of §11 computed from it in one query.
+- [x] Live proof: the rows for every Issue since 2026-11-01, and the KPI line.
+**Left behind:** PR #45 (`e4fc6a6`, `b7d749a`, deep: 2 nits fixed in round 1, round 2 clean, `covered`), `make check` green (1796 pass), deployed `b7d749a7ed2c`, verify green. Proof: 39 rows for 37 Issues since 2026-11-01 (Issues 62 and 63 have two attempts each, `retried` then `dropped`); `asks/issue 0.05 (2/37)  zero-touch 94 % (15/16)  first-hold 81 % (13/16)  window -`, checked by hand against the rows. As built against the brief: `landed_at` (the first ship's `mergedAt`) instead of `first_commit_at`, the events hold no earlier commit time; no review rounds column (stored nowhere); a `first_hold_decided` column, so an attempt still in its first hold is `open`, not a failure; `parks.lead_gone` counts every `lead_gone`, the requeues too. Window points per Issue is `null` and Argo's (its page is not built).
 
 ## Stop for the owner
 
