@@ -171,7 +171,7 @@ evidence (a sha, a log line, a number); no narrative.
 - **A docs commit made a healthy hold red.** The program lead pushed docs-only `a0c93a3` while Issue 64 was in its hold; `make verify`
   checks "deployed sha is origin/master" exactly, so the hold's verify and its re-run failed (`deployed c7081b8615c0 is not origin/master
   a0c93a381f56`) and the Issue regressed. The lead redeployed and shipped again in 25 s, but one of its three regressions is spent on
-  nothing. Change: Issue 66 (filed, the factory builds it): a commit range that needs no deploy is not an undeployed release. Until it
+  nothing. Its second hold verified green at 03:29:10Z (`closed`); filed to closed 77 min, of which 60 are the two holds. Change: Issue 66 (filed, the factory builds it): a commit range that needs no deploy is not an undeployed release. Until it
   lands the program lead pushes no master commit while an Issue of this repo is in its hold.
 - **The board is not seen.** The HEALTH section is checked by its pure-function tests only; the Herdr app runs on the MacBook and nobody
   looked at it tonight.
