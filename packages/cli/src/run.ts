@@ -533,16 +533,17 @@ export const factLine = (r: IssueFactRow): string =>
     .map(cell)
     .join('\t')
 
-const count = (r: IssueKpi['ownerAsksPerIssue']): string => `(${r.numerator}/${r.denominator})`
-const percent = (r: IssueKpi['zeroTouch']): string =>
-  `${r.value === null ? '-' : Math.round(r.value * 100)} % ${count(r)}`
+const count = (r: IssueKpi['ownerAsksPerIssue'], open = 0): string =>
+  `(${r.numerator}/${r.denominator}${open > 0 ? `, open ${open}` : ''})`
+const percent = (r: IssueKpi['zeroTouch'], open = 0): string =>
+  `${r.value === null ? '-' : Math.round(r.value * 100)} % ${count(r, open)}`
 
 /** The four KPIs on one line; a rate over nothing is `-`, and the window points are the usage tracker's, so always `-` here. */
 export const kpiLine = (k: IssueKpi): string =>
   [
     `asks/issue ${k.ownerAsksPerIssue.value === null ? '-' : k.ownerAsksPerIssue.value.toFixed(2)} ${count(k.ownerAsksPerIssue)}`,
     `zero-touch ${percent(k.zeroTouch)}`,
-    `first-hold ${percent(k.verifyFirstHold)}`,
+    `first-hold ${percent(k.verifyFirstHold, k.verifyFirstHold.open)}`,
     `window ${k.windowPointsPerIssue.value ?? '-'}`,
   ].join('  ')
 

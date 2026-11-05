@@ -144,6 +144,8 @@ export const IssueFactRow = z.object({
   reviewTier: z.string().nullable(),
   holds: z.number().int(),
   verifyFirstPass: z.boolean(),
+  /** the attempt has a `verified`, `verify_red` or `regression` event: its first hold has a verdict */
+  firstHoldDecided: z.boolean(),
   reopened: z.boolean(),
   /** Claude session ids of the attempt's lead: what a consumer joins with its own session windows */
   leadSessionIds: z.array(z.string()),
@@ -164,8 +166,8 @@ export const IssueKpi = z.object({
   ownerAsksPerIssue: Ratio,
   /** of the Issues with a verified attempt, those with no ask, block or owner touch in any attempt */
   zeroTouch: Ratio,
-  /** of the attempts that were held, those whose first hold ended verified with no red check before it */
-  verifyFirstHold: Ratio,
+  /** of the attempts whose first hold has a verdict, those that ended verified with no red check before it; `open` counts the held attempts with no verdict yet */
+  verifyFirstHold: Ratio.extend({ open: z.number().int() }),
   windowPointsPerIssue: z.object({ value: z.null(), source: z.literal('usage-tracker') }),
 })
 export type IssueKpi = z.infer<typeof IssueKpi>

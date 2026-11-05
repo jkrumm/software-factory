@@ -955,7 +955,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id[/timeline]]`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`, `GET /issues/:id/timeline`, `GET /issues/facts`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {

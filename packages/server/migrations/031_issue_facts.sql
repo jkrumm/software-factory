@@ -12,6 +12,8 @@
 -- `outcome` is `issues.outcome` for the Issue's last attempt and `retried` for an earlier one. `parks` counts events, not states: a
 -- `lead_gone` is counted whether it queued the next attempt or parked, `parked` is a `park` or the third regression.
 -- `verify_first_pass` is true when the first hold ended `verified` with no `verify_red` or `regression` before it.
+-- `first_hold_decided` is true when the attempt has a `verified`, `verify_red` or `regression` event: the first hold has a verdict. The
+-- first-hold KPI counts only decided attempts; one still in its first hold, or dropped mid-hold, is excluded and counted as open.
 CREATE OR REPLACE VIEW factory.issue_facts AS
 WITH admits AS (
   SELECT issue_id, at, id, row_number() OVER (PARTITION BY issue_id ORDER BY at, id)::int AS attempt
@@ -62,7 +64,8 @@ agg AS (
          ))::int AS owner_touches,
          (array_agg(payload->'derived'->'review'->>'tier' ORDER BY at DESC, id DESC) FILTER (WHERE kind = 'ship'))[1] AS review_tier,
          (count(*) FILTER (WHERE kind = 'ship'))::int AS holds,
-         bool_or(kind = 'reopen') AS reopened
+         bool_or(kind = 'reopen') AS reopened,
+         bool_or(kind IN ('verified', 'verify_red', 'regression')) AS first_hold_decided
   FROM ev
   GROUP BY issue_id, attempt
 )
@@ -91,6 +94,7 @@ SELECT
     WHERE x.issue_id = a.issue_id AND x.attempt = a.attempt AND x.kind IN ('verify_red', 'regression')
       AND (x.at, x.id) < (g.verified_at, g.verified_id)
   ) AS verify_first_pass,
+  coalesce(g.first_hold_decided, false) AS first_hold_decided,
   coalesce(g.reopened, false) AS reopened,
   array(
     SELECT s.claude_session_id FROM factory.sessions s

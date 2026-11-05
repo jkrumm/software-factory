@@ -342,7 +342,7 @@ pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local
 keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
 `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`),
 `POST /sessions/:id/stop-check`, `PUT|DELETE /slots/:id` (`factory slot run`), `POST /spawns` (a pane starts work, below),
-`POST /issues` and `GET /issues[/:id]` (a pane files work, §4), `POST /intake` (the door's alerts, §11), and
+`POST /issues` and `GET /issues[/:id]`, `GET /issues/:id/timeline` and `GET /issues/facts` (a pane files work and reads it back, §4), `POST /intake` (the door's alerts, §11), and
 three reads a spawner needs to follow it, `GET /spawns/:key`, `GET /sessions/:id` and `GET /queue[?project=]` (`factory spawn get`,
 `session get`, `queue get` use the socket when `FACTORY_TOKEN` is not set), which a session in a pane runs without a token, and
 nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
@@ -845,13 +845,13 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   `verified_at`, `closed_at`; `outcome` (`issues.outcome` for the last attempt, `retried` for an earlier one); `asks` (`ask` and `block` events);
   `parks` (`wall`, `lead_gone`, `unreported`, `parked` as event counts: every `lead_gone` counts, whether it queued the next attempt or parked);
   `owner_touches` (`note`, `retier`, `reopen`, and an `answer` whose `who` is not `default` or `closed`); `review_tier` (the last ship's); `holds`
-  (ships); `verify_first_pass` (the first hold ended `verified` with no `verify_red` or `regression` before it); `reopened`. **Review rounds are not a
+  (ships); `verify_first_pass` (the first hold ended `verified` with no `verify_red` or `regression` before it); `first_hold_decided` (the attempt has a `verified`, `verify_red` or `regression` event); `reopened`. **Review rounds are not a
   column:** the factory keeps only `derived.review` (tier, covered), the rounds are agw's. `GET /issues/facts?since=<iso>` (token or socket, a malformed
   `since` is 400, filters on `filed_at`) answers `{rows, kpi}` (`IssueFactsRead`), and `factory issue facts [--since <iso>]` prints it: plain is a line per
-  attempt, then `asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12)  window -`. The four KPIs come from one query over the view
+  attempt, then `asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12, open 1)  window -`. The four KPIs come from one query over the view
   (`issues/facts.ts`), each with numerator and denominator: owner asks per Issue (asks over Issues), Issues verified with no ask, block or owner touch in any
-  attempt (over Issues with a verified attempt), attempts whose first hold was green (over attempts with a hold; one still in its first hold counts
-  against), and the window points per Issue, which are the usage tracker's and read `null` here.
+  attempt (over Issues with a verified attempt), attempts whose first hold was green (over attempts whose first hold has a verdict; one still in its first hold, or dropped mid-hold, is
+  excluded and counted as `open`, shown as `, open <n>` when above 0), and the window points per Issue, which are the usage tracker's and read `null` here.
 - **Ids and a restore.** Not built for Issues. `issues.id` is a sequence, and nothing moves it past the ids in pane names (`lead-<issue>-<attempt>`) or the
   spool after a restore, nor rebuilds an Issue the dump lost from the spool: the F1 gameday proved it for sessions and spawns, whose keys are not
   sequences. The F2 gamedays of §13 (Wave 6) decide it.

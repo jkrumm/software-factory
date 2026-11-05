@@ -147,7 +147,9 @@ describe('issue_facts: the attempts of an Issue', () => {
   test('an Issue still in its first hold has no first pass yet', async () => {
     const id = await working()
     await step(id, 'ship')
-    expect(await rowsOf(id)).toMatchObject([{ holds: 1, verifyFirstPass: false, verifiedAt: null, outcome: null }])
+    expect(await rowsOf(id)).toMatchObject([
+      { holds: 1, verifyFirstPass: false, firstHoldDecided: false, verifiedAt: null, outcome: null },
+    ])
   })
 
   test('an ask, a block, an owner answer and an owner note count', async () => {
@@ -276,8 +278,18 @@ describe('issue facts: the KPIs and the read', () => {
     expect(await kpis(db.sql)).toEqual({
       ownerAsksPerIssue: { value: 0.2, numerator: 1, denominator: 5 },
       zeroTouch: { value: 0.5, numerator: 2, denominator: 4 },
-      verifyFirstHold: { value: 0.5, numerator: 2, denominator: 4 },
+      verifyFirstHold: { value: 0.5, numerator: 2, denominator: 4, open: 0 },
       windowPointsPerIssue: { value: null, source: 'usage-tracker' },
+    })
+  })
+
+  test('an attempt that shipped with no verdict yet is open, not in the denominator', async () => {
+    await seed()
+    const f = await working()
+    await step(f, 'ship')
+    expect(await rowsOf(f)).toMatchObject([{ firstHoldDecided: false }])
+    expect(await kpis(db.sql)).toMatchObject({
+      verifyFirstHold: { value: 0.5, numerator: 2, denominator: 4, open: 1 },
     })
   })
 
@@ -287,7 +299,7 @@ describe('issue facts: the KPIs and the read', () => {
     expect(await kpis(db.sql, { since: sinceD })).toMatchObject({
       ownerAsksPerIssue: { value: 0, numerator: 0, denominator: 2 },
       zeroTouch: { value: 1, numerator: 1, denominator: 1 },
-      verifyFirstHold: { value: 0, numerator: 0, denominator: 1 },
+      verifyFirstHold: { value: 0, numerator: 0, denominator: 1, open: 0 },
     })
     expect(await listFacts(db.sql, { since: new Date(clock.now().getTime() + 1000) })).toEqual([])
   })
@@ -296,7 +308,7 @@ describe('issue facts: the KPIs and the read', () => {
     expect(await kpis(db.sql)).toMatchObject({
       ownerAsksPerIssue: { value: null, numerator: 0, denominator: 0 },
       zeroTouch: { value: null, numerator: 0, denominator: 0 },
-      verifyFirstHold: { value: null, numerator: 0, denominator: 0 },
+      verifyFirstHold: { value: null, numerator: 0, denominator: 0, open: 0 },
     })
   })
 

@@ -161,6 +161,7 @@ const FACT_ROW = {
   reviewTier: 'standard',
   holds: 1,
   verifyFirstPass: true,
+  firstHoldDecided: true,
   reopened: false,
   leadSessionIds: ['c-1'],
 }
@@ -174,7 +175,7 @@ const FACTS = {
   kpi: {
     ownerAsksPerIssue: ratio(0, 12),
     zeroTouch: ratio(11, 12),
-    verifyFirstHold: ratio(10, 12),
+    verifyFirstHold: { ...ratio(10, 12), open: 1 },
     windowPointsPerIssue: { value: null, source: 'usage-tracker' },
   },
 }
@@ -514,7 +515,7 @@ describe('factory issue facts', () => {
     expect(r.stdout).toBe(
       [
         '7\t2\tdone\t2026-10-30T12:00:00.000Z\t2026-10-30T12:05:00.000Z\t-\t2026-10-30T14:00:00.000Z\t2026-10-30T14:00:00.000Z\t0\t0\t1\ttrue\tstandard',
-        'asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12)  window -',
+        'asks/issue 0.00 (0/12)  zero-touch 92 % (11/12)  first-hold 83 % (10/12, open 1)  window -',
         '',
       ].join('\n'),
     )

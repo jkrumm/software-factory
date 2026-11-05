@@ -22,6 +22,7 @@ interface FactRow {
   review_tier: string | null
   holds: number
   verify_first_pass: boolean
+  first_hold_decided: boolean
   reopened: boolean
   lead_session_ids: string[]
 }
@@ -49,6 +50,7 @@ const fact = (row: FactRow): IssueFactRow => ({
   reviewTier: row.review_tier,
   holds: row.holds,
   verifyFirstPass: row.verify_first_pass,
+  firstHoldDecided: row.first_hold_decided,
   reopened: row.reopened,
   leadSessionIds: row.lead_session_ids,
 })
@@ -75,7 +77,8 @@ export async function kpis(sql: SQL, input: { since?: Date } = {}): Promise<Issu
     asks: number
     verified_issues: number
     zero_touch: number
-    held: number
+    decided: number
+    open: number
     first_pass: number
   }[] = await sql`
     WITH facts AS (SELECT * FROM factory.issue_facts ${since(sql, input.since)}),
@@ -88,13 +91,14 @@ export async function kpis(sql: SQL, input: { since?: Date } = {}): Promise<Issu
       (SELECT coalesce(sum(asks), 0) FROM facts)::int AS asks,
       (SELECT count(*) FROM per_issue WHERE verified)::int AS verified_issues,
       (SELECT count(*) FROM per_issue WHERE verified AND touches = 0)::int AS zero_touch,
-      (SELECT count(*) FROM facts WHERE holds > 0)::int AS held,
-      (SELECT count(*) FROM facts WHERE holds > 0 AND verify_first_pass)::int AS first_pass`
+      (SELECT count(*) FROM facts WHERE first_hold_decided)::int AS decided,
+      (SELECT count(*) FROM facts WHERE holds > 0 AND NOT first_hold_decided)::int AS open,
+      (SELECT count(*) FROM facts WHERE first_hold_decided AND verify_first_pass)::int AS first_pass`
   if (!row) throw new Error('the KPI query returned no row')
   return {
     ownerAsksPerIssue: ratio(row.asks, row.issues),
     zeroTouch: ratio(row.zero_touch, row.verified_issues),
-    verifyFirstHold: ratio(row.first_pass, row.held),
+    verifyFirstHold: { ...ratio(row.first_pass, row.decided), open: row.open },
     windowPointsPerIssue: { value: null, source: 'usage-tracker' },
   }
 }
