@@ -179,3 +179,32 @@ evidence (a sha, a log line, a number); no narrative.
   is the sidebar order (`jk-spaces` files every space under its group, in order), and reordering the app doc with `doc.set` is the path
   `herdr-core.md` calls fragile. `spaces.json` is rendered from `groups.json`; the factory only makes sure each listed space (inside
   `FACTORY_REPO_ROOTS`) exists with its `plan:` tab, and never reorders. `reset.md` Wave 6 and its briefs say so.
+
+## Wave 6, spaces (row 11), 2026-11-05 04:20 — the build and the proof
+
+- **Two workers, two repos, 9 + 19 min, in parallel.** software-factory PR #44 (`ba7984a`, nit fix `ed17547`): deep round 1 found 1 nit
+  (`finalize.ts` imported the plan-key rule from the hc adapter; moved to the `runner.ts` port), round 2 clean, `covered` true; `make
+  check` green (1775 pass, 373 s); landed as a fast-forward **after Issue 66's hold ended** (closed `done` 04:08:40Z, first hold green),
+  deployed `ed175476713c`, verify green. dotfiles PR #62 (`241d7c8`, standard, clean, `covered`), landed, `make deploy` (the setup step:
+  `unchanged … spaces.json (40 spaces)`); dotfiles `make verify` 62 passed, 2 failed, both not this wave's (`tcc`: an IuRoot LaunchAgent's
+  versioned python; `architecture map`: the known unmapped labels).
+- **The proof.** The first reconcile after the deploy started 40 `plan:` terminals, one per `spaces.json` entry, 0 skipped, 0 errors; every
+  one a login shell (`zsh`, the core runs `/bin/zsh -l` for no argv, checked on a scratch core by the worker); 38 of 40 carry the
+  `herdr.space` id of the repo's existing space or a seeded one where the repo had none. A second pass at +10 min started nothing (no
+  `spaces` log line, the same 40 addresses `t13t`..`t153`). hc-reap `--dry-run` keeps every keyless owner terminal (10 of them) and never
+  looks at a plan shell (it judges only agents).
+- **The brief was wrong about IuRoot.** Both briefs said the factory skips IuRoot paths; `FACTORY_REPO_ROOTS` defaults to
+  `~/SourceRoot:~/IuRoot`, so the 8 IuRoot entries got plan tabs too. Kept: a shell in the repo reads and sends nothing, and RS6 asks for a
+  plan tab in every listed space. The fleet's `FACTORY_VISIBLE_ROOTS` (IuRoot read-only for the digest and the reaper) is a different
+  rule; a plan shell is not touched by it.
+- **Two spaces are now doubled.** The app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have `folder: ~/IuRoot` and no name in
+  the app doc (they were opened from `~/IuRoot`), so keyed by real path the reconcile seeded `sp-agent-workflows-…` and
+  `sp-epos-ai-teamchat-athena-…` beside them. Correct by design v3 §8; the sidebar shows those two twice until the owner closes the old
+  ones (their terminals: `t11p`, `t11q` and its review children; `t126`, `t133`). The factory does not edit the owner's spaces (a
+  structural `doc.set`).
+- **The plan tab is not first in an existing space.** A new space starts with it; in a space with tabs it lands last. Moving tabs is the
+  fragile `doc.set` path; not done. The app's `where` label was empty for all 40 at the proof (the app on the MacBook was not connected,
+  04:10Z), so the sidebar itself is not seen yet.
+- **Monitors at a worker's end.** The dotfiles worker ended a turn on two `Monitor`s over a backgrounded `make -k check`, against its
+  brief; the factory reported it idle, a stale `workers done` note arrived while its second, foreground check ran. Re-declaring the wait
+  worked. The brief's "never end a turn on a background shell or a wait" did not hold on Sonnet; the hook does not catch a Monitor.

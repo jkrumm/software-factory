@@ -57,18 +57,18 @@ The lead does this itself; no worker.
 **Repos:** dotfiles, homelab
 **Left behind:** software-factory PR #42 (`5e8d49d`, `c7081b8`, deep then standard, `covered`), deployed `c7081b8615c0`; dotfiles #61 (`3cc0248`), homelab #19 (`055d9cd`, Kuma `Software Factory - Push` id 269, the URL file on the mini). `factory status`: 7 asks before, 0 asks and 7 health lines after; `/fleet` asks are the human queue plus one digest `reply` (goes in row 8). Heartbeat live (pusher `✓ factory monitor`). `make rollback` tested with `DRY_RUN=1` only. The board's HEALTH section is not seen in the app yet. Found: a docs-only master commit turns a hold's `make verify` red (Issue 66 fixes it; until then no master push during a hold).
 
-## Wave 6 — Spaces (row 11)            <!-- status: active -->
-- [ ] `~/.config/factory/spaces.json` (`{name, path}`), written by dotfiles `make setup` from `config/herdr-app/groups.json` (the one list; it already orders the sidebar through `jk-spaces`, so the factory never reorders the app doc). Briefs `briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`.
-- [ ] The factory reconciles on start and every 10 min: one space per entry by real path (inside `FACTORY_REPO_ROOTS`), a first tab with
+## Wave 6 — Spaces (row 11)            <!-- status: done -->
+- [x] `~/.config/factory/spaces.json` (`{name, path}`), written by dotfiles `make setup` from `config/herdr-app/groups.json` (the one list; it already orders the sidebar through `jk-spaces`, so the factory never reorders the app doc). Briefs `briefs/reset-w6-spaces.md`, `briefs/reset-w6-dotfiles.md`.
+- [x] The factory reconciles on start and every 10 min: one space per entry by real path (inside `FACTORY_REPO_ROOTS`), a first tab with
   `factory.key=plan:<repo>` (a login shell), never closed; unknown repos appended on first use.
-- [ ] hc-reap and finalize never touch a `plan:` tab or a tab without `factory.key`.
-- [ ] Live proof: every listed space has its `plan` tab (`hc` labels; the app's order is `groups.json`'s); a second reconcile changes nothing.
+- [x] hc-reap and finalize never touch a `plan:` tab or a tab without `factory.key`.
+- [x] Live proof: every listed space has its `plan` tab (`hc` labels; the app's order is `groups.json`'s); a second reconcile changes nothing.
 **Repos:** dotfiles
-**Left behind:**
+**Left behind:** software-factory PR #44 (`ba7984a`, `ed17547`, deep, nit fixed, `covered`), deployed `ed175476713c`, verify green; dotfiles #62 (`241d7c8`, standard, clean, `covered`), `make deploy` done. Proof: 40 `plan:` login shells (`t13t`..`t153`), one per `spaces.json` entry incl. the 8 IuRoot ones (`FACTORY_REPO_ROOTS` defaults to both workspaces; the briefs were wrong to say IuRoot is skipped); the second pass changed nothing. Gaps: in a space that had tabs the plan tab is last, not first (no tab moves); the app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have folder `~/IuRoot`, so the reconcile seeded correct ones beside them and the sidebar shows both twice until the owner closes the old ones; the app was not connected at the proof, so the sidebar is not seen yet.
 
-## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: pending -->
+## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: active -->
 - [ ] Migration: the view `factory.issue_facts` over issues, issue_events, evidence, decisions and sessions (design v3 §11);
-  no read of `usage.*`.
+  no read of `usage.*`. Brief `briefs/reset-w7-issue-facts.md`.
 - [ ] `factory issue facts [--since]` prints it; the four KPIs of §11 computed from it in one query.
 - [ ] Live proof: the rows for every Issue since 2026-11-01, and the KPI line.
 **Left behind:**
