@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { IssueVerbAck, type StopCheck } from '@software-factory/contract'
+import { type AdmissionLimits, HOLD_RECHECK_MS } from '../src/admission.ts'
 import { serveHooks } from '../src/http.ts'
 import { Classification } from '../src/issues/classify.ts'
 import type { Commits } from '../src/issues/commits.ts'
@@ -123,7 +124,9 @@ const ports = () => ({
 })
 
 /** One tick of the server, then the classifies it started finish. */
-async function pass(extra: { issuePorts?: ReturnType<typeof ports>; settle?: boolean } = {}) {
+async function pass(
+  extra: { issuePorts?: ReturnType<typeof ports>; settle?: boolean; reviewLimits?: AdmissionLimits } = {},
+) {
   const result = await tick({
     sql: db.sql,
     clock,
@@ -133,6 +136,7 @@ async function pass(extra: { issuePorts?: ReturnType<typeof ports>; settle?: boo
     leadWorktrees: maker,
     projects: sync,
     alertLeads: alerts,
+    reviewLimits: extra.reviewLimits,
   })
   if (extra.settle !== false) {
     await classification.settled()
@@ -205,7 +209,7 @@ describe('classify, then admission', () => {
       attempt: 1,
       kind: 'bug',
       lead_tier: 'sonnet',
-      lead_effort: 'medium',
+      lead_effort: 'high',
     })
     expect(worktrees.made).toEqual([{ repo, branch: `factory/${id}-1` }])
 
@@ -215,7 +219,7 @@ describe('classify, then admission', () => {
       key: `lead-${id}-1`,
       role: 'lead',
       tier: 'sonnet',
-      effort: 'medium',
+      effort: 'high',
       repo: `${repo}/.claude/worktrees/factory-${id}-1`,
       space: repo,
       issue_id: id,
@@ -227,10 +231,10 @@ describe('classify, then admission', () => {
       key: `lead-${id}-1`,
       role: 'lead',
       tier: 'sonnet',
-      effort: 'medium',
+      effort: 'high',
       space: repo,
     })
-    expect(runner.started[0]?.prompt).toContain('# Standing orders')
+    expect(runner.started[0]?.prompt).toContain('# Operating contract')
     expect(runner.started[0]?.prompt).toContain(`# Issue ${id}`)
     expect(runner.started[0]?.prompt).toContain(`factory/${id}-1`)
     // The brief is recorded under its prompt id before anything types it, and never typed a second time.
@@ -255,7 +259,7 @@ describe('classify, then admission', () => {
     const id = await file(newRepo())
     await drive(4)
     expect(await trail(id)).toEqual(['created -→queued', 'classify_failed', 'admitted queued→working'])
-    expect((await spawns())[0]).toMatchObject({ role: 'lead', tier: 'opus', effort: 'high' })
+    expect((await spawns())[0]).toMatchObject({ role: 'lead', tier: 'sonnet', effort: 'high' })
   })
 
   test('an Issue is not admitted before it is classified', async () => {
@@ -343,7 +347,7 @@ describe('classify, then admission', () => {
     expect((await issue(id)).state).toBe('working')
   })
 
-  test('the lead starts at the level of the role table now, with the floor, whatever was stored', async () => {
+  test('the lead starts at the lead row of the role table now, whatever Classify stored', async () => {
     // Classified long ago, when the table said otherwise: what is stored is out of date.
     const classified = async (id: number, set: { tier: string; effort: string; kind: string; class: string }) =>
       db.sql`
@@ -356,8 +360,87 @@ describe('classify, then admission', () => {
     await drive(4)
     const started = async (issueId: number) =>
       (await spawns()).find((s: { key: string }) => s.key === `lead-${issueId}-1`)
-    expect(await started(id)).toMatchObject({ tier: 'opus', effort: 'high' })
+    expect(await started(id)).toMatchObject({ tier: 'sonnet', effort: 'high' })
     expect(await started(incident)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+  })
+
+  describe('the lead cap per account', () => {
+    /** A fresh sample of these accounts: an account takes one new spawn per sample, and the cap is what these tests are about. */
+    const sample = async (accounts: string[]) => {
+      const source = new FakeQuotaSource()
+      source.readings = accounts.map((account) => ({
+        account,
+        ...usage(1, 1, new Date(clock.now().getTime() + 1_000 * 3_600_000)),
+      }))
+      await new QuotaPoller({ sql: db.sql, clock, source }).poll()
+    }
+    const states = async () =>
+      Object.fromEntries(
+        (await db.sql`SELECT key, status, account FROM factory.spawns ORDER BY key`).map(
+          (r: { key: string; status: string; account: string | null }) => [
+            r.key,
+            `${r.status}${r.account ? ` on ${r.account}` : ''}`,
+          ],
+        ),
+      )
+    /** Three Issues in three repos, one account: the first two leads start on it, the third waits at the cap. */
+    async function twoOnOne() {
+      await db.sql`DELETE FROM factory.quota_readings WHERE account = 'b'`
+      const ids = [await file(newRepo()), await file(newRepo()), await file(newRepo())]
+      for (let i = 0; i < 3; i++) {
+        await drive(4)
+        await sample(['a'])
+      }
+      await drive(4)
+      return ids
+    }
+
+    test('an account with two live Issue leads takes no third: the spawn waits, and the account has two', async () => {
+      const [first, second, third] = await twoOnOne()
+      expect(await states()).toEqual({
+        [leadKey(first ?? 0, 1)]: 'started on a',
+        [leadKey(second ?? 0, 1)]: 'started on a',
+        [leadKey(third ?? 0, 1)]: 'waiting',
+      })
+      expect((await issue(third ?? 0)).state).toBe('working')
+    })
+
+    test('another account with room is picked for it', async () => {
+      const [, , third] = await twoOnOne()
+      await sample(['a', 'b'])
+      clock.advance(HOLD_RECHECK_MS)
+      await drive(3)
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('started on b')
+    })
+
+    test('a lead that ends gives its place back: the waiting spawn starts at the next look', async () => {
+      const [first, , third] = await twoOnOne()
+      await emit(leadKey(first ?? 0, 1), 'session_ended')
+      await sample(['a'])
+      clock.advance(HOLD_RECHECK_MS)
+      await drive(3)
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('started on a')
+    })
+
+    test('a program lead or a wave, which have no Issue, are neither counted nor capped', async () => {
+      await twoOnOne()
+      await sample(['a'])
+      const res = await app.send('POST', '/spawns', { key: 'program-lead', repo: newRepo(), prompt: 'p', role: 'lead' })
+      expect(await res.json()).toMatchObject({ status: 'queued', account: 'a' })
+    })
+
+    test('a cap of one holds the second lead on the account', async () => {
+      await db.sql`DELETE FROM factory.quota_readings WHERE account = 'b'`
+      await file(newRepo())
+      await file(newRepo())
+      const reviewLimits = { sessions: 2, deepCap: 15, idleMs: 600_000, leadsPerAccount: 1 }
+      for (let i = 0; i < 2; i++) {
+        for (let j = 0; j < 4; j++) await pass({ reviewLimits })
+        await sample(['a'])
+      }
+      await pass({ reviewLimits })
+      expect(Object.values(await states()).sort()).toEqual(['started on a', 'waiting'])
+    })
   })
 
   test('a note with no lead to go to parks the Issue as lead_gone, with a line for the owner', async () => {
@@ -1215,7 +1298,7 @@ describe('what the review found', () => {
       clock.now(),
     )
     await drive(4)
-    expect(runner.started.some((start) => start.prompt.includes('# Standing orders'))).toBe(false)
+    expect(runner.started.some((start) => start.prompt.includes('# Operating contract'))).toBe(false)
     const status = await statusOf()
     expect(status.attention.some((line) => line.includes("is not this Issue's lead"))).toBe(true)
   })

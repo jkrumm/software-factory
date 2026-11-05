@@ -124,6 +124,21 @@ export interface HookIo {
   /** the hook's JSON, as Claude Code piped it */
   stdin(): Promise<string>
   now(): number
+  /** the hook's stdout, which Claude Code adds to the session's context on a `SessionStart`: written only by `compactedLead` */
+  out?(text: string): void
+}
+
+/**
+ * The one line a compaction costs an Issue's lead, or nothing. `SessionStart` is the one hook whose stdout becomes the session's context,
+ * and `source: compact` says the context was just summarized: a lead (`lead-<issue>-<attempt>`) is told to read its Issue again. No server
+ * call: the key carries the Issue.
+ */
+function compactedLead(event: string, input: Input, session: string): string | undefined {
+  if (event !== 'session-start' || input.source !== 'compact') return undefined
+  const issue = /^lead-(\d+)-\d+$/.exec(session)?.[1]
+  return issue
+    ? `Context was compacted. Re-read Issue ${issue} with \`factory issue show ${issue}\` and your brief's standing orders before acting.`
+    : undefined
 }
 
 /** The spool's lines so far and the sums a rotation left behind, read in that order (see `rotateIfDue`). */
@@ -181,7 +196,7 @@ async function askStopCheck(
 
 /**
  * Never throws a failure into the session. The result is the one line the hook prints on stderr when a `Stop` is sent
- * back (exit 2), else nothing: every other outcome is a silent exit 0.
+ * back (exit 2), else nothing: every other outcome is a silent exit 0. Stdout stays empty but for the compaction line of an Issue's lead.
  */
 export async function runHook(event: string, io: HookIo): Promise<string | undefined> {
   const session = io.env.FACTORY_SESSION
@@ -235,6 +250,9 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
     release?.()
   }
 
+  const reread = compactedLead(event, input, session)
+  if (reread) io.out?.(`${reread}\n`)
+
   if (!socket) return undefined
   try {
     const response = await fetch('http://localhost/events', {
@@ -260,10 +278,11 @@ export async function hookMain(
   env: Record<string, string | undefined>,
   stdin: () => Promise<string> = () => (process.stdin.isTTY ? Promise.resolve('') : Bun.stdin.text()),
   err: (text: string) => void = (text) => void process.stderr.write(text),
+  out: (text: string) => void = (text) => void process.stdout.write(text),
 ): Promise<number> {
   if (!env.FACTORY_SESSION) return 0
   try {
-    const sendBack = await runHook(argv[0] ?? '', { env, stdin, now: Date.now })
+    const sendBack = await runHook(argv[0] ?? '', { env, stdin, now: Date.now, out })
     if (sendBack) {
       err(`${sendBack}\n`)
       return 2

@@ -314,6 +314,8 @@ describe('the binary', () => {
   // Claude Code adds a hook's stdout to the session's context on SessionStart and UserPromptSubmit.
   test.each([
     ['session-start', { source: 'startup', session_id: 'c-1', transcript_path: '/t', cwd: '/w' }],
+    // A compaction of a session that is not an Issue's lead (its key is `s`) is silent too.
+    ['session-start', { source: 'compact', session_id: 'c-1' }],
     ['user-prompt-submit', { session_id: 'c-1', prompt: 'hello' }],
     ['stop', { stop_hook_active: false, last_assistant_message: 'done' }],
     ['stop-failure', { error: 'rate_limit', error_details: '429' }],
@@ -330,6 +332,27 @@ describe('the binary', () => {
     }
     const garbage = await run(['hook', event], 'not json', env())
     expect(garbage).toMatchObject({ code: 0, stdout: '', stderr: '' })
+  })
+
+  // The one exception: an Issue lead's context was compacted, and SessionStart's stdout is added to the context.
+  test('a compaction of an Issue lead prints one line telling it to re-read the Issue, after the spool line', async () => {
+    const compact = (source: string, session = 'lead-62-2') =>
+      run(['hook', 'session-start'], JSON.stringify({ source, session_id: 'c-1' }), env({ FACTORY_SESSION: session }))
+    const r = await compact('compact')
+    expect(r).toMatchObject({
+      code: 0,
+      stderr: '',
+      stdout:
+        "Context was compacted. Re-read Issue 62 with `factory issue show 62` and your brief's standing orders before acting.\n",
+    })
+    expect(lines('lead-62-2')).toHaveLength(1)
+    for (const quiet of [await compact('startup'), await compact('resume'), await compact('clear')]) {
+      expect(quiet).toMatchObject({ code: 0, stdout: '', stderr: '' })
+    }
+    // Only a lead's key counts: a wave, a reviewer and a look-alike are silent.
+    for (const session of ['wave-3', 'review-9-a1', 'lead-x-1', 'lead-62', 'xlead-62-1', 'lead-62-1 ']) {
+      expect(await compact('compact', session)).toMatchObject({ code: 0, stdout: '', stderr: '' })
+    }
   })
 
   test('hooks of one session that overlap never write the same key', async () => {

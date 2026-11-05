@@ -2,14 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { parseRoleTable } from '@software-factory/contract'
 import { CannotExecute, EXIT_TIMEOUT, type ProcessResult } from '../src/exec.ts'
-import {
-  AgwClassifier,
-  Classification,
-  clampLead,
-  ClassifyFailed,
-  classifyIssue,
-  leadLevel,
-} from '../src/issues/classify.ts'
+import { AgwClassifier, Classification, ClassifyFailed, classifyIssue, leadLevel } from '../src/issues/classify.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { TEST_REPO, TEST_ROLES, TEST_ROOT } from './support/app.ts'
 import { FakeClassifier } from './support/classifier.ts'
@@ -85,8 +78,7 @@ describe('classify', () => {
           size: 'm',
           tier: 'sonnet',
           effort: 'high',
-          clamped: false,
-          floored: true,
+          clamped: true,
         },
       },
     ])
@@ -100,24 +92,19 @@ describe('classify', () => {
     })
   })
 
-  test('tier and effort above the lead role are cut to it, and never above opus/high', async () => {
-    const issue = await file()
+  test('the lead runs at the role table row whatever Classify asked, and never above opus/high', async () => {
     const classifier = new FakeClassifier()
     classifier.answer = { project: null, kind: 'bug', class: 'routine', size: 'l', tier: 'opus', effort: 'max' }
+    const issue = await file()
     await classifyIssue({ sql: db.sql, classifier, roles: TEST_ROLES, now }, issue)
-    expect(await stored(issue.id)).toMatchObject({ lead_tier: 'opus', lead_effort: 'high' })
-    expect((await events(issue.id))[0]?.payload).toMatchObject({ tier: 'opus', effort: 'high', clamped: true })
+    expect(await stored(issue.id)).toMatchObject({ lead_tier: 'sonnet', lead_effort: 'high' })
+    expect((await events(issue.id))[0]?.payload).toMatchObject({ tier: 'sonnet', effort: 'high', clamped: true })
+    // Classify's own labels stay stored.
     expect((await stored(issue.id)).classify).toMatchObject({ asked: { tier: 'opus', effort: 'max' } })
 
-    // A role table that sets the lead lower is the ceiling, and one that sets it higher is cut to opus/high.
+    // A table that sets the lead lower is followed; one that sets it higher is cut to opus/high.
     const lower = parseRoleTable(JSON.stringify({ roles: { lead: { tier: 'sonnet', effort: 'medium' } } }))
     const higher = parseRoleTable(JSON.stringify({ roles: { lead: { tier: 'opus', effort: 'max' } } }))
-    const ask = { tier: 'opus', effort: 'high' } as const
-    expect(clampLead(ask, { tier: 'sonnet', effort: 'medium' })).toEqual({
-      tier: 'sonnet',
-      effort: 'medium',
-      clamped: true,
-    })
     const second = await file()
     await classifyIssue({ sql: db.sql, classifier, roles: lower, now }, second)
     expect(await stored(second.id)).toMatchObject({ lead_tier: 'sonnet', lead_effort: 'medium' })
@@ -135,13 +122,13 @@ describe('classify', () => {
       state: 'queued',
       kind: null,
       class: null,
-      lead_tier: 'opus',
+      lead_tier: 'sonnet',
       lead_effort: 'high',
       classify: { failure: 'agw is down' },
     })
     expect((await stored(issue.id)).classified_at).toBeInstanceOf(Date)
     expect(await events(issue.id)).toEqual([
-      { kind: 'classify_failed', payload: { detail: 'agw is down', tier: 'opus', effort: 'high' } },
+      { kind: 'classify_failed', payload: { detail: 'agw is down', tier: 'sonnet', effort: 'high' } },
     ])
   })
 
@@ -188,46 +175,28 @@ describe('classify', () => {
 })
 
 describe('the level a lead starts at', () => {
-  const none = { kind: null, class: null }
   const table = (tier: string, effort: string) => parseRoleTable(JSON.stringify({ roles: { lead: { tier, effort } } }))
 
-  test('a risky or business class and an incident are never below sonnet/high, and never above opus/high', () => {
+  test('is the lead row, whatever Classify asked: a cheap ask is not honoured, a labelled one is not raised', () => {
     const cheap = { tier: 'haiku', effort: 'low' } as const
-    for (const labels of [
-      { kind: null, class: 'risky' },
-      { kind: null, class: 'business' },
-      { kind: 'incident', class: 'routine' },
-    ]) {
-      expect(leadLevel(cheap, TEST_ROLES, labels)).toMatchObject({ tier: 'sonnet', effort: 'high', floored: true })
-    }
-    // Routine work keeps what Classify asked for.
-    expect(leadLevel(cheap, TEST_ROLES, { kind: 'bug', class: 'routine' })).toMatchObject({
-      tier: 'haiku',
-      effort: 'low',
-      floored: false,
-    })
-    expect(leadLevel({ tier: 'opus', effort: 'max' }, TEST_ROLES, { kind: 'incident', class: 'risky' })).toMatchObject({
-      tier: 'opus',
-      effort: 'high',
-    })
-    // The floor outranks a table that sets the lead lower; nothing outranks opus/high.
-    expect(leadLevel(cheap, table('haiku', 'low'), { kind: 'incident', class: null })).toMatchObject({
+    expect(leadLevel(cheap, TEST_ROLES)).toEqual({ tier: 'sonnet', effort: 'high', clamped: true })
+    expect(leadLevel({ tier: 'sonnet', effort: 'high' }, TEST_ROLES)).toEqual({
       tier: 'sonnet',
       effort: 'high',
+      clamped: false,
     })
-    expect(leadLevel({ tier: 'opus', effort: 'high' }, table('opus', 'max'), none)).toMatchObject({
-      tier: 'opus',
-      effort: 'high',
-    })
+    expect(leadLevel(cheap, table('haiku', 'low'))).toMatchObject({ tier: 'haiku', effort: 'low', clamped: false })
+    // Nothing outranks opus/high.
+    expect(leadLevel(cheap, table('opus', 'max'))).toMatchObject({ tier: 'opus', effort: 'high' })
   })
 
-  test('is stored with the floor at Classify', async () => {
+  test('a chore asked haiku/low is stored at the lead row', async () => {
     const issue = await file()
     const classifier = new FakeClassifier()
-    classifier.answer = { project: null, kind: 'bug', class: 'risky', size: 'm', tier: 'haiku', effort: 'low' }
+    classifier.answer = { project: null, kind: 'chore', class: 'routine', size: 's', tier: 'haiku', effort: 'low' }
     await classifyIssue({ sql: db.sql, classifier, roles: TEST_ROLES, now }, issue)
     expect(await stored(issue.id)).toMatchObject({ lead_tier: 'sonnet', lead_effort: 'high' })
-    expect((await events(issue.id))[0]?.payload).toMatchObject({ floored: true })
+    expect((await stored(issue.id)).classify).toMatchObject({ asked: { tier: 'haiku', effort: 'low' } })
   })
 })
 

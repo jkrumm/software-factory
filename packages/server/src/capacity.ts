@@ -2,6 +2,7 @@ import type { Quota } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { LOCKS } from './locks.ts'
 import type { QuotaInput } from './schemas.ts'
+import type { LiveSession } from './sessions.ts'
 
 /** An account takes new spawns below 85 % of its 5-hour window and below 95 % of its week: the owner's reserve. */
 export const WEEKLY_LIMIT = 95
@@ -244,4 +245,22 @@ export function nextOpening(readings: readonly Reading[], options: PickOptions):
   const standings = fresh.map((r) => standing(r, options.now, options.pace, options.review))
   if (standings.some((s) => s.open)) return undefined
   return standings.flatMap((s) => (!s.open && s.until ? [s.until] : [])).sort((a, b) => a.getTime() - b.getTime())[0]
+}
+
+/**
+ * Live Issue-lead sessions per account: sessions whose spawn has role `lead` and an Issue (a program lead or a wave has none and is
+ * not counted), as `liveSessions` reads them. `except` leaves the spawn being admitted out. An Issue lead is "live" from its claim on.
+ */
+export async function issueLeadsByAccount(
+  sql: SQL,
+  sessions: readonly LiveSession[],
+  except?: string,
+): Promise<Map<string, number>> {
+  const keys = sessions.filter((s) => s.role === 'lead' && s.id !== except).map((s) => s.id)
+  if (keys.length === 0) return new Map()
+  const rows: { account: string; n: number }[] = await sql`
+    SELECT account, count(*)::int AS n FROM factory.spawns
+    WHERE key IN ${sql(keys)} AND role = 'lead' AND issue_id IS NOT NULL AND account IS NOT NULL
+    GROUP BY account`
+  return new Map(rows.map((r) => [r.account, r.n]))
 }

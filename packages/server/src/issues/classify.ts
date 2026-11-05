@@ -129,7 +129,7 @@ export const LEAD_CEILING = { tier: 'opus', effort: 'high' } as const satisfies 
 
 const lower = <T extends string>(order: readonly T[], a: T, b: T): T => (order.indexOf(a) <= order.indexOf(b) ? a : b)
 
-/** The `lead` entry of the role table is the ceiling and the default; nothing goes above `opus/high`. */
+/** The `lead` entry of the role table is the level a lead runs at; nothing goes above `opus/high`. */
 export function leadBounds(roles: RoleTable): { tier: Tier; effort: Effort } {
   const lead = roles.get('lead')
   return {
@@ -138,37 +138,17 @@ export function leadBounds(roles: RoleTable): { tier: Tier; effort: Effort } {
   }
 }
 
-/** Tier and effort as Classify asked, cut to the ceiling. */
-export function clampLead(
-  asked: { tier: Tier; effort: Effort },
-  ceiling: { tier: Tier; effort: Effort },
-): { tier: Tier; effort: Effort; clamped: boolean } {
-  const tier = lower(TIER_ORDER, asked.tier, ceiling.tier)
-  const effort = lower(EFFORT_ORDER, asked.effort, ceiling.effort)
-  return { tier, effort, clamped: tier !== asked.tier || effort !== asked.effort }
-}
-
-/** The least a lead is started at when the Issue is risky, business or an incident: a cheap lead is for routine work. */
-export const LEAD_FLOOR = { tier: 'sonnet', effort: 'high' } as const satisfies { tier: Tier; effort: Effort }
-
-const higher = <T extends string>(order: readonly T[], a: T, b: T): T => (order.indexOf(a) >= order.indexOf(b) ? a : b)
-
 /**
- * The tier and effort a lead is started at: what was asked, cut to the role table's `lead` entry and to `opus/high`, then raised
- * to the floor for a risky or business class or an incident, then cut to `opus/high` again (the floor outranks a low table, nothing
- * outranks the absolute ceiling). Asked at Classify and again at the start, against the table of that moment.
+ * The tier and effort an Issue lead is started at: the role table's `lead` row (cut to `opus/high`), whatever Classify asked. Classify's
+ * labels stay stored and shown; they no longer move the lead (a `chore` asked `haiku/low` and its lead dropped the work rather than wait).
+ * `clamped` says the row differs from what Classify asked. Asked at Classify and again at the start, against the table of that moment.
  */
 export function leadLevel(
   asked: { tier: Tier; effort: Effort },
   roles: RoleTable,
-  labels: { kind: string | null; class: string | null },
-): { tier: Tier; effort: Effort; clamped: boolean; floored: boolean } {
-  const cut = clampLead(asked, leadBounds(roles))
-  const floor = labels.class === 'risky' || labels.class === 'business' || labels.kind === 'incident'
-  if (!floor) return { ...cut, floored: false }
-  const tier = lower(TIER_ORDER, higher(TIER_ORDER, cut.tier, LEAD_FLOOR.tier), LEAD_CEILING.tier)
-  const effort = lower(EFFORT_ORDER, higher(EFFORT_ORDER, cut.effort, LEAD_FLOOR.effort), LEAD_CEILING.effort)
-  return { tier, effort, clamped: cut.clamped, floored: tier !== cut.tier || effort !== cut.effort }
+): { tier: Tier; effort: Effort; clamped: boolean } {
+  const { tier, effort } = leadBounds(roles)
+  return { tier, effort, clamped: tier !== asked.tier || effort !== asked.effort }
 }
 
 interface ToClassify {
@@ -210,7 +190,7 @@ export async function classifyIssue(deps: ClassifyDeps, issue: ToClassify): Prom
   }
 
   const now = deps.now()
-  const lead = answer ? leadLevel(answer, roles, answer) : { ...leadBounds(roles), clamped: false, floored: false }
+  const lead = answer ? leadLevel(answer, roles) : { ...leadBounds(roles), clamped: false }
   const stored = answer
     ? { ...answer, tier: lead.tier, effort: lead.effort, asked: { tier: answer.tier, effort: answer.effort } }
     : { failure }
@@ -240,7 +220,6 @@ export async function classifyIssue(deps: ClassifyDeps, issue: ToClassify): Prom
             tier: lead.tier,
             effort: lead.effort,
             clamped: lead.clamped,
-            floored: lead.floored,
           }
         : { detail: failure, tier: lead.tier, effort: lead.effort },
     )

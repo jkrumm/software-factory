@@ -1,6 +1,7 @@
 import { DEFAULT_ROLES_FILE, ReaperMode } from '@software-factory/contract'
 import { parseProbeHosts } from './fleet/probes.ts'
-import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './review/limits.ts'
+import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT } from './admission.ts'
+import { DEFAULT_REVIEW_LIMITS } from './review/limits.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -52,8 +53,8 @@ export interface Config {
   reaper: ReaperMode
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
-  /** review v4's reviewer sessions: `FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS` */
-  review: ReviewLimits
+  /** what admission is bounded by: review v4's reviewer sessions (`FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`) and the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
+  review: AdmissionLimits
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -126,6 +127,13 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
         DEFAULT_REVIEW_LIMITS.idleMs,
         60_000,
         86_400_000,
+      ),
+      leadsPerAccount: wholeNumber(
+        'FACTORY_LEADS_PER_ACCOUNT',
+        env.FACTORY_LEADS_PER_ACCOUNT,
+        DEFAULT_LEADS_PER_ACCOUNT,
+        1,
+        16,
       ),
     },
   }

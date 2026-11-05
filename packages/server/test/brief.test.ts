@@ -23,15 +23,22 @@ describe('the standing orders', () => {
   // Changing a word changes every lead's instructions and the prompt cache's prefix: it is a decision, so the hash is pinned.
   test('are pinned, and the first thing in every brief, byte for byte', () => {
     expect(createHash('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '9e139f58ceaf64cd9916894f171a7e8fd77c9f6dbf86660f1dc338a6a18883bb',
+      '5ea909d4cb1be2ff37d170cd8f7dd775234c67525aae5db1150ef1115d1d9599',
     )
     expect(DONE_MEANS).toContain('--commit <merged sha>')
     expect(DONE_MEANS).toContain('factory issue evidence <id>')
-    expect(STANDING_ORDERS).toContain('Decide alone.')
-    expect(STANDING_ORDERS).toContain('factory issue ask')
-    expect(STANDING_ORDERS).toContain('Max')
-    expect(STANDING_ORDERS).toContain('Never end a turn on a background shell')
+    // The contract's eight points, with the verbs' real syntax; the old wave-era lines are gone.
+    expect(STANDING_ORDERS).toContain('You own the Issue from cause to verified production')
+    expect(STANDING_ORDERS).toContain('factory issue phase <id> --phase <name> --note "<decision, why>"')
+    expect(STANDING_ORDERS).toContain('factory issue ask <id> --question')
+    expect(STANDING_ORDERS).toContain('factory issue block <id> --reason')
+    expect(STANDING_ORDERS).toContain('You open no terminals: no `rd fan`, no `rd wave`, no hidden children')
+    expect(STANDING_ORDERS).toContain('factory issue ship <id> --summary')
+    expect(STANDING_ORDERS).toContain('factory issue show <id>')
+    expect(STANDING_ORDERS).toContain('factory issue drop <id> --reason')
     expect(STANDING_ORDERS).toContain('Every stop reports.')
+    expect(STANDING_ORDERS).not.toMatch(/rd (fan|wave)`[^,]/)
+    expect(STANDING_ORDERS).not.toContain('Decide alone')
     const manifest = ProjectManifest.parse({
       apiVersion: 'factory/v2',
       name: 'beta',

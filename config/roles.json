@@ -1,7 +1,7 @@
 {
   "roles": {
     "mother": { "tier": "opus", "effort": "medium" },
-    "lead": { "tier": "opus", "effort": "high" },
+    "lead": { "tier": "sonnet", "effort": "high" },
     "wave": { "tier": "sonnet", "effort": "high" },
     "worker": { "tier": "sonnet", "effort": "high" },
     "mechanical": { "tier": "haiku", "effort": "low" },

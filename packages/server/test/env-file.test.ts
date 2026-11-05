@@ -48,8 +48,10 @@ describe('scripts/env-file.sh', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
-  test('the review limits are listed keys, so a deploy can set them', () => {
-    const { out } = load('FACTORY_REVIEW_SESSIONS=3\nFACTORY_REVIEW_DEEP_CAP=5\nFACTORY_REVIEW_IDLE_MS=120000\n')
+  test('the review limits and the lead cap are listed keys, so a deploy can set them', () => {
+    const { out } = load(
+      'FACTORY_REVIEW_SESSIONS=3\nFACTORY_REVIEW_DEEP_CAP=5\nFACTORY_REVIEW_IDLE_MS=120000\nFACTORY_LEADS_PER_ACCOUNT=3\n',
+    )
     expect(out).toBe('code=0 probe= every=')
   })
 

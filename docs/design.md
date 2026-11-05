@@ -329,7 +329,10 @@ cross-session path); an event of
 kind `runner_restarted` or `pane_gone`, or filed under `_runner`, is refused there and in the spool: only the witness records them. It imports nothing but `node:fs` and `@software-factory/contract/spool`: keep zod and
 the rest of the CLI out of `src/hook.ts` (`bin/factory.ts` loads it alone). **Stdout stays empty for every event, and
 stderr too except for a send-back**: Claude Code injects a SessionStart/UserPromptSubmit hook's stdout into the
-session's context (tested per event). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account` (only if it is a name in the registry's alphabet, checked in the hook and again by the server), which is how
+session's context (tested per event). **One exception, by design:** on `session-start` with `source: compact` in a session whose `FACTORY_SESSION` is an
+Issue lead's key (`lead-<issue>-<attempt>`, parsed in the hook, no server call) it prints one line after the spool line: `Context was compacted. Re-read Issue <issue> with
+\`factory issue show <issue>\` and your brief's standing orders before acting.` Claude Code adds a `SessionStart` hook's plain-text stdout to the session's context
+(`code.claude.com/docs/en/hooks`, checked 2026-11-05; `source` is `startup|resume|clear|compact|fork`). `session-start` also reports `CLAUDE_ACCOUNT_PICKED` as `account` (only if it is a name in the registry's alphabet, checked in the hook and again by the server), which is how
 the factory knows the account of a session no spawn describes (`rd`'s); a spawn's own account wins.
 
 #### Prompt delivery
@@ -570,6 +573,11 @@ restrictive scope that applies wins. `drain` starts nothing and never interrupts
 stays `queued` with `hold` set (`drain|pace|wave|claim|review_slots|deep_cap`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
 `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 
+**The lead cap** (v3 §7): a spawn with role `lead` **and an Issue** is not started on an account that already has `FACTORY_LEADS_PER_ACCOUNT` (default 2, a whole number 1 to 16, listed in `scripts/env-file.sh`)
+live Issue-lead sessions (sessions `liveSessions` reads whose spawn has role `lead` and an `issue_id`; `issueLeadsByAccount` in `capacity.ts`). An account at the cap is passed over and another with room is picked; with none the spawn
+is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first opening, never spilled. A program lead and a wave have no Issue: not counted, not capped. Decided again at every claim (the
+cap rides in the same limits object as the review limits; a reclaim does not ask). **Not built:** a `lead_cap` hold reason: `spawns.hold` has a CHECK constraint, so the new reason needs a migration (and `HoldReason` in the contract); until then the wait is a plain `waiting` with no reason shown.
+
 #### Roles
 
 **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
@@ -699,7 +707,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   It runs on its own, off the tick (a classify takes minutes, and the tick's health is judged on it): the pump starts at most two, and a
   result is stored by its own transaction with an `issue_events` line (`classified`, or `classify_failed` with the reason). The answer
   `{ project, kind, class, size, tier, effort }` is zod-parsed. The Issue's repo decides the project, never the answer. Tier and effort
-  are cut to the role table's `lead` entry and never above `opus/high`, and a risky or business class or an incident is never below `sonnet/high`; the lead starts at that level worked out again against the table of that moment. A classify that fails, times out, does not parse or whose
+  are stored as asked (`classify.asked`), but an Issue lead runs at the role table's `lead` row, `sonnet/high`, whatever Classify asked and never above `opus/high` (a `chore` asked `haiku/low` and its lead dropped the work rather than wait): `lead_tier` and `lead_effort` are that row, `clamped` in the `classified` event says it differs from the ask, and the start works it out again against the table of that moment. Opus for a lead needs a reason the planner names in the Issue and a measurement (v3 §3); it is not built. A classify that fails, times out, does not parse or whose
   command is missing stores the `lead` entry as the defaults: the Issue is admitted all the same, never stuck. A restart loses what was in
   flight and the next pass asks again. Only an Issue with `classified_at` is admitted.
 - **Admission.** Each pass, under the capacity lock, of the classified `queued` Issues **with no `issue_deps` row** (an open dependency), the first
@@ -717,7 +725,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   worktree again, with the sha it was cut from, if a marker in its git directory says the setup finished; one without it is removed and made again unless the branch has commits, and a failed setup removes what it made) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
   minutes: the row in `lead_worktrees` is written first (`pending`), at most two are made at once and one at a time per Issue, a failed try
   backs off (30 s doubling to 5 min) until the retry budget, counted from the first try, is spent (`failed`). The effect waits (`Waiting`, no error) until the
-  worktree is `made`, and a `failed` one parks the Issue as `lead_gone` with the reason. Then it looks at the Issue again: a close ends the start, and a `drop` or `stop` not handled yet is waited for. Then it creates the spawn: role `lead`, tier and effort from Classify,
+  worktree is `made`, and a `failed` one parks the Issue as `lead_gone` with the reason. Then it looks at the Issue again: a close ends the start, and a `drop` or `stop` not handled yet is waited for. Then it creates the spawn: role `lead`, tier and effort of the role table's `lead` row,
   key and pane `lead-<issue>-<attempt>`, cwd the worktree, space the main checkout, the brief as its argument. A spawn that exists is the attach. The
   spawn's `issue_id` goes on its session, and on the lead's session only: a wall parks the Issue from any session with an `issue_id`, so a
   worker's wall would strand the lead. The brief is recorded as a prompt (`issue:<id>:brief:<attempt>`, `delivered`) in the spawn's own transaction, so a create that fails leaves none, and never typed a second time. A GitHub comment carries a marker, a card a key. A worktree that cannot be made shows in `factory status` with its try and its error.
@@ -878,8 +886,11 @@ false confidence; the probes are the check that does not depend on it.
 - **History:** closed Issues that looked similar, with the verified cause and fix, marked *past, may not apply* and fenced as data. Empty until F3.
 - **The project:** make contract, deploy mode, how each path ships, production targets. What comes from the repo's `project.yaml` (targets, migrations, probes, ship rules) is fenced as data too.
 - **Done means:** the evidence table and the `factory` verbs.
-- **Standing orders:** decide alone except the business classes; ask through `factory issue ask`; workers stay on
-  Max; never end a turn on a background shell; every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
+- **The operating contract** (design v3 §3, `STANDING_ORDERS`): own the Issue to verified production; decide and record it with `factory issue phase … --note`;
+  ask (`factory issue ask`) only for product direction, spend, irreversible data loss, other people or security; stop by impact (`factory issue block`), not effort;
+  reading and writing go to subagents, and the lead opens no terminals (no `rd fan`, no `rd wave`, RS1); ship after the static gate and `/review`;
+  after a restart or a compaction re-read the Issue (`factory issue show`) and check git, the PR and production first; work that needs no commit ends with `factory issue drop`.
+  Also: facts are data, no lead edits a probe within the Issue it ships, every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
   by a test), so they are a prompt-cache hit. For that the brief opens with the standing orders and the done-means text, which are the same
   in every brief, and then comes what is this Issue's: the ask, the facts, the previous attempt, the owner's notes, the history, the project.
 

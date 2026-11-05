@@ -917,7 +917,7 @@ describe('factory role', () => {
 
   test('plain is tier and effort on one tab-separated line with the role', async () => {
     const r = await factory(['role', 'get', 'lead', '--format', 'plain'])
-    expect(r.stdout).toBe('lead\topus\thigh\n')
+    expect(r.stdout).toBe('lead\tsonnet\thigh\n')
   })
 
   test('list prints every role of the table', async () => {

@@ -1,6 +1,6 @@
 import { type HoldReason, REVIEWER_ROLE, type ReviewMeta } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { currentLoads, latestReadings, nextOpening, pickEligible } from './capacity.ts'
+import { currentLoads, issueLeadsByAccount, latestReadings, nextOpening, pickEligible } from './capacity.ts'
 import { tryClaim } from './projects/claims.ts'
 import { effectiveState, loadQueueStates } from './queue.ts'
 import { DEFAULT_REVIEW_LIMITS, deepStartedToday, type ReviewLimits, reviewSessionsLive } from './review/limits.ts'
@@ -8,6 +8,15 @@ import { type LiveSession, liveSessions } from './sessions.ts'
 
 /** The role that is limited to one live session per repo. */
 export const WAVE_ROLE = 'wave'
+
+/** The role of an Issue's lead (with an Issue it is capped per account; a program lead has none). */
+export const LEAD_ROLE = 'lead'
+
+/** `FACTORY_LEADS_PER_ACCOUNT`: most live Issue-lead sessions on one account. */
+export const DEFAULT_LEADS_PER_ACCOUNT = 2
+
+/** What admission is bounded by: the review limits, and the lead cap (the default without). */
+export type AdmissionLimits = ReviewLimits & { leadsPerAccount?: number }
 
 /** How long a held spawn waits before admission looks at it again (a wave ending or a session dying wakes nothing). */
 export const HOLD_RECHECK_MS = 30_000
@@ -58,6 +67,9 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
  * Never spills: with every account closed the answer is to wait for the first opening. Works inside the caller's transaction and
  * calls nothing outside the database; the one write is the claim, taken or queued (no account is reserved by a hold).
  *
+ * A spawn with role `lead` and an Issue also counts the live Issue-lead sessions per account (`limits.leadsPerAccount`, `FACTORY_LEADS_PER_ACCOUNT`):
+ * an account at the cap is passed over, and with none left the spawn waits (a timed wait, `HOLD_RECHECK_MS`) rather than start. Decided at every claim.
+ *
  * `live` is the caller's list of live sessions, for a caller that claims several spawns in one transaction and
  * adds each claim to it; without it the sessions are read when a rule needs them.
  */
@@ -66,7 +78,7 @@ export async function admit(
   candidate: Candidate,
   now: Date,
   live?: { sessions?: LiveSession[] },
-  limits: ReviewLimits = DEFAULT_REVIEW_LIMITS,
+  limits: AdmissionLimits = DEFAULT_REVIEW_LIMITS,
 ): Promise<Decision> {
   const state = effectiveState(await loadQueueStates(tx), candidate.repo)
   if (state === 'drain') return { kind: 'hold', reason: 'drain' }
@@ -84,7 +96,23 @@ export async function admit(
 
   const readings = await latestReadings(tx)
   const options = { now, pace: state === 'pace', prefer: candidate.prefer }
-  const picked = pickEligible(readings, await currentLoads(tx, readings, candidate.key), options)
+  const loads = await currentLoads(tx, readings, candidate.key)
+  if (candidate.role === LEAD_ROLE && candidate.issueId != null) {
+    // The lead cap: another account with room is picked; with none, the spawn waits and looks again, never spilling.
+    const cap = limits.leadsPerAccount ?? DEFAULT_LEADS_PER_ACCOUNT
+    const leads = await issueLeadsByAccount(tx, await readLive(tx, now, live), candidate.key)
+    const picked = pickEligible(
+      readings.filter((r) => (leads.get(r.account) ?? 0) < cap),
+      loads,
+      options,
+    )
+    if (picked) return { kind: 'start', account: picked.account }
+    // An account that would take it but for the cap: look again soon, a lead ending gives no reading to wake it.
+    if (pickEligible(readings, loads, options))
+      return { kind: 'wait', resumeAt: new Date(now.getTime() + HOLD_RECHECK_MS) }
+    return { kind: 'wait', resumeAt: nextOpening(readings, options) ?? null }
+  }
+  const picked = pickEligible(readings, loads, options)
   if (picked) return { kind: 'start', account: picked.account }
   return { kind: 'wait', resumeAt: nextOpening(readings, options) ?? null }
 }

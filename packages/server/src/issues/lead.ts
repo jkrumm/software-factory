@@ -68,12 +68,8 @@ async function startLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const role = roles.get('lead')
   if (!role) throw new Error('the role table has no `lead`')
 
-  // Against the role table as it is now, not as it was at Classify: a table lowered since is the ceiling, and the floor holds.
-  const level = leadLevel(
-    { tier: issue.lead_tier ?? role.tier, effort: issue.lead_effort ?? role.effort },
-    roles,
-    issue,
-  )
+  // The role table's `lead` row as it is now, not as it was at Classify: an Issue lead runs at it whatever Classify asked.
+  const level = leadLevel({ tier: issue.lead_tier ?? role.tier, effort: issue.lead_effort ?? role.effort }, roles)
   const branch = leadBranch(issue.id, attempt)
   // The worktree is made off the tick, by `WorktreeMaker`: this asks for it, and waits until it is there.
   const tree = await worktreeFor(sql, issue.id, attempt, clock.now())

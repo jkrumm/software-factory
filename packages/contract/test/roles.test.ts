@@ -19,11 +19,11 @@ describe('config/roles.json', () => {
     ])
   })
 
-  test('seeds from today: waves and workers Sonnet/high, the program lead Opus/high, sweeps Haiku', async () => {
+  test('seeds from today: waves and workers Sonnet/high, the Issue lead Sonnet/high, sweeps Haiku', async () => {
     const table = await loadRoleTable()
     expect(table.get('wave')).toEqual({ role: 'wave', tier: 'sonnet', effort: 'high' })
     expect(table.get('worker')).toEqual({ role: 'worker', tier: 'sonnet', effort: 'high' })
-    expect(table.get('lead')).toEqual({ role: 'lead', tier: 'opus', effort: 'high' })
+    expect(table.get('lead')).toEqual({ role: 'lead', tier: 'sonnet', effort: 'high' })
     expect(table.get('mechanical')?.tier).toBe('haiku')
     expect(table.get('deep')).toEqual({ role: 'deep', tier: 'opus', effort: 'high' })
   })

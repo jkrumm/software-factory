@@ -95,7 +95,7 @@ describe('config (finding 5)', () => {
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
       reaper: 'dry',
-      review: { sessions: 2, deepCap: 15, idleMs: 600_000 },
+      review: { sessions: 2, deepCap: 15, idleMs: 600_000, leadsPerAccount: 2 },
       probeHosts: new Map(),
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -124,9 +124,16 @@ describe('config (finding 5)', () => {
         FACTORY_REVIEW_DEEP_CAP: '5',
         FACTORY_REVIEW_IDLE_MS: '120000',
       }).review,
-    ).toEqual({ sessions: 3, deepCap: 5, idleMs: 120_000 })
+    ).toEqual({ sessions: 3, deepCap: 5, idleMs: 120_000, leadsPerAccount: 2 })
     for (const name of ['FACTORY_REVIEW_SESSIONS', 'FACTORY_REVIEW_DEEP_CAP', 'FACTORY_REVIEW_IDLE_MS'])
       expect(() => loadConfig({ ...env, [name]: '0' })).toThrow(name)
+  })
+
+  test('FACTORY_LEADS_PER_ACCOUNT is the Issue-lead cap per account, two by default, and a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '3' }).review.leadsPerAccount).toBe(3)
+    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '' }).review.leadsPerAccount).toBe(2)
+    for (const bad of ['0', '-1', '1.5', 'many', '17'])
+      expect(() => loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: bad })).toThrow('FACTORY_LEADS_PER_ACCOUNT')
   })
 
   test('FACTORY_ALERT_LEADS is on unless it says 0, and a mistake is refused', () => {
