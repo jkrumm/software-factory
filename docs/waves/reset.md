@@ -78,13 +78,20 @@ The lead does this itself; no worker.
 The owner read the learnings and the handoff and let the loop run on (RS10). From here the program lead is the owner's
 session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
 
-## Wave 8 — dotfiles: `rd`, `/wave`, hc-reap, `wave-gate.py` (row 7)            <!-- status: active -->
-- [ ] Brief `briefs/reset-w8-dotfiles.md` from design v3 §3, §8, §12 and an inventory of every caller; one `rd fan` worker in dotfiles.
-- [ ] `rd` a thin `factory issue new`; the `/wave` skill the Issue lead's playbook (in-session `/review`, never `agw review request`'s
-  hidden transport); hc-reap keeps only orphaned shells older than 7 days and `claude --bg` leftovers; `wave-gate.py` and its callers gone.
-- [ ] Cut-over: other repos' chains still running on `rd fan` (iris) are told first and land after their current wave closes.
-- [ ] Live proof: `rd` files an Issue that a lead ships; no `rd fan|wave|merge` caller left (`rg`).
+## Wave 8 — dotfiles: the Issue path beside the wave path (row 7, expand)            <!-- status: active -->
+- [ ] Brief `briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
+  the plan playbook (Issues with `--after`; the chain modes under Legacy), hc-reap's orphaned-shell rule, the lanes docs. Built by one
+  `implementer` in a dotfiles worktree (this session is not a factory session, so `rd fan` would go hc-direct).
+- [ ] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
+**Why expand:** six repos have a wave marked active; iris runs one on `rd wave --child`, `rd fan`, `rd merge` (the inventory of 2026-11-05).
 **Repos:** dotfiles
+
+## Wave 8b — the contract of row 7            <!-- status: todo -->
+- [ ] iris's running wave closes; its mother and lead handoffs, agent-workflows' handoffs and software-factory's `scripts/gate-run` and
+  `scripts/gameday` teardown move off `rd wave|close`; the stale active waves (basalt-ui, modelpick, ntfy-mac, basalt-expr-trial,
+  basalt-expr-trial-v1) become Issues or are archived.
+- [ ] Then delete `rd wave|fan|merge|close` for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and
+  tests, hc-reap's agent rules; keep `rd work|agents|read|say|issue`.
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: todo -->
 - [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
@@ -92,7 +99,7 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 - [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: todo -->
-- [ ] Row 8 as Issues `--after` row 7: the fleet triage/presence/away/digest/reaper, the review transport (after Issue 67's fix is
+- [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the review transport (after Issue 67's fix is
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
 - [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
