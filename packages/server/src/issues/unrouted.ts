@@ -37,10 +37,10 @@ const DUE = (sql: SQL, now: Date) => sql`
   u.status = 'down' AND NOT u.is_group AND u.down_since <= ${new Date(now.getTime() - UNROUTED_GRACE_MS)}
   AND NOT EXISTS (SELECT 1 FROM factory.door_routes r WHERE r.source = u.source AND r.monitor = u.monitor)`
 
-/** The Issue of the monitor's current down: the one the steward filed, else an open Issue of the monitor (a `heal:` grace files it later, off the row). */
-export const ISSUE_OF = (sql: SQL) => sql`COALESCE(u.filed_issue, (
+/** The Issue of the monitor's current down (none for an up): the one the steward filed, else an open Issue of the monitor (a `heal:` grace files it later, off the row). */
+export const ISSUE_OF = (sql: SQL) => sql`CASE WHEN u.status = 'down' THEN COALESCE(u.filed_issue, (
   SELECT max(d.issue_id) FROM factory.door_issues d JOIN factory.issues i ON i.id = d.issue_id AND i.state <> 'closed'
-  WHERE d.source = u.source AND d.monitor = u.monitor))`
+  WHERE d.source = u.source AND d.monitor = u.monitor)) END`
 
 const SUFFIX = /\s+[-–—]\s+(push|door)$/i
 
