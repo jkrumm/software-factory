@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/await-thenable -- bun types the `rejects` matchers as void; they return a promise */
 import { describe, expect, test } from 'bun:test'
 import { EvidenceKind } from '@software-factory/contract'
+import { EXIT_TIMEOUT } from '../src/exec.ts'
 import { AgwReview, ReviewFailed } from '../src/issues/review.ts'
 
 const ok = (stdout: unknown, exitCode = 0) => ({ exitCode, stdout: JSON.stringify(stdout) })
@@ -48,15 +49,44 @@ describe('AgwReview', () => {
   })
 
   test('a failing, silent or odd agw throws', async () => {
-    await expect(adapter({ route: ok({}, 2) }).review.read({ repo: '/r', base: 'a', head: 'b' })).rejects.toThrow(
-      ReviewFailed,
-    )
+    const covered = ok({ covered: true, commits: [], uncovered: [] })
     await expect(
-      adapter({ route: { exitCode: 0, stdout: 'nope' } }).review.read({ repo: '/r', base: 'a', head: 'b' }),
+      adapter({ route: ok({}, 2), covered }).review.read({ repo: '/r', base: 'a', head: 'b' }),
+    ).rejects.toThrow(ReviewFailed)
+    await expect(
+      adapter({ route: { exitCode: 0, stdout: 'nope' }, covered }).review.read({ repo: '/r', base: 'a', head: 'b' }),
     ).rejects.toThrow('printed no JSON')
     await expect(
-      adapter({ route: ok({ tier: 'huge' }) }).review.read({ repo: '/r', base: 'a', head: 'b' }),
+      adapter({ route: ok({ tier: 'huge' }), covered }).review.read({ repo: '/r', base: 'a', head: 'b' }),
     ).rejects.toThrow('unexpected')
+  })
+
+  test('a slow covered read on a long range is waited for under a limit of minutes, not refused', async () => {
+    const limits: Record<string, number> = {}
+    const started: string[] = []
+    const review = new AgwReview({
+      bin: 'agw',
+      run: async (cmd, timeoutMs) => {
+        limits[cmd[2] ?? ''] = timeoutMs
+        started.push(cmd[2] ?? '')
+        if (cmd[2] === 'covered') await new Promise((resolve) => setTimeout(resolve, 50))
+        return cmd[2] === 'route' ? ok({ tier: 'light' }) : ok({ covered: true, commits: [], uncovered: [] })
+      },
+    })
+    const pending = review.read({ repo: '/r', base: 'a', head: 'b' })
+    // both reads are in flight before either answered: the two limits do not add up
+    expect(started).toEqual(['route', 'covered'])
+    expect(await pending).toEqual({ tier: 'light', covered: true, uncovered: [] })
+    expect(limits.covered).toBeGreaterThanOrEqual(120_000)
+    expect(limits.route).toBeGreaterThanOrEqual(120_000)
+  })
+
+  test('a covered read that outlasts its limit is a refusal, never a pass', async () => {
+    const review = new AgwReview({
+      bin: 'agw',
+      run: async (cmd) => (cmd[2] === 'route' ? ok({ tier: 'light' }) : { exitCode: EXIT_TIMEOUT, stdout: '' }),
+    })
+    await expect(review.read({ repo: '/r', base: 'a', head: 'b' })).rejects.toThrow('did not answer in time')
   })
 })
 

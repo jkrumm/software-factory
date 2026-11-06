@@ -22,7 +22,7 @@ export const SYNC_INTERVAL_MS = 10 * 60_000
 const GIT_TIMEOUT_MS = 5_000
 const FETCH_TIMEOUT_MS = 30_000
 const CONCURRENCY = 8
-/** How long `factory project sync` waits for the remotes in all: the server's idle timeout is 120 s and the CLI's 100 s, and a pass still follows. */
+/** How long `factory project sync` waits for the remotes in all: well inside the server's idle timeout (240 s) and the CLI's (250 s), and a pass still follows. */
 export const SYNC_FETCH_BUDGET_MS = 40_000
 
 export interface SyncDeps {
