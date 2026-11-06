@@ -1570,7 +1570,7 @@ owner "continue".
 |-|-|
 | The factory deploys itself | stop, swap the release, start, health check; a failed check starts the previous release. The one automatic revert, because a dead factory watches nothing |
 | The mini was down | open deadlines move by the downtime; missed job slots run once |
-| A second copy starts | the advisory lock makes it exit |
+| A second copy starts | it waits 45 s for the advisory lock, then exits |
 | The factory is down when a hook fires | the event goes to the spool, replayed on start |
 | A hook fires in the owner's own session | it exits at once: no `FACTORY_SESSION` |
 | A runner restart moves a session to another account | the witness records the account in effect |

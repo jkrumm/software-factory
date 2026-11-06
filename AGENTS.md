@@ -46,7 +46,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   tab, any role, with or without a parent.
 - **Roles** (`config/roles.json`): role → tier (`haiku|sonnet|opus`, never a model id) and effort. `lead` (sonnet, high) is the level every Issue lead runs at, whatever Classify asked. The table is `lead`, `implementer` (the `spawn create` default), `verifier`, `reviewer` (sonnet, medium: the `/review` subagent) and `Explore`; a spawn with a role not in the table is 422. `rd --role` depends on `factory role get <role> --format json` printing exactly
   `{"role","tier","effort"}`; unknown is exit 4. Values change only on measured data.
-- **One process.** A session-level Postgres advisory lock is taken first; a second copy exits 1. Every advisory key lives in
+- **One process.** A session-level Postgres advisory lock is taken first; a second copy asks for it for 45 s (the old server may be shutting down), then exits 1. Every advisory key lives in
   `src/locks.ts` and they stay distinct.
 - **One contract.** Response shapes are zod schemas in `packages/contract`; the server builds every body through its schema and
   the CLI parses with the same one (a body that does not parse is exit 9).
