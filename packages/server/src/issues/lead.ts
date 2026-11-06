@@ -229,23 +229,33 @@ const MAX_BRIEF_NOTE_BYTES = 24_000
 
 const clip = (text: string): string => (text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) : text)
 
+const fieldOf = (payload: Effect['payload'], name: string): string | null => {
+  const value = payload?.[name]
+  return typeof value === 'string' && value ? value : null
+}
+
+/** The sentence that carries an answer to the lead (an owner's, the steward's, an expiry's default). */
+function answerLine(head: string, payload: Effect['payload']): string {
+  const who = fieldOf(payload, 'who')
+  // The steward's answer says where it comes from and that the owner can overrule it (`judge.ts` builds the sentence).
+  if (who === 'steward' && fieldOf(payload, 'text')) return `${head} ${fieldOf(payload, 'text')}`
+  return `${head} your question was answered${who && who !== 'owner' ? ` (${who})` : ''}: ${fieldOf(payload, 'answer') ?? 'see the owner'}`
+}
+
 /** What the lead is told for the event that woke or reached it. Never starts with `-`. */
 export function noteText(issueId: number, payload: Effect['payload']): string {
-  const field = (name: string): string | null => {
-    const value = payload?.[name]
-    return typeof value === 'string' && value ? value : null
-  }
+  const field = (name: string): string | null => fieldOf(payload, name)
   const head = `Factory, Issue ${issueId}:`
   switch (payload?.cause) {
-    case 'answer': {
-      const who = field('who')
-      // The steward's answer says where it comes from and that the owner can overrule it (`judge.ts` builds the sentence).
-      if (who === 'steward' && field('text')) return clip(`${head} ${field('text')}`)
-      return clip(
-        `${head} your question was answered${who && who !== 'owner' ? ` (${who})` : ''}: ${field('answer') ?? 'see the owner'}`,
-      )
-    }
+    case 'answer':
+      return clip(answerLine(head, payload))
     case 'wake':
+      // The end of a decision wait: the repo was free for other work meanwhile, so what landed is yours to build on before you go on.
+      if (payload?.for === 'claim') {
+        return clip(
+          `${answerLine(head, payload)} The repo was free for other work while you waited and is yours again. Before you carry on, \`git fetch\` and rebase your branch onto the default branch (resolve conflicts, rerun the checks), then continue. Notes that came while you waited: \`factory issue show ${issueId}\`.`,
+        )
+      }
       return `${head} your wait is over. Carry on from where you stopped.`
     case 'regression': {
       // One line: what the checks printed is data, and JSON escapes whatever it holds.
@@ -269,6 +279,12 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
 async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const { sql, clock } = deps
   const key = leadKey(effect.issueId, attemptOf(effect))
+  // A lead in a decision wait, or waiting to take its repo's claim again, is not typed to: it would work with no place in the repo. The
+  // note comes with the wake that gives the place back (the effects of an Issue run in order, so it is not lost).
+  const [waiting]: { reason: string }[] = await sql`
+    SELECT reason FROM factory.issues WHERE id = ${effect.issueId} AND state = 'waiting' AND reason IN ('decision', 'claim')`
+  if (waiting)
+    throw new Waiting(`Issue ${effect.issueId} has no place in its repo (${waiting.reason}); the note waits for it`)
   const spawn = await getSpawn(sql, key, clock.now())
   if (spawn?.status === 'failed' || spawn?.status === 'ended') {
     // Nobody is left to tell. The Issue would sit `working` with its claim held and no lead, unseen: it parks, with a line for the owner.

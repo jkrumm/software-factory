@@ -120,6 +120,7 @@ const WAITING_ISSUE: Record<string, string> = {
   parked: 'Parked: it needs a look.',
   unreported: 'The lead stopped without reporting.',
   lead_gone: 'The lead ended and no new attempt will start.',
+  claim: 'Answered, waiting for the repo to be free.',
 }
 
 /** The fixed sentence for an Issue that has said nothing of its own yet. */

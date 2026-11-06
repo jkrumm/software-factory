@@ -605,7 +605,7 @@ stateDiagram-v2
   working --> queued: a lead is gone (twice)
   waiting --> queued: the steward restarts a lead_gone park
   waiting --> working: also the owner's note --wake on a wait, a block or a park
-  waiting --> waiting: a timed wait, re-filed or turned into a block or a question
+  waiting --> waiting: a timed wait, re-filed or turned into a block or a question; an answer (decision to claim)
   waiting --> watching: a timed wait, the lead ships
   waiting --> closed: stopped, or a timed wait, the lead closes or drops
   working --> watching: shipped with evidence
@@ -616,7 +616,7 @@ stateDiagram-v2
   closed --> queued: same fault within 30 days
 ```
 
-*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to, for the third time). **Every park can end without a drop** (RS3): a `wall` and an `unreported` end by themselves when the session that caused them starts a turn again (below), a `lead_gone` is a new attempt twice before it is a park, and a `parked` by the third regression is the owner's. A `wait` needs a time in `until`, which sets `wake_at`. **A timed wait can be ended early**: by its lead, whose `phase` (back to `working`), `wait` (a new time), `ship`, `close`, `drop`, `block` and `ask` then act as they do while `working` (they are refused on every other reason: a `blocked` or `decision` wait keeps its rules), and by the owner, whose `factory issue note <id> <text> --wake` ends it like a wake and types the text to the lead as any note. **`--wake` is also the owner's way out of a `blocked` and a `parked` Issue** (nothing but a stop left them before); a `decision` wait stays on `issue answer`, a `dependency` ends with its blockers, and a `lead_gone` park and every other reason take `--wake` as a plain note. The timer's own `wake` for the ended wait finds the Issue changed and ends nothing. A stopped Issue
+*Parked* is `waiting` with a reason (`reason`: `wait`, `blocked`, `decision`, `wall`, `dependency`, `parked`, `unreported`: a lead that stopped twice with nothing reported, `lead_gone`: its spawn failed or ended, so the news had nobody to go to, for the third time, `claim`: the question was answered and the Issue waits to take its repo's claim again). **Every park can end without a drop** (RS3): a `wall` and an `unreported` end by themselves when the session that caused them starts a turn again (below), a `lead_gone` is a new attempt twice before it is a park, and a `parked` by the third regression is the owner's. A `wait` needs a time in `until`, which sets `wake_at`. **A timed wait can be ended early**: by its lead, whose `phase` (back to `working`), `wait` (a new time), `ship`, `close`, `drop`, `block` and `ask` then act as they do while `working` (they are refused on every other reason: a `blocked` or `decision` wait keeps its rules), and by the owner, whose `factory issue note <id> <text> --wake` ends it like a wake and types the text to the lead as any note. **`--wake` is also the owner's way out of a `blocked` and a `parked` Issue** (nothing but a stop left them before); a `decision` wait stays on `issue answer`, a `dependency` ends with its blockers, and a `lead_gone` park and every other reason take `--wake` as a plain note. The timer's own `wake` for the ended wait finds the Issue changed and ends nothing. A stopped Issue
 is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `healed`. Pausing is a flag on the project.
 
 - **One writer.** `issues.state` changes in one module, `src/issues/lifecycle.ts`: its `TABLE` (event → state → step) is the
@@ -1098,6 +1098,14 @@ ticktick: { list: WeatherOrb }
   Issue by id (urgent ones first); only an Issue with a spawn still queued, waiting or starting counts as queued. A repo whose
   project has no row yet is held the same way: the tick syncs a named repo before it claims. A spawn for a closed Issue is
   refused (`IssueClosed`, nothing stored), and a queued or waiting one whose Issue closed fails in the tick's sweep. A spawn without an Issue (a resume) takes no claim. The session of a spawn is not bound to its Issue here (Wave 3 does it with the lead).
+- **A decision wait frees the repo.** An Issue `waiting` on a `decision` holds no claim: `settleClaims` (`issues/admission.ts`, once per tick before admission, under the
+  capacity lock) deletes the claim rows of such Issues (`releaseDecisionClaims`, idempotent, so it also releases a claim held from before the ask) and
+  looks again at the spawns waiting for a place, so the next Issue of the project runs while the owner takes as long as the owner takes. The lead's worktree and
+  session stay. The `answer` moves the Issue to `waiting` with reason `claim` (the answer is stored); the same pass takes the claim again through `tryClaim`
+  (urgent first, then by id; a waiting Issue counts as queued for that, so a younger one cannot pass it) and, holding it, files `wake:<issue>:claim:<ask key>`, which moves it to `working`
+  and types the answer to the lead with the order to `git fetch` and rebase its branch onto the default branch, as master may have moved. Another lead holding the repo keeps the Issue in `claim` until it is
+  closed or itself waits on a decision, so working leads stay at most `leads` per project. A note typed to a lead in a `decision` or `claim` wait is held (the effect waits) until the lead has the claim,
+  so nothing works in a repo without a place. A repo with no project row any more has no claim to wait for. `factory status` shows the wait as `claim`, a health line `Issue N waits for the claim on <project>` stands for both a queued and an answered Issue.
 - **Release.** `releaseClaim` is what finalize calls (Wave 4); until then `releaseClosed` in the tick's project pass gives back the
   claims of closed Issues, and the held claim of an Issue whose every spawn failed (no lead ever ran; `factory spawn requeue` asks
   again), before the spawns are claimed, so the next Issue is promoted in the same pass. The sweep and `requeueSpawn` run under the capacity

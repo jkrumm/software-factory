@@ -87,11 +87,12 @@ describe('POST /issues/:id/answer', () => {
     const ack = IssueAnswerAck.parse(await res.json())
     expect(ack).toEqual({ issue: id, key: `${id}:answer:a1`, duplicate: false, state: 'waiting' })
     expect(await pass()).toEqual([])
+    await pass()
     expect((await getIssue(db.sql, id))?.state).toBe('working')
     const [decision] = await db.sql`SELECT answer, answered_by FROM factory.decisions WHERE issue_id = ${id}`
     expect(decision).toEqual({ answer: 'the first', answered_by: 'owner' })
     const [effect] = await db.sql`SELECT kind, payload FROM factory.issue_effects WHERE kind = 'note_lead'`
-    expect(effect?.payload).toMatchObject({ cause: 'answer', answer: 'the first' })
+    expect(effect?.payload).toMatchObject({ cause: 'wake', for: 'claim', answer: 'the first' })
     // the same call again is one answer
     const again = await app.send('POST', `/issues/${id}/answer`, { answer: 'the first', id: 'a1' })
     expect(again.status).toBe(200)
@@ -213,6 +214,7 @@ describe('factory issue answer, factory notify', () => {
     const done = await factory(['issue', 'answer', String(id), 'the second one', '--decision', '1', '--id', 'c1'])
     expect(done.code).toBe(0)
     expect(IssueAnswerAck.parse(JSON.parse(done.stdout))).toMatchObject({ issue: id, key: `${id}:answer:c1` })
+    await pass()
     await pass()
     expect((await getIssue(db.sql, id))?.state).toBe('working')
     const [decision] = await db.sql`SELECT answer FROM factory.decisions WHERE issue_id = ${id}`

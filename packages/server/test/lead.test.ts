@@ -743,6 +743,34 @@ describe('classify, then admission', () => {
     expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE kind = 'lead_gone'`).toHaveLength(0)
   })
 
+  test('a lead in a decision wait is typed to only once it has its repo’s claim again, answer first, with the order to rebase', async () => {
+    const { id, key } = await lead()
+    await post(id, 'ask', { question: 'Which?', session: key })
+    await pass()
+    await pass()
+    expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(0)
+    // A note while the question is open waits; so does the answer's wake while another lead holds the repo.
+    await enqueue(db.sql, { issueId: id, key: `note:${id}:w`, kind: 'note', at: clock.now(), payload: { text: 'fyi' } })
+    await drive(3)
+    expect(await db.sql`SELECT 1 FROM factory.prompts WHERE source = 'note' AND session = ${key}`).toHaveLength(0)
+    await enqueue(db.sql, {
+      issueId: id,
+      key: `answer:${id}:w`,
+      kind: 'answer',
+      at: clock.now(),
+      payload: { answer: 'this one' },
+    })
+    await drive(3)
+    expect(await issue(id)).toMatchObject({ state: 'working', reason: null })
+    expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id} AND held_at IS NOT NULL`).toHaveLength(1)
+    const texts: { text: string }[] = await db.sql`
+      SELECT text FROM factory.prompts WHERE source = 'note' AND session = ${key} ORDER BY created_at, id`
+    expect(
+      texts.some((t) => t.text.includes('your question was answered: this one') && t.text.includes('rebase')),
+    ).toBe(true)
+    expect(texts.some((t) => t.text.includes('fyi'))).toBe(true)
+  })
+
   test('the brief is recorded with the spawn: a create that fails leaves no prompt behind', async () => {
     const id = await file(newRepo())
     const input = {
@@ -1139,6 +1167,7 @@ describe('what the review found', () => {
       at: clock.now(),
       payload: { answer: 'yes' },
     })
+    await pass()
     await pass()
     await post(id, 'ask', { id: 'new', question: 'new?', session: key })
     await pass()

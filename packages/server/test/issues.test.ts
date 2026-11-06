@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { Issue } from '@software-factory/contract'
 import { type Effect, type EffectKind, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
+import { settleClaims } from '../src/issues/admission.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { REOPEN_WINDOW_MS, TABLE } from '../src/issues/lifecycle.ts'
@@ -247,6 +248,9 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'ask', { question: 'which one?', options: ['a', 'b'], default: 'a' })
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'decision' })
     await step(id, 'answer', { answer: 'b', who: 'owner' })
+    // The answer is recorded and the Issue waits to take its repo's claim again; the next pass gives it back and wakes the lead.
+    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'claim' })
+    expect(await pass()).toEqual([])
     expect(await state(id)).toMatchObject({ state: 'working', reason: null })
     const [decision] =
       await db.sql`SELECT question, options, default_option, answer, answered_by FROM factory.decisions`
@@ -262,7 +266,8 @@ describe('golden paths: transitions and effects', () => {
       'admitted queued→working',
       'ask working→waiting',
       'ask_judged',
-      'answer waiting→working',
+      'answer waiting→waiting',
+      'wake waiting→working',
     ])
     expect(await effects(id)).toEqual(['start_lead', 'note_lead'])
   })
@@ -1303,6 +1308,8 @@ describe('the replay test: a crash after every effect', () => {
     { send: 'phase', payload: { phase: 'investigate' } },
     { send: 'ask', payload: { question: 'which?' } },
     { send: 'answer', payload: { answer: 'this' } },
+    // the pass that gives the Issue its repo's claim back and wakes it, before anything else is said to it
+    { advance: 1000 },
     { send: 'note', payload: { text: 'a new fact' } },
     { send: 'ship' },
     { send: 'signal', payload: { regression: true } },
@@ -1344,6 +1351,8 @@ describe('the replay test: a crash after every effect', () => {
   async function passWith(world: World, faults: Faults): Promise<void> {
     faults.point()
     await fireTimers(db.sql, clock.now())
+    faults.point()
+    await settleClaims(db.sql, clock.now())
     faults.point()
     await processInbox(db.sql, now)
     faults.point()

@@ -57,6 +57,8 @@ async function step(issueId: number, kind: string, payload?: Record<string, unkn
     payload: GATED.has(kind) ? { derived: DERIVED, commits: DERIVED.commits, ...payload } : payload,
   })
   expect(await pass()).toEqual([])
+  // An answer leaves the Issue waiting for its repo's claim; the next pass gives it back.
+  if (kind === 'answer') expect(await pass()).toEqual([])
 }
 
 const iso = (offsetMs = 0) => new Date(clock.now().getTime() + offsetMs).toISOString()

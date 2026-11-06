@@ -171,7 +171,6 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   for (const issue of regressing) {
     lines.push(`Issue ${issue.id}: ${MAX_REGRESSIONS} regressions, the next one parks it`)
   }
-  lines.push(...(await decisionClaimLines(sql, now)))
   lines.push(...(await loadHoldLines(sql)))
   return lines
 }
@@ -191,34 +190,6 @@ async function loadHoldLines(sql: SQL): Promise<string[]> {
   return [
     `held by load: Issue ${first}${more} waits for the machine, new leads start when its load is under the ceiling`,
   ]
-}
-
-/** An Issue waiting on the owner's decision that holds a project's claim while another Issue has been queued behind it this long gets a line. */
-export const CLAIM_QUEUED_LINE_MS = 15 * 60_000
-
-/**
- * `Issue N waits on the owner's decision and holds <repo> for X min: Issue M (and K more) queued behind it`. The claim is not released
- * (the lead's worktree and the repo's one-at-a-time rule stay), so the line is all there is: the owner answers, or the queued work waits.
- * A claim key is `repo:<project name>` (`projects/claims.ts`).
- */
-async function decisionClaimLines(sql: SQL, now: Date): Promise<string[]> {
-  const rows: { holder: number; project: string; held_at: Date; queued: number[] }[] = await sql`
-    SELECT h.issue_id AS holder, substr(h.key, 6) AS project, h.held_at, array_agg(q.issue_id ORDER BY q.issue_id) AS queued
-    FROM factory.claims h
-    JOIN factory.issues hi ON hi.id = h.issue_id AND hi.state = 'waiting' AND hi.reason = 'decision'
-    JOIN factory.claims q ON q.key = h.key AND q.held_at IS NULL
-    JOIN factory.issues qi ON qi.id = q.issue_id AND qi.state = 'queued'
-    WHERE h.held_at IS NOT NULL AND q.queued_at <= ${new Date(now.getTime() - CLAIM_QUEUED_LINE_MS)}
-    GROUP BY h.issue_id, h.key, h.held_at
-    ORDER BY h.issue_id`
-  return rows.flatMap((row) => {
-    const [first, ...rest] = row.queued
-    if (first === undefined) return []
-    const more = rest.length > 0 ? ` (and ${rest.length} more)` : ''
-    return [
-      `Issue ${row.holder} waits on the owner's decision and holds ${row.project} for ${minutes(now.getTime() - row.held_at.getTime())} min: Issue ${first}${more} queued behind it`,
-    ]
-  })
 }
 
 /** Which kind of health line a line is (the one place that decides; `/fleet` carries it). */

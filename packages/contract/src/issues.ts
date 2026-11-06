@@ -15,6 +15,7 @@ export const WaitReason = z.enum([
   'parked',
   'unreported',
   'lead_gone',
+  'claim',
 ])
 export type WaitReason = z.infer<typeof WaitReason>
 
@@ -329,7 +330,7 @@ export const IssueResumeInput = z.strictObject({ id: CallId.optional(), attempt:
 export type IssueResumeInput = z.output<typeof IssueResumeInput>
 
 /** What an Issue waits for in `factory status`: a `waiting` Issue's reason, or `claim` for a queued one the project's claim has no room for. */
-export const StatusWait = z.union([WaitReason, z.literal('claim')])
+export const StatusWait = WaitReason
 export type StatusWait = z.infer<typeof StatusWait>
 
 /**

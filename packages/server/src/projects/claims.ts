@@ -47,7 +47,8 @@ export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<Cla
   const urgent = issue.class === 'urgent' || issue.kind === 'incident'
   const rows: { issue_id: number; urgent: boolean; held: boolean; pending: boolean }[] = await tx`
     SELECT c.issue_id, c.urgent, c.held_at IS NOT NULL AS held,
-      EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status IN ('queued', 'waiting', 'starting')) AS pending
+      (EXISTS (SELECT 1 FROM factory.spawns s WHERE s.issue_id = c.issue_id AND s.status IN ('queued', 'waiting', 'starting'))
+       OR EXISTS (SELECT 1 FROM factory.issues w WHERE w.id = c.issue_id AND w.state = 'waiting' AND w.reason = 'claim')) AS pending
     FROM factory.claims c WHERE c.key = ${key}`
   const mine = rows.find((r) => r.issue_id === issueId)
   if (mine?.held) return 'held'
@@ -73,6 +74,28 @@ export async function tryClaim(tx: SQL, issueId: number, now: Date): Promise<Cla
 export async function releaseClaim(tx: SQL, issueId: number): Promise<string[]> {
   const rows: { key: string }[] = await tx`DELETE FROM factory.claims WHERE issue_id = ${issueId} RETURNING key`
   return rows.map((row) => row.key)
+}
+
+/**
+ * Gives back the claims of Issues that wait on the owner's decision (held or queued) and says which keys: the lead's worktree stays,
+ * the repo's place does not wait for an answer that can take hours. The Issue takes a place again when answered (`tryClaim`, in a
+ * `claim` wait). Idempotent, so it is also what releases a claim an Issue held before it asked. Callers hold the capacity lock.
+ */
+export async function releaseDecisionClaims(tx: SQL): Promise<string[]> {
+  const rows: { key: string }[] = await tx`
+    DELETE FROM factory.claims c USING factory.issues i
+    WHERE i.id = c.issue_id AND i.state = 'waiting' AND i.reason = 'decision'
+    RETURNING c.key`
+  return [...new Set(rows.map((row) => row.key))]
+}
+
+/** Looks again, now, at the spawns that wait for a place in these projects (a place just freed). Callers hold the capacity lock. */
+export async function wakeClaimWaiters(tx: SQL, keys: readonly string[], now: Date): Promise<void> {
+  if (keys.length === 0) return
+  await tx`
+    UPDATE factory.spawns SET resume_at = ${now}
+    WHERE status = 'queued' AND hold = 'claim'
+      AND issue_id IN (SELECT issue_id FROM factory.claims WHERE key IN ${tx(keys)} AND held_at IS NULL)`
 }
 
 const IDLE = `c.held_at IS NOT NULL
