@@ -12,7 +12,7 @@ import {
 import { serveHooks } from '../src/http.ts'
 import { FileTranscripts } from '../src/issues/archive.ts'
 import { Classification } from '../src/issues/classify.ts'
-import { type CommitRead, type Commits, GitCommits } from '../src/issues/commits.ts'
+import { type CommitRead, type Commits, GitCommits, type ReviewRange } from '../src/issues/commits.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { runProcess } from '../src/exec.ts'
 import { type Effect, type EffectPorts, runEffects, Waiting } from '../src/issues/effects.ts'
@@ -84,11 +84,18 @@ class FakeCommits implements Commits {
   resolves: Record<string, string> = {}
   /** origin/<default> as the ship found it */
   landedAt: string | null = 'f'.repeat(40)
+  reviewRanges: ReviewRange[] | undefined
   async read({ reported }: { reported: readonly string[] }): Promise<CommitRead> {
     this.calls++
     if (this.failure) throw this.failure
     const full = reported.map((sha) => this.resolves[sha] ?? sha)
-    return { landedAt: this.landedAt, commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
+    return {
+      landedAt: this.landedAt,
+      commits: [...full, ...this.branch],
+      paths: this.paths,
+      mergedAt: this.mergedAt,
+      reviewRanges: this.reviewRanges ?? (this.landedAt ? [{ base: '0'.repeat(40), head: this.landedAt }] : []),
+    }
   }
 }
 
@@ -509,6 +516,80 @@ describe('GitCommits, against a repo with an origin', () => {
     expect(found.paths).toEqual(['docs/named.md', 'src/unnamed.ts'])
     expect((await read({ repo: clone, cut, reported: [] })).paths).toEqual(['src/unnamed.ts'])
   })
+
+  describe('another Issue’s commits land while this one waits', () => {
+    /** A clone whose origin takes pushes, so the lead can land work on the base as it does. */
+    function lane(name: string) {
+      const made = cloned(name)
+      fixture.git(made.origin, 'config', 'receive.denyCurrentBranch', 'updateInstead')
+      fixture.git(made.clone, 'checkout', '-q', '-b', 'factory/1-1')
+      const rebase = () => {
+        fixture.git(made.clone, 'fetch', '-q', 'origin')
+        fixture.git(made.clone, 'rebase', '-q', 'origin/master')
+      }
+      const land = () => fixture.git(made.clone, 'push', '-q', 'origin', 'HEAD:master')
+      return { ...made, rebase, land }
+    }
+
+    test('the branch rebased over their commits is judged by its own: paths, commits and review ranges leave theirs out', async () => {
+      const { origin, clone, head, cut, rebase, land } = lane('rebased')
+      fixture.commit(clone, { 'docs/own1.md': 'a' })
+      fixture.commit(origin, { 'src/foreign.ts': 'x' })
+      const foreign = head(origin)
+      rebase()
+      fixture.commit(clone, { 'docs/own2.md': 'b' })
+      land()
+      const own2 = head(clone)
+      const found = await read({ repo: clone, cut, reported: [own2], merged: true })
+      expect(found.paths).toEqual(['docs/own1.md', 'docs/own2.md'])
+      expect(found.commits).not.toContain(foreign)
+      expect(found.commits).toHaveLength(2)
+      expect(found.reviewRanges).toEqual([{ base: foreign, head: own2 }])
+      // close: nothing named, the branch alone, is judged the same way
+      expect((await read({ repo: clone, cut, reported: [] })).paths).toEqual(['docs/own1.md', 'docs/own2.md'])
+    })
+
+    test('work landed in two steps with theirs between is two review ranges, and the first step stays its own after the second rebase', async () => {
+      const { origin, clone, head, cut, rebase, land } = lane('stepped')
+      fixture.commit(origin, { 'src/f1.ts': 'x' })
+      const f1 = head(origin)
+      rebase()
+      fixture.commit(clone, { 'docs/own1.md': 'a' })
+      const own1 = head(clone)
+      land()
+      fixture.commit(origin, { 'src/f2.ts': 'y' })
+      const f2 = head(origin)
+      rebase()
+      fixture.commit(clone, { 'docs/own2.md': 'b' })
+      const own2 = head(clone)
+      land()
+      const found = await read({ repo: clone, cut, reported: [own2], merged: true })
+      expect(found.commits.sort()).toEqual([own1, own2].sort())
+      expect(found.paths).toEqual(['docs/own1.md', 'docs/own2.md'])
+      expect(found.reviewRanges).toEqual([
+        { base: f1, head: own1 },
+        { base: f2, head: own2 },
+      ])
+    })
+
+    test('a commit of the branch the lead leaves out is still its own', async () => {
+      const { origin, clone, head, cut, rebase, land } = lane('left-out')
+      fixture.commit(origin, { 'src/foreign.ts': 'x' })
+      rebase()
+      fixture.commit(clone, { 'src/left-out.ts': 'a' })
+      fixture.commit(clone, { 'docs/named.md': 'b' })
+      land()
+      const found = await read({ repo: clone, cut, reported: [head(clone)], merged: true })
+      expect(found.paths).toEqual(['docs/named.md', 'src/left-out.ts'])
+    })
+
+    test('a branch never rebased keeps its whole range, and a rebase reflog cannot be read leaves it whole too', async () => {
+      const { origin, clone, cut } = lane('plain')
+      fixture.commit(clone, { 'docs/own.md': 'a' })
+      fixture.commit(origin, { 'src/foreign.ts': 'x' })
+      expect((await read({ repo: clone, cut, reported: [] })).paths).toEqual(['docs/own.md'])
+    })
+  })
 })
 
 describe('ship', () => {
@@ -692,7 +773,7 @@ describe('review evidence', () => {
     expect(review.asked).toHaveLength(1)
     expect(review.asked[0]).toMatchObject({ base: '0'.repeat(40), head: 'f'.repeat(40) })
     expect(await lastDerived()).toMatchObject({
-      review: { tier: 'none', covered: true, uncovered: [], base: '0'.repeat(40), head: 'f'.repeat(40) },
+      review: { tier: 'none', covered: true, uncovered: [], ranges: [{ base: '0'.repeat(40), head: 'f'.repeat(40) }] },
       reviewProblem: null,
     })
   })
@@ -732,6 +813,33 @@ describe('review evidence', () => {
     )
     review.failure = undefined
     expect((await ship(id, key, { id: 's1' })).status).toBe(201)
+  })
+
+  test('only the Issue’s own ranges are asked, the highest tier counts and every range must be covered', async () => {
+    const own = [
+      { base: '1'.repeat(40), head: '2'.repeat(40) },
+      { base: '3'.repeat(40), head: '4'.repeat(40) },
+    ]
+    commits.reviewRanges = own
+    review.answers = [{ tier: 'light', covered: true, uncovered: [] }, standard(false)]
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    const refused = await ship(id, key, { id: 's1' })
+    expect(refused.status).toBe(409)
+    expect(review.asked.map(({ base, head }) => ({ base, head }))).toEqual(own)
+    expect(((await refused.json()) as { error: string }).error).toContain(
+      `${'a'.repeat(12)} feat: the change (needs standard)`,
+    )
+    expect(await lastDerived()).toMatchObject({ review: { tier: 'standard', covered: false, ranges: own } })
+  })
+
+  test('commits that are not on origin leave nothing to review, which refuses the ship', async () => {
+    commits.reviewRanges = []
+    const { id, key } = await lead()
+    await prove(id, key, 'service')
+    const response = await ship(id, key)
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as { error: string }).error).toContain('none of the Issue’s commits is on origin')
   })
 
   test('close is not asked for review', async () => {

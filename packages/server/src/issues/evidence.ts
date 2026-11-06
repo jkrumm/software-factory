@@ -11,7 +11,7 @@ import {
 import type { SQL } from 'bun'
 import { projectOfPath } from '../projects/claims.ts'
 import { getProject } from '../projects/store.ts'
-import { type Commits, CommitsRefused } from './commits.ts'
+import { type CommitRead, type Commits, CommitsRefused, type ReviewRange } from './commits.ts'
 import { leadBranch } from './names.ts'
 import type { Review, ReviewTier, UncoveredCommit } from './review.ts'
 import type { Context } from './shared.ts'
@@ -96,15 +96,13 @@ export function requiredEvidence(paths: readonly string[], manifest: ProjectMani
   return EVIDENCE_KINDS.filter((kind) => kinds.has(kind))
 }
 
-/** What review v4 said of `base..head` when `derive` asked; `covered` is agw's judgment, never the factory's. */
+/** What review v4 said of the Issue's own ranges when `derive` asked; `covered` is agw's judgment, never the factory's. */
 export interface DerivedReview {
   tier: ReviewTier
   covered: boolean
   uncovered: UncoveredCommit[]
-  /** the sha the lead's worktree was cut at */
-  base: string
-  /** `landedAt` */
-  head: string
+  /** what was asked: the Issue's own commits as `base..head` ranges of the landed base, none of the commits others landed in between */
+  ranges: ReviewRange[]
 }
 
 /** The answer of `derive`, carried on the verb's inbox row: the lifecycle decides inside a transaction, where no git can run. */
@@ -172,7 +170,7 @@ export async function derive(
     })
     const asked =
       merged && input.review && read.commits.length > 0
-        ? await askReview(input.review, repo, tree?.sha ?? null, read.landedAt)
+        ? await askReview(input.review, repo, tree?.sha ?? null, read)
         : { review: null, reviewProblem: null }
     return {
       landedAt: read.landedAt,
@@ -191,26 +189,45 @@ export async function derive(
 }
 
 /**
- * Review v4 over what the Issue's work added to the base: from the sha its worktree was cut at to `origin/<default>` as `derive` found
- * it. Commits others landed in between are in the range too: stricter, never lighter. Every failure is a `reviewProblem`.
+ * Review v4 over the Issue's own commits: one `base..head` per run of them on `origin/<default>` (`CommitRead.reviewRanges`), asked
+ * together. What others landed in between is no part of it. The tier is the highest asked, covered needs every range covered. Every
+ * failure is a `reviewProblem`.
  */
 async function askReview(
   review: Review,
   repo: string,
-  base: string | null,
-  head: string | null,
+  cut: string | null,
+  read: CommitRead,
 ): Promise<Pick<Derived, 'review' | 'reviewProblem'>> {
-  if (!base)
+  if (!cut)
     return { review: null, reviewProblem: 'no cut sha is on record for this attempt, so what to review is not known' }
-  if (!head)
+  if (!read.landedAt)
     return { review: null, reviewProblem: 'the landed commit on origin is not known, so what to review is not known' }
+  const { reviewRanges: ranges } = read
+  if (ranges.length === 0)
+    return { review: null, reviewProblem: 'none of the Issue’s commits is on origin, so what to review is not known' }
   try {
-    return { review: { ...(await review.read({ repo, base, head })), base, head }, reviewProblem: null }
+    const answers = await Promise.all(ranges.map(({ base, head }) => review.read({ repo, base, head })))
+    const tier = answers.reduce<ReviewTier>(
+      (top, one) => (TIER_ORDER.indexOf(one.tier) > TIER_ORDER.indexOf(top) ? one.tier : top),
+      'none',
+    )
+    return {
+      review: {
+        tier,
+        covered: answers.every((one) => one.covered),
+        uncovered: answers.flatMap((one) => one.uncovered),
+        ranges: [...ranges],
+      },
+      reviewProblem: null,
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     return { review: null, reviewProblem: `review could not be read: ${reason}` }
   }
 }
+
+const TIER_ORDER: readonly ReviewTier[] = ['none', 'light', 'standard', 'deep']
 
 const derivedOf = (row: Context['row']): Derived | undefined => row.payload?.derived as Derived | undefined
 
@@ -278,7 +295,7 @@ function reviewRefusal(issueId: number, derived: Derived): string | undefined {
         `${commit.sha.slice(0, 12)} ${commit.subject} (needs ${commit.required}${commit.reason ? `, ${commit.reason}` : ''})`,
     )
     .join('; ')
-  return `ship refused, review missing: ${EVIDENCE_MEANS.review}. Uncovered: ${named || `the range ${review.base.slice(0, 12)}..${review.head.slice(0, 12)} needs ${review.tier}`}. Review them (\`/review\`, \`agw review\`), then ship ${issueId} again; a filed link alone does not satisfy it.`
+  return `ship refused, review missing: ${EVIDENCE_MEANS.review}. Uncovered: ${named || `${review.ranges.map((range) => `${range.base.slice(0, 12)}..${range.head.slice(0, 12)}`).join(', ')} needs ${review.tier}`}. Review them (\`/review\`, \`agw review\`), then ship ${issueId} again; a filed link alone does not satisfy it.`
 }
 
 interface InlineEvidence {

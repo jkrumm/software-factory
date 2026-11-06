@@ -64,7 +64,13 @@ class FakeCommits implements Commits {
     this.calls++
     if (this.failure) throw this.failure
     const full = reported.map((sha) => this.resolves[sha] ?? sha)
-    return { landedAt: this.landedAt, commits: [...full, ...this.branch], paths: this.paths, mergedAt: this.mergedAt }
+    return {
+      landedAt: this.landedAt,
+      commits: [...full, ...this.branch],
+      paths: this.paths,
+      mergedAt: this.mergedAt,
+      reviewRanges: this.landedAt ? [{ base: '0'.repeat(40), head: this.landedAt }] : [],
+    }
   }
 }
 
