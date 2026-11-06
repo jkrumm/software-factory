@@ -614,11 +614,12 @@ const issueResumeHandler =
   }
 
 /** `GET /projects`: every project, by name. */
-const projectListHandler = (sql: SQL) => async () => respond(ProjectList, { projects: await listProjects(sql) })
+const projectListHandler = (sql: SQL, clock: Clock) => async () =>
+  respond(ProjectList, { projects: await listProjects(sql, clock.now()) })
 
 /** `GET /projects/:name`. */
-const projectGetHandler = (sql: SQL) => async (req: Bun.BunRequest<'/projects/:name'>) => {
-  const project = await getProject(sql, parseParam(ProjectName, req.params.name))
+const projectGetHandler = (sql: SQL, clock: Clock) => async (req: Bun.BunRequest<'/projects/:name'>) => {
+  const project = await getProject(sql, parseParam(ProjectName, req.params.name), clock.now())
   return project && listable(project) ? respond(Project, project) : json({ error: 'unknown project' }, 404)
 }
 
@@ -852,9 +853,9 @@ export function routes(
     '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, commits, review, { requireSession: false })) },
     '/notifications': { GET: route(notificationListHandler(sql)) },
     '/notifications/test': { POST: route(notificationTestHandler(sql, clock, notifier, notifyTarget)) },
-    '/projects': { GET: route(projectListHandler(sql)) },
+    '/projects': { GET: route(projectListHandler(sql, clock)) },
     '/projects/sync': { POST: route(async () => respond(ProjectSyncResult, await projects.syncNow())) },
-    '/projects/:name': { GET: route(projectGetHandler(sql)) },
+    '/projects/:name': { GET: route(projectGetHandler(sql, clock)) },
     '/door/routes': { GET: route(door.routes.GET), PUT: route(door.routes.PUT), DELETE: route(door.routes.DELETE) },
     '/door/unrouted': { GET: route(door.unrouted.GET) },
     '/quota': {
@@ -979,8 +980,8 @@ export function serveHooks(deps: {
       '/issues/:id/:verb': {
         POST: viaSocket(issueVerbHandler(deps.sql, deps.clock, commits, deps.review, { requireSession: true })),
       },
-      '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
-      '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
+      '/projects': { GET: viaSocket(projectListHandler(deps.sql, deps.clock)) },
+      '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql, deps.clock)) },
       // Not here, on purpose: `/fleet`, `/fleet/refresh` and all of `/v1`. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.

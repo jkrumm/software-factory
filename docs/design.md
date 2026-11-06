@@ -834,6 +834,32 @@ A new decision ask (a `factory.decisions` row) and a spent steward escalation (a
 - **The hidden window.** An ask is off the owner's list (`factory status` attention, the fleet's asks) until the pass has recorded `ask_judged:<decision>` with an outcome other than `answered` (`owner`, `failed`, `rejected`, `visible`); it shows anyway once it is 45 min old, so a stuck judge never hides it. An escalation's marker is `steward_judged:<issue>:<cause>`. A decision open when this shipped has no marker and is judged like a new one.
 - **Failure is today's behaviour.** A verdict `owner`, a non-zero exit, bad JSON, a run that is not `done`, a timeout, a schema mismatch, a missing `agw`, `FACTORY_ASK_JUDGE=off` or no judge wired: the owner is told and the ask stands exactly as before.
 
+### The plan files its next Issue
+
+Until now the factory knew only the Issues somebody filed; the rest of a plan lived in prose, so an empty queue with an unfinished plan raised no line. A repo's plan is a file, `docs/plan.yaml`, and the server files its rows. No model: the file, the Issues and the clock decide.
+
+```yaml
+version: 1
+rows:
+  - key: surfaces              # [a-z0-9][a-z0-9-]*, unique in the file
+    title: "..."               # the Issue's title
+    facts: { why: ..., what: ..., change: ..., acceptance: ... }   # becomes the Issue's facts, inline only
+    repo: dotfiles             # optional, a project name; default: this plan's own project
+    after: [other-key]         # optional, rows of this file; filable only when all are done
+    not_before: 2026-11-13     # optional ISO date or datetime, UTC
+    stable_days: 7             # optional, see below
+    issue: 150                 # optional: adopt an Issue filed by hand; title and facts are then optional, and no other condition is allowed
+```
+
+- **Reading.** The project sync reads the file from the same ref as `project.yaml`, in the same pass, with the same hardened YAML options (`plan-file.ts`, schema `packages/contract/src/plan.ts`, 64 KiB). It stores `plan`, `plan_sha`, `plan_error` and `plan_error_sha` on the project's row (migration `036`), the manifest's way: no file, no plan; an unreadable or oversized file or one that is not a regular file is an error; a file that does not parse keeps the last valid plan and records the error; a pass that read no branch keeps everything. A plan error files no upkeep Issue, it is a health line.
+- **Row state** (`projects/plan-status.ts`, derived at read, nothing stored). A row's Issue is the adopted `issue`, else the one with source `plan` and key `<project>:<row key>`. `done`: that Issue is closed, **whatever the outcome** (the meaning of `--after`: a dropped Issue releases what waits for it; the owner stops a row by stopping its Issue). `open`: it has an Issue that is not closed. `filable`: no Issue yet, every `after` row done, every condition met. `waiting`: otherwise, with the reason (`after <key>`, `not before <date>`, `stable for N days: <why>`, `unknown repo <name>`).
+- **Filing** (`projects/plan.ts`, from `projectPass` after the sync, every tick, so a closing Issue files the next row in the same pass). Each `filable` row goes through `createIssue` (source `plan`; facts are the row's plus `{plan: {project, key}}`; the repo is the row's project resolved to its path; `after` is not passed, the dependencies are closed already). The key makes a replayed tick or sync file nothing twice and a closed row is never filed again. A refused row (its repo is gone or outside the roots) is an error of the pass; the other rows still go.
+- **Stable** (`stable_days: N`): the factory had no owner touch on any Issue in the last N days and at least one Issue closed in that time. An owner touch is an `issue_events` row of kind `note`, `retier`, `reopen` or `stop`, or an `answer` whose `who` is not `default`, `closed` or `steward` (a `note` of the steward is not one either; `prio` is steering, not a rescue). Unmet, the reason says what and when it can first be true: `stable for 7 days: owner touch on Issue 153 2026-11-06 09:00 UTC, first true 2026-11-13 09:00 UTC`.
+- **Health line.** A project whose plan has rows left, no filable row and no row with an open Issue gets `plan of <project>: waits for <key> (<reason>), …` naming up to three rows that wait for something other than another row, then `and N more`. A plan with an open row Issue is making progress and has no line. A stored `plan_error` is `plan.yaml of <project> does not parse: <message>`, there while it is true.
+- **Owner line.** A plan whose rows are all done, in a project with no open Issue of any source, sends one outbox message per plan content: `notify:plan:<project>:<plan_sha>`, "The plan of <project> is finished: what next?" (kind `plan`, no Issue). It is a decision for the owner, so the away rule lets it out.
+- **Surface.** `factory project show <name>` lists each row with its state, Issue and reason, and the plan error (`GET /projects/:name`, `plan` and `planError`).
+- **Why a file.** A plan in prose is read by whoever remembers it; a file the server reads cannot be forgotten, and the same pass that files a row can say when nothing is left to file. The dependency, date and stable conditions are the only ones, so there is nothing to judge.
+
 ## 5. The loop
 
 | Step | Owner | Engine | Out |
@@ -1083,6 +1109,7 @@ ticktick: { list: WeatherOrb }
 - **Keys.** The key is the directory's name. Two directories of one name (under different roots): the one stored first keeps
   `<name>`, the other is `<name>~<first 8 hex of the sha-256 of its real path>`, and a stored repo keeps its key whatever is
   added later. A claim and a project lookup go by the repo's path (the row whose `repo` is the path or contains it).
+- **The plan.** `docs/plan.yaml` is read in the same pass from the same ref and stored beside the manifest; the server files its rows as Issues (§4 "The plan files its next Issue").
 - **A broken manifest** (YAML, schema, a `name` that is not the directory): the row keeps `manifest` and `manifest_sha`, records
   `manifest_error` and the content's hash, and `createIssue` opens one upkeep Issue (`source: "upkeep"`, `source_key`
   `manifest:<project>:<sha-256 of the content>`). The same content again finds that Issue, whatever became of it; changed content
@@ -1199,10 +1226,11 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   | `notify:failed:door:<source>:<monitor>:<date>` | the door refused an alert (a route into IuRoot or outside the roots) | one per monitor per day |
   | `notify:regression:<issue>:<hold>` | a regression was sent back to a lead | |
   | `notify:steward:<issue>:<cause>` | the steward spent its 3 acts for a cause and the Issue is still in that state (kind `failed`) | goes out like a decision; a park's line is folded |
+  | `notify:plan:<project>:<plan sha>` | a plan with every row done in a project with no open Issue (kind `plan`, no Issue) | a decision for the owner: goes out; once per plan content |
   | `notify:digest:<date>` | 07:30 local | the morning reading, below |
   | `notify:test:...` | `factory notify test` | |
 
-- **The away rule** is decided at send time, in the claim's transaction (`foldReason`, the key only): **the owner is always treated as away.** `notify:ask:*` (a decision), `notify:steward:*` (the steward gave up on an Issue), `notify:digest:*` and `notify:test:*` go out;
+- **The away rule** is decided at send time, in the claim's transaction (`foldReason`, the key only): **the owner is always treated as away.** `notify:ask:*` (a decision), `notify:steward:*` (the steward gave up on an Issue), `notify:plan:*` (a finished plan: what next is the owner's), `notify:digest:*` and `notify:test:*` go out;
   every other message (`parked`, `failed`, `regression`) is **`folded`** (`folded_at`, `folded_reason`; `status: folded` in `factory notify list`): it is never sent later, its
   facts are on `factory status` and the fleet view, and its `next_at` is `infinity`, so a release that does not know the column never finds it due. A delivery wins over a fold made while the send was in flight (a lease that ran out): the delivery clears the fold, as a delivery is always recorded.
   The rule reads nothing but the key.
@@ -1407,7 +1435,7 @@ group.
 | `slots` | holder, lease, command | F1 |
 | `spawns` | key, repo, prompt, role, tier, effort, status (`queued`, `waiting`, `starting`, `started`, `failed`, `cancelled`), hold, account, `resume_at`, session | F1 |
 | `fleet_snapshot`, `fleet_digest*` | the newest fleet read model (one row) and the digest's cache, runs, pending batch and backoff | FV |
-| `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
+| `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, the last valid `docs/plan.yaml` with its hash and error (`plan`, `plan_sha`, `plan_error`, `plan_error_sha`), make targets, pause flag; filled by sync since Wave 2 | F2 |
 | `issues`, `issue_deps` | source, source key, repo, facts, kind, class, size, the lead's tier and effort, what Classify answered (`classify`) and when (`classified_at`), title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
 | `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
 | `issue_effects` | what a transition asks of the world, key, attempts, error, done at | F2 |

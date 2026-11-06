@@ -257,6 +257,10 @@ const projectScreen = (p: Project): string =>
           : 'no Makefile'
     }`,
     ...(p.manifestError ? [`error\t${p.manifestError.message}`] : []),
+    ...(p.planError ? [`plan error\t${p.planError}`] : []),
+    ...(p.plan?.rows.map(
+      (r) => `plan\t${r.key}\t${r.state}${r.issue === null ? '' : ` #${r.issue}`}${r.reason ? `\t${r.reason}` : ''}`,
+    ) ?? []),
   ].join('\n')
 
 const queueLine = (q: QueueView) => [q.scope.project ?? 'global', q.state, q.effective, q.setAt].map(cell).join('\t')

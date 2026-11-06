@@ -131,5 +131,5 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 - [ ] Issue 148: a wait on the owner frees the repo's claim (learnings, the first unattended night).
 - [ ] Issue 149: row 14, intake; Issue 150: row 15, surfaces and the owner's line off Slack (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
 - [ ] Issue 151: row 10, Apple verify on the mini (`--after 148`, so iris's wait on the App Store Connect record does not hold it). Issue 152: the machine budget for sessions outside the factory.
-- Row 17, parallel leads in one repo, waits for a stable week (design v3 §13).
+- Rows not filed yet (13 the repo contract audit, 16 the docs sweep, 17 parallel leads after a stable week) now live in `docs/plan.yaml`; the server files each when its dependencies are closed (design §4 "The plan files its next Issue").
 

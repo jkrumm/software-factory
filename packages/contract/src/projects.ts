@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PlanView } from './plan.ts'
 
 /** The manifest's `apiVersion`. A manifest of another version is a broken one. */
 export const MANIFEST_API_VERSION = 'factory/v2'
@@ -147,6 +148,10 @@ export const Project = z.object({
   claim: z.object({ leads: z.number().int(), holders: z.array(z.number().int()), queued: z.array(z.number().int()) }),
   paused: z.boolean(),
   syncedAt: z.string().nullable(),
+  /** `docs/plan.yaml` (design §4 "The plan files its next Issue"): its rows with their state; null: no plan, or not read for this response */
+  plan: PlanView.nullable().default(null),
+  /** the content now on the default branch does not parse; `plan` is the last valid one */
+  planError: z.string().nullable().default(null),
 })
 export type Project = z.infer<typeof Project>
 
