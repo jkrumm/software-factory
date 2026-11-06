@@ -53,6 +53,7 @@ describe('scripts/env-file.sh', () => {
     for (const key of [
       'FACTORY_VISIBLE_ROOTS',
       'FACTORY_DIGEST_EVERY',
+      'FACTORY_GITHUB_POLL',
       'FACTORY_ALERT_LEADS',
       'FACTORY_ASK_JUDGE',
       'FACTORY_NOTIFY_TARGET',

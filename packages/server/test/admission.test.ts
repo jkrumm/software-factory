@@ -5,6 +5,9 @@ import { QueueView } from '@software-factory/contract'
 import { HOLD_RECHECK_MS } from '../src/admission.ts'
 import { WEEK_MS } from '../src/capacity.ts'
 import { HcRunner } from '../src/hc-runner.ts'
+import { createIssue } from '../src/issues/create.ts'
+import { admitIssues } from '../src/issues/admission.ts'
+import { fileSignalIn } from '../src/issues/signals.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, TEST_ROOT, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -262,5 +265,104 @@ describe('the role', () => {
   test('a role that is not a word is a 400', async () => {
     expect((await spawn('x', { role: '--model' })).status).toBe(400)
     expect((await spawn('x', { role: 'a b' })).status).toBe(400)
+  })
+})
+
+describe('stop the line', () => {
+  let n = 0
+  const project = (name: string, repo: string) =>
+    db.sql`
+      INSERT INTO factory.projects (name, repo, manifest, make_targets, synced_at, created_at)
+      VALUES (${name}, ${repo}, NULL, NULL, ${clock.now()}, ${clock.now()})`
+  const classify = (id: number) => db.sql`UPDATE factory.issues SET classified_at = ${clock.now()} WHERE id = ${id}`
+  const ordinary = async (repo = TEST_REPO, extra: { class?: string } = {}): Promise<number> => {
+    const { issue } = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: `k${++n}`, repo, title: 'a title', facts: {} },
+      { repoRoots: [TEST_ROOT], now: clock.now() },
+    )
+    if (extra.class) await db.sql`UPDATE factory.issues SET class = ${extra.class} WHERE id = ${issue.id}`
+    await classify(issue.id)
+    return issue.id
+  }
+  const episode = async (source: string, status: 'down' | 'event', repo = TEST_REPO): Promise<number> => {
+    const done = await db.sql.begin((tx) =>
+      fileSignalIn(
+        tx,
+        { source, subject: `s${++n}`, event: `e${n}`, status, title: 'x is down', facts: {}, repo },
+        { repoRoots: [TEST_ROOT], now: clock.now() },
+      ),
+    )
+    if (done.issue === null) throw new Error('no Issue was filed')
+    await classify(done.issue)
+    return done.issue
+  }
+  const admit = async (alertLeads = true): Promise<number[]> => {
+    await admitIssues(db.sql, { now: clock.now(), alertLeads })
+    const rows: { issue_id: number }[] = await db.sql`
+      SELECT issue_id FROM factory.issue_inbox WHERE kind = 'admitted' ORDER BY issue_id`
+    return rows.map((r) => r.issue_id)
+  }
+
+  beforeEach(async () => {
+    await project('main', TEST_REPO)
+    await project('other', OTHER_REPO)
+  })
+
+  test('a project with a queued episode Issue admits only it, though an older ordinary one is queued', async () => {
+    await ordinary()
+    const fix = await episode('kuma', 'down')
+    expect(await admit()).toEqual([fix])
+  })
+
+  test('the same project is not stopped once the episode Issue waits', async () => {
+    const first = await ordinary()
+    const fix = await episode('kuma', 'down')
+    await db.sql`UPDATE factory.issues SET state = 'waiting', reason = 'decision' WHERE id = ${fix}`
+    expect(await admit()).toEqual([first])
+  })
+
+  test('another project is unaffected', async () => {
+    const elsewhere = await ordinary(OTHER_REPO)
+    await ordinary()
+    const fix = await episode('kuma', 'down')
+    expect(await admit()).toEqual([elsewhere, fix])
+  })
+
+  test('an urgent Issue still passes', async () => {
+    const urgent = await ordinary(TEST_REPO, { class: 'urgent' })
+    const plain = await ordinary()
+    await episode('kuma', 'down')
+    const admitted = await admit()
+    expect(admitted).toContain(urgent)
+    expect(admitted).not.toContain(plain)
+  })
+
+  test('a GitHub label Issue is a request: it stops nothing', async () => {
+    const first = await ordinary()
+    await episode('github', 'event')
+    expect(await admit()).toEqual([first])
+  })
+
+  test('an alert whose switch is off cannot be admitted, so it stops nothing', async () => {
+    const first = await ordinary()
+    await episode('kuma', 'down')
+    expect(await admit(false)).toEqual([first])
+  })
+
+  test('an episode Issue with an open dependency stops nothing', async () => {
+    const first = await ordinary()
+    const fix = await episode('kuma', 'down')
+    await db.sql`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${fix}, ${first})`
+    expect(await admit()).toEqual([first])
+  })
+
+  test('an episode Issue still finalizing stops nothing', async () => {
+    const first = await ordinary()
+    const fix = await episode('kuma', 'down')
+    await db.sql`
+      INSERT INTO factory.issue_effects (issue_id, key, kind, created_at)
+      VALUES (${fix}, ${`finalize:${fix}`}, 'finalize', ${clock.now()})`
+    expect(await admit()).toEqual([first])
   })
 })

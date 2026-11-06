@@ -8,6 +8,9 @@ import { blockerRefusal } from './deps.ts'
 import { findIssue, type IssueRow, toIssue } from './read.ts'
 import { logEvent } from './shared.ts'
 
+/** The sources the intake files for: none of them reaches IuRoot (decision 3). */
+export const INTAKE_SOURCES = new Set(['alert', 'github', 'checks', 'launchd'])
+
 /** A create the policy refuses; the message is the 422 body. */
 class IssueRefused extends RepoRefused {}
 
@@ -38,6 +41,22 @@ async function inIuRoot(submitted: string, roots: readonly string[]): Promise<bo
   return false
 }
 
+/**
+ * The real path of a repo an Issue of `source` may be filed in: inside the roots, and for an intake source never IuRoot. Throws
+ * `RepoRefused`. The IuRoot look comes first, and with no path in the answer (the roots' refusal names the resolved path); then
+ * the stored path answers for itself: a link can be pointed elsewhere between the two looks.
+ */
+export async function vetIntakeRepo(source: string, path: string, repoRoots: readonly string[]): Promise<string> {
+  const refuse = async (candidate: string): Promise<void> => {
+    if (!INTAKE_SOURCES.has(source) || !(await inIuRoot(candidate, repoRoots))) return
+    throw new IssueRefused('an alert files no Issue in IuRoot')
+  }
+  await refuse(path)
+  const repo = await resolveRepo(path, repoRoots)
+  await refuse(repo)
+  return repo
+}
+
 /** Postgres refuses this JSON: half a surrogate pair, a NUL, or nesting past its stack, whose depth differs per host. */
 const UNSTORABLE_JSON = new Set(['22P02', '22P05', '54001'])
 
@@ -57,15 +76,7 @@ export async function createIssueIn(
   const known = await findIssue(tx, input.source, input.sourceKey)
   if (known) return { issue: known, created: false }
 
-  const refuseAlert = async (path: string): Promise<void> => {
-    if (input.source !== 'alert' || !(await inIuRoot(path, context.repoRoots))) return
-    throw new IssueRefused('an alert files no Issue in IuRoot')
-  }
-  // First, and with no path in the answer: the roots' refusal names the resolved path. Then the stored path answers for
-  // itself: a link can be pointed elsewhere between the two looks.
-  await refuseAlert(input.repo)
-  const repo = await resolveRepo(input.repo, context.repoRoots)
-  await refuseAlert(repo)
+  const repo = await vetIntakeRepo(input.source, input.repo, context.repoRoots)
 
   const after = [...new Set(input.after ?? [])].sort((a, b) => a - b)
   for (const on of after) {

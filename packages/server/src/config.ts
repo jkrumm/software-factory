@@ -49,6 +49,10 @@ export interface Config {
   digestTz: string
   /** `FACTORY_DIGEST_EVERY` (`5m`, `90s`, `1h`, or `off`): how often the fleet digest asks `agw digest` about what changed; null is off (not the owner's morning line above) */
   fleetDigestEveryMs: number | null
+  /** `FACTORY_GITHUB_POLL` (`5m`, `off`): how often the GitHub label source polls; null is off */
+  githubPollMs: number | null
+  /** `FACTORY_GITHUB_TOKEN` (from `secrets-run`): the GitHub label source is off without it */
+  githubToken: string | undefined
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
   /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) and the load ceiling (`FACTORY_LOAD_CEILING`) */
@@ -104,6 +108,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
+    ...githubSource(env),
     admission: {
       leadsPerAccount: wholeNumber(
         'FACTORY_LEADS_PER_ACCOUNT',
@@ -127,10 +132,10 @@ function wholeNumber(name: string, value: string | undefined, fallback: number, 
 }
 
 /** A channel's name is not a secret, and a message to it never makes Hermes answer. */
-export const DEFAULT_NOTIFY_TARGET = 'slack:#agents'
-export const DEFAULT_DIGEST_AT = '07:30'
-export const DEFAULT_DIGEST_TZ = 'Europe/Berlin'
-export const DEFAULT_FLEET_DIGEST_EVERY_MS = 5 * 60_000
+const DEFAULT_NOTIFY_TARGET = 'slack:#agents'
+const DEFAULT_DIGEST_AT = '07:30'
+const DEFAULT_DIGEST_TZ = 'Europe/Berlin'
+const DEFAULT_FLEET_DIGEST_EVERY_MS = 5 * 60_000
 
 function digestAt(value: string | undefined): string | null {
   if (value === undefined || value === '') return DEFAULT_DIGEST_AT
@@ -145,15 +150,22 @@ function digestAt(value: string | undefined): string | null {
 const DURATION_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000 } as const
 
 /** `5m`, `90s`, `1h`; `off` for none; unset is five minutes. Between 30 s and 24 h: a shorter spacing is spend, a longer one is a stale board. */
-function fleetDigestEvery(value: string | undefined): number | null {
+function fleetDigestEvery(value: string | undefined, name = 'FACTORY_DIGEST_EVERY'): number | null {
   if (value === undefined || value === '') return DEFAULT_FLEET_DIGEST_EVERY_MS
   if (value === 'off') return null
   const found = /^(\d+)([smh])$/.exec(value)
   const ms = found ? Number(found[1]) * DURATION_UNIT_MS[found[2] as 's' | 'm' | 'h'] : Number.NaN
   if (!(ms >= 30_000 && ms <= 24 * 3_600_000)) {
-    throw new Error(`FACTORY_DIGEST_EVERY must be a duration of 30s to 24h (5m, 90s, 1h) or off, got: ${value}`)
+    throw new Error(`${name} must be a duration of 30s to 24h (5m, 90s, 1h) or off, got: ${value}`)
   }
   return ms
+}
+
+function githubSource(env: Record<string, string | undefined>): Pick<Config, 'githubPollMs' | 'githubToken'> {
+  return {
+    githubPollMs: fleetDigestEvery(env.FACTORY_GITHUB_POLL, 'FACTORY_GITHUB_POLL'),
+    githubToken: env.FACTORY_GITHUB_TOKEN || undefined,
+  }
 }
 
 function digestTz(value: string | undefined): string {
@@ -175,7 +187,7 @@ function switchOn(name: string, value: string | undefined, unset: boolean): bool
 }
 
 /** Test slots (FL7): two to start with, tuned from the load record. */
-export const DEFAULT_SLOTS = 2
+const DEFAULT_SLOTS = 2
 
 function slots(value: string | undefined): number {
   if (value === undefined || value === '') return DEFAULT_SLOTS

@@ -1047,6 +1047,58 @@ twice becomes an upkeep Issue that adds it to `heal:`), thresholds (changed only
 golden set). Four monthly measures show whether it learns: missed-at-intake rate, wrong-join rate, seen-before hit
 rate, runbook share. None improving over two months opens an Issue.
 
+### Intake: work comes in by itself (Reset row 14, RS13, 2026-11-06)
+
+Plan, short. No model, no eval set, no judge (RS13): rules decide, real use tunes them. v3 §10 is the source.
+
+**One entry, `fileSignal`** (`issues/signals.ts`). Every source, the door and the pollers alike, hands it one signal
+`{source, subject, event, status: down|up|event, title, facts, repo, fingerprint?}` and gets one outcome back. The repo is the
+sender's route or the project's, never the payload's; the IuRoot refusal of `createIssueIn` holds for every intake source (`alert`,
+`github`, `checks`, `launchd`), and a poller never reads a repo under `scopeOf` `visible`.
+
+| Source | Kind | Subject | Down / up | Built in |
+|-|-|-|-|-|
+| Kuma, HyperDX (door) | stateful | the monitor | the alert's status | Issue 149 (moved onto `fileSignal`, Part A built) |
+| GitHub label | stateless | `<owner>/<repo>#<n>` | one `event` | Issue 149 |
+| GitHub red checks | stateful | `<owner>/<repo>:<check>` on the default branch | failure / success | follow-up Issue |
+| failed launchd jobs | stateful | the job's label | exit status ≠ 0 / 0 | follow-up Issue |
+
+**Dedup, at intake, by rules.**
+- *Stateful:* one episode per `(source, subject)` until it closes. A `down` while an Issue of the episode is not closed is a `signal` on it
+  (`regression: true` while `watching`); a `down` after the close is a new Issue. The episode table is `factory.door_issues` (its name
+  stays, migration `037` adds `fingerprint`, `repeats`, `last_seen`; a rollback ignores them).
+- *Stateless:* the fingerprint is the source's own (a GitHub issue: the repo plus the title lower-cased, digits and punctuation removed).
+  A match is a repeat while its Issue is not closed **or** was filed less than `FINGERPRINT_WINDOW_MS` (24 h) ago: a signal when open, only
+  `repeats + 1` when closed. An older closed match is a new Issue. The source's own key (`github:<owner>/<repo>#<n>`) is checked first, so a
+  re-labelled GitHub issue never files twice.
+- A replayed event is one effect: `factory.intake_seen (key, seen_at)` keeps every settled event key 7 days, so a late retry of a `down` that
+  already healed cannot open a second pending row.
+
+**Settle, before any lead.** The manifest's `heal:` list, `{when: <source>.down, grace: 5m, runbook: make restart, max: 2}` (`grace` as
+`hold` is written, 30 s to 1 d; `runbook` is optional and, for now, only `make restart`; `max` 1 to 5, default 1), is parsed and kept (it
+is no longer dropped; `signals` stays loose except `github` and `launchd`). A `down` of a source with a matching rule does not file an Issue:
+it stores `factory.intake_pending (source, subject, repo, signal, rule, opened_at, due_at, attempts, last_result)`, one row per subject, and a
+repeat of the `down` changes nothing. An `up` for the subject deletes the row (outcome `healed`, nothing filed). The tick's settle pass takes
+the due rows `FOR UPDATE SKIP LOCKED`, claims the run in one short transaction (`attempts + 1`, `due_at` pushed by the lease), runs the
+runbook **outside any transaction** (`make -C <repo> restart`, 120 s, own process group, skipped with a recorded reason when the project's
+Makefile has no `restart`), then records its exit and sets `due_at = now + grace`. A row due with the runbook spent (or none) and no `up` since is
+filed (`fileSignal`'s create path, facts carry `settle: {graceMs, attempts, results}`) and deleted. A rule with no runbook is a pure grace timer. The pass runs in the `Settler`, behind the tick's back (`kick`, one pass at a time), so a 120 s runbook holds no tick.
+No rule: the `down` files at once, as the door always did. A heal that fixes the symptom is the source's `up`: no lead starts.
+
+**Order.** Admission already holds dependencies, urgent, `prio` and age. Row 14 adds the first rule, **stop the line** (§7): while a
+project has an episode Issue (a `door_issues` row, so every intake source) in `queued` or `working`, only a fix is admitted there: an
+episode Issue, an `urgent` or incident one. It starts at the head of the order, a `waiting`/`watching`/`blocked` episode Issue does not stop it
+(an owner decision never freezes a repo), and a lead already running is never touched.
+
+**A label starts work, never authorship.** `signals: {github: {label: factory}}` in the manifest (default label `factory`) puts a project on
+the GitHub poll (`FACTORY_GITHUB_POLL`, default `5m`, `off`; the token `FACTORY_GITHUB_TOKEN` from `secrets-run`, none = the source is off and one line is logged). Only open issues, never pull requests; the repo is `owner/name` from the project's `origin`. The Issue is source `github`, title =
+the GitHub title, facts `{url, number, body (clipped), labels}`: the body is someone else's text and is data, the label is the owner's act (only
+triage access can set it). Nothing is written back to GitHub.
+
+**Split.** Issue 149 builds the engine, the door on it, settle + heal, order, and the GitHub label source. Red checks and failed launchd jobs
+are two follow-up Issues on the same engine (`--after 149`). Done when, live: a labelled GitHub issue in a scratch repo becomes one Issue; a
+repeat of the same alert files no second; a `heal` runbook that fixes the symptom starts no lead.
+
 ## 9. Projects
 
 ```yaml
@@ -1071,7 +1123,7 @@ leads: 1
 ticktick: { list: WeatherOrb }
 ```
 
-- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Later (F3):** signals, heal, jobs, ticktick: accepted and dropped, so an F3 manifest does not break F2.
+- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Row 14:** `signals` and `heal` are read (§8 "Intake"). **Later:** jobs, ticktick: accepted and dropped, so a later manifest does not break this one.
 - **A broken manifest** becomes an upkeep Issue; the factory keeps running on the last valid version.
 - **Make contract:** `check`, `test`, `deploy`, `verify`, `version`, `restart`, `quality`, `logs`, `status`. `version` prints the deployed commit sha, one line, and only reads. `check`, `test` and
   `quality` take `BASE=<ref>`. Every target ends in a one-line verdict. A repo is onboarded when it first has signals
@@ -1091,8 +1143,7 @@ ticktick: { list: WeatherOrb }
 - **The schema.** `apiVersion: factory/v2`, `name`, `deploy {mode auto|make|agentic|none, targets[{name, host, verify}], hold,
   migrations[], probes[{name, http, expect}]}`, `ship[{paths[], via push|pr}]`, `leads`. `verify` is an `http(s)` URL or `make <target>`; `hold` is
   `30s`, `30m`, `2h` or `1d`, at most `7d`, default `0m` (no artificial wait: the hold ends on the next timer pass, the check runs at once and a green one closes the Issue and frees the claim; a red one keeps the re-run and regression rules); `expect` defaults to 200; `leads` is 1 to 8. Objects are strict: a key
-  that is not in the schema is an error (a typo is not read as a default), except `signals`, `heal`, `jobs` and `ticktick`, which
-  are accepted and dropped. `project sync` names a project only from a valid directory name (letters, digits, dot, dash, underscore, no leading dot; else a line in the result's `errors`), waits at most 40 s for the remotes before it reads what is there, and `project list` hides a legacy row with an invalid name. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
+  that is not in the schema is an error (a typo is not read as a default), except `jobs` and `ticktick`, which are accepted and dropped. `heal` and `signals` are parsed and kept (output defaults `[]` and `{}`): `heal[{when: <kuma|hyperdx|github|checks|launchd>.down, grace (as `hold`, at most `1d`), runbook: make restart (optional), max 1 to 5, default 1}]` at most 32, `signals` a loose object with `github: {label}` (default `factory`), `launchd: [label]`, and `kuma`, `hyperdx` unread; a `signals` that is not an object is a manifest error. `project sync` names a project only from a valid directory name (letters, digits, dot, dash, underscore, no leading dot; else a line in the result's `errors`), waits at most 40 s for the remotes before it reads what is there, and `project list` hides a legacy row with an invalid name. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
   most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
   `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
   says so in a manifest), done means the commit or the document.
@@ -1186,12 +1237,15 @@ runbooks exist (decision 3).
   (422), and a route into IuRoot is refused when it is set, as an alert's Issue is when it is filed: one policy, in `createIssue`.
 - **`POST /intake`** (`issues/intake.ts`, socket only) files in one transaction, the route row locked so one monitor's alerts go in
   one at a time: (1) no route, no Issue, one `door_unrouted` row counts it (202: Kuma attaches every provider to every monitor, so this is
-  the common path); (2) routed, an Issue of this monitor not closed, the event is a `signal` inbox row (key `door:<source>:<monitor>:<event>`) on it, `regression: true` when
-  down (200); (3) routed, none open, down: `createIssue` (`source: alert`, key `<source>:<monitor>:<event>`, the route's repo) (201);
-  (4) routed, none open, up: only the route's counter (202). A replayed event is one effect: the Issue's key, the inbox key and the
+  the common path); (2) routed: `fileSignalIn` (`issues/signals.ts`, with the route's repo, never the payload's) decides: an Issue of this
+  monitor not closed takes the event as a `signal` inbox row (key `door:<source>:<monitor>:<event>`), `regression: true` when down (200);
+  none open and a `down` is `createIssue` (`source: alert`, key `<source>:<monitor>:<event>`) (201), or, when the project's `heal:` has a
+  rule for `<source>.down`, a pending row (`settling`, 202, §4 "Intake"); none open and an `up` cancels a pending `down` (`healed`, 202) or is
+  only the route's counter (`quiet`, 202). A replayed event is one effect: the Issue's key, the inbox key, `factory.intake_seen` and the
   counters' last event (a counter keeps only its latest event, so an older retry counts again). The event that created an Issue, and one that was a
   signal, are not filed again later, whatever became of the Issue. The key escapes `:` and `%` in the monitor, so two monitors never share one. A signal carries the
-  alert's facts. An open Issue keeps its monitor until it closes, also when the route has moved to another repo.
+  alert's facts. An open Issue keeps its monitor until it closes, also when the route has moved to another repo. The ack's outcomes are
+  `unrouted`, `quiet`, `attached`, `created`, `replayed`, `settling`, `healed`.
 - **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
   the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line. The door restarts at every deploy: for
   the seconds it is down a POST is refused at the connection, and Slack still gets every alert, so nothing is lost that was not already

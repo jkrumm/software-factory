@@ -112,7 +112,7 @@ async function fileIssue(repo: string, key: string, urgent = false): Promise<num
 }
 
 describe('a valid manifest', () => {
-  test('is read from the default branch, defaults filled in, the keys of F3 ignored', async () => {
+  test('is read from the default branch, defaults filled in, heal and signals kept, the other keys of F3 ignored', async () => {
     fixture.repo('alpha', { 'project.yaml': MANIFEST, Makefile: 'check:\n\t@true\n' })
     const result = await runSync()
     expect(ProjectSyncResult.parse(result)).toEqual({ synced: 1, broken: [], errors: [] })
@@ -134,6 +134,8 @@ describe('a valid manifest', () => {
         { paths: ['**'], via: 'pr' },
       ],
       leads: 2,
+      signals: { kuma: ['alpha'] },
+      heal: [{ when: 'kuma.down', grace: '5m', runbook: 'make restart', max: 2 }],
     })
     expect(project.claim).toEqual({ leads: 2, holders: [], queued: [] })
     expect(project.syncedAt).toBe(clock.now().toISOString())
@@ -420,6 +422,8 @@ describe('no manifest', () => {
       deploy: { mode: 'none', targets: [], hold: '0m', migrations: [], probes: [] },
       ship: [{ paths: ['**'], via: 'push' }],
       leads: 1,
+      signals: {},
+      heal: [],
     })
     expect(quiet).toBeTruthy()
     expect(ProjectList.parse(await (await app.get('/projects')).json()).projects.map((p) => p.name)).toEqual(['named'])

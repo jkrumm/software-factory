@@ -12,6 +12,7 @@ export const DEFAULT_HOLD = '0m'
 const DURATION = /^(\d+)(s|m|h|d)$/
 const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
 const MAX_HOLD_MS = 7 * UNIT_MS.d
+const MAX_GRACE_MS = UNIT_MS.d
 
 /** `30m`, `2h`, `1d`: milliseconds, or `undefined` for anything else. */
 export function durationMs(text: string): number | undefined {
@@ -66,9 +67,46 @@ const ShipRule = z.strictObject({
 
 const DEFAULT_DEPLOY = Deploy.parse({})
 
+/** One `heal:` rule (design §4 "Intake"): a `down` of the source waits `grace` for its `up`, after trying the runbook. */
+const HealRule = z.strictObject({
+  when: z
+    .string()
+    .regex(
+      /^(kuma|hyperdx|github|checks|launchd)\.down$/,
+      '`<source>.down` of kuma, hyperdx, github, checks or launchd',
+    ),
+  /** how long a `down` waits for its `up` (`30s`, `30m`, `2h`, `1d`; at most 1 day) */
+  grace: z.string().refine((grace) => {
+    const ms = durationMs(grace)
+    return ms !== undefined && ms <= MAX_GRACE_MS
+  }, 'a duration like 30s, 30m, 2h or 1d, at most 1d'),
+  runbook: z.literal('make restart').optional(),
+  /** how often the runbook runs before the `down` is filed */
+  max: z.number().int().min(1).max(5).default(1),
+})
+export type HealRule = z.output<typeof HealRule>
+
+/** What a project tells the intake sources about itself; `kuma` and `hyperdx` are the door's routes and stay unread here. */
+const Signals = z.looseObject({
+  github: z
+    .strictObject({
+      /** the label that puts a GitHub issue on the project's poll */
+      label: z
+        .string()
+        .min(1)
+        .max(50)
+        .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, dot, dash and underscore')
+        .default('factory'),
+    })
+    .optional(),
+  launchd: z.array(z.string().min(1).max(200)).max(64).optional(),
+  kuma: z.unknown().optional(),
+  hyperdx: z.unknown().optional(),
+})
+
 /**
- * `project.yaml`, v0 (F2). The keys F3 brings (`signals`, `heal`, `jobs`, `ticktick`) are accepted and dropped, so a manifest
- * written for F3 does not break F2; any other key is an error, so a typo is not read as a default.
+ * `project.yaml`. `signals` and `heal` are parsed and kept (the intake reads them); the keys F3 still brings (`jobs`, `ticktick`) are
+ * accepted and dropped, so a manifest written for F3 does not break; any other key is an error, so a typo is not read as a default.
  */
 export const ProjectManifest = z
   .strictObject({
@@ -80,12 +118,12 @@ export const ProjectManifest = z
       .min(1)
       .default([{ paths: ['**'], via: 'push' }]),
     leads: z.number().int().min(1).max(8).default(1),
-    signals: z.unknown().optional(),
-    heal: z.unknown().optional(),
+    signals: Signals.default({}),
+    heal: z.array(HealRule).max(32).default([]),
     jobs: z.unknown().optional(),
     ticktick: z.unknown().optional(),
   })
-  .transform(({ signals: _signals, heal: _heal, jobs: _jobs, ticktick: _ticktick, ...v0 }) => v0)
+  .transform(({ jobs: _jobs, ticktick: _ticktick, ...kept }) => kept)
 export type ProjectManifest = z.output<typeof ProjectManifest>
 
 /** What a project without a manifest runs on: requests only, one lead, no deploy, ship by push. */
