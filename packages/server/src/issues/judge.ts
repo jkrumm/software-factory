@@ -54,7 +54,8 @@ export class AgwAskJudge implements AskJudge {
       workflow: 'factory-ask',
       label: 'ask',
       idempotencyKey: key,
-      stdin: JSON.stringify({ ask }),
+      // The workflow's stdin is the ask object itself (`agw schema factory-ask`, `x-cli.stdin: ask`), not wrapped under `ask`.
+      stdin: JSON.stringify(ask),
       failure: (message) => new AskJudgeFailed(message),
     })
   }
