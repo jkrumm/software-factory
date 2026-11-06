@@ -9,7 +9,7 @@ import { type Effect, type EffectPorts, Waiting } from './effects.ts'
 import type { Derived } from './evidence.ts'
 import { enqueue } from './inbox.ts'
 import type { OffTick } from './offtick.ts'
-import { deployedHolds } from './origin.ts'
+import { type CheckoutSync, deployedHolds, syncCheckout } from './origin.ts'
 import { markEvent } from './shared.ts'
 
 /** One check of the proof: pass or fail, never averaged. `detail` is data, whatever the check printed. */
@@ -17,6 +17,8 @@ export interface HoldCheck {
   name: string
   ok: boolean
   detail: string
+  /** the check could not look at the code at all (the checkout is not ours to move): neither a pass nor a regression */
+  blocked?: boolean
 }
 
 export interface ProofInput {
@@ -71,16 +73,41 @@ exit "$st"`
 
 /**
  * `make version` (the deployed commit, which must hold where the work landed), `make verify` in the repo, the deployed checkout, and an
- * HTTP GET per probe. Every one runs, the version check red or not: the lead sees every signal. None of them writes the checkout.
+ * HTTP GET per probe. Every one runs, the version check red or not: the lead sees every signal. The only write to the checkout is the first
+ * step: `syncCheckout` fast-forwards it to `origin/<default>` so that `make` reads what was merged. A checkout it may not move (another
+ * branch, a tracked change, diverged) is a `blocked` check, and `make version` and `make verify` then do not run on a stale tree.
  */
 export class MakeAndProbes implements Proof {
-  constructor(private readonly options: { run?: typeof runProcess } = {}) {}
+  constructor(
+    private readonly options: {
+      run?: typeof runProcess
+      sync?: (repo: string, signal?: AbortSignal) => Promise<CheckoutSync>
+    } = {},
+  ) {}
 
   async run({ repo, makeVerify, version, probes }: ProofInput, signal?: AbortSignal): Promise<HoldCheck[]> {
-    const deployed = version ? [await this.version(repo, version, signal)] : []
+    const sync = makeVerify || version ? await this.sync(repo, signal) : undefined
     const checks = await Promise.all(probes.map((probe) => this.probe(probe, signal)))
+    if (sync?.state === 'blocked')
+      return [{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...checks]
+    const advanced: HoldCheck[] =
+      sync?.state === 'advanced' ? [{ name: 'checkout', ok: true, detail: sync.detail }] : []
+    const deployed = version ? [await this.version(repo, version, signal)] : []
     const verify = makeVerify ? [await this.makeVerify(repo, signal)] : []
-    return [...deployed, ...verify, ...checks]
+    return [...advanced, ...deployed, ...verify, ...checks]
+  }
+
+  private async sync(repo: string, signal?: AbortSignal): Promise<CheckoutSync> {
+    try {
+      if (this.options.sync) return await this.options.sync(repo, signal)
+      return await syncCheckout(repo, { run: this.options.run, signal })
+    } catch (error) {
+      // A git that timed out cannot say whether the tree is the shipped one: blocked, rechecked in 5 min, and the probes still report.
+      return {
+        state: 'blocked',
+        detail: `${repo}: ${error instanceof Error ? error.message : String(error)}`,
+      }
+    }
   }
 
   private async version(
@@ -164,6 +191,9 @@ export class MakeAndProbes implements Proof {
  * restarts the door only once `/health` answers: a hold that ended meanwhile, this repo's above all, would read the deploy as a regression.
  */
 export const VERIFY_SETTLE_MS = 2 * 60_000
+
+/** How long after a blocked checkout the hold looks again. */
+export const CHECKOUT_RECHECK_MS = 5 * 60_000
 
 export interface HoldDeps {
   sql: SQL
@@ -249,6 +279,24 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   if (signal.aborted) throw new Waiting('the server is stopping')
   // A check takes minutes: a stop or a regression may have ended the hold since.
   if (!(await current())) return
+  const blocked = checks.find((check) => check.blocked)
+  if (blocked) {
+    const now = clock.now()
+    const earlier = (effect.payload?.blocked as { since?: string } | undefined)?.since
+    const next = {
+      ...effect.payload,
+      blocked: { detail: blocked.detail, since: earlier ?? now.toISOString() },
+      notBefore: new Date(now.getTime() + CHECKOUT_RECHECK_MS).toISOString(),
+    }
+    await sql.begin(async (tx) => {
+      await markEvent(tx, issueId, `checkout_blocked:${issueId}:${hold}`, 'checkout_blocked', now, {
+        hold,
+        detail: blocked.detail,
+      })
+      await tx`UPDATE factory.issue_effects SET payload = ${next} WHERE id = ${effect.id}`
+    })
+    throw new Waiting('the checkout cannot be brought to the default branch')
+  }
   const green = checks.every((check) => check.ok)
   // `rerun` is the payload of the one retry an earlier server filed: it counts as the last.
   const retry = effect.payload?.rerun === true ? VERIFY_RETRY_DELAYS_MS.length : Number(effect.payload?.retry ?? 0)
@@ -256,8 +304,9 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   if (!green && delay !== undefined) {
     const now = clock.now()
     const rootKey = typeof effect.payload?.root === 'string' ? effect.payload.root : effect.key
+    const { blocked: _cleared, ...kept } = effect.payload ?? {}
     const next = {
-      ...effect.payload,
+      ...kept,
       root: rootKey,
       retry: retry + 1,
       notBefore: new Date(now.getTime() + delay).toISOString(),

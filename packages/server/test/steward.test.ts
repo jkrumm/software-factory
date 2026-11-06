@@ -479,3 +479,54 @@ describe('rule 6 and the status', () => {
     expect(id).toBeGreaterThan(0)
   })
 })
+
+describe('the checkout cause', () => {
+  const blockedHold = async () => {
+    const id = await working()
+    await db.sql`UPDATE factory.issues SET state = 'watching', reason = NULL WHERE id = ${id}`
+    const since = clock.now().toISOString()
+    await db.sql`
+      INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
+      VALUES (${id}, ${`verify:${id}`}, 'verify', ${{ hold: 1, blocked: { detail: 'the repo has uncommitted changes (a.txt)', since } }}, ${clock.now()})`
+    return id
+  }
+
+  test('a watching Issue with a blocked hold gets the note at 30 min, not before, at most 3 times', async () => {
+    const id = await blockedHold()
+    advance(29 * MIN)
+    await pass()
+    expect(await acts()).toEqual([])
+
+    advance(MIN)
+    await pass()
+    const [act, ...rest] = await acts()
+    expect(rest).toEqual([])
+    expect(act).toMatchObject({ key: `steward:${id}:checkout:1`, kind: 'note', result: 'applied' })
+    expect(act.payload).toMatchObject({ who: 'steward', cause: 'checkout', n: 1 })
+    expect(act.payload.wake).toBeUndefined()
+    expect(act.payload.text).toContain('the hold cannot verify: the repo has uncommitted changes (a.txt)')
+    expect(await state(id)).toMatchObject({ state: 'watching' })
+
+    advance(2 * HOUR)
+    await pass()
+    advance(6 * HOUR)
+    await pass()
+    advance(30 * HOUR)
+    await pass()
+    expect((await acts(id)).map((a: { key: string }) => a.key)).toEqual([
+      `steward:${id}:checkout:1`,
+      `steward:${id}:checkout:2`,
+      `steward:${id}:checkout:3`,
+    ])
+    const [exhausted] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'steward_exhausted'`
+    expect(exhausted.payload.tried[0]).toContain('note,')
+  })
+
+  test('a watching Issue with no blocked hold is left alone', async () => {
+    const id = await working()
+    await db.sql`UPDATE factory.issues SET state = 'watching', reason = NULL WHERE id = ${id}`
+    advance(10 * HOUR)
+    await pass()
+    expect(await acts()).toEqual([])
+  })
+})

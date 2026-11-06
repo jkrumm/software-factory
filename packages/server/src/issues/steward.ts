@@ -30,7 +30,7 @@ export const WAIT_GRACE_MS = 5 * MIN
 /** The retries are spent for the owner this long after the last act, the length of the last backoff. */
 const EXHAUSTED_AFTER_MS = BACKOFF_MS[2]
 
-export type Cause = 'blocked' | 'parked' | 'unreported' | 'lead_gone' | 'claim' | 'silent' | 'over_budget'
+export type Cause = 'blocked' | 'parked' | 'unreported' | 'lead_gone' | 'claim' | 'silent' | 'over_budget' | 'checkout'
 
 const WAKE_TEXT = 'recheck your block against the current state; ship, continue, or block again with what changed'
 const NUDGE_TEXT = 'report: continue, ship, block, or narrow'
@@ -43,7 +43,7 @@ export interface StewardDeps {
 interface OpenIssue {
   id: number
   repo: string
-  state: 'waiting' | 'working'
+  state: 'waiting' | 'working' | 'watching'
   reason: string | null
   attempt: number
   waits: number
@@ -139,14 +139,29 @@ async function claimHolders(sql: SQL, now: Date): Promise<Map<number, Date>> {
   return new Map(rows.map((row) => [row.holder, row.queued_at]))
 }
 
+/** The watching Issues whose hold cannot verify for a checkout it may not move: when the oldest open blocked check began. */
+async function checkoutBlocked(sql: SQL): Promise<Map<number, Date>> {
+  const rows: { issue_id: number; since: string }[] = await sql`
+    SELECT e.issue_id, min(e.payload->'blocked'->>'since') AS since
+    FROM factory.issue_effects e JOIN factory.issues i ON i.id = e.issue_id AND i.state = 'watching'
+    WHERE e.kind = 'verify' AND e.done_at IS NULL AND e.cancelled_at IS NULL AND e.payload->'blocked' IS NOT NULL
+    GROUP BY e.issue_id`
+  return new Map(rows.map((row) => [row.issue_id, new Date(row.since)]))
+}
+
 /** Every cause that holds for the Issue now, in the order the steward tries them. */
 function candidates(
   issue: OpenIssue,
   live: ReadonlySet<string>,
   holders: ReadonlyMap<number, Date>,
   background: ReadonlySet<number>,
+  checkouts: ReadonlyMap<number, Date>,
   now: Date,
 ): Candidate[] {
+  if (issue.state === 'watching') {
+    const since = checkouts.get(issue.id)
+    return since ? [{ cause: 'checkout', anchor: since }] : []
+  }
   const hasLead = live.has(leadKey(issue.id, issue.attempt))
   const found: Candidate[] = []
   if (issue.state === 'waiting') {
@@ -202,6 +217,21 @@ async function fileAct(
     })
     return !duplicate
   }
+  if (cause === 'checkout') {
+    const [row]: { detail: string | null }[] = await sql`
+      SELECT e.payload->'blocked'->>'detail' AS detail FROM factory.issue_effects e
+      WHERE e.issue_id = ${issue.id} AND e.kind = 'verify' AND e.done_at IS NULL AND e.cancelled_at IS NULL
+        AND e.payload->'blocked' IS NOT NULL ORDER BY e.id LIMIT 1`
+    const text = `the hold cannot verify: ${row?.detail ?? 'the checkout is not clean'}. The checkout is the owner's; it is checked again every 5 min and the hold goes on when it is clean on the default branch and not diverged`
+    const { duplicate } = await enqueue(sql, {
+      issueId: issue.id,
+      key: id,
+      kind: 'note',
+      at: now,
+      payload: { ...base, text, call: callOf(id) },
+    })
+    return !duplicate
+  }
   const waking = issue.state === 'waiting'
   let text = waking ? WAKE_TEXT : NUDGE_TEXT
   if (cause === 'blocked' && (await blockNamesVerify(sql, issue))) {
@@ -227,7 +257,7 @@ async function exhaust(sql: SQL, issue: OpenIssue, cause: Cause, now: Date): Pro
     WHERE issue_id = ${issue.id} AND key LIKE ${`steward:${issue.id}:${cause}:%`} ORDER BY id`
   const tried = rows.map(
     (row) =>
-      `${row.payload.n}. ${minutes(row.at)} ${row.kind === 'restart' ? 'restart' : row.kind === 'note' && row.payload.text === NUDGE_TEXT ? 'nudge' : 'wake'}, ${row.result ?? 'not handled'}`,
+      `${row.payload.n}. ${minutes(row.at)} ${row.kind === 'restart' ? 'restart' : row.kind === 'note' && row.payload.text === NUDGE_TEXT ? 'nudge' : cause === 'checkout' ? 'note' : 'wake'}, ${row.result ?? 'not handled'}`,
   )
   await markEvent(sql, issue.id, `steward_exhausted:${issue.id}:${cause}`, 'steward_exhausted', now, { cause, tried })
 }
@@ -242,12 +272,13 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
     SELECT i.id, i.repo, i.state, i.reason, i.attempt, i.waits, i.size, i.updated_at AS entered, i.wake_at,
       COALESCE((SELECT max(e.at) FROM factory.issue_events e WHERE e.issue_id = i.id AND e.to_state = 'working'), i.updated_at) AS since,
       (SELECT max(v.at) FROM factory.events v WHERE v.session = 'lead-' || i.id || '-' || i.attempt) AS last_event
-    FROM factory.issues i WHERE i.state IN ('waiting', 'working') ORDER BY i.id`
+    FROM factory.issues i WHERE i.state IN ('waiting', 'working', 'watching') ORDER BY i.id`
   if (issues.length === 0) return
 
   const live = new Set((await liveSessions(sql, now)).map((session) => session.id))
   const holders = await claimHolders(sql, now)
   const background = await leadsOnBackgroundWork(sql)
+  const checkouts = await checkoutBlocked(sql)
   const actRows: { issue_id: number; cause: Cause; n: number; last_at: Date }[] = await sql`
     SELECT issue_id, payload->>'cause' AS cause, count(*)::int AS n, max(at) AS last_at FROM factory.issue_inbox
     WHERE key LIKE 'steward:%' GROUP BY issue_id, payload->>'cause'`
@@ -256,7 +287,7 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
   const told = new Set(spentRows.map((row) => row.key))
 
   for (const issue of issues) {
-    for (const { cause, anchor } of candidates(issue, live, holders, background, now)) {
+    for (const { cause, anchor } of candidates(issue, live, holders, background, checkouts, now)) {
       const done = acted.get(`${issue.id}:${cause}`)
       const n = done?.n ?? 0
       if (n >= MAX_ACTS) {
