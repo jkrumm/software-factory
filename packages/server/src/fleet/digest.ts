@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { getSession } from '../sessions.ts'
 import { boundReply, cleanHeading, head, LIMIT, line, tail, wellFormed } from './digest-text.ts'
+import { plainText } from '../read/plain.ts'
 import { FileReplies, type ReplyReader } from './transcript.ts'
 
 /**
@@ -49,11 +50,26 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 const hash = (text: string, length = 16): string => createHash('sha256').update(text).digest('hex').slice(0, length)
 export const reasonText = (reason: string): string => head(wellFormed(reason), REASON_MAX)
 
-export type ItemKind = 'heading' | 'session' | 'reply'
+export type ItemKind = 'heading' | 'session' | 'reply' | 'line'
 
 export const headingKey = (text: string): string => `heading:${hash(text, 12)}`
 export const sessionKey = (id: string): string => `session:${id}`
 export const replyKey = (id: string): string => `reply:${id}`
+export const lineKey = (sent: string): string => `line:${hash(sent, 12)}`
+
+/**
+ * What is sent for an ask or a health line: its plain words (no ids) under a context line. It depends on the raw text alone, so the
+ * read API finds the answer from the same text, and one text is one answer for every line that has it. agw reads it as a `session`.
+ * An elapsed time (`for 17 min`, `for 3 h`) is rebuilt into a line at every build: it is left out, or each minute would be a new
+ * item and a new call, and the stored answer would never be found again (the model's own `lineKey` leaves it out for the same reason).
+ */
+export const lineText = (raw: string): string =>
+  head(
+    wellFormed(
+      `Role: ask or health line\nLast message: ${plainText(raw).replace(/\b\d+(\.\d+)? (h|min)\b/g, 'a while')}`,
+    ),
+    LIMIT.session,
+  )
 
 // --- the feed: what the builder offers ---------------------------------------------------------------------------
 
@@ -78,6 +94,8 @@ export interface DigestFeed {
   /** plan and wave headings with no `<!-- short: … -->`, of ordinary repos only */
   headings: string[]
   sessions: FeedSession[]
+  /** the raw text of an ask or a health line the digest may read (`scopeOf` decides); none when absent */
+  lines?: readonly string[]
   /** every source was read in the build that made this feed; a partial one (hc down, a plan unreadable) must not make the cache forget rows */
   complete: boolean
 }
@@ -98,6 +116,7 @@ const ReplyAnswer = z.object({
 /** What a row of `factory.fleet_digest` holds in `answer`: agw's answer plus the turn it was made for. */
 const StoredHeading = HeadingAnswer
 const StoredSession = SessionAnswer.extend({ turn: z.number().int().nullable() })
+const StoredLine = SessionAnswer
 const StoredReply = ReplyAnswer.extend({ turn: z.number().int(), at: z.string(), text: z.string() })
 export type StoredReply = z.infer<typeof StoredReply>
 
@@ -124,6 +143,12 @@ export class DigestView {
     return parsed.success ? parsed.data.headline : null
   }
 
+  /** The words of an ask or a health line, from its raw text: `summary` is the digest's headline. */
+  line(raw: string): { short: string; summary: string } | null {
+    const parsed = StoredLine.safeParse(this.rows.get(lineKey(lineText(raw)))?.answer)
+    return parsed.success ? { short: parsed.data.short, summary: parsed.data.headline } : null
+  }
+
   reply(sessionId: string): StoredReply | null {
     const parsed = StoredReply.safeParse(this.rows.get(replyKey(sessionId))?.answer)
     return parsed.success ? parsed.data : null
@@ -143,7 +168,7 @@ export async function readDigestCache(sql: SQL): Promise<DigestView> {
 const BatchItem = z.object({
   id: z.string(),
   key: z.string(),
-  kind: z.enum(['heading', 'session', 'reply']),
+  kind: z.enum(['heading', 'session', 'reply', 'line']),
   text: z.string(),
   /** the content that was sent: what the cache compares */
   fingerprint: z.string(),
@@ -417,7 +442,10 @@ export class Digest {
     const [ended]: { n: number }[] = await sql`
       SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE batch_hash = ${batchHash} AND terminal`
     const key = `factory-digest-${batchHash}-${ended?.n ?? 0}`
-    const stdin = JSON.stringify(batch.map(({ id, kind, text }) => ({ id, kind, text })))
+    // agw's digest knows heading, session, reply and window: a line is asked as a session (a title and one sentence).
+    const stdin = JSON.stringify(
+      batch.map(({ id, kind, text }) => ({ id, kind: kind === 'line' ? 'session' : kind, text })),
+    )
     let reply: Reply
     try {
       reply = await this.exec([this.deps.bin, 'digest', '--format', 'json', '--idempotency-key', key], stdin)
@@ -656,6 +684,15 @@ export class Digest {
       offer({ key, kind: 'heading', text, fingerprint: hash(text), turn: null, at: null })
     }
 
+    for (const raw of feed.lines ?? []) {
+      const text = lineText(raw)
+      const key = lineKey(text)
+      // One item per text, however many lines have it.
+      if (wanted.has(key)) continue
+      wanted.add(key)
+      offer({ key, kind: 'line', text, fingerprint: hash(text), turn: null, at: null })
+    }
+
     const current =
       this.deps.session ??
       (async (id: string) => {
@@ -755,6 +792,10 @@ function parseAnswer(item: BatchItem, raw: Record<string, unknown> | undefined):
   if (!raw || 'error' in raw) return undefined
   if (item.kind === 'heading') {
     const parsed = HeadingAnswer.safeParse(raw)
+    return parsed.success ? parsed.data : undefined
+  }
+  if (item.kind === 'line') {
+    const parsed = StoredLine.safeParse(raw)
     return parsed.success ? parsed.data : undefined
   }
   if (item.kind === 'session') {

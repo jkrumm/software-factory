@@ -3,12 +3,15 @@ import {
   type AccountQuota,
   API_VERSION,
   type Fleet,
+  type FleetAsk,
   type FleetSession,
   type Insights,
   type IssueCard,
   type IssueDetail,
   type IssueSummary,
   type Overview,
+  type ReadAsk,
+  type ReadHealth,
   type SessionCard,
   type SessionState,
   type Terminal,
@@ -17,13 +20,15 @@ import type { SQL } from 'bun'
 import { latestReadings, toQuota } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
 import { type DigestView, readDigestCache } from '../fleet/digest.ts'
+import { STALE_ASK_MS } from '../fleet/model.ts'
 import { namesIuRoot } from '../fleet/place.ts'
 import { readSnapshot } from '../fleet/store.ts'
 import { getIssueView } from '../issues/follow.ts'
-import { leadKey } from '../issues/names.ts'
+import { isLeadSession, leadKey } from '../issues/names.ts'
 import { listIssues } from '../issues/read.ts'
 import { type Loaded, loadByIds } from '../sessions.ts'
 import { cut, describeEvent, firstSentence } from './describe.ts'
+import { fallbackWords } from './plain.ts'
 import { sumInsights, type TimedEvent, TranscriptInsights, workingOf } from './insights.ts'
 
 export { describeEvent } from './describe.ts'
@@ -36,6 +41,8 @@ const SESSION_LIMIT = 200
 /** How far down a lead's tree of started sessions is followed. */
 const TREE_DEPTH = 4
 const TITLE_WORDS_MAX = 80
+/** The raw text of an ask or a health line in the read API: one line, cut at a word. */
+const LINE_TEXT_MAX = 240
 
 export interface ReadDeps {
   sql: SQL
@@ -44,6 +51,18 @@ export interface ReadDeps {
   isVisible?: (path: string) => boolean
   /** the transcript counter, shared so its cache lives as long as the server */
   insights?: TranscriptInsights
+}
+
+/**
+ * A `reply` ask of an Issue's lead is the Issue's open decision asked twice: it goes when an ask of source `decision` for the same
+ * Issue is there (decision ids are `decision:<issue>:<attempt>:...`).
+ */
+export function dropReplyDuplicates(asks: readonly FleetAsk[]): FleetAsk[] {
+  const decided = new Set(asks.flatMap((a) => (a.source === 'decision' ? [/^decision:(\d+):/.exec(a.id)?.[1]] : [])))
+  return asks.filter((a) => {
+    if (a.source !== 'reply' || !a.session || !isLeadSession(a.session)) return true
+    return !decided.has(a.session.split('-')[1])
+  })
 }
 
 /** Thrown where a resource needs the fleet snapshot and none is stored yet: the route answers 503 `not_ready`. */
@@ -147,6 +166,7 @@ export class Reader {
     const rows: { state: string; n: number }[] = await sql`
       SELECT state, count(*)::int AS n FROM factory.issues WHERE state <> 'closed' GROUP BY state`
     const n = (state: string): number => rows.find((r) => r.state === state)?.n ?? 0
+    const { asks, humanQueue, health } = this.words(ctx, ctx.snapshot)
     return {
       version: API_VERSION,
       now: clock.now().toISOString(),
@@ -156,21 +176,68 @@ export class Reader {
         waiting: n('waiting'),
         queued: n('queued'),
         watching: n('watching'),
-        asks: ctx.snapshot.asks.length,
-        health: ctx.snapshot.health.length,
+        asks: asks.length,
+        humanQueue: humanQueue.filter((a) => !a.stale).length,
+        health: health.length,
       },
-      asks: ctx.snapshot.asks,
-      health: ctx.snapshot.health,
+      asks,
+      humanQueue,
+      health,
       accounts: [...ctx.quota.values()],
       queue: ctx.snapshot.queue,
     }
   }
 
   /** The lists of the overview, whole. */
-  async lists(): Promise<{ asks: Fleet['asks']; health: Fleet['health']; accounts: AccountQuota[] }> {
+  async lists(): Promise<{
+    asks: ReadAsk[]
+    humanQueue: ReadAsk[]
+    health: ReadHealth[]
+    accounts: AccountQuota[]
+  }> {
     const ctx = await this.context()
     if (!ctx.snapshot) throw new NotReady('the fleet model is not built yet')
-    return { asks: ctx.snapshot.asks, health: ctx.snapshot.health, accounts: [...ctx.quota.values()] }
+    return { ...this.words(ctx, ctx.snapshot), accounts: [...ctx.quota.values()] }
+  }
+
+  /**
+   * The asks and health lines in plain words: the digest's answer for the line when it has one, else a reply ask's own `short`, else
+   * the deterministic fallback. The digest never reads a visible place's line, so none of its answers is shown for one.
+   */
+  private words(ctx: Context, snapshot: Fleet): { asks: ReadAsk[]; humanQueue: ReadAsk[]; health: ReadHealth[] } {
+    const visibleSpaces = new Set(snapshot.repos.filter((r) => r.visible).map((r) => r.space))
+    const model = (line: { repo: string | null; session?: string | null; text: string }) => {
+      const visible =
+        (line.repo !== null && (visibleSpaces.has(line.repo) || this.isVisible(line.repo))) ||
+        (!!line.session && !!ctx.placed.get(line.session)?.visible)
+      return visible ? null : ctx.digest.line(line.text)
+    }
+    const all = dropReplyDuplicates(snapshot.asks).map((ask): ReadAsk => {
+      const fallback = fallbackWords(ask.text, 'ask')
+      const said = model(ask)
+      return {
+        ...ask,
+        text: cut(ask.text, LINE_TEXT_MAX),
+        short: said?.short ?? ask.short ?? fallback.short,
+        summary: said?.summary ?? fallback.summary,
+        stale: ctx.now.getTime() - Date.parse(ask.at) >= STALE_ASK_MS,
+      }
+    })
+    const health = snapshot.health.map((line): ReadHealth => {
+      const fallback = fallbackWords(line.text, 'health')
+      const said = model(line)
+      return {
+        ...line,
+        text: cut(line.text, LINE_TEXT_MAX),
+        short: said?.short ?? fallback.short,
+        summary: said?.summary ?? fallback.summary,
+      }
+    })
+    return {
+      asks: all.filter((a) => a.source !== 'queue'),
+      humanQueue: all.filter((a) => a.source === 'queue'),
+      health,
+    }
   }
 
   async accounts(): Promise<AccountQuota[]> {

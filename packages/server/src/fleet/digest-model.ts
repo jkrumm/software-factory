@@ -26,13 +26,31 @@ export interface ScopeInput {
   isVisible: (path: string) => boolean
   /** the open Issues: the filed titles of those in ordinary repos get a short heading */
   issues: readonly { title: string; repo: string }[]
+  /** the names of the visible repos: the directories directly under each visible root, and the model's visible repos */
+  visibleNames: readonly string[]
+}
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** Names shorter than this are too common as words to mean a repo. */
+const NAME_MIN = 3
+
+/** Whether a text mentions IuRoot or a visible repo by name (whole word, any case). */
+function namesVisible(text: string, names: readonly string[]): boolean {
+  if (/iuroot/i.test(text)) return true
+  const long = [...new Set(names.filter((n) => n.length >= NAME_MIN))]
+  if (long.length === 0) return false
+  const words = long.map(escapeRegExp).join('|')
+  return new RegExp(String.raw`(?<![A-Za-z0-9_])(?:${words})(?![A-Za-z0-9_])`, 'i').test(text)
 }
 
 /**
  * The digest's reading of the model. A session is offered only when it is listed under an ordinary repo and none of its places is
  * visible: its repo, its spawn's repo, its directory, its terminal's directory. A session outside every repo is never offered
  * (nothing says where it stands). The feed's headings are the filed titles of the open Issues of ordinary repos and nothing else: an
- * Issue whose repo is visible (or the model marks visible) never has its title offered.
+ * Issue whose repo is visible (or the model marks visible) never has its title offered. The feed's lines are the texts of the asks and
+ * health lines whose repo and session are ordinary and whose text names neither IuRoot nor a visible repo; any other line gets its
+ * words from the deterministic fallback alone.
  */
 export function scopeOf(input: ScopeInput): DigestScope {
   const { model, isVisible } = input
@@ -73,7 +91,23 @@ export function scopeOf(input: ScopeInput): DigestScope {
         .map((issue) => issue.title),
     ),
   ]
-  return { feed: { headings, sessions: [...sessions.values()], complete: true }, sessions, repos }
+  const visibleNames = [...input.visibleNames, ...model.repos.filter((repo) => repo.visible).map((repo) => repo.name)]
+  const visibleSessions = new Set(
+    model.repos
+      .filter((repo) => repo.visible || isVisible(repo.space))
+      .flatMap((repo) => repo.sessions.map((s) => s.id)),
+  )
+  const placedVisible = (session: string | null): boolean => {
+    if (!session) return false
+    const m = byId.get(session)
+    return !!m && [m.repo, m.spawnRepo, m.cwd, m.hc?.cwd].some((p) => p && isVisible(p))
+  }
+  const mayRead = (line: { repo: string | null; session?: string | null; text: string }): boolean =>
+    !(line.repo !== null && (visibleRepos.has(line.repo) || isVisible(line.repo))) &&
+    !(line.session && (visibleSessions.has(line.session) || placedVisible(line.session))) &&
+    !namesVisible(line.text, visibleNames)
+  const lines = [...new Set([...model.asks, ...model.health].filter(mayRead).map((line) => line.text))]
+  return { feed: { headings, sessions: [...sessions.values()], lines, complete: true }, sessions, repos }
 }
 
 /**

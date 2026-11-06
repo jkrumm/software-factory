@@ -87,8 +87,27 @@ const ASK = {
   text: 'Which way should it go?',
   source: 'decision',
   at: '2026-11-06T10:00:00.000Z',
+  summary: 'Which way it should go.',
+  stale: false,
 }
-const HEALTH = { id: 'health:x:1', kind: 'silent', text: 'quiet', repo: null, since: '2026-11-06T09:00:00.000Z' }
+const QUEUED = {
+  ...ASK,
+  id: 'queue:1',
+  kind: 'human',
+  short: 'Review the notes',
+  summary: 'Read the release notes.',
+  source: 'queue',
+  stale: true,
+}
+const HEALTH = {
+  id: 'health:x:1',
+  kind: 'silent',
+  text: 'quiet',
+  short: 'A quiet lead',
+  summary: 'The lead has been quiet.',
+  repo: null,
+  since: '2026-11-06T09:00:00.000Z',
+}
 
 const frame = (id: string, event: string, data: unknown) =>
   `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`
@@ -123,8 +142,9 @@ beforeAll(() => {
             version: 'v1',
             now: 'n',
             builtAt: 'b',
-            counts: { working: 1, waiting: 0, queued: 2, watching: 0, asks: 1, health: 1 },
+            counts: { working: 1, waiting: 0, queued: 2, watching: 0, asks: 1, humanQueue: 0, health: 1 },
             asks: [ASK],
+            humanQueue: [QUEUED],
             health: [HEALTH],
             accounts: [QUOTA],
             queue: { effective: 'run', spawns: [] },
@@ -138,7 +158,7 @@ beforeAll(() => {
         case '/v1/sessions/lead-1':
           return json(SESSION)
         case '/v1/asks':
-          return json({ asks: [ASK] })
+          return json({ asks: [ASK], humanQueue: [QUEUED] })
         case '/v1/health':
           return json({ health: [HEALTH] })
         case '/v1/accounts':
@@ -188,7 +208,7 @@ describe('factory read', () => {
       [['read', 'issue', '7'], DETAIL],
       [['read', 'sessions'], { sessions: [SESSION] }],
       [['read', 'session', 'lead-1'], SESSION],
-      [['read', 'asks'], { asks: [ASK] }],
+      [['read', 'asks'], { asks: [ASK], humanQueue: [QUEUED] }],
       [['read', 'health'], { health: [HEALTH] }],
       [['read', 'accounts'], { accounts: [QUOTA] }],
     ] as const) {
@@ -218,6 +238,15 @@ describe('factory read', () => {
     expect(one.stdout).toContain('timeline\n2026-11-06T10:00:00.000Z\tfiled\tFiled.')
     const overview = await factory(['--format', 'plain', 'read', 'overview'])
     expect(overview.stdout).toContain('1 working · 0 waiting · 2 queued')
+    expect(overview.stdout).toContain('1 asks · 0 human queue · 1 health')
+    expect(overview.stdout).toContain(
+      'ask\tWhich way?\tWhich way it should go.\t2026-11-06T10:00:00.000Z\tquestion\t-\t\n',
+    )
+    expect(overview.stdout).toContain('human queue\tReview the notes\tRead the release notes.')
+    const asks = await factory(['--format', 'plain', 'read', 'asks'])
+    expect(asks.stdout).toContain('\thuman\t-\tstale\n')
+    const health = await factory(['--format', 'plain', 'read', 'health'])
+    expect(health.stdout).toBe('A quiet lead\tThe lead has been quiet.\t2026-11-06T09:00:00.000Z\tsilent\t-\n')
     expect(overview.stdout).toContain('account\ta1\t5h 40%\tweek 10%\tavailable\tfresh')
   })
 

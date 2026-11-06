@@ -265,6 +265,32 @@ describe('the pass', () => {
     expect(call?.items.every((i) => /^i\d+$/.test(i.id))).toBe(true)
   })
 
+  test('lines are asked as sessions under plain words, stored under line: keys, and read back by the raw text', async () => {
+    const raw = 'spawn lead-119-1 failed: Issue 119 closed before the spawn started'
+    const feed: DigestFeed = {
+      headings: [],
+      sessions: [],
+      lines: [raw, raw, 'digest: 2 failed passes'],
+      complete: true,
+    }
+    expect(await digest.pass(feed)).toMatchObject({ called: true, sent: 2, stored: 2 })
+    const items = calls()[0]?.items ?? []
+    expect(items.map((i) => i.kind)).toEqual(['session', 'session'])
+    expect(items.map((i) => i.text)).toContain(
+      'Role: ask or health line\nLast message: A spawn failed: an Issue closed before the spawn started',
+    )
+    expect(items.map((i) => i.text).join(' ')).not.toMatch(/lead-119-1|Issue 119/)
+    const rows: { key: string }[] = await db.sql`SELECT key FROM factory.fleet_digest ORDER BY key`
+    expect(rows.every((r) => r.key.startsWith('line:'))).toBe(true)
+    expect(rows).toHaveLength(2)
+    expect((await digest.view()).line(raw)).toEqual({
+      short: 'Session',
+      summary: 'Headline A spawn failed:',
+    })
+    // the same text is not asked again, and the rows are kept for as long as the line is in the feed
+    expect(await digest.pass(feed)).toMatchObject({ called: false })
+  })
+
   test('more than 64 changed items: 64 go, the rest wait for the next pass', async () => {
     const feed: DigestFeed = {
       headings: Array.from({ length: 70 }, (_, i) => `Heading number ${i}`),

@@ -718,7 +718,8 @@ const readHandlers = (reader: Reader) => {
       const card = await reader.session(req.params.id)
       return card ? respond(SessionCard, card) : json({ error: 'unknown session' }, 404)
     },
-    asks: async () => reader.lists().then((l) => respond(AskList, { asks: l.asks }), notReady),
+    asks: async () =>
+      reader.lists().then((l) => respond(AskList, { asks: l.asks, humanQueue: l.humanQueue }), notReady),
     health: async () => reader.lists().then((l) => respond(HealthList, { health: l.health }), notReady),
     accounts: async () => respond(AccountList, { accounts: await reader.accounts() }),
   }
