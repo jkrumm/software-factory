@@ -904,9 +904,9 @@ function allowedMethods(table: Record<string, object>): (pathname: string) => st
 }
 
 /**
- * Stops accepting and lets requests in flight finish for `graceMs`, then closes whatever is still open: the SSE stream and a
- * session's long-poll `wait` never end by themselves, and a plain `stop()` waits for them forever (a shutdown then sat in
- * it until its backstop, 210 s, holding the database lock).
+ * Stops accepting and lets requests in flight finish for `graceMs`, then closes whatever is still open: the SSE stream
+ * (`/v1/stream`) never ends by itself, and a plain `stop()` waits for it forever (a shutdown then sat in it until its
+ * backstop, 210 s, holding the database lock).
  */
 export async function stopListening(
   listener: { stop(closeActiveConnections?: boolean): Promise<void> },

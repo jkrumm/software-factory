@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { stopListening } from '../src/http.ts'
 
-/** A stream that never ends, like `/v1/stream` or a session's long-poll `wait`. */
+/** A stream that never ends, like `/v1/stream`. */
 function openStream() {
   return Bun.serve({
     port: 0,
