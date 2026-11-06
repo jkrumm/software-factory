@@ -107,13 +107,24 @@ unload_wait_secs() { # $1 plist or template
   echo $(( ${t:-120} + 10 ))
 }
 
-stop_service() { # $1 max seconds to wait for the unload
+# The pid launchd runs for the service ("" = not running). The server holds the database lock until that process is gone.
+service_pid() {
+  launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }'
+}
+
+# Waits until the service is unloaded AND its process is gone: launchd can drop the job while the old server is still in
+# its SIGTERM shutdown, holding the database lock, and the next server would exit on the taken lock.
+stop_service() { # $1 max seconds to wait
+  local pid i=0
+  pid=$(service_pid)
   loaded || return 0
   mark_deliberate_restart
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
-  local i=0
-  while (( i < $1 )) && loaded; do sleep 1; i=$((i + 1)); done
-  ! loaded
+  while (( i < $1 )); do
+    if ! loaded && { [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; }; then return 0; fi
+    sleep 1; i=$((i + 1))
+  done
+  return 1
 }
 
 start_service() { # $1 release dir, $2 sha

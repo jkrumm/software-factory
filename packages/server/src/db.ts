@@ -42,18 +42,30 @@ export interface SingletonOptions {
   onLost?: (reason: string) => void
   /** how often the connection is checked */
   checkMs?: number
+  /** how long to keep asking while another copy holds the lock (it may be shutting down); 0 asks once */
+  waitMs?: number
+  /** how often the lock is asked for while waiting */
+  retryMs?: number
 }
 
 /**
  * Takes the session-level advisory lock that makes this the only server on the database. The lock belongs to a
  * connection, so one is reserved and kept for the life of the process; the database drops the lock when it closes.
  * A watchdog checks that this connection still holds it, because a dropped connection frees the lock without a sound
- * and a second copy could then start beside a server that keeps ticking. Returns `undefined` when another copy holds it.
+ * and a second copy could then start beside a server that keeps ticking. A holder that is shutting down lets go within
+ * seconds, so a new copy asks again for `waitMs` before it gives up. Returns `undefined` when another copy still holds it.
  */
 export async function acquireSingleton(sql: SQL, options: SingletonOptions = {}): Promise<Singleton | undefined> {
   const connection = await sql.reserve()
-  const [row] = await connection`SELECT pg_try_advisory_lock(${LOCKS.singleton}) AS locked`
-  if (!row?.locked) {
+  const deadline = Date.now() + (options.waitMs ?? 0)
+  let locked = false
+  for (;;) {
+    const [row] = await connection`SELECT pg_try_advisory_lock(${LOCKS.singleton}) AS locked`
+    locked = Boolean(row?.locked)
+    if (locked || Date.now() >= deadline) break
+    await Bun.sleep(options.retryMs ?? 500)
+  }
+  if (!locked) {
     await connection.release()
     return undefined
   }

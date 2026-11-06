@@ -557,7 +557,10 @@ itself, with no server and no token: `rd work --role` depends on `role get <role
 #### Process, health, contract, schema and API
 
 **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
-if its connection loses it; a second copy exits 1. Every
+if its connection loses it; a second copy asks for the lock again every 500 ms for 45 s (the old server may be in its SIGTERM
+shutdown, which releases the lock last), then exits 1. A deploy's and a rollback's `stop_service` also waits for the old
+server's process to be gone, not only for launchd to drop the job: launchd can unload it while it still holds the lock. A
+shutdown that hits its backstop logs the step it was in. Every
 advisory key lives in `src/locks.ts` and they must stay distinct.
 
 **`/health` is the ticker's pulse:** the last successful tick and the last tick error; no success within three
@@ -1567,7 +1570,7 @@ owner "continue".
 |-|-|
 | The factory deploys itself | stop, swap the release, start, health check; a failed check starts the previous release. The one automatic revert, because a dead factory watches nothing |
 | The mini was down | open deadlines move by the downtime; missed job slots run once |
-| A second copy starts | the advisory lock makes it exit |
+| A second copy starts | it waits 45 s for the advisory lock, then exits |
 | The factory is down when a hook fires | the event goes to the spool, replayed on start |
 | A hook fires in the owner's own session | it exits at once: no `FACTORY_SESSION` |
 | A runner restart moves a session to another account | the witness records the account in effect |

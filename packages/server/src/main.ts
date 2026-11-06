@@ -37,6 +37,9 @@ import { gitProbe, startWitness } from './witness.ts'
 /** Longest a shutdown may take: one in-flight start is bounded by the start budget; the plist ExitTimeOut is longer. */
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
 
+/** How long a new server asks for the one-process lock while the old one is still stopping. */
+const LOCK_WAIT_MS = 45_000
+
 const config = loadConfig(process.env)
 
 // The runner and the quota source depend on files of the dotfiles checkout, and every spawn on the role table: a
@@ -56,8 +59,10 @@ const roles = await loadRoleTable(config.rolesFile).catch((error: unknown) => {
 // The factory role may hold 10 connections: the pool (one of them kept for the one-process lock) leaves room for a psql.
 const sql = new SQL({ url: config.databaseUrl, max: 8 })
 
-// One process: a second copy finds the lock taken and leaves before it touches anything.
+// One process: a second copy waits a while for the lock (a deploy starts it while the old server is still shutting
+// down), and if it stays taken leaves before it touches anything.
 const singleton = await acquireSingleton(sql, {
+  waitMs: LOCK_WAIT_MS,
   onLost: (reason) => {
     // launchd restarts the process, which takes the lock again (or finds another copy holding it).
     console.error(`lost the database lock: ${reason}; exiting`)
@@ -246,28 +251,42 @@ const witnessLoop = startWitness({ sql, runner: events, clock, probe: gitProbe }
 console.log(`listening on ${server.url.href} (version ${config.version})`)
 
 let stopping = false
+let stoppingStep = 'start'
 async function shutdown(signal: string): Promise<void> {
   if (stopping) return
   stopping = true
   console.log(`${signal}: stopping`)
   setTimeout(() => {
-    console.error('shutdown took too long, exiting')
+    console.error(`shutdown took too long (still in: ${stoppingStep}), exiting`)
     process.exit(1)
   }, SHUTDOWN_BACKSTOP_MS).unref()
   try {
     // Stop taking requests, let the tick in flight record its result, only then release the lock and close the pool.
+    stoppingStep = 'server.stop'
     await server.stop()
+    stoppingStep = 'hooks.stop'
     await hooks.stop()
+    stoppingStep = 'ticker.stop'
     await ticker.stop()
+    stoppingStep = 'fleet.settled'
     await fleet.settled()
+    stoppingStep = 'settler.settled'
     await settler.settled()
+    stoppingStep = 'github.settled'
     await github?.settled()
+    stoppingStep = 'spaces.settled'
     await spaces.settled()
+    stoppingStep = 'leadWorktrees.stop'
     await leadWorktrees.stop(15_000)
+    stoppingStep = 'offTick.stop'
     await offTick.stop(15_000)
+    stoppingStep = 'witnessLoop.stop'
     await witnessLoop.stop()
+    stoppingStep = 'events.stop'
     await events.stop()
+    stoppingStep = 'singleton.release'
     await singleton?.release()
+    stoppingStep = 'sql.close'
     await sql.close()
     process.exit(0)
   } catch (error) {
