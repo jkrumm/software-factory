@@ -455,12 +455,17 @@ describe('the adapter', () => {
     return { calls, run }
   }
 
-  test('runs factory-ask with the ask on stdin under `ask`, keyed by the ask', async () => {
+  test('runs factory-ask with the ask object itself on stdin, keyed by the ask', async () => {
     const { calls, run } = scripted([{ exitCode: 0, stdout: JSON.stringify({ status: 'done', output }) }])
     expect(await new AgwAskJudge({ bin: 'agw', run }).judge(input, 'factory-ask-7')).toEqual(output)
     expect(calls[0]?.cmd).toEqual(['agw', 'factory-ask', '--format', 'json', '--idempotency-key', 'factory-ask-7'])
     expect(JSON.parse(calls[0]?.stdin ?? '')).toEqual({
-      ask: { question: 'q', options: ['a'], default: null, facts: 'f', plan: 'p', repo: 'r' },
+      question: 'q',
+      options: ['a'],
+      default: null,
+      facts: 'f',
+      plan: 'p',
+      repo: 'r',
     })
   })
 
@@ -470,7 +475,7 @@ describe('the adapter', () => {
       { ...input, question: 'x'.repeat(3000), options: Array.from({ length: 12 }, () => 'y'.repeat(2000)) },
       'k',
     )
-    const sent = JSON.parse(calls[0]?.stdin ?? '').ask
+    const sent = JSON.parse(calls[0]?.stdin ?? '')
     expect(sent.question).toHaveLength(2000)
     expect(sent.options).toHaveLength(10)
     expect(sent.options[0]).toHaveLength(1000)
