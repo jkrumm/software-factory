@@ -47,7 +47,8 @@ interface ReadInput {
 /**
  * Reads the commits a lead merged: those it reports with `ship`, each of which must be on the remote's default branch, and whatever else
  * is on its branch since the worktree was cut, so the bar is set by what the branch holds and not by what the lead chose to name. A branch
- * rebased over newer work counts those commits too: stricter, never lighter. A merge commit counts as what it brought in. A reported
+ * rebased over what others landed is judged by its own commits, found from its reflog (`branchCommits`); where the reflog cannot say, the
+ * whole range counts: stricter, never lighter. A merge commit counts as what it brought in. A reported
  * commit older than the cut is refused, and for `ship` so is a branch with work not on the base. What is not known, or not on the base, is
  * looked for once more after a fetch: a pull request merged on GitHub is on no local ref until then.
  */
@@ -238,7 +239,7 @@ export class GitCommits implements Commits {
     for (const entry of reflog.stdout.split('\n')) {
       const [tip, ...words] = entry.split(' ')
       const message = words.join(' ')
-      if (tip && /^commit( \([a-z ]+\))?:/.test(message)) made.add(tip)
+      if (tip && /^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message)) made.add(tip)
       const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
       if (tip && onto) rebased.push({ onto, tip })
     }

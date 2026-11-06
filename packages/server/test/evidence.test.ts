@@ -583,6 +583,24 @@ describe('GitCommits, against a repo with an origin', () => {
       expect(found.paths).toEqual(['docs/named.md', 'src/left-out.ts'])
     })
 
+    test('a cherry-picked commit of its own that landed stays its own through a later rebase', async () => {
+      const { origin, clone, head, cut, rebase, land } = lane('picked')
+      fixture.commit(origin, { 'src/f1.ts': 'x' })
+      rebase()
+      fixture.git(clone, 'checkout', '-q', '-b', 'side')
+      fixture.commit(clone, { 'docs/picked.md': 'a' })
+      const picked = head(clone)
+      fixture.git(clone, 'checkout', '-q', 'factory/1-1')
+      fixture.git(clone, 'cherry-pick', picked)
+      land()
+      fixture.commit(origin, { 'src/f2.ts': 'y' })
+      rebase()
+      fixture.commit(clone, { 'docs/last.md': 'b' })
+      land()
+      const found = await read({ repo: clone, cut, reported: [head(clone)], merged: true })
+      expect(found.paths).toEqual(['docs/last.md', 'docs/picked.md'])
+    })
+
     test('a branch never rebased keeps its whole range, and a rebase reflog cannot be read leaves it whole too', async () => {
       const { origin, clone, cut } = lane('plain')
       fixture.commit(clone, { 'docs/own.md': 'a' })
