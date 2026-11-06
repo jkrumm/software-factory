@@ -4,7 +4,9 @@ import { basename, join } from 'node:path'
 import {
   isProjectDirName,
   MAX_MANIFEST_BYTES,
+  MAX_PLAN_BYTES,
   type MakeTargets,
+  type PlanFile,
   type ProjectManifest,
   type ProjectSyncResult,
 } from '@software-factory/contract'
@@ -12,6 +14,7 @@ import type { SQL } from 'bun'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
 import { createIssue } from '../issues/create.ts'
 import { contentSha, parseManifest } from './manifest.ts'
+import { parsePlan } from './plan-file.ts'
 import { makeTargetsOf } from './make.ts'
 
 /** A full pass over the roots at most this often; the repos Issues and spawns name are picked up on every tick. */
@@ -42,10 +45,23 @@ interface Row {
   manifest_sha: string | null
   manifest_error: string | null
   manifest_error_sha: string | null
+  plan: PlanFile | null
+  plan_sha: string | null
+  plan_error: string | null
+  plan_error_sha: string | null
 }
 
 /** `undefined`: no default branch to read, so nothing is known (the row keeps what it has) */
 type Manifested = string | null | undefined | { bad: string; sha: string }
+
+/** The two files of the default branch the sync reads in one pass. */
+interface Committed {
+  manifest: Manifested
+  plan: Manifested
+}
+
+const MANIFEST_FILE = 'project.yaml'
+const PLAN_FILE = 'docs/plan.yaml'
 
 const isDirectory = (path: string) =>
   stat(path).then(
@@ -82,6 +98,14 @@ export class ProjectSync {
   private fresh = false
 
   constructor(private readonly deps: SyncDeps) {}
+
+  /** the real roots the plan pass files Issues inside, and the sync's clock */
+  get roots(): readonly string[] {
+    return this.deps.roots
+  }
+  now(): Date {
+    return this.deps.now()
+  }
 
   /** The tick's call: a full pass when it is due, else only the repos that are named and unknown. */
   syncIfDue(): Promise<ProjectSyncResult> {
@@ -228,15 +252,15 @@ export class ProjectSync {
   }
 
   /**
-   * `project.yaml` as committed on the repo's default branch: its text; `null` when the branch has no such file; `undefined` when there
-   * is no default branch to read (an empty repo, another name); `bad` when there is
-   * one that cannot be read as a manifest (not a regular file, larger than the limit), with the hash that keys its upkeep Issue.
+   * `project.yaml` and `docs/plan.yaml` as committed on the repo's default branch, each: its text; `null` when the branch has no such
+   * file; `undefined` when there is no default branch to read (an empty repo, another name); `bad` when there is
+   * one that cannot be read (not a regular file, larger than the limit), with the hash that keys its upkeep Issue.
    * The branch is resolved first and only that branch is read: `origin/HEAD`'s (`origin/<it>`, else the local branch), else the first
    * of `main` and `master` that exists, on the remote before the local one. Anything git fails at throws, so the row keeps what it has: a
    * failure is not a deletion.
    */
-  private async manifestText(repo: string): Promise<Manifested> {
-    if (!(await exists(join(repo, '.git')))) return null
+  private async committedFiles(repo: string): Promise<Committed> {
+    if (!(await exists(join(repo, '.git')))) return { manifest: null, plan: null }
     const run = this.deps.run ?? runProcess
     const env = childEnv({ GIT_TERMINAL_PROMPT: '0' })
     const git = async (args: string[], accept: number[] = [0]) => {
@@ -257,37 +281,42 @@ export class ProjectSync {
         break
       }
     }
-    if (!ref) return undefined
+    if (!ref) return { manifest: undefined, plan: undefined }
 
-    const listed = (await git(['ls-tree', '-l', ref, '--', 'project.yaml'])).stdout.trim()
-    if (!listed) return null
-    const [info] = listed.split('\t')
-    const [mode, , oid, size] = (info ?? '').split(/\s+/)
-    if (mode !== '100644' && mode !== '100755')
-      return { bad: 'project.yaml is not a regular file', sha: contentSha(listed) }
-    if (Number(size) > MAX_MANIFEST_BYTES) {
-      return { bad: `project.yaml is larger than ${MAX_MANIFEST_BYTES} bytes`, sha: contentSha(`blob:${oid}`) }
+    const blob = async (file: string, limit: number): Promise<Manifested> => {
+      const listed = (await git(['ls-tree', '-l', ref, '--', file])).stdout.trim()
+      if (!listed) return null
+      const [info] = listed.split('\t')
+      const [mode, , oid, size] = (info ?? '').split(/\s+/)
+      if (mode !== '100644' && mode !== '100755')
+        return { bad: `${file} is not a regular file`, sha: contentSha(listed) }
+      if (Number(size) > limit) {
+        return { bad: `${file} is larger than ${limit} bytes`, sha: contentSha(`blob:${oid}`) }
+      }
+      return (await git(['cat-file', 'blob', oid ?? ''])).stdout
     }
-    return (await git(['cat-file', 'blob', oid ?? ''])).stdout
+    return { manifest: await blob(MANIFEST_FILE, MAX_MANIFEST_BYTES), plan: await blob(PLAN_FILE, MAX_PLAN_BYTES) }
   }
 
-  /** What is on disk for one repo: the manifest text on its default branch and its Makefile's targets. */
-  private async read(repo: string): Promise<{ text: Manifested; make: MakeTargets } | undefined> {
+  /** What is on disk for one repo: the manifest and plan texts on its default branch and its Makefile's targets. */
+  private async read(repo: string): Promise<{ files: Committed; make: MakeTargets } | undefined> {
     if (!(await isDirectory(repo))) return undefined
-    return { text: await this.manifestText(repo), make: await makeTargetsOf(repo) }
+    return { files: await this.committedFiles(repo), make: await makeTargetsOf(repo) }
   }
 
   /** One repo's row from what was read. `skipEmpty`: a repo with no manifest and no row is no project, and gets none. */
   private async store(
     repo: string,
-    { text, make }: { text: Manifested; make: MakeTargets },
+    { files, make }: { files: Committed; make: MakeTargets },
     roots: readonly string[],
     skipEmpty: boolean,
   ): Promise<{ name: string; broken: boolean; issue: number | null } | undefined> {
     const { sql } = this.deps
     const dirName = basename(repo)
+    const text = files.manifest
     const [prev]: Row[] = await sql`
-      SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha FROM factory.projects WHERE repo = ${repo}`
+      SELECT name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha,
+        plan, plan_sha, plan_error, plan_error_sha FROM factory.projects WHERE repo = ${repo}`
     if (!prev && (text === null || text === undefined) && skipEmpty) return undefined
     if (!isProjectDirName(dirName)) {
       throw new Error(
@@ -323,12 +352,18 @@ export class ProjectSync {
       }
     }
 
+    const planned = this.planOf(files.plan, prev)
+
     await sql`
-      INSERT INTO factory.projects (name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha, make_targets, make_checked_at, synced_at, created_at)
+      INSERT INTO factory.projects (name, repo, manifest, manifest_sha, manifest_error, manifest_error_sha, plan, plan_sha, plan_error, plan_error_sha, make_targets, make_checked_at, synced_at, created_at)
       VALUES (${name}, ${repo}, ${manifest === null ? null : JSON.stringify(manifest)}::text::jsonb, ${manifestSha},
-              ${error?.message ?? null}, ${error?.sha ?? null}, ${JSON.stringify(make)}::text::jsonb, ${now}, ${now}, ${now})
+              ${error?.message ?? null}, ${error?.sha ?? null},
+              ${planned.plan === null ? null : JSON.stringify(planned.plan)}::text::jsonb, ${planned.sha},
+              ${planned.error?.message ?? null}, ${planned.error?.sha ?? null},
+              ${JSON.stringify(make)}::text::jsonb, ${now}, ${now}, ${now})
       ON CONFLICT (repo) DO UPDATE SET manifest = EXCLUDED.manifest, manifest_sha = EXCLUDED.manifest_sha,
         manifest_error = EXCLUDED.manifest_error, manifest_error_sha = EXCLUDED.manifest_error_sha,
+        plan = EXCLUDED.plan, plan_sha = EXCLUDED.plan_sha, plan_error = EXCLUDED.plan_error, plan_error_sha = EXCLUDED.plan_error_sha,
         make_targets = EXCLUDED.make_targets, make_checked_at = EXCLUDED.make_checked_at, synced_at = EXCLUDED.synced_at`
 
     if (!error) return { name, broken: false, issue: null }
@@ -345,6 +380,28 @@ export class ProjectSync {
       { repoRoots: roots, now },
     )
     return { name, broken: true, issue: issue.id }
+  }
+
+  /**
+   * The plan the row ends with, the manifest's way: absent file, no plan; nothing read, whatever the row had; an unreadable or broken
+   * file keeps the last valid plan and records the error. No upkeep Issue: a plan error is a health line.
+   */
+  private planOf(
+    text: Manifested,
+    prev: Row | undefined,
+  ): { plan: PlanFile | null; sha: string | null; error: { sha: string; message: string } | null } {
+    const kept = { plan: prev?.plan ?? null, sha: prev?.plan_sha ?? null }
+    if (text === null) return { plan: null, sha: null, error: null }
+    if (text === undefined) {
+      const error =
+        prev?.plan_error && prev.plan_error_sha ? { sha: prev.plan_error_sha, message: prev.plan_error } : null
+      return { ...kept, error }
+    }
+    if (typeof text === 'object') return { ...kept, error: { sha: text.sha, message: text.bad } }
+    const sha = contentSha(text)
+    const parsed = parsePlan(text)
+    if (!parsed.ok) return { ...kept, error: { sha, message: parsed.message } }
+    return { plan: parsed.plan, sha, error: null }
   }
 
   /** `<dir name>` if no other repo has it, else the name with the path's hash. */

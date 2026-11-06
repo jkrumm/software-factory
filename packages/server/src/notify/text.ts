@@ -52,7 +52,7 @@ export const issueHead = (issue: { id: number; repo: string }): string =>
 
 export interface Message {
   key: string
-  kind: 'ask' | 'parked' | 'failed' | 'regression' | 'digest' | 'test'
+  kind: 'ask' | 'parked' | 'failed' | 'regression' | 'digest' | 'plan' | 'test'
   issueId: number | null
   text: string
 }
@@ -136,5 +136,15 @@ export function regressionMessage(input: { issue: IssueRef; hold: number; title?
     kind: 'regression',
     issueId: input.issue.id,
     text: `${issueHead(input.issue)} regressed after its ship (hold ${input.hold}) and went back to its lead${input.title ? `: ${quote(input.title)}` : ''}`,
+  }
+}
+
+/** A plan with every row done in a project with nothing open: the owner decides what comes next. One per plan content. */
+export function planFinishedMessage(input: { project: string; sha: string }): Message {
+  return {
+    key: `notify:plan:${input.project}:${input.sha}`,
+    kind: 'plan',
+    issueId: null,
+    text: `The plan of ${input.project} is finished: what next?`,
   }
 }
