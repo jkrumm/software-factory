@@ -97,6 +97,8 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
+      githubPollMs: 300_000,
+      githubToken: undefined,
       admission: { leadsPerAccount: 2, loadCeiling: 60 },
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -158,6 +160,13 @@ describe('config (finding 5)', () => {
     for (const bad of ['7:30', '24:00', '07:60', 'morning', '12:00', '18:30'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_AT: bad })).toThrow('FACTORY_DIGEST_AT')
     expect(() => loadConfig({ ...env, FACTORY_DIGEST_TZ: 'Mars/Olympus' })).toThrow('FACTORY_DIGEST_TZ')
+  })
+
+  test('FACTORY_GITHUB_POLL: five minutes, a duration of 30 s to 24 h, or off; the token is optional', () => {
+    expect(loadConfig({ ...env, FACTORY_GITHUB_POLL: '10m' }).githubPollMs).toBe(600_000)
+    expect(loadConfig({ ...env, FACTORY_GITHUB_POLL: 'off' }).githubPollMs).toBeNull()
+    expect(() => loadConfig({ ...env, FACTORY_GITHUB_POLL: '1s' })).toThrow('FACTORY_GITHUB_POLL')
+    expect(loadConfig({ ...env, FACTORY_GITHUB_TOKEN: 'x' }).githubToken).toBe('x')
   })
 
   test('FACTORY_DIGEST_EVERY: five minutes, a duration of 30 s to 24 h, or off; a mistake is refused', () => {

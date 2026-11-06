@@ -26,7 +26,7 @@ export class CannotExecute extends Error {
 }
 
 /** What the factory is given to run on is not for `hc`, which would pass its environment on. */
-const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL']
+const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL', 'FACTORY_GITHUB_TOKEN']
 
 export function childEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
   const env = { ...process.env, ...extra }

@@ -5,6 +5,8 @@ import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
 import { Digest } from './fleet/digest.ts'
+import { GithubIntake } from './intake/github.ts'
+import { Settler } from './issues/settle.ts'
 import { Places } from './fleet/place.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
@@ -201,6 +203,17 @@ const judgement = new AskJudgement({
   judge: config.askJudge ? new AgwAskJudge({ bin: config.agwBin }) : undefined,
   visible,
 })
+const settler = new Settler({ repoRoots: config.repoRoots }, sql, () => clock.now())
+const github =
+  config.githubPollMs === null
+    ? undefined
+    : new GithubIntake({
+        sql,
+        now: () => clock.now(),
+        roots: config.repoRoots,
+        token: config.githubToken,
+        everyMs: config.githubPollMs,
+      })
 const ticker = startTicker(
   {
     sql,
@@ -210,6 +223,8 @@ const ticker = startTicker(
     spool,
     quota,
     projects,
+    settler,
+    github,
     issuePorts,
     steward: { verify: { proof, offTick } },
     classification,
@@ -244,6 +259,8 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await fleet.settled()
+    await settler.settled()
+    await github?.settled()
     await spaces.settled()
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)

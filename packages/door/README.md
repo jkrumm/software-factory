@@ -23,7 +23,7 @@ JSON of the source's shape (400). Then the source's parser, then the server. The
 
 | Server | Door answers |
 |-|-|
-| 201 an Issue was created, 200 attached to an open one or replayed, 202 counted | the same status, `{ "outcome": ... }` |
+| 201 an Issue was created, 200 attached to an open one or replayed, 202 counted, or `settling` / `healed` (a `down` held by the project's `heal:` grace, an `up` that cancelled it) | the same status, `{ "outcome": ... }` |
 | 422 refused (a route into IuRoot, outside the roots) | 422, no reason |
 | unreachable, or 5xx | 503 (Kuma retries; nothing is spooled) |
 | any other answer | 502 |

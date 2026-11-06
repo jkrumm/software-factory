@@ -13,6 +13,8 @@ import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { type NotifyDeps, notifyPass } from './notify/index.ts'
 import type { StewardDeps } from './issues/steward.ts'
+import type { GithubIntake } from './intake/github.ts'
+import type { Settler } from './issues/settle.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
 import type { ProjectSync } from './projects/sync.ts'
@@ -24,13 +26,13 @@ import type { Spaces } from './spaces.ts'
 import type { SpoolReplayer } from './spool.ts'
 
 /** Delay before a spawn whose start failed is claimed again: base, 2*base, ... up to cap. */
-export const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
+const RETRY_DELAY = { baseMs: 30_000, capMs: 300_000 }
 export const retryDelayMs = (attempt: number): number =>
   Math.min(RETRY_DELAY.capMs, RETRY_DELAY.baseMs * 2 ** (attempt - 1))
 /** A claim older than this is a crashed tick's: the longest a `Runner.start` can run, plus a minute. */
 export const DEFAULT_LEASE_MS = DEFAULT_START_BUDGET_MS + 60_000
 /** Most spawns one tick claims; the rest wait for the next. */
-export const DEFAULT_BATCH = 20
+const DEFAULT_BATCH = 20
 
 export interface TickDeps {
   sql: SQL
@@ -57,6 +59,10 @@ export interface TickDeps {
   alertLeads?: boolean
   /** reads each project's manifest and Makefile; without it the tick syncs nothing (it still gives back the claims of closed Issues) */
   projects?: ProjectSync
+  /** the settle pass (`issues/settle.ts`): pending `down`s whose grace ran out, run behind the tick's back; without it none is settled */
+  settler?: Pick<Settler, 'kick' | 'takeErrors'>
+  /** the GitHub label source: the tick kicks it and it paces itself; without it none is polled */
+  github?: Pick<GithubIntake, 'kick'>
   /** the owner's line: the rules that read state, then the outbox; without it nothing is sent */
   notify?: NotifyDeps
   /** the fleet read model: the tick starts a build when one is due and does not wait for it; without it none is built */
@@ -311,6 +317,19 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
   return (await recordStarted(deps.sql, claim.key, started, deps.clock.now())) ? 'started' : 'lost'
 }
 
+/** Starts the settle pass behind the tick's back and takes the errors the earlier ones left. */
+function settleStep(deps: TickDeps): string[] {
+  deps.settler?.kick()
+  return deps.settler?.takeErrors() ?? []
+}
+
+/** The read models and pollers that run behind the tick's back, each at its own pace. */
+function kickBackground(deps: TickDeps): void {
+  deps.fleet?.kick()
+  deps.github?.kick()
+  deps.spaces?.kick()
+}
+
 /**
  * One pass: claim what is due and commit, call the Runner outside any transaction (its own process timeout bounds
  * it), record each result separately. Safe to run concurrently with itself: a claimed row is not due to anyone else.
@@ -340,13 +359,14 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
   // Projects before the claims: a closed Issue's place is free and a newly named repo has its row when its spawn is admitted.
   const projects = await projectPass(deps.sql, deps.projects)
+  const settleErrors = settleStep(deps)
   const { claims, failed, skipped } = await claimDue(deps)
   const result: TickResult = {
     started: [],
     failed: [...projects.failed, ...failed],
     retrying: [],
     skipped,
-    errors: [...projects.errors],
+    errors: [...projects.errors, ...settleErrors],
     replayed,
   }
   if (replayError) result.errors.push(replayError)
@@ -396,8 +416,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
     }
   }
   // The fleet model builds behind the tick's back (bounded reads, no transaction); the next pass finds it done or still running.
-  deps.fleet?.kick()
-  deps.spaces?.kick()
+  kickBackground(deps)
   return result
 }
 

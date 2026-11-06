@@ -32,7 +32,8 @@ interface Waiting {
  * they are not read. Held back, and still `queued`: `drain` (for the repo or globally), a paused project, a project not synced yet,
  * a full claim, an `alert` while its switch is off (left out of the reading, so it does not stand in front of a request behind
  * it), and a reopened Issue whose last attempt is not finalized: its lead closes before a new one is admitted. Under the capacity lock
- * like every admission.
+ * like every admission. **Stop the line:** while a project has an episode Issue (a `down` of the intake) `queued` or `working`, its
+ * only candidates besides urgent ones are such fixes, and a fix goes first; a `waiting`, `watching` or `blocked` episode Issue stops nothing.
  */
 export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<number> {
   return sql.begin(async (tx) => {
@@ -40,6 +41,12 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
     const queued: Waiting[] = await tx`
       WITH q AS (
         SELECT i.id, i.repo, i.attempt, p.name AS project, COALESCE(i.class = 'urgent' OR i.kind = 'incident', false) AS urgent,
+          EXISTS (
+            SELECT 1 FROM factory.door_issues d JOIN factory.issues x ON x.id = d.issue_id
+            WHERE x.state IN ('queued', 'working') AND x.facts->>'status' = 'down'
+              AND (SELECT xp.name FROM factory.projects xp WHERE x.repo = xp.repo OR starts_with(x.repo, xp.repo || '/')
+                   ORDER BY length(xp.repo) DESC LIMIT 1) = p.name) AS stopped,
+          (i.facts->>'status' = 'down' AND EXISTS (SELECT 1 FROM factory.door_issues d WHERE d.issue_id = i.id)) AS fix,
           COALESCE((
             SELECT (e.payload->>'value')::int FROM factory.issue_events e
             WHERE e.issue_id = i.id AND e.kind = 'prio' ORDER BY e.at DESC, e.id DESC LIMIT 1), 0) AS prio
@@ -57,8 +64,10 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
             WHERE e.issue_id = i.id AND e.kind = 'finalize' AND e.done_at IS NULL AND e.cancelled_at IS NULL)
       )
       SELECT id, repo, attempt FROM q
-      WHERE urgent OR id = (SELECT o.id FROM q o WHERE o.project = q.project AND NOT o.urgent ORDER BY o.prio DESC, o.id LIMIT 1)
-      ORDER BY urgent DESC, prio DESC, id`
+      WHERE urgent OR id = (
+        SELECT o.id FROM q o WHERE o.project = q.project AND NOT o.urgent AND (o.fix OR NOT o.stopped)
+        ORDER BY o.prio DESC, o.id LIMIT 1)
+      ORDER BY (stopped AND fix) DESC, urgent DESC, prio DESC, id`
     if (queued.length === 0) return 0
     const states = await loadQueueStates(tx)
     let admitted = 0

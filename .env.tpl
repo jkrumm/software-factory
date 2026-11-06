@@ -3,3 +3,4 @@
 # the schema `factory` in the shared database (vps: make db-shared).
 FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
 FACTORY_TOKEN=op://mini/software-factory/FACTORY_TOKEN
+FACTORY_GITHUB_TOKEN=op://mini/github/token

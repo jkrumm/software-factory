@@ -68,9 +68,10 @@ export type IntakeInput = z.output<typeof IntakeInput>
 
 /**
  * What the intake did. `unrouted`: no route, counted. `quiet`: routed, but an `up` with no open Issue, counted on the route.
- * `attached`: a signal on the open Issue. `created`: a new Issue. `replayed`: this event was filed before.
+ * `attached`: a signal on the open Issue. `created`: a new Issue. `replayed`: this event was filed before. `settling`: a `down` the
+ * project's `heal:` rule waits on (nothing filed yet). `healed`: an `up` that cancelled such a wait.
  */
-export const IntakeOutcome = z.enum(['unrouted', 'quiet', 'attached', 'created', 'replayed'])
+export const IntakeOutcome = z.enum(['unrouted', 'quiet', 'attached', 'created', 'replayed', 'settling', 'healed'])
 export type IntakeOutcome = z.infer<typeof IntakeOutcome>
 
 export const IntakeAck = z.object({ outcome: IntakeOutcome, issue: z.number().int().nullable() })
