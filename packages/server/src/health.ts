@@ -1,6 +1,7 @@
 import type { Health, HealthKind, Heartbeat } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
+import { hasTurned } from './briefs.ts'
 import { leadsOnBackgroundWork } from './issues/lead-activity.ts'
 import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
 import { planLines } from './projects/plan-status.ts'
@@ -187,8 +188,9 @@ async function unsentBriefLines(sql: SQL, now: Date): Promise<string[]> {
   const rows: { key: string; issue_id: number | null; assigned_at: Date }[] = await sql`
     SELECT s.key, s.issue_id, s.assigned_at FROM factory.spawns s
     WHERE s.status = 'started' AND s.assigned_at <= ${new Date(now.getTime() - NO_FIRST_TURN_MS)}
+      AND NOT ${hasTurned(sql)}
       AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.key AND e.at >= s.assigned_at
-                      AND e.kind IN ('turn_started', 'session_ended', 'pane_gone'))
+                      AND e.kind IN ('session_ended', 'pane_gone'))
     ORDER BY s.assigned_at, s.key`
   return rows.map(
     (row) =>

@@ -167,7 +167,7 @@ that applies wins.
   5-hour window and the last 5 % of the week, so new spawns stop at 95 %. A session already running there
   rotates at 94 % (below), one point earlier, so its successor can still be spawned elsewhere before the wall.
 - **Never spill.** With every account walled the queue waits for the first reset.
-- **A spawn holds its account** while queued or starting, and once started until a reading taken after its start
+- **A spawn holds its account** while queued or starting, and once started until a turn has begun (not ended, within 30 min) and a reading taken after its start
   shows it. A burst starts only as many spawns as there are open accounts; there is no per-spawn cost estimate. A
   spawn a rule holds back (`drain`, `pace`, no capacity) stays queued with a hold reason.
 
@@ -522,7 +522,7 @@ weekly use at or below the elapsed share of its week. Never spills: with no acco
 pace the moment the elapsed share reaches the use); none if no reading names a time, or if an account is open by its standing
 and only its load keeps it from being picked (a far reset of another account is no opening then), a new reading wakes it.
 **The spawn cost is not a number:** an account takes one new spawn per sample. A queued or starting spawn holds its account (no agent runs yet, no sample
-can show it); a started one holds it until a sample is taken after the moment it started (`assigned_at`, moved to the start;
+can show it); a started one holds it until a turn has begun (a session that ended, or one older than 30 min without a turn, stops holding) and a sample is taken after the moment it started (`assigned_at`, moved to the start;
 `sampled_at` is stamped before the picker is asked). Then the account is offered again (the poll shows it within about a
 minute). A burst starts as many spawns as there are open accounts
 and the rest wait for the next sample.

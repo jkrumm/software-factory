@@ -212,9 +212,39 @@ describe('the unsent-brief pass', () => {
     await world_.spawned('s', { startedMinutesAgo: 10 })
     await quota.poll()
     const readings = await latestReadings(db.sql)
-    expect((await currentLoads(db.sql, readings)).get('a')).toBe(1)
+    expect((await currentLoads(db.sql, readings, clock.now())).get('a')).toBe(1)
     await world_.emit('s', 'turn_started', world_.at(5))
-    expect((await currentLoads(db.sql, readings)).get('a')).toBeUndefined()
+    expect((await currentLoads(db.sql, readings, clock.now())).get('a')).toBeUndefined()
+  })
+
+  test('a spawn past 30 minutes, or whose session ended, without a turn no longer holds its account', async () => {
+    const source = new FakeQuotaSource()
+    source.readings = [{ account: 'a', ...usage(1, 1, new Date(clock.now().getTime() + 1_000 * 3_600_000)) }]
+    const quota = new QuotaPoller({ sql: db.sql, clock, source })
+    const world_ = w()
+    await world_.spawned('ended', { startedMinutesAgo: 10 })
+    await world_.emit('ended', 'pane_gone', world_.at(5))
+    await world_.spawned('old', { startedMinutesAgo: 31, account: 'b' })
+    await quota.poll()
+    const loads = await currentLoads(db.sql, await latestReadings(db.sql), clock.now())
+    expect(loads.get('a')).toBeUndefined()
+    expect(loads.get('b')).toBeUndefined()
+  })
+
+  test('a turn stamped before assigned_at, within the start budget, counts everywhere', async () => {
+    const source = new FakeQuotaSource()
+    source.readings = [{ account: 'a', ...usage(1, 1, new Date(clock.now().getTime() + 1_000 * 3_600_000)) }]
+    const quota = new QuotaPoller({ sql: db.sql, clock, source })
+    const world_ = w()
+    await world_.spawned('s', { startedMinutesAgo: 5 })
+    // the hook stamped the first turn a minute before the tick recorded the start
+    await world_.emit('s', 'turn_started', world_.at(6))
+    await quota.poll()
+    expect((await currentLoads(db.sql, await latestReadings(db.sql), clock.now())).get('a')).toBeUndefined()
+    expect(await healthLines(db.sql, clock.now())).toEqual([])
+    const runner = new FakeRunner()
+    expect(await pass(runner)).toEqual([])
+    expect(runner.screenRead).toEqual([])
   })
 
   test('the tick runs the pass when it is given a watch, and not without one', async () => {

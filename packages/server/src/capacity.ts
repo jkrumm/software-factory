@@ -1,5 +1,6 @@
 import type { Quota } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { BRIEF_MAX_AGE_MS, hasTurned } from './briefs.ts'
 import { LOCKS } from './locks.ts'
 import type { QuotaInput } from './schemas.ts'
 import type { LiveSession } from './sessions.ts'
@@ -108,7 +109,7 @@ export async function recordReadings(sql: SQL, readings: readonly NamedQuota[], 
     }
     await pruneReadings(tx, now)
     const latest = await latestReadings(tx)
-    if (pickEligible(latest, await currentLoads(tx, latest), { now })) await wakeWaiting(tx, now)
+    if (pickEligible(latest, await currentLoads(tx, latest, now), { now })) await wakeWaiting(tx, now)
   })
 }
 
@@ -139,25 +140,29 @@ export async function latestReadings(sql: SQL): Promise<Reading[]> {
 
 /**
  * Spawns that hold an account against its current reading: queued or starting ones always (no agent runs for them yet,
- * so no sample can show them), started ones until a turn began (a brief may sit unsent, and no sample shows an agent that
- * does not work) and a sample is taken after the moment they started (`assigned_at` is moved to it). `except` leaves one spawn out, for a spawn that is re-checking its own account.
+ * so no sample can show them), started ones until a turn began (`hasTurned`; a brief may sit unsent, and no sample shows an agent
+ * that does not work) and a sample is taken after the moment they started (`assigned_at` is moved to it). A started spawn without
+ * a turn stops holding when its session ended or it is older than `BRIEF_MAX_AGE_MS`: the sample rule alone applies then. `except` leaves one spawn out, for a spawn that is re-checking its own account.
  */
 export async function currentLoads(
   sql: SQL,
   readings: readonly Reading[],
+  now: Date,
   except?: string,
 ): Promise<Map<string, number>> {
-  const rows: { account: string; status: string; assigned_at: Date; turned: boolean }[] = await sql`
-    SELECT account, status, assigned_at,
-      EXISTS (SELECT 1 FROM factory.events e WHERE e.session = factory.spawns.key AND e.kind = 'turn_started' AND e.at >= factory.spawns.assigned_at) AS turned
-    FROM factory.spawns
-    WHERE status IN ('queued', 'starting', 'started') AND account IS NOT NULL AND assigned_at IS NOT NULL
-      AND key IS DISTINCT FROM ${except ?? null}`
+  const rows: { account: string; status: string; assigned_at: Date; waiting: boolean }[] = await sql`
+    SELECT s.account, s.status, s.assigned_at,
+      (s.status = 'started' AND NOT ${hasTurned(sql)} AND s.assigned_at > ${new Date(now.getTime() - BRIEF_MAX_AGE_MS)}
+        AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.key AND e.at >= s.assigned_at
+                        AND e.kind IN ('session_ended', 'pane_gone'))) AS waiting
+    FROM factory.spawns s
+    WHERE s.status IN ('queued', 'starting', 'started') AND s.account IS NOT NULL AND s.assigned_at IS NOT NULL
+      AND s.key IS DISTINCT FROM ${except ?? null}`
   const sampled = new Map(readings.map((r) => [r.account, r.sampledAt]))
   const loads = new Map<string, number>()
   for (const row of rows) {
     const at = sampled.get(row.account)
-    if (row.status !== 'started' || !row.turned || (at && row.assigned_at >= at))
+    if (row.status !== 'started' || row.waiting || (at && row.assigned_at >= at))
       loads.set(row.account, (loads.get(row.account) ?? 0) + 1)
   }
   return loads

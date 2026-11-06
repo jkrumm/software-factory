@@ -105,7 +105,7 @@ export async function admit(
 
   const readings = await latestReadings(tx)
   const options = { now, pace: state === 'pace', prefer: candidate.prefer }
-  const loads = await currentLoads(tx, readings, candidate.key)
+  const loads = await currentLoads(tx, readings, now, candidate.key)
   if (candidate.role === LEAD_ROLE && candidate.issueId != null) {
     // The lead cap: another account with room is picked; with none, the spawn waits and looks again, never spilling.
     const cap = limits.leadsPerAccount ?? DEFAULT_LEADS_PER_ACCOUNT

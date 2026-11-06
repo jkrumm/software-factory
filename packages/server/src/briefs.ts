@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
-import type { Runner } from './runner.ts'
+import { DEFAULT_START_BUDGET_MS, type Runner } from './runner.ts'
 
 /**
  * A spawn's brief is the last argv of `claude`, so it is no row in `factory.prompts` and the prompt retry never sees it. When
@@ -16,6 +16,15 @@ export const BRIEF_MAX_AGE_MS = 30 * 60_000
 export const PRESS_GAPS_MS = [10_000, 20_000, 40_000, 60_000]
 /** Most spawns one pass looks at. */
 export const BRIEF_BATCH = 10
+
+/**
+ * The one definition of "has turned", for the pass, the health line and the account's load: a `turn_started` of the spawn's session
+ * (its key) at or after `assigned_at` minus the start budget. `assigned_at` is stamped after `Runner.start` returns (up to the budget),
+ * while the hook stamps the first turn with its own earlier time. The spawn table must be aliased `s`.
+ */
+export const hasTurned = (sql: SQL) =>
+  sql`EXISTS (SELECT 1 FROM factory.events t WHERE t.session = s.key AND t.kind = 'turn_started'
+    AND t.at >= s.assigned_at - (${DEFAULT_START_BUDGET_MS}::int * interval '1 millisecond'))`
 
 /** What the pass did for one spawn: how often it pressed Enter and when it last did. In memory; a restart starts the backoff over. */
 export type BriefWatch = Map<string, { presses: number; lastAt: number }>
@@ -59,7 +68,7 @@ export async function nudgeBriefs(deps: {
     WHERE s.status = 'started' AND s.session IS NOT NULL
       AND s.assigned_at <= ${new Date(now.getTime() - BRIEF_MIN_AGE_MS)}
       AND s.assigned_at >= ${new Date(now.getTime() - BRIEF_MAX_AGE_MS)}
-      AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.key AND e.kind = 'turn_started' AND e.at >= s.assigned_at)
+      AND NOT ${hasTurned(sql)}
     ORDER BY s.assigned_at DESC, s.key
     LIMIT ${BRIEF_BATCH}`
   const keys = new Set(rows.map((r) => r.key))
