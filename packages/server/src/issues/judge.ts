@@ -130,6 +130,8 @@ interface IssueFields {
   facts: unknown
   repo: string
   state: string
+  /** a business Issue's question is the owner's whatever default the lead named (the lifecycle rule of `expireDecision`) */
+  business: boolean
 }
 
 type Item =
@@ -208,8 +210,10 @@ export class AskJudgement {
       facts: unknown
       repo: string
       state: string
+      business: boolean
     }[] = await sql`
-      SELECT d.id, d.issue_id, d.question, d.options, d.default_option, i.title, i.facts, i.repo, i.state
+      SELECT d.id, d.issue_id, d.question, d.options, d.default_option, i.title, i.facts, i.repo, i.state,
+             (i.class = 'business' OR i.classify->>'class' = 'business') IS TRUE AS business
       FROM factory.decisions d JOIN factory.issues i ON i.id = d.issue_id
       WHERE d.answered_at IS NULL AND i.state <> 'closed'
         AND NOT EXISTS (SELECT 1 FROM factory.issue_events m WHERE m.key = 'ask_judged:' || d.id)
@@ -222,8 +226,10 @@ export class AskJudgement {
       facts: unknown
       repo: string
       state: string
+      business: boolean
     }[] = await sql`
-      SELECT e.issue_id, e.payload, i.title, i.facts, i.repo, i.state
+      SELECT e.issue_id, e.payload, i.title, i.facts, i.repo, i.state,
+             (i.class = 'business' OR i.classify->>'class' = 'business') IS TRUE AS business
       FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
       WHERE e.kind = 'steward_exhausted' AND i.state <> 'closed'
         AND NOT EXISTS (SELECT 1 FROM factory.issue_events m WHERE m.key = 'steward_judged:' || e.issue_id || ':' || (e.payload->>'cause'))
@@ -236,12 +242,14 @@ export class AskJudgement {
       facts: unknown
       repo: string
       state: string
+      business: boolean
     }): IssueFields => ({
       id: row.issue_id,
       title: row.title,
       facts: row.facts,
       repo: row.repo,
       state: row.state,
+      business: row.business,
     })
     return [
       ...asks.map((row): Item => ({
@@ -291,6 +299,10 @@ export class AskJudgement {
       source,
       answer: '',
     })
+    if (item.issue.business) return failed("a business Issue's question is the owner's", 'owner')
+    // Off (no judge wired) sends every ask to the owner, the visible do-nothing shortcut included.
+    const { judge } = this.deps
+    if (!judge) return failed('no judge is wired')
     if (visible) {
       // Nothing of a visible repo goes to a model: only a declared do-nothing default can settle its ask.
       if (item.kind === 'ask' && item.default !== null && isDoNothing(item.default)) {
@@ -304,8 +316,6 @@ export class AskJudgement {
       }
       return failed('the repo is visible: nothing is sent to a model', 'visible')
     }
-    const { judge } = this.deps
-    if (!judge) return failed('no judge is wired')
     try {
       const plan = await (this.deps.plan ?? planOf)(item.issue.repo)
       const key =

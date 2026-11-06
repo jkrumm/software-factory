@@ -219,6 +219,38 @@ describe('a verdict owner or a failure', () => {
   })
 })
 
+describe('FACTORY_ASK_JUDGE=off', () => {
+  test('sends every ask to the owner, a visible repo’s do-nothing default included', async () => {
+    const id = await asked({ question: 'Close it?', default: 'Leave it open' })
+    const pass = judgement(undefined, true)
+    await pass.start()
+    expect(await inbox(id)).toEqual([])
+    expect(await marker('ask_judged:1')).toMatchObject({ outcome: 'failed' })
+    expect(await notifications()).toEqual(['notify:ask:1'])
+  })
+})
+
+describe('a business Issue', () => {
+  for (const visible of [true, false]) {
+    test(`its do-nothing default is not taken and nothing is judged (visible repo: ${visible})`, async () => {
+      const id = await asked({ question: 'Close it?', default: 'Leave it open' })
+      await db.sql`UPDATE factory.issues SET class = 'business' WHERE id = ${id}`
+      const fake = new FakeJudge()
+      fake.verdict = answer('Leave it open')
+      const pass = judgement(fake, visible)
+      await pass.start()
+      await pass.settled()
+      expect(fake.calls).toEqual([])
+      expect(await inbox(id)).toEqual([])
+      expect(await marker('ask_judged:1')).toMatchObject({
+        outcome: 'owner',
+        reason: "a business Issue's question is the owner's",
+      })
+      expect(await notifications()).toEqual(['notify:ask:1'])
+    })
+  }
+})
+
 describe('the hidden window', () => {
   test('an ask is off the owner’s list until it is judged, and shows anyway after 45 minutes', async () => {
     await asked()
