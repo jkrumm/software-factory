@@ -38,6 +38,8 @@ export interface Config {
   agwBin: string
   /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead. Unset: yes (decision 3: evidence and the hold are live); `0` switches it off */
   alertLeads: boolean
+  /** `FACTORY_ASK_JUDGE`: whether `agw factory-ask` judges asks and spent escalations before the owner hears of them. Unset: yes; `off` or `0`: every one goes to the owner */
+  askJudge: boolean
   /** `FACTORY_NOTIFY_TARGET`: where Hermes delivers the owner's messages; `off` sends nothing */
   notifyTarget: string
   /** `HERMES_BIN` */
@@ -95,6 +97,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     slots: slots(env.FACTORY_SLOTS),
     agwBin: env.FACTORY_AGW_BIN || `${required('HOME')}/.local/bin/agw`,
     alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS, true),
+    askJudge: switchOn('FACTORY_ASK_JUDGE', env.FACTORY_ASK_JUDGE, true),
     archiveDir: env.FACTORY_ARCHIVE_DIR || `${required('HOME')}/.local/share/factory/archive`,
     notifyTarget: env.FACTORY_NOTIFY_TARGET || DEFAULT_NOTIFY_TARGET,
     hermesBin: env.HERMES_BIN || `${required('HOME')}/.local/bin/hermes`,

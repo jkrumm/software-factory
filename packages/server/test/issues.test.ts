@@ -261,6 +261,7 @@ describe('golden paths: transitions and effects', () => {
       'created -→queued',
       'admitted queued→working',
       'ask working→waiting',
+      'ask_judged',
       'answer waiting→working',
     ])
     expect(await effects(id)).toEqual(['start_lead', 'note_lead'])

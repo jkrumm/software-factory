@@ -90,6 +90,7 @@ describe('config (finding 5)', () => {
       slots: 2,
       agwBin: '/home/me/.local/bin/agw',
       alertLeads: true,
+      askJudge: true,
       archiveDir: '/home/me/.local/share/factory/archive',
       notifyTarget: 'slack:#agents',
       hermesBin: '/home/me/.local/bin/hermes',
@@ -121,6 +122,12 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '' }).admission.leadsPerAccount).toBe(2)
     for (const bad of ['0', '-1', '1.5', 'many', '17'])
       expect(() => loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: bad })).toThrow('FACTORY_LEADS_PER_ACCOUNT')
+  })
+
+  test('FACTORY_ASK_JUDGE is on unless it says off, and a mistake is refused', () => {
+    expect(loadConfig(env).askJudge).toBe(true)
+    for (const off of ['off', '0', 'false']) expect(loadConfig({ ...env, FACTORY_ASK_JUDGE: off }).askJudge).toBe(false)
+    expect(() => loadConfig({ ...env, FACTORY_ASK_JUDGE: 'maybe' })).toThrow('FACTORY_ASK_JUDGE')
   })
 
   test('FACTORY_ALERT_LEADS is on unless it says 0, and a mistake is refused', () => {

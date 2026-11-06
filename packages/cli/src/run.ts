@@ -490,7 +490,9 @@ function issueViewScreen(v: IssueView): string {
       [
         'question',
         d.id,
-        d.answeredAt ? `answered by ${oneLine(d.answeredBy ?? '-', 40)}` : 'open',
+        d.answeredAt
+          ? `answered by ${oneLine(d.answeredBy ?? '-', 40)}${d.answerSource ? ` from ${oneLine(d.answerSource, 120)}` : ''}`
+          : 'open',
         oneLine(d.question),
         d.answer ? `answer: ${oneLine(d.answer)}` : d.default ? `default ${oneLine(d.default, 60)}` : '',
       ]

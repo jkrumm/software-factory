@@ -1,4 +1,3 @@
-import { notifyAsk } from '../notify/rules.ts'
 import { type Context, badTime, text, time } from './shared.ts'
 
 export async function recordDecision({ tx, issue, row, now }: Context): Promise<string | undefined> {
@@ -6,25 +5,12 @@ export async function recordDecision({ tx, issue, row, now }: Context): Promise<
   if (!question) return 'an ask needs a question'
   if (badTime(row.payload, 'expiresAt')) return 'expiresAt is not a time'
   const options = Array.isArray(row.payload?.options) ? JSON.stringify(row.payload.options) : null
-  const asked: { id: string }[] = await tx`
+  // The owner is not told here: the ask judge (`judge.ts`) answers the question or sends the owner's line (`notify:ask:<id>`, once).
+  await tx`
     INSERT INTO factory.decisions (issue_id, key, question, options, default_option, expires_at, created_at)
     VALUES (${issue.id}, ${row.key}, ${question}, ${options}::text::jsonb, ${text(row.payload, 'default')},
             ${time(row.payload, 'expiresAt')}, ${now})
-    ON CONFLICT (key) DO NOTHING
-    RETURNING id`
-  // The owner is told once per question: a replayed ask stored nothing new, and its message has its key already.
-  const [decision] = asked
-  if (decision) {
-    const choices = Array.isArray(row.payload?.options) ? row.payload.options.filter((o) => typeof o === 'string') : []
-    await notifyAsk(tx, {
-      issue,
-      decision: Number(decision.id),
-      question,
-      options: choices,
-      default: text(row.payload, 'default'),
-      now,
-    })
-  }
+    ON CONFLICT (key) DO NOTHING`
   return undefined
 }
 

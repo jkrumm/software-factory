@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import { admitIssues } from './admission.ts'
 import type { Classification } from './classify.ts'
 import { type EffectPorts, runEffects } from './effects.ts'
+import { AskJudgement } from './judge.ts'
 import { parkGoneLeads } from './lead.ts'
 import type { WorktreeMaker } from './leadtree.ts'
 import { applyEvent, supersede } from './lifecycle.ts'
@@ -132,6 +133,8 @@ export async function issuePass(
     alertLeads?: boolean
     /** the steward (`steward.ts`); without it none runs */
     steward?: StewardDeps
+    /** judges the open asks and spent escalations (`judge.ts`); without it each is settled in the pass as a failure: the owner hears of it */
+    judgement?: AskJudgement
   },
 ): Promise<string[]> {
   await input.classification?.start()
@@ -141,5 +144,11 @@ export async function issuePass(
   await parkGoneLeads(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)
+  // After the inbox: an ask or a spent escalation made in this pass is judged (or, with no judge, told to the owner) in it.
+  try {
+    await (input.judgement ?? new AskJudgement({ sql, now: input.now })).start()
+  } catch (error) {
+    errors.push(`ask judge: ${error instanceof Error ? error.message : String(error)}`)
+  }
   return [...errors, ...(await runEffects(sql, input.ports, input.now))]
 }

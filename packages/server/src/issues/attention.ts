@@ -10,6 +10,12 @@ const oneLine = (text: string, max = 160): string => {
 
 const PER_KIND = 10
 
+/**
+ * A new ask is hidden from the owner's list until the ask judge has a verdict that leaves it open (`ask_judged:<id>`, outcome not
+ * `answered`), but never longer than this: a stuck judge does not hide an ask.
+ */
+export const JUDGE_WINDOW_MS = 45 * 60_000
+
 const minutesOf = (ms: number): string => {
   const min = Math.max(0, Math.floor(ms / 60_000))
   return min >= 120 ? `${Math.floor(min / 60)} h` : `${min} min`
@@ -33,7 +39,10 @@ export async function issueAttention(
     await sql`
     SELECT d.issue_id, d.question, d.default_option, d.expires_at FROM factory.decisions d
     JOIN factory.issues i ON i.id = d.issue_id
-    WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id LIMIT ${PER_KIND}`
+    WHERE d.answered_at IS NULL AND i.state <> 'closed'
+      AND (d.created_at <= ${new Date(now.getTime() - JUDGE_WINDOW_MS)} OR EXISTS (
+        SELECT 1 FROM factory.issue_events m WHERE m.key = 'ask_judged:' || d.id AND m.payload->>'outcome' <> 'answered'))
+    ORDER BY d.id LIMIT ${PER_KIND}`
   for (const ask of asks) {
     const lapsed = ask.expires_at !== null && ask.expires_at <= now && ask.default_option === null
     const parts = [

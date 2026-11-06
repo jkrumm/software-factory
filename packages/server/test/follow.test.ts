@@ -437,6 +437,7 @@ describe('factory issue show: the timeline', () => {
       'event:admitted→working',
       'event:phase',
       'event:ask→waiting',
+      'event:ask_judged',
       'event:answer→working',
       'inbox:phase',
     ])
