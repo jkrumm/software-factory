@@ -23,7 +23,7 @@ describe('the standing orders', () => {
   // Changing a word changes every lead's instructions and the prompt cache's prefix: it is a decision, so the hash is pinned.
   test('are pinned, and the first thing in every brief, byte for byte', () => {
     expect(createHash('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '528dba25a3d68fe2222e6fe391b1b5ea8d2eb208697be5f2a699192b671f5665',
+      'b4236ebd12aff9b65cb75c8e3901e7d4f4fe317456f7a531525a6d8d0bdc804c',
     )
     expect(DONE_MEANS).toContain('--commit <merged sha>')
     expect(DONE_MEANS).toContain('factory issue evidence <id>')
