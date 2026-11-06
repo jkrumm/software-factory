@@ -95,6 +95,11 @@ export function describeEvent(kind: string, from: string | null, to: string | nu
       return to === 'waiting'
         ? 'The check failed again and the Issue was parked.'
         : 'The check failed; the lead works on it again.'
+    case 'checkout_blocked':
+      return after(
+        'The check could not run because the repo checkout is not clean on the default branch',
+        field(payload, 'detail'),
+      )
     case 'hold_over':
       return 'The holding period is over; checking the result.'
     case 'verified':

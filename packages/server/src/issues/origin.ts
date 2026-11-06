@@ -110,6 +110,70 @@ export async function originDefault(
   return undefined
 }
 
+export interface CheckoutSync {
+  /** `advanced`: fast-forwarded; `current`: nothing to pull; `unknown`: no answer from the remote, the checkout is the best there is; `blocked`: behind and not ours to move */
+  state: 'current' | 'advanced' | 'unknown' | 'blocked'
+  detail: string
+}
+
+const firstLine = (text: string): string => text.trim().split('\n')[0]?.trim() ?? ''
+
+/**
+ * Brings the repo's main checkout up to `origin/<default>` for a check that reads it (`make verify`, `make version`). Fast-forward only:
+ * a checkout that is not on the default branch, has a tracked change, or has commits the remote lacks is the owner's and is never
+ * touched (`blocked`). No remote answer is `unknown`, and the check goes on with what is there.
+ */
+export async function syncCheckout(
+  repo: string,
+  options: { run?: Run; git?: string; signal?: AbortSignal } = {},
+): Promise<CheckoutSync> {
+  const git = (args: string[]) => gitIn(repo, args, options)
+  if (!(await fetchOrigin(repo, options))) return { state: 'unknown', detail: `could not fetch origin for ${repo}` }
+  const remote = await originDefault(repo, options)
+  if (!remote) return { state: 'unknown', detail: `${repo} has no origin default branch` }
+  const count = async (range: string): Promise<number | undefined> => {
+    const done = await git(['rev-list', '--count', range])
+    const n = Number(done.stdout.trim())
+    return done.exitCode === 0 && Number.isInteger(n) ? n : undefined
+  }
+  const behind = await count(`HEAD..${remote}`)
+  const ahead = await count(`${remote}..HEAD`)
+  if (behind === undefined || ahead === undefined)
+    return { state: 'unknown', detail: `could not compare ${repo} with ${remote}` }
+  if (behind === 0) return { state: 'current', detail: `${repo} holds ${remote}` }
+
+  const branch = remote.slice(remote.indexOf('/') + 1)
+  const head = await git(['symbolic-ref', '-q', '--short', 'HEAD'])
+  const on = head.exitCode === 0 ? head.stdout.trim() : ''
+  if (on !== branch)
+    return {
+      state: 'blocked',
+      detail: `${repo} is ${on ? `on branch ${on}` : 'on a detached HEAD'}, not ${branch}, and ${behind} commits behind ${remote}`,
+    }
+  const status = await git(['status', '--porcelain', '--untracked-files=no'])
+  if (status.exitCode !== 0 || status.stdout.trim()) {
+    const paths = status.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => line.slice(3))
+    const shown = paths.slice(0, 3).join(', ')
+    return {
+      state: 'blocked',
+      detail: `${repo} has uncommitted changes (${shown}${paths.length > 3 ? ', …' : ''}) and is ${behind} commits behind ${remote}`,
+    }
+  }
+  if (ahead > 0)
+    return { state: 'blocked', detail: `${repo} diverged from ${remote}: ${ahead} ahead, ${behind} behind` }
+  const merged = await git(['merge', '--ff-only', remote])
+  if (merged.exitCode !== 0)
+    return {
+      state: 'blocked',
+      detail: `${repo} could not fast-forward to ${remote}: ${firstLine(merged.stdout) || `git exit ${merged.exitCode}`}`,
+    }
+  const sha = await git(['rev-parse', 'HEAD'])
+  return { state: 'advanced', detail: `fast-forwarded ${repo} ${behind} commits to ${sha.stdout.trim().slice(0, 12)}` }
+}
+
 export interface DeployedCheck {
   ok: boolean
   /** what was found, in words the lead reads as the reason of a red check */

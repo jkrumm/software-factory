@@ -171,8 +171,19 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   for (const issue of regressing) {
     lines.push(`Issue ${issue.id}: ${MAX_REGRESSIONS} regressions, the next one parks it`)
   }
+  lines.push(...(await checkoutLines(sql)))
   lines.push(...(await loadHoldLines(sql)))
   return lines
+}
+
+/** A watching Issue whose hold cannot verify because its repo's checkout is not the owner's to move (`issues/hold.ts`): there while it is true. */
+async function checkoutLines(sql: SQL): Promise<string[]> {
+  const rows: { issue_id: number; detail: string }[] = await sql`
+    SELECT e.issue_id, e.payload->'blocked'->>'detail' AS detail
+    FROM factory.issue_effects e JOIN factory.issues i ON i.id = e.issue_id AND i.state = 'watching'
+    WHERE e.kind = 'verify' AND e.done_at IS NULL AND e.cancelled_at IS NULL AND e.payload->'blocked' IS NOT NULL
+    ORDER BY e.issue_id, e.id`
+  return rows.map((row) => `Issue ${row.issue_id}: the hold cannot verify, ${row.detail}; it checks again every 5 min`)
 }
 
 /**

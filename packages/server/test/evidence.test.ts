@@ -19,10 +19,12 @@ import { type Effect, type EffectPorts, runEffects, Waiting } from '../src/issue
 import { branchOnBase } from '../src/issues/origin.ts'
 import { GitWorktrees } from '../src/issues/worktree.ts'
 import { FakeReview } from './support/review.ts'
+import { healthLines } from '../src/health.ts'
 import { kindOfPath, requiredEvidence } from '../src/issues/evidence.ts'
 import { finalizePorts } from '../src/issues/finalize.ts'
 import {
   type HoldCheck,
+  CHECKOUT_RECHECK_MS,
   holdPorts,
   MakeAndProbes,
   NO_TARGET_LINE,
@@ -869,6 +871,78 @@ describe('the hold', () => {
     await drive(3)
     expect(proof.runs).toBe(2)
     expect(await db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'verify' ORDER BY id`).toHaveLength(2)
+  })
+
+  test('a blocked checkout is no red: no regression, no retry, the effect waits and a clean run closes the hold', async () => {
+    const { id } = await shipped()
+    const blockedCheck = {
+      name: 'checkout',
+      ok: false,
+      blocked: true,
+      detail: 'the repo has uncommitted changes (a.txt)',
+    }
+    let blocked = true
+    proof.run = async () => {
+      proof.runs++
+      return blocked ? [blockedCheck, { name: 'home', ok: true, detail: 'HTTP 200' }] : proof.checks
+    }
+    await holdEnds(id)
+    expect(proof.runs).toBe(1)
+    expect(await issue(id)).toMatchObject({ state: 'watching', hold: 1 })
+    expect(await trail(id)).not.toContain('verify_red')
+    expect(await trail(id).then((t) => t.filter((k) => k === 'checkout_blocked'))).toHaveLength(1)
+    expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key LIKE 'regression:%'`).toHaveLength(0)
+    const open = await db.sql`SELECT payload FROM factory.issue_effects WHERE kind = 'verify' AND done_at IS NULL`
+    expect(open).toHaveLength(1)
+    expect(open[0].payload.blocked).toMatchObject({ detail: blockedCheck.detail })
+    const due = Date.parse(open[0].payload.notBefore) - clock.now().getTime()
+    expect(due).toBeGreaterThan(CHECKOUT_RECHECK_MS - 60_000)
+    expect(due).toBeLessThanOrEqual(CHECKOUT_RECHECK_MS)
+    expect(await healthLines(db.sql, clock.now())).toContain(
+      `Issue ${id}: the hold cannot verify, ${blockedCheck.detail}; it checks again every 5 min`,
+    )
+
+    // Not due yet: nothing runs. Due: it asks again, and a blocked check never counts as a regression, however often.
+    await drive(4)
+    expect(proof.runs).toBe(1)
+    for (let i = 0; i < 4; i++) {
+      clock.advance(CHECKOUT_RECHECK_MS)
+      await drive(4)
+    }
+    expect(proof.runs).toBe(5)
+    expect(await issue(id)).toMatchObject({ state: 'watching', hold: 1 })
+    expect(await trail(id)).not.toContain('verify_red')
+    expect(await trail(id).then((t) => t.filter((k) => k === 'checkout_blocked'))).toHaveLength(1)
+    const since = (await db.sql`SELECT payload FROM factory.issue_effects WHERE kind = 'verify' AND done_at IS NULL`)[0]
+      .payload.blocked.since
+    expect(Date.parse(since)).toBeLessThan(clock.now().getTime() - 3 * CHECKOUT_RECHECK_MS)
+
+    blocked = false
+    clock.advance(CHECKOUT_RECHECK_MS)
+    await drive(4)
+    expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done' })
+    expect(await healthLines(db.sql, clock.now())).toEqual([])
+  })
+
+  test('a red after a blocked run is a retry without the blocked payload', async () => {
+    const { id } = await shipped()
+    const answers: HoldCheck[][] = [
+      [{ name: 'checkout', ok: false, blocked: true, detail: 'x' }],
+      [{ name: 'home', ok: false, detail: 'HTTP 503, expected 200' }],
+    ]
+    proof.run = async () => {
+      proof.runs++
+      return answers[proof.runs - 1] ?? proof.checks
+    }
+    await holdEnds(id)
+    clock.advance(CHECKOUT_RECHECK_MS)
+    await drive(4)
+    expect(proof.runs).toBe(2)
+    expect(await trail(id)).toContain('verify_red')
+    const open = await db.sql`SELECT payload FROM factory.issue_effects WHERE kind = 'verify' AND done_at IS NULL`
+    expect(open).toHaveLength(1)
+    expect(open[0].payload).not.toHaveProperty('blocked')
+    expect(open[0].payload.retry).toBe(1)
   })
 
   describe('a hold of 0m: no artificial wait', () => {
