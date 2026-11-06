@@ -197,6 +197,13 @@ describe('the sync', () => {
     expect(stored.why).toBe('because')
   })
 
+  test('a failure message never carries a NUL from the file', () => {
+    const parsed = parsePlan(planOf(row('a').replace('title:', '"x\\0y": 1\n    title:')))
+    if (parsed.ok) throw new Error('parsed')
+    expect(parsed.message).not.toContain('\u0000')
+    expect(parsed.message.isWellFormed()).toBe(true)
+  })
+
   test('refuses facts nested too deep', () => {
     const deep = `${'['.repeat(40)}${']'.repeat(40)}`
     expect(parsePlan(planOf(row('a').replace('what: a', `what: ${deep}`))).ok).toBe(false)

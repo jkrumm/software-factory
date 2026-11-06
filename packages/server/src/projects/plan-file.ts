@@ -11,7 +11,9 @@ export function parsePlan(text: string): PlanParse {
   const raw = parseYaml(text)
   if (!raw.ok) return raw
   const parsed = PlanFile.safeParse(raw.value)
-  if (!parsed.success) return { ok: false, message: schemaMessage(parsed.error) }
+  // The message quotes keys from the file: a NUL or half a surrogate pair in one would make `plan_error` itself unstorable.
+  if (!parsed.success)
+    return { ok: false, message: schemaMessage(parsed.error).replaceAll('\u0000', '').toWellFormed() }
   const unstorable = unstorableReason(parsed.data)
   if (unstorable) return { ok: false, message: unstorable }
   return { ok: true, plan: parsed.data }
