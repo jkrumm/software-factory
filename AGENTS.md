@@ -34,7 +34,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   inside `FACTORY_REPO_ROOTS` after `realpath`, else 422 and nothing stored. The API is loopback only; the tailnet and the
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The door** (`packages/door`, `docs/design.md` §11): alerts from the tailnet become Issues. It binds loopback only, holds no factory token
-  and no database credential, and posts to the socket's `POST /intake`; the repo comes from `factory.door_routes`, never the payload.
+  and no database credential, and posts to the socket's `POST /intake`; the repo comes from `factory.door_routes`, never the payload. A down with no route that outlasts 10 min is a health line and one Issue (`issues/unrouted.ts`, `docs/design.md` §11).
 - **Hooks: spool first, then post.** `factory hook <event>` does nothing without `FACTORY_SESSION`, appends one line to the
   spool, posts it to the unix socket (300 ms) and exits 0 whatever happens (one exception: the Stop send-back, exit 2).
   `src/hook.ts` imports only `node:fs` and `@software-factory/contract/spool` (no zod, no rest of the CLI) and keeps

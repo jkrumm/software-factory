@@ -1252,6 +1252,16 @@ runbooks exist (decision 3).
   signal, are not filed again later, whatever became of the Issue. The key escapes `:` and `%` in the monitor, so two monitors never share one. A signal carries the
   alert's facts. An open Issue keeps its monitor until it closes, also when the route has moved to another repo. The ack's outcomes are
   `unrouted`, `quiet`, `attached`, `created`, `replayed`, `settling`, `healed`.
+- **An unrouted monitor that stays down reaches someone** (`issues/unrouted.ts`, migration `039`). The `door_unrouted` row keeps the monitor's last
+  `status`, `down_since` (an `up` clears it) and `is_group` (an alert saying 'Child monitors down|up', in the title, `msg` or the heartbeat's: a
+  group never files anything). Past `UNROUTED_GRACE_MS` (10 min) a down with no route is (1) a health line, derived at read from the row
+  (`monitor <source>/<name> down 28 h with no route, filed as Issue N`; no transition event is needed, and a down row is not dropped by the 30-day
+  clean-up, a year at most) and (2) filed once by `fileUnrouted` (`issuePass`, after the steward, errors in the pass's list), through `fileSignalIn`
+  like a routed alert: in the repo the default rule maps it to, else as an Issue in the home repo (`~/SourceRoot/dotfiles`) titled to pick its repo and
+  add the route. The rule: a name `<name> - Push` or `<name> - Door` goes to the repo of a route of the same source whose monitor starts `<name> - `,
+  else to the project named `<name>` (manifest name or directory); a repo the intake policy refuses (IuRoot, outside the roots) is skipped, so
+  nothing of IuRoot is routed or filed, and a home repo that is refused is a `not filed` line. `filed_at` makes it once; an `up` clears it, so the
+  next down is a signal on the Issue if still open, else a new one. A route set (`setRoute`) deletes the row.
 - **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
   the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line. The door restarts at every deploy: for
   the seconds it is down a POST is refused at the connection, and machine alerts still reach ntfy by their own senders.

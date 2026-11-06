@@ -162,7 +162,7 @@ commands:
   door route rm <source> <monitor>
                   remove a route: its alerts count as unrouted again
   door route list the routes, with how many quiet alerts (an up with no open Issue) each counted
-  door unrouted   the monitors that raised alerts with no route: source, monitor, count, last seen, last title
+  door unrouted   the monitors that raised alerts with no route: source, monitor, count, last seen, last title, status, Issue
   door token new <source> [--rotate]
                   write a fresh token (32 random bytes, base64url) for the source into the door's tokens file
                   (FACTORY_DOOR_TOKENS_FILE, default ~/.config/factory/door-tokens.json, mode 0600) and print it once.
@@ -522,7 +522,8 @@ function issueViewScreen(v: IssueView): string {
 
 const routeLine = (r: DoorRoute) => [r.source, r.monitor, r.repo, r.quiet, r.lastQuietAt].map(cell).join('\t')
 
-const unroutedLine = (u: DoorUnrouted) => [u.source, u.monitor, u.count, u.lastSeen, u.lastTitle].map(cell).join('\t')
+const unroutedLine = (u: DoorUnrouted) =>
+  [u.source, u.monitor, u.count, u.lastSeen, u.lastTitle, u.status ?? '-', u.issue ?? '-'].map(cell).join('\t')
 
 const notificationLine = (n: Notification) =>
   [n.key, n.kind, n.status, n.attempts, n.error, n.text.replace(/\s+/g, ' ')].map(cell).join('\t')

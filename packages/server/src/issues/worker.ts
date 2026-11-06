@@ -9,6 +9,7 @@ import { applyEvent, supersede } from './lifecycle.ts'
 import type { IssueRow } from './read.ts'
 import type { InboxRow } from './shared.ts'
 import { runSteward, type StewardDeps } from './steward.ts'
+import { fileUnrouted } from './unrouted.ts'
 import { fireTimers } from './timers.ts'
 
 /** Most rows of one Issue in one transaction, and most Issues in one pass: the rest wait for the next. */
@@ -140,11 +141,19 @@ export async function issuePass(
   await input.classification?.start()
   await input.worktrees?.start()
   await fireTimers(sql, input.now())
+  const errors: string[] = []
   if (input.steward) await runSteward(sql, input.now(), input.steward)
+  if (input.steward?.unrouted) {
+    try {
+      await fileUnrouted(sql, input.steward.unrouted, input.now())
+    } catch (error) {
+      errors.push(`unrouted: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   await parkGoneLeads(sql, input.now())
   await settleClaims(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
-  const errors = await processInbox(sql, input.now)
+  errors.push(...(await processInbox(sql, input.now)))
   // After the inbox: an ask or a spent escalation made in this pass is judged (or, with no judge, told to the owner) in it.
   try {
     await (input.judgement ?? new AskJudgement({ sql, now: input.now })).start()

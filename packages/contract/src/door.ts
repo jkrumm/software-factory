@@ -112,6 +112,14 @@ export const DoorUnrouted = z.object({
   count: z.number().int(),
   lastSeen: z.string(),
   lastTitle: z.string(),
+  /** the last known state; null for a row from before it was kept */
+  status: z.enum(['down', 'up']).nullable().default(null),
+  /** when the current down began */
+  downSince: z.string().nullable().default(null),
+  /** a group monitor files nothing */
+  group: z.boolean().default(false),
+  /** the Issue the steward filed for the current down */
+  issue: z.number().int().nullable().default(null),
 })
 export type DoorUnrouted = z.infer<typeof DoorUnrouted>
 

@@ -20,6 +20,17 @@ export interface IntakeContext {
 
 /** How long a monitor with no route stays listed after its last alert. */
 const UNROUTED_KEEP_MS = 30 * 24 * 60 * 60_000
+/** How long one that is still down stays listed after its last alert. */
+const UNROUTED_DOWN_KEEP_MS = 365 * 24 * 60 * 60_000
+
+/** A group monitor's alert (Kuma: 'Child monitors down') names no thing of its own: the children are the alerts. */
+const GROUP_MESSAGE = /child monitors? (down|up)/i
+const isGroupAlert = (input: IntakeInput): boolean => {
+  const facts = input.facts as { msg?: unknown; heartbeat?: { msg?: unknown } } | null
+  return [input.title, facts?.msg, facts?.heartbeat?.msg].some(
+    (text) => typeof text === 'string' && GROUP_MESSAGE.test(text),
+  )
+}
 
 /** The HTTP status and the body of an intake. */
 export interface IntakeResult {
@@ -63,14 +74,30 @@ async function fileAlert(sql: SQL, input: IntakeInput, context: IntakeContext): 
       SELECT repo FROM factory.door_routes WHERE source = ${input.source} AND monitor = ${input.monitor} FOR UPDATE`
     if (!route) {
       // A row not seen for a month is a monitor nobody alerts on: the table is a recent list, not a history, and a sender with a
-      // token cannot grow it past what it has made in thirty days.
-      await tx`DELETE FROM factory.door_unrouted WHERE last_seen < ${new Date(now.getTime() - UNROUTED_KEEP_MS)}`
+      // token cannot grow it past what it has made in thirty days. A monitor still down keeps its row (Kuma sends the `down` once,
+      // and the line must outlive it), for a year at most.
       await tx`
-        INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event)
-        VALUES (${input.source}, ${input.monitor}, 1, ${now}, ${input.title}, ${input.event})
+        DELETE FROM factory.door_unrouted
+        WHERE last_seen < ${new Date(now.getTime() - UNROUTED_KEEP_MS)} AND status IS DISTINCT FROM 'down'`
+      await tx`DELETE FROM factory.door_unrouted WHERE last_seen < ${new Date(now.getTime() - UNROUTED_DOWN_KEEP_MS)}`
+      const down = input.status === 'down'
+      await tx`
+        INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event, status, down_since, is_group)
+        VALUES (${input.source}, ${input.monitor}, 1, ${now}, ${input.title}, ${input.event}, ${input.status},
+          ${down ? now : null}, ${isGroupAlert(input)})
         ON CONFLICT (source, monitor) DO UPDATE
           SET count = factory.door_unrouted.count + 1, last_seen = EXCLUDED.last_seen, last_title = EXCLUDED.last_title,
-              last_event = EXCLUDED.last_event
+              last_event = EXCLUDED.last_event, status = EXCLUDED.status,
+              is_group = factory.door_unrouted.is_group OR EXCLUDED.is_group,
+              down_since = CASE WHEN EXCLUDED.status <> 'down' THEN NULL
+                                WHEN factory.door_unrouted.status = 'down' THEN factory.door_unrouted.down_since
+                                ELSE EXCLUDED.down_since END,
+              filed_at = CASE WHEN EXCLUDED.status = 'down' AND factory.door_unrouted.status = 'down'
+                              THEN factory.door_unrouted.filed_at END,
+              filed_issue = CASE WHEN EXCLUDED.status = 'down' AND factory.door_unrouted.status = 'down'
+                                 THEN factory.door_unrouted.filed_issue END,
+              file_error = CASE WHEN EXCLUDED.status = 'down' AND factory.door_unrouted.status = 'down'
+                                THEN factory.door_unrouted.file_error END
           WHERE factory.door_unrouted.last_event <> EXCLUDED.last_event`
       return { status: 202, ack: { outcome: 'unrouted', issue: null } }
     }
@@ -174,8 +201,19 @@ export async function listRoutes(sql: SQL): Promise<DoorRoute[]> {
 /** Most recent first. Each alert keeps only its latest event, so a retry of an older one than the last counts again. */
 export async function listUnrouted(sql: SQL, limit = 1000): Promise<DoorUnrouted[]> {
   // A route set while an alert was in flight can leave a row behind: a routed monitor is not unrouted.
-  const rows: { source: string; monitor: string; count: number; last_seen: Date; last_title: string }[] = await sql`
-    SELECT u.source, u.monitor, u.count, u.last_seen, u.last_title FROM factory.door_unrouted u
+  const rows: {
+    source: string
+    monitor: string
+    count: number
+    last_seen: Date
+    last_title: string
+    status: 'down' | 'up' | null
+    down_since: Date | null
+    is_group: boolean
+    filed_issue: number | null
+  }[] = await sql`
+    SELECT u.source, u.monitor, u.count, u.last_seen, u.last_title, u.status, u.down_since, u.is_group, u.filed_issue
+    FROM factory.door_unrouted u
     WHERE NOT EXISTS (SELECT 1 FROM factory.door_routes r WHERE r.source = u.source AND r.monitor = u.monitor)
     ORDER BY u.last_seen DESC, u.source, u.monitor LIMIT ${limit}`
   return rows.map((row) => ({
@@ -184,5 +222,9 @@ export async function listUnrouted(sql: SQL, limit = 1000): Promise<DoorUnrouted
     count: row.count,
     lastSeen: row.last_seen.toISOString(),
     lastTitle: row.last_title,
+    status: row.status,
+    downSince: row.down_since?.toISOString() ?? null,
+    group: row.is_group,
+    issue: row.filed_issue,
   }))
 }

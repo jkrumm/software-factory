@@ -49,7 +49,7 @@ export interface TickDeps {
   /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
   issuePorts?: EffectPorts
   /** the steward's verifier; Without it no steward runs */
-  steward?: Pick<StewardDeps, 'verify'>
+  steward?: Pick<StewardDeps, 'verify' | 'unrouted'>
   /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
   classification?: Classification
   /** judges asks and spent escalations before the owner hears of them; without it each stands as a failed judgment */
