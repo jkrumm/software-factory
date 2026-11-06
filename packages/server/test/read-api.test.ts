@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   AccountList,
   AskList,
@@ -512,6 +512,24 @@ describe('read API round 3', () => {
     ]) {
       expect(text).not.toMatch(/lead-|\bIssue \d/)
     }
+  })
+
+  test('a queued Issue behind a claim holder says so and carries heldBy; with no holder the fixed sentence stays', async () => {
+    const holder = await file(TEST_REPO, 'Holds the repo', {}, 'h1')
+    const waiting = await file(TEST_REPO, 'Waits for the repo', {}, 'h2')
+    await db.sql`
+      INSERT INTO factory.projects (name, repo, created_at) VALUES ('held-proj', ${TEST_REPO}, ${NOW})`
+    const found = async () => (await cards()).find((c) => c.id === waiting.id)
+    expect((await found())?.summary).toBe('Queued, waiting for a free account.')
+    expect((await found())?.heldBy).toBeNull()
+    await db.sql`
+      INSERT INTO factory.claims (key, issue_id, queued_at, held_at)
+      VALUES ('repo:held-proj', ${waiting.id}, ${NOW}, NULL), ('repo:held-proj', ${holder.id}, ${NOW}, ${NOW})`
+    const behind = await found()
+    expect(behind?.summary).toBe(`Queued behind another Issue that holds ${basename(TEST_REPO)}.`)
+    expect(behind?.summary).not.toMatch(/\bIssue \d/)
+    expect(behind?.heldBy).toBe(holder.id)
+    expect((await cards()).find((c) => c.id === holder.id)?.heldBy).toBeNull()
   })
 
   test('a snapshot stored before Spawn had an issue still parses', () => {
