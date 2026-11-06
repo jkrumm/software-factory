@@ -77,11 +77,27 @@ export async function findIssue(sql: SQL, source: string, sourceKey: string): Pr
   return row && toIssue(row)
 }
 
-/** Newest first; a list carries no facts, `GET /issues/:id` does. */
-export async function listIssues(sql: SQL, limit = 200): Promise<IssueSummary[]> {
+/**
+ * Newest first; a list carries no facts, `GET /issues/:id` does. `scope` keeps the open or the closed ones; `byActivity` puts the open
+ * ones first, the most recently moved on top (the read API's order).
+ */
+export async function listIssues(
+  sql: SQL,
+  limit = 200,
+  options: { scope?: 'open' | 'closed' | 'all'; byActivity?: boolean } = {},
+): Promise<IssueSummary[]> {
+  const where =
+    options.scope === 'open'
+      ? sql`WHERE state <> 'closed'`
+      : options.scope === 'closed'
+        ? sql`WHERE state = 'closed'`
+        : sql``
+  const order = options.byActivity
+    ? sql`ORDER BY (state = 'closed'), updated_at DESC, id DESC`
+    : sql`ORDER BY created_at DESC, id DESC`
   const rows: SummaryRow[] = await sql`
     SELECT id, state, reason, outcome, source, source_key, repo, title, kind, class, size, lead_tier, lead_effort, classified_at, parent,
            attempt, wake_at, created_at, updated_at, closed_at
-    FROM factory.issues ORDER BY created_at DESC, id DESC LIMIT ${limit}`
+    FROM factory.issues ${where} ${order} LIMIT ${limit}`
   return rows.map(summary)
 }

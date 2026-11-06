@@ -48,6 +48,7 @@ import {
 import pkg from '../package.json' with { type: 'json' }
 import { BIN, call, DEFAULT_URL, type Io } from './client.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
+import { follow, readVerb } from './read.ts'
 
 /** A call that waits for git on the server; the server's own idle timeout is longer. */
 const GIT_CALL_TIMEOUT_MS = 100_000
@@ -73,6 +74,15 @@ commands:
                   the fleet read model (plain: asks first, then the health line, then the open Issues, then the repos with their sessions, then the digest; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
+  read overview|issues [--state open|closed|all] [--limit n]|issue <id>|sessions [--issue n] [--role r] [--live]|session <id>|asks|health|accounts
+                  the read API (/v1), for people: titles, one-sentence summaries, insights (tool calls, subagents, tokens, time
+                  working). --format json prints the body as the contract has it; plain prints one row per item, an id leading
+                  the row. Token only
+  follow [--issue <id>] [--since <cursor>] [--until-closed]
+                  the change stream (/v1/stream): one line per frame (json: {"event","id","data"}; plain: time, id, words).
+                  Reconnects after a drop with the last cursor (1 s to 15 s backoff); SIGINT or SIGTERM exits 0. A cursor the server
+                  does not know (410) is exit 1: read the resources again. --until-closed (needs --issue) exits 0 once that Issue
+                  is closed. Token only
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -187,7 +197,9 @@ commands:
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
 --pending       notify list: only what is not sent
---since <iso>    issue facts: only Issues filed at or after it
+--since <iso>    issue facts: only Issues filed at or after it (follow: a stream cursor)
+--state, --limit, --issue, --role, --live  read issues|sessions filters (--issue also follow)
+--until-closed   follow: exit 0 once the --issue Issue is closed
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --kind, --link, --file, --stdin  issue evidence
 --attempt <n>    issue resume: which attempt (default: the latest)
@@ -557,6 +569,11 @@ interface Flags {
   decision?: string
   pending?: boolean
   since?: string
+  state?: string
+  limit?: string
+  issue?: string
+  live?: boolean
+  'until-closed'?: boolean
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -726,6 +743,10 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     }
     return
   }
+
+  if (words[0] === 'read') return readVerb(words, format, flags, io)
+
+  if (key === 'follow') return follow(format, flags, io)
 
   if (key === 'spawn list') {
     const { body } = await call(io, '/spawns', { auth: true, schema: SpawnList })
@@ -1274,5 +1295,10 @@ const OPTIONS = {
   decision: { type: 'string' },
   pending: { type: 'boolean' },
   since: { type: 'string' },
+  state: { type: 'string' },
+  limit: { type: 'string' },
+  issue: { type: 'string' },
+  live: { type: 'boolean' },
+  'until-closed': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const

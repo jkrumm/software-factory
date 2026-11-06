@@ -5,7 +5,7 @@ import { type MergedSession, STALE_ASK_MS } from './model.ts'
 /**
  * Where the digest meets the model. Two things, both pure: which parts of the model the digest may read (`scopeOf`, the one
  * place that decides, so a visible repo's or session's text is never an item), and what its cache adds to the model
- * (`applyDigest`). The model has no plans any more: no heading is offered and a session has no plan or wave.
+ * (`applyDigest`). The model has no plans any more: the only headings are Issue titles, and a session has no plan or wave.
  */
 
 export interface DigestScope {
@@ -24,12 +24,15 @@ export interface ScopeInput {
   sessions: readonly { id: string; turn: number; transcriptPath: string | null }[]
   /** whether a place is IuRoot's or a visible root's */
   isVisible: (path: string) => boolean
+  /** the open Issues: the filed titles of those in ordinary repos get a short heading */
+  issues: readonly { title: string; repo: string }[]
 }
 
 /**
  * The digest's reading of the model. A session is offered only when it is listed under an ordinary repo and none of its places is
  * visible: its repo, its spawn's repo, its directory, its terminal's directory. A session outside every repo is never offered
- * (nothing says where it stands).
+ * (nothing says where it stands). The feed's headings are the filed titles of the open Issues of ordinary repos and nothing else: an
+ * Issue whose repo is visible (or the model marks visible) never has its title offered.
  */
 export function scopeOf(input: ScopeInput): DigestScope {
   const { model, isVisible } = input
@@ -62,7 +65,15 @@ export function scopeOf(input: ScopeInput): DigestScope {
       })
     }
   }
-  return { feed: { headings: [], sessions: [...sessions.values()], complete: true }, sessions, repos }
+  const visibleRepos = new Set(model.repos.filter((repo) => repo.visible).map((repo) => repo.space))
+  const headings = [
+    ...new Set(
+      input.issues
+        .filter((issue) => !visibleRepos.has(issue.repo) && !isVisible(issue.repo))
+        .map((issue) => issue.title),
+    ),
+  ]
+  return { feed: { headings, sessions: [...sessions.values()], complete: true }, sessions, repos }
 }
 
 /**

@@ -130,6 +130,13 @@ export class DigestView {
   }
 }
 
+/** The cache alone, for a reader that makes no build (the read API): the answers as stored, no spend figures, never a call. */
+export async function readDigestCache(sql: SQL): Promise<DigestView> {
+  const rows: { key: string; fingerprint: string; answer: unknown; at: Date }[] =
+    await sql`SELECT key, fingerprint, answer, at FROM factory.fleet_digest`
+  return new DigestView(new Map(rows.map((r) => [r.key, { fingerprint: r.fingerprint, answer: r.answer, at: r.at }])))
+}
+
 // --- the items ----------------------------------------------------------------------------------------------------
 
 /** One item of a batch: what was sent (`id`, `kind`, `text`), and what its answer is stored under. Kept as is while its run is pending. */
