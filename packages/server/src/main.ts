@@ -11,7 +11,7 @@ import { Places } from './fleet/place.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
-import { serve, serveHooks } from './http.ts'
+import { serve, serveHooks, stopServing } from './http.ts'
 import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
 import { AgwReview } from './issues/review.ts'
@@ -263,9 +263,9 @@ async function shutdown(signal: string): Promise<void> {
   try {
     // Stop taking requests, let the tick in flight record its result, only then release the lock and close the pool.
     stoppingStep = 'server.stop'
-    await server.stop()
+    await stopServing(server)
     stoppingStep = 'hooks.stop'
-    await hooks.stop()
+    await stopServing(hooks)
     stoppingStep = 'ticker.stop'
     await ticker.stop()
     stoppingStep = 'fleet.settled'

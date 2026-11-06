@@ -560,7 +560,9 @@ itself, with no server and no token: `rd work --role` depends on `role get <role
 if its connection loses it; a second copy asks for the lock again every 500 ms for 45 s (the old server may be in its SIGTERM
 shutdown, which releases the lock last), then exits 1. A deploy's and a rollback's `stop_service` also waits for the old
 server's processes to be gone, not only for launchd to drop the job: launchd runs the `secrets-run` wrapper and the server is its child, so the job can end while the server still holds the lock (the processes are listed before the bootout). A
-shutdown that hits its backstop logs the step it was in. Every
+shutdown that hits its backstop logs the step it was in. The port and the socket stop through `stopServing` (`http.ts`): no new
+connection at once, requests in flight get `STOP_GRACE_MS` (10 s), then the open connections are closed; a plain `stop()` waits
+for every connection and `/v1/stream` never ends, so a deploy sat in `server.stop` for the whole backstop with the port closed. Every
 advisory key lives in `src/locks.ts` and they must stay distinct.
 
 **`/health` is the ticker's pulse:** the last successful tick and the last tick error; no success within three
