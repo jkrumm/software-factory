@@ -3,10 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fleet } from '@software-factory/contract'
-import { runProcess } from '../src/exec.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { FleetBuilder } from '../src/fleet/index.ts'
-import { GitReader } from '../src/fleet/git.ts'
 import { AskHumanQueue, type HcLister, type HcTerminal, type QueueReader } from '../src/fleet/sources.ts'
 import { serveHooks } from '../src/http.ts'
 import { startApp, TEST_ROLES, TEST_TOKEN, type TestApp } from './support/app.ts'
@@ -27,7 +25,6 @@ let w: ReturnType<typeof world>
 let terminals: HcTerminal[]
 let hcFails: string | undefined
 let queueAnswer: () => Promise<{ id: string; text: string; askedAt: string; state: string | null }[]>
-const processes: string[][] = []
 
 const hc: HcLister = {
   list: async () => {
@@ -54,7 +51,6 @@ beforeEach(async () => {
   w = world(db.sql, clock)
   terminals = estateTerminals(estate)
   hcFails = undefined
-  processes.length = 0
   queueAnswer = async () => [
     {
       id: '20261027T230130-2786',
@@ -70,10 +66,6 @@ beforeEach(async () => {
     },
     { id: '20261102T110000-1', text: 'MacBook: pull dotfiles', askedAt: '2026-11-02T11:00:00.000Z', state: 'queued' },
   ]
-  const run: typeof runProcess = (cmd, ...rest) => {
-    processes.push(cmd)
-    return runProcess(cmd, ...rest)
-  }
   builder = new FleetBuilder({
     sql: db.sql,
     now: () => clock.now(),
@@ -82,7 +74,6 @@ beforeEach(async () => {
     home: estate.src,
     hc,
     queue,
-    git: new GitReader(run),
   })
   app = startApp({ sql: db.sql, clock, fleet: builder, repoRoots: [estate.src] })
 })
@@ -135,14 +126,36 @@ describe('GET /fleet', () => {
     const res = await app.get('/fleet')
     expect(res.status).toBe(503)
     expect(await res.json()).toMatchObject({ code: 'not_ready' })
-    expect(processes).toHaveLength(0)
 
     await builder.refreshNow()
-    const calls = processes.length
-    expect(calls).toBeGreaterThan(0)
-    await get()
-    await get()
-    expect(processes).toHaveLength(calls)
+    const first = await get()
+    // a read is the stored row: a change since the build does not show until the next one
+    queueAnswer = async () => []
+    expect(await get()).toEqual(first)
+  })
+
+  test('issues: the open Issues, with the lead session when one is live; a closed one is not listed', async () => {
+    await factoryRows()
+    const open = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'i1', repo: `${estate.src}/modelpick`, title: 'Open one', facts: {} },
+      { repoRoots: [estate.src], now: clock.now() },
+    )
+    const closed = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'i2', repo: `${estate.src}/modelpick`, title: 'Closed one', facts: {} },
+      { repoRoots: [estate.src], now: clock.now() },
+    )
+    await db.sql`UPDATE factory.issues SET state = 'closed', closed_at = ${clock.now()}, outcome = 'done' WHERE id = ${closed.issue.id}`
+    await builder.refreshNow()
+    const issues = (await get()).issues
+    expect(issues.map((i) => i.title)).toContain('Open one')
+    expect(issues.map((i) => i.title)).not.toContain('Closed one')
+    expect(issues.find((i) => i.id === open.issue.id)).toMatchObject({
+      repo: `${estate.src}/modelpick`,
+      state: expect.any(String),
+      lead: null,
+    })
   })
 
   test('needs the token', async () => {
@@ -151,14 +164,11 @@ describe('GET /fleet', () => {
 })
 
 describe('the estate', () => {
-  test('repos: only those with a plan or a live session, git read, IuRoot visible', async () => {
+  test('repos: only those with a live session or an open Issue, IuRoot visible', async () => {
     await factoryRows()
     await builder.refreshNow()
     const fleet = await get()
     expect(fleet.repos.map((r) => r.name)).toEqual([
-      'agent-workflows',
-      'homelab',
-      'linewatch',
       'modelpick',
       'prometheus-epx',
       'prometheus-scripts',
@@ -167,72 +177,10 @@ describe('the estate', () => {
     ])
     const by = (name: string) => fleet.repos.find((r) => r.name === name)
     expect(by('dotfiles')).toBeUndefined()
-    expect(by('software-factory')).toMatchObject({
-      visible: false,
-      space: join(estate.src, 'software-factory'),
-      git: { branch: 'master', dirty: false, lastCommit: { subject: 'software-factory: the state of the plan' } },
-    })
+    expect(by('software-factory')).toMatchObject({ visible: false, space: join(estate.src, 'software-factory') })
     expect(by('prometheus-scripts')).toMatchObject({ visible: true })
-    expect(by('prometheus-epx')).toMatchObject({ visible: true, plan: null })
-    expect(by('prometheus-epx')?.git?.lastCommit?.at).toBe('2026-11-01T12:00:00Z')
-  })
-
-  test('plans: dated statuses, short comments, states by the proposal', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    const fleet = await get()
-    const plan = (name: string) => fleet.repos.find((r) => r.name === name)?.plan
-
-    // a stale plan: an active wave, eight days untouched, nobody works it
-    expect(plan('agent-workflows')).toMatchObject({
-      state: 'stale',
-      title: 'agent-workflows: the gateway',
-      goal: 'one gateway for every model call.',
-    })
-    expect(plan('agent-workflows')?.waves.slice(0, 2)).toEqual([
-      {
-        n: 1,
-        title: 'Gateway spike and registry',
-        short: null,
-        status: 'done',
-        statusDate: '2026-11-01',
-        statusText: 'release 767f643',
-      },
-      { n: 2, title: 'Gateway', short: null, status: 'done', statusDate: '2026-11-02', statusText: 'release b25aac5' },
-    ])
-    expect(plan('agent-workflows')?.lastTouched).toBe('2026-10-25T12:00:00Z')
-    expect(plan('homelab')?.state).toBe('done')
-    expect(plan('modelpick')?.state).toBe('planned')
-    expect(plan('linewatch')?.state).toBe('scheduled')
-    expect(plan('linewatch')?.waves[0]).toMatchObject({
-      status: 'scheduled',
-      statusDate: '2099-01-01',
-      statusText: "the owner's call",
-    })
-
-    // a visible repo's short is the title cut at 8 words; a repo of the factory's own has none until the digest
-    const teamchat = plan('prometheus-scripts')
-    expect(teamchat).toMatchObject({ state: 'running', title: 'Teamchat: Wave 62 and on' })
-    expect(teamchat?.path).toBe(join(estate.iu, 'prometheus-scripts/wip/waves-teamchat/docs/waves/PLAN.md'))
-    expect(teamchat?.waves[0]?.short).toBe('Channel pinning and the long running migration of…')
-    expect(plan('modelpick')?.waves[0]?.short).toBeNull()
-  })
-
-  test('the plan a live spawn names beside the repo plan; the Never clause is not a plan', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    const sf = (await get()).repos.find((r) => r.name === 'software-factory')
-    // the lead works PLAN.md (found from its directory), the worker fv.md (its start text names it, not the file under Never)
-    expect(sf?.plan).toMatchObject({ state: 'running', title: 'Software factory: the program plan' })
-    expect(sf?.plan?.waves.find((x) => x.n === 6)).toMatchObject({ short: 'The night run', status: 'active' })
-    expect(sf?.morePlans).toHaveLength(1)
-    expect(sf?.morePlans[0]).toMatchObject({ state: 'running', title: 'FV: the fleet view' })
-    const worker = sf?.sessions.find((s) => s.terminal === 't7d')
-    expect(worker).toMatchObject({
-      plan: join(estate.src, 'software-factory/docs/waves/fv.md'),
-      wave: 1,
-      parent: 'software-factory-w6',
-    })
+    expect(by('prometheus-epx')).toMatchObject({ visible: true })
+    expect(Object.keys(by('modelpick') ?? {}).sort()).toEqual(['name', 'sessions', 'space', 'visible'])
   })
 
   test('sessions: the factory and hc merged by name, IuRoot included, outside the roots left out', async () => {
@@ -298,9 +246,6 @@ describe('the estate', () => {
       text: 'Allow Bash(rm -rf node_modules)?',
       repo: join(estate.iu, 'prometheus-epx'),
       short: null,
-      tier: 'yours',
-      suggestion: null,
-      actions: [{ label: 'Later', intent: 'later' }],
     })
     expect(by('decision:q1:dec')).toMatchObject({
       kind: 'question',
@@ -354,7 +299,7 @@ describe('a source that fails', () => {
     const fleet = await builder.refreshNow()
     expect(fleet.errors).toEqual(['human queue: ask-human.sh list --json did not print JSON'])
     expect(fleet.asks.some((a) => a.source === 'queue')).toBe(false)
-    expect(fleet.repos).toHaveLength(8)
+    expect(fleet.repos).toHaveLength(5)
   })
 
   test('hc leaves its part as the build before had it', async () => {
@@ -390,24 +335,6 @@ describe('a source that fails', () => {
         .map((s) => s.id)
         .sort(),
     ).toEqual(['rb-waits', 'software-factory-w6'])
-  })
-
-  test('a plan that cannot be read leaves the last text with an errors line', async () => {
-    await factoryRows()
-    const before = await builder.refreshNow()
-    const path = join(estate.src, 'modelpick/docs/waves/PLAN.md')
-    const { chmodSync } = await import('node:fs')
-    chmodSync(path, 0o000)
-    try {
-      const after = await builder.refreshNow()
-      if (process.getuid?.() === 0) return // root reads it anyway
-      expect(after.errors[0]).toStartWith('plan modelpick/docs/waves/PLAN.md:')
-      expect(after.repos.find((r) => r.name === 'modelpick')?.plan).toEqual(
-        before.repos.find((r) => r.name === 'modelpick')?.plan,
-      )
-    } finally {
-      chmodSync(path, 0o644)
-    }
   })
 })
 
@@ -469,61 +396,9 @@ describe('a restart and what a start text names', () => {
     expect(second.repos.flatMap((r) => r.sessions).find((s) => s.id === 'prometheus-epx-w1')?.since).toBe(sinceBefore)
     expect(second.fingerprint).toBe(first.fingerprint)
   })
-
-  test('a factory ask that expired stays expired after a restart: its first-seen time is in the table', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    clock.advance(8 * 24 * 3_600_000)
-    terminals = terminals.map((t) => ({ ...t, statusAt: clock.now().toISOString() }))
-    const expired = await builder.refreshNow()
-    const hidden = expired.asks.filter((a) => a.source === 'factory').map((a) => a.id)
-    const restarted = new FleetBuilder({
-      sql: db.sql,
-      now: () => clock.now(),
-      roots: [estate.src],
-      visibleRoots: [estate.iu],
-      home: estate.src,
-      hc,
-      queue,
-    })
-    const after = await restarted.refreshNow()
-    expect(after.asks.filter((a) => a.source === 'factory').map((a) => a.id)).toEqual(hidden)
-    expect(after.asks.filter((a) => a.source === 'factory').every((a) => a.at !== clock.now().toISOString())).toBe(true)
-  })
-
-  test('a plan path outside the roots, or a file that is not a plan, is not followed', async () => {
-    terminals = terminals.map((t) =>
-      t.address === 't7d'
-        ? {
-            ...t,
-            prompt: `Read /etc/passwd and ${estate.src}/../outside/docs/waves/x.md and ~/../../etc/docs/waves/y.md ${'z'.repeat(80)}`,
-          }
-        : t,
-    )
-    await factoryRows()
-    const fleet = await builder.refreshNow()
-    const worker = fleet.repos.flatMap((r) => r.sessions).find((s) => s.terminal === 't7d')
-    // nothing named counts; its directory is a worktree of the factory's checkout, so the repo's PLAN.md is its plan
-    expect(worker?.plan).toBe(join(estate.src, 'software-factory/docs/waves/PLAN.md'))
-  })
 })
 
 describe('review follow-ups', () => {
-  test('a root that cannot be listed is an errors line, not a silent loss', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    chmodSync(estate.src, 0o000)
-    try {
-      if (process.getuid?.() === 0) return
-      const after = await builder.refreshNow()
-      expect(after.errors.some((e) => e.startsWith(`repos ${estate.src}:`))).toBe(true)
-      // the IuRoot repos are another root's: they stand
-      expect(after.repos.some((r) => r.name === 'prometheus-scripts')).toBe(true)
-    } finally {
-      chmodSync(estate.src, 0o755)
-    }
-  })
-
   test('a refresh that cannot build is a 503 build_failed, not a bare 500', async () => {
     const failing = startApp({
       sql: db.sql,
@@ -641,9 +516,6 @@ describe('the lead’s review', () => {
         ['GET', '/fleet'],
         ['POST', '/fleet/refresh'],
         ['GET', '/fleet/refresh'],
-        ['POST', '/fleet/asks/queue%3Ax/act'],
-        ['GET', '/fleet/triage'],
-        ['POST', '/fleet/triage/1/undo'],
       ] as const) {
         const res = await fetch(`http://localhost${path}`, { method, unix: socketPath })
         expect(res.status).toBe(404)
@@ -712,30 +584,6 @@ describe('the lead’s review', () => {
     expect(pick(first).length).toBe(2)
   })
 
-  test('3: errors come in repo path order, run after run', async () => {
-    await factoryRows()
-    const failing: typeof runProcess = async (cmd) => {
-      await Bun.sleep(Math.floor(Math.random() * 20))
-      return cmd.includes('log') || cmd.includes('status') ? { exitCode: 128, stdout: '' } : { exitCode: 0, stdout: '' }
-    }
-    const flaky = new FleetBuilder({
-      sql: db.sql,
-      now: () => clock.now(),
-      roots: [estate.src],
-      visibleRoots: [estate.iu],
-      home: estate.src,
-      hc,
-      queue,
-      git: new GitReader(failing),
-    })
-    const gitErrors = async () => (await flaky.refreshNow()).errors.filter((e) => e.startsWith('git '))
-    const first = await gitErrors()
-    expect(first).toHaveLength(8)
-    const paths = (await get()).repos.map((r) => r.space).sort()
-    expect(first.map((e) => e.split(':')[0])).toEqual(paths.map((p) => `git ${p.split('/').at(-1)}`))
-    for (let i = 0; i < 3; i++) expect(await gitErrors()).toEqual(first)
-  })
-
   test('4: a session’s directory is matched after realpath', async () => {
     const links = mkdtempSync('/tmp/factory-fleet-links-')
     symlinkSync(estate.src, join(links, 'src'))
@@ -755,21 +603,10 @@ describe('the lead’s review', () => {
       const fleet = await builder.refreshNow()
       const repo = fleet.repos.find((r) => r.name === 'modelpick')
       expect(repo?.sessions.map((x) => x.id)).toContain('via-link')
-      expect(repo?.plan?.state).toBe('running')
       expect(fleet.unplaced.map((x) => x.id)).not.toContain('via-link')
     } finally {
       rmSync(links, { recursive: true, force: true })
     }
-  })
-
-  test('5: an idle or done tab does not make a plan run; a working one does', async () => {
-    const fleet = await builder.refreshNow()
-    expect(fleet.repos.find((r) => r.name === 'modelpick')).toMatchObject({
-      plan: { state: 'planned' },
-      sessions: [{ id: 'modelpick-idle', hc: 'done' }],
-    })
-    terminals = terminals.map((t) => (t.address === 't8m' ? { ...t, status: 'working' } : t))
-    expect((await builder.refreshNow()).repos.find((r) => r.name === 'modelpick')?.plan?.state).toBe('running')
   })
 
   test('6: a session with no repo is unplaced and not in the summary', async () => {
@@ -813,19 +650,6 @@ describe('the lead’s review', () => {
     const second = await restarted.refreshNow()
     const factoryAt = (f: Fleet) => f.asks.filter((a) => a.source === 'factory').map((a) => a.at)
     expect(factoryAt(second)).toEqual(factoryAt(first))
-  })
-
-  test('9: only "## Wave <n>" headings are waves; any other "## Wave …" heading is ignored, with no errors line', async () => {
-    const path = join(estate.src, 'modelpick/docs/waves/PLAN.md')
-    const original = await Bun.file(path).text()
-    writeFileSync(path, `${original}\r\n## Wave — nothing numbered\r\n## Wave overview\r\n## Wave 3.5 Half\r\n`)
-    try {
-      const fleet = await builder.refreshNow()
-      expect(fleet.errors).toEqual([])
-      expect(fleet.repos.find((r) => r.name === 'modelpick')?.plan?.waves).toHaveLength(1)
-    } finally {
-      writeFileSync(path, original)
-    }
   })
 })
 
@@ -891,13 +715,9 @@ describe('the fingerprint and NOTIFY', () => {
 })
 
 describe('no model is called', () => {
-  test('the builder runs git and nothing else, and its sources never name agw', async () => {
-    await factoryRows()
-    await builder.refreshNow()
-    expect(processes.length).toBeGreaterThan(0)
-    expect(processes.every((p) => p[0] === 'git')).toBe(true)
+  test('the builder’s sources never name agw', async () => {
     const sources = await Promise.all(
-      ['index.ts', 'model.ts', 'plans.ts', 'sources.ts', 'git.ts', 'store.ts'].map((f) =>
+      ['index.ts', 'model.ts', 'sources.ts', 'store.ts'].map((f) =>
         Bun.file(join(import.meta.dir, '..', 'src', 'fleet', f)).text(),
       ),
     )
@@ -924,7 +744,7 @@ describe('the human queue reader', () => {
       `[ "$1 $2" = "list --json" ] && printf '%s' '[{"id":"a","text":"hi \\"there\\"\\nline","cmd":null,"askedAt":"2026-11-01T10:00:00Z","ageSeconds":5,"state":"queued"}]'`,
     )
     expect(await new AskHumanQueue(bin).list()).toEqual([
-      { id: 'a', text: 'hi "there"\nline', cmd: null, askedAt: '2026-11-01T10:00:00.000Z', state: 'queued' },
+      { id: 'a', text: 'hi "there"\nline', askedAt: '2026-11-01T10:00:00.000Z', state: 'queued' },
     ])
   })
 
@@ -946,7 +766,7 @@ describe('factory fleet', () => {
     await builder.refreshNow()
     const json = await factory(['fleet'])
     expect(json.code).toBe(0)
-    expect(Fleet.parse(JSON.parse(json.stdout)).repos).toHaveLength(8)
+    expect(Fleet.parse(JSON.parse(json.stdout)).repos).toHaveLength(5)
 
     const plain = await factory(['fleet', '--format', 'plain'])
     expect(plain.code).toBe(0)
@@ -955,12 +775,11 @@ describe('factory fleet', () => {
     expect(lines[0]).toStartWith('FLEET')
     expect(lines[1]).toBe('ASKS')
     expect(lines.indexOf('REPOS')).toBeGreaterThan(lines.indexOf('ASKS'))
+    expect(lines).toContain('ISSUES')
     expect(plain.stdout).toContain('queue:20261027T230130-2786')
-    // repos with a running plan: the factory's, the teamchat's; not the stale or the planned
     const repos = lines.slice(lines.indexOf('REPOS') + 1)
     expect(repos.join('\n')).toContain('software-factory')
-    expect(repos.join('\n')).toContain('prometheus-scripts (visible)')
-    expect(repos.join('\n')).not.toContain('agent-workflows')
+    expect(repos.join('\n')).toContain('prometheus-epx (visible)')
   })
 
   test('--refresh builds now; before any build a plain read is a failure with the reason', async () => {

@@ -5,7 +5,6 @@ import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { FleetBuilder } from './fleet/index.ts'
-import type { WindowDigest } from './fleet/window.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './review/limits.ts'
 import type { ReviewTransport } from './review/transport.ts'
@@ -61,8 +60,6 @@ export interface TickDeps {
   notify?: NotifyDeps
   /** the fleet read model: the tick starts a build when one is due and does not wait for it; without it none is built */
   fleet?: Pick<FleetBuilder, 'kick'>
-  /** the since reading's headline paragraph: the tick starts a pass when a window waits and none runs (behind its back, like the fleet build) */
-  windows?: Pick<WindowDigest, 'kick'>
   /** review v4's limits (slots, deep cap): admission at every claim; the defaults without */
   reviewLimits?: ReviewLimits
   /** review v4's transport: the tick starts a pass (submit on Stop, the idle watchdog) behind its back, like the fleet build */
@@ -422,7 +419,6 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
   // The fleet model builds behind the tick's back (bounded reads, no transaction); the next pass finds it done or still running.
   deps.fleet?.kick()
-  deps.windows?.kick()
   deps.reviews?.kick()
   deps.spaces?.kick()
   return result

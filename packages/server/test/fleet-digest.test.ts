@@ -223,16 +223,9 @@ describe('the pass', () => {
     expect(calls()).toHaveLength(1)
     const sent = calls()[0]
     expect(sent?.args.slice(0, 4)).toEqual(['digest', '--format', 'json', '--idempotency-key'])
-    // headings of ordinary plans, the session, its reply
+    // the session and its reply: no plan feeds a heading any more
     const kinds = new Set(sent?.items.map((i) => i.kind))
-    expect(kinds).toEqual(new Set(['heading', 'session', 'reply']))
-    expect(sent?.items.map((i) => i.text)).toContain('Program lead, rotation 1')
-    // a heading that has a short of its own is not an item
-    expect(sent?.items.map((i) => i.text)).not.toContain('The night of 2026-11-01')
-
-    const waves = repoOf(first, 'software-factory')?.plan?.waves
-    expect(waves?.find((x) => x.n === 1)?.short).toBe('Short Program lead, rotation')
-    expect(waves?.find((x) => x.n === 6)?.short).toBe('The night run')
+    expect(kinds).toEqual(new Set(['session', 'reply']))
     expect(repoOf(first, 'rb')?.sessions[0]?.headline).toBe('Headline All done. Nothing')
 
     // nothing changed: later passes call nothing
@@ -258,6 +251,7 @@ describe('the pass', () => {
   })
 
   test('the call is agw digest with the items on stdin, the batch and the attempt in its key', async () => {
+    await idleSession('rb-a', join(estate.src, 'rb'), 'Done.')
     await builder.refreshNow()
     await digest.settled()
     const [call] = calls()
@@ -353,12 +347,13 @@ describe('failure is quiet', () => {
     expect(HANG_GUARD_MS).toBeGreaterThanOrEqual(30 * 60_000)
     builder = newBuilder({ hangGuardMs: 300 })
     mode('slow')
+    await idleSession('rb-a', join(estate.src, 'rb'), 'Done.')
     await builder.refreshNow()
     await digest.settled()
     const fleet = await builder.refreshNow()
     expect(fleet.digest.lastError).toContain('hung past the guard')
     expect(fleet.digest.days[0]).toMatchObject({ calls: 1, failed: 1 })
-    expect(repoOf(fleet, 'software-factory')?.plan?.waves[0]?.short).toBeNull()
+    expect(repoOf(fleet, 'rb')?.sessions[0]?.headline).toBeNull()
   })
 
   test('a database that cannot give the cache leaves the last cache in the model, with a line in errors', async () => {
@@ -388,9 +383,6 @@ describe('the cache', () => {
     const fleet = await round()
     expect(calls()).toHaveLength(1)
     expect(repoOf(fleet, 'rb')?.sessions[0]?.headline).toBe('Headline Done.')
-    expect(repoOf(fleet, 'software-factory')?.plan?.waves.find((x) => x.n === 2)?.short).toBe(
-      'Short Program lead, rotation',
-    )
   })
 
   test('a heading is made once per heading text, whichever plan has it', async () => {
@@ -516,22 +508,12 @@ describe('the reply extract', () => {
 
 describe('IuRoot never goes', () => {
   test('no heading, session, reply or title of a visible repo, plan or session is sent; their shorts stay their own', async () => {
-    // an IuRoot session whose last message asks something, a session in an ordinary repo that works an IuRoot plan, and an ordinary one
+    // an IuRoot session whose last message asks something, and an ordinary one
     await idleSession(
       'epx-ask',
       join(estate.iu, 'prometheus-epx'),
       'IUROOT-SECRET-REPLY: shall I drop the table? Shall I?',
     )
-    const teamchat = join(estate.iu, 'prometheus-scripts', 'wip', 'waves-teamchat', 'docs', 'waves', 'PLAN.md')
-    await db.sql`
-      INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, session, created_at)
-      VALUES ('rb-cross', ${join(estate.src, 'rb')}, ${`Work ${teamchat} wave 62`}, 'worker', 'sonnet', 'high', 'started', 'a', ${w.at(60)}, 'w1:rb-cross', ${w.at(60)})`
-    const { openSession } = await import('../src/sessions.ts')
-    await openSession(db.sql, { id: 'rb-cross', spawnKey: 'rb-cross', pane: 'w1:rb-cross', at: w.at(60) })
-    await w.emit('rb-cross', 'session_started', w.at(60), { claudeSessionId: 'c-cross' })
-    await w.emit('rb-cross', 'turn_started', w.at(20))
-    await w.emit('rb-cross', 'turn_ended', w.at(15))
-    await db.sql`UPDATE factory.sessions SET transcript_path = ${transcript('rb-cross', 'CROSS-SECRET-REPLY. Shall I?')} WHERE id = 'rb-cross'`
     await idleSession('rb-ok', join(estate.src, 'rb'), 'ORDINARY-REPLY. Shall I?')
 
     const fleet = await round()
@@ -539,7 +521,6 @@ describe('IuRoot never goes', () => {
     expect(sent).toContain('ORDINARY-REPLY')
     for (const secret of [
       'IUROOT-SECRET-REPLY',
-      'CROSS-SECRET-REPLY',
       'Channel pinning',
       'Teamchat',
       'Wave 62',
@@ -554,23 +535,18 @@ describe('IuRoot never goes', () => {
     expect(keys.map((k) => k.key).filter((k) => /epx|cross/.test(k))).toEqual([])
     expect(JSON.stringify(keys)).not.toContain('SECRET')
 
-    // IuRoot's short is the plan's own comment or the heading cut at 8 words; headline null; no reply ask
-    const scripts = repoOf(fleet, 'prometheus-scripts')
-    expect(scripts?.visible).toBe(true)
-    expect(scripts?.plan?.waves[0]?.short).toBe('Channel pinning and the long running migration of…')
-    expect(scripts?.plan?.short).toBe('Teamchat: Wave 62 and on')
+    // headline null; no reply ask
     const epx = repoOf(fleet, 'prometheus-epx')
     expect(epx?.sessions.every((s) => s.headline === null)).toBe(true)
     expect(fleet.asks.filter((a) => a.source === 'reply').map((a) => a.session)).toEqual(['rb-ok'])
-    // every session that is a visible one's has no headline, the cross one included
-    const cross = repoOf(fleet, 'rb')?.sessions.find((s) => s.id === 'rb-cross')
-    expect(cross?.plan).toBe(teamchat)
-    expect(cross?.headline).toBeNull()
+    // every session that is a visible one's has no headline
     for (const r of fleet.repos.filter((x) => x.visible))
       expect(r.sessions.every((s) => s.headline === null)).toBe(true)
   })
 
   test('with IuRoot out of the visible roots it is still IuRoot by place', async () => {
+    await idleSession('epx-ask', join(estate.iu, 'prometheus-epx'), 'IUROOT-SECRET-REPLY: shall I? Shall I?')
+    await idleSession('rb-ok', join(estate.src, 'rb'), 'ORDINARY-REPLY. Shall I?')
     builder = new FleetBuilder({
       sql: db.sql,
       now: () => clock.now(),
@@ -582,8 +558,8 @@ describe('IuRoot never goes', () => {
       digest: (digest = new Digest({ sql: db.sql, now: () => clock.now(), bin: 'agw', everyMs: EVERY })),
     })
     await round()
-    expect(sentText()).not.toContain('Channel pinning')
-    expect(sentText()).toContain('Program lead, rotation 1')
+    expect(sentText()).not.toContain('IUROOT-SECRET-REPLY')
+    expect(sentText()).toContain('ORDINARY-REPLY')
   })
 })
 
@@ -1061,10 +1037,6 @@ describe('an ask the session already has', () => {
         source: 'wait',
         kind: 'question',
         short: 'Wants an answer',
-        // the deterministic source's own: the triage gives it its tier and actions, the reply only its words
-        tier: 'yours',
-        actions: [{ label: 'Later', intent: 'later' }],
-        suggestion: null,
       }),
     ])
     expect(fleet.asks.some((a) => a.source === 'reply')).toBe(false)
@@ -1074,26 +1046,35 @@ describe('an ask the session already has', () => {
 
 describe('applyDigest', () => {
   test('gives text only to what the scope offered: the same rule that decides what is sent', async () => {
+    await idleSession('rb-a', join(estate.src, 'rb'), 'Done.')
     const base = await builder.refreshNow()
     await digest.settled()
     const cached = await digest.view()
     const { fingerprint: _f, digest: _d, ...model } = base
-    const factory = model.repos.find((r) => r.name === 'software-factory')
-    const wave1 = (m: typeof model) =>
-      m.repos.find((r) => r.name === 'software-factory')?.plan?.waves.find((x) => x.n === 1)?.short
-    expect(wave1(model)).toBeNull()
+    const rb = model.repos.find((r) => r.name === 'rb')
+    const headline = (m: { repos: Fleet['repos'] }) => m.repos.find((r) => r.name === 'rb')?.sessions[0]?.headline
     const nothing = {
       feed: { headings: [], sessions: [], complete: true },
       sessions: new Map(),
-      plans: new Set<string>(),
       repos: new Set<string>(),
     }
-    const none = applyDigest(model, cached, nothing, clock.now())
-    expect(wave1(none)).toBeNull()
-    const offered = { ...nothing, repos: new Set([factory?.space ?? '']), plans: new Set([factory?.plan?.path ?? '']) }
-    expect(wave1(applyDigest(model, cached, offered, clock.now()))).toBe('Short Program lead, rotation')
-    // a repo offered but a plan that is not: no text either
-    expect(wave1(applyDigest(model, cached, { ...offered, plans: new Set<string>() }, clock.now()))).toBeNull()
-    expect(none.repos.find((r) => r.name === 'agent-workflows')?.plan?.waves.every((x) => x.short === null)).toBe(true)
+    expect(headline(applyDigest(model, cached, nothing, clock.now()))).toBeNull()
+    // a repo offered but a session that is not: no text either
+    const offered = { ...nothing, repos: new Set([rb?.space ?? '']) }
+    expect(headline(applyDigest(model, cached, offered, clock.now()))).toBeNull()
+    const session = {
+      id: 'rb-a',
+      turn: 1,
+      settled: true,
+      transcriptPath: null,
+      since: null,
+      title: null,
+      role: null,
+      repo: 'rb',
+      plan: null,
+      wave: null,
+    }
+    const full = { ...offered, sessions: new Map([['rb-a', session]]) }
+    expect(headline(applyDigest(model, cached, full, clock.now()))).toBe('Headline Done.')
   })
 })

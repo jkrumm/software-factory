@@ -23,6 +23,7 @@ import {
   type TimelineEntry,
   IssueEvidenceAck,
   IssueVerb,
+  IsoTime,
   IssueVerbAck,
   MAX_EVIDENCE_BYTES,
   loadRoleTable,
@@ -45,15 +46,6 @@ import {
   SpawnList,
   Status,
   WaitOn,
-  ActIntent,
-  ActResult,
-  IsoTime,
-  Presence,
-  PresenceAct,
-  PresencePlace,
-  Since,
-  TriageEntry,
-  TriageList,
 } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
 import { BIN, call, DEFAULT_URL, type Io } from './client.ts'
@@ -84,27 +76,9 @@ commands:
   spawn requeue <key>
                   put a failed spawn back in the queue with a fresh retry budget
   fleet [--refresh]
-                  the fleet read model (plain: asks first, then the health line, then the repos with a running plan, then the presence, the digest and the reaper; --format json: all of it, the digest's spend per day under "digest").
+                  the fleet read model (plain: asks first, then the health line, then the open Issues, then the repos with their sessions, then the digest; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
-  fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]
-                  do something with an ask (token only): resolve (a queue request, marked done), deny (a queue request, or a decision answered with a
-                  denial), later (hide it until --until, default 24 h), archive_plan (a worker moves a done plan to docs/waves/archive/), hand_off (a
-                  worker starts on it; its end comes back as a new ask). Only what the ask's \`actions\` offer; a repeat answers with the first
-  fleet triage [--undo <id>]
-                  what the triage did on its own (a stale plan marked, an ask folded under a newer one, an expired note dismissed), newest first;
-                  --undo takes one back. It never runs a command and never denies
-  fleet presence <place> <act> [--until <iso>]
-                  one act of a person (token only). place: desk|phone. act: focus, looked, board_click, unlock, memo, foreground, caught_up
-                  (memo and foreground are the phone's). caught_up needs --until, the until of the reading that was seen, and no other act takes
-                  one. The desk is present 45 min after its last act, the phone 10 min; neither is away
-  fleet since [--t <iso>]
-                  what happened since --t (default: the cursor; at most 7 days back; a later or malformed --t is exit 2), grouped: Needs you,
-                  Shipped, Went wrong then recovered, Handled for you, Still running, Spend, under the headline paragraph (ready, pending,
-                  failed or none). Only the default reading asks for a headline; --t shows one already made, or none
-  fleet seen --until <iso> [--place desk|phone]
-                  caught up (default desk) on every surface: the owner-wide cursor goes to --until, the until on the SINCE line (and in json) of the
-                  reading that was seen (never past where the model was built); what landed after it is in the next window
   status          one screen: what needs a look, the open Issues (state, repo, lead, phase, what it waits for, evidence
                   missing, open questions), sessions by state (walled, blocked, stuck first), the queue with its hold
                   reasons, accounts with their readings, notes not yet delivered
@@ -219,11 +193,7 @@ commands:
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
 --pending       notify list: only what is not sent
---undo <id>     fleet triage: take an automatic decision back
---t <iso>        fleet since: the window's start
 --since <iso>    issue facts: only Issues filed at or after it
---until <iso>    fleet seen (required), fleet presence caught_up: the until of the reading that was seen (fleet since prints it)
---place <place> fleet seen, fleet act: desk (default) or phone
 --phase, --note, --until, --why, --summary, --commit, --document, --evidence, --reason, --question, --option, --default, --expires  issue <verb>
 --kind, --link, --file, --stdin  issue evidence
 --attempt <n>    issue resume: which attempt (default: the latest)
@@ -401,7 +371,7 @@ export function statusScreen(s: Status): string {
   ].join('\n')
 }
 
-/** The fleet on one screen: the asks, oldest first, then each repo with a running plan and its live sessions. */
+/** The fleet on one screen: the asks, oldest first, the health line, the open Issues, then each repo with its live sessions. */
 export function fleetScreen(f: Fleet): string {
   const out: string[] = []
   const s = f.summary
@@ -411,34 +381,28 @@ export function fleetScreen(f: Fleet): string {
   out.push('ASKS')
   if (f.asks.length === 0) out.push('  -')
   for (const a of f.asks) {
-    out.push(
-      `  ${a.id}\t${a.kind}\t${a.tier}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.short ?? a.text, 100)}`,
-    )
-    if (a.suggestion) {
-      out.push(`    suggest ${a.suggestion.verb} (${a.suggestion.confidence})\t${oneLine(a.suggestion.evidence, 160)}`)
-    }
-    if (a.actions.length > 0) out.push(`    actions ${a.actions.map((x) => x.intent).join(' ')}`)
+    out.push(`  ${a.id}\t${a.kind}\t${a.repo?.split('/').at(-1) ?? '-'}\t${a.at}\t${oneLine(a.short ?? a.text, 100)}`)
   }
   out.push('HEALTH')
   if (f.health.length === 0) out.push('  -')
   for (const h of f.health) {
     out.push(`  ${h.id}\t${h.kind}\t${h.repo?.split('/').at(-1) ?? '-'}\t${h.since}\t${oneLine(h.text, 160)}`)
   }
-  out.push('REPOS')
-  const shown = f.repos.filter((r) => r.plan?.state === 'running' || r.morePlans.some((p) => p.state === 'running'))
-  if (shown.length === 0) out.push('  -')
-  for (const r of shown) {
-    const plan = [r.plan, ...r.morePlans].find((p) => p?.state === 'running')
-    const active = plan?.waves.find((w) => w.status === 'active')
-    const git = r.git ? `${r.git.branch ?? 'detached'}${r.git.dirty ? '*' : ''}` : '-'
+  out.push('ISSUES')
+  if (f.issues.length === 0) out.push('  -')
+  for (const i of f.issues) {
     out.push(
-      `  ${r.name}${r.visible ? ' (visible)' : ''}\t${git}\t${oneLine(plan?.short ?? plan?.title ?? '-', 50)}${active ? `\twave ${active.n}${(active.short ?? active.title) ? ` ${oneLine(active.short ?? active.title, 40)}` : ''}` : ''}`,
+      `  ${i.id}\t${i.state}\t${i.repo.split('/').at(-1) ?? '-'}\t${i.kind ?? '-'}\t${i.size ?? '-'}\t${i.lead ?? '-'}\t${oneLine(i.title, 80)}`,
     )
+  }
+  out.push('REPOS')
+  if (f.repos.length === 0) out.push('  -')
+  for (const r of f.repos) {
+    out.push(`  ${r.name}${r.visible ? ' (visible)' : ''}`)
     for (const x of r.sessions) {
       out.push(`    ${x.state}\t${x.id}\t${x.role ?? '-'}\t${oneLine(x.headline ?? x.title ?? '-', 60)}`)
     }
   }
-  if (f.presence) out.push(`PRESENCE\t${presenceLine(f.presence)}`)
   const d = f.digest
   const today = d.days[0]
   out.push(
@@ -446,77 +410,12 @@ export function fleetScreen(f: Fleet): string {
       ? `DIGEST\ton${d.pending ? ' (waiting for a run)' : ''}\t${today ? `${today.day}: ${today.calls} calls, ${today.failed} failed, $${today.costUsd.toFixed(4)}` : 'no call yet'}${d.lastError ? `\tlast pass failed: ${oneLine(d.lastError, 100)}` : ''}`
       : 'DIGEST\toff',
   )
-  const r = f.reaper
-  if (r.mode !== 'off') {
-    out.push(
-      `REAPER\t${r.mode}\t${r.closed.filter((c) => !c.dry).length} closed (24 h)\t${r.closed.filter((c) => c.dry).length} would close\t${r.kept.length} kept`,
-    )
-    for (const c of r.closed)
-      out.push(`  ${c.dry ? 'would close' : 'closed'}\t${c.session}\t${c.repo}\t${oneLine(c.evidence, 160)}`)
-    for (const k of r.kept) out.push(`  kept\t${k.session}\t${k.repo}\t${oneLine(k.why, 160)}`)
-  } else out.push('REAPER\toff')
   if (f.errors.length > 0) {
     out.push('ERRORS')
     for (const e of f.errors) out.push(`  ${oneLine(e, 200)}`)
   }
   return out.join('\n')
 }
-
-const presenceLine = (p: Presence): string =>
-  [
-    p.away ? 'away' : 'here',
-    `desk ${p.desk.present ? 'present' : 'absent'} ${cell(p.desk.at)}`,
-    `phone ${p.phone.present ? 'present' : 'absent'} ${cell(p.phone.at)}`,
-    `since ${cell(p.awaySince)}`,
-    `seen ${cell(p.seenAt)}`,
-  ].join('\t')
-
-/** The since reading on one screen: the headline, then each group with its lines and their sources. */
-export function sinceScreen(r: Since): string {
-  const out: string[] = [
-    `SINCE\t${r.t}\t${r.until}${r.clamped ? '\t(cut to 7 days)' : ''}`,
-    `HEADLINE\t${r.headline.state}${r.headline.text ? `\t${oneLine(r.headline.text, 600)}` : ''}`,
-  ]
-  if (r.incomplete.length > 0) out.push(`INCOMPLETE\tShipped may miss commits in: ${r.incomplete.join(', ')}`)
-  const group = (title: string, lines: string[]): void => {
-    out.push(`${title} (${lines.length})`)
-    for (const l of lines) out.push(`  ${l}`)
-  }
-  group(
-    'NEEDS YOU',
-    r.needsYou.map(
-      (n) =>
-        `${n.yours ? 'yours' : n.ask.tier}\t${n.ask.id}\t${n.ask.at}\t${oneLine(n.ask.short ?? n.ask.text, 100)}${n.ask.actions.length > 0 ? `\t[${n.ask.actions.map((x) => x.intent).join(' ')}]` : ''}`,
-    ),
-  )
-  const line = (l: { text: string; at: string | null; source: string; visible: boolean }): string =>
-    `${cell(l.at)}\t${oneLine(l.text, 120)}\t${l.source}${l.visible ? '\t(visible)' : ''}`
-  group('SHIPPED', r.shipped.map(line))
-  group('WENT WRONG, THEN RECOVERED', r.recovered.map(line))
-  group(
-    'HANDLED FOR YOU',
-    r.handled.map((h) => `${line(h)}${h.undoId === null ? '' : `\tundo ${h.undoId}`}`),
-  )
-  group(
-    'STILL RUNNING',
-    r.running.map(
-      (x) =>
-        `${x.id}\t${x.ranForMs === null ? '-' : `${Math.round(x.ranForMs / 60_000)} min`}\t${oneLine(x.headline ?? x.text, 80)}\t${x.source}${x.visible ? '\t(visible)' : ''}`,
-    ),
-  )
-  out.push(
-    `SPEND\tdigest $${r.spend.digestUsd.toFixed(4)}`,
-    ...r.spend.accounts.map(
-      (a) => `  ${a.account}\tweek ${cell(a.weeklyAtStart)} to ${cell(a.weeklyNow)}\t${a.source}`,
-    ),
-  )
-  return out.join('\n')
-}
-
-const triageLine = (t: TriageEntry) =>
-  [t.id, t.kind, t.at, t.undoneAt ? `undone ${t.undoneAt}` : '-', oneLine(t.what, 120), oneLine(t.evidence, 160)].join(
-    '\t',
-  )
 
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
@@ -674,10 +573,7 @@ interface Flags {
   expires?: string
   decision?: string
   pending?: boolean
-  undo?: string
-  t?: string
   since?: string
-  place?: string
 }
 
 /** `--facts @file` or `--facts -`: the text must be JSON, and the server keeps the size limit. */
@@ -915,111 +811,7 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         },
       )
     }
-    if (key === 'fleet act')
-      throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]')
-    if (words[1] === 'act') {
-      const [, , ask, intent] = words
-      if (!ask || !intent || words.length > 4)
-        throw usage('usage: fleet act <ask> <intent> [--note <text>] [--until <time>] [--place desk|phone]')
-      const parsed = ActIntent.safeParse(intent)
-      if (!parsed.success) throw usage(`intent is one of ${ActIntent.options.join(', ')}`)
-      const parsedPlace = flags.place === undefined ? undefined : PresencePlace.safeParse(flags.place)
-      if (parsedPlace && !parsedPlace.success) throw usage(`--place is one of ${PresencePlace.options.join(', ')}`)
-      const place = parsedPlace?.success ? parsedPlace.data : undefined
-      const { body } = await call(io, `/fleet/asks/${encodeURIComponent(ask)}/act`, {
-        method: 'POST',
-        auth: true,
-        timeoutMs: 60_000,
-        schema: ActResult,
-        body: {
-          intent: parsed.data,
-          ...(flags.note ? { note: flags.note } : {}),
-          ...(flags.until ? { until: flags.until } : {}),
-          ...(place ? { place } : {}),
-        },
-      })
-      return print(
-        body,
-        [
-          body.ask,
-          body.intent,
-          body.duplicate ? 'again' : 'done',
-          body.spawn ?? body.until ?? '-',
-          oneLine(body.detail, 200),
-        ].join('\t'),
-      )
-    }
-    if (words[1] === 'triage') {
-      if (words.length > 2) throw usage('usage: fleet triage [--undo <id>]')
-      if (flags.undo !== undefined) {
-        const id = Number(flags.undo)
-        if (!Number.isSafeInteger(id) || id <= 0) throw usage('--undo takes a triage entry id')
-        const { body } = await call(io, `/fleet/triage/${id}/undo`, { method: 'POST', auth: true, schema: TriageEntry })
-        return print(body, triageLine(body))
-      }
-      const { body } = await call(io, '/fleet/triage', { auth: true, schema: TriageList })
-      if (format === 'plain' && body.entries.length === 0) return
-      return print(body, body.entries.map(triageLine).join('\n'))
-    }
-    if (words[1] === 'presence') {
-      const [, , place, act] = words
-      const parsedPlace = PresencePlace.safeParse(place)
-      const parsedAct = PresenceAct.safeParse(act)
-      if (words.length !== 4 || !parsedPlace.success || !parsedAct.success) {
-        throw usage(`usage: fleet presence <${PresencePlace.options.join('|')}> <${PresenceAct.options.join('|')}>`)
-      }
-      if (parsedPlace.data === 'desk' && (parsedAct.data === 'memo' || parsedAct.data === 'foreground'))
-        throw usage('memo and foreground are the phone only')
-      if ((parsedAct.data === 'caught_up') !== (flags.until !== undefined))
-        throw usage(
-          'caught_up takes --until <the until of the reading that was seen> (fleet since prints it), and no other act does',
-        )
-      if (flags.until !== undefined && !IsoTime.safeParse(flags.until).success)
-        throw usage('--until takes an ISO 8601 time with a Z or an offset')
-      const { body } = await call(io, '/fleet/presence', {
-        method: 'POST',
-        auth: true,
-        schema: Presence,
-        body: { place: parsedPlace.data, act: parsedAct.data, ...(flags.until ? { until: flags.until } : {}) },
-      })
-      return print(body, presenceLine(body))
-    }
-    if (words[1] === 'seen') {
-      if (words.length > 2) throw usage('usage: fleet seen --until <iso> [--place desk|phone]')
-      // The owner passes on the until of the reading that was seen (fleet since prints it): a default would be a build never shown.
-      if (flags.until === undefined || !IsoTime.safeParse(flags.until).success)
-        throw usage(
-          'usage: fleet seen --until <iso> [--place desk|phone]: --until is the until `fleet since` printed (ISO 8601 with a Z or an offset)',
-        )
-      const place = PresencePlace.safeParse(flags.place ?? 'desk')
-      if (!place.success) throw usage(`--place is one of ${PresencePlace.options.join(', ')}`)
-      const { body } = await call(io, '/fleet/presence', {
-        method: 'POST',
-        auth: true,
-        schema: Presence,
-        body: { place: place.data, act: 'caught_up', until: flags.until },
-      })
-      return print(body, presenceLine(body))
-    }
-    if (words[1] === 'since') {
-      if (words.length > 2) throw usage('usage: fleet since [--t <iso>]')
-      if (flags.t !== undefined && !IsoTime.safeParse(flags.t).success) {
-        throw usage('--t takes an ISO 8601 time with a Z or an offset, like 2026-11-02T07:30:00Z')
-      }
-      const { body } = await call(
-        io,
-        `/fleet/since${flags.t === undefined ? '' : `?t=${encodeURIComponent(flags.t)}`}`,
-        {
-          auth: true,
-          schema: Since,
-        },
-      )
-      return print(body, sinceScreen(body))
-    }
-    if (words.length > 1)
-      throw usage(
-        'usage: fleet [--refresh] | fleet act <ask> <intent> | fleet triage [--undo <id>] | fleet presence <place> <act> | fleet since [--t <iso>] | fleet seen --until <iso>',
-      )
+    if (words.length > 1) throw usage('usage: fleet [--refresh]')
     const refresh = flags.refresh === true
     const { body } = await call(io, refresh ? '/fleet/refresh' : '/fleet', {
       method: refresh ? 'POST' : 'GET',
@@ -1514,9 +1306,6 @@ const OPTIONS = {
   expires: { type: 'string' },
   decision: { type: 'string' },
   pending: { type: 'boolean' },
-  undo: { type: 'string' },
-  t: { type: 'string' },
   since: { type: 'string' },
-  place: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const

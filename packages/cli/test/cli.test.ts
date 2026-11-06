@@ -593,6 +593,23 @@ describe('usage errors', () => {
       expect(r.stdout).toContain('usage: factory')
     }
   })
+
+  test('the help lists no fleet verb but `fleet [--refresh]`, and the removed ones are usage errors', async () => {
+    const help = (await factory(['--help'])).stdout
+    expect(help).toContain('fleet [--refresh]')
+    for (const verb of ['fleet act', 'fleet triage', 'fleet presence', 'fleet since', 'fleet seen'])
+      expect(help).not.toContain(verb)
+    for (const args of [
+      ['fleet', 'act', 'queue:x', 'resolve'],
+      ['fleet', 'triage'],
+      ['fleet', 'presence', 'desk', 'focus'],
+      ['fleet', 'since'],
+      ['fleet', 'seen', '--until', '2026-11-01T00:00:00Z'],
+    ]) {
+      const r = await factory(args)
+      expect(r.code).toBe(EXIT.usage)
+    }
+  })
 })
 
 describe('factory session', () => {

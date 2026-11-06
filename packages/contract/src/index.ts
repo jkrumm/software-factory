@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FleetBody, Presence } from './fleet.ts'
+import { FleetBody } from './fleet.ts'
 import { StatusIssue } from './issues.ts'
 import { Effort, RoleName, Tier } from './roles.ts'
 
@@ -294,7 +294,5 @@ export const Fleet = FleetBody.extend({
     effective: QueueState,
     spawns: z.array(Spawn),
   }),
-  /** where the owner is, derived by the clock when the model is read (FV Wave 4); the stored snapshot has none */
-  presence: Presence.optional(),
 })
 export type Fleet = z.infer<typeof Fleet>

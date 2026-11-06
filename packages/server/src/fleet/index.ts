@@ -1,41 +1,15 @@
-import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import {
-  type Fleet,
-  type FleetGit,
-  NO_DIGEST,
-  type ReaperMode,
-  type Session,
-  type Status,
-} from '@software-factory/contract'
+import { realpath, stat } from 'node:fs/promises'
+import { type Fleet, type FleetIssue, NO_DIGEST, type Session, type Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
+import { leadKey } from '../issues/names.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import { type Digest, DigestView } from './digest.ts'
 import { applyDigest, scopeOf } from './digest-model.ts'
-import { GitReader } from './git.ts'
 import { Places } from './place.ts'
-import { Reaper } from './reaper.ts'
-import { type Probes, ProbeRunner } from './probes.ts'
-import { Triage } from './triage.ts'
-import { readSeen } from './triage-store.ts'
-import {
-  assemble,
-  type DecisionRow,
-  fingerprintOf,
-  type MergedSession,
-  type PlanFile,
-  type RepoFacts,
-} from './model.ts'
-import { MAX_PLAN_BYTES, namedPlanPaths, namedWave } from './plans.ts'
-import {
-  askSourcesAnswered,
-  type HcCloser,
-  type HcLister,
-  type HcTerminal,
-  type QueueReader,
-  type QueueRequest,
-} from './sources.ts'
+import { assemble, type DecisionRow, fingerprintOf, type MergedSession } from './model.ts'
+import { askSourcesAnswered, type HcLister, type HcTerminal, type QueueReader, type QueueRequest } from './sources.ts'
 import { readSnapshot, writeSnapshot } from './store.ts'
 
 export { AskHumanQueue, HcTerminals } from './sources.ts'
@@ -43,11 +17,9 @@ export { readSnapshot } from './store.ts'
 
 /** A build at most this often from the tick; `POST /fleet/refresh` builds at once. */
 export const FLEET_INTERVAL_MS = 30_000
-const CONCURRENCY = 8
 const MAX_DECISIONS = 500
 /** the asks whose time is the first build that saw them (the others carry their own) */
-const TIMED_BY_BUILDER = new Set<string>(['hc', 'wait', 'factory', 'handoff'])
-const PLAN = 'docs/waves/PLAN.md'
+const TIMED_BY_BUILDER = new Set<string>(['hc', 'wait', 'factory'])
 
 export interface FleetDeps {
   sql: SQL
@@ -55,46 +27,31 @@ export interface FleetDeps {
   /** `FACTORY_REPO_ROOTS` and `FACTORY_VISIBLE_ROOTS` as configured */
   roots: readonly string[]
   visibleRoots: readonly string[]
-  /** where `~/` in a plan path a spawn names is */
   home: string
   hc: HcLister
   queue: QueueReader
-  git?: GitReader
   /** the digest (`digest.ts`): its cache is read into every build and a pass is kicked after it; without it the model has no digest text */
   digest?: Digest
   alertLeads?: boolean
-  /** the reaper (`FACTORY_REAPER`): without it, or `off`, it reads nothing; `dry` lists, `on` closes through `closer` */
-  reaper?: { mode: ReaperMode; closer?: HcCloser; actBudgetMs?: number }
   intervalMs?: number
-  /** the triage's probes (`probes.ts`): the machines they may look at (`FACTORY_PROBE_HOSTS`: name → ssh alias or `local`), the one a queue request's command runs on, and (tests) the probes themselves */
-  triage?: { hosts?: ReadonlyMap<string, string>; queueMachine?: string; probes?: Probes }
 }
 
 interface DbPart {
   status: Status
   /** what the read left out, said in `errors` */
   notes: string[]
-  spawns: Map<string, { repo: string; prompt: string }>
+  spawns: Map<string, { repo: string }>
   decisions: DecisionRow[]
+  issues: FleetIssue[]
 }
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-const isFile = (path: string) =>
-  stat(path).then(
-    (s) => s.isFile(),
-    () => false,
-  )
 const exists = (path: string) =>
   stat(path).then(
     () => true,
     () => false,
   )
-const inside = (path: string, roots: readonly string[]) => roots.some((root) => path.startsWith(`${root}/`))
-
-/** `<repo>/.claude/worktrees/<x>/…` is the worktree of `<repo>`: its plan is the repo's. */
-const mainCheckout = (path: string): string => path.replace(/\/\.claude\/worktrees\/[^/]+(?:\/.*)?$/, '')
-
 /**
  * Builds the fleet read model off the tick and keeps the newest in one row (`factory.fleet_snapshot`), `NOTIFY fleet` when it
  * changes. `kick` is the tick's call: a build starts behind its back when one is due and none is running; `refreshNow` builds
@@ -114,40 +71,16 @@ export class FleetBuilder {
   private healthSeen = new Map<string, string>()
   /** when a terminal the factory does not know was first seen in its state: hc's own time moves with every message */
   private since = new Map<string, string>()
-  private readonly git: GitReader
-  private readonly triage: Triage
-  private readonly reaper: Reaper
   /** the sources that answered with an older reading in this build (`fallback`) */
   private fell = new Set<string>()
-  /** the reaper's closes after a snapshot: one at a time, off the build */
-  private acting: Promise<void> | undefined
   private readonly last: {
     db?: DbPart
     hc?: HcTerminal[]
     queue?: QueueRequest[]
-    git: Map<string, FleetGit>
-    plans: Map<string, PlanFile>
     digest?: DigestView
-  } = { git: new Map(), plans: new Map() }
+  } = {}
 
-  constructor(private readonly deps: FleetDeps) {
-    this.git = deps.git ?? new GitReader()
-    const hosts = deps.triage?.hosts ?? new Map<string, string>()
-    this.reaper = new Reaper({
-      sql: deps.sql,
-      now: deps.now,
-      mode: deps.reaper?.mode ?? 'off',
-      git: this.git,
-      closer: deps.reaper?.closer,
-      actBudgetMs: deps.reaper?.actBudgetMs,
-    })
-    this.triage = new Triage({
-      sql: deps.sql,
-      probes: deps.triage?.probes ?? new ProbeRunner({ hosts, home: deps.home, now: deps.now, git: this.git }),
-      machines: [...hosts.keys()],
-      queueMachine: deps.triage?.queueMachine,
-    })
-  }
+  constructor(private readonly deps: FleetDeps) {}
 
   /** The tick's call. Never throws and never waits for the build. */
   kick(): void {
@@ -180,7 +113,7 @@ export class FleetBuilder {
       timer = setTimeout(resolve, timeoutMs)
     })
     try {
-      await Promise.race([Promise.all([this.chain, this.deps.digest?.settled(), this.acting]), bound])
+      await Promise.race([Promise.all([this.chain, this.deps.digest?.settled()]), bound])
     } finally {
       clearTimeout(timer)
     }
@@ -202,16 +135,9 @@ export class FleetBuilder {
     if (!this.seeded) {
       try {
         const stored = await readSnapshot(sql)
-        // The table has every ask the builds listed, also the ones the triage folded or the owner snoozed (the snapshot has not): a
-        // restart must not make an old ask look new, or a fold would be decided the other way round. Read before `seeded` is set, so a
-        // read that fails is tried again.
-        const seen = await readSeen(sql)
         this.seeded = true
         for (const h of stored?.health ?? []) this.healthSeen.set(h.id, h.since)
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
-        for (const [id, at] of seen) if (TIMED_BY_BUILDER.has(id.slice(0, id.indexOf(':')))) this.firstSeen.set(id, at)
-        // What a build whose git times out falls back to: the previous build's repo state, also after a restart.
-        for (const r of stored?.repos ?? []) if (r.git) this.last.git.set(r.space, r.git)
         for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
           if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
         }
@@ -286,50 +212,15 @@ export class FleetBuilder {
       knownSince: this.since,
       real: (path) => real.get(path) ?? path,
     })
-    // The reaper's judgement (git and the database, no port); its closes run after the snapshot is stored.
-    const reaped = await this.reaper.look({
-      sessions: merged,
-      roots: ordinaryRoots.filter((root) => !places.isVisible(root)),
-      places,
-      // From what really fell back to an older answer, not from the error lines: the decisions cap is a note, not a stale read.
-      complete: !this.fell.has('hc') && !this.fell.has('database'),
-    })
-    errors.push(...reaped.errors)
     const sessions = merged
-    const planOf = new Map<string, { plan: string | null; wave: number | null }>()
     const repoPaths = new Set<string>()
-    for (const m of sessions) if (m.repo) repoPaths.add(m.repo)
-    for (const root of roots) {
-      try {
-        for (const dir of await repoDirs(root)) {
-          if (await isFile(join(dir, PLAN))) repoPaths.add(dir)
-        }
-      } catch (error) {
-        // A root that cannot be listed is said, and the repos the last build knew under it are tried again (they may still be reachable).
-        errors.push(`repos ${root}: ${message(error)}`)
-        for (const known of this.last.git.keys()) if (known.startsWith(`${root}/`)) repoPaths.add(known)
-      }
+    for (const m of merged) if (m.repo) repoPaths.add(m.repo)
+    for (const issue of db.issues) {
+      const repo = enclosingRepo(await realPath(issue.repo), roots)
+      if (repo) repoPaths.add(repo)
     }
-
-    // Each session's plan file; a plan in another repo of the roots (a spawn names it) puts that repo on the list too.
-    for (const m of sessions) {
-      const plan = await this.sessionPlan(m, roots)
-      planOf.set(m.session.id, { plan, wave: namedWave(m.prompt ?? '') })
-      const home = plan ? enclosingRepo(plan, roots) : undefined
-      if (home) repoPaths.add(home)
-    }
-
-    // Each repo's errors are kept with it and merged in path order, so the reads running side by side cannot reorder them.
-    const facts: RepoFacts[] = []
-    const list = [...repoPaths].sort()
-    for (let i = 0; i < list.length; i += CONCURRENCY) {
-      const read = await Promise.all(list.slice(i, i + CONCURRENCY).map((path) => this.readRepo(path, roots, planOf)))
-      for (const found of read) {
-        if (!found) continue
-        facts.push(found.facts)
-        errors.push(...found.errors)
-      }
-    }
+    const repos: string[] = []
+    for (const path of [...repoPaths].sort()) if (await exists(join(path, '.git'))) repos.push(path)
 
     const expired = new Map<string, string>()
     const base = assemble({
@@ -338,8 +229,8 @@ export class FleetBuilder {
       isVisible: (path) => places.isVisible(path),
       status: db.status,
       sessions,
-      sessionPlans: planOf,
-      repos: facts,
+      repos,
+      issues: db.issues,
       decisions: db.decisions,
       queue,
       firstSeen: this.firstSeen,
@@ -347,7 +238,7 @@ export class FleetBuilder {
       expired,
       errors,
     })
-    // The digest's text comes from its cache, for the repos and sessions it may read (IuRoot's stay as the plan wrote them).
+    // The digest's text comes from its cache, for the repos and sessions it may read (IuRoot's get none).
     const scope = scopeOf({
       model: base,
       merged: sessions,
@@ -355,44 +246,16 @@ export class FleetBuilder {
       isVisible: (path) => places.isVisible(path),
     })
     const complete = askSourcesAnswered(errors)
-    const digested = applyDigest(base, view, scope, now)
-    // The triage: tiers, suggestions with evidence, actions, and the bookkeeping that needs no one. Its failure leaves the asks as they are.
-    let model: Omit<Fleet, 'fingerprint'> = digested
-    const failures: string[] = []
-    let timed = digested.asks
-    try {
-      const triaged = await this.triage.apply({
-        model: digested,
-        now,
-        queue,
-        firstSeen: this.firstSeen,
-        expired,
-        roots,
-        complete,
-      })
-      model = triaged.model
-      timed = triaged.timed
-    } catch (error) {
-      console.error('fleet triage failed', message(error))
-      // What the owner closed or snoozed stays gone; the rest is the asks as the sources raised them.
-      const hidden = await this.triage.hide(digested, now).catch((hideError: unknown) => {
-        console.error('fleet triage fallback failed; closed and snoozed asks are listed again', hideError)
-        failures.push(`triage fallback: ${message(hideError)}: what the owner closed or snoozed is listed again`)
-        return digested
-      })
-      model = { ...hidden, errors: [...hidden.errors, `triage: ${message(error)}`, ...failures] }
-    }
-    model = { ...model, reaper: reaped.reaper }
+    const model = applyDigest(base, view, scope, now)
     // What the snapshot will hold, so the answer to a refresh, the fingerprint and `GET /fleet` agree: no NUL (Postgres refuses it in jsonb).
     const clean: Omit<Fleet, 'fingerprint'> = JSON.parse(
       JSON.stringify(model, (_key, value: unknown) => (typeof value === 'string' ? value.replaceAll('\0', '') : value)),
     )
     const fleet: Fleet = { ...clean, fingerprint: fingerprintOf(clean) }
-    // Every ask the sources raised, also one the triage folded or the owner snoozed: it keeps its time for when it comes back.
     // A build that could not read a source leaves what it knew of that source's asks (they did not leave, they were not listed).
     // An expired factory ask keeps its time too, or it would come back as new at the next build.
     const listed = [
-      ...timed.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const),
+      ...model.asks.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const),
       ...expired,
     ]
     this.firstSeen = complete ? new Map(listed) : new Map([...this.firstSeen, ...listed])
@@ -403,9 +266,8 @@ export class FleetBuilder {
       ),
     )
     await writeSnapshot(sql, fleet)
-    this.startAct(reaped.plan)
-    // A source the feed is made from that failed makes it partial (the queue and git are not in it).
-    digest?.kick({ ...scope.feed, complete: !errors.some((e) => /^(hc|database|repos |plan )/.test(e)) })
+    // A source the feed is made from that failed makes it partial (the queue is not in it).
+    digest?.kick({ ...scope.feed, complete: !errors.some((e) => /^(hc|database)/.test(e)) })
     return fleet
   }
 
@@ -428,130 +290,49 @@ export class FleetBuilder {
     }
   }
 
-  /**
-   * The reaper's closes, behind the build that stored the snapshot: a build never waits for them. One pass at a time; a plan made while
-   * one is still running is dropped (the next build makes it again). A terminal that went is dropped from the hc fallback too.
-   */
-  private startAct(plan: Parameters<Reaper['act']>[0]): void {
-    if (this.acting || (!plan.reconcile && plan.close.length === 0)) return
-    this.acting = this.reaper
-      .act(plan)
-      .then((gone) => {
-        if (gone.size > 0 && this.last.hc) this.last.hc = this.last.hc.filter((t) => !gone.has(t.address))
-      })
-      .catch((error: unknown) => console.error('fleet reaper failed', message(error)))
-      .finally(() => {
-        this.acting = undefined
-      })
-  }
-
   private async readDb(now: Date): Promise<DbPart> {
     const { sql } = this.deps
     const status = await buildStatus(sql, now, { alertLeads: this.deps.alertLeads ?? false })
-    const spawnRows: { key: string; repo: string; prompt: string }[] = await sql`
-      SELECT key, repo, left(prompt, 65536) AS prompt FROM factory.spawns WHERE status = 'started'`
+    const spawnRows: { key: string; repo: string }[] = await sql`
+      SELECT key, repo FROM factory.spawns WHERE status = 'started'`
     const decisionRows: { key: string; repo: string; question: string; created_at: Date }[] = await sql`
       SELECT d.key, i.repo, d.question, d.created_at FROM factory.decisions d
       JOIN factory.issues i ON i.id = d.issue_id
       WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id LIMIT ${MAX_DECISIONS + 1}`
+    const issueRows: {
+      id: number
+      title: string
+      repo: string
+      state: string
+      kind: string | null
+      size: string | null
+      attempt: number
+      updated_at: Date
+    }[] = await sql`
+      SELECT id, title, repo, state, kind, size, attempt, updated_at FROM factory.issues
+      WHERE state <> 'closed' ORDER BY id`
+    const live = new Set(status.sessions.filter((x) => x.state !== 'dead').map((x) => x.id))
     return {
       status,
+      issues: issueRows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        repo: r.repo,
+        state: r.state,
+        kind: r.kind,
+        size: r.size,
+        lead: live.has(leadKey(r.id, r.attempt)) ? leadKey(r.id, r.attempt) : null,
+        updatedAt: r.updated_at.toISOString(),
+      })),
       notes:
         decisionRows.length > MAX_DECISIONS
           ? [`database: more than ${MAX_DECISIONS} open decisions, the rest are not listed`]
           : [],
-      spawns: new Map(spawnRows.map((r) => [r.key, { repo: r.repo, prompt: r.prompt }])),
+      spawns: new Map(spawnRows.map((r) => [r.key, { repo: r.repo }])),
       decisions: decisionRows
         .slice(0, MAX_DECISIONS)
         .map((r) => ({ key: r.key, repo: r.repo, question: r.question, createdAt: r.created_at })),
     }
-  }
-
-  /**
-   * The plan file a session works: the one its start text names (a `docs/waves/*.md` path, the most named first), else the
-   * `docs/waves/PLAN.md` found walking up from its directory to its repo (a plan deeper in the tree is the nearest), else the
-   * repo's. Only a regular file under a root, of a size a plan has, counts.
-   */
-  private async sessionPlan(m: MergedSession, roots: readonly string[]): Promise<string | null> {
-    const repo = m.repo
-    const bases = [m.spawnRepo, repo, m.cwd, ...roots].filter((b): b is string => Boolean(b)).map(mainCheckout)
-    for (const named of namedPlanPaths(m.prompt ?? '').slice(0, 5)) {
-      const candidates = named.startsWith('~/')
-        ? [join(this.deps.home, named.slice(2))]
-        : named.startsWith('/')
-          ? [named]
-          : bases.map((base) => join(base, named))
-      for (const candidate of candidates) {
-        const real = await usablePlan(candidate, roots)
-        if (real) return real
-      }
-    }
-    if (!repo) return null
-    let dir = m.cwd ? mainCheckout(m.cwd) : repo
-    if (!dir.startsWith(`${repo}/`) && dir !== repo) dir = repo
-    for (;;) {
-      const found = await usablePlan(join(dir, PLAN), roots)
-      if (found) return found
-      if (dir === repo) return null
-      dir = dirname(dir)
-    }
-  }
-
-  private async readRepo(
-    path: string,
-    roots: readonly string[],
-    planOf: ReadonlyMap<string, { plan: string | null }>,
-  ): Promise<{ facts: RepoFacts; errors: string[] } | undefined> {
-    const errors: string[] = []
-    if (!(await exists(join(path, '.git')))) return undefined
-    const name = path.split('/').at(-1) ?? path
-    let git: FleetGit | null = null
-    try {
-      const { recentError, ...state } = await this.git.state(path)
-      git = state
-      if (recentError !== undefined) {
-        // The commits could not be read: the previous build's stand in, and the since reading lists the repo as incomplete.
-        errors.push(`git ${name}: ${recentError}`)
-        git = { ...state, recent: this.last.git.get(path)?.recent ?? [] }
-      }
-      this.last.git.set(path, git)
-    } catch (error) {
-      errors.push(`git ${name}: ${message(error)}`)
-      git = this.last.git.get(path) ?? null
-    }
-
-    const rootPlan = (await usablePlan(join(path, PLAN), roots)) ?? null
-    const paths = new Set<string>(rootPlan ? [rootPlan] : [])
-    for (const { plan } of planOf.values()) if (plan && enclosingRepo(plan, roots) === path) paths.add(plan)
-
-    const plans: PlanFile[] = []
-    for (const file of [...paths].sort()) {
-      try {
-        const text = await Bun.file(file).text()
-        const read = { path: file, text, touched: await this.git.touched(file) }
-        this.last.plans.set(file, read)
-        plans.push(read)
-      } catch (error) {
-        errors.push(`plan ${name}/${file.slice(path.length + 1)}: ${message(error)}`)
-        const before = this.last.plans.get(file)
-        if (before) plans.push(before)
-      }
-    }
-    return { facts: { path, git, plans, rootPlan }, errors }
-  }
-}
-
-/** The real path of a plan file if it is a regular file under a root and no larger than a plan is; else undefined. */
-async function usablePlan(path: string, roots: readonly string[]): Promise<string | undefined> {
-  try {
-    // The directory's real path, not the file's: a plan that cannot be read still is one (and reading it fails with a line in `errors`).
-    const link = await lstat(path)
-    const real = link.isSymbolicLink() ? await realpath(path) : join(await realpath(dirname(path)), basename(path))
-    const info = await stat(real)
-    if (!info.isFile() || info.size > MAX_PLAN_BYTES || !real.endsWith('.md')) return undefined
-    return inside(real, roots) ? real : undefined
-  } catch {
-    return undefined
   }
 }
 
@@ -580,25 +361,13 @@ async function realRoots(roots: readonly string[]): Promise<string[]> {
   return real.filter((root): root is string => root !== undefined)
 }
 
-/** The git repos directly under a root: `.git` is a directory, or a file for a worktree. */
-async function repoDirs(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true })
-  const found: string[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-    const path = join(root, entry.name)
-    if (await exists(join(path, '.git'))) found.push(path)
-  }
-  return found
-}
-
 /** hc's word for a state, for a terminal the factory has no session for. */
 const stateOfHc = (status: string | null): 'working' | 'blocked' | 'idle' =>
   status === 'working' ? 'working' : status === 'blocked' ? 'blocked' : 'idle'
 
 export interface MergeInput {
   sessions: readonly Session[]
-  spawns: ReadonlyMap<string, { repo: string; prompt: string }>
+  spawns: ReadonlyMap<string, { repo: string }>
   terminals: readonly HcTerminal[]
   /** real paths */
   roots: readonly string[]
@@ -650,7 +419,6 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
         lastActivityAt: times.sort().at(-1) ?? null,
       },
       repo: place.repo,
-      prompt: spawn?.prompt ?? term?.prompt ?? null,
       spawnRepo: spawn ? real(spawn.repo) : null,
       cwd: cwd ? real(cwd) : null,
       hc: term,
@@ -680,7 +448,6 @@ export function mergeSessions(input: MergeInput): MergedSession[] {
         lastActivityAt: t.statusAt,
       },
       repo: place.repo,
-      prompt: t.prompt,
       spawnRepo: null,
       cwd: place.where,
       hc: t,

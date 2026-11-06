@@ -1,11 +1,12 @@
 #!/bin/bash
-# Sourced by launch.sh: the factory's own settings that are not secrets and not in the repo (FACTORY_PROBE_HOSTS names machines).
+# Sourced by launch.sh: the factory's own settings that are not secrets and not in the repo (FACTORY_PROBE_HOSTS and FACTORY_REAPER are accepted and ignored).
 # ~/.config/factory/env (FACTORY_ENV_FILE) when it exists: KEY=VALUE lines only (blank lines and # comments allowed), the file mode
 # 0600 and owned by the user, and only the keys below. Nothing in it is evaluated: a line is split at the first = and exported as it
 # is. The whole file is checked before anything is exported. A wrong mode or owner, a line that is not KEY=VALUE, a key that is not
 # listed (a secret, PATH, the port, a program the server would run, a typo) or a symlink refuses the start (exit 78): a setting that is silently ignored is worse than
 # a launch that says why it will not run. Secrets stay in .env.tpl. Read at launch only: an edit takes a LaunchAgent restart.
 
+# FACTORY_PROBE_HOSTS and FACTORY_REAPER stay listed though the server no longer reads them: an existing env file that sets them must still launch.
 EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_ALERT_LEADS FACTORY_NOTIFY_TARGET FACTORY_DIGEST_AT FACTORY_DIGEST_TZ FACTORY_REAPER FACTORY_REVIEW_SESSIONS FACTORY_REVIEW_DEEP_CAP FACTORY_REVIEW_IDLE_MS FACTORY_LEADS_PER_ACCOUNT "
 
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
