@@ -294,3 +294,38 @@ describe('a line about something finished ends 72 h after it finished', () => {
     expect(lines).toContain(`Issue ${silent}: no hook event for 6000 min`)
   })
 })
+
+describe('a decision that holds the repo', () => {
+  async function claim(id: number, heldAt: Date | null, queuedAt: Date): Promise<void> {
+    await sql()`
+      INSERT INTO factory.claims (key, issue_id, urgent, queued_at, held_at)
+      VALUES ('repo:iris', ${id}, false, ${queuedAt}, ${heldAt})`
+  }
+
+  test('one line once another Issue has been queued behind it for 15 min, naming the first and counting the rest', async () => {
+    const holder = await issue('waiting', { reason: 'decision' })
+    await claim(holder, ago(40 * MIN), ago(40 * MIN))
+    const first = await issue('queued')
+    const second = await issue('queued')
+    await claim(first, null, ago(16 * MIN))
+    await claim(second, null, ago(15 * MIN))
+    expect(await healthLines(sql(), clock.now())).toEqual([
+      `Issue ${holder} waits on the owner's decision and holds iris for 40 min: Issue ${first} (and 1 more) queued behind it`,
+    ])
+  })
+
+  test('no line before 15 min, for one that is not waiting on a decision, or when nothing is queued', async () => {
+    const holder = await issue('waiting', { reason: 'decision' })
+    await claim(holder, ago(40 * MIN), ago(40 * MIN))
+    const young = await issue('queued')
+    await claim(young, null, ago(14 * MIN))
+    expect(await healthLines(sql(), clock.now())).toEqual([])
+
+    await sql()`UPDATE factory.claims SET queued_at = ${ago(20 * MIN)} WHERE issue_id = ${young}`
+    await sql()`UPDATE factory.issues SET reason = 'wait' WHERE id = ${holder}`
+    expect(await healthLines(sql(), clock.now())).toEqual([])
+    await sql()`UPDATE factory.issues SET reason = 'decision' WHERE id = ${holder}`
+    await sql()`UPDATE factory.issues SET state = 'working' WHERE id = ${young}`
+    expect(await healthLines(sql(), clock.now())).toEqual([])
+  })
+})

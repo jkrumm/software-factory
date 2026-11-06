@@ -11,6 +11,7 @@ import type {
   Status,
 } from '@software-factory/contract'
 import { healthKind } from '../health.ts'
+import { isLeadSession } from '../issues/names.ts'
 import { BLOCKED_AFTER_MS } from '../rules.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import type { HcTerminal, QueueRequest } from './sources.ts'
@@ -109,7 +110,10 @@ function subjectKey(line: string): string {
 
 /** The session or spawn or Issue an attention line names, for the repo and the session of its ask. */
 function lineSubject(line: string): { session?: string; spawn?: string; issue?: number } {
-  const session = /^(?:blocked|stuck|walled) (\S+)/.exec(line) ?? /^note \S+ to (\S+)/.exec(line)
+  const session =
+    /^(?:blocked|stuck|walled) (\S+)/.exec(line) ??
+    /^note \S+ to (\S+)/.exec(line) ??
+    /^(lead-\d+-\d+) waits at a permission prompt/.exec(line)
   if (session?.[1]) return { session: session[1].replace(/:$/, '') }
   const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn?.[1]) return { spawn: spawn[1] }
@@ -189,7 +193,8 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
   for (const m of input.sessions) {
     const { id, wait, since } = m.session
     const repo = m.repo ?? null
-    if (m.hc?.status === 'blocked') {
+    // An Issue lead at a permission prompt is no ask: it is the steward's cause, and a health line after 15 minutes (status.ts).
+    if (m.hc?.status === 'blocked' && !isLeadSession(id)) {
       // hc's own time for it (when its status last changed), else the first build that saw it; the debounce counts from there.
       const askId = `hc:${id}`
       const hcAt = m.hc.statusAt && !Number.isNaN(Date.parse(m.hc.statusAt)) ? m.hc.statusAt : null

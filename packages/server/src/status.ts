@@ -9,7 +9,8 @@ import { stewardStatus } from './issues/steward.ts'
 import { notificationAttention } from './notify/outbox.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
-import { BLOCKED_AFTER_MS } from './rules.ts'
+import { isLeadSession } from './issues/names.ts'
+import { BLOCKED_AFTER_MS, LEAD_PROMPT_LINE_MS } from './rules.ts'
 import { type Fact, loadSessions } from './sessions.ts'
 import { listSpawns } from './spawns.ts'
 
@@ -25,7 +26,17 @@ interface Lines {
   health: string[]
 }
 
-/** A blocked session is an ask, and shows only once it has waited the two minutes; stuck, walled, notes and failed spawns are health. */
+/** Agent text on the owner's terminal: one line, no control characters, cut short (as in `issues/attention.ts`). */
+const oneLine = (text: string, max = 160): string => {
+  // oxlint-disable-next-line no-control-regex -- exactly what is removed
+  const clean = text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim()
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean
+}
+
+/**
+ * A blocked session is an ask, and shows only once it has waited the two minutes; stuck, walled, notes and failed spawns are health.
+ * An Issue lead's permission prompt is no ask (the steward's cause, nothing is typed for it): after 15 minutes it is one health line.
+ */
 function attention(
   sessions: readonly { view: Session; facts: readonly Fact[] }[],
   notes: Status['notes'],
@@ -36,7 +47,15 @@ function attention(
   const lines: Lines = { asks: [], health: [] }
   for (const { view, facts } of sessions) {
     const age = minutesSince(view.since, now)
-    if (view.state === 'blocked' && now.getTime() - Date.parse(view.since ?? '') >= BLOCKED_AFTER_MS) {
+    const waited = now.getTime() - Date.parse(view.since ?? '')
+    if (view.state === 'blocked' && isLeadSession(view.id)) {
+      if (waited >= LEAD_PROMPT_LINE_MS) {
+        const command = facts.findLast((f) => f.kind === 'prompt_blocked')?.detail
+        lines.health.push(
+          `${view.id} waits at a permission prompt for ${age} min${command ? `: ${oneLine(command)}` : ''}`,
+        )
+      }
+    } else if (view.state === 'blocked' && waited >= BLOCKED_AFTER_MS) {
       const why = facts.findLast((f) => f.kind === 'prompt_blocked')?.detail
       lines.asks.push(`blocked ${view.id} for ${age} min${why ? `: ${why}` : ''}`)
     }

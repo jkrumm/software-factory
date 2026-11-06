@@ -435,6 +435,8 @@ export const DecisionEntry = z.object({
   askedAt: z.string(),
   answer: z.string().nullable(),
   answeredBy: z.string().nullable(),
+  /** where the steward's answer comes from (the ask judge's cited source); null for any other answer */
+  answerSource: z.string().nullable().default(null),
   answeredAt: z.string().nullable(),
 })
 export type DecisionEntry = z.infer<typeof DecisionEntry>

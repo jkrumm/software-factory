@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 
 const SCRIPT = join(import.meta.dir, '..', '..', '..', 'scripts', 'env-file.sh')
@@ -36,6 +45,24 @@ function loadPath(file: string) {
 }
 
 describe('scripts/env-file.sh', () => {
+  test('every key the server reads from the env file is a separate token of EF_ALLOWED', () => {
+    const line = readFileSync(SCRIPT, 'utf8')
+      .split('\n')
+      .find((l) => l.startsWith('EF_ALLOWED='))
+    const tokens = (line ?? '').replace(/^EF_ALLOWED="|"$/g, '').split(/\s+/)
+    for (const key of [
+      'FACTORY_VISIBLE_ROOTS',
+      'FACTORY_DIGEST_EVERY',
+      'FACTORY_ALERT_LEADS',
+      'FACTORY_ASK_JUDGE',
+      'FACTORY_NOTIFY_TARGET',
+      'FACTORY_DIGEST_AT',
+      'FACTORY_DIGEST_TZ',
+      'FACTORY_LEADS_PER_ACCOUNT',
+    ])
+      expect(tokens).toContain(key)
+  })
+
   test('no file is no settings', () => {
     expect(load(undefined).out).toBe('code=0 probe= every=')
   })

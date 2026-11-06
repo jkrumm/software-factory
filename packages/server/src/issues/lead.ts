@@ -239,6 +239,8 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
   switch (payload?.cause) {
     case 'answer': {
       const who = field('who')
+      // The steward's answer says where it comes from and that the owner can overrule it (`judge.ts` builds the sentence).
+      if (who === 'steward' && field('text')) return clip(`${head} ${field('text')}`)
       return clip(
         `${head} your question was answered${who && who !== 'owner' ? ` (${who})` : ''}: ${field('answer') ?? 'see the owner'}`,
       )

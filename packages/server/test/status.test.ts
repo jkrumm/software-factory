@@ -298,3 +298,38 @@ describe('the hooks socket serves notes and the send-back check', () => {
     })
   })
 })
+
+describe('a blocked prompt', () => {
+  test('an Issue lead at a prompt is no ask: no line before 15 min, then one health line naming the command', async () => {
+    await w.spawned('lead-7-1', { role: 'lead' })
+    await w.emit('lead-7-1', 'turn_started', w.at(30))
+    await w.emit('lead-7-1', 'prompt_blocked', w.at(14), { message: 'Bash(rm -rf /tmp/x)\nAllow?' })
+    await w.spawned('helper', { role: 'worker' })
+    await w.emit('helper', 'turn_started', w.at(30))
+    await w.emit('helper', 'prompt_blocked', w.at(14), { message: 'Bash(ls)' })
+    const young = await status()
+    expect(young.sessions.find((s) => s.id === 'lead-7-1')?.state).toBe('blocked')
+    expect(young.attention).toEqual(['blocked helper for 14 min: Bash(ls)'])
+    expect(young.health).toEqual([])
+
+    clock.advance(2 * 60_000)
+    const old = await status()
+    expect(old.attention).toEqual(['blocked helper for 16 min: Bash(ls)'])
+    expect(old.health).toEqual(['lead-7-1 waits at a permission prompt for 16 min: Bash(rm -rf /tmp/x) Allow?'])
+  })
+
+  test('blocked, then the runner reads the terminal working: no ask and no blocked state', async () => {
+    await w.spawned('stuck-prompt', { role: 'worker' })
+    await w.emit('stuck-prompt', 'turn_started', w.at(30))
+    await w.emit('stuck-prompt', 'prompt_blocked', w.at(10), { message: 'Allow?' })
+    await db.sql`UPDATE factory.sessions SET agent_status = 'blocked', agent_seen_at = ${w.at(1)} WHERE id = 'stuck-prompt'`
+    const blocked = await status()
+    expect(blocked.sessions[0]?.state).toBe('blocked')
+    expect(blocked.attention).toHaveLength(1)
+
+    await db.sql`UPDATE factory.sessions SET agent_status = 'working', agent_seen_at = ${clock.now()} WHERE id = 'stuck-prompt'`
+    const answered = await status()
+    expect(answered.sessions[0]?.state).toBe('working')
+    expect(answered.attention).toEqual([])
+  })
+})

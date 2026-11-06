@@ -30,6 +30,8 @@ export const ROTATE_AT = 94
 export const ROTATING_ROLES: readonly string[] = ['lead']
 /** A session that sits on a confirmation this long is reported, and its parent told. */
 export const BLOCKED_AFTER_MS = 2 * 60_000
+/** An Issue lead at a permission prompt is no ask of the owner; after this long it is one health line naming the command. */
+export const LEAD_PROMPT_LINE_MS = 15 * 60_000
 /** A runner restart is acted on after the witness has had two passes at it and only while it is recent. */
 export const RESTART_SETTLE_MS = 3 * 60_000
 export const RESTART_WINDOW_MS = 2 * 3_600_000

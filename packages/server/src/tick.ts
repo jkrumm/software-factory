@@ -8,6 +8,7 @@ import type { FleetBuilder } from './fleet/index.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { Classification } from './issues/classify.ts'
+import type { AskJudgement } from './issues/judge.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { type NotifyDeps, notifyPass } from './notify/index.ts'
@@ -48,6 +49,8 @@ export interface TickDeps {
   steward?: Pick<StewardDeps, 'verify'>
   /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
   classification?: Classification
+  /** judges asks and spent escalations before the owner hears of them; without it each stands as a failed judgment */
+  judgement?: AskJudgement
   /** makes the leads' worktrees off the tick; without it a lead is never started */
   leadWorktrees?: WorktreeMaker
   /** `FACTORY_ALERT_LEADS`: whether an `alert` Issue gets a lead (decision 3) */
@@ -375,6 +378,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
         now,
         ports: deps.issuePorts ?? {},
         classification: deps.classification,
+        judgement: deps.judgement,
         worktrees: deps.leadWorktrees,
         alertLeads: deps.alertLeads ?? false,
         steward: deps.steward,

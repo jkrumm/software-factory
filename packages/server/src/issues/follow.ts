@@ -237,8 +237,12 @@ async function readIssueView(sql: SQL, id: number): Promise<IssueView | undefine
     created_at: Date
     answer: string | null
     answered_by: string | null
+    answer_source: string | null
     answered_at: Date | null
-  }[] = await sql`SELECT * FROM factory.decisions WHERE issue_id = ${id} ORDER BY id`
+  }[] = await sql`
+    SELECT d.*, CASE WHEN d.answered_by = 'steward' THEN
+      (SELECT m.payload->>'source' FROM factory.issue_events m WHERE m.key = 'ask_judged:' || d.id) END AS answer_source
+    FROM factory.decisions d WHERE d.issue_id = ${id} ORDER BY d.id`
 
   return {
     ...issue,
@@ -262,6 +266,7 @@ async function readIssueView(sql: SQL, id: number): Promise<IssueView | undefine
       askedAt: d.created_at.toISOString(),
       answer: d.answer,
       answeredBy: d.answered_by,
+      answerSource: d.answer_source,
       answeredAt: d.answered_at?.toISOString() ?? null,
     })),
   }

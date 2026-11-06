@@ -6,7 +6,7 @@ import { enqueue } from '../src/issues/inbox.ts'
 import { type Proof } from '../src/issues/hold.ts'
 import { OffTick } from '../src/issues/offtick.ts'
 import { getIssue } from '../src/issues/read.ts'
-import type { StewardDeps } from '../src/issues/steward.ts'
+import { runSteward, type StewardDeps, WAIT_GRACE_MS } from '../src/issues/steward.ts'
 import { issuePass } from '../src/issues/worker.ts'
 import { foldReason } from '../src/notify/outbox.ts'
 import { buildStatus } from '../src/status.ts'
@@ -387,6 +387,60 @@ describe('rule 4: a silent or over-budget lead is nudged, a claim holder is woke
     const [wake] = await acts()
     expect(wake.payload).toMatchObject({ cause: 'claim', wake: true, who: 'steward' })
     expect(await state(holder)).toMatchObject({ state: 'working' })
+  })
+
+  const claimActs = async () =>
+    (await acts()).filter((a: { payload: { cause: string } }) => a.payload.cause === 'claim')
+
+  test('a wait set a moment ago is not woken for the claim, its grace is WAIT_GRACE_MS', async () => {
+    const holder = await working()
+    await lead(holder)
+    await report(holder, 'wait', { until: new Date(clock.now().getTime() + 2 * MIN).toISOString() })
+    await queuedBehind(holder, 60)
+    await db.sql`UPDATE factory.issues SET wake_at = NULL WHERE id = ${holder}`
+    advance(WAIT_GRACE_MS - MIN)
+    await pass()
+    expect(await claimActs()).toEqual([])
+    advance(MIN)
+    await pass()
+    expect(await claimActs()).toHaveLength(1)
+  })
+
+  test('a wait with a stated time is no stall while that time lies ahead, and is one again once it passed', async () => {
+    const holder = await working()
+    await lead(holder)
+    await report(holder, 'wait', { until: new Date(clock.now().getTime() + 6 * HOUR).toISOString() })
+    await queuedBehind(holder, 60)
+    advance(HOUR)
+    await pass()
+    expect(await claimActs()).toEqual([])
+    expect(await state(holder)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    // the timer has not fired for this pass: the stated time is behind us
+    await db.sql`UPDATE factory.issues SET wake_at = ${new Date(clock.now().getTime() - MIN)} WHERE id = ${holder}`
+    await runSteward(db.sql, now(), steward())
+    expect(await claimActs()).toHaveLength(1)
+  })
+
+  test('a block holder is woken at once as before, however fresh', async () => {
+    const holder = await working()
+    await lead(holder)
+    await report(holder, 'block', { reason: 'r' })
+    await queuedBehind(holder, 60)
+    await pass()
+    expect(await claimActs()).toHaveLength(1)
+  })
+
+  test('a lead whose last event is a stop with background work is not silent, until a later event says otherwise', async () => {
+    const id = await working()
+    await lead(id)
+    await w.emit(`lead-${id}-1`, 'turn_ended', clock.now(), { backgroundTasks: true })
+    advance(SILENT_AFTER_MS + MIN)
+    await pass()
+    expect(await acts()).toEqual([])
+    await w.emit(`lead-${id}-1`, 'turn_ended', clock.now())
+    advance(SILENT_AFTER_MS)
+    await pass()
+    expect((await acts()).map((a: { payload: { cause: string } }) => a.payload.cause)).toEqual(['silent'])
   })
 
   test('no wake while another holder is working', async () => {

@@ -1,7 +1,7 @@
 import { ClassifyAnswer, type Effort, type RoleTable, type Tier } from '@software-factory/contract'
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
-import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
+import { type AgwOptions, callAgw } from './agw-call.ts'
 import { logEvent } from './shared.ts'
 
 /** What Classify is asked: the Issue's words and facts (data), and the projects the classifier may name. */
@@ -22,64 +22,20 @@ export interface Classifier {
   classify(input: ClassifyInput): Promise<unknown>
 }
 
-/** `agw` exits 10 for a run that is still going. */
-const EXIT_PENDING = 10
-
-/** One `agw` call: past this it is killed. A call waits at most the CLI's own budget (110 s by default), so this only guards a hang. */
-export const DEFAULT_CALL_TIMEOUT_MS = 150_000
-/**
- * All the waiting for one classify. A single model request is no worker, but a short limit turns a slow answer into a failure
- * (`rules/agent-limits.md`): this is a hang guard, and a classify that reaches it falls back to defaults like any failure.
- */
-export const DEFAULT_CLASSIFY_DEADLINE_MS = 30 * 60_000
-
 /** What `agw factory-classify` accepts. */
 const MAX_TITLE = 300
 const MAX_FACTS = 20_000
 
-const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9-]{5,127}$/
-
-/** The id of a pending run, from the JSON `agw` printed with exit 10. */
-function runIdOf(stdout: string): string | undefined {
-  try {
-    const body = JSON.parse(stdout) as Record<string, unknown>
-    const run = body.run as Record<string, unknown> | undefined
-    const id = body.runId ?? body.run_id ?? run?.id ?? body.id
-    return typeof id === 'string' && RUN_ID.test(id) ? id : undefined
-  } catch {
-    return undefined
-  }
-}
-
 export class ClassifyFailed extends Error {}
-
-export interface AgwClassifierOptions {
-  /** the `agw` binary (`FACTORY_AGW_BIN`) */
-  bin: string
-  callTimeoutMs?: number
-  deadlineMs?: number
-  /** swapped by the tests */
-  run?: typeof runProcess
-  now?: () => number
-}
 
 /**
  * `agw factory-classify --format json` with the Issue on stdin as JSON (the facts stay a value under `facts`, never part of an
- * instruction). Exit 10 means the run is still going: `agw run wait <runId>` until the exit is not 10, as every `agw` caller
- * does. Exit 0 is read for `status` (`done`) and the workflow's `output`.
+ * instruction); the run, its pending loop and its failures are `callAgw`'s.
  */
 export class AgwClassifier implements Classifier {
-  private readonly run: typeof runProcess
-  private readonly now: () => number
+  constructor(private readonly options: AgwOptions) {}
 
-  constructor(private readonly options: AgwClassifierOptions) {
-    this.run = options.run ?? runProcess
-    this.now = options.now ?? Date.now
-  }
-
-  async classify(input: ClassifyInput): Promise<unknown> {
-    const callMs = this.options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
-    const deadline = this.now() + (this.options.deadlineMs ?? DEFAULT_CLASSIFY_DEADLINE_MS)
+  classify(input: ClassifyInput): Promise<unknown> {
     // The workflow's limits: facts a string of at most 20,000 characters and a title of 300 (more is refused, so it is cut);
     // repo and source are identifiers, so the repo goes by its directory's name, the project's name.
     const stdin = JSON.stringify({
@@ -89,35 +45,13 @@ export class AgwClassifier implements Classifier {
       source: input.source,
       projects: input.projects,
     })
-    // The key is the Issue's: a classify asked again after a restart finds its run instead of paying for a second.
-    const command = [
-      this.options.bin,
-      'factory-classify',
-      '--format',
-      'json',
-      '--idempotency-key',
-      `factory-classify-${input.id}`,
-    ]
-    let result = await this.run(command, callMs, childEnv(), stdin)
-    while (result.exitCode === EXIT_PENDING) {
-      const runId = runIdOf(result.stdout)
-      if (!runId) throw new ClassifyFailed('agw says the run is pending but names no run id')
-      if (this.now() >= deadline) throw new ClassifyFailed(`classify run ${runId} did not finish in time`)
-      result = await this.run([this.options.bin, 'run', 'wait', runId, '--format', 'json'], callMs, childEnv())
-    }
-    if (result.exitCode === EXIT_TIMEOUT) throw new ClassifyFailed('agw did not answer in time')
-    if (result.exitCode !== 0) throw new ClassifyFailed(`agw exited ${result.exitCode}`)
-    let body: unknown
-    try {
-      body = JSON.parse(result.stdout)
-    } catch {
-      throw new ClassifyFailed('agw printed no JSON')
-    }
-    const envelope = body as { status?: unknown; output?: unknown }
-    if (envelope.status !== undefined && envelope.status !== 'done') {
-      throw new ClassifyFailed(`the classify run is ${String(envelope.status)}`)
-    }
-    return envelope.output ?? body
+    return callAgw(this.options, {
+      workflow: 'factory-classify',
+      label: 'classify',
+      idempotencyKey: `factory-classify-${input.id}`,
+      stdin,
+      failure: (message) => new ClassifyFailed(message),
+    })
   }
 }
 

@@ -3,6 +3,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { type Fleet, type FleetIssue, NO_DIGEST, type Session, type Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
+import { JUDGE_WINDOW_MS } from '../issues/attention.ts'
 import { leadKey } from '../issues/names.ts'
 import { enclosingRepo } from '../projects/sync.ts'
 import { type Digest, DigestView } from './digest.ts'
@@ -297,7 +298,10 @@ export class FleetBuilder {
     const decisionRows: { key: string; repo: string; question: string; created_at: Date }[] = await sql`
       SELECT d.key, i.repo, d.question, d.created_at FROM factory.decisions d
       JOIN factory.issues i ON i.id = d.issue_id
-      WHERE d.answered_at IS NULL AND i.state <> 'closed' ORDER BY d.id LIMIT ${MAX_DECISIONS + 1}`
+      WHERE d.answered_at IS NULL AND i.state <> 'closed'
+        AND (d.created_at <= ${new Date(now.getTime() - JUDGE_WINDOW_MS)} OR EXISTS (
+          SELECT 1 FROM factory.issue_events m WHERE m.key = 'ask_judged:' || d.id AND m.payload->>'outcome' <> 'answered'))
+      ORDER BY d.id LIMIT ${MAX_DECISIONS + 1}`
     const issueRows: {
       id: number
       title: string

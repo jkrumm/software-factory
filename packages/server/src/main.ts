@@ -15,6 +15,7 @@ import { AgwClassifier, Classification } from './issues/classify.ts'
 import { AgwReview } from './issues/review.ts'
 import { finalizePorts } from './issues/finalize.ts'
 import { holdPorts, MakeAndProbes, VERIFY_SETTLE_MS } from './issues/hold.ts'
+import { AgwAskJudge, AskJudgement } from './issues/judge.ts'
 import { leadPorts } from './issues/lead.ts'
 import { WorktreeMaker } from './issues/leadtree.ts'
 import { OffTick } from './issues/offtick.ts'
@@ -192,6 +193,13 @@ const classification = new Classification({
   roles,
   now: () => clock.now(),
 })
+// `FACTORY_ASK_JUDGE=off`: no judge, so every ask and spent escalation goes to the owner at once, as before.
+const judgement = new AskJudgement({
+  sql,
+  now: () => clock.now(),
+  judge: config.askJudge ? new AgwAskJudge({ bin: config.agwBin }) : undefined,
+  visible,
+})
 const ticker = startTicker(
   {
     sql,
@@ -204,6 +212,7 @@ const ticker = startTicker(
     issuePorts,
     steward: { verify: { proof, offTick } },
     classification,
+    judgement,
     leadWorktrees,
     fleet,
     admission: config.admission,

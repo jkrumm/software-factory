@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto'
 import type { SQL } from 'bun'
 import { BUDGET_HOURS, DEFAULT_SIZE, SILENT_AFTER_MS } from '../health.ts'
-import { record } from '../notify/outbox.ts'
-import { stewardMessage } from '../notify/text.ts'
 import { liveSessions } from '../sessions.ts'
 import { Waiting } from './effects.ts'
 import { type HoldCheck, proofInputOf, type Proof } from './hold.ts'
 import { enqueue } from './inbox.ts'
+import { leadsOnBackgroundWork } from './lead-activity.ts'
 import { WAKEABLE } from './lifecycle.ts'
 import { leadKey } from './names.ts'
 import type { OffTick } from './offtick.ts'
@@ -26,6 +25,8 @@ const BACKOFF_MS = [30 * MIN, 120 * MIN, 360 * MIN] as const
 /** A cause that is already a condition of its own (a silent lead, a queue behind a claim) starts its first act at that condition. */
 const CLAIM_QUEUED_MS = 15 * MIN
 const FIRST_MS: Partial<Record<Cause, number>> = { silent: SILENT_AFTER_MS, claim: CLAIM_QUEUED_MS }
+/** A timed `wait` is no stall for this long after it began: a claim wake does not cut short a wait the lead just set (a CI run). */
+export const WAIT_GRACE_MS = 5 * MIN
 /** The retries are spent for the owner this long after the last act, the length of the last backoff. */
 const EXHAUSTED_AFTER_MS = BACKOFF_MS[2]
 
@@ -49,6 +50,8 @@ interface OpenIssue {
   size: string | null
   /** when it came to be in this state */
   entered: Date
+  /** the timer that ends a `wait`, while it has not fired */
+  wake_at: Date | null
   /** the lead's last event, working only */
   last_event: Date | null
   /** when it began working, working only */
@@ -137,12 +140,23 @@ async function claimHolders(sql: SQL, now: Date): Promise<Map<number, Date>> {
 }
 
 /** Every cause that holds for the Issue now, in the order the steward tries them. */
-function candidates(issue: OpenIssue, live: ReadonlySet<string>, holders: ReadonlyMap<number, Date>): Candidate[] {
+function candidates(
+  issue: OpenIssue,
+  live: ReadonlySet<string>,
+  holders: ReadonlyMap<number, Date>,
+  background: ReadonlySet<number>,
+  now: Date,
+): Candidate[] {
   const hasLead = live.has(leadKey(issue.id, issue.attempt))
   const found: Candidate[] = []
   if (issue.state === 'waiting') {
     const queued = holders.get(issue.id)
-    if (queued && hasLead) found.push({ cause: 'claim', anchor: queued })
+    // A `wait` is the lead's own choice: not a stall while its stated time lies ahead, nor in the minutes after it was set.
+    const waitingOnPurpose =
+      issue.reason === 'wait' &&
+      ((issue.wake_at !== null && issue.wake_at.getTime() > now.getTime()) ||
+        now.getTime() - issue.entered.getTime() < WAIT_GRACE_MS)
+    if (queued && hasLead && !waitingOnPurpose) found.push({ cause: 'claim', anchor: queued })
     if (hasLead && (issue.reason === 'blocked' || issue.reason === 'parked' || issue.reason === 'unreported')) {
       found.push({ cause: issue.reason, anchor: issue.entered })
     }
@@ -151,10 +165,13 @@ function candidates(issue: OpenIssue, live: ReadonlySet<string>, holders: Readon
   }
   if (!hasLead) return found
   // Silent from its last event, but not from before it was last woken or began working: the news that moved it is the last word it was given.
-  found.push({
-    cause: 'silent',
-    anchor: new Date(Math.max((issue.last_event ?? issue.since).getTime(), issue.since.getTime())),
-  })
+  // A lead whose last event is a stop with background work in flight (a subagent) waits for it, it is not silent.
+  if (!background.has(issue.id)) {
+    found.push({
+      cause: 'silent',
+      anchor: new Date(Math.max((issue.last_event ?? issue.since).getTime(), issue.since.getTime())),
+    })
+  }
   const size = issue.size && issue.size in BUDGET_HOURS ? (issue.size as keyof typeof BUDGET_HOURS) : DEFAULT_SIZE
   found.push({ cause: 'over_budget', anchor: new Date(issue.since.getTime() + BUDGET_HOURS[size] * 60 * MIN) })
   return found
@@ -202,7 +219,7 @@ async function fileAct(
   return !duplicate
 }
 
-/** The owner hears once, with what was tried: the event in the Issue's story and the line in the outbox commit together. */
+/** The retries are spent: one event with what was tried. The ask judge (`judge.ts`) then answers it or records the owner's line. */
 async function exhaust(sql: SQL, issue: OpenIssue, cause: Cause, now: Date): Promise<void> {
   const rows: { key: string; at: Date; kind: string; result: string | null; payload: { n: number; text?: string } }[] =
     await sql`
@@ -212,10 +229,7 @@ async function exhaust(sql: SQL, issue: OpenIssue, cause: Cause, now: Date): Pro
     (row) =>
       `${row.payload.n}. ${minutes(row.at)} ${row.kind === 'restart' ? 'restart' : row.kind === 'note' && row.payload.text === NUDGE_TEXT ? 'nudge' : 'wake'}, ${row.result ?? 'not handled'}`,
   )
-  await sql.begin(async (tx) => {
-    await markEvent(tx, issue.id, `steward_exhausted:${issue.id}:${cause}`, 'steward_exhausted', now, { cause, tried })
-    await record(tx, stewardMessage({ issue, cause, tried }), now)
-  })
+  await markEvent(sql, issue.id, `steward_exhausted:${issue.id}:${cause}`, 'steward_exhausted', now, { cause, tried })
 }
 
 /**
@@ -225,7 +239,7 @@ async function exhaust(sql: SQL, issue: OpenIssue, cause: Cause, now: Date): Pro
  */
 export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promise<void> {
   const issues: OpenIssue[] = await sql`
-    SELECT i.id, i.repo, i.state, i.reason, i.attempt, i.waits, i.size, i.updated_at AS entered,
+    SELECT i.id, i.repo, i.state, i.reason, i.attempt, i.waits, i.size, i.updated_at AS entered, i.wake_at,
       COALESCE((SELECT max(e.at) FROM factory.issue_events e WHERE e.issue_id = i.id AND e.to_state = 'working'), i.updated_at) AS since,
       (SELECT max(v.at) FROM factory.events v WHERE v.session = 'lead-' || i.id || '-' || i.attempt) AS last_event
     FROM factory.issues i WHERE i.state IN ('waiting', 'working') ORDER BY i.id`
@@ -233,6 +247,7 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
 
   const live = new Set((await liveSessions(sql, now)).map((session) => session.id))
   const holders = await claimHolders(sql, now)
+  const background = await leadsOnBackgroundWork(sql)
   const actRows: { issue_id: number; cause: Cause; n: number; last_at: Date }[] = await sql`
     SELECT issue_id, payload->>'cause' AS cause, count(*)::int AS n, max(at) AS last_at FROM factory.issue_inbox
     WHERE key LIKE 'steward:%' GROUP BY issue_id, payload->>'cause'`
@@ -241,7 +256,7 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
   const told = new Set(spentRows.map((row) => row.key))
 
   for (const issue of issues) {
-    for (const { cause, anchor } of candidates(issue, live, holders)) {
+    for (const { cause, anchor } of candidates(issue, live, holders, background, now)) {
       const done = acted.get(`${issue.id}:${cause}`)
       const n = done?.n ?? 0
       if (n >= MAX_ACTS) {
