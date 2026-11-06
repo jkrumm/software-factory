@@ -1221,7 +1221,7 @@ tuning at 50 closed Issues, security audits per repo at about 2,000 changed line
 
 ### The factory door (owner decision 2, 2026-11-01)
 
-Today every alert goes to Slack only. The door makes a real alert one Issue, from the tailnet, before F3's dedup, settle and
+Alerts reach the factory through the door, and machine alerts also go to ntfy by their own senders. The door makes a real alert one Issue, from the tailnet, before F3's dedup, settle and
 runbooks exist (decision 3).
 
 - **A process of its own,** `packages/door`: one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
@@ -1248,23 +1248,24 @@ runbooks exist (decision 3).
   `unrouted`, `quiet`, `attached`, `created`, `replayed`, `settling`, `healed`.
 - **Run:** its own LaunchAgent, installed and restarted by `make deploy` from the same release directory; `make verify` ends with
   the door's 401 to an unauthenticated `POST /alert/kuma`. A door that cannot start (no tokens file) warns at deploy and fails that line. The door restarts at every deploy: for
-  the seconds it is down a POST is refused at the connection, and Slack still gets every alert, so nothing is lost that was not already
-  only in Slack.
+  the seconds it is down a POST is refused at the connection, and machine alerts still reach ntfy by their own senders.
 
 ### The owner's line (owner decision 4, 2026-11-01)
 
-The factory writes to Slack through Hermes, which only
-delivers: a message is a template filled with facts, never a model's words (SF2).
+The factory publishes to ntfy over HTTP, a topic the owner's iPhone and Mac subscribe to: a message is a template filled with facts, never a model's words (SF2).
 
-- **The `Notifier` port** (`notify/port.ts`) has one call, `send(message)`, answering `ok` or an error and never throwing. `HermesNotifier`
-  runs `hermes send --to <target> --quiet` with the text on stdin and a 10 s process timeout (`HERMES_BIN`; `FACTORY_NOTIFY_TARGET`,
-  default `slack:#agents`: a channel name is no secret, and a message there never makes Hermes answer). `FACTORY_NOTIFY_TARGET=off` is the
+- **The `Notifier` port** (`notify/port.ts`) has one call, `send(message)`, answering `ok` or an error and never throwing. `NtfyNotifier`
+  POSTs the text to `<FACTORY_NTFY_URL>/<topic>` with a bearer token and a 10 s timeout; `FACTORY_NOTIFY_TARGET` is
+  `ntfy:<topic>` (default `ntfy:factory`) or `off`, and any other value, an old `slack:...` included, refuses the start. The token is
+  `NTFY_TOKEN` from `.env.tpl`; the URL comes from the env file (`FACTORY_NTFY_URL`) because a hostname stays out of the repo. A body is cut
+  to 4000 bytes (ntfy turns a longer one into an attachment). With no URL or token the server starts and a send answers that it is not set, so
+  the outbox retries and the health line shows it. `FACTORY_NOTIFY_TARGET=off` is the
   `NullNotifier`: rows are still recorded and count as sent, with the reason in `error`. The tests use a fake.
 - **An outbox, never a port in a transaction.** `factory.notifications` (`key` primary). A rule that decides a message inserts its row
   `ON CONFLICT DO NOTHING` in the transaction that decides it (`ask` in `recordDecision`, parked and the hold in `applyEvent`), so a rolled
   back decision says nothing; the rules that read state (`notifyFailures`, the digest) run once a tick as statements of their own, and their
   keys make a replay a no-op. The tick then sends: claim and commit (at most 5 rows, `attempts + 1`, `next_at` = now + a 2-minute lease),
-  call the notifier outside any transaction (the calls of one pass side by side, so a dead Hermes costs one timeout), record the result. A
+  call the notifier outside any transaction (the calls of one pass side by side, so a dead ntfy costs one timeout), record the result. A
   failed send is fenced by the attempt it belongs to (a send that outlived its lease cannot undo a newer attempt; a delivery is always recorded) and backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for 72 h. A
   crash between the send and its record leaves the lease to run out and the row is sent again: **at-least-once**, so a message may arrive twice.
 - **What goes out**, one line each, `Issue <id> (<repo name>)` first, never a path or a hostname. Agent text (a question, a lead's reason, a
@@ -1297,8 +1298,8 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   event, bound to the question open at that moment when none is named, so a question asked later cannot take it (none open is a 409); the
   lead is told in a note. **Token API only, never on the socket**: a pane has no token, so a lead cannot answer its own question, and the
   answer is always the owner's (`answered_by = owner`). The CLI without `FACTORY_TOKEN` says so (exit 3). The one other way a question is answered is the factory applying its own expired default (§4); and a process of the same user that can run `secrets-run` can fetch the token, which is the perimeter as the trust boundary in §3 states it, not something this route can close.
-- **Not built:** the app's toast. `hc` has no `notify` command (0.1.15: `hc --help` lists none), so there is nothing to call besides Slack.
-- **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and Hermes, exit 1 and the
+- **Not built:** an app toast, and it is not needed: ntfy's clients on the iPhone and the Mac are the toast.
+- **CLI:** `factory notify list [--pending]` and `factory notify test` (the lead's proof: one line through the outbox and ntfy, exit 1 and the
   error if it did not arrive, also when the target is `off`). The test row is made already claimed (`sendNow`), so the tick cannot send it beside the caller.
 
 ### The fleet view (FV Wave 1, 2026-11-02)
@@ -1446,6 +1447,23 @@ with the cursor, and a `: keepalive` comment every 15 s. The tables are never pr
 
 **Auth and scope.** The bearer token, as everywhere. The token API already holds IuRoot's text (§11 "The fleet view"), so the read API does too
 and marks it (`visible`); the socket still answers 404 for all of `/v1`. A consumer in a pane reaches it through an agent that holds the token.
+
+**Reaching `/v1`** (Reset row 15, 2026-11-06). The server binds loopback and stays there: no `tailscale serve` port, no ACL grant, nothing wider than today.
+On the mini a surface (Iris's server, Hermes, `agw`, the CLI) calls `http://127.0.0.1:<PORT>` with the token. From any other tailnet device (the MacBook)
+the path is an SSH local forward over the SSH grant the owner's machines already have, so the tailnet's own SSH authentication is the second factor
+and the bearer token is the first:
+
+```sh
+ssh -N -L 17793:127.0.0.1:<PORT> mini        # PORT: the server's port, in the LaunchAgent plist
+curl -H "Authorization: Bearer $FACTORY_TOKEN" http://127.0.0.1:17793/v1/overview     # or the factory CLI with FACTORY_URL=http://127.0.0.1:17793
+```
+
+`FACTORY_TOKEN` is `op://mini/software-factory/FACTORY_TOKEN` (the MacBook's 1Password, `op read`).
+
+`GET /health` answers without a token (200), `GET /v1/*` without one is 401. Why not `tailscale serve`: it would publish the port to every tailnet node the ACL
+reaches, and the token API holds IuRoot's text; the forward needs a login on the mini, which only the owner's machines have. A surface that must be reached by
+a device that cannot run SSH (the iPhone) goes through Iris's server, which is the one process that talks to `/v1` on its behalf. Proven 2026-11-06: a forward
+from the MacBook returned `/health` 200, `/v1/overview` 401 without the token and 200 with it.
 
 **Versioning.** The path is the version. Within `/v1` changes are additive only: new routes, new optional fields, new enum values a client treats as
 "other". Schemas are not strict (unlike the fleet's), so an older client ignores a field it does not know. A rename, a removal or a changed meaning is `/v2`,

@@ -4,3 +4,4 @@
 FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
 FACTORY_TOKEN=op://mini/software-factory/FACTORY_TOKEN
 FACTORY_GITHUB_TOKEN=op://mini/github/token
+NTFY_TOKEN=op://common/ntfy/TOKEN

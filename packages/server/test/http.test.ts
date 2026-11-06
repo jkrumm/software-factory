@@ -92,8 +92,9 @@ describe('config (finding 5)', () => {
       alertLeads: true,
       askJudge: true,
       archiveDir: '/home/me/.local/share/factory/archive',
-      notifyTarget: 'slack:#agents',
-      hermesBin: '/home/me/.local/bin/hermes',
+      notifyTarget: 'ntfy:factory',
+      ntfyUrl: '',
+      ntfyToken: '',
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
@@ -147,11 +148,16 @@ describe('config (finding 5)', () => {
     expect(() => loadConfig({ ...env, FACTORY_ALERT_LEADS: 'maybe' })).toThrow('FACTORY_ALERT_LEADS')
   })
 
-  test('the notifier: a target, a binary, a digest time and zone, and a mistake is refused', () => {
-    expect(loadConfig({ ...env, FACTORY_NOTIFY_TARGET: 'off', HERMES_BIN: '/x/hermes' })).toMatchObject({
-      notifyTarget: 'off',
-      hermesBin: '/x/hermes',
+  test('the notifier: a target, the ntfy url and token, a digest time and zone, and a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_NOTIFY_TARGET: 'off' }).notifyTarget).toBe('off')
+    expect(loadConfig({ ...env, FACTORY_NOTIFY_TARGET: 'ntfy:ops' }).notifyTarget).toBe('ntfy:ops')
+    expect(loadConfig({ ...env, FACTORY_NTFY_URL: 'https://ntfy.example.com', NTFY_TOKEN: 't' })).toMatchObject({
+      ntfyUrl: 'https://ntfy.example.com',
+      ntfyToken: 't',
     })
+    for (const bad of ['slack:#agents', 'ntfy:bad topic', 'ntfy:', 'matrix:x'])
+      expect(() => loadConfig({ ...env, FACTORY_NOTIFY_TARGET: bad })).toThrow('FACTORY_NOTIFY_TARGET')
+    expect(() => loadConfig({ ...env, FACTORY_NTFY_URL: 'ftp://x' })).toThrow('FACTORY_NTFY_URL')
     expect(loadConfig({ ...env, FACTORY_DIGEST_AT: '06:05', FACTORY_DIGEST_TZ: 'UTC' })).toMatchObject({
       digestAt: '06:05',
       digestTz: 'UTC',

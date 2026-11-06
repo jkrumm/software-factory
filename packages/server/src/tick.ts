@@ -407,7 +407,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   } catch (error) {
     result.errors.push(`issues: ${error instanceof Error ? error.message : String(error)}`)
   }
-  // Last: what this pass decided goes out in the same pass, and a slow Hermes holds nothing that was claimed before it.
+  // Last: what this pass decided goes out in the same pass, and a slow ntfy holds nothing that was claimed before it.
   if (deps.notify) {
     try {
       result.errors.push(...(await notifyPass(deps.sql, deps.notify, () => deps.clock.now())))
