@@ -244,6 +244,7 @@ export class FleetBuilder {
       merged: sessions,
       sessions: db.status.sessions,
       isVisible: (path) => places.isVisible(path),
+      issues: db.issues,
     })
     const complete = askSourcesAnswered(errors)
     const model = applyDigest(base, view, scope, now)

@@ -1299,11 +1299,70 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
   session went idle); a newer turn drops it at once, before the digest has read that turn. A session that already has an ask of its own (`hc:` or `wait:`) is **one** ask: the reply gives it its `short` and nothing else (its kind stays the deterministic source's), no second ask. An interrupt marker (`[Request interrupted by user …]`) ends the turn with no reply.
 - **IuRoot never goes.** The feed is built by `scopeOf` and nothing else: no session whose repo, spawn repo, directory or
   terminal directory is visible, no session outside every repo. `applyDigest` gates by the same scope (the repos and sessions it offered),
-  so text is added to nothing else. Their `headline` stays null, and the cache holds nothing of them. The model has no plans, so the feed has no headings (the `heading` item kind stays in `digest.ts` for the read API).
+  so text is added to nothing else. Their `headline` stays null, and the cache holds nothing of them. The model has no plans; the feed's only headings are the filed titles of the open Issues of ordinary repos (`scopeOf` decides, an Issue in a visible repo never has its title offered), which the read API shows as short titles.
 - **Failure is quiet.** A failed call stores nothing and the model keeps the cached text. `factory status` shows `digest: N failed passes in the last 24 h` as
   a health line (`health` on `factory status`, `health[]` on `/fleet`; only when N > 0, never an ask). `factory fleet --format json` has `digest { enabled, pending, lastAt, lastError, days[] }`, the
   days UTC, newest first, each with calls, failed calls, items and `costUsd`; `digest` is not in the fingerprint, so a call that changes no text does not `NOTIFY`.
 - **Not done:** the `visible` marker still filters nothing in the (token-only) model.
+
+### The read API (Reset row 9b, RS13, 2026-11-06)
+
+One read contract for every surface (the Herdr sidebar, Iris, Argo, Hermes). It adds **no new truth**: it is a projection of what the
+factory already holds, shaped for people. The owner's call (RS13): no signed spec, a working proof of concept first, then better from real
+use. Code: `packages/contract/src/read.ts` (the schemas), `packages/server/src/read/` (the projection, `insights.ts`, `stream.ts`),
+`factory read …` and `factory follow` (CLI on the same schemas).
+
+**Resources.** `GET` only, under `/v1`, on the token API (never the socket; same bearer, loopback Host, and 503 `not_ready` only where it
+reads the fleet snapshot before its first build). Every body is built through its schema in `read.ts`.
+
+| Route | Body |
+|-|-|
+| `/v1/overview` | `{ version, now, builtAt, counts { working, waiting, queued, watching, asks, health }, asks[], health[], accounts[], queue }`: the sidebar's one call |
+| `/v1/issues?state=open\|closed\|all&limit=` | `{ issues: IssueCard[] }`, open first by recent activity (default `open`, limit 100) |
+| `/v1/issues/:id` | `IssueDetail`: the card plus `timeline[]`, `evidence[]`, `asks[]`, `sessions[]` (its leads and what they started) |
+| `/v1/sessions?issue=&role=&live=1` | `{ sessions: SessionCard[] }` (a lead is a session with `issue` set and `role: lead`) |
+| `/v1/sessions/:id` | `SessionCard` |
+| `/v1/asks`, `/v1/health`, `/v1/accounts` | the lists of `overview`, whole: `{ asks[] }`, `{ health[] }`, `{ accounts[] }` |
+| `/v1/stream` | the change stream (below) |
+
+**Display text.** Every card has `title` (short, plain words) and `summary` (one sentence on where it stands) for people, and ids only as
+fields for linking (`id`, `issue`, `lead`, `terminal`), never inside `title` or `summary`. `title`: for an Issue, the digest's short heading of the
+filed title (the digest's existing `heading` item, fed for open Issues of ordinary repos and nothing else) else the filed title cut at a word
+(`filedTitle` keeps the original); for a session, the Claude tab title, else its role in words. `summary`: an open Issue's lead headline (the digest's, once per turn),
+else the lead's latest phase note cut at a sentence, else a fixed sentence from the state ("Queued, waiting for a free account"); a closed Issue's
+is the lead's own ship or close summary. All text is data. Claude Code's own session summaries are not read. **Nothing of a visible (IuRoot) repo
+is sent to `agw`**: `scopeOf` decides, as for the digest; a visible card still carries its (local) text and `visible: true`.
+
+**Insights.** `Insights { startedAt, endedAt|null, elapsedMs, workingMs, turns, toolCalls, subagents, tokens { input, output, cacheRead, cacheWrite }, models[], attempts }`
+on an Issue (its leads of every attempt and the sessions they started, summed) and on a session. `workingMs`, `turns` come from the stored events
+(`turn_started` to `turn_ended`, an open turn counts to now), `toolCalls`, `subagents` (calls of the `Agent`/`Task` tool) and `tokens` from the
+transcript (`transcriptPath` after the same `realpath` check as the digest), read once and counted again only when the file's size or mtime moved
+(memory, bounded). Tokens of a subagent's own transcript are not added. A missing or unreadable transcript is zeros with `partial: true`. **Quota**
+is the account's reading (`account` + `quota { fiveHourUsed, weeklyUsed, resetsAt…, fresh }`) on every card that runs on one; there is no per-Issue quota.
+
+**Terminal and space.** A session's `terminal { id, name, space, tab, workspace }`: hc's address and name, the herdr space (keyed by the repo's real path) and tab, from the
+fleet snapshot and the spawn; null fields where herdr has nothing.
+
+**The change stream** is Server-Sent Events, `GET /v1/stream?since=<cursor>&issue=<id>` (`Last-Event-ID` works the same). Chosen over
+`NOTIFY`: a `NOTIFY` is lossy (a reader that is away misses it, a payload is 8 KB, it needs a held connection) and says only "something moved";
+the stream is a **cursor over the append-only event tables** (`factory.issue_events`, `factory.events`), so a client that reconnects with its last
+id misses nothing, and a new client without `since` starts at "now" (it reads the resources first). The server polls both tables by id once a second
+(an indexed range read, no held connection, latency under 2 s). Frames: `id: <cursor>` (opaque, `i<issue event id>.s<session event id>`),
+`event: issue` (an `issue_events` row as `{ issue, kind, from, to, at, text }`, `text` plain words of what happened), `event: session`
+(`{ session, issue, kind, state, at }`), `event: fleet` (the snapshot's fingerprint moved: `{ fingerprint, builtAt }`, a hint to re-read), `event: hello` once
+with the cursor, and a `: keepalive` comment every 15 s. The tables are never pruned, so a cursor is 410 only when it is malformed or ahead of what is stored (a database that was reset), and the client reads the resources again.
+`?issue=` keeps `issue` events and the `session` events of that Issue's sessions. A frame is never a full resource: it says what happened and where to read.
+
+**Auth and scope.** The bearer token, as everywhere. The token API already holds IuRoot's text (§11 "The fleet view"), so the read API does too
+and marks it (`visible`); the socket still answers 404 for all of `/v1`. A consumer in a pane reaches it through an agent that holds the token.
+
+**Versioning.** The path is the version. Within `/v1` changes are additive only: new routes, new optional fields, new enum values a client treats as
+"other". Schemas are not strict (unlike the fleet's), so an older client ignores a field it does not know. A rename, a removal or a changed meaning is `/v2`,
+served beside `/v1` until the surfaces moved. `GET /v1/overview` carries `version`.
+
+**As built.** The schemas are `read.ts` beside `core.ts` (the pieces `index.ts` and `read.ts` both build on: spawn, session state, quota, queue state; split out so neither imports the other). `overview` also carries `asks[]` and `counts.watching` (additive). `src/read/`: `index.ts` the `Reader` (cards from `issues/read.ts`, `issues/follow.ts` `getIssueView`, `sessions.ts` `loadByIds`, the stored snapshot, and the digest cache through `readDigestCache`), `describe.ts` (`describeEvent`), `insights.ts` (the transcript counter, guarded by `resolveTranscript` of `fleet/transcript.ts`), `stream.ts`. A session's Issue is its own `issue_id`, else its nearest ancestor's through `spawns.parent`. The stream polls by id with no ordering guarantee across concurrent writers: a row committed late with a lower id than one already sent is missed (the resources are the truth; a client re-reads on `fleet` frames). `/v1/stream` takes its connection out of Bun's idle timer (`server.timeout(req, 0)`).
+
+**Not done (next, from real use):** subagent transcripts in the insights, a per-Issue cost in money (`usage` joins on `claudeSessionId`), a cursor for sessions of other lanes (`rd` sessions are listed, their events are not streamed), a smaller overview for the sidebar if the full one proves heavy.
 
 Intake polls: Kuma, Beszel, Docker on the three hosts, HyperDX alerts and error clusters, GitHub issues and checks,
 RollHook deploys, failed launchd jobs, CrowdSec, TickTick. Polling also catches a missed recovery on the next read.

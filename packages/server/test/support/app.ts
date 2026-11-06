@@ -7,7 +7,7 @@ import { TickMonitor } from '../../src/health.ts'
 import type { FleetBuilder } from '../../src/fleet/index.ts'
 import type { Commits } from '../../src/issues/commits.ts'
 import type { Review } from '../../src/issues/review.ts'
-import { serve } from '../../src/http.ts'
+import { type AppDeps, serve } from '../../src/http.ts'
 import type { Notifier } from '../../src/notify/port.ts'
 import { ProjectSync } from '../../src/projects/sync.ts'
 import { QuotaPoller } from '../../src/quota.ts'
@@ -56,6 +56,7 @@ export function startApp(deps: {
   commits?: Commits
   review?: Review
   fleet?: Pick<FleetBuilder, 'refreshNow'>
+  read?: AppDeps['read']
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)

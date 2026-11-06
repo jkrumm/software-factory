@@ -1,5 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import {
+  AccountList,
+  AskList,
   DoorRoute,
   DoorRouteInput,
   DoorRouteKey,
@@ -8,11 +10,14 @@ import {
   EventAck,
   Fleet,
   Health,
+  HealthList,
   IntakeAck,
   IntakeInput,
   Issue,
   IssueAnswerAck,
   IssueAnswerBody,
+  IssueCards,
+  IssueDetail,
   IssueId,
   IssueEvidenceAck,
   IssueEvidenceInput,
@@ -33,6 +38,7 @@ import {
   Project,
   NotificationList,
   Notification,
+  Overview,
   ProjectList,
   ProjectName,
   ProjectSyncResult,
@@ -42,6 +48,8 @@ import {
   QueueView,
   type RoleTable,
   Session,
+  SessionCard,
+  SessionCards,
   SessionList,
   Slot,
   SlotRelease,
@@ -73,6 +81,8 @@ import { NullNotifier, type Notifier } from './notify/port.ts'
 import { getProject, listable, listProjects } from './projects/store.ts'
 import type { ProjectSync } from './projects/sync.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
+import { MAX_LIMIT, DEFAULT_LIMIT, NotReady, Reader, type ReadDeps } from './read/index.ts'
+import { streamHandler, type StreamDeps } from './read/stream.ts'
 import { getQueue, setQueue } from './queue.ts'
 import { recordPrompt } from './prompts.ts'
 import { stopCheck } from './rules.ts'
@@ -126,6 +136,8 @@ export interface AppDeps {
   review?: Review
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
+  /** the read API (`/v1`): whether a place is IuRoot's (`Places.isVisible`), the transcript counter, and the stream's timing for a test */
+  read?: Pick<ReadDeps, 'isVisible' | 'insights'> & Pick<StreamDeps, 'pollMs' | 'keepaliveMs' | 'sleep'>
 }
 
 /** Largest request body the server reads. */
@@ -665,6 +677,53 @@ const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
   }
 }
 
+/** `?limit=` of a list: a whole number from 1 to `MAX_LIMIT`. */
+function limitParam(raw: string | null): number {
+  if (raw === null) return DEFAULT_LIMIT
+  const limit = Number(raw)
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+    throw new BadRequest(`limit must be a whole number from 1 to ${MAX_LIMIT}`)
+  }
+  return limit
+}
+
+/** The read API's handlers, `GET /v1/...` (docs/design.md §11 "The read API"): the token API only, never on the socket. */
+const readHandlers = (reader: Reader) => {
+  const notReady = (error: unknown): Response => {
+    if (error instanceof NotReady) return json({ error: error.message, code: 'not_ready' }, 503)
+    throw error
+  }
+  return {
+    overview: async () => reader.overview().then((body) => respond(Overview, body), notReady),
+    issues: async (req: Request) => {
+      const params = new URL(req.url).searchParams
+      const scope = params.get('state') ?? 'open'
+      if (scope !== 'open' && scope !== 'closed' && scope !== 'all')
+        throw new BadRequest('state must be open, closed or all')
+      return respond(IssueCards, { issues: await reader.issues({ scope, limit: limitParam(params.get('limit')) }) })
+    },
+    issue: async (req: Bun.BunRequest<'/v1/issues/:id'>) => {
+      const detail = await reader.issue(parseParam(IssueId, req.params.id))
+      return detail ? respond(IssueDetail, detail) : json({ error: 'unknown issue' }, 404)
+    },
+    sessions: async (req: Request) => {
+      const params = new URL(req.url).searchParams
+      const rawIssue = params.get('issue')
+      const issue = rawIssue === null ? undefined : parseParam(IssueId, rawIssue)
+      const role = params.get('role') ?? undefined
+      const live = params.get('live') === '1'
+      return respond(SessionCards, { sessions: await reader.sessions({ issue, role, live }) })
+    },
+    session: async (req: Bun.BunRequest<'/v1/sessions/:id'>) => {
+      const card = await reader.session(req.params.id)
+      return card ? respond(SessionCard, card) : json({ error: 'unknown session' }, 404)
+    },
+    asks: async () => reader.lists().then((l) => respond(AskList, { asks: l.asks }), notReady),
+    health: async () => reader.lists().then((l) => respond(HealthList, { health: l.health }), notReady),
+    accounts: async () => respond(AccountList, { accounts: await reader.accounts() }),
+  }
+}
+
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
   const project = new URL(req.url).searchParams.get('project')
@@ -683,26 +742,34 @@ const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
 })
 
 /** The route table for `Bun.serve`. */
-export function routes({
-  sql,
-  clock,
-  version,
-  token,
-  monitor,
-  repoRoots,
-  roles,
-  quota,
-  projects,
-  alertLeads,
-  admission,
-  notifier = new NullNotifier(),
-  notifyTarget = 'off',
-  commits = new GitCommits(),
-  review,
-  fleet,
-}: AppDeps) {
+export function routes(
+  {
+    sql,
+    clock,
+    version,
+    token,
+    monitor,
+    repoRoots,
+    roles,
+    quota,
+    projects,
+    alertLeads,
+    admission,
+    notifier = new NullNotifier(),
+    notifyTarget = 'off',
+    commits = new GitCommits(),
+    review,
+    fleet,
+    read: readOptions,
+  }: AppDeps,
+  /** what only a running server can do: take a connection out of its idle timer (the stream) */
+  runtime: { noTimeout?: (req: Request) => void } = {},
+) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
+  const reader = new Reader({ sql, clock, ...readOptions })
+  const read = readHandlers(reader)
+  const stream = streamHandler({ sql, clock, reader, ...readOptions }, runtime.noTimeout ?? (() => {}))
   return {
     '/health': {
       GET: guarded(
@@ -742,6 +809,15 @@ export function routes({
     },
     '/fleet': { GET: route(fleetGetHandler(sql)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
+    '/v1/overview': { GET: route(read.overview) },
+    '/v1/issues': { GET: route(read.issues) },
+    '/v1/issues/:id': { GET: route(read.issue) },
+    '/v1/sessions': { GET: route(read.sessions) },
+    '/v1/sessions/:id': { GET: route(read.session) },
+    '/v1/asks': { GET: route(read.asks) },
+    '/v1/health': { GET: route(read.health) },
+    '/v1/accounts': { GET: route(read.accounts) },
+    '/v1/stream': { GET: route(stream) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots, admission)),
@@ -826,9 +902,10 @@ function allowedMethods(table: Record<string, object>): (pathname: string) => st
 }
 
 export function serve(deps: AppDeps & { port: number }) {
-  const table = routes(deps)
+  // The stream is quiet between keepalives: Bun's idle timer would cut it, so its handler takes its connection out of the timer.
+  const table = routes(deps, { noTimeout: (req) => server.timeout(req, 0) })
   const allowed = allowedMethods(table)
-  return Bun.serve({
+  const server = Bun.serve({
     hostname: '127.0.0.1',
     port: deps.port,
     idleTimeout: IDLE_TIMEOUT_S,
@@ -841,6 +918,7 @@ export function serve(deps: AppDeps & { port: number }) {
     },
     error: failure,
   })
+  return server
 }
 
 /**
@@ -902,7 +980,7 @@ export function serveHooks(deps: {
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
-      // Not here, on purpose: `/fleet` and `/fleet/refresh`. The model holds IuRoot's text and what a pane reads goes to its model.
+      // Not here, on purpose: `/fleet`, `/fleet/refresh` and all of `/v1`. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },

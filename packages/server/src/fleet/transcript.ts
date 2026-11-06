@@ -101,12 +101,22 @@ export function lastReplyOf(tail: string): string | null {
   return null
 }
 
+/** The real path of a Claude Code transcript, or `null` for any path that is none (after `realpath`) or cannot be resolved: the one guard before a transcript is read. */
+export async function resolveTranscript(transcriptPath: string): Promise<string | null> {
+  try {
+    const real = await realpath(transcriptPath)
+    return TRANSCRIPT.test(real) ? real : null
+  } catch {
+    return null
+  }
+}
+
 /** Reads the end of the session's transcript file. A path that is no transcript of Claude Code (after `realpath`) is not read. */
 export class FileReplies implements ReplyReader {
   async lastReply(transcriptPath: string): Promise<string | null> {
     try {
-      const real = await realpath(transcriptPath)
-      if (!TRANSCRIPT.test(real)) return null
+      const real = await resolveTranscript(transcriptPath)
+      if (!real) return null
       const file = await open(real, 'r')
       try {
         const { size } = await file.stat()
