@@ -7,10 +7,8 @@ import { type Proof } from '../src/issues/hold.ts'
 import { OffTick } from '../src/issues/offtick.ts'
 import { getIssue } from '../src/issues/read.ts'
 import type { StewardDeps } from '../src/issues/steward.ts'
-import { fireTimers } from '../src/issues/timers.ts'
 import { issuePass } from '../src/issues/worker.ts'
 import { foldReason } from '../src/notify/outbox.ts'
-import { DEFAULT_REVIEW_LIMITS } from '../src/review/limits.ts'
 import { buildStatus } from '../src/status.ts'
 import { TEST_REPO, TEST_ROOT } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -60,7 +58,7 @@ const send = (issueId: number, kind: string, payload?: Record<string, unknown>) 
         : payload,
   })
 
-const steward = (extra: Partial<StewardDeps> = {}): StewardDeps => ({ limits: DEFAULT_REVIEW_LIMITS, ...extra })
+const steward = (extra: Partial<StewardDeps> = {}): StewardDeps => ({ ...extra })
 const pass = (deps: StewardDeps = steward()) => issuePass(db.sql, { now, ports: {}, steward: deps })
 
 /** One report, handled. */
@@ -287,49 +285,11 @@ describe('rule 1: a block with a live lead is woken', () => {
   })
 })
 
-describe('rule 2: a timed wait is woken when its cause lifted', () => {
-  const deepStarted = async (count: number) => {
-    for (let i = 0; i < count; i++) {
-      await db.sql`
-        INSERT INTO factory.spawns (key, repo, prompt, status, role, account, first_claimed_at, review_job, review_tier, review_effort, created_at)
-        VALUES (${`review-d${i}-a1`}, '/r', 'p', 'started', 'reviewer', 'a', ${clock.now()}, ${`d${i}`}, 'deep', 'high', ${clock.now()})`
-    }
-  }
+describe('rule 2: a timed wait and a decision wait are left alone', () => {
   const waitOn = (id: number, payload: Record<string, unknown>) =>
     report(id, 'wait', { until: new Date(clock.now().getTime() + 6 * HOUR).toISOString(), ...payload })
 
-  test('--on deep_cap wakes when the cap has room, and not before', async () => {
-    const id = await working()
-    await lead(id)
-    await deepStarted(DEFAULT_REVIEW_LIMITS.deepCap)
-    await waitOn(id, { on: 'deep_cap', why: 'review held' })
-    expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
-    advance(HOUR)
-    await pass()
-    expect(await state(id)).toMatchObject({ state: 'waiting' })
-
-    await db.sql`DELETE FROM factory.spawns WHERE key LIKE 'review-d%'`
-    await pass()
-    expect(await state(id)).toMatchObject({ state: 'working' })
-    const [wake] = await db.sql`SELECT key, payload FROM factory.issue_inbox WHERE kind = 'wake'`
-    expect(wake.key).toBe(`wake:${id}:1`)
-    expect(wake.payload).toMatchObject({ for: 'wait', wait: 1, who: 'steward', cause: 'deep_cap' })
-  })
-
-  test('a wait whose why names the deep cap counts, and the timer at until acts no second time', async () => {
-    const id = await working()
-    await waitOn(id, { why: 'the review is held at the deep cap' })
-    await pass()
-    expect(await state(id)).toMatchObject({ state: 'working' })
-    advance(7 * HOUR)
-    await fireTimers(db.sql, clock.now())
-    await pass()
-    const wakes = await db.sql`SELECT key FROM factory.issue_inbox WHERE kind = 'wake'`
-    expect(wakes).toHaveLength(1)
-    expect(await state(id)).toMatchObject({ state: 'working' })
-  })
-
-  test('a wait with another cause, or none, is left to its timer', async () => {
+  test('a timed wait is left to its timer', async () => {
     const id = await working()
     await waitOn(id, { why: 'waiting for the deploy window' })
     advance(HOUR)
@@ -451,37 +411,5 @@ describe('rule 6 and the status', () => {
     await pass()
     expect((await buildStatus(db.sql, clock.now())).steward).toEqual({ acts: 1, exhausted: 0 })
     expect(id).toBeGreaterThan(0)
-  })
-})
-
-describe('rule 5: finished review work is no health line', () => {
-  const outcome = (job: string, kind: string, at = clock.now()) =>
-    db.sql`INSERT INTO factory.review_outcomes (spawn_key, job_id, attempt, outcome, detail, at) VALUES (${`review-${job}-${kind}`}, ${job}, 1, ${kind}, 'refused', ${at})`
-  const spawn = (job: string, kind: string, repo = TEST_REPO) =>
-    db.sql`INSERT INTO factory.spawns (key, repo, prompt, status, role, review_job, review_tier, review_effort, created_at)
-      VALUES (${`review-${job}-${kind}`}, ${repo}, 'p', 'started', 'reviewer', ${job}, 'light', 'low', ${clock.now()})`
-  const lines = async () =>
-    (await buildStatus(db.sql, clock.now())).health
-      .filter((line) => line.includes('needs a human'))
-      .map((l) => l.split(':')[0])
-
-  test('shown while the job is unfinished; gone when it was taken, its repo has no open Issue, or it is a day old', async () => {
-    await working()
-    await spawn('open', 'needs_human')
-    await outcome('open', 'needs_human')
-    expect(await lines()).toEqual(['review open needs a human'])
-
-    // a later attempt was submitted: agw has its verdict
-    await spawn('covered', 'needs_human')
-    await outcome('covered', 'needs_human')
-    await spawn('covered', 'submitted')
-    await outcome('covered', 'submitted')
-    // its repo has no open Issue
-    await spawn('orphan', 'needs_human', '/elsewhere')
-    await outcome('orphan', 'needs_human')
-    expect(await lines()).toEqual(['review open needs a human'])
-
-    advance(25 * HOUR)
-    expect(await lines()).toEqual([])
   })
 })

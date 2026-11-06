@@ -206,20 +206,6 @@ describe('asks and health are two lists', () => {
     expect(s.attention).toEqual([])
     expect(s.health).toEqual([`Issue ${id}: no hook event for 30 min`])
   })
-
-  test('a review that needs a human is health; one held at the deep cap is an ask', async () => {
-    // Unfinished work: the reviewer's repo has an open Issue (a finished job's line is gone: `steward.test.ts`).
-    await issue('working')
-    await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, review_job, review_tier, review_effort, created_at)
-      VALUES ('review-j1-a2', '/r', 'p', 'started', 'reviewer', 'j1', 'light', 'low', ${clock.now()})`
-    await sql()`INSERT INTO factory.review_outcomes (spawn_key, job_id, attempt, outcome, detail, at)
-      VALUES ('review-j1-a2', 'j1', 2, 'needs_human', 'refused', ${clock.now()})`
-    await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, hold, review_job, review_tier, review_effort, created_at)
-      VALUES ('review-j2-a1', '/r', 'p', 'queued', 'reviewer', 'deep_cap', 'j2', 'deep', 'high', ${clock.now()})`
-    const s = await buildStatus(sql(), clock.now())
-    expect(s.attention.map((l) => l.split(' held')[0])).toEqual(['review review-j2-a1'])
-    expect(s.health).toEqual(['review j1 needs a human: attempt 2 failed: refused'])
-  })
 })
 
 describe('healthKind', () => {

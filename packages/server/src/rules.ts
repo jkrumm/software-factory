@@ -1,4 +1,4 @@
-import { REVIEWER_ROLE, type StopCheck } from '@software-factory/contract'
+import type { StopCheck } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { issueStop } from './issues/sendback.ts'
@@ -269,9 +269,7 @@ export interface RulesResult {
  * records each effect under its key. Idempotent: the same facts record nothing the second time.
  */
 export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
-  // A reviewer is never resumed, woken, rotated or continued: a resumed one would come back without its read-only argv. A lost one is
-  // a failed attempt for the review transport, which starts a fresh session.
-  const sessions = (await loadSessions(sql, now)).filter((s) => s.view.role !== REVIEWER_ROLE)
+  const sessions = await loadSessions(sql, now)
   const readings = await latestReadings(sql)
   const candidates = [
     ...(await resumeWatchdog(sql, sessions, now)),

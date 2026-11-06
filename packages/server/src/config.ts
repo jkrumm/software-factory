@@ -1,6 +1,5 @@
 import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT } from './admission.ts'
-import { DEFAULT_REVIEW_LIMITS } from './review/limits.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -50,8 +49,8 @@ export interface Config {
   fleetDigestEveryMs: number | null
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
-  /** what admission is bounded by: review v4's reviewer sessions (`FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`) and the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
-  review: AdmissionLimits
+  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
+  admission: AdmissionLimits
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -102,28 +101,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
-    review: {
-      sessions: wholeNumber(
-        'FACTORY_REVIEW_SESSIONS',
-        env.FACTORY_REVIEW_SESSIONS,
-        DEFAULT_REVIEW_LIMITS.sessions,
-        1,
-        16,
-      ),
-      deepCap: wholeNumber(
-        'FACTORY_REVIEW_DEEP_CAP',
-        env.FACTORY_REVIEW_DEEP_CAP,
-        DEFAULT_REVIEW_LIMITS.deepCap,
-        1,
-        1000,
-      ),
-      idleMs: wholeNumber(
-        'FACTORY_REVIEW_IDLE_MS',
-        env.FACTORY_REVIEW_IDLE_MS,
-        DEFAULT_REVIEW_LIMITS.idleMs,
-        60_000,
-        86_400_000,
-      ),
+    admission: {
       leadsPerAccount: wholeNumber(
         'FACTORY_LEADS_PER_ACCOUNT',
         env.FACTORY_LEADS_PER_ACCOUNT,

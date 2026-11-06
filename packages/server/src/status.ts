@@ -7,7 +7,6 @@ import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
 import { stewardStatus } from './issues/steward.ts'
 import { notificationAttention } from './notify/outbox.ts'
-import { DEFAULT_REVIEW_LIMITS, type ReviewLimits, reviewAttention, reviewStatus } from './review/limits.ts'
 import { listOpenPrompts } from './prompts.ts'
 import { getQueue } from './queue.ts'
 import { BLOCKED_AFTER_MS } from './rules.ts'
@@ -65,12 +64,7 @@ async function digestAttention(sql: SQL, now: Date): Promise<string[]> {
 }
 
 /** `GET /status`: sessions by derived state, the queue with its hold reasons, accounts with their readings, the open Issues, pending notes. */
-export async function buildStatus(
-  sql: SQL,
-  now: Date,
-  options: { alertLeads?: boolean; reviewLimits?: ReviewLimits } = {},
-): Promise<Status> {
-  const limits = options.reviewLimits ?? DEFAULT_REVIEW_LIMITS
+export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: boolean } = {}): Promise<Status> {
   const loaded = (await loadSessions(sql, now)).filter((s) => s.view.state !== 'dead')
   loaded.sort(
     (a, b) =>
@@ -86,17 +80,15 @@ export async function buildStatus(
   const issues = await statusIssues(sql, now)
   const own = attention(loaded, notes, spawns, now)
   const byIssue = await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })
-  const byReview = await reviewAttention(sql, now, limits)
   return {
     now: now.toISOString(),
-    attention: [...own.asks, ...byIssue.asks, ...byReview.asks],
+    attention: [...own.asks, ...byIssue.asks],
     health: [
       ...own.health,
       ...byIssue.health,
       ...(await healthLines(sql, now)),
       ...(await notificationAttention(sql, now)),
       ...(await digestAttention(sql, now)),
-      ...byReview.health,
     ],
     sessions: loaded.map((s) => s.view),
     queue: { effective: (await getQueue(sql, null)).effective, spawns },
@@ -106,6 +98,5 @@ export async function buildStatus(
     notes,
     notesMore,
     steward: await stewardStatus(sql, now),
-    reviews: await reviewStatus(sql, now, limits),
   }
 }

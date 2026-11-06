@@ -23,43 +23,16 @@ export { EVENT_KINDS, type EventKind } from './spool.ts'
 export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', 'ended', 'failed', 'cancelled'])
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
-/**
- * Why a queued spawn is not starting although capacity may be there: the queue state, the one-wave-per-repo rule, its Issue's claim on the
- * project, or (a reviewer) the host-wide review sessions are taken (`review_slots`) or the deep reviews of the day are spent (`deep_cap`).
- */
-export const HoldReason = z.enum(['drain', 'pace', 'wave', 'claim', 'review_slots', 'deep_cap'])
+/** Why a queued spawn is not starting although capacity may be there: the queue state or its Issue's claim on the project. */
+export const HoldReason = z.enum(['drain', 'pace', 'claim'])
 export type HoldReason = z.infer<typeof HoldReason>
 
 /**
  * Where a spawn's terminal goes: a hidden child of its parent's terminal, a tab of its own, or `hidden`: a terminal with no parent and
- * no space or tab (review v4's reviewer; found and closed by its `factory.key` label alone).
+ * no space or tab (found and closed by its `factory.key` label alone).
  */
 export const Placement = z.enum(['tab', 'child', 'hidden'])
 export type Placement = z.infer<typeof Placement>
-
-/** What a reviewer spawn carries (review v4): agw's job, the tier it was routed at and the effort the session runs at. */
-export const REVIEW_TIERS = ['light', 'standard', 'deep'] as const
-export const ReviewTier = z.enum(REVIEW_TIERS)
-export type ReviewTier = z.infer<typeof ReviewTier>
-export const ReviewEffort = z.enum(['low', 'medium', 'high'])
-export type ReviewEffort = z.infer<typeof ReviewEffort>
-/** agw's job ids look like `rv_ddx2xwgrsnyz7mh4rrwy`; the job id becomes a spawn key, a process argument and a log line. */
-export const REVIEW_JOB = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
-export const ReviewMeta = z.object({ jobId: z.string().regex(REVIEW_JOB), tier: ReviewTier, effort: ReviewEffort })
-export type ReviewMeta = z.infer<typeof ReviewMeta>
-
-/** The role that runs agw's review jobs. It carries `review`, and only it does. */
-export const REVIEWER_ROLE = 'reviewer'
-/** Two tries per job: the key of an attempt is a pure function of the job, so a replayed request or tick makes the same spawn. */
-export const REVIEW_ATTEMPTS = 2
-export const reviewKey = (jobId: string, attempt: number): string => `review-${jobId}-a${attempt}`
-/** The attempt a reviewer key names for its job, or null when the key is not that job's. */
-export function reviewAttemptOf(key: string, jobId: string): number | null {
-  const prefix = `review-${jobId}-a`
-  if (!key.startsWith(prefix)) return null
-  const n = key.slice(prefix.length)
-  return /^[1-9]$/.test(n) && Number(n) <= REVIEW_ATTEMPTS ? Number(n) : null
-}
 
 export const Spawn = z.object({
   key: z.string(),
@@ -85,8 +58,6 @@ export const Spawn = z.object({
   parent: z.string().nullable(),
   /** what the caller asked for; null is the role's default (worker roles child, others tab). A server of before placement sends no field */
   placement: Placement.nullish(),
-  /** a reviewer's job (review v4); null for every other role. A server of before review v4 sends no field */
-  review: ReviewMeta.nullish(),
 })
 export type Spawn = z.infer<typeof Spawn>
 
@@ -252,15 +223,6 @@ export const Status = z.object({
   notesMore: z.number().int(),
   /** the steward's acts of the last 24 h, counted from the Issues' inbox and events: wakes, nudges and requeues, and Issues whose retries ran out and went to the owner. A server of before the steward sends none */
   steward: z.object({ acts: z.number().int(), exhausted: z.number().int() }).nullish(),
-  /** review v4's reviewer sessions: live against the slots, and the deep reviews started today (UTC) per account. A server of before review v4 sends none */
-  reviews: z
-    .object({
-      live: z.number().int(),
-      slots: z.number().int(),
-      deepCap: z.number().int(),
-      deepToday: z.array(z.object({ account: z.string(), started: z.number().int() })),
-    })
-    .nullish(),
 })
 export type Status = z.infer<typeof Status>
 

@@ -822,46 +822,6 @@ describe('factory spawn create', () => {
     expect(spawnCalls[1]).toMatchObject({ key: 'p3', placement: 'hidden' })
   })
 
-  test('the review flags travel as one review object, and a part of them is a usage error', async () => {
-    spawnCalls.length = 0
-    const flags = ['--repo', '/work/repo', '--prompt', 'job=/tmp/j tier=deep round=1', '--role', 'reviewer']
-    await factory(
-      [
-        'spawn',
-        'create',
-        'review-rv_ddx2xwgrsnyz7mh4rrwy-a1',
-        ...flags,
-        '--placement',
-        'hidden',
-        '--review-job',
-        'rv_ddx2xwgrsnyz7mh4rrwy',
-        '--review-tier',
-        'deep',
-        '--effort',
-        'high',
-      ],
-      { FACTORY_SESSION: '' },
-    )
-    expect(spawnCalls).toEqual([
-      {
-        key: 'review-rv_ddx2xwgrsnyz7mh4rrwy-a1',
-        repo: '/work/repo',
-        prompt: 'job=/tmp/j tier=deep round=1',
-        role: 'reviewer',
-        placement: 'hidden',
-        review: { jobId: 'rv_ddx2xwgrsnyz7mh4rrwy', tier: 'deep', effort: 'high' },
-      },
-    ])
-    for (const partial of [
-      ['--review-job', 'rv_x'],
-      ['--review-job', 'rv_x', '--review-tier', 'deep', '--effort', 'max'],
-    ]) {
-      const bad = await factory(['spawn', 'create', 'review-rv_x-a1', ...flags, ...partial], { FACTORY_SESSION: '' })
-      expect(bad.code).toBe(2)
-    }
-    expect(spawnCalls).toHaveLength(1)
-  })
-
   test('without a token it goes by the socket, with the caller as parent; with one, by the port', async () => {
     spawnCalls.length = 0
     socketSpawnCalls.length = 0

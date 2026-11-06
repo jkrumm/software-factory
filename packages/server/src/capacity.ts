@@ -8,14 +8,6 @@ import type { LiveSession } from './sessions.ts'
 export const WEEKLY_LIMIT = 95
 export const FIVE_HOUR_LIMIT = 85
 
-/**
- * A reviewer (review v4) runs on the owner's subscriptions beside their own work, so it takes less of them: an account is eligible for one
- * only below 70 % of its 5-hour window and below 90 % of its week. An account with no 5-hour number is judged on its week, one with neither
- * is not eligible (`standing`).
- */
-export const REVIEW_FIVE_HOUR_LIMIT = 70
-export const REVIEW_WEEKLY_LIMIT = 90
-
 export const WEEK_MS = 7 * 24 * 3_600_000
 
 /** Readings older than this are deleted, except the newest of each account: the table stays small enough to scan. */
@@ -182,11 +174,11 @@ export function elapsedWeekShare(r: Reading, now: Date): number | null {
 /**
  * Whether an account can take a new spawn on this reading alone: enabled, auth fine, a sample (a window without a number
  * counts as unused, both without is no sample), not marked exhausted,
- * below both limits (`review`: the lower limits of a reviewer). With `pace`, also at or below the elapsed share of its week. A closed account says when it
+ * below both limits. With `pace`, also at or below the elapsed share of its week. A closed account says when it
  * opens, if the reading says so: the reset of the window that closed it (both: the later), or for pace the moment
  * the week's elapsed share reaches its use. A window whose reset is already past is a stale reading and names no time.
  */
-export function standing(r: Reading, now: Date, pace = false, review = false): Standing {
+export function standing(r: Reading, now: Date, pace = false): Standing {
   if (!r.enabled || !r.authOk || !r.sampledAt || (r.fiveHourUsed === null && r.weeklyUsed === null)) {
     return { open: false, until: null }
   }
@@ -196,8 +188,8 @@ export function standing(r: Reading, now: Date, pace = false, review = false): S
   const reopens: (Date | null)[] = []
   const ahead = (at: Date | null) => (at && at > now ? at : null)
   if (r.exhaustedUntil && r.exhaustedUntil > now) reopens.push(r.exhaustedUntil)
-  if (fiveHour >= (review ? REVIEW_FIVE_HOUR_LIMIT : FIVE_HOUR_LIMIT)) reopens.push(ahead(r.fiveHourResetsAt))
-  if (weekly >= (review ? REVIEW_WEEKLY_LIMIT : WEEKLY_LIMIT)) reopens.push(ahead(r.weeklyResetsAt))
+  if (fiveHour >= FIVE_HOUR_LIMIT) reopens.push(ahead(r.fiveHourResetsAt))
+  if (weekly >= WEEKLY_LIMIT) reopens.push(ahead(r.weeklyResetsAt))
   if (pace) {
     const share = elapsedWeekShare(r, now)
     if (share === null) reopens.push(null)
@@ -215,8 +207,6 @@ export interface PickOptions {
   pace?: boolean
   /** an account the spawn already has: it keeps it while it is still open */
   prefer?: string | null
-  /** a reviewer: judged against the review ceiling instead of the usual limits */
-  review?: boolean
 }
 
 /**
@@ -226,8 +216,7 @@ export interface PickOptions {
  */
 export function pickEligible(readings: readonly Reading[], loads: Loads, options: PickOptions): Reading | undefined {
   const open = readings.filter(
-    (r) =>
-      isFresh(r, options.now) && !loads.get(r.account) && standing(r, options.now, options.pace, options.review).open,
+    (r) => isFresh(r, options.now) && !loads.get(r.account) && standing(r, options.now, options.pace).open,
   )
   const preferred = open.find((r) => r.account === options.prefer)
   if (preferred) return preferred
@@ -242,7 +231,7 @@ export function pickEligible(readings: readonly Reading[], loads: Loads, options
  */
 export function nextOpening(readings: readonly Reading[], options: PickOptions): Date | undefined {
   const fresh = readings.filter((r) => isFresh(r, options.now))
-  const standings = fresh.map((r) => standing(r, options.now, options.pace, options.review))
+  const standings = fresh.map((r) => standing(r, options.now, options.pace))
   if (standings.some((s) => s.open)) return undefined
   return standings.flatMap((s) => (!s.open && s.until ? [s.until] : [])).sort((a, b) => a.getTime() - b.getTime())[0]
 }

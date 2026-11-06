@@ -21,8 +21,6 @@ export interface HcTerminal {
   parent: string | null
   /** whether the foreground program is Claude Code */
   claude: boolean
-  /** what the terminal was started with: the prompt of an agent started by `rd` is in here */
-  prompt: string | null
   role: string | null
   account: string | null
 }
@@ -87,8 +85,6 @@ export class HcTerminals implements HcLister {
           runs(argv) ||
           runs(t.argv) ||
           'jk.claude.session' in t.labels
-        // The prompt an agent started with is its longest argument; a short one is a flag.
-        const prompt = [...t.argv].sort((a, b) => b.length - a.length)[0] ?? null
         return {
           address: t.address,
           name: t.name,
@@ -100,7 +96,6 @@ export class HcTerminals implements HcLister {
           statusAt: t.status_ms === null ? null : new Date(t.status_ms).toISOString(),
           parent: t.parent,
           claude,
-          prompt: prompt && prompt.length > 80 ? prompt : null,
           role: envOf(t.argv, 'FACTORY_ROLE'),
           account: envOf(t.argv, 'CLAUDE_ACCOUNT_PICKED'),
         }

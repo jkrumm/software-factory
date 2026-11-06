@@ -35,7 +35,6 @@ import {
   Prompt,
   type Quota,
   Placement,
-  ReviewMeta,
   QueueState,
   QueueView,
   QuotaList,
@@ -61,14 +60,13 @@ commands:
   health          the server's /health
   spawn list      the spawn queue, newest first
   spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]
-                  [--placement tab|child|hidden] [--review-job <id> --review-tier light|standard|deep --effort low|medium|high]
+                  [--placement tab|child|hidden]
                   queue a spawn (idempotent by key; the parent defaults to $FACTORY_SESSION: the send-back rule counts a
                   session's workers). The tab goes into the space of --space (default: the repo; a fan worker's
                   worktree names its main checkout); --new-space asks for a space of its own; --placement child makes it a hidden
                   child of the parent's terminal (a tab if there is none), tab a tab (default: worker roles child, others
-                  tab). A reviewer (review v4: --role reviewer, which requires the three review flags and takes no others, runs
-                  hidden: no parent, no tab) is admitted against the review slots, ceiling and the day's deep cap. Uses the token when
-                  FACTORY_TOKEN is set and the socket otherwise
+                  tab). Uses the token when FACTORY_TOKEN is set and
+                  the socket otherwise
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn cancel <key>
                   end a queued or waiting spawn that was never claimed (state cancelled, its key is spent; the same call again is
@@ -120,7 +118,7 @@ commands:
                   Any of them ends a timed wait early (a wait Issue's lead need not wait it out); blocked and decision waits keep their rules
                   (the owner's way out of a block is issue note --wake).
                     phase  --phase <name> [--note <text>]
-                    wait   --until <ISO time> [--why <text>] [--on deep_cap]  a timed wait; the Issue wakes then (--on names the cause the steward may lift early: deep_cap wakes it when the deep review cap has room)
+                    wait   --until <ISO time> [--why <text>]  a timed wait; the Issue wakes then
                     ship   --summary <text> --commit <sha> … [--evidence kind=<k>[,link=<url>][,note=<text>] …]
                            the merged commits; refused (exit 5, saying what is missing) until the evidence they require is on record
                            deploy mode make: deploy from the repo's main checkout first (git pull --ff-only, make deploy, make verify, make version);
@@ -183,7 +181,7 @@ commands:
                   session-end); reads the hook JSON on stdin, spools it, tells the server, always exits 0
 
 --all            list: include dead sessions
---on <what>      session wait: workers, deploy or owner; issue wait: deep_cap
+--on <what>      session wait: workers, deploy or owner
 --done           session wait: the wait is over
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note, issue note|prio: the call's idempotency key
@@ -303,14 +301,6 @@ const statusIssueLine = (i: StatusIssue) =>
     .filter(Boolean)
     .join('\t')
 
-/** `reviews: 1/2 live, deep today 3/15 per account (a 3, b 0)`: the most any one account has started is the figure against the cap. */
-const reviewsLine = (r: NonNullable<Status['reviews']>): string => {
-  const most = Math.max(0, ...r.deepToday.map((d) => d.started))
-  const each = r.deepToday.map((d) => `${d.account} ${d.started}`).join(', ')
-  return `reviews: ${r.live}/${r.slots} live, deep today ${most}/${r.deepCap} per account${each ? ` (${each})` : ''}`
-}
-
-/** `steward: 3 acts in 24 h, 1 handed to the owner`: what the steward did, nothing when it did nothing. */
 const stewardLine = (r: NonNullable<Status['steward']>): string =>
   `steward: ${r.acts} act${r.acts === 1 ? '' : 's'} in 24 h, ${r.exhausted} handed to the owner`
 
@@ -362,7 +352,6 @@ export function statusScreen(s: Status): string {
       ),
     ),
     ...section('ACCOUNTS', s.accounts.map(quotaLine)),
-    ...(s.reviews ? [reviewsLine(s.reviews)] : []),
     ...(s.steward && (s.steward.acts > 0 || s.steward.exhausted > 0) ? [stewardLine(s.steward)] : []),
     ...section('NOTES', [
       ...s.notes.map(promptLine),
@@ -542,9 +531,6 @@ interface Flags {
   space?: string
   'new-space'?: boolean
   placement?: string
-  'review-job'?: string
-  'review-tier'?: string
-  effort?: string
   name?: string
   title?: string
   facts?: string
@@ -699,7 +685,7 @@ function verbBody(verb: IssueVerb, flags: Flags, io: Io): Record<string, unknown
     case 'phase':
       return { ...common, phase: need('phase'), ...optional('note') }
     case 'wait':
-      return { ...common, until: need('until'), ...optional('why'), ...optional('on') }
+      return { ...common, until: need('until'), ...optional('why') }
     case 'ship':
       if (!flags.commit?.length) throw usage('issue ship needs --commit <merged sha>, once per commit')
       return {
@@ -755,19 +741,11 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const name = words[2]
     if (!name || words.length > 3 || !flags.repo || !flags.prompt) {
       throw usage(
-        'usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space] [--placement tab|child|hidden] [--review-job <id> --review-tier light|standard|deep --effort low|medium|high]',
+        'usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space] [--placement tab|child|hidden]',
       )
     }
     const placement = flags.placement === undefined ? undefined : Placement.safeParse(flags.placement).data
     if (flags.placement !== undefined && !placement) throw usage('--placement is tab, child or hidden')
-    const given = [flags['review-job'], flags['review-tier'], flags.effort].filter((v) => v !== undefined).length
-    if (given !== 0 && given !== 3) throw usage('--review-job, --review-tier and --effort go together')
-    const review =
-      given === 0
-        ? undefined
-        : ReviewMeta.safeParse({ jobId: flags['review-job'], tier: flags['review-tier'], effort: flags.effort })
-    if (review && !review.success)
-      throw usage("--review-job is agw's job id, --review-tier light|standard|deep, --effort low|medium|high")
     const parent = flags.parent ?? io.env.FACTORY_SESSION
     // With a token it is the HTTP route; a pane has none, and goes by the socket (the same body, the same checks).
     const { body } = await call(io, '/spawns', {
@@ -784,7 +762,6 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         ...(flags.space ? { space: resolve(flags.space) } : {}),
         ...(flags['new-space'] ? { new_space: true } : {}),
         ...(placement ? { placement } : {}),
-        ...(review?.success ? { review: review.data } : {}),
       },
     })
     return print(body, spawnLine(body))
@@ -1275,9 +1252,6 @@ const OPTIONS = {
   space: { type: 'string' },
   'new-space': { type: 'boolean' },
   placement: { type: 'string' },
-  'review-job': { type: 'string' },
-  'review-tier': { type: 'string' },
-  effort: { type: 'string' },
   name: { type: 'string' },
   title: { type: 'string' },
   facts: { type: 'string' },

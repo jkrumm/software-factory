@@ -53,6 +53,7 @@ import {
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
+import type { AdmissionLimits } from './admission.ts'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
@@ -92,7 +93,6 @@ import { declareWait, getSession, listSessions, recordEvent } from './sessions.t
 import { heartbeat, type TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { releaseSlot, touchSlot } from './slots.ts'
-import type { ReviewLimits } from './review/limits.ts'
 import { cancelSpawn, createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
@@ -114,8 +114,8 @@ export interface AppDeps {
   projects: Pick<ProjectSync, 'syncNow'>
   /** `FACTORY_ALERT_LEADS`: `factory status` says why an alert Issue starts no lead */
   alertLeads?: boolean
-  /** review v4's limits (slots, deep cap): admission of a reviewer spawn, and the reviews line of `/status`; the defaults without */
-  reviewLimits?: ReviewLimits
+  /** the lead cap for admission of a spawn; the default without */
+  admission?: AdmissionLimits
   /** the owner's line, for `POST /notifications/test`; without it the line is off */
   notifier?: Notifier
   /** `FACTORY_NOTIFY_TARGET`: `off` is said in the answer to a test */
@@ -306,7 +306,7 @@ const replay = (spawn: Spawn): Response =>
  * repo-roots check, so a pane that can reach the socket asks for no more than a holder of the token.
  */
 const spawnHandler =
-  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[], reviewLimits?: ReviewLimits) =>
+  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[], admission?: AdmissionLimits) =>
   async (req: Request): Promise<Response> => {
     const input = await parseBody(req, SpawnInput)
     // A replay of a known key answers with the row it made, whatever the role table says now. A spent key (its agent is
@@ -332,17 +332,15 @@ const spawnHandler =
         newSpace: input.new_space,
         tier: entry.tier,
         effort: entry.effort,
-        // A reviewer has no tab: the row says so, whatever the caller left out.
-        placement: input.placement ?? (input.review ? 'hidden' : undefined),
       },
       clock.now(),
-      reviewLimits,
+      admission,
     )
     return created ? respond(Spawn, spawn, 201) : replay(spawn)
   }
 
 /**
- * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels the review it asked for): a queued or waiting spawn
+ * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels what it asked for): a queued or waiting spawn
  * becomes `cancelled`, the same call again answers the same row; one that was claimed is 409 `not_cancellable` carrying
  * the spawn row (`spawn.status`), so a caller reads the state from the body, not from the message.
  */
@@ -696,7 +694,7 @@ export function routes({
   quota,
   projects,
   alertLeads,
-  reviewLimits,
+  admission,
   notifier = new NullNotifier(),
   notifyTarget = 'off',
   commits = new GitCommits(),
@@ -740,13 +738,13 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': {
-      GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads, reviewLimits }))),
+      GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))),
     },
     '/fleet': { GET: route(fleetGetHandler(sql)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
-      POST: route(spawnHandler(sql, clock, roles, repoRoots, reviewLimits)),
+      POST: route(spawnHandler(sql, clock, roles, repoRoots, admission)),
     },
     '/spawns/:key': {
       GET: route(spawnGetHandler(sql, clock)),
@@ -862,7 +860,7 @@ export function serveHooks(deps: {
   slots: number
   commits?: Commits
   review?: Review
-  reviewLimits?: ReviewLimits
+  admission?: AdmissionLimits
 }) {
   const commits = deps.commits ?? new GitCommits()
   const open = { open: true }
@@ -883,7 +881,7 @@ export function serveHooks(deps: {
       '/sessions/:id/note': { POST: viaSocket(noteHandler(deps.sql, deps.clock)) },
       '/sessions/:id/stop-check': { POST: viaSocket(stopCheckHandler(deps.sql, deps.clock)) },
       '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
-      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.reviewLimits)) },
+      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.admission)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/spawns/:key/cancel': { POST: viaSocket(spawnCancelHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },

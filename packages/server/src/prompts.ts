@@ -1,11 +1,4 @@
-import {
-  type Effort,
-  type Placement,
-  type Prompt,
-  type PromptStatus,
-  REVIEWER_ROLE,
-  type Tier,
-} from '@software-factory/contract'
+import { type Effort, type Placement, type Prompt, type PromptStatus, type Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
@@ -403,13 +396,11 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     const refusal = !target
       ? `unknown session ${prompt.session}`
-      : prompt.via === 'resume' && target.spawn?.role === REVIEWER_ROLE
-        ? 'a reviewer is never resumed: its attempt is started afresh'
-        : prompt.via === 'resume' && target.ended
-          ? 'the session ended; nothing to resume'
-          : prompt.via === 'resume' && (await target.alive(prompt.created_at))
-            ? 'the session came back by itself; not resumed'
-            : undefined
+      : prompt.via === 'resume' && target.ended
+        ? 'the session ended; nothing to resume'
+        : prompt.via === 'resume' && (await target.alive(prompt.created_at))
+          ? 'the session came back by itself; not resumed'
+          : undefined
     if (refusal || !target) {
       await giveUp(sql, prompt.id, refusal ?? 'unknown session', clock.now())
       result.failed.push(prompt.id)

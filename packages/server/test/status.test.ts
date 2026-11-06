@@ -60,7 +60,7 @@ describe('factory status', () => {
     await recordReading(db.sql, { account: 'a', ...usage(40, 100, new Date('2026-10-30T14:00:00Z')) }, clock.now())
     await db.sql`
       INSERT INTO factory.spawns (key, repo, prompt, status, hold, resume_at, created_at)
-      VALUES ('held', '/work/repo', 'p', 'queued', 'wave', ${new Date(clock.now().getTime() + 30_000)}, ${clock.now()}),
+      VALUES ('held', '/work/repo', 'p', 'queued', 'claim', ${new Date(clock.now().getTime() + 30_000)}, ${clock.now()}),
              ('broken', '/work/repo', 'p', 'failed', NULL, NULL, ${clock.now()})`
     await db.sql`UPDATE factory.spawns SET error = 'hc terminal.run: exited 1' WHERE key = 'broken'`
     await recordPrompt(db.sql, { id: 'n-pending', session: 'busy', source: 'note', text: 'look at x' }, clock.now())
@@ -100,7 +100,7 @@ describe('factory status', () => {
     const s = await status()
     expect(s.queue.effective).toBe('run')
     expect(s.queue.spawns.map((x) => [x.key, x.status, x.hold])).toEqual([
-      ['held', 'queued', 'wave'],
+      ['held', 'queued', 'claim'],
       ['broken', 'failed', null],
     ])
     expect(s.accounts).toHaveLength(1)
