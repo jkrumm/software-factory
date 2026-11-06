@@ -59,6 +59,7 @@ describe('scripts/env-file.sh', () => {
       'FACTORY_DIGEST_AT',
       'FACTORY_DIGEST_TZ',
       'FACTORY_LEADS_PER_ACCOUNT',
+      'FACTORY_LOAD_CEILING',
     ])
       expect(tokens).toContain(key)
   })

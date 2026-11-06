@@ -1,5 +1,5 @@
 import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
-import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT } from './admission.ts'
+import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT, DEFAULT_LOAD_CEILING } from './admission.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -51,7 +51,7 @@ export interface Config {
   fleetDigestEveryMs: number | null
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
-  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
+  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) and the load ceiling (`FACTORY_LOAD_CEILING`) */
   admission: AdmissionLimits
 }
 
@@ -112,6 +112,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
         1,
         16,
       ),
+      loadCeiling: wholeNumber('FACTORY_LOAD_CEILING', env.FACTORY_LOAD_CEILING, DEFAULT_LOAD_CEILING, 1, 100_000),
     },
   }
 }

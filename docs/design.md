@@ -533,12 +533,14 @@ and the rest wait for the next sample.
 **Queue state `run|pace|drain`** (`queue.ts`, table `queue_states`): per scope, global (`project` null) or a project (the
 repo path, resolved like a spawn's); `initiative` is a nullable column for F4, not read yet. No row is `run`. The most
 restrictive scope that applies wins. `drain` starts nothing and never interrupts; `pace` as above. A spawn held by a rule
-stays `queued` with `hold` set (`drain|pace|claim`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
+stays `queued` with `hold` set (`drain|pace|claim|load`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
 `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 
 **The lead cap** (v3 §7): a spawn with role `lead` **and an Issue** is not started on an account that already has `FACTORY_LEADS_PER_ACCOUNT` (default 2, a whole number 1 to 16, listed in `scripts/env-file.sh`)
 live Issue-lead sessions (sessions `liveSessions` reads whose spawn has role `lead` and an `issue_id`; `issueLeadsByAccount` in `capacity.ts`). An account at the cap is passed over and another with room is picked; with none the spawn
-is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first opening, never spilled. A program lead and a wave have no Issue: not counted, not capped. Decided again at every claim (a reclaim does not ask). **Not built:** a `lead_cap` hold reason: `spawns.hold` has a CHECK constraint, so the new reason needs a migration (and `HoldReason` in the contract); until then the wait is a plain `waiting` with no reason shown.
+is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first opening, never spilled. A lead whose Issue waits on the owner's decision (`waiting`, reason `decision`) holds no capacity and is not counted. A program lead and a wave have no Issue: not counted, not capped. Decided again at every claim (a reclaim does not ask). **Not built:** a `lead_cap` hold reason: `spawns.hold` has a CHECK constraint, so the new reason needs a migration (and `HoldReason` in the contract); until then the wait is a plain `waiting` with no reason shown.
+
+**The load ceiling:** a spawn with role `lead` **and an Issue** is not admitted while the machine's 1-minute load average (`os.loadavg()`, read on the server's host, the mini) is above `FACTORY_LOAD_CEILING` (default 60, a whole number from 1, listed in `scripts/env-file.sh`): it stays `queued` with hold `load` (migration `034`), is looked at again every `HOLD_RECHECK_MS`, and starts at the first look under the ceiling. The rule is `heldByLoad(load, ceiling)` with the reading passed in, checked before the claim so a held lead queues behind nothing. Running leads, resumes, program leads and waves are never held. While any spawn is held, `factory status` shows the health line `held by load: Issue N (and K more) waits for the machine, new leads start when its load is under the ceiling`. No model is involved.
 
 #### Roles
 

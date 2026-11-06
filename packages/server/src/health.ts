@@ -172,7 +172,25 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
     lines.push(`Issue ${issue.id}: ${MAX_REGRESSIONS} regressions, the next one parks it`)
   }
   lines.push(...(await decisionClaimLines(sql, now)))
+  lines.push(...(await loadHoldLines(sql)))
   return lines
+}
+
+/**
+ * `held by load: Issue N (and K more) wait for the machine`: Issue leads admission holds because the 1-minute load average is above
+ * `FACTORY_LOAD_CEILING`. A held spawn is looked at again every `HOLD_RECHECK_MS`, so the line is there while the hold is and gone at the
+ * first look under the ceiling.
+ */
+async function loadHoldLines(sql: SQL): Promise<string[]> {
+  const rows: { issue_id: number }[] = await sql`
+    SELECT issue_id FROM factory.spawns
+    WHERE status = 'queued' AND hold = 'load' AND issue_id IS NOT NULL ORDER BY issue_id`
+  const [first, ...rest] = rows.map((row) => row.issue_id)
+  if (first === undefined) return []
+  const more = rest.length > 0 ? ` (and ${rest.length} more)` : ''
+  return [
+    `held by load: Issue ${first}${more} waits for the machine, new leads start when its load is under the ceiling`,
+  ]
 }
 
 /** An Issue waiting on the owner's decision that holds a project's claim while another Issue has been queued behind it this long gets a line. */
