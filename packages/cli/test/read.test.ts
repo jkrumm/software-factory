@@ -50,6 +50,7 @@ const CARD = {
   createdAt: '2026-11-06T10:00:00.000Z',
   updatedAt: '2026-11-06T10:30:00.000Z',
   closedAt: null,
+  heldBy: null,
   waitingOnOwner: false,
 }
 const SESSION = {

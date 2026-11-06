@@ -86,6 +86,8 @@ export const IssueCard = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   closedAt: z.string().nullable(),
+  /** the Issue holding the project claim this one waits behind (the lowest id if several), else null */
+  heldBy: z.number().int().nullable().default(null),
   waitingOnOwner: z.boolean(),
 })
 export type IssueCard = z.infer<typeof IssueCard>

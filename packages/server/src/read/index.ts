@@ -156,10 +156,11 @@ function leadSpawn(spawns: readonly Spawn[], issue: IssueSummary): Spawn | undef
 }
 
 /** The fixed sentence for an Issue that has said nothing of its own yet; a queued one names its spawn's hold when it has one. */
-function stateSentence(issue: IssueSummary, spawn?: Spawn): string {
+function stateSentence(issue: IssueSummary, spawn?: Spawn, heldBy: number | null = null): string {
+  const behind = `Queued behind another Issue that holds ${basename(issue.repo)}.`
   switch (issue.state) {
     case 'queued':
-      return holdSentence(spawn) ?? 'Queued, waiting for a free account.'
+      return holdSentence(spawn) ?? (heldBy === null ? 'Queued, waiting for a free account.' : behind)
     case 'settling':
       return 'Being settled.'
     case 'working':
@@ -167,6 +168,7 @@ function stateSentence(issue: IssueSummary, spawn?: Spawn): string {
     case 'watching':
       return 'Shipped, held for its check.'
     case 'waiting':
+      if (issue.reason === 'claim' && heldBy !== null) return behind
       return (issue.reason && WAITING_ISSUE[issue.reason]) || 'Waiting.'
     case 'closed':
       return issue.outcome === 'dropped'
@@ -482,7 +484,19 @@ export class Reader {
     const goals = await loadGoals(sql, ids)
     const asking: { issue_id: number }[] = await sql`
       SELECT DISTINCT issue_id FROM factory.decisions WHERE issue_id IN ${sql(ids)} AND answered_at IS NULL`
+    // The holder of the project claim a queued Issue waits behind (the project by `projectOfPath`'s rule), the lowest id if several.
+    const holders: { id: number; holder: number }[] = await sql`
+      SELECT i.id, min(c.issue_id) AS holder
+      FROM factory.issues i
+      JOIN LATERAL (
+        SELECT p.name FROM factory.projects p
+        WHERE p.repo = i.repo OR starts_with(i.repo, p.repo || '/')
+        ORDER BY length(p.repo) DESC LIMIT 1) proj ON true
+      JOIN factory.claims c ON c.key = 'repo:' || proj.name AND c.held_at IS NOT NULL AND c.issue_id <> i.id
+      WHERE i.id IN ${sql(ids)} AND (i.state = 'queued' OR (i.state = 'waiting' AND i.reason = 'claim'))
+      GROUP BY i.id`
     return {
+      heldBy: new Map(holders.map((h) => [h.id, h.holder])),
       phases: new Map(phases.map((p) => [p.issue_id, p.payload])),
       closings: new Map(closings.map((p) => [p.issue_id, p.payload])),
       asking: new Set(asking.map((a) => a.issue_id)),
@@ -501,11 +515,12 @@ export class Reader {
     const lead = open && current && current.card.state !== 'dead' ? current.card.id : null
     const closing = extras.closings.get(issue.id)
     const closingWords = isRecord(closing) ? (text(closing.summary) ?? text(closing.reason)) : null
+    const heldBy = extras.heldBy.get(issue.id) ?? null
     const headline = lead && !visible ? ctx.digest.headline(lead) : null
     const summary = open
       ? (headline ??
         (phaseNote ? firstSentence(phaseNote) : null) ??
-        stateSentence(issue, leadSpawn(ctx.snapshot?.queue.spawns ?? [], issue)))
+        stateSentence(issue, leadSpawn(ctx.snapshot?.queue.spawns ?? [], issue), heldBy))
       : closingWords
         ? firstSentence(closingWords)
         : stateSentence(issue)
@@ -539,6 +554,7 @@ export class Reader {
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
       closedAt: issue.closedAt,
+      heldBy,
       waitingOnOwner:
         open &&
         (extras.asking.has(issue.id) ||
@@ -641,6 +657,8 @@ export class Reader {
 }
 
 interface Extras {
+  /** the Issue holding the claim an Issue waits behind */
+  heldBy: ReadonlyMap<number, number>
   phases: ReadonlyMap<number, unknown>
   closings: ReadonlyMap<number, unknown>
   asking: ReadonlySet<number>
