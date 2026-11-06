@@ -97,7 +97,7 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
-      admission: { leadsPerAccount: 2 },
+      admission: { leadsPerAccount: 2, loadCeiling: 60 },
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -122,6 +122,13 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '' }).admission.leadsPerAccount).toBe(2)
     for (const bad of ['0', '-1', '1.5', 'many', '17'])
       expect(() => loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: bad })).toThrow('FACTORY_LEADS_PER_ACCOUNT')
+  })
+
+  test('FACTORY_LOAD_CEILING is the load average above which no new Issue lead starts, 60 by default, and a mistake is refused', () => {
+    expect(loadConfig({ ...env, FACTORY_LOAD_CEILING: '90' }).admission.loadCeiling).toBe(90)
+    expect(loadConfig({ ...env, FACTORY_LOAD_CEILING: '' }).admission.loadCeiling).toBe(60)
+    for (const bad of ['0', '-1', '1.5', 'many'])
+      expect(() => loadConfig({ ...env, FACTORY_LOAD_CEILING: bad })).toThrow('FACTORY_LOAD_CEILING')
   })
 
   test('FACTORY_ASK_JUDGE is on unless it says off, and a mistake is refused', () => {

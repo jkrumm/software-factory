@@ -441,6 +441,48 @@ describe('classify, then admission', () => {
       await pass({ admission })
       expect(Object.values(await states()).sort()).toEqual(['started on a', 'waiting'])
     })
+
+    test('a lead whose Issue waits on the owner’s decision holds no capacity: the waiting spawn starts', async () => {
+      const [first, , third] = await twoOnOne()
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('waiting')
+      await post(first ?? 0, 'ask', { question: 'Which?', session: leadKey(first ?? 0, 1) })
+      await pass()
+      expect(await issue(first ?? 0)).toMatchObject({ state: 'waiting', reason: 'decision' })
+      await sample(['a'])
+      clock.advance(HOLD_RECHECK_MS)
+      await drive(3)
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('started on a')
+    })
+  })
+
+  describe('the load ceiling', () => {
+    const lines = async () => (await statusOf()).health.filter((line) => line.startsWith('held by load'))
+    const held = async () => (await spawns()).map((s: { status: string; hold: string | null }) => [s.status, s.hold])
+
+    test('holds a new lead above the ceiling with a health line, and releases it below', async () => {
+      let reading = 346
+      const admission = { loadCeiling: 60, loadAverage: () => reading }
+      const id = await file(newRepo())
+      for (let i = 0; i < 4; i++) await pass({ admission })
+      expect(await held()).toEqual([['queued', 'load']])
+      expect((await issue(id)).state).toBe('working')
+      expect(await lines()).toEqual([expect.stringContaining(`Issue ${id} waits for the machine`)])
+
+      reading = 60
+      clock.advance(HOLD_RECHECK_MS)
+      for (let i = 0; i < 3; i++) await pass({ admission })
+      expect(await held()).toEqual([['started', null]])
+      expect(await lines()).toEqual([])
+    })
+
+    test('touches no running lead and no spawn without an Issue', async () => {
+      const running = await lead()
+      const admission = { loadCeiling: 60, loadAverage: () => 346 }
+      await pass({ admission })
+      expect((await spawns()).find((s: { key: string }) => s.key === running.key)).toMatchObject({ status: 'started' })
+      const res = await app.send('POST', '/spawns', { key: 'program-lead', repo: newRepo(), prompt: 'p', role: 'lead' })
+      expect(await res.json()).toMatchObject({ status: 'queued', hold: null })
+    })
   })
 
   test('a note with no lead to go to parks the Issue as lead_gone, with a line for the owner', async () => {

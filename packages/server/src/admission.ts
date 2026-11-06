@@ -1,3 +1,4 @@
+import { loadavg } from 'node:os'
 import type { HoldReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { currentLoads, issueLeadsByAccount, latestReadings, nextOpening, pickEligible } from './capacity.ts'
@@ -11,10 +12,21 @@ export const LEAD_ROLE = 'lead'
 /** `FACTORY_LEADS_PER_ACCOUNT`: most live Issue-lead sessions on one account. */
 export const DEFAULT_LEADS_PER_ACCOUNT = 2
 
-/** What admission is bounded by: the lead cap (the default without). */
+/** `FACTORY_LOAD_CEILING`: the 1-minute load average above which no new Issue lead is admitted. */
+export const DEFAULT_LOAD_CEILING = 60
+
+/** What admission is bounded by: the lead cap (the default without) and the load ceiling (none without: nothing is held for load). */
 export interface AdmissionLimits {
   leadsPerAccount?: number
+  loadCeiling?: number
+  /** the machine's 1-minute load average; the default reads `os.loadavg()` */
+  loadAverage?: () => number
 }
+
+/** The rule: a new Issue lead waits while the load is above the ceiling. The reading is passed in; running leads are never touched. */
+export const heldByLoad = (load: number, ceiling: number): boolean => load > ceiling
+
+const machineLoad = (): number => loadavg()[0] ?? 0
 
 /** How long a held spawn waits before admission looks at it again (a session dying wakes nothing). */
 export const HOLD_RECHECK_MS = 30_000
@@ -55,7 +67,7 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
 }
 
 /**
- * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), `pace` (one live session per project), the Issue's claim on its project (`claim`; a spawn with an Issue only),
+ * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), the machine's load (a lead with an Issue is held, hold `load`, while the 1-minute load average is above `limits.loadCeiling`, `FACTORY_LOAD_CEILING`), `pace` (one live session per project), the Issue's claim on its project (`claim`; a spawn with an Issue only),
  * and then an account with room, which under `pace` is also one whose weekly use is at or below the elapsed share of its week.
  * Never spills: with every account closed the answer is to wait for the first opening. Works inside the caller's transaction and
  * calls nothing outside the database; the one write is the claim, taken or queued (no account is reserved by a hold).
@@ -75,6 +87,14 @@ export async function admit(
 ): Promise<Decision> {
   const state = effectiveState(await loadQueueStates(tx), candidate.repo)
   if (state === 'drain') return { kind: 'hold', reason: 'drain' }
+  // A new Issue lead waits while the machine is overloaded; before the claim, so a held lead takes no place in the queue.
+  if (
+    candidate.role === LEAD_ROLE &&
+    candidate.issueId != null &&
+    limits.loadCeiling !== undefined &&
+    heldByLoad((limits.loadAverage ?? machineLoad)(), limits.loadCeiling)
+  )
+    return { kind: 'hold', reason: 'load' }
 
   const sessions = state === 'pace' ? await readLive(tx, now, live) : []
   const others = sessions.filter((s) => s.id !== candidate.key && inRepo(s.repo, candidate.repo))

@@ -238,7 +238,7 @@ export function nextOpening(readings: readonly Reading[], options: PickOptions):
 
 /**
  * Live Issue-lead sessions per account: sessions whose spawn has role `lead` and an Issue (a program lead or a wave has none and is
- * not counted), as `liveSessions` reads them. `except` leaves the spawn being admitted out. An Issue lead is "live" from its claim on.
+ * not counted), as `liveSessions` reads them. A lead whose Issue waits on the owner's decision holds no capacity and is not counted. `except` leaves the spawn being admitted out. An Issue lead is "live" from its claim on.
  */
 export async function issueLeadsByAccount(
   sql: SQL,
@@ -248,8 +248,10 @@ export async function issueLeadsByAccount(
   const keys = sessions.filter((s) => s.role === 'lead' && s.id !== except).map((s) => s.id)
   if (keys.length === 0) return new Map()
   const rows: { account: string; n: number }[] = await sql`
-    SELECT account, count(*)::int AS n FROM factory.spawns
-    WHERE key IN ${sql(keys)} AND role = 'lead' AND issue_id IS NOT NULL AND account IS NOT NULL
-    GROUP BY account`
+    SELECT p.account, count(*)::int AS n FROM factory.spawns p
+    JOIN factory.issues i ON i.id = p.issue_id
+    WHERE p.key IN ${sql(keys)} AND p.role = 'lead' AND p.account IS NOT NULL
+      AND NOT (i.state = 'waiting' AND i.reason = 'decision')
+    GROUP BY p.account`
   return new Map(rows.map((r) => [r.account, r.n]))
 }
