@@ -60,9 +60,16 @@ export const lineKey = (sent: string): string => `line:${hash(sent, 12)}`
 /**
  * What is sent for an ask or a health line: its plain words (no ids) under a context line. It depends on the raw text alone, so the
  * read API finds the answer from the same text, and one text is one answer for every line that has it. agw reads it as a `session`.
+ * An elapsed time (`for 17 min`, `for 3 h`) is rebuilt into a line at every build: it is left out, or each minute would be a new
+ * item and a new call, and the stored answer would never be found again (the model's own `lineKey` leaves it out for the same reason).
  */
 export const lineText = (raw: string): string =>
-  head(wellFormed(`Role: ask or health line\nLast message: ${plainText(raw)}`), LIMIT.session)
+  head(
+    wellFormed(
+      `Role: ask or health line\nLast message: ${plainText(raw).replace(/\b\d+(\.\d+)? (h|min)\b/g, 'a while')}`,
+    ),
+    LIMIT.session,
+  )
 
 // --- the feed: what the builder offers ---------------------------------------------------------------------------
 

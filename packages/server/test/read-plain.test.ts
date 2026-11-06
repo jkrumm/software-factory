@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { lineKey, lineText } from '../src/fleet/digest.ts'
 import { fallbackWords, plainText } from '../src/read/plain.ts'
 
 const IDS = /lead-\d|\bIssue \d|[0-9a-f]{8}-[0-9a-f]{4}|\b[0-9a-f]{7,}\b|\bt\d+\b|\/Users/
@@ -58,5 +59,16 @@ describe('fallbackWords', () => {
 
   test('a text of only ids still has words', () => {
     expect(fallbackWords('t12', 'ask').short).toBe('A question for the owner')
+  })
+})
+
+describe('lineText', () => {
+  test('an elapsed time does not change the item the digest is asked about', () => {
+    const a = lineText('stuck lead-5-1: nothing moved for 17 min')
+    const b = lineText('stuck lead-5-1: nothing moved for 22 min')
+    const c = lineText('walled lead-5-1 for 3 h on me')
+    expect(lineKey(a)).toBe(lineKey(b))
+    expect(lineKey(a)).not.toBe(lineKey(c))
+    expect(a).not.toMatch(/\d/)
   })
 })
