@@ -107,7 +107,7 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 - [x] Filed and closed `done`: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
   (agent-workflows: `agw check` inside the slot, capped test workers; `--after 71`). iris (`xcodebuild` in the slot, a simulator shut down
   after its verify) is Issue 86, queued behind iris's claim (Issue 77, waiting for the deep-cap day to turn).
-- [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
+- [x] Live proof (2026-11-06, dotfiles Issue 152): the dotfiles `hooks/test-slot.ts` PreToolUse hook puts test runners outside the factory (`make check`, vitest, pytest, `bun test`, …) through `factory slot run` with workers capped at half the cores. Three checks started at once ran one after the other (starts 10:34:43, :49, :55 and a direct `factory slot run` triplet, each waiting for the last); load peaked at 15 through a full dotfiles `make check` (limit 40).
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: done -->
 - [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the hidden review sessions (after Issue 67's fix is
