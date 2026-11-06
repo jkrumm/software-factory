@@ -557,7 +557,10 @@ itself, with no server and no token: `rd work --role` depends on `role get <role
 #### Process, health, contract, schema and API
 
 **One process.** A session-level Postgres advisory lock is taken before anything else, and a watchdog exits the server
-if its connection loses it; a second copy exits 1. Every
+if its connection loses it; a second copy asks for the lock again every 500 ms for 45 s (the old server may be in its SIGTERM
+shutdown, which releases the lock last), then exits 1. A deploy's and a rollback's `stop_service` also waits for the old
+server's process to be gone, not only for launchd to drop the job: launchd can unload it while it still holds the lock. A
+shutdown that hits its backstop logs the step it was in. Every
 advisory key lives in `src/locks.ts` and they must stay distinct.
 
 **`/health` is the ticker's pulse:** the last successful tick and the last tick error; no success within three

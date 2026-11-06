@@ -102,6 +102,35 @@ describe('one process', () => {
     }
   })
 
+  test('a second server started while the first is still shutting down gets the lock once it is released', async () => {
+    const other = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
+    try {
+      const first = await acquireSingleton(db.sql)
+      expect(first).toBeDefined()
+      const waiting = acquireSingleton(other, { waitMs: 5_000, retryMs: 20 })
+      await Bun.sleep(150)
+      await first?.release()
+      const second = await waiting
+      expect(second).toBeDefined()
+      await second?.release()
+    } finally {
+      await other.close()
+    }
+  })
+
+  test('a second server gives up when the first never lets go within the wait', async () => {
+    const other = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
+    try {
+      const first = await acquireSingleton(db.sql)
+      const started = Date.now()
+      expect(await acquireSingleton(other, { waitMs: 200, retryMs: 20 })).toBeUndefined()
+      expect(Date.now() - started).toBeGreaterThanOrEqual(200)
+      await first?.release()
+    } finally {
+      await other.close()
+    }
+  })
+
   test('a server whose lock connection is lost is told, so it can exit', async () => {
     const lostReasons: string[] = []
     const holder = new SQL({ adapter: 'postgres', path: db.path, username: 'factory', database: 'postgres', max: 2 })
