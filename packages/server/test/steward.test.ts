@@ -225,11 +225,9 @@ describe('rule 1: a block with a live lead is woken', () => {
     expect(counted.n).toBe(1)
   })
 
-  test('the away rule does not fold the steward line unless the desk shows it live', () => {
-    const away = { desk: { at: null, present: false }, phone: { at: null, present: false } }
-    expect(foldReason('notify:steward:7:blocked', away)).toBeNull()
-    expect(foldReason('notify:steward:7:blocked', { ...away, desk: { at: null, present: true } })).toContain('desk')
-    expect(foldReason('notify:parked:7:3', away)).not.toBeNull()
+  test('the owner is always away: the steward line goes out, other lines are folded', () => {
+    expect(foldReason('notify:steward:7:blocked')).toBeNull()
+    expect(foldReason('notify:parked:7:3')).not.toBeNull()
   })
 
   test('a block that names the verification re-runs it off the tick first and puts the result in the note', async () => {

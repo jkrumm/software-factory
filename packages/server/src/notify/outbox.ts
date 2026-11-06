@@ -1,6 +1,5 @@
-import type { Notification, NotificationKind, Presence } from '@software-factory/contract'
+import type { Notification, NotificationKind } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { readPresence } from '../fleet/presence.ts'
 import type { Notifier } from './port.ts'
 import type { Message } from './text.ts'
 
@@ -15,19 +14,13 @@ export const backoffMs = (attempt: number): number => Math.min(BACKOFF.capMs, BA
 export const LEASE_MS = 120_000
 
 /**
- * The away rule (FV Wave 4), decided at send time from presence: why a message is folded instead of sent, or `null` when it goes out.
- * A decision (`notify:ask:*`, the `yours` tier) and the steward's spent retries (`notify:steward:*`) go out unless the desk is present; the morning reading and a test always go out; every
- * other message goes out only while the phone is present and the desk is not. Before the board reports presence the owner is away.
+ * The away rule: why a message is folded instead of sent, or `null` when it goes out. The owner is always treated as away: a decision
+ * (`notify:ask:*`), the steward's spent retries (`notify:steward:*`), the morning reading and a test go out; every other message is folded.
  */
-export function foldReason(key: string, presence: Pick<Presence, 'desk' | 'phone'>): string | null {
+export function foldReason(key: string): string | null {
   if (key.startsWith('notify:digest:') || key.startsWith('notify:test:')) return null
-  // The steward's line is a machine that gave up on an Issue and needs the owner now, like an ask: only a present desk, which shows it live, folds it.
-  if (key.startsWith('notify:ask:') || key.startsWith('notify:steward:'))
-    return presence.desk.present ? 'the desk is present: the board shows it live' : null
-  if (presence.desk.present) return 'the desk is present: the board shows it live'
-  return presence.phone.present
-    ? null
-    : 'the owner is away and this is not a decision: its facts are in the since reading'
+  if (key.startsWith('notify:ask:') || key.startsWith('notify:steward:')) return null
+  return 'the owner is away and this is not a decision: its facts are in the morning reading and on the fleet view'
 }
 
 /**
@@ -64,9 +57,8 @@ export async function claim(sql: SQL, now: Date, limit: number): Promise<Claimed
       ORDER BY created_at, key LIMIT ${limit}
       FOR UPDATE SKIP LOCKED`
     const claimed: Claimed[] = []
-    const presence = due.length > 0 ? await readPresence(tx, now) : undefined
     for (const row of due) {
-      const folded = presence ? foldReason(row.key, presence) : null
+      const folded = foldReason(row.key)
       if (folded !== null) {
         // Never sent later; 'infinity' keeps a release that does not know the column from finding the row due.
         await tx`

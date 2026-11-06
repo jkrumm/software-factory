@@ -6,11 +6,12 @@ import { createIssue } from '../src/issues/create.ts'
 import { enqueue } from '../src/issues/inbox.ts'
 import { intakeAlert } from '../src/issues/intake.ts'
 import { issuePass } from '../src/issues/worker.ts'
-import { digestDue, localParts } from '../src/notify/digest.ts'
+import { digestDue, loadMorning, localParts, renderMorning } from '../src/notify/digest.ts'
 import { notifyPass } from '../src/notify/index.ts'
 import {
   backoffMs,
   claim,
+  foldReason,
   LEASE_MS,
   listNotifications,
   MAX_ATTEMPTS,
@@ -42,9 +43,6 @@ beforeEach(async () => {
   clock = new FakeClock(new Date('2026-11-02T10:00:00.000Z'))
   notifier = new FakeNotifier()
   n = 0
-  // The away rule folds what is not a decision while nobody is present (FV Wave 4); these tests are about delivery, so the phone is
-  // in the foreground for good (an act dated far ahead is present at any clock the tests set).
-  await db.sql`INSERT INTO factory.fleet_presence_acts (place, act, at) VALUES ('phone', 'foreground', '2100-01-01T00:00:00Z')`
 })
 
 const now = () => clock.now()
@@ -461,7 +459,61 @@ describe('HermesNotifier', () => {
   })
 })
 
+describe('the away rule', () => {
+  test('the owner is always away: a decision, the steward, the morning reading and a test go out; the rest is folded', async () => {
+    for (const key of ['notify:ask:7:q', 'notify:steward:7:blocked', 'notify:digest:2026-11-02', 'notify:test:1'])
+      expect(foldReason(key)).toBeNull()
+    expect(foldReason('notify:parked:7:3')).toContain('morning reading')
+    await record(db.sql, { key: 'notify:parked:7:3', kind: 'parked', issueId: null, text: 'parked' }, now())
+    await record(db.sql, { key: 'notify:test:1', kind: 'test', issueId: null, text: 'hello' }, now())
+    clock.advance(1000)
+    await sendDue(db.sql, { notifier, now })
+    expect(notifier.sent).toEqual(['hello'])
+    const [row] =
+      await db.sql`SELECT folded_at, folded_reason FROM factory.notifications WHERE key = 'notify:parked:7:3'`
+    expect(row.folded_at).not.toBeNull()
+  })
+})
+
 describe('the digest', () => {
+  test('the morning reading is facts: Issues shipped in 24 h, asks, health and open Issues from the snapshot; an IuRoot item is a count', async () => {
+    const made = await file()
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${new Date(now().getTime() - 3600_000)}, title = 'Ship the thing' WHERE id = ${made.id}`
+    const before = await loadMorning(db.sql, { now: now(), date: '2026-11-02', isVisible: () => false })
+    expect(before).toContain('Shipped: 1')
+    expect(before).toContain(`Issue ${made.id} “Ship the thing”`)
+    expect(before).toContain('The fleet model was not built yet')
+    const ask = {
+      id: 'a',
+      kind: 'question',
+      repo: '/x/iu',
+      session: null,
+      short: null,
+      text: 'SECRET-IU-TEXT',
+      source: 'decision',
+      at: 'x',
+    }
+    const health = { id: 'h', kind: 'park', text: 'Issue 9 parked', repo: null, since: 'x' }
+    const text = renderMorning(
+      {
+        since: new Date('2026-11-01T10:00:00Z'),
+        shipped: [],
+        snapshot: {
+          asks: [ask, { ...ask, id: 'b', repo: '/x/own', text: 'own question' }],
+          health: [health],
+          issues: [],
+        } as never,
+        isVisible: (path) => path === '/x/iu',
+      },
+      '2026-11-02',
+    )
+    expect(text).toContain('Needs you: 2: question “own question”')
+    expect(text).not.toContain('SECRET-IU-TEXT')
+    expect(text).toContain('Health: 1: “Issue 9 parked”')
+    expect(text).toContain('Read-only area: 1 items, counted only')
+    expect(text.length).toBeLessThanOrEqual(3000)
+  })
+
   test('due from 07:30 local until noon, in the zone, across the day and the clock change', () => {
     const due = (iso: string) => digestDue(new Date(iso), { at: '07:30', timeZone: 'Europe/Berlin' })
     expect(due('2026-11-02T06:29:00Z')).toBeNull() // 07:29 CET
