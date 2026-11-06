@@ -401,6 +401,52 @@ describe('insights', () => {
     expect(grown.stats.tokens.input).toBe(19)
   })
 
+  test('a growing file counts only the appended lines, each parsed once', async () => {
+    writeTranscript(transcript)
+    const insights = transcripts()
+    await insights.read(transcript)
+    const afterFirst = insights.parsed
+    expect(afterFirst).toBeGreaterThan(0)
+    for (const [n, id] of [1, 2, 3].entries()) {
+      appendFileSync(
+        transcript,
+        `${assistant(`g${id}`, [{ type: 'tool_use', id: `gt${id}`, name: 'Read' }], { input_tokens: 1, output_tokens: 1 })}\n`,
+      )
+      const { stats } = await insights.read(transcript)
+      expect(stats.toolCalls).toBe(3 + n + 1)
+      expect(stats.tokens.input).toBe(14 + n + 1)
+      expect(insights.parsed).toBe(afterFirst + n + 1)
+    }
+  })
+
+  test('a partial trailing line is not counted until it is complete', async () => {
+    writeTranscript(transcript)
+    const insights = transcripts()
+    await insights.read(transcript)
+    const line = assistant('p1', [{ type: 'tool_use', id: 'pt1', name: 'Read' }], { input_tokens: 7, output_tokens: 1 })
+    appendFileSync(transcript, line.slice(0, 30))
+    const half = await insights.read(transcript)
+    expect(half.partial).toBe(false)
+    expect(half.stats.toolCalls).toBe(3)
+    appendFileSync(transcript, `${line.slice(30)}\n`)
+    const whole = await insights.read(transcript)
+    expect(whole.stats.toolCalls).toBe(4)
+    expect(whole.stats.tokens.input).toBe(21)
+  })
+
+  test('a file that shrank is counted from the start', async () => {
+    writeTranscript(transcript)
+    const insights = transcripts()
+    await insights.read(transcript)
+    writeFileSync(
+      transcript,
+      `${assistant('s1', [{ type: 'tool_use', id: 'st1', name: 'Read' }], { input_tokens: 2, output_tokens: 1 })}\n`,
+    )
+    const { stats } = await insights.read(transcript)
+    expect(stats.toolCalls).toBe(1)
+    expect(stats.tokens).toEqual({ input: 2, output: 1, cacheRead: 0, cacheWrite: 0 })
+  })
+
   test('the cache is bounded', async () => {
     const insights = transcripts()
     for (const name of ['a', 'b', 'c']) {

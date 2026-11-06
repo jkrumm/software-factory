@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const namesIuRoot = (path: string): boolean => path.split('/').includes('IuRoot')
+export const namesIuRoot = (path: string): boolean => path.split('/').includes('IuRoot')
 
 /**
  * Whether a place is the owner's read-only, never-leaves-the-mini ground: under a visible root as configured, anywhere under a

@@ -17,6 +17,7 @@ import type { SQL } from 'bun'
 import { latestReadings, toQuota } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
 import { type DigestView, readDigestCache } from '../fleet/digest.ts'
+import { namesIuRoot } from '../fleet/place.ts'
 import { readSnapshot } from '../fleet/store.ts'
 import { getIssueView } from '../issues/follow.ts'
 import { leadKey } from '../issues/names.ts'
@@ -35,9 +36,6 @@ const SESSION_LIMIT = 200
 /** How far down a lead's tree of started sessions is followed. */
 const TREE_DEPTH = 4
 const TITLE_WORDS_MAX = 80
-
-/** IuRoot is recognised by place when the server brings no richer rule. */
-export const namesIuRoot = (path: string): boolean => path.split('/').includes('IuRoot')
 
 export interface ReadDeps {
   sql: SQL
