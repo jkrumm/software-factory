@@ -65,6 +65,8 @@ export const IssueCard = z.object({
   title: z.string(),
   /** one sentence on where it stands */
   summary: z.string(),
+  /** one sentence on what the Issue is for: the digest's answer, else the first sentence of the filed goal, else the filed title (additive) */
+  about: z.string().default(''),
   state: IssueState,
   reason: WaitReason.nullable(),
   outcome: IssueOutcome.nullable(),
@@ -92,6 +94,8 @@ export const SessionCard = z.object({
   id: z.string(),
   /** the Issue it works or belongs to (a lead's, or the lead's tree) */
   issue: z.number().int().nullable(),
+  /** the session that started it, when one did (additive) */
+  parent: z.string().nullable().default(null),
   role: z.string().nullable(),
   title: z.string(),
   summary: z.string(),
@@ -169,6 +173,8 @@ export type OverviewCounts = z.infer<typeof OverviewCounts>
 export const ReadAsk = FleetAsk.extend({
   short: z.string(),
   summary: z.string(),
+  /** the Issue it is about: from a decision or lead session id, else the Issue of its session (additive) */
+  issue: z.number().int().nullable().default(null),
   /** older than 24 h */
   stale: z.boolean(),
 })

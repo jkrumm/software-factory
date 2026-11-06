@@ -36,6 +36,8 @@ export const Spawn = z.object({
   error: z.string().nullable(),
   /** the session that asked for it, when one did */
   parent: z.string().nullable(),
+  /** the Issue it works for (a lead's spawn), from `issue_id`; a snapshot stored before this field has none */
+  issue: z.number().int().nullable().default(null),
 })
 export type Spawn = z.infer<typeof Spawn>
 

@@ -18,11 +18,22 @@ export function cut(text: string, max = 140): string {
   return `${(space > max / 2 ? head.slice(0, space) : head).replace(/[\s,;:.-]+$/, '')}…`
 }
 
-/** The first sentence of a text, cut when it is long. */
+/**
+ * The first sentence of a text. One that is longer than `max` is cut at its last clause boundary (`;`, ` — `, `: `, `, `) past
+ * half of `max`, else at a word; the cut ends in `…`.
+ */
 export function firstSentence(text: string, max = 160): string {
   const one = text.replace(/\s+/g, ' ').trim()
   const end = /[.!?](\s|$)/.exec(one)
-  return cut(end ? one.slice(0, end.index + 1) : one, max)
+  const sentence = end ? one.slice(0, end.index + 1) : one
+  if (sentence.length <= max) return sentence
+  const window = sentence.slice(0, max)
+  let at = -1
+  for (const m of window.matchAll(/[;:,](?=\s)|\s—(?=\s)/g)) {
+    if (m.index > max / 2 && m.index < max - 1) at = m.index
+  }
+  if (at < 0) return cut(sentence, max)
+  return `${window.slice(0, at).replace(/[\s,;:.-]+$/, '')}…`
 }
 
 const after = (lead: string, quoted: string | null): string => (quoted ? `${lead}: ${cut(quoted)}` : `${lead}.`)

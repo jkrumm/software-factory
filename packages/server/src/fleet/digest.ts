@@ -50,12 +50,44 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 const hash = (text: string, length = 16): string => createHash('sha256').update(text).digest('hex').slice(0, length)
 export const reasonText = (reason: string): string => head(wellFormed(reason), REASON_MAX)
 
-export type ItemKind = 'heading' | 'session' | 'reply' | 'line'
+export type ItemKind = 'heading' | 'session' | 'reply' | 'line' | 'about'
 
 export const headingKey = (text: string): string => `heading:${hash(text, 12)}`
 export const sessionKey = (id: string): string => `session:${id}`
 export const replyKey = (id: string): string => `reply:${id}`
 export const lineKey = (sent: string): string => `line:${hash(sent, 12)}`
+/** One row per Issue: a changed title or goal replaces the answer (the fingerprint is the text that was sent). */
+export const aboutKey = (issue: number): string => `about:${issue}`
+
+/** Longest goal text that is kept and sent for an Issue's `about`. */
+const GOAL_MAX = 800
+
+/**
+ * The filed goal of each of these Issues, head-capped: the first of `facts.goal | request | text | description` that is a string.
+ * Facts are free-form data, so an Issue with none has no entry. Read in the database, so a 32 KiB facts column is never loaded.
+ */
+export async function loadGoals(sql: SQL, ids: readonly number[]): Promise<Map<number, string>> {
+  const goals = new Map<number, string>()
+  if (ids.length === 0) return goals
+  const rows: { id: number; goal: string | null }[] = await sql`
+    SELECT id, left(COALESCE(facts->>'goal', facts->>'request', facts->>'text', facts->>'description'), ${GOAL_MAX * 2}) AS goal
+    FROM factory.issues WHERE id IN ${sql(ids)}`
+  for (const row of rows) {
+    const goal = row.goal?.replace(/\s+/g, ' ').trim()
+    if (goal) goals.set(row.id, head(wellFormed(goal), GOAL_MAX))
+  }
+  return goals
+}
+
+/**
+ * What is sent for an Issue's `about`: the filed title and goal under a context line. agw reads it as a `session`, and the answer's
+ * `headline` is the sentence on what the Issue is for. It depends on the filed text alone, so the read API finds the answer again.
+ */
+export const aboutText = (title: string, goal: string | null): string =>
+  head(
+    wellFormed(`Role: Issue request\nLast message: ${cleanHeading(title)}${goal ? `\n${head(goal, GOAL_MAX)}` : ''}`),
+    LIMIT.session,
+  )
 
 /**
  * What is sent for an ask or a health line: its plain words (no ids) under a context line. It depends on the raw text alone, so the
@@ -96,6 +128,8 @@ export interface DigestFeed {
   sessions: FeedSession[]
   /** the raw text of an ask or a health line the digest may read (`scopeOf` decides); none when absent */
   lines?: readonly string[]
+  /** the filed title and goal of the open Issues of ordinary repos (`scopeOf` decides): their `about` */
+  abouts?: readonly { issue: number; title: string; goal: string | null }[]
   /** every source was read in the build that made this feed; a partial one (hc down, a plan unreadable) must not make the cache forget rows */
   complete: boolean
 }
@@ -149,6 +183,14 @@ export class DigestView {
     return parsed.success ? { short: parsed.data.short, summary: parsed.data.headline } : null
   }
 
+  /** What the Issue is for, when the stored answer is for its current title and goal. */
+  about(issue: number, title: string, goal: string | null): string | null {
+    const row = this.rows.get(aboutKey(issue))
+    if (row?.fingerprint !== hash(aboutText(title, goal))) return null
+    const parsed = StoredLine.safeParse(row.answer)
+    return parsed.success ? parsed.data.headline : null
+  }
+
   reply(sessionId: string): StoredReply | null {
     const parsed = StoredReply.safeParse(this.rows.get(replyKey(sessionId))?.answer)
     return parsed.success ? parsed.data : null
@@ -168,7 +210,7 @@ export async function readDigestCache(sql: SQL): Promise<DigestView> {
 const BatchItem = z.object({
   id: z.string(),
   key: z.string(),
-  kind: z.enum(['heading', 'session', 'reply', 'line']),
+  kind: z.enum(['heading', 'session', 'reply', 'line', 'about']),
   text: z.string(),
   /** the content that was sent: what the cache compares */
   fingerprint: z.string(),
@@ -442,9 +484,13 @@ export class Digest {
     const [ended]: { n: number }[] = await sql`
       SELECT count(*)::int AS n FROM factory.fleet_digest_runs WHERE batch_hash = ${batchHash} AND terminal`
     const key = `factory-digest-${batchHash}-${ended?.n ?? 0}`
-    // agw's digest knows heading, session, reply and window: a line is asked as a session (a title and one sentence).
+    // agw's digest knows heading, session, reply and window: a line and an about are asked as a session (a title and one sentence).
     const stdin = JSON.stringify(
-      batch.map(({ id, kind, text }) => ({ id, kind: kind === 'line' ? 'session' : kind, text })),
+      batch.map(({ id, kind, text }) => ({
+        id,
+        kind: kind === 'line' || kind === 'about' ? 'session' : kind,
+        text,
+      })),
     )
     let reply: Reply
     try {
@@ -693,6 +739,13 @@ export class Digest {
       offer({ key, kind: 'line', text, fingerprint: hash(text), turn: null, at: null })
     }
 
+    for (const a of feed.abouts ?? []) {
+      const key = aboutKey(a.issue)
+      wanted.add(key)
+      const text = aboutText(a.title, a.goal)
+      offer({ key, kind: 'about', text, fingerprint: hash(text), turn: null, at: null })
+    }
+
     const current =
       this.deps.session ??
       (async (id: string) => {
@@ -794,7 +847,7 @@ function parseAnswer(item: BatchItem, raw: Record<string, unknown> | undefined):
     const parsed = HeadingAnswer.safeParse(raw)
     return parsed.success ? parsed.data : undefined
   }
-  if (item.kind === 'line') {
+  if (item.kind === 'line' || item.kind === 'about') {
     const parsed = StoredLine.safeParse(raw)
     return parsed.success ? parsed.data : undefined
   }

@@ -25,7 +25,9 @@ export interface ScopeInput {
   /** whether a place is IuRoot's or a visible root's */
   isVisible: (path: string) => boolean
   /** the open Issues: the filed titles of those in ordinary repos get a short heading */
-  issues: readonly { title: string; repo: string }[]
+  issues: readonly { id?: number; title: string; repo: string }[]
+  /** the filed goal text per Issue id (`loadGoals`): with the title it is what the digest words an Issue's `about` from */
+  goals?: ReadonlyMap<number, string>
   /** the names of the visible repos: the directories directly under each visible root, and the model's visible repos */
   visibleNames: readonly string[]
 }
@@ -48,7 +50,8 @@ function namesVisible(text: string, names: readonly string[]): boolean {
  * The digest's reading of the model. A session is offered only when it is listed under an ordinary repo and none of its places is
  * visible: its repo, its spawn's repo, its directory, its terminal's directory. A session outside every repo is never offered
  * (nothing says where it stands). The feed's headings are the filed titles of the open Issues of ordinary repos and nothing else: an
- * Issue whose repo is visible (or the model marks visible) never has its title offered. The feed's lines are the texts of the asks and
+ * Issue whose repo is visible (or the model marks visible) never has its title or goal offered; the same open Issues of ordinary repos are
+ * the feed's `abouts` (title and filed goal, for the sentence on what the Issue is for). The feed's lines are the texts of the asks and
  * health lines whose repo and session are ordinary and whose text names neither IuRoot nor a visible repo; any other line gets its
  * words from the deterministic fallback alone.
  */
@@ -84,13 +87,11 @@ export function scopeOf(input: ScopeInput): DigestScope {
     }
   }
   const visibleRepos = new Set(model.repos.filter((repo) => repo.visible).map((repo) => repo.space))
-  const headings = [
-    ...new Set(
-      input.issues
-        .filter((issue) => !visibleRepos.has(issue.repo) && !isVisible(issue.repo))
-        .map((issue) => issue.title),
-    ),
-  ]
+  const ordinary = input.issues.filter((issue) => !visibleRepos.has(issue.repo) && !isVisible(issue.repo))
+  const headings = [...new Set(ordinary.map((issue) => issue.title))]
+  const abouts = ordinary.flatMap((issue) =>
+    issue.id === undefined ? [] : [{ issue: issue.id, title: issue.title, goal: input.goals?.get(issue.id) ?? null }],
+  )
   const visibleNames = [...input.visibleNames, ...model.repos.filter((repo) => repo.visible).map((repo) => repo.name)]
   const visibleSessions = new Set(
     model.repos
@@ -107,7 +108,7 @@ export function scopeOf(input: ScopeInput): DigestScope {
     !(line.session && (visibleSessions.has(line.session) || placedVisible(line.session))) &&
     !namesVisible(line.text, visibleNames)
   const lines = [...new Set([...model.asks, ...model.health].filter(mayRead).map((line) => line.text))]
-  return { feed: { headings, sessions: [...sessions.values()], lines, complete: true }, sessions, repos }
+  return { feed: { headings, sessions: [...sessions.values()], lines, abouts, complete: true }, sessions, repos }
 }
 
 /**

@@ -21,6 +21,13 @@ describe('machine failures are not asks', () => {
     expect(isMachineNoise(line, none)).toBe(false)
   })
 
+  test('a spawn released because its Issue closed before it started, whatever its terminal does', () => {
+    const line = 'spawn lead-119-1 failed: Issue 119 closed before the spawn started'
+    expect(isMachineNoise(line, none)).toBe(true)
+    expect(isMachineNoise(line, { ...none, issueOpen: true })).toBe(true)
+    expect(isMachineNoise('spawn lead-119-1 failed: no terminal came up', none)).toBe(false)
+  })
+
   test('a kept worktree of a closed Issue, not of an open one', () => {
     const line = 'Issue 7: its worktree was kept (dirty): /x'
     expect(isMachineNoise(line, none)).toBe(true)
@@ -64,6 +71,15 @@ describe('assemble: machine failures and expiry', () => {
     ])
     expect(fleet.asks).toEqual([])
     expect(fleet.health.map((h) => [h.kind, h.text])).toEqual([['machine', 'stuck w1:p1: nothing moved for 40 min']])
+  })
+
+  test('two closed-before-start lines (two spawns) are in neither list of the model', () => {
+    const fleet = model([], new Map(), [
+      'spawn lead-119-1 failed: Issue 119 closed before the spawn started',
+      'spawn lead-119-2 failed: Issue 119 closed before the spawn started',
+    ])
+    expect(fleet.health).toEqual([])
+    expect(fleet.asks).toEqual([])
   })
 
   test('a health line keeps the time it was first seen, and carries its kind and Issue', () => {

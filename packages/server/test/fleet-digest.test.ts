@@ -291,6 +291,42 @@ describe('the pass', () => {
     expect(await digest.pass(feed)).toMatchObject({ called: false })
   })
 
+  test('an Issue about is asked as a session under about:<issue>, read back for the same title and goal only, replaced when they change', async () => {
+    const title = 'Fix the flaky login test'
+    const goal = 'Make the login suite stable on a cold cache. Then add a retry.'
+    const feed = (g: string): DigestFeed => ({
+      headings: [],
+      sessions: [],
+      abouts: [{ issue: 7, title, goal: g }],
+      complete: true,
+    })
+    expect(await digest.pass(feed(goal))).toMatchObject({ called: true, sent: 1, stored: 1 })
+    const item = calls()[0]?.items[0]
+    expect(item?.kind).toBe('session')
+    expect(item?.text).toBe(`Role: Issue request\nLast message: ${title}\n${goal}`)
+    const rows: { key: string }[] = await db.sql`SELECT key FROM factory.fleet_digest`
+    expect(rows.map((r) => r.key)).toEqual(['about:7'])
+    const view = await digest.view()
+    expect(view.about(7, title, goal)).toBe('Headline Fix the flaky')
+    expect(view.about(7, title, 'another goal')).toBeNull()
+    expect(view.about(8, title, goal)).toBeNull()
+    // unchanged: no second call; a changed goal: one item again, still one row
+    expect(await digest.pass(feed(goal))).toMatchObject({ called: false })
+    expect(await digest.pass(feed('A different goal.'))).toMatchObject({ called: true, sent: 1, stored: 1 })
+    expect(await db.sql`SELECT key FROM factory.fleet_digest`).toHaveLength(1)
+  })
+
+  test('abouts share the 64 item limit with the rest; an Issue that left the feed is dropped after a week', async () => {
+    const abouts = Array.from({ length: 70 }, (_, i) => ({ issue: i + 1, title: `Issue title ${i}`, goal: null }))
+    const first = await digest.pass({ headings: [], sessions: [], abouts, complete: true })
+    expect(first).toMatchObject({ called: true, sent: MAX_ITEMS, stored: MAX_ITEMS, waiting: 6 })
+    await digest.pass({ headings: [], sessions: [], abouts, complete: true })
+    clock.advance(8 * 24 * 3_600_000)
+    await digest.pass({ headings: [], sessions: [], abouts: abouts.slice(0, 2), complete: true })
+    const rows: { n: number }[] = await db.sql`SELECT count(*)::int AS n FROM factory.fleet_digest`
+    expect(rows[0]?.n).toBe(2)
+  })
+
   test('more than 64 changed items: 64 go, the rest wait for the next pass', async () => {
     const feed: DigestFeed = {
       headings: Array.from({ length: 70 }, (_, i) => `Heading number ${i}`),

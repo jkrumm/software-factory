@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -13,14 +14,14 @@ import {
   SessionCards,
 } from '@software-factory/contract'
 import { cleanHeading } from '../src/fleet/digest-text.ts'
-import { headingKey, lineKey, lineText } from '../src/fleet/digest.ts'
+import { aboutKey, aboutText, headingKey, lineKey, lineText } from '../src/fleet/digest.ts'
 import { writeSnapshot } from '../src/fleet/store.ts'
 import { serveHooks } from '../src/http.ts'
 import { createIssue } from '../src/issues/create.ts'
 import { TABLE } from '../src/issues/lifecycle.ts'
 import { openSession } from '../src/sessions.ts'
 import { logEvent } from '../src/issues/shared.ts'
-import { describeEvent } from '../src/read/describe.ts'
+import { describeEvent, firstSentence } from '../src/read/describe.ts'
 import { dropReplyDuplicates } from '../src/read/index.ts'
 import { TranscriptInsights, workingOf } from '../src/read/insights.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
@@ -411,6 +412,244 @@ function snapshot(fingerprint: string): Fleet {
     queue: { effective: 'run', spawns: [] },
   })
 }
+
+describe('read API round 3', () => {
+  const file = async (repo: string, title: string, facts: unknown, key: string) =>
+    (
+      await createIssue(
+        db.sql,
+        { source: 'request', sourceKey: key, repo, title, facts },
+        { repoRoots: [TEST_ROOT], now: w.at(120) },
+      )
+    ).issue
+  const cards = async () => IssueCards.parse(await (await app.get('/v1/issues')).json()).issues
+
+  test('about: the digest answer for an ordinary repo, the filed goal otherwise, the filed title without one; a visible repo never gets the digest', async () => {
+    const ordinary = await file(TEST_REPO, 'Fix login', { goal: 'Make login survive a cold cache. Then more.' }, 'a1')
+    const plain = await file(TEST_REPO, 'Rotate the signing key', {}, 'a2')
+    const hidden = await file(VISIBLE_REPO, 'Ticket work', { request: 'Do the portal thing. Second sentence.' }, 'a3')
+    expect((await cards()).map((c) => [c.id, c.about])).toEqual(
+      expect.arrayContaining([
+        [ordinary.id, 'Make login survive a cold cache.'],
+        [plain.id, 'Rotate the signing key'],
+        [hidden.id, 'Do the portal thing.'],
+      ]),
+    )
+    const text = aboutText('Fix login', 'Make login survive a cold cache. Then more.')
+    await db.sql`
+      INSERT INTO factory.fleet_digest (key, fingerprint, answer, at)
+      VALUES (${aboutKey(ordinary.id)}, ${createHash('sha256').update(text).digest('hex').slice(0, 16)}, ${{ short: 'Login', headline: 'Keeps users signed in when the cache is cold.' }}, ${NOW}),
+             (${aboutKey(hidden.id)}, 'f', ${{ short: 'x', headline: 'Model words.' }}, ${NOW})`
+    const after = await cards()
+    expect(after.find((c) => c.id === ordinary.id)?.about).toBe('Keeps users signed in when the cache is cold.')
+    expect(after.find((c) => c.id === hidden.id)?.about).toBe('Do the portal thing.')
+    // a changed goal makes the stored answer stale: the fallback shows again
+    await db.sql`UPDATE factory.issues SET facts = ${{ goal: 'Something else.' }} WHERE id = ${ordinary.id}`
+    expect((await cards()).find((c) => c.id === ordinary.id)?.about).toBe('Something else.')
+    const detail = IssueDetail.parse(await (await app.get(`/v1/issues/${ordinary.id}`)).json())
+    expect(detail.about).toBe('Something else.')
+  })
+
+  test('a queued Issue names its real hold; with no spawn or hold the fixed sentence stays', async () => {
+    const issue = await file(TEST_REPO, 'Queued work', {}, 'q1')
+    const spawn = (extra: Record<string, unknown>) => ({
+      key: `lead-${issue.id}-0`,
+      status: 'queued',
+      repo: TEST_REPO,
+      space: TEST_REPO,
+      role: 'lead',
+      tier: 'sonnet',
+      effort: 'high',
+      hold: null,
+      account: null,
+      resumeAt: null,
+      attempts: 0,
+      session: null,
+      pane: null,
+      tab: null,
+      workspace: null,
+      error: null,
+      parent: null,
+      issue: issue.id,
+      ...extra,
+    })
+    const summary = async (spawns: unknown[]) => {
+      await writeSnapshot(
+        db.sql,
+        Fleet.parse({
+          ...snapshot(`fp-${spawns.length}-${JSON.stringify(spawns).length}`),
+          queue: { effective: 'run', spawns },
+        }),
+      )
+      return (await cards()).find((c) => c.id === issue.id)?.summary
+    }
+    expect(await cards().then((c) => c[0]?.summary)).toBe('Queued, waiting for a free account.')
+    expect(await summary([])).toBe('Queued, waiting for a free account.')
+    expect(await summary([spawn({ hold: 'claim' })])).toBe(
+      'Queued: the repo is busy with another Issue, this one starts when it is free.',
+    )
+    expect(await summary([spawn({ hold: 'drain' })])).toBe('Queued: the queue is draining, so no new work starts.')
+    expect(await summary([spawn({ hold: 'pace' })])).toMatch(/paced/)
+    expect(await summary([spawn({ hold: 'load' })])).toMatch(/machine is too busy/)
+    expect(await summary([spawn({ status: 'waiting', resumeAt: '2026-11-06T15:30:00.000Z' })])).toBe(
+      'Queued: every account is at its usage limit, the next try is at 2026-11-06 15:30 UTC.',
+    )
+    // another Issue's spawn (lead-1<id>-…) is not this Issue's
+    expect(await summary([spawn({ key: `lead-${issue.id}9-1`, hold: 'claim' })])).toBe(
+      'Queued, waiting for a free account.',
+    )
+    for (const text of [
+      await summary([spawn({ hold: 'claim' })]),
+      await summary([spawn({ status: 'waiting', resumeAt: '2026-11-06T15:30:00.000Z' })]),
+    ]) {
+      expect(text).not.toMatch(/lead-|\bIssue \d/)
+    }
+  })
+
+  test('a snapshot stored before Spawn had an issue still parses', () => {
+    const old = {
+      ...snapshot('old'),
+      queue: {
+        effective: 'run',
+        spawns: [
+          {
+            key: 'lead-1-1',
+            status: 'queued',
+            repo: '/r',
+            space: '/r',
+            role: 'lead',
+            tier: 'sonnet',
+            effort: 'high',
+            hold: null,
+            account: null,
+            resumeAt: null,
+            attempts: 0,
+            session: null,
+            pane: null,
+            tab: null,
+            workspace: null,
+            error: null,
+            parent: null,
+          },
+        ],
+      },
+    }
+    expect(Fleet.parse(old).queue.spawns[0]?.issue).toBeNull()
+  })
+
+  test('an ask names its Issue: from the decision id, a lead session, or the session’s own Issue', async () => {
+    const { issue, lead } = await workingIssue()
+    const ask = (id: string, session: string | null) => ({
+      id,
+      kind: 'question',
+      repo: null,
+      session,
+      short: null,
+      text: 'Something to look at',
+      source: 'factory',
+      at: w.at(10).toISOString(),
+    })
+    await writeSnapshot(
+      db.sql,
+      Fleet.parse({
+        ...snapshot('asks'),
+        asks: [
+          ask(`decision:${issue.id}:1:ask:a`, null),
+          ask('factory:lead', lead),
+          ask('factory:helper', 'helper-1'),
+          ask('factory:none', null),
+        ],
+      }),
+    )
+    const o = Overview.parse(await (await app.get('/v1/overview')).json())
+    expect(o.asks.map((a) => [a.id, a.issue])).toEqual([
+      [`decision:${issue.id}:1:ask:a`, issue.id],
+      ['factory:lead', issue.id],
+      ['factory:helper', issue.id],
+      ['factory:none', null],
+    ])
+  })
+
+  test('a session card names the session that started it', async () => {
+    const { lead } = await workingIssue()
+    const sessions = SessionCards.parse(await (await app.get('/v1/sessions')).json()).sessions
+    expect(sessions.find((s) => s.id === 'helper-1')?.parent).toBe(lead)
+    expect(sessions.find((s) => s.id === lead)?.parent).toBeNull()
+  })
+
+  test('a long filed title without a digest heading takes the lead’s tab title; a short one keeps its own', async () => {
+    const { issue, lead } = await workingIssue()
+    expect((await cards())[0]?.title.endsWith('…')).toBe(true)
+    const withTab = (title: string | null) =>
+      writeSnapshot(
+        db.sql,
+        Fleet.parse({
+          ...snapshot(`tab-${title}`),
+          repos: [
+            {
+              name: 'repo',
+              space: TEST_REPO,
+              visible: false,
+              sessions: [
+                {
+                  id: lead,
+                  role: 'lead',
+                  parent: null,
+                  state: 'working',
+                  hc: null,
+                  wait: null,
+                  account: 'a',
+                  terminal: 'w1:p1',
+                  title,
+                  headline: null,
+                  since: null,
+                  lastActivityAt: null,
+                },
+              ],
+            },
+          ],
+        }),
+      )
+    await withTab('Stabilise login tests')
+    expect((await cards()).find((c) => c.id === issue.id)?.title).toBe('Stabilise login tests')
+    await withTab(null)
+    expect((await cards()).find((c) => c.id === issue.id)?.title.endsWith('…')).toBe(true)
+    const short = await file(TEST_REPO, 'Short title', {}, 's1')
+    await withTab('Some tab')
+    expect((await cards()).find((c) => c.id === short.id)?.title).toBe('Short title')
+  })
+})
+
+describe('firstSentence', () => {
+  const NAME =
+    'Fixed the failing check in tests/test_epx_allowed.py and tests/test_epx_denied.py after the allowlist moved, rerunning the suite now to confirm nothing else regressed'
+  test('a text that ends in a sentence within the limit is unchanged', () => {
+    expect(firstSentence('Writing the fix now. Then the tests follow.')).toBe('Writing the fix now.')
+    expect(firstSentence('No full stop here')).toBe('No full stop here')
+  })
+
+  test('a file name does not end the sentence; the cut is at the last clause boundary past half of the limit', () => {
+    const out = firstSentence(NAME)
+    expect(out).toBe(
+      'Fixed the failing check in tests/test_epx_allowed.py and tests/test_epx_denied.py after the allowlist moved…',
+    )
+    expect(out.length).toBeLessThanOrEqual(160)
+  })
+
+  test('other clause boundaries cut too, and without one the cut is at a word', () => {
+    const semi = `${'a'.repeat(100)}; ${'b '.repeat(80)}`
+    expect(firstSentence(semi)).toBe(`${'a'.repeat(100)}…`)
+    const dash = `${'word '.repeat(20).trim()} — ${'more '.repeat(30)}`
+    expect(firstSentence(dash)).toBe(`${'word '.repeat(20).trim()}…`)
+    const plainWords = 'word '.repeat(60)
+    const cutAtWord = firstSentence(plainWords)
+    expect(cutAtWord.endsWith('word…')).toBe(true)
+    expect(cutAtWord.length).toBeLessThanOrEqual(160)
+    // a clause boundary before half of the limit is not used
+    const early = `Short, ${'x'.repeat(200)}`
+    expect(firstSentence(early).startsWith('Short, xxx')).toBe(true)
+  })
+})
 
 describe('describeEvent', () => {
   // The common kinds, filed the way the verbs file them, with ids and keys in the payload that must stay out of the prose.
