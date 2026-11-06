@@ -12,6 +12,7 @@ const FIRST_PASS_MS = 30_000
 const REMOTE_TIMEOUT_MS = 10_000
 const HTTP_TIMEOUT_MS = 15_000
 const MAX_BODY_CHARS = 4000
+const PAGE_SIZE = 50
 const NAME = /^[A-Za-z0-9._-]+$/
 
 export interface GithubIntakeDeps {
@@ -160,7 +161,7 @@ export class GithubIntake {
     const repo = `${owner}/${name}`
     const url =
       `https://api.github.com/repos/${owner}/${name}/issues?labels=${encodeURIComponent(target.label)}` +
-      '&state=open&per_page=50&sort=created&direction=asc'
+      `&state=open&per_page=${PAGE_SIZE}&sort=created&direction=asc`
     let status: number | string = 'error'
     try {
       const response = await (this.deps.fetch ?? fetch)(url, {
@@ -176,6 +177,9 @@ export class GithubIntake {
       if (response.status !== 200) throw new Error('not 200')
       status = 'unparsable'
       const issues = GithubIssues.parse(await response.json())
+      // Nothing is written back, so filed issues that stay open keep their place: a full page may hide newer ones.
+      if (issues.length >= PAGE_SIZE)
+        console.error('github intake: a full page, newer labelled issues may be unseen', { repo })
       return issues
         .filter((issue) => issue.pull_request === undefined)
         .map((issue) => {

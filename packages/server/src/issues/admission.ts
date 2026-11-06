@@ -44,6 +44,12 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
           EXISTS (
             SELECT 1 FROM factory.door_issues d JOIN factory.issues x ON x.id = d.issue_id
             WHERE x.state IN ('queued', 'working') AND x.facts->>'status' = 'down'
+              -- only a fix this very reading can admit stops the line: an alert with its switch off, a blocked one or one still finalizing cannot
+              AND (x.source <> 'alert' OR ${options.alertLeads})
+              AND NOT EXISTS (SELECT 1 FROM factory.issue_deps xd WHERE xd.issue_id = x.id)
+              AND NOT EXISTS (
+                SELECT 1 FROM factory.issue_effects xe
+                WHERE xe.issue_id = x.id AND xe.kind = 'finalize' AND xe.done_at IS NULL AND xe.cancelled_at IS NULL)
               AND (SELECT xp.name FROM factory.projects xp WHERE x.repo = xp.repo OR starts_with(x.repo, xp.repo || '/')
                    ORDER BY length(xp.repo) DESC LIMIT 1) = p.name) AS stopped,
           (i.facts->>'status' = 'down' AND EXISTS (SELECT 1 FROM factory.door_issues d WHERE d.issue_id = i.id)) AS fix,

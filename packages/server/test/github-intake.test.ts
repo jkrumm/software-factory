@@ -242,4 +242,16 @@ describe('the GitHub label source', () => {
     expect((await rows('issues')).map((r) => r.source_key)).toEqual(['o/s#3'])
     expect(logged).toContainEqual(['github intake', { repo: 'o/r', status: 500 }])
   })
+
+  test('a full page of 50 logs one line and still files them all', async () => {
+    await project('r', TEST_REPO)
+    const gh = setup()
+    // Titles differ in letters only: digits do not count towards the fingerprint.
+    const word = (n: number) => String.fromCharCode(97 + Math.floor(n / 26), 97 + (n % 26))
+    gh.serve(Array.from({ length: 50 }, (_, n) => item(n + 1, `Problem ${word(n)}`)))
+    await gh.pass()
+    expect(await rows('issues')).toHaveLength(50)
+    expect(logged).toHaveLength(1)
+    expect(JSON.stringify(logged)).toContain('full page')
+  })
 })

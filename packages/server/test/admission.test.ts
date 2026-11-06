@@ -297,8 +297,8 @@ describe('stop the line', () => {
     await classify(done.issue)
     return done.issue
   }
-  const admit = async (): Promise<number[]> => {
-    await admitIssues(db.sql, { now: clock.now(), alertLeads: true })
+  const admit = async (alertLeads = true): Promise<number[]> => {
+    await admitIssues(db.sql, { now: clock.now(), alertLeads })
     const rows: { issue_id: number }[] = await db.sql`
       SELECT issue_id FROM factory.issue_inbox WHERE kind = 'admitted' ORDER BY issue_id`
     return rows.map((r) => r.issue_id)
@@ -341,6 +341,28 @@ describe('stop the line', () => {
   test('a GitHub label Issue is a request: it stops nothing', async () => {
     const first = await ordinary()
     await episode('github', 'event')
+    expect(await admit()).toEqual([first])
+  })
+
+  test('an alert whose switch is off cannot be admitted, so it stops nothing', async () => {
+    const first = await ordinary()
+    await episode('kuma', 'down')
+    expect(await admit(false)).toEqual([first])
+  })
+
+  test('an episode Issue with an open dependency stops nothing', async () => {
+    const first = await ordinary()
+    const fix = await episode('kuma', 'down')
+    await db.sql`INSERT INTO factory.issue_deps (issue_id, on_issue) VALUES (${fix}, ${first})`
+    expect(await admit()).toEqual([first])
+  })
+
+  test('an episode Issue still finalizing stops nothing', async () => {
+    const first = await ordinary()
+    const fix = await episode('kuma', 'down')
+    await db.sql`
+      INSERT INTO factory.issue_effects (issue_id, key, kind, created_at)
+      VALUES (${fix}, ${`finalize:${fix}`}, 'finalize', ${clock.now()})`
     expect(await admit()).toEqual([first])
   })
 })

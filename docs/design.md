@@ -1123,7 +1123,7 @@ leads: 1
 ticktick: { list: WeatherOrb }
 ```
 
-- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Later (F3):** signals, heal, jobs, ticktick: accepted and dropped, so an F3 manifest does not break F2.
+- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Row 14:** `signals` and `heal` are read (§8 "Intake"). **Later:** jobs, ticktick: accepted and dropped, so a later manifest does not break this one.
 - **A broken manifest** becomes an upkeep Issue; the factory keeps running on the last valid version.
 - **Make contract:** `check`, `test`, `deploy`, `verify`, `version`, `restart`, `quality`, `logs`, `status`. `version` prints the deployed commit sha, one line, and only reads. `check`, `test` and
   `quality` take `BASE=<ref>`. Every target ends in a one-line verdict. A repo is onboarded when it first has signals
