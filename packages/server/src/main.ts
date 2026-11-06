@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
@@ -232,7 +233,10 @@ const ticker = startTicker(
     settler,
     github,
     issuePorts,
-    steward: { verify: { proof, offTick } },
+    steward: {
+      verify: { proof, offTick },
+      unrouted: { repoRoots: config.repoRoots, home: join(process.env.HOME ?? homedir(), 'SourceRoot', 'dotfiles') },
+    },
     classification,
     judgement,
     leadWorktrees,

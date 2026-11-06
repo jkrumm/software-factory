@@ -5,6 +5,7 @@ import { hasTurned } from './briefs.ts'
 import { issueLeadHolders } from './capacity.ts'
 import { leadsOnBackgroundWork } from './issues/lead-activity.ts'
 import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
+import { unroutedLines } from './issues/unrouted.ts'
 import { planLines } from './projects/plan-status.ts'
 import { liveSessions } from './sessions.ts'
 
@@ -180,6 +181,7 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   lines.push(...(await loadHoldLines(sql)))
   lines.push(...(await capHoldLines(sql, now)))
   lines.push(...(await planLines(sql, now)))
+  lines.push(...(await unroutedLines(sql, now)))
   return lines
 }
 

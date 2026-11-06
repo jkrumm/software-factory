@@ -9,6 +9,7 @@ import { leadsOnBackgroundWork } from './lead-activity.ts'
 import { WAKEABLE } from './lifecycle.ts'
 import { leadKey } from './names.ts'
 import type { OffTick } from './offtick.ts'
+import type { UnroutedDeps } from './unrouted.ts'
 import { markEvent } from './shared.ts'
 
 /**
@@ -36,6 +37,8 @@ const NUDGE_TEXT = 'report: continue, ship, block, or narrow'
 export interface StewardDeps {
   /** re-runs a hold's verification off the tick for a block that names it; without it the note says it was not re-run */
   verify?: { proof: Proof; offTick: OffTick }
+  /** files an unrouted monitor's down (`unrouted.ts`); without it none is filed */
+  unrouted?: UnroutedDeps
 }
 
 interface OpenIssue {

@@ -108,19 +108,19 @@ describe('rule 1: no route', () => {
     ])
   })
 
-  test('a monitor not seen for 30 days is dropped when the next unrouted alert comes', async () => {
-    await intake({ monitor: 'old' })
+  test('a monitor that is up and not seen for 30 days is dropped when the next unrouted alert comes', async () => {
+    await intake({ monitor: 'old', status: 'up' })
     clock.advance(29 * 24 * 60 * 60_000)
-    await intake({ monitor: 'recent' })
+    await intake({ monitor: 'recent', status: 'up' })
     expect(await rows('door_unrouted')).toHaveLength(2)
     clock.advance(2 * 24 * 60 * 60_000)
-    await intake({ monitor: 'newest' })
+    await intake({ monitor: 'newest', status: 'up' })
     expect((await rows('door_unrouted')).map((row) => row.monitor).sort()).toEqual(['newest', 'recent'])
     // seen again, it stays: the clock is its last alert, not its first
     clock.advance(20 * 24 * 60 * 60_000)
-    await intake({ monitor: 'recent', event: 'again' })
+    await intake({ monitor: 'recent', status: 'up', event: 'again' })
     clock.advance(20 * 24 * 60 * 60_000)
-    await intake({ monitor: 'other' })
+    await intake({ monitor: 'other', status: 'up' })
     expect((await rows('door_unrouted')).map((row) => row.monitor).sort()).toEqual(['other', 'recent'])
   })
 
@@ -586,7 +586,7 @@ describe('factory door', () => {
     await intake()
     const unrouted = await factory(['door', 'unrouted', '--format', 'plain'])
     expect(unrouted.code).toBe(0)
-    expect(unrouted.stdout).toMatch(/^kuma\tforecast-api\t1\t.+\tforecast-api is down\n$/)
+    expect(unrouted.stdout).toMatch(/^kuma\tforecast-api\t1\t.+\tforecast-api is down\tdown\t-\n$/)
 
     const set = await factory(['door', 'route', 'set', 'kuma', 'forecast-api', TEST_REPO])
     expect(set.code).toBe(0)
