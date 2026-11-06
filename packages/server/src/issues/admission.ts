@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
-import { projectOfPath, releaseDecisionClaims, tryClaim, wakeClaimWaiters } from '../projects/claims.ts'
+import { projectOfPath, releaseWaitClaims, tryClaim, wakeClaimWaiters } from '../projects/claims.ts'
 import { effectiveState, loadQueueStates } from '../queue.ts'
 import { enqueue } from './inbox.ts'
 
@@ -94,17 +94,18 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
 }
 
 /**
- * Claims for Issues that wait on the owner, once per tick before admission (under the capacity lock like every admission): an Issue in a
- * decision wait gives its repo's claim back, so the next Issue of the project can run while the owner may take hours; an Issue
- * whose question was answered (`waiting`, reason `claim`) takes a place again through `tryClaim`, in the same order as admission (urgent
+ * Claims for Issues that wait, once per tick before admission (under the capacity lock like every admission): an Issue in a
+ * decision wait or a timed wait gives its repo's claim back, so the next Issue of the project can run while the owner may take hours
+ * or a counting wait a day; an Issue whose question was answered, or whose timed wait ended (lifecycle sends both to `waiting`/`claim`), (`waiting`, reason `claim`) takes a place again through `tryClaim`, in the same order as admission (urgent
  * first, then by id) and behind a holder that works, so a project never has more working leads than its `leads`. Having the place, it gets
- * a `wake` (key `wake:<issue>:claim:<question key>`) that moves it to `working` and types the answer to its lead, with the order to rebase.
+ * a `wake` (key `wake:<issue>:claim:<question key>`, or `…:claim:e<id of the event that ended the wait>` for a timed wait) that moves it to `working`
+ * and types the answer, or that its wait is over, to its lead, with the order to rebase.
  * The lead's worktree is never touched here. Idempotent: it is also what releases a claim an Issue held when it asked.
  */
 export async function settleClaims(sql: SQL, now: Date): Promise<{ released: number; resumed: number }> {
   return sql.begin(async (tx) => {
     await lockCapacity(tx)
-    const keys = await releaseDecisionClaims(tx)
+    const keys = await releaseWaitClaims(tx)
     await wakeClaimWaiters(tx, keys, now)
     const waiting: { id: number; repo: string }[] = await tx`
       SELECT id, repo FROM factory.issues WHERE state = 'waiting' AND reason = 'claim'
@@ -117,8 +118,13 @@ export async function settleClaims(sql: SQL, now: Date): Promise<{ released: num
         SELECT payload FROM factory.issue_inbox
         WHERE issue_id = ${id} AND kind = 'answer' AND result = 'applied' ORDER BY id DESC LIMIT 1`
       // The wake is keyed by the question it ends (its key is the ask's own), so a replay of the run files the same one.
-      const [question]: { key: string }[] = await tx`
-        SELECT key FROM factory.decisions WHERE issue_id = ${id} AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+      // The event that sent it here: an `answer` ends a decision wait, anything else (the timer's wake, a note with `--wake`, the lead's own phase) a timed one.
+      const [entered]: { id: string; kind: string }[] = await tx`
+        SELECT id, kind FROM factory.issue_events WHERE issue_id = ${id} AND to_state = 'waiting' ORDER BY id DESC LIMIT 1`
+      const [question]: { key: string }[] =
+        entered?.kind === 'answer'
+          ? await tx`SELECT key FROM factory.decisions WHERE issue_id = ${id} AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+          : [{ key: `e${entered?.id ?? 'none'}` }]
       const carried = Object.fromEntries(
         ['answer', 'who', 'text'].flatMap((name) => {
           const value = answer?.payload?.[name]
@@ -130,7 +136,7 @@ export async function settleClaims(sql: SQL, now: Date): Promise<{ released: num
         key: `wake:${id}:claim:${question?.key ?? 'none'}`,
         kind: 'wake',
         at: now,
-        payload: { for: 'claim', ...carried },
+        payload: { for: 'claim', ...(entered?.kind === 'answer' ? carried : {}) },
       })
       resumed++
     }

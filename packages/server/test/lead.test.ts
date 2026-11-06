@@ -407,7 +407,7 @@ describe('classify, then admission', () => {
       expect(await states()).toEqual({
         [leadKey(first ?? 0, 1)]: 'started on a',
         [leadKey(second ?? 0, 1)]: 'started on a',
-        [leadKey(third ?? 0, 1)]: 'waiting',
+        [leadKey(third ?? 0, 1)]: 'queued',
       })
       expect((await issue(third ?? 0)).state).toBe('working')
     })
@@ -451,7 +451,7 @@ describe('classify, then admission', () => {
 
     test('a lead whose Issue waits on the owner’s decision holds no capacity: the waiting spawn starts', async () => {
       const [first, , third] = await twoOnOne()
-      expect((await states())[leadKey(third ?? 0, 1)]).toBe('waiting')
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('queued')
       await post(first ?? 0, 'ask', { question: 'Which?', session: leadKey(first ?? 0, 1) })
       await pass()
       expect(await issue(first ?? 0)).toMatchObject({ state: 'waiting', reason: 'decision' })
@@ -459,6 +459,39 @@ describe('classify, then admission', () => {
       clock.advance(HOLD_RECHECK_MS)
       await drive(3)
       expect((await states())[leadKey(third ?? 0, 1)]).toBe('started on a')
+    })
+
+    const waitUntil = (hours: number) => new Date(clock.now().getTime() + hours * 3_600_000).toISOString()
+
+    test('holds no lead slot: the spawn held at the cap starts, and it carries hold cap until then', async () => {
+      const [first, , third] = await twoOnOne()
+      expect((await spawns()).find((s: { key: string }) => s.key === leadKey(third ?? 0, 1))).toMatchObject({
+        status: 'queued',
+        hold: 'cap',
+      })
+      await post(first ?? 0, 'wait', { until: waitUntil(24), why: 'counting', session: leadKey(first ?? 0, 1) })
+      await pass()
+      expect(await issue(first ?? 0)).toMatchObject({ state: 'waiting', reason: 'wait' })
+      await sample(['a'])
+      clock.advance(HOLD_RECHECK_MS)
+      await drive(3)
+      expect((await states())[leadKey(third ?? 0, 1)]).toBe('started on a')
+    })
+
+    test('a lead held by the cap for 15 min has one health line naming the leads that hold it', async () => {
+      const [first, second, third] = await twoOnOne()
+      const lines = async () => (await statusOf()).health.filter((line) => line.includes('held by the lead cap'))
+      expect(await lines()).toEqual([])
+      clock.advance(16 * 60_000)
+      await sample(['a'])
+      await pass()
+      expect(await lines()).toEqual([
+        expect.stringMatching(
+          new RegExp(
+            `^Issue ${third}: held by the lead cap for 1\\d min, running leads: a: Issue ${first}, Issue ${second}$`,
+          ),
+        ),
+      ])
     })
   })
 

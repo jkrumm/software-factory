@@ -136,6 +136,8 @@ function holdSentence(spawn: Spawn | undefined): string | null {
       return 'Queued: the repo is busy with another Issue, this one starts when it is free.'
     case 'load':
       return 'Queued: the machine is too busy, the lead starts when its load drops.'
+    case 'cap':
+      return 'Queued: every account is running as many leads as it may, this one starts when one ends or sleeps.'
     case null:
       break
   }

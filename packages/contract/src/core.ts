@@ -11,7 +11,7 @@ export const SpawnStatus = z.enum(['queued', 'waiting', 'starting', 'started', '
 export type SpawnStatus = z.infer<typeof SpawnStatus>
 
 /** Why a queued spawn is not starting although capacity may be there: the queue state or its Issue's claim on the project. */
-export const HoldReason = z.enum(['drain', 'pace', 'claim', 'load'])
+export const HoldReason = z.enum(['drain', 'pace', 'claim', 'load', 'cap'])
 export type HoldReason = z.infer<typeof HoldReason>
 
 export const Spawn = z.object({

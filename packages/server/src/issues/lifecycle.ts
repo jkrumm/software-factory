@@ -325,7 +325,13 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
   const fits = found && (!found.only || found.only === issue.reason) && (!found.when || (await found.when(context)))
   // The table's step, or the one it names for an Issue whose stored events have spent it.
   const spent = fits && found.otherwise ? await found.otherwise.when(context) : false
-  const step: Step | undefined = spent ? found?.otherwise?.step : fits ? found : undefined
+  const table: Step | undefined = spent ? found?.otherwise?.step : fits ? found : undefined
+  // A timed wait gave its repo's claim back (`settleClaims`): its way out to work is the claim wait, as a decision's answer is, and the pass that
+  // takes the place files the wake that types the lead. The timer's own wake needs no note of its own: that one says the wait is over.
+  const step: Step | undefined =
+    table?.to === 'working' && issue.state === 'waiting' && issue.reason === 'wait'
+      ? { ...table, to: 'waiting', reason: 'claim', effects: kind === 'wake' ? [] : table.effects }
+      : table
   const payload = step?.detail ? { ...row.payload, detail: step.detail } : row.payload
   const refused = async (detail: string): Promise<Handled> => {
     await logEvent(

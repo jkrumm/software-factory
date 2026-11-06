@@ -252,8 +252,13 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
     case 'wake':
       // The end of a decision wait: the repo was free for other work meanwhile, so what landed is yours to build on before you go on.
       if (payload?.for === 'claim') {
+        // An answered question carries its answer; a timed wait that ended has none to tell.
+        const opening =
+          fieldOf(payload, 'answer') || fieldOf(payload, 'text')
+            ? answerLine(head, payload)
+            : `${head} your wait is over.`
         return clip(
-          `${answerLine(head, payload)} The repo was free for other work while you waited and is yours again. Before you carry on, \`git fetch\` and rebase your branch onto the default branch (resolve conflicts, rerun the checks), then continue. Notes that came while you waited: \`factory issue show ${issueId}\`.`,
+          `${opening} The repo was free for other work while you waited and is yours again. Before you carry on, \`git fetch\` and rebase your branch onto the default branch (resolve conflicts, rerun the checks), then continue. Notes that came while you waited: \`factory issue show ${issueId}\`.`,
         )
       }
       return `${head} your wait is over. Carry on from where you stopped.`
