@@ -36,7 +36,7 @@ const MAX_QUESTION = 2000
 const MAX_OPTIONS = 10
 const MAX_OPTION = 1000
 
-/** `agw factory-ask --format json` with the ask on stdin under `ask`; the run, its pending loop and its failures are `callAgw`'s. */
+/** `agw factory-ask --format json` with the ask object itself on stdin; the run, its pending loop and its failures are `callAgw`'s. */
 export class AgwAskJudge implements AskJudge {
   constructor(private readonly options: AgwOptions) {}
 
@@ -87,7 +87,8 @@ export type Guarded = { ok: true; answer: string; source: string } | { ok: false
 
 /**
  * The factory's checks on an `answer` verdict, after the workflow: with options the answer is exactly one of them; it names a source; and
- * a declared default (the source says so, or the answer equals it) stands only when it is a do-nothing choice.
+ * an answer that rests on the declared default (the source says so) stands only when the default is a do-nothing choice; an answer that
+ * merely equals a default that states a fact stands only when the source is a plan document.
  */
 export function guard(
   ask: { options: readonly string[]; default: string | null },
@@ -101,11 +102,17 @@ export function guard(
   if (chosen === undefined) return { ok: false, why: 'the answer is not one of the options' }
   const fromDefault = /^default/i.test(source)
   const isDefault = ask.default !== null && same(chosen, ask.default)
-  if (fromDefault || isDefault) {
+  if (fromDefault) {
     if (ask.default === null) return { ok: false, why: 'the source is a default that was not declared' }
     if (!isDefault) return { ok: false, why: 'the source is the default, the answer is not' }
     if (!isDoNothing(ask.default))
       return { ok: false, why: 'the default states a fact; it is not a leave-it-open choice' }
+  } else if (isDefault && !isDoNothing(ask.default) && !/^plan\b/i.test(source)) {
+    // The answer is what the lead declared, and a declared fact is no proof of itself: only a plan document may back it.
+    return {
+      ok: false,
+      why: 'the answer repeats a declared default that states a fact, and the source is not a plan document',
+    }
   }
   return { ok: true, answer: chosen.trim(), source }
 }
