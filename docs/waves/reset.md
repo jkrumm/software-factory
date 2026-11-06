@@ -109,20 +109,20 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
   after its verify) is Issue 86, queued behind iris's claim (Issue 77, waiting for the deep-cap day to turn).
 - [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
 
-## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: todo -->
+## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: done -->
 - [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the review transport (after Issue 67's fix is
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
 - [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
 - [ ] Filed: Issue 83 (row 8, `--after 80 81 82`), 84 (row 9, `--after 83`).
 
-## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: todo -->
+## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: done -->
 - [ ] `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
   behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
   The lead writes a short spec (`docs/design.md`) and builds a proof of concept, no sign-off (RS13). Surfaces (row 15)
   build on it, nothing earlier. Filed: Issue 85 (`--after 84`).
 
-## Wave 8c — The factory governs itself (RS12), as Issues            <!-- status: active -->
-- [ ] Issue 100: the deterministic steward (blocked and parked re-checks on a backoff, lifted waits, notes that reach a mid-turn lead, one owner line after retries).
-- [ ] Issue 101: agent-workflows, a cheap-route workflow judging whether an ask is the owner's or answerable from the plan, failing closed.
-- [ ] Issue 102 (`--after 100 101`): asks and spent escalations pass that judgment first. Ahead of row 8 by `issue prio`; row 9b's spec sign-off stays the owner's.
+## Wave 8c — The factory governs itself (RS12), as Issues            <!-- status: done -->
+- [x] Issue 100: the deterministic steward (blocked and parked re-checks on a backoff, lifted waits, notes that reach a mid-turn lead, one owner line after retries).
+- [x] Issue 101: agent-workflows, a cheap-route workflow judging whether an ask is the owner's or answerable from the plan, failing closed.
+- [x] Issue 102 (`--after 100 101`): asks and spent escalations pass that judgment first. Ahead of row 8 by `issue prio`; row 9b's spec sign-off stays the owner's.

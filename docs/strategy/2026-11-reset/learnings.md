@@ -266,7 +266,7 @@ evidence (a sha, a log line, a number); no narrative.
 - **`blocked` was a dead end** (evening, 2026-11-05). Issue 82 was merged and deployed; the hold's verify went red on two rows from other
   projects; the lead blocked; the owner fixed them forward and wrote a note, and nothing could take the Issue back: the lead's verbs are
   refused on a waiting Issue, `reopen` only takes a closed one, `stop` records a drop. It held Issues 83 to 85 for 6 h. RS3 had said every
-  park can end; the table never checked it. Issue 98 adds the exit. Change: a test that every `waiting` reason has a non-drop exit.
+  park can end; the table never checked it. Issue 97 added the exit (`note --wake`). Change: a test that every `waiting` reason has a non-drop exit.
 - **A lead paused on its own background work can stay paused.** Issue 92's lead ended a turn at 16:49 with `make check` running in the
   background (correctly not sent back, Issue 67's rule), the session compacted while idle, and no turn followed the check's end: 4 h 20 min
   of nothing until a note woke it. The silent-lead health line showed it; nothing acted. Candidate for row 8's health rework: a lead silent
@@ -276,3 +276,16 @@ evidence (a sha, a log line, a number); no narrative.
   owner's words come as factory notes or in this chat.
 - **Two orchestrators filed the same fix two minutes apart** (Issues 98 and 99). A `--key` dedups one filer's repeats, not two sessions
   with different keys. Check `factory issue list` for the repo right before filing.
+- **The first unattended night (2026-11-05 to 06).** About 8 h of stall in the evening, then rows 8, 9, 9b and 13 shipped overnight with the owner asleep. What it taught:
+  - **A lead can invent an approval.** Issue 93 was answered "do not merge with --admin"; three minutes later its lead wrote "Owner approved the admin merge" and merged past a
+    work repo's required review. No approval exists in its transcript. An answer is not a guard: a hook is (Issue 104). Rules that matter are enforced, not briefed.
+  - **A note can claim to be delivered and not be.** "Filed" is not "read": the note widening Issue 97 sat pending 50 min through a long turn. Check `NOTES`, not the ack. Fixed: a note is typed after 5 min.
+  - **A fixed hold was waiting, not verifying.** 30 min per ship with the claim held was hours of nothing across a chain. Gone (hold 0m). The catch: a repo deploying from a poller was verified mid-deploy, so a red verify now retries at 1, 2 and 4 min.
+  - **Idle leads spend capacity.** Leads parked on the owner and scratch Issues filled every account's cap, and a new lead could not start for 45 min with quota free. A decision wait no longer counts.
+  - **A wait on the owner holds the repo.** Issue 88 held iris while a red-CI fix queued. Refiling behind the fix was the workaround; a health line now names what is held back. Not fixed: the claim itself.
+  - **Proving a change can become the stall.** Issue 102's lead filed four scratch Issues to prove its judge and held the chain an hour. Scratch Issues hold claims and slots like any other.
+  - **Do not filter your own alarm for the thing you are doing.** The session watcher ignored "Scratch", which hid exactly that hour.
+  - **A default can state a falsehood.** Issue 88's default was "Record and internal group created", with no record. The judge takes only do-nothing defaults.
+  - **Claude Code's "Dangerous rm not ruled out" stops a bypass-mode lead** on shell heredocs with no `rm` in them, four times in one night until a person answers. Leads now edit with the Edit tool; a prompt older than 15 min is a health line.
+  - **A fan-out ignores owner decisions it was not told about.** Row 13 filed an Issue for paused basalt-ui (stopped by hand). An audit should read `docs/decisions.md` first.
+  - **Load came from outside the factory too.** It reached 346 on 12 cores with IuRoot sessions outside the test slot and a simulator; the server stopped answering at 160. Admission now holds new leads under load; sessions outside the factory are still unbounded.
