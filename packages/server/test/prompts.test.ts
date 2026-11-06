@@ -253,7 +253,7 @@ describe('prompt delivery: guards', () => {
     expect((await deliver()).sent).toEqual(['mine'])
   })
 
-  test('a failure shows in status for a day from when it failed, not from when it was recorded', async () => {
+  test('a failure shows in status for 72 h from when it failed, not from when it was recorded', async () => {
     await working()
     await endTurn()
     await recordPrompt(db.sql, { id: 'old', session: 's', source: 'note', text: 'x' }, w.at(25 * 60))
@@ -264,7 +264,7 @@ describe('prompt delivery: guards', () => {
     await deliver()
     expect((await row('old')).status).toBe('failed')
     expect((await listOpenPrompts(db.sql, clock.now())).prompts.map((p) => p.id)).toEqual(['old'])
-    clock.advance(25 * 3_600_000)
+    clock.advance(73 * 3_600_000)
     expect(await listOpenPrompts(db.sql, clock.now())).toEqual({ prompts: [], more: 0 })
   })
 

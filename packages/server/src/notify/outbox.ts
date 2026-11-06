@@ -1,5 +1,6 @@
 import type { Notification, NotificationKind } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { FINISHED_HEALTH_MS } from '../health.ts'
 import type { Notifier } from './port.ts'
 import type { Message } from './text.ts'
 
@@ -214,13 +215,12 @@ export async function getNotification(sql: SQL, key: string): Promise<Notificati
 }
 
 /** How long a message that was not delivered stays a line in `factory status`. */
-export const FAILED_SHOWN_MS = 7 * 24 * 60 * 60_000
 
 /** A line in `factory status` for each message that spent its attempts. */
 export async function notificationAttention(sql: SQL, now: Date): Promise<string[]> {
   const rows: { key: string; error: string | null }[] = await sql`
     SELECT key, error FROM factory.notifications
-    WHERE failed_at IS NOT NULL AND failed_at > ${new Date(now.getTime() - FAILED_SHOWN_MS)}
+    WHERE failed_at IS NOT NULL AND failed_at > ${new Date(now.getTime() - FINISHED_HEALTH_MS)}
     ORDER BY created_at DESC LIMIT 10`
   return rows.map((row) => `notification ${row.key} was not delivered: ${row.error ?? 'unknown'}`)
 }

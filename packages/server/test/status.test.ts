@@ -130,9 +130,9 @@ describe('factory status', () => {
     expect(s.health).toEqual(['walled anon for 30 min: account unknown, the watchdog cannot act'])
   })
 
-  test('delivered notes and failures older than a day are gone from it', async () => {
+  test('delivered notes and failures older than 72 h are gone from it', async () => {
     await w.spawned('s')
-    await recordPrompt(db.sql, { id: 'old', session: 's', source: 'note', text: 'x', failed: 'gave up' }, w.at(26 * 60))
+    await recordPrompt(db.sql, { id: 'old', session: 's', source: 'note', text: 'x', failed: 'gave up' }, w.at(74 * 60))
     await recordPrompt(db.sql, { id: 'done', session: 's', source: 'note', text: 'x' }, clock.now())
     await db.sql`UPDATE factory.prompts SET status = 'delivered' WHERE id = 'done'`
     expect((await status()).notes).toEqual([])

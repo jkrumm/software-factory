@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { FINISHED_HEALTH_MS } from '../health.ts'
 
 /** Agent text on the owner's terminal: one line, no control characters, cut short. */
 const oneLine = (text: string, max = 160): string => {
@@ -8,8 +9,6 @@ const oneLine = (text: string, max = 160): string => {
 }
 
 const PER_KIND = 10
-/** A kept worktree is the owner's to look at; a week on it is no news. */
-const KEPT_SHOWN_MS = 7 * 24 * 3_600_000
 
 const minutesOf = (ms: number): string => {
   const min = Math.max(0, Math.floor(ms / 60_000))
@@ -20,7 +19,7 @@ const minutesOf = (ms: number): string => {
  * The Issue lines of `factory status`, in the two lists of RS3. `asks` are decisions: an open question, and an Issue a lead
  * blocked. `health` is everything else: a park (`wall`, `lead_gone`, `unreported`, `parked`) with its reason and age, alerts held back by the
  * switch, Issues waiting for their project's claim, a lead that cannot be started, a worktree not made, an attempt that cannot be
- * finalized and a worktree finalize kept (for a week). A line is in one list. Lead text is data and is shown cut.
+ * finalized and a worktree finalize kept (for 72 h). A line is in one list. Lead text is data and is shown cut.
  */
 export async function issueAttention(
   sql: SQL,
@@ -98,7 +97,7 @@ export async function issueAttention(
 
   const kept: { issue_id: number; path: string | null; why: string }[] = await sql`
     SELECT issue_id, payload->>'path' AS path, payload->>'kept' AS why FROM factory.issue_events
-    WHERE kind = 'worktree_kept' AND at > ${new Date(now.getTime() - KEPT_SHOWN_MS)} ORDER BY id DESC LIMIT ${PER_KIND}`
+    WHERE kind = 'worktree_kept' AND at > ${new Date(now.getTime() - FINISHED_HEALTH_MS)} ORDER BY id DESC LIMIT ${PER_KIND}`
   for (const tree of kept) {
     health.push(
       `Issue ${tree.issue_id}: its worktree was kept (${oneLine(tree.why)})${tree.path ? `: ${oneLine(tree.path)}` : ''}`,

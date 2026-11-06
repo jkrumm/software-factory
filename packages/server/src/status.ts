@@ -1,7 +1,7 @@
 import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
-import { healthLines } from './health.ts'
+import { FINISHED_HEALTH_MS, healthLines } from './health.ts'
 import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
 import { statusIssues } from './issues/follow.ts'
@@ -31,6 +31,7 @@ function attention(
   notes: Status['notes'],
   spawns: Status['queue']['spawns'],
   now: Date,
+  over: ReadonlySet<string>,
 ): Lines {
   const lines: Lines = { asks: [], health: [] }
   for (const { view, facts } of sessions) {
@@ -52,9 +53,21 @@ function attention(
     else if (note.sentCount > 0 && note.error) lines.health.push(`note ${note.id} to ${note.session}: ${note.error}`)
   }
   for (const spawn of spawns) {
-    if (spawn.status === 'failed') lines.health.push(`spawn ${spawn.key} failed: ${spawn.error ?? 'unknown'}`)
+    if (spawn.status === 'failed' && !over.has(spawn.key))
+      lines.health.push(`spawn ${spawn.key} failed: ${spawn.error ?? 'unknown'}`)
   }
   return lines
+}
+
+/**
+ * Failed spawns that failed over 72 h ago, whose line has ended. A spawn stores no failure time (`claimed_at` is cleared when it
+ * fails), so the closest facts stand for it: the newer of `created_at` and `assigned_at`.
+ */
+async function staleFailedSpawns(sql: SQL, now: Date): Promise<Set<string>> {
+  const rows: { key: string }[] = await sql`
+    SELECT key FROM factory.spawns
+    WHERE status = 'failed' AND GREATEST(created_at, assigned_at) <= ${new Date(now.getTime() - FINISHED_HEALTH_MS)}`
+  return new Set(rows.map((r) => r.key))
 }
 
 /** The fleet digest's counter: one line when a pass failed in the last day (the model keeps what it had; this says it is not being refreshed). */
@@ -78,7 +91,7 @@ export async function buildStatus(sql: SQL, now: Date, options: { alertLeads?: b
     .filter((s) => s.status !== 'started' && s.status !== 'ended' && s.status !== 'cancelled')
     .sort((a, b) => Number(a.status === 'failed') - Number(b.status === 'failed'))
   const issues = await statusIssues(sql, now)
-  const own = attention(loaded, notes, spawns, now)
+  const own = attention(loaded, notes, spawns, now, await staleFailedSpawns(sql, now))
   const byIssue = await issueAttention(sql, now, { alertLeads: options.alertLeads ?? false })
   return {
     now: now.toISOString(),

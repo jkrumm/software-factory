@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { FINISHED_HEALTH_MS } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
 import { clearAnsweredWait, getSession, HOOK_KINDS, RESUME_LEAD_MS } from './sessions.ts'
 
@@ -18,8 +19,6 @@ export const MAX_FAILURES = 5
  * outlasts the longest Runner call (a start's budget), so a call in flight is never taken for a crashed one.
  */
 export const TYPING_LEASE_MS = DEFAULT_START_BUDGET_MS + 60_000
-/** A failed prompt stays in `factory status` this long. */
-export const FAILED_SHOWN_MS = 24 * 3_600_000
 /** Most prompts one tick types; prompts that cannot be typed yet (their session is working) do not count. */
 export const DELIVER_BATCH = 10
 /**
@@ -122,7 +121,8 @@ export const STATUS_PROMPTS = 100
 
 /** What owner and program lead look at: prompts still on their way, and those that gave up in the last day; failed first. */
 export async function listOpenPrompts(sql: SQL, now: Date): Promise<{ prompts: Prompt[]; more: number }> {
-  const since = new Date(now.getTime() - FAILED_SHOWN_MS)
+  // A failed prompt is finished work: it stays 72 h from `failed_at`.
+  const since = new Date(now.getTime() - FINISHED_HEALTH_MS)
   const rows: PromptRow[] = await sql`
     SELECT * FROM factory.prompts
     WHERE status IN ('pending', 'typing', 'sent') OR (status = 'failed' AND failed_at > ${since})
