@@ -214,8 +214,6 @@ export async function getNotification(sql: SQL, key: string): Promise<Notificati
   return row && toNotification(row)
 }
 
-/** How long a message that was not delivered stays a line in `factory status`. */
-
 /** A line in `factory status` for each message that spent its attempts. */
 export async function notificationAttention(sql: SQL, now: Date): Promise<string[]> {
   const rows: { key: string; error: string | null }[] = await sql`

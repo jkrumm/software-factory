@@ -1163,7 +1163,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
   back decision says nothing; the rules that read state (`notifyFailures`, the digest) run once a tick as statements of their own, and their
   keys make a replay a no-op. The tick then sends: claim and commit (at most 5 rows, `attempts + 1`, `next_at` = now + a 2-minute lease),
   call the notifier outside any transaction (the calls of one pass side by side, so a dead Hermes costs one timeout), record the result. A
-  failed send is fenced by the attempt it belongs to (a send that outlived its lease cannot undo a newer attempt; a delivery is always recorded) and backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for a week. A
+  failed send is fenced by the attempt it belongs to (a send that outlived its lease cannot undo a newer attempt; a delivery is always recorded) and backs off 30 s, 60 s, ... up to 5 min; the fifth failure is `failed` (`failed_at`) and a line in `factory status` for 72 h. A
   crash between the send and its record leaves the lease to run out and the row is sent again: **at-least-once**, so a message may arrive twice.
 - **What goes out**, one line each, `Issue <id> (<repo name>)` first, never a path or a hostname. Agent text (a question, a lead's reason, a
   monitor name) is cut to 200 characters, reduced to one line, scrubbed of token, host and path shapes and of a link's query and fragment (best effort, `notify/text.ts`) and fenced in
@@ -1240,12 +1240,12 @@ in a session's last message. Reset row 8 slimmed it: no plans, git state, tiers,
   factory does not know (an `rd` session, IuRoot's) is its own entry, its state from hc's status, its parent through the parent
   terminal's name. A session outside every root is listed as `unplaced`.
 - **Asks** (deterministic sources only; `id` is `<source>:<key>`): `hc:<session>` (hc `blocked` for 2 min from hc's own status time, kind `permission`),
-  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>:<verb>:<hash>` (a `factory status` attention line, now only `blocked:<session>`, `issue:<id>:blocked` and `review-held:<key>`, plus a short hash of the line with its digits removed: a counter such as
+  `wait:<session>` (a declared wait on the owner, `question`), `factory:<subject>:<verb>:<hash>` (a `factory status` attention line, now only `blocked:<session>`, `issue:<id>:blocked`, plus a short hash of the line with its digits removed: a counter such as
   `for 5 min` or `for 3 h` does not change the id, two different lines of one subject do not collapse), `decision:<key>` (an open decision of an open Issue,
   `question`) and `queue:<id>` (the human queue through `ask-human.sh list --json`, `human`; the script is dotfiles', at
   `FACTORY_ASK_HUMAN`; a script that does not print the JSON array yet is an `errors[]` line). An ask with no time of its own (hc, a wait, an attention line) has the time of the first build that saw it, kept across builds and
   restarts. Oldest first. **Machine failures are not asks.** They are `health` (below), and a health line never becomes an ask. A `factory:` ask older than 7 days expires
-  (left out, its time kept in the builder's memory so it does not return as new; after a restart it is first seen anew, as the stored snapshot lists only what was shown; the queue, decisions, hc and waits never expire here).
+  (left out, its time kept in the snapshot's `expired` map (id to first-seen time, only the ids that expired in that build) so it does not return as new, also after a restart; the queue, decisions, hc and waits never expire here).
 - **The health line.** `Fleet.health[]` (`FleetHealth`: `id`, `kind`, `text`, `repo`, `issue?`, `session?`, `since`) is `factory status`'s `health` lines, one per line, `id` = `health:` + `lineKey`
   (the subject, then a short hash of the line without its digits, so an age does not change it), `since` the first build that saw the id (kept in the snapshot across builds and restarts; a line that leaves the list starts again when it
   returns). The finished kinds leave the list 72 h after they ended (§3 `factory status`); the ids of the lines that remain are unchanged. `kind` (`healthKind`, one place): `park` (`Issue N parked for <age>: …`), `silent`, `over_budget`, `regressions`, else `machine`. The model drops what is bookkeeping and no line for the owner

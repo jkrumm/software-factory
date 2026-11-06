@@ -40,12 +40,7 @@ describe('machine failures are not asks', () => {
 const status = (attention: string[], health: string[] = []): Status =>
   ({ attention, health, accounts: [], queue: { spawns: [] }, issues: [] }) as unknown as Status
 
-const model = (
-  attention: string[],
-  firstSeen: Map<string, string>,
-  expired = new Map<string, string>(),
-  health: string[] = [],
-) =>
+const model = (attention: string[], firstSeen: Map<string, string>, health: string[] = []) =>
   assemble({
     now: NOW,
     roots: [],
@@ -57,13 +52,12 @@ const model = (
     decisions: [],
     queue: [],
     firstSeen,
-    expired,
     errors: [],
   })
 
 describe('assemble: machine failures and expiry', () => {
   test('a note to a missing terminal and a claim line are not listed; a stuck session is a health line, never an ask', () => {
-    const fleet = model([], new Map(), undefined, [
+    const fleet = model([], new Map(), [
       'note n1 to gone:p failed: expired: the session never took it',
       'Issue 9 waits for the claim on proj',
       'stuck w1:p1: nothing moved for 40 min',
@@ -105,17 +99,15 @@ describe('assemble: machine failures and expiry', () => {
     const young = 'Issue 2 blocked: needs a credential'
     const oldAt = new Date(NOW.getTime() - EXPIRE_FACTORY_ASK_MS).toISOString()
     const youngAt = new Date(NOW.getTime() - EXPIRE_FACTORY_ASK_MS + 60_000).toISOString()
-    const expired = new Map<string, string>()
     const fleet = model(
       [old, young],
       new Map([
         [`factory:${lineKey(old)}`, oldAt],
         [`factory:${lineKey(young)}`, youngAt],
       ]),
-      expired,
     )
     expect(fleet.asks.map((a) => a.text)).toEqual([young])
-    expect([...expired]).toEqual([[`factory:${lineKey(old)}`, oldAt]])
+    expect(fleet.expired).toEqual({ [`factory:${lineKey(old)}`]: oldAt })
   })
 
   test('a human-queue ask is never expired', () => {

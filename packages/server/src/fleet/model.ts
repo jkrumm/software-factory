@@ -55,8 +55,6 @@ export interface ModelInput {
   firstSeen: ReadonlyMap<string, string>
   /** when a health line (by id) was first seen: the previous build's `since`, so a restart keeps it */
   healthSeen?: ReadonlyMap<string, string>
-  /** out: the factory asks that expired this build (id to first-seen time), so the builder keeps their time and they stay gone */
-  expired?: Map<string, string>
   errors: string[]
 }
 
@@ -82,10 +80,6 @@ function subjectKey(line: string): string {
   if (note) return `note:${note[1]}`
   const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn) return `spawn:${spawn[1]}`
-  const held = /^review (\S+) held: deep cap/.exec(line)
-  if (held) return `review-held:${held[1]}`
-  const human = /^review (\S+) needs a human/.exec(line)
-  if (human) return `review-human:${human[1]}`
   const notification = /^notification (\S+) was not delivered/.exec(line)
   if (notification) return `notification:${notification[1]}`
   const issue = /^Issue (\d+)(.*)$/.exec(line)
@@ -117,7 +111,7 @@ function subjectKey(line: string): string {
 function lineSubject(line: string): { session?: string; spawn?: string; issue?: number } {
   const session = /^(?:blocked|stuck|walled) (\S+)/.exec(line) ?? /^note \S+ to (\S+)/.exec(line)
   if (session?.[1]) return { session: session[1].replace(/:$/, '') }
-  const spawn = /^spawn (\S+) failed/.exec(line) ?? /^review (\S+) held: deep cap/.exec(line)
+  const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn?.[1]) return { spawn: spawn[1] }
   const issue = /^Issue (\d+)/.exec(line)
   if (issue?.[1]) return { issue: Number(issue[1]) }
@@ -182,6 +176,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     .sort(sessionOrder)
 
   const asks: FleetAsk[] = []
+  const expired: Record<string, string> = {}
   const ask = (a: Omit<FleetAsk, 'short'>) => {
     asks.push({ short: null, ...a })
   }
@@ -227,7 +222,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     }
   }
 
-  // The factory's own asks: a lead's `blocked` Issue and a review held at the deep cap. Open decisions have their own asks below, and a
+  // The factory's own asks: a lead's `blocked` Issue Open decisions have their own asks below, and a
   // blocked session its hc ask.
   for (const line of status.attention) {
     if (/^Issue \d+ asks: /.test(line)) continue
@@ -242,7 +237,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
       (subject.issue === undefined ? undefined : issueRepo.get(subject.issue))
     const at = seen(id)
     if (now.getTime() - Date.parse(at) >= EXPIRE_FACTORY_ASK_MS) {
-      input.expired?.set(id, at)
+      expired[id] = at
       continue
     }
     ask({
@@ -326,6 +321,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     builtAt: now.toISOString(),
     summary,
     asks,
+    expired,
     health,
     repos,
     issues: input.issues,

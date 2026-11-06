@@ -508,6 +508,21 @@ describe('the digest', () => {
       '2026-11-02',
     )
     expect(text).toContain('Needs you: 2: question “own question”')
+    const withShort = renderMorning(
+      {
+        since: new Date('2026-11-01T10:00:00Z'),
+        shipped: [],
+        snapshot: {
+          asks: [{ ...ask, repo: '/x/own', text: 'own question', short: 'MODEL-WORDS' }],
+          health: [],
+          issues: [],
+        } as never,
+        isVisible: () => false,
+      },
+      '2026-11-02',
+    )
+    expect(withShort).toContain('own question')
+    expect(withShort).not.toContain('MODEL-WORDS')
     expect(text).not.toContain('SECRET-IU-TEXT')
     expect(text).toContain('Health: 1: “Issue 9 parked”')
     expect(text).toContain('Read-only area: 1 items, counted only')

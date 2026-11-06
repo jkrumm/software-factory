@@ -138,6 +138,7 @@ export class FleetBuilder {
         this.seeded = true
         for (const h of stored?.health ?? []) this.healthSeen.set(h.id, h.since)
         for (const a of stored?.asks ?? []) if (TIMED_BY_BUILDER.has(a.source)) this.firstSeen.set(a.id, a.at)
+        for (const [id, at] of Object.entries(stored?.expired ?? {})) this.firstSeen.set(id, at)
         for (const x of [...(stored?.repos.flatMap((r) => r.sessions) ?? []), ...(stored?.unplaced ?? [])]) {
           if (x.since) this.since.set(`${x.id}\0${x.state}`, x.since)
         }
@@ -222,7 +223,6 @@ export class FleetBuilder {
     const repos: string[] = []
     for (const path of [...repoPaths].sort()) if (await exists(join(path, '.git'))) repos.push(path)
 
-    const expired = new Map<string, string>()
     const base = assemble({
       now,
       roots,
@@ -235,7 +235,6 @@ export class FleetBuilder {
       queue,
       firstSeen: this.firstSeen,
       healthSeen: this.healthSeen,
-      expired,
       errors,
     })
     // The digest's text comes from its cache, for the repos and sessions it may read (IuRoot's get none).
@@ -256,7 +255,7 @@ export class FleetBuilder {
     // An expired factory ask keeps its time too, or it would come back as new at the next build.
     const listed = [
       ...model.asks.filter((a) => TIMED_BY_BUILDER.has(a.source)).map((a) => [a.id, a.at] as const),
-      ...expired,
+      ...Object.entries(model.expired),
     ]
     this.firstSeen = complete ? new Map(listed) : new Map([...this.firstSeen, ...listed])
     this.healthSeen = new Map(fleet.health.map((h) => [h.id, h.since]))

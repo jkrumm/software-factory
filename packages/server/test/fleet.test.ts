@@ -373,6 +373,51 @@ describe('the tick’s kick', () => {
   })
 })
 
+describe('an expired factory ask', () => {
+  const blockedIssue = async () => {
+    const { issue } = await createIssue(
+      db.sql,
+      { source: 'request', sourceKey: 'old', repo: `${estate.src}/modelpick`, title: 'Old block', facts: {} },
+      { repoRoots: [estate.src], now: clock.now() },
+    )
+    await db.sql`UPDATE factory.issues SET state = 'waiting', reason = 'blocked' WHERE id = ${issue.id}`
+  }
+  const newBuilder = () =>
+    new FleetBuilder({
+      sql: db.sql,
+      now: () => clock.now(),
+      roots: [estate.src],
+      visibleRoots: [estate.iu],
+      home: estate.src,
+      hc,
+      queue,
+    })
+  const factoryAsks = (f: Fleet) => f.asks.filter((a) => a.source === 'factory')
+
+  test('after 7 days it is not listed and is in expired; a new builder over the same database keeps it gone', async () => {
+    await blockedIssue()
+    const first = await builder.refreshNow()
+    expect(factoryAsks(first).length).toBeGreaterThan(0)
+    clock.advance(8 * 24 * 3_600_000)
+    terminals = terminals.map((t) => ({ ...t, statusAt: clock.now().toISOString() }))
+    const expired = await builder.refreshNow()
+    expect(factoryAsks(expired).filter((a) => a.text.includes('Issue'))).toEqual([])
+    const ids = Object.keys(expired.expired)
+    expect(ids.length).toBeGreaterThan(0)
+    expect(ids.every((id) => id.startsWith('factory:'))).toBe(true)
+
+    const restarted = await newBuilder().refreshNow()
+    expect(restarted.asks.map((a) => a.id).filter((id) => ids.includes(id))).toEqual([])
+    expect(restarted.expired).toEqual(expired.expired)
+  })
+
+  test('a snapshot stored before the field still parses', async () => {
+    const fleet = await builder.refreshNow()
+    const { expired: _expired, ...old } = fleet
+    expect(Fleet.parse(old).expired).toEqual({})
+  })
+})
+
 describe('a restart and what a start text names', () => {
   test('a new builder keeps the first-seen time of a factory ask and the since of a terminal', async () => {
     await factoryRows()

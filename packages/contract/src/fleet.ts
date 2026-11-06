@@ -143,6 +143,8 @@ export const FleetBody = z.strictObject({
   fingerprint: z.string(),
   summary: FleetSummary,
   asks: z.array(FleetAsk),
+  /** the factory asks that expired in this build (id to first-seen ISO time), so a restart keeps them gone; a snapshot stored before this field has none */
+  expired: z.record(z.string(), z.string()).default({}),
   /** a snapshot stored before the health line has none */
   health: z.array(FleetHealth).default([]),
   repos: z.array(FleetRepo),

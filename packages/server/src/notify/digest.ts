@@ -67,7 +67,7 @@ export function renderMorning(facts: MorningFacts, date: string): string {
         : `${label}: ${items.length}${own.length > 0 ? `: ${own.slice(0, SHOWN).map(show).join('; ')}${own.length > SHOWN ? ` (+${own.length - SHOWN} more)` : ''}` : ''}`
     lines.push(line.length > LINE_MAX ? `${line.slice(0, LINE_MAX - 1)}…` : line)
   }
-  list('Needs you', snapshot?.asks ?? [], (a) => `${a.kind} ${quote(a.short ?? a.text, 60)}`)
+  list('Needs you', snapshot?.asks ?? [], (a) => `${a.kind} ${quote(a.text, 60)}`)
   list('Health', snapshot?.health ?? [], (h) => quote(h.text, 70))
   list('Shipped', facts.shipped, (i) => `Issue ${i.id} ${quote(i.title, 60)}`)
   list('Open Issues', snapshot?.issues ?? [], (i) => `Issue ${i.id} ${i.state} ${quote(i.title, 50)}`)
