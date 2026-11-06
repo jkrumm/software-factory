@@ -143,8 +143,8 @@ export interface AppDeps {
 /** Largest request body the server reads. */
 export const MAX_BODY_BYTES = 64 * 1024
 
-/** A `ship` waits for a `git fetch`, and `project sync` for all of them: Bun's own default is ten seconds of silence. */
-const IDLE_TIMEOUT_S = 120
+/** A `ship` waits for a `git fetch` and for agw's review reads (minutes on a long range), and `project sync` for all the fetches: Bun's own default is ten seconds of silence, its maximum 255. */
+const IDLE_TIMEOUT_S = 240
 /** Bun applies it on a unix socket too, with the same ten-second default, though its types leave it out of the socket's options. */
 const idle = { idleTimeout: IDLE_TIMEOUT_S } as object
 

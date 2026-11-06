@@ -35,8 +35,13 @@ const CoveredAnswer = z.object({
   uncovered: z.array(z.string()),
 })
 
-/** Both are host reads: they answer at once and never exit 10. */
-export const DEFAULT_REVIEW_TIMEOUT_MS = 60_000
+/**
+ * Both are host reads that never exit 10, but `covered` costs seconds per commit (it routes every commit against the recent jobs), so a
+ * long range takes minutes. This is a hang guard, not a budget. It sits under the ship call's own ceiling: the call waits for it
+ * inside one HTTP request (server idle timeout 240 s, Bun's maximum being 255 s; the CLI's 250 s), after the commit read's fetch
+ * (30 s at most) and before the answer poll (a few seconds), so 180 s keeps the worst case a clean refusal, not a dropped connection.
+ */
+export const DEFAULT_REVIEW_TIMEOUT_MS = 180_000
 
 export interface AgwReviewOptions {
   /** the `agw` binary (`FACTORY_AGW_BIN`) */
@@ -58,16 +63,13 @@ export class AgwReview implements Review {
   }
 
   async read({ repo, base, head }: { repo: string; base: string; head: string }): Promise<ReviewRead> {
-    const { tier } = this.parse(
-      RouteAnswer,
-      'route',
-      await this.ask('route', ['--cwd', repo, '--base', base, '--head', head]),
-    )
-    const covered = this.parse(
-      CoveredAnswer,
-      'covered',
-      await this.ask('covered', ['--cwd', repo, '--range', `${base}..${head}`]),
-    )
+    // Independent reads asked together, so the two limits do not add up inside the one request that waits for them.
+    const [routed, coveredBody] = await Promise.all([
+      this.ask('route', ['--cwd', repo, '--base', base, '--head', head]),
+      this.ask('covered', ['--cwd', repo, '--range', `${base}..${head}`]),
+    ])
+    const { tier } = this.parse(RouteAnswer, 'route', routed)
+    const covered = this.parse(CoveredAnswer, 'covered', coveredBody)
     const bySha = new Map(covered.commits.map((commit) => [commit.sha, commit]))
     const uncovered = covered.uncovered.map((sha): UncoveredCommit => {
       const commit = bySha.get(sha)

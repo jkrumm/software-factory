@@ -51,7 +51,7 @@ import { EXIT, FactoryError, usage } from './exit.ts'
 import { follow, readVerb } from './read.ts'
 
 /** A call that waits for git on the server; the server's own idle timeout is longer. */
-const GIT_CALL_TIMEOUT_MS = 100_000
+const GIT_CALL_TIMEOUT_MS = 250_000
 
 const HELP = `usage: ${BIN} [--format json|plain] <command>
 
