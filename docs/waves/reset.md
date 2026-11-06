@@ -126,3 +126,10 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 - [x] Issue 100: the deterministic steward (blocked and parked re-checks on a backoff, lifted waits, notes that reach a mid-turn lead, one owner line after retries).
 - [x] Issue 101: agent-workflows, a cheap-route workflow judging whether an ask is the owner's or answerable from the plan, failing closed.
 - [x] Issue 102 (`--after 100 101`): asks and spent escalations pass that judgment first. Ahead of row 8 by `issue prio`; row 9b's spec sign-off stays the owner's.
+
+## Wave 12 — What is left of the build order, as Issues            <!-- status: active -->
+- [ ] Issue 148: a wait on the owner frees the repo's claim (learnings, the first unattended night).
+- [ ] Issue 149: row 14, intake; Issue 150: row 15, surfaces and the owner's line off Slack (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
+- [ ] Issue 151: row 10, Apple verify on the mini (`--after 148`, so iris's wait on the App Store Connect record does not hold it). Issue 152: the machine budget for sessions outside the factory.
+- Row 17, parallel leads in one repo, waits for a stable week (design v3 §13).
+
