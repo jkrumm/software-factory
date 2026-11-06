@@ -903,6 +903,24 @@ function allowedMethods(table: Record<string, object>): (pathname: string) => st
   return (pathname) => patterns.find((p) => p.regex.test(pathname))?.methods ?? []
 }
 
+/** How long a stopping server lets requests in flight finish before it closes their connections. */
+export const STOP_GRACE_MS = 10_000
+
+/**
+ * Stops a `Bun.serve` server: it stops accepting at once and lets requests in flight finish for `graceMs`, then closes what is
+ * left. A plain `stop()` waits for every open connection, and `/v1/stream` never ends on its own: a deploy sat in it until the
+ * shutdown backstop, with the port closed for minutes.
+ */
+export async function stopServing(server: { stop(closeActive?: boolean): Promise<void> }, graceMs = STOP_GRACE_MS) {
+  const stopped = server.stop()
+  const force = setTimeout(() => void server.stop(true), graceMs)
+  try {
+    await stopped
+  } finally {
+    clearTimeout(force)
+  }
+}
+
 export function serve(deps: AppDeps & { port: number }) {
   // The stream is quiet between keepalives: Bun's idle timer would cut it, so its handler takes its connection out of the timer.
   const table = routes(deps, { noTimeout: (req) => server.timeout(req, 0) })
