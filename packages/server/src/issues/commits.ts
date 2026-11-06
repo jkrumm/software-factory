@@ -205,7 +205,7 @@ export class GitCommits implements Commits {
   /**
    * The lead's own commits on its branch since its worktree was cut: a range that cannot be read fails the verb, it does not lower the bar.
    * A branch rebased over what others landed holds their commits too. Its reflog says what it was rebased onto: what that holds is theirs,
-   * except what sat on top of an earlier onto when that rebase finished, and what was made on the branch (a `commit:` entry); those are
+   * except what sat on top of an earlier onto when that rebase finished, and what was made on the branch (a `commit`, `cherry-pick`, `revert`, `am` or `merge` entry; a fast-forward only moved the tip onto others' work); those are
    * its own even where a later rebase put them under a newer onto (it landed part of its work, then went on). A reflog that cannot be read,
    * or no rebase in it, leaves the whole range: stricter, never lighter.
    */
@@ -239,7 +239,8 @@ export class GitCommits implements Commits {
     for (const entry of reflog.stdout.split('\n')) {
       const [tip, ...words] = entry.split(' ')
       const message = words.join(' ')
-      if (tip && /^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message)) made.add(tip)
+      if (tip && /^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message) && !message.endsWith(': Fast-forward'))
+        made.add(tip)
       const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
       if (tip && onto) rebased.push({ onto, tip })
     }
