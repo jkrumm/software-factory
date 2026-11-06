@@ -123,14 +123,14 @@ async function verification(
   return read()
 }
 
-/** The holders of a project's claim, waiting in a wakeable reason with another Issue queued behind it for 15 min and no lead working: when the oldest began waiting. */
+/** The holders of a project's claim, waiting in a wakeable reason with another Issue queued (or answered and waiting for its claim) behind it for 15 min and no lead working: when the oldest began waiting. */
 async function claimHolders(sql: SQL, now: Date): Promise<Map<number, Date>> {
   const rows: { holder: number; queued_at: Date }[] = await sql`
     SELECT h.issue_id AS holder, min(q.queued_at) AS queued_at
     FROM factory.claims h
     JOIN factory.issues hi ON hi.id = h.issue_id AND hi.state = 'waiting' AND hi.reason IN ${sql([...WAKEABLE])}
     JOIN factory.claims q ON q.key = h.key AND q.held_at IS NULL
-    JOIN factory.issues qi ON qi.id = q.issue_id AND qi.state = 'queued'
+    JOIN factory.issues qi ON qi.id = q.issue_id AND (qi.state = 'queued' OR (qi.state = 'waiting' AND qi.reason = 'claim'))
     WHERE h.held_at IS NOT NULL AND q.queued_at <= ${new Date(now.getTime() - CLAIM_QUEUED_MS)}
       AND NOT EXISTS (
         SELECT 1 FROM factory.claims w JOIN factory.issues wi ON wi.id = w.issue_id
