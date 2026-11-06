@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EXIT_STOPPED, EXIT_TIMEOUT, runProcess } from '../src/exec.ts'
+import { childEnv, EXIT_STOPPED, EXIT_TIMEOUT, runProcess } from '../src/exec.ts'
 
 const alive = (pid: number) => Bun.spawnSync(['kill', '-0', String(pid)]).exitCode === 0
 
@@ -71,5 +71,24 @@ setTimeout(() => process.exit(1), 300)
     await Bun.sleep(100)
     expect(alive(child)).toBe(false)
     rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('childEnv', () => {
+  test('keeps every secret the factory runs on out of a child, and passes the rest on', () => {
+    const secrets = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL', 'FACTORY_GITHUB_TOKEN', 'NTFY_TOKEN']
+    const saved = Object.fromEntries(secrets.map((name) => [name, process.env[name]]))
+    try {
+      for (const name of secrets) process.env[name] = 'must-not-reach-a-child-0000'
+      const env = childEnv({ EXTRA: 'kept' })
+      for (const name of secrets) expect(env[name]).toBeUndefined()
+      expect(env.EXTRA).toBe('kept')
+      expect(env.PATH).toBe(process.env.PATH)
+    } finally {
+      for (const name of secrets) {
+        if (saved[name] === undefined) delete process.env[name]
+        else process.env[name] = saved[name]
+      }
+    }
   })
 })
