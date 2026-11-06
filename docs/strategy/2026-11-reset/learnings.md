@@ -286,6 +286,6 @@ evidence (a sha, a log line, a number); no narrative.
   - **Proving a change can become the stall.** Issue 102's lead filed four scratch Issues to prove its judge and held the chain an hour. Scratch Issues hold claims and slots like any other.
   - **Do not filter your own alarm for the thing you are doing.** The session watcher ignored "Scratch", which hid exactly that hour.
   - **A default can state a falsehood.** Issue 88's default was "Record and internal group created", with no record. The judge takes only do-nothing defaults.
-  - **Claude Code's "Dangerous rm not ruled out" stops a bypass-mode lead** on shell heredocs with no `rm` in them, four times in one night until a person answers. Leads now edit with the Edit tool; a prompt older than 15 min is a health line.
+  - **Claude Code's "Dangerous rm not ruled out" stops a bypass-mode lead** on shell heredocs with no `rm` in them, five times in one night until a person answers. Leads now edit with the Edit tool; a prompt older than 15 min is a health line.
   - **A fan-out ignores owner decisions it was not told about.** Row 13 filed an Issue for paused basalt-ui (stopped by hand). An audit should read `docs/decisions.md` first.
   - **Load came from outside the factory too.** It reached 346 on 12 cores with IuRoot sessions outside the test slot and a simulator; the server stopped answering at 160. Admission now holds new leads under load; sessions outside the factory are still unbounded.
