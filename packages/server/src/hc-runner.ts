@@ -45,6 +45,7 @@ export interface HcRunnerOptions {
 const DELIVER_POLL_MS = 1_000
 
 const Status = z.object({ state: z.string() }).loose()
+const Screen = z.object({ text: z.string() }).loose()
 const Terminal = z
   .object({
     address: z.string(),
@@ -237,6 +238,15 @@ export class HcRunner implements Runner {
       // the answer `busy`; anything else is an error. No refusal (a timeout, a dead process) says nothing about the text.
       if (error.refusal?.kind === 'blocked' || error.refusal?.kind === 'status_mismatch') return 'busy'
       throw error.refusal ? new RunnerError(error.message, false) : new UncertainTyping(error.message)
+    }
+  }
+
+  async screen(pane: string): Promise<string> {
+    const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
+    try {
+      return (await this.rpc('terminal.read', { terminal: pane }, Screen, budget)).text
+    } catch (error) {
+      throw asRunnerError(error)
     }
   }
 

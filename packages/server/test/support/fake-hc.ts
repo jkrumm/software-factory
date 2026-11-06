@@ -36,6 +36,10 @@ interface Terminal {
   template: string | null
   title: string
   turn: number
+  /** the visible text `terminal.read` answers; the fake models Claude Code's input box only */
+  screen_text: string
+  /** a terminal started `unsent`: its brief sits in the input box; this many Enters are swallowed before it starts */
+  swallow: number | null
   foreground: { argv: string[]; cwd: string; name: string; pid: number } | null
 }
 
@@ -50,7 +54,13 @@ interface State {
   docs: Record<string, { value: unknown; version: number }>
   calls: string[]
   plan: string[]
+  /** how many Enters an `unsent` terminal swallows before it takes one (default 1) */
+  swallow?: number
 }
+
+/** Claude Code's idle screen: a status line, the input box between two rules, the footer. */
+const claudeScreen = (box: string): string =>
+  ['  Ready.', '─'.repeat(80), `❯ ${box}`, '─'.repeat(80), '  ? for shortcuts', '  Opus  ctx 3%'].join('\n')
 
 const dir = process.env.FAKE_HC_DIR as string
 const file = join(dir, 'state.json')
@@ -123,6 +133,7 @@ function handle(state: State, method: string, params: Record<string, unknown>, f
       const argv = (params.argv as string[] | undefined) ?? []
       const address = `t${++state.seq}`
       const reports = fault !== 'silent'
+      const unsent = fault === 'unsent'
       const cwd = (params.cwd as string | null | undefined) ?? '/'
       const terminal: Terminal = {
         address,
@@ -148,11 +159,13 @@ function handle(state: State, method: string, params: Record<string, unknown>, f
         signal: null,
         state: 'live',
         // Claude Code given a prompt in argv starts its first turn on its own.
-        status: reports ? { app: 'claude-code', state: 'working' } : null,
+        status: reports ? { app: 'claude-code', state: unsent ? 'idle' : 'working' } : null,
         status_ms: reports ? 1_793_452_437_000 : null,
         template: null,
         title: '',
         turn: 0,
+        screen_text: claudeScreen(unsent ? (argv[argv.length - 1] ?? '') : ''),
+        swallow: unsent ? (state.swallow ?? 1) : null,
         foreground: { argv, cwd, name: basename(argv[0] ?? 'sh'), pid: 3000 + state.seq },
       }
       state.terminals.push(terminal)
@@ -211,12 +224,23 @@ function handle(state: State, method: string, params: Record<string, unknown>, f
         text: params.text as string,
         ...(params.if ? { if: params.if as string } : {}),
       })
+      // `unsent`: the brief sits in the box; an Enter may be swallowed, the first one taken starts the turn.
+      if (terminal.swallow !== null && params.text === '') {
+        if (terminal.swallow > 0) {
+          terminal.swallow--
+          return { started: true, status: word ?? null, turn: terminal.turn }
+        }
+        terminal.swallow = null
+        terminal.screen_text = claudeScreen('')
+      }
       if (terminal.status) {
         terminal.status = { ...terminal.status, state: 'working' }
         announce(state, 'status', terminal.address, { records: {}, reported: true, status: terminal.status })
       }
       return { started: true, status: word ?? null, turn: terminal.turn }
     }
+    case 'terminal.read':
+      return { text: find(params.terminal as string).screen_text, complete: true, how: 'screen' }
     case 'server.status':
       return {
         core: { id: state.core.id, name: 'fake' },
@@ -259,9 +283,10 @@ async function tail(epoch: string, stdinClosed: () => boolean, from: number): Pr
     if (stdinClosed()) process.exit(0)
     if (readFileSync(epochFile, 'utf8') !== epoch) process.exit(1)
     if (existsSync(eventsFile) && statSync(eventsFile).size > offset) {
-      const text = readFileSync(eventsFile, 'utf8')
-      process.stdout.write(text.slice(offset))
-      offset = text.length
+      // Bytes, not characters: a terminal record carries the screen's non-ASCII rules.
+      const bytes = readFileSync(eventsFile)
+      process.stdout.write(bytes.subarray(offset))
+      offset = bytes.length
     }
     await Bun.sleep(10)
   }

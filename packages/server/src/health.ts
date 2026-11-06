@@ -1,6 +1,7 @@
 import type { Health, HealthKind, Heartbeat } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
+import { hasTurned } from './briefs.ts'
 import { leadsOnBackgroundWork } from './issues/lead-activity.ts'
 import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
 import { planLines } from './projects/plan-status.ts'
@@ -172,10 +173,29 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   for (const issue of regressing) {
     lines.push(`Issue ${issue.id}: ${MAX_REGRESSIONS} regressions, the next one parks it`)
   }
+  lines.push(...(await unsentBriefLines(sql, now)))
   lines.push(...(await checkoutLines(sql)))
   lines.push(...(await loadHoldLines(sql)))
   lines.push(...(await planLines(sql, now)))
   return lines
+}
+
+/** How long a started spawn may go without its first turn before the line says its brief may sit unsent. */
+export const NO_FIRST_TURN_MS = 3 * 60_000
+
+/** A started spawn with no `turn_started` since it started and no end: derived on read, gone once the turn exists. */
+async function unsentBriefLines(sql: SQL, now: Date): Promise<string[]> {
+  const rows: { key: string; issue_id: number | null; assigned_at: Date }[] = await sql`
+    SELECT s.key, s.issue_id, s.assigned_at FROM factory.spawns s
+    WHERE s.status = 'started' AND s.assigned_at <= ${new Date(now.getTime() - NO_FIRST_TURN_MS)}
+      AND NOT ${hasTurned(sql)}
+      AND NOT EXISTS (SELECT 1 FROM factory.events e WHERE e.session = s.key AND e.at >= s.assigned_at
+                      AND e.kind IN ('session_ended', 'pane_gone'))
+    ORDER BY s.assigned_at, s.key`
+  return rows.map(
+    (row) =>
+      `${row.issue_id === null ? `spawn ${row.key}` : `Issue ${row.issue_id}`}: no first turn ${minutes(now.getTime() - row.assigned_at.getTime())} min after its start, its brief may sit unsent`,
+  )
 }
 
 /** A watching Issue whose hold cannot verify because its repo's checkout is not the owner's to move (`issues/hold.ts`): there while it is true. */
@@ -208,7 +228,7 @@ async function loadHoldLines(sql: SQL): Promise<string[]> {
 /** Which kind of health line a line is (the one place that decides; `/fleet` carries it). */
 export function healthKind(line: string): HealthKind {
   if (/^Issue \d+ parked/.test(line)) return 'park'
-  if (/^Issue \d+: no hook event/.test(line)) return 'silent'
+  if (/^Issue \d+: no hook event/.test(line) || /^(Issue \d+|spawn \S+): no first turn /.test(line)) return 'silent'
   if (/^Issue \d+: working .* budget /.test(line)) return 'over_budget'
   if (/^Issue \d+: \d+ regressions/.test(line)) return 'regressions'
   return 'machine'

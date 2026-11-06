@@ -221,6 +221,7 @@ const ticker = startTicker(
     clock,
     retryBudgetMs: config.retryBudgetMs,
     spool,
+    briefs: new Map(),
     quota,
     projects,
     settler,

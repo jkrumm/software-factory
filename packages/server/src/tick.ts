@@ -7,6 +7,7 @@ import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { FleetBuilder } from './fleet/index.ts'
 import type { TickMonitor } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
+import { type BriefWatch, nudgeBriefs } from './briefs.ts'
 import type { Classification } from './issues/classify.ts'
 import type { AskJudgement } from './issues/judge.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
@@ -69,6 +70,8 @@ export interface TickDeps {
   fleet?: Pick<FleetBuilder, 'kick'>
   /** the lead cap: admission at every claim; the defaults without */
   admission?: AdmissionLimits
+  /** the unsent-brief nudge's backoff memory; without it the pass does not run */
+  briefs?: BriefWatch
   /** the fixed spaces (`spaces.ts`): its own interval, behind the tick's back */
   spaces?: Pick<Spaces, 'kick'>
 }
@@ -390,6 +393,14 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
     await deliverPrompts({ sql: deps.sql, runner: deps.runner, clock: deps.clock })
   } catch (error) {
     result.errors.push(`prompts: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (deps.briefs) {
+    try {
+      const errors = await nudgeBriefs({ sql: deps.sql, runner: deps.runner, clock: deps.clock, watch: deps.briefs })
+      result.errors.push(...errors.map((e) => `briefs: ${e}`))
+    } catch (error) {
+      result.errors.push(`briefs: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
   try {
     const now = () => deps.clock.now()

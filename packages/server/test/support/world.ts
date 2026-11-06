@@ -20,6 +20,15 @@ export class FakeRunner implements Runner {
     return this.answer
   }
 
+  screens = new Map<string, string>()
+  screenRead: string[] = []
+
+  async screen(pane: string): Promise<string> {
+    if (this.failure) throw this.failure
+    this.screenRead.push(pane)
+    return this.screens.get(pane) ?? ''
+  }
+
   async close(key: string): Promise<void> {
     if (this.failure) throw this.failure
     this.closed.push(key)

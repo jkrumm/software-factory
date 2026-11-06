@@ -167,7 +167,7 @@ that applies wins.
   5-hour window and the last 5 % of the week, so new spawns stop at 95 %. A session already running there
   rotates at 94 % (below), one point earlier, so its successor can still be spawned elsewhere before the wall.
 - **Never spill.** With every account walled the queue waits for the first reset.
-- **A spawn holds its account** while queued or starting, and once started until a reading taken after its start
+- **A spawn holds its account** while queued or starting, and once started until a turn has begun (not ended, within 30 min) and a reading taken after its start
   shows it. A burst starts only as many spawns as there are open accounts; there is no per-spawn cost estimate. A
   spawn a rule holds back (`drain`, `pace`, no capacity) stays queued with a hold reason.
 
@@ -354,6 +354,7 @@ a day from when it failed. A Runner error that says nothing was typed is retried
 (`UncertainTyping`: hc timed out or died after the call) counts as sent and waits for a turn; the one retry after a
 minute without one types the text again, as for a claim left `typing` by a crashed tick (after the start budget plus a minute): only
 a prompt whose first typing the runner answered `typed` (`prompts.typed_at`, migration `030`) gets Enter alone, since only then is the text known to be in the pane.
+A spawn's brief is the last argv of `claude`, so it is no prompt row and this retry never covers it. `briefs.ts` (`nudgeBriefs`, after `deliverPrompts` in the tick, in-memory `BriefWatch`) does for it what the retry does: a `started` spawn 10 s to 30 min old with no `turn_started` since its start, whose screen (`Runner.screen`, `terminal.read`) shows text in the Claude Code input box, gets Enter alone at gaps of 10 s, 20 s, 40 s, then every 60 s; an empty box is never pressed. Until its first turn such a spawn also keeps holding its account (`currentLoads`), and from 3 min on a health line says `no first turn … its brief may sit unsent` (kind `silent`).
 `Runner.type` types only into an agent the core calls `idle` or `done` (`working` queues the text, `blocked` would answer its dialog). A `pending` prompt expires after 6 h
 (a rule's) or 24 h (a note). A rule whose prompt failed or expired asks again after 30 min while its condition holds
 (the same row starts over; a delivered prompt, a note, or a prompt recorded as undeliverable never does). One prompt is
@@ -521,7 +522,7 @@ weekly use at or below the elapsed share of its week. Never spills: with no acco
 pace the moment the elapsed share reaches the use); none if no reading names a time, or if an account is open by its standing
 and only its load keeps it from being picked (a far reset of another account is no opening then), a new reading wakes it.
 **The spawn cost is not a number:** an account takes one new spawn per sample. A queued or starting spawn holds its account (no agent runs yet, no sample
-can show it); a started one holds it until a sample is taken after the moment it started (`assigned_at`, moved to the start;
+can show it); a started one holds it until a turn has begun (a session that ended, or one older than 30 min without a turn, stops holding) and a sample is taken after the moment it started (`assigned_at`, moved to the start;
 `sampled_at` is stamped before the picker is asked). Then the account is offered again (the poll shows it within about a
 minute). A burst starts as many spawns as there are open accounts
 and the rest wait for the next sample.

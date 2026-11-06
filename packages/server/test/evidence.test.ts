@@ -874,7 +874,9 @@ describe('the hold', () => {
   })
 
   test('a blocked checkout is no red: no regression, no retry, the effect waits and a clean run closes the hold', async () => {
-    const { id } = await shipped()
+    const { id, key } = await shipped()
+    // The lead has begun its first turn: a started spawn without one is a health line of its own.
+    await emit(key, 'turn_started')
     const blockedCheck = {
       name: 'checkout',
       ok: false,
