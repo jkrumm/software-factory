@@ -11,12 +11,7 @@ rows:
   - key: machine-budget
     issue: 152
   - key: repo-contract-audit
-    title: Audit every repo against the project contract
-    facts:
-      why: The factory runs each repo on its project.yaml and its make targets (check, test, deploy, verify, version, restart, quality, logs, status). A repo that falls short makes a lead guess or a hold fail.
-      what: Read every repo under the allowed roots that the factory knows (factory project list), compare its project.yaml and Makefile with the contract in docs/design.md section 9, and list what is missing or wrong.
-      change: For each repo that falls short, file one Issue in that repo with factory issue new, naming the missing targets or manifest fields. Change nothing in the repos themselves. Close when every shortfall has its Issue.
-      acceptance: factory project show <repo> lists the make targets read; every repo with a gap has exactly one open or closed Issue naming it; a repo that meets the contract has none.
+    issue: 95
   - key: docs-sweep
     after: [surfaces]
     title: Sweep the docs and skills under rules/writing-for-agents.md
