@@ -140,6 +140,27 @@ describe('an unrouted monitor that stays down', () => {
   })
 })
 
+describe('a mapped repo with a heal rule', () => {
+  test('the down waits out the rule, and an up in the meantime cancels it', async () => {
+    const manifest = { apiVersion: 'factory/v2', name: 'forecast', heal: [{ when: 'kuma.down', grace: '30m' }] }
+    await db.sql`
+      INSERT INTO factory.projects (name, repo, manifest, make_targets, synced_at, created_at)
+      VALUES ('forecast', ${MAPPED}, ${JSON.stringify(manifest)}::text::jsonb, '{}'::jsonb, ${clock.now()}, ${clock.now()})`
+    await alert('forecast - Push')
+    settle()
+    await pass()
+    expect(await rows('issues')).toEqual([])
+    expect(await rows('intake_pending')).toMatchObject([{ source: 'kuma', subject: 'forecast - Push', repo: MAPPED }])
+    expect(await lines()).toEqual([
+      'monitor kuma/forecast - Push down 10 min with no route, filing waits for the repo’s heal rule',
+    ])
+
+    await alert('forecast - Push', 'up')
+    expect(await rows('intake_pending')).toEqual([])
+    expect(await lines()).toEqual([])
+  })
+})
+
 describe('group monitors', () => {
   test('never raise a line or file anything, however they say it', async () => {
     await alert('Homelab', 'down', { title: 'Homelab is down: Child monitors down' })

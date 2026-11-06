@@ -81,6 +81,9 @@ async function fileAlert(sql: SQL, input: IntakeInput, context: IntakeContext): 
         WHERE last_seen < ${new Date(now.getTime() - UNROUTED_KEEP_MS)} AND status IS DISTINCT FROM 'down'`
       await tx`DELETE FROM factory.door_unrouted WHERE last_seen < ${new Date(now.getTime() - UNROUTED_DOWN_KEEP_MS)}`
       const down = input.status === 'down'
+      // The steward may have handed the down to a project's `heal:` grace (`unrouted.ts`): the `up` cancels it as a routed one does.
+      if (!down)
+        await tx`DELETE FROM factory.intake_pending WHERE source = ${input.source} AND subject = ${input.monitor}`
       await tx`
         INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event, status, down_since, is_group)
         VALUES (${input.source}, ${input.monitor}, 1, ${now}, ${input.title}, ${input.event}, ${input.status},
