@@ -526,7 +526,7 @@ can show it); a started one holds it until a sample is taken after the moment it
 minute). A burst starts as many spawns as there are open accounts
 and the rest wait for the next sample.
 
-**Retired (Reset row 8):** the review transport (hidden `reviewer` sessions, `review_slots`, `deep_cap`, the review ceiling, `FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`, `spawn create --review-job`) and the `wave` hold are deleted. The spawn columns `review_job`, `review_tier`, `review_effort`, `deep_allowed` and the table `review_outcomes` stay in the schema (migration `029`) and nothing writes or reads them; row 9 drops them. `factory spawn cancel <key>` (`POST /spawns/:key/cancel`, token and socket; `cancelSpawn` in `spawns.ts`) stays: a `queued` or `waiting` spawn never claimed becomes `cancelled`, the same call again answers the same row, a claimed one is 409 `not_cancellable` carrying the spawn row; a cancelled key is spent. The Issue-evidence review at `ship` (`issues/review.ts`) is unchanged.
+**Retired (Reset row 8):** the review transport (hidden `reviewer` sessions, `review_slots`, `deep_cap`, the review ceiling, `FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`, `spawn create --review-job`) and the `wave` hold are deleted. The spawn columns `review_job`, `review_tier`, `review_effort`, `deep_allowed` and the table `review_outcomes` were dropped by migration `035` (Reset row 9). `factory spawn cancel <key>` (`POST /spawns/:key/cancel`, token and socket; `cancelSpawn` in `spawns.ts`) stays: a `queued` or `waiting` spawn never claimed becomes `cancelled`, the same call again answers the same row, a claimed one is 409 `not_cancellable` carrying the spawn row; a cancelled key is spent. The Issue-evidence review at `ship` (`issues/review.ts`) is unchanged.
 
 #### Queue state
 
@@ -1215,7 +1215,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 
 One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
 `docs/waves/archive/fv.md`). The deterministic half; "The digest" (below) adds the model text: `short`, `headline` and the asks found
-in a session's last message. Reset row 8 slimmed it: no plans, git state, tiers, suggestions, actions, presence or reaper (the tables of those stay until row 9 drops them); it only reads.
+in a session's last message. Reset row 8 slimmed it: no plans, git state, tiers, suggestions, actions, presence or reaper (their tables `fleet_triage_log`, `fleet_ask_seen`, `fleet_acts`, `fleet_presence_acts`, `fleet_seen` and `fleet_windows` were dropped by migration `035`, Reset row 9); it only reads.
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `health[]`, `issues[]` (the open Issues: `id`, `title`, `repo`, `state`, `kind`, `size`, `lead` the live lead's session id or null, `updatedAt`; read from the Issues table, no model call), `repos[]` (`name`, `space`, `visible`, `sessions[]`), `unplaced[]` (live sessions with no repo of
@@ -1337,6 +1337,8 @@ group.
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
 | `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered`, written in the spawn's own transaction | F1 |
 | `slots` | holder, lease, command | F1 |
+| `spawns` | key, repo, prompt, role, tier, effort, status (`queued`, `waiting`, `starting`, `started`, `failed`, `cancelled`), hold, placement, account, `resume_at`, session; the review-transport columns and `review_outcomes` went with migration `035` | F1 |
+| `fleet_snapshot`, `fleet_digest*` | the newest fleet read model (one row) and the digest's cache, runs, pending batch and backoff; `fleet_triage_log`, `fleet_ask_seen`, `fleet_acts`, `fleet_presence_acts`, `fleet_seen` and `fleet_windows` were dropped by migration `035` | FV |
 | `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
 | `issues`, `issue_deps` | source, source key, repo, facts, kind, class, size, the lead's tier and effort, what Classify answered (`classify`) and when (`classified_at`), title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
 | `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
