@@ -11,6 +11,7 @@ const ROLE = {
   effort: 'high',
   hold: null,
   parent: null,
+  issue: null,
   repo: '/work/repo',
   space: '/work/repo',
   pane: null,

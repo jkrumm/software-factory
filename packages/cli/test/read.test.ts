@@ -33,6 +33,7 @@ const CARD = {
   filedTitle: 'Fix the thing in the repo',
   title: 'Fix the thing',
   summary: 'Working on it.',
+  about: 'Keeps the login stable.',
   state: 'working',
   reason: null,
   outcome: null,
@@ -54,6 +55,7 @@ const CARD = {
 const SESSION = {
   id: 'lead-1',
   issue: 7,
+  parent: null,
   role: 'lead',
   title: 'Lead',
   summary: 'Leading.',
@@ -88,6 +90,7 @@ const ASK = {
   source: 'decision',
   at: '2026-11-06T10:00:00.000Z',
   summary: 'Which way it should go.',
+  issue: null,
   stale: false,
 }
 const QUEUED = {

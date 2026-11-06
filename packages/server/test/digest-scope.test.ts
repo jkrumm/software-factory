@@ -106,3 +106,28 @@ test('a text naming a visible repo as part of a longer word is still offered', (
   })
   expect(scope.feed.lines).toEqual(['The desktop needs a restart'])
 })
+
+test("the feed's abouts are the open Issues of ordinary repos with their filed goal, none of IuRoot's", () => {
+  const scope = scopeOf({
+    model,
+    merged: [],
+    sessions: [],
+    isVisible: (path) => path.split('/').includes('IuRoot'),
+    issues: [
+      { id: 1, title: 'Fix the login flow', repo: '/work/app' },
+      { id: 2, title: 'Ticket EP-12 customer data', repo: '/Users/me/IuRoot/portal' },
+      { id: 3, title: 'Marked by the model', repo: '/work/marked' },
+      { id: 4, title: 'No goal filed', repo: '/work/app' },
+    ],
+    goals: new Map([
+      [1, 'Make login survive a cold cache.'],
+      [2, 'Customer data goal'],
+      [3, 'Marked goal'],
+    ]),
+    visibleNames: [],
+  })
+  expect(scope.feed.abouts).toEqual([
+    { issue: 1, title: 'Fix the login flow', goal: 'Make login survive a cold cache.' },
+    { issue: 4, title: 'No goal filed', goal: null },
+  ])
+})

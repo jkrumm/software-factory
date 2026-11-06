@@ -125,6 +125,7 @@ function lineSubject(line: string): { session?: string; spawn?: string; issue?: 
 /**
  * Whether a health line is the factory's own bookkeeping and worth no line on `/fleet`: it stays in `factory status`'s health list.
  * A note to a terminal that no longer exists (it expired, or was never confirmed), a spawn marked failed while its terminal works on, a
+ * spawn the factory released because its Issue closed before it started (`projects/claims.ts` `releaseClosed`, `issues/finalize.ts`: nothing to do), a
  * kept worktree of a closed Issue, and the informational "waits for the claim".
  */
 export function isMachineNoise(
@@ -139,6 +140,7 @@ export function isMachineNoise(
   },
 ): boolean {
   if (/^note \S+ to \S+/.test(line)) return facts.session === null || /\bunconfirmed:/.test(line)
+  if (/^spawn \S+ failed: Issue \d+ closed before the spawn started/.test(line)) return true
   if (/^spawn \S+ failed/.test(line)) return facts.spawnWorking
   if (/^Issue \d+: its worktree was kept/.test(line)) return !facts.issueOpen
   return /^Issue \d+ waits for the claim/.test(line)

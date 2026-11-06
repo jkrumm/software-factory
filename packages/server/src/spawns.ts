@@ -28,6 +28,7 @@ interface SpawnRow {
   workspace: string | null
   error: string | null
   parent: string | null
+  issue_id: number | null
 }
 
 export const toView = (row: SpawnRow): SpawnView => ({
@@ -48,6 +49,7 @@ export const toView = (row: SpawnRow): SpawnView => ({
   workspace: row.workspace,
   error: row.error,
   parent: row.parent,
+  issue: row.issue_id,
 })
 
 /**
@@ -79,13 +81,13 @@ export async function withEnded(sql: SQL, spawns: readonly SpawnView[], now: Dat
 
 export async function getSpawn(sql: SQL, key: string, now: Date): Promise<SpawnView | undefined> {
   const [row]: SpawnRow[] = await sql`
-    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns WHERE key = ${key}`
+    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, issue_id FROM factory.spawns WHERE key = ${key}`
   return row && (await withEnded(sql, [toView(row)], now))[0]
 }
 
 export async function listSpawns(sql: SQL, now: Date, limit = 200): Promise<SpawnView[]> {
   const rows: SpawnRow[] = await sql`
-    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent FROM factory.spawns
+    SELECT key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, issue_id FROM factory.spawns
     ORDER BY created_at DESC, key LIMIT ${limit}`
   return withEnded(sql, rows.map(toView), now)
 }
@@ -154,7 +156,7 @@ export async function createSpawn(
       INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, hold, resume_at, created_at, parent, space, new_space, issue_id, fork_session, fork_archive)
       VALUES (${input.key}, ${input.repo}, ${input.prompt}, ${input.role}, ${input.tier}, ${input.effort}, ${status},
               ${account}, ${account ? now : null}, ${hold}, ${resumeAt}, ${now}, ${input.parent ?? null}, ${input.space ?? input.repo}, ${input.newSpace ?? false}, ${input.issueId ?? null}, ${input.fork?.session ?? null}, ${input.fork?.archive ?? null})
-      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, issue_id`
     if (!row) throw new Error(`spawn ${input.key} was not stored`)
     await input.withSpawn?.(tx)
     return { spawn: toView(row), created: true }
@@ -181,7 +183,7 @@ export async function cancelSpawn(
       UPDATE factory.spawns
       SET status = 'cancelled', hold = NULL, account = NULL, assigned_at = NULL, resume_at = NULL, claimed_at = NULL
       WHERE key = ${key} AND status IN ('queued', 'waiting')
-      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, issue_id`
     return cancelled
   })
   if (row) return { spawn: toView(row) }
@@ -210,7 +212,7 @@ export async function requeueSpawn(
       SET status = 'queued', attempts = 0, error = NULL, claimed_at = NULL, resume_at = NULL, first_claimed_at = NULL,
           hold = NULL, assigned_at = NULL
       WHERE key = ${key} AND status = 'failed'
-      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent`
+      RETURNING key, status, repo, COALESCE(space, repo) AS space, role, tier, effort, hold, account, resume_at, attempts, session, tab, workspace, error, parent, issue_id`
     return requeued
   })
   if (row) return { spawn: toView(row) }

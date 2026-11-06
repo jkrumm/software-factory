@@ -75,6 +75,7 @@ function issueScreen(d: IssueDetail): string {
   return [
     [d.id, d.state, d.repoName, oneLine(d.title)].join('\t'),
     oneLine(d.summary),
+    ...(d.about ? [`about\t${oneLine(d.about)}`] : []),
     insightsLine(d.insights),
     ...(d.timeline.length ? ['', 'timeline', ...d.timeline.map((t) => `${t.at}\t${t.kind}\t${oneLine(t.text)}`)] : []),
     ...(d.evidence.length

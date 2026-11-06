@@ -14,12 +14,13 @@ import {
   type ReadHealth,
   type SessionCard,
   type SessionState,
+  type Spawn,
   type Terminal,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
-import { type DigestView, readDigestCache } from '../fleet/digest.ts'
+import { type DigestView, loadGoals, readDigestCache } from '../fleet/digest.ts'
 import { STALE_ASK_MS } from '../fleet/model.ts'
 import { namesIuRoot } from '../fleet/place.ts'
 import { readSnapshot } from '../fleet/store.ts'
@@ -123,11 +124,42 @@ const WAITING_ISSUE: Record<string, string> = {
   claim: 'Answered, waiting for the repo to be free.',
 }
 
-/** The fixed sentence for an Issue that has said nothing of its own yet. */
-function stateSentence(issue: IssueSummary): string {
+/** The hold of a queued spawn in plain words, no ids: why the Issue's lead has not started. `null` when the spawn names none. */
+function holdSentence(spawn: Spawn | undefined): string | null {
+  if (!spawn) return null
+  switch (spawn.hold) {
+    case 'drain':
+      return 'Queued: the queue is draining, so no new work starts.'
+    case 'pace':
+      return 'Queued: the queue is paced, and its repo already has a running session.'
+    case 'claim':
+      return 'Queued: the repo is busy with another Issue, this one starts when it is free.'
+    case 'load':
+      return 'Queued: the machine is too busy, the lead starts when its load drops.'
+    case null:
+      break
+  }
+  if (spawn.status === 'waiting' && spawn.resumeAt) {
+    const at = Date.parse(spawn.resumeAt)
+    return Number.isNaN(at)
+      ? null
+      : `Queued: every account is at its usage limit, the next try is at ${new Date(at).toISOString().slice(0, 16).replace('T', ' ')} UTC.`
+  }
+  return null
+}
+
+/** The spawn of an Issue's lead that has not started: the current attempt's, else the newest attempt's (`lead-<id>-<attempt>`). */
+function leadSpawn(spawns: readonly Spawn[], issue: IssueSummary): Spawn | undefined {
+  const prefix = `lead-${issue.id}-`
+  const mine = spawns.filter((s) => s.key.startsWith(prefix) && (s.status === 'queued' || s.status === 'waiting'))
+  return mine.find((s) => s.key === leadKey(issue.id, issue.attempt)) ?? mine.at(-1)
+}
+
+/** The fixed sentence for an Issue that has said nothing of its own yet; a queued one names its spawn's hold when it has one. */
+function stateSentence(issue: IssueSummary, spawn?: Spawn): string {
   switch (issue.state) {
     case 'queued':
-      return 'Queued, waiting for a free account.'
+      return holdSentence(spawn) ?? 'Queued, waiting for a free account.'
     case 'settling':
       return 'Being settled.'
     case 'working':
@@ -145,10 +177,25 @@ function stateSentence(issue: IssueSummary): string {
   }
 }
 
+/**
+ * What an Issue is for, from its filed facts alone: the first sentence of the goal, else the filed title. The only words a visible repo's
+ * Issue has, and the ones an ordinary repo's Issue has until the digest answers.
+ */
+export function aboutFallback(title: string, goal: string | null): string {
+  return goal ? firstSentence(goal) : cut(title, 160)
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
+
+/** The Issue an ask names by its ids: a decision's (`decision:<issue>:…`), else its lead session's (`lead-<issue>-<attempt>`). */
+function askIssueOf(ask: FleetAsk): number | null {
+  const id =
+    /^decision:(\d+):/.exec(ask.id)?.[1] ?? (ask.session ? /^lead-(\d+)-\d+$/.exec(ask.session)?.[1] : undefined)
+  return id === undefined ? null : Number(id)
+}
 
 export class Reader {
   private readonly insights: TranscriptInsights
@@ -167,7 +214,7 @@ export class Reader {
     const rows: { state: string; n: number }[] = await sql`
       SELECT state, count(*)::int AS n FROM factory.issues WHERE state <> 'closed' GROUP BY state`
     const n = (state: string): number => rows.find((r) => r.state === state)?.n ?? 0
-    const { asks, humanQueue, health } = this.words(ctx, ctx.snapshot)
+    const { asks, humanQueue, health } = await this.words(ctx, ctx.snapshot)
     return {
       version: API_VERSION,
       now: clock.now().toISOString(),
@@ -198,14 +245,17 @@ export class Reader {
   }> {
     const ctx = await this.context()
     if (!ctx.snapshot) throw new NotReady('the fleet model is not built yet')
-    return { ...this.words(ctx, ctx.snapshot), accounts: [...ctx.quota.values()] }
+    return { ...(await this.words(ctx, ctx.snapshot)), accounts: [...ctx.quota.values()] }
   }
 
   /**
    * The asks and health lines in plain words: the digest's answer for the line when it has one, else a reply ask's own `short`, else
    * the deterministic fallback. The digest never reads a visible place's line, so none of its answers is shown for one.
    */
-  private words(ctx: Context, snapshot: Fleet): { asks: ReadAsk[]; humanQueue: ReadAsk[]; health: ReadHealth[] } {
+  private async words(
+    ctx: Context,
+    snapshot: Fleet,
+  ): Promise<{ asks: ReadAsk[]; humanQueue: ReadAsk[]; health: ReadHealth[] }> {
     const visibleSpaces = new Set(snapshot.repos.filter((r) => r.visible).map((r) => r.space))
     const model = (line: { repo: string | null; session?: string | null; text: string }) => {
       const visible =
@@ -213,7 +263,9 @@ export class Reader {
         (!!line.session && !!ctx.placed.get(line.session)?.visible)
       return visible ? null : ctx.digest.line(line.text)
     }
-    const all = dropReplyDuplicates(snapshot.asks).map((ask): ReadAsk => {
+    const kept = dropReplyDuplicates(snapshot.asks)
+    const owned = await this.issuesOf(kept.flatMap((a) => (a.session && !askIssueOf(a) ? [a.session] : [])))
+    const all = kept.map((ask): ReadAsk => {
       const fallback = fallbackWords(ask.text, 'ask')
       const said = model(ask)
       return {
@@ -221,6 +273,7 @@ export class Reader {
         text: cut(ask.text, LINE_TEXT_MAX),
         short: said?.short ?? ask.short ?? fallback.short,
         summary: said?.summary ?? fallback.summary,
+        issue: askIssueOf(ask) ?? (ask.session ? (owned.get(ask.session) ?? null) : null),
         stale: ctx.now.getTime() - Date.parse(ask.at) >= STALE_ASK_MS,
       }
     })
@@ -426,12 +479,14 @@ export class Reader {
     const closings: { issue_id: number; payload: unknown }[] = await sql`
       SELECT DISTINCT ON (issue_id) issue_id, payload FROM factory.issue_events
       WHERE issue_id IN ${sql(ids)} AND kind IN ('close', 'ship', 'drop', 'stop') ORDER BY issue_id, id DESC`
+    const goals = await loadGoals(sql, ids)
     const asking: { issue_id: number }[] = await sql`
       SELECT DISTINCT issue_id FROM factory.decisions WHERE issue_id IN ${sql(ids)} AND answered_at IS NULL`
     return {
       phases: new Map(phases.map((p) => [p.issue_id, p.payload])),
       closings: new Map(closings.map((p) => [p.issue_id, p.payload])),
       asking: new Set(asking.map((a) => a.issue_id)),
+      goals,
     }
   }
 
@@ -448,11 +503,15 @@ export class Reader {
     const closingWords = isRecord(closing) ? (text(closing.summary) ?? text(closing.reason)) : null
     const headline = lead && !visible ? ctx.digest.headline(lead) : null
     const summary = open
-      ? (headline ?? (phaseNote ? firstSentence(phaseNote) : null) ?? stateSentence(issue))
+      ? (headline ??
+        (phaseNote ? firstSentence(phaseNote) : null) ??
+        stateSentence(issue, leadSpawn(ctx.snapshot?.queue.spawns ?? [], issue)))
       : closingWords
         ? firstSentence(closingWords)
         : stateSentence(issue)
     const heading = visible ? null : ctx.digest.heading(issue.title)
+    const goal = extras.goals.get(issue.id) ?? null
+    const about = (visible ? null : ctx.digest.about(issue.id, issue.title, goal)) ?? aboutFallback(issue.title, goal)
     const account = current?.card.account ?? null
     const startedAt = issue.createdAt
     const endedAt = issue.closedAt
@@ -461,8 +520,9 @@ export class Reader {
     return {
       id: issue.id,
       filedTitle: issue.title,
-      title: heading ?? cut(issue.title, TITLE_WORDS_MAX),
+      title: heading ?? this.cutTitle(ctx, issue, leads),
       summary,
+      about,
       state: issue.state,
       reason: issue.reason,
       outcome: issue.outcome,
@@ -484,6 +544,20 @@ export class Reader {
         (extras.asking.has(issue.id) ||
           (issue.state === 'waiting' && (issue.reason === 'decision' || issue.reason === 'blocked'))),
     }
+  }
+
+  /**
+   * The title of an Issue without a digest heading: the filed title when it fits, else the newest lead's tab title (a real one, never
+   * the role words), else the filed title cut at a word.
+   */
+  private cutTitle(ctx: Context, issue: IssueSummary, leads: readonly Bundle[]): string {
+    if (issue.title.replace(/\s+/g, ' ').trim().length <= TITLE_WORDS_MAX) return cut(issue.title, TITLE_WORDS_MAX)
+    const newest = [...leads].sort((a, b) => b.card.lastActivityAt.localeCompare(a.card.lastActivityAt))
+    for (const lead of newest) {
+      const tab = ctx.placed.get(lead.card.id)?.session.title?.replace(/\s+/g, ' ').trim()
+      if (tab) return cut(tab, TITLE_WORDS_MAX)
+    }
+    return cut(issue.title, TITLE_WORDS_MAX)
   }
 
   /** The cards of the loaded sessions with their figures; `issue` is the Issue a whole tree is known to belong to. */
@@ -541,6 +615,7 @@ export class Reader {
           card: {
             id: s.id,
             issue: belongs.get(s.id) ?? ownIssue.get(s.id) ?? null,
+            parent: s.parent,
             role: s.role,
             title: fleet?.session.title ?? roleWords(s.role),
             summary: headline ?? wait ?? SESSION_SENTENCE[s.state],
@@ -569,4 +644,6 @@ interface Extras {
   phases: ReadonlyMap<number, unknown>
   closings: ReadonlyMap<number, unknown>
   asking: ReadonlySet<number>
+  /** the filed goal text per Issue (`loadGoals`) */
+  goals: ReadonlyMap<number, string>
 }

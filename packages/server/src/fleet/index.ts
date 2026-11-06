@@ -6,7 +6,7 @@ import { buildStatus } from '../status.ts'
 import { JUDGE_WINDOW_MS } from '../issues/attention.ts'
 import { leadKey } from '../issues/names.ts'
 import { enclosingRepo } from '../projects/sync.ts'
-import { type Digest, DigestView } from './digest.ts'
+import { type Digest, DigestView, loadGoals } from './digest.ts'
 import { applyDigest, scopeOf } from './digest-model.ts'
 import { Places } from './place.ts'
 import { assemble, type DecisionRow, fingerprintOf, type MergedSession } from './model.ts'
@@ -245,6 +245,10 @@ export class FleetBuilder {
       sessions: db.status.sessions,
       isVisible: (path) => places.isVisible(path),
       issues: db.issues,
+      goals: await loadGoals(
+        sql,
+        db.issues.map((i) => i.id),
+      ),
       visibleNames: await directoryNames(visibleRoots),
     })
     const complete = askSourcesAnswered(errors)
