@@ -48,7 +48,7 @@ describe('scripts/env-file.sh', () => {
     expect(existsSync(marker)).toBe(false)
   })
 
-  test('the review limits and the lead cap are listed keys, so a deploy can set them', () => {
+  test('the retired review limits are accepted and ignored, the lead cap is a listed key', () => {
     const { out } = load(
       'FACTORY_REVIEW_SESSIONS=3\nFACTORY_REVIEW_DEEP_CAP=5\nFACTORY_REVIEW_IDLE_MS=120000\nFACTORY_LEADS_PER_ACCOUNT=3\n',
     )

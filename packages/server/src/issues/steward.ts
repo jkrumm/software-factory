@@ -3,8 +3,6 @@ import type { SQL } from 'bun'
 import { BUDGET_HOURS, DEFAULT_SIZE, SILENT_AFTER_MS } from '../health.ts'
 import { record } from '../notify/outbox.ts'
 import { stewardMessage } from '../notify/text.ts'
-import { deepStartedToday, type ReviewLimits } from '../review/limits.ts'
-import { latestReadings } from '../capacity.ts'
 import { liveSessions } from '../sessions.ts'
 import { Waiting } from './effects.ts'
 import { type HoldCheck, proofInputOf, type Proof } from './hold.ts'
@@ -37,7 +35,6 @@ const WAKE_TEXT = 'recheck your block against the current state; ship, continue,
 const NUDGE_TEXT = 'report: continue, ship, block, or narrow'
 
 export interface StewardDeps {
-  limits: ReviewLimits
   /** re-runs a hold's verification off the tick for a block that names it; without it the note says it was not re-run */
   verify?: { proof: Proof; offTick: OffTick }
 }
@@ -121,35 +118,6 @@ async function verification(
     return `verify was not re-run: ${error instanceof Error ? error.message : String(error)}`
   }
   return read()
-}
-
-/** Whether a deep review has room somewhere today (UTC), as admission reads it: some account with fewer starts than the cap. */
-async function deepCapHasRoom(sql: SQL, now: Date, limits: ReviewLimits): Promise<boolean> {
-  const started = await deepStartedToday(sql, now)
-  const accounts = new Set([...started.keys(), ...(await latestReadings(sql)).map((reading) => reading.account)])
-  return accounts.size === 0 || [...accounts].some((account) => (started.get(account) ?? 0) < limits.deepCap)
-}
-
-/**
- * A timed wait that waits for the deep review cap (declared `--on deep_cap`, or its `why` says so) wakes when the cap has room. The wake has the
- * timer's own key, so the timer at `until` and this are one event.
- */
-async function wakeDeepCapWaits(sql: SQL, now: Date, deps: StewardDeps, issues: OpenIssue[]): Promise<void> {
-  const waits = issues.filter((issue) => issue.state === 'waiting' && issue.reason === 'wait')
-  if (waits.length === 0 || !(await deepCapHasRoom(sql, now, deps.limits))) return
-  for (const issue of waits) {
-    const [wait]: { on: string | null; why: string | null }[] = await sql`
-      SELECT payload->>'on' AS on, payload->>'why' AS why FROM factory.issue_events
-      WHERE issue_id = ${issue.id} AND kind = 'wait' AND to_state = 'waiting' ORDER BY id DESC LIMIT 1`
-    if (wait?.on !== 'deep_cap' && !/deep[ _-]?cap/i.test(wait?.why ?? '')) continue
-    await enqueue(sql, {
-      issueId: issue.id,
-      key: `wake:${issue.id}:${issue.waits}`,
-      kind: 'wake',
-      at: now,
-      payload: { for: 'wait', wait: issue.waits, who: 'steward', cause: 'deep_cap' },
-    })
-  }
 }
 
 /** The holders of a project's claim, waiting in a wakeable reason with another Issue queued behind it for 15 min and no lead working: when the oldest began waiting. */
@@ -262,7 +230,6 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
       (SELECT max(v.at) FROM factory.events v WHERE v.session = 'lead-' || i.id || '-' || i.attempt) AS last_event
     FROM factory.issues i WHERE i.state IN ('waiting', 'working') ORDER BY i.id`
   if (issues.length === 0) return
-  await wakeDeepCapWaits(sql, now, deps, issues)
 
   const live = new Set((await liveSessions(sql, now)).map((session) => session.id))
   const holders = await claimHolders(sql, now)

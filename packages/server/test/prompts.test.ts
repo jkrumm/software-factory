@@ -253,7 +253,7 @@ describe('prompt delivery: guards', () => {
     expect((await deliver()).sent).toEqual(['mine'])
   })
 
-  test('a failure shows in status for a day from when it failed, not from when it was recorded', async () => {
+  test('a failure shows in status for 72 h from when it failed, not from when it was recorded', async () => {
     await working()
     await endTurn()
     await recordPrompt(db.sql, { id: 'old', session: 's', source: 'note', text: 'x' }, w.at(25 * 60))
@@ -264,7 +264,7 @@ describe('prompt delivery: guards', () => {
     await deliver()
     expect((await row('old')).status).toBe('failed')
     expect((await listOpenPrompts(db.sql, clock.now())).prompts.map((p) => p.id)).toEqual(['old'])
-    clock.advance(25 * 3_600_000)
+    clock.advance(73 * 3_600_000)
     expect(await listOpenPrompts(db.sql, clock.now())).toEqual({ prompts: [], more: 0 })
   })
 
@@ -477,36 +477,6 @@ describe('prompt delivery: one at a time, and resumes are admitted', () => {
     expect((await deliver()).sent).toEqual(['restart:x:s'])
     expect(runner.started).toHaveLength(1)
     expect(runner.started[0]).toMatchObject({ key: 's', account: 'a', resume: 'claude-s' })
-  })
-
-  test("a resume goes back under its parent's terminal, unless the spawn has a space of its own", async () => {
-    await w.spawned('boss', { role: 'mother' })
-    await w.spawned('s', { account: 'a', role: 'lead', parent: 'boss' })
-    await db.sql`UPDATE factory.spawns SET placement = 'child' WHERE key = 's'`
-    await w.emit('s', 'turn_started', w.at(10))
-    await recordPrompt(
-      db.sql,
-      { id: 'restart:x:s', session: 's', source: 'restart', via: 'resume', text: 'cut off' },
-      clock.now(),
-    )
-    await open('a')
-    await deliver()
-    expect(runner.started[0]).toMatchObject({ key: 's', placement: 'child', parentTerminal: 'w1:boss' })
-  })
-
-  test('a resume of a spawn with a space of its own names no parent terminal', async () => {
-    await w.spawned('boss', { role: 'mother' })
-    await w.spawned('s', { account: 'a', role: 'lead', parent: 'boss' })
-    await db.sql`UPDATE factory.spawns SET placement = 'child', new_space = true WHERE key = 's'`
-    await w.emit('s', 'turn_started', w.at(10))
-    await recordPrompt(
-      db.sql,
-      { id: 'restart:x:s', session: 's', source: 'restart', via: 'resume', text: 'cut off' },
-      clock.now(),
-    )
-    await open('a')
-    await deliver()
-    expect(runner.started[0]?.parentTerminal).toBeUndefined()
   })
 
   test('is held without room on its account, even if another account has some', async () => {

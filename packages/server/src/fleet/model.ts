@@ -3,19 +3,16 @@ import { basename } from 'node:path'
 import type {
   Fleet,
   FleetAsk,
-  FleetGit,
   FleetHealth,
-  FleetPlan,
+  FleetIssue,
   FleetRepo,
   FleetSession,
   FleetSummary,
   Status,
 } from '@software-factory/contract'
-import { NO_REAPER } from '@software-factory/contract'
 import { healthKind } from '../health.ts'
 import { BLOCKED_AFTER_MS } from '../rules.ts'
 import { enclosingRepo } from '../projects/sync.ts'
-import { parsePlan, planState } from './plans.ts'
 import type { HcTerminal, QueueRequest } from './sources.ts'
 
 /** An ask older than this counts in `summary.staleAsks`. */
@@ -23,31 +20,15 @@ export const STALE_ASK_MS = 24 * 3_600_000
 /** A factory-raised ask this old resolves itself as expired: it is bookkeeping, not a decision waiting on the owner. */
 export const EXPIRE_FACTORY_ASK_MS = 7 * 24 * 3_600_000
 
-/** A session as the merge left it: what the model shows, and what the plan lookup and the asks need besides. */
+/** A session as the merge left it: what the model shows, and what the asks and the digest's scope need besides. */
 export interface MergedSession {
-  session: Omit<FleetSession, 'plan' | 'wave'>
+  session: FleetSession
   /** the repo directory under a root it belongs to; undefined: no repo of the model (outside every root, or not under a repo) */
   repo: string | undefined
-  /** the text it was started with, where a plan path may be named; data, scanned for a path only */
-  prompt: string | null
-  /** its spawn's repo, the base of a relative plan path */
+  /** its spawn's repo */
   spawnRepo: string | null
   cwd: string | null
   hc: HcTerminal | undefined
-}
-
-export interface PlanFile {
-  path: string
-  text: string
-  touched: string | null
-}
-
-export interface RepoFacts {
-  path: string
-  git: FleetGit | null
-  plans: PlanFile[]
-  /** the repo's own `docs/waves/PLAN.md`, when it has one */
-  rootPlan: string | null
 }
 
 export interface DecisionRow {
@@ -65,17 +46,15 @@ export interface ModelInput {
   roots: readonly string[]
   status: Status
   sessions: MergedSession[]
-  /** by session id: the plan file it works and the wave its start names */
-  sessionPlans: ReadonlyMap<string, { plan: string | null; wave: number | null }>
-  repos: RepoFacts[]
+  /** the repo directories to list (real paths): those with a session or an open Issue */
+  repos: readonly string[]
+  issues: FleetIssue[]
   decisions: DecisionRow[]
   queue: QueueRequest[]
   /** when an ask that has no time of its own (hc, a wait's fallback, an attention line) was first seen: the first build that saw it */
   firstSeen: ReadonlyMap<string, string>
   /** when a health line (by id) was first seen: the previous build's `since`, so a restart keeps it */
   healthSeen?: ReadonlyMap<string, string>
-  /** out: the factory asks that expired this build (id to first-seen time), so the builder keeps their time and they stay gone */
-  expired?: Map<string, string>
   errors: string[]
 }
 
@@ -101,10 +80,6 @@ function subjectKey(line: string): string {
   if (note) return `note:${note[1]}`
   const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn) return `spawn:${spawn[1]}`
-  const held = /^review (\S+) held: deep cap/.exec(line)
-  if (held) return `review-held:${held[1]}`
-  const human = /^review (\S+) needs a human/.exec(line)
-  if (human) return `review-human:${human[1]}`
   const notification = /^notification (\S+) was not delivered/.exec(line)
   if (notification) return `notification:${notification[1]}`
   const issue = /^Issue (\d+)(.*)$/.exec(line)
@@ -136,7 +111,7 @@ function subjectKey(line: string): string {
 function lineSubject(line: string): { session?: string; spawn?: string; issue?: number } {
   const session = /^(?:blocked|stuck|walled) (\S+)/.exec(line) ?? /^note \S+ to (\S+)/.exec(line)
   if (session?.[1]) return { session: session[1].replace(/:$/, '') }
-  const spawn = /^spawn (\S+) failed/.exec(line) ?? /^review (\S+) held: deep cap/.exec(line)
+  const spawn = /^spawn (\S+) failed/.exec(line)
   if (spawn?.[1]) return { spawn: spawn[1] }
   const issue = /^Issue (\d+)/.exec(line)
   if (issue?.[1]) return { issue: Number(issue[1]) }
@@ -165,29 +140,15 @@ export function isMachineNoise(
   return /^Issue \d+ waits for the claim/.test(line)
 }
 
-/** Whether a session counts as working a plan: running, or stopped mid-turn (blocked, stuck, walled), or waiting on workers or a deploy; not an idle or done tab, nor one that waits on the owner. */
-const worksAPlan = (s: { state: string; wait: string | null }) =>
-  s.state === 'waiting' ? s.wait !== 'owner' : s.state !== 'idle'
-
 const askKind = (line: string): FleetAsk['kind'] => (/^(blocked|Issue|review) /.test(line) ? 'blocker' : 'note')
 
 function sessionOrder(a: FleetSession, b: FleetSession): number {
   return STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || a.id.localeCompare(b.id)
 }
 
-/**
- * The read model from what was read: pure, so the same sources always give the same model. Plans are parsed here, their state
- * decided against the sessions and the clock. `fingerprint` is left for `fingerprintOf`.
- */
+/** The read model from what was read: pure, so the same sources always give the same model. `fingerprint` is left for `fingerprintOf`. */
 export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest'> {
   const { now, status } = input
-
-  // A session's plan, and a plan's live sessions.
-  const worked = new Set<string>()
-  for (const m of input.sessions) {
-    const plan = input.sessionPlans.get(m.session.id)?.plan
-    if (plan && worksAPlan(m.session)) worked.add(plan)
-  }
 
   const bySession = new Map<string, MergedSession>(input.sessions.map((m) => [m.session.id, m]))
   const repoOf = (path: string | undefined) => (path ? enclosingRepo(path, input.roots) : undefined)
@@ -195,67 +156,29 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
   const issueRepo = new Map(status.issues.map((i) => [i.id, repoOf(i.repo)]))
 
   const repos: FleetRepo[] = []
-  const listed = new Set(input.repos.map((r) => r.path))
-  for (const facts of input.repos) {
-    const isVisible = input.isVisible(facts.path)
-    const plans: FleetPlan[] = facts.plans.map((file) => {
-      const parsed = parsePlan(file.text, { visible: isVisible })
-      return {
-        path: file.path,
-        ...parsed,
-        state: planState({ waves: parsed.waves, worked: worked.has(file.path), lastTouched: file.touched, now }),
-        lastTouched: file.touched,
-      }
-    })
-    // The plan a live session works leads (the repo's own first), then the repo's own, then the others in path order.
-    const rank = (p: FleetPlan) => (p.state === 'running' ? 0 : 2) + (p.path === facts.rootPlan ? 0 : 1)
-    plans.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path))
-    const sessions: FleetSession[] = input.sessions
-      .filter((m) => m.repo === facts.path)
-      .map((m) => {
-        const found = input.sessionPlans.get(m.session.id)
-        const plan = found?.plan ?? null
-        const wave =
-          plan && plans.find((p) => p.path === plan)?.waves.some((w) => w.n === found?.wave)
-            ? (found?.wave ?? null)
-            : null
-        return { ...m.session, plan, wave }
-      })
-      .sort(sessionOrder)
+  const listed = new Set(input.repos)
+  for (const path of input.repos) {
     repos.push({
-      name: basename(facts.path),
-      space: facts.path,
-      visible: isVisible,
-      git: facts.git,
-      plan: plans[0] ?? null,
-      morePlans: plans.slice(1),
-      sessions,
+      name: basename(path),
+      space: path,
+      visible: input.isVisible(path),
+      sessions: input.sessions
+        .filter((m) => m.repo === path)
+        .map((m) => m.session)
+        .sort(sessionOrder),
     })
   }
   repos.sort((a, b) => a.name.localeCompare(b.name) || a.space.localeCompare(b.space))
 
   const unplaced: FleetSession[] = input.sessions
     .filter((m) => !m.repo || !listed.has(m.repo))
-    .map((m) => ({ ...m.session, plan: null, wave: null }))
+    .map((m) => m.session)
     .sort(sessionOrder)
 
   const asks: FleetAsk[] = []
-  const ask = (
-    a: Omit<FleetAsk, 'short' | 'suggestion' | 'actions' | 'plan' | 'tier' | 'folded' | 'occurrence'> & {
-      plan?: string | null
-    },
-  ) => {
-    const planOf = a.session ? (input.sessionPlans.get(a.session)?.plan ?? null) : null
-    asks.push({
-      short: null,
-      tier: 'yours',
-      suggestion: null,
-      actions: [],
-      folded: [],
-      occurrence: 1,
-      ...a,
-      plan: a.plan ?? planOf,
-    })
+  const expired: Record<string, string> = {}
+  const ask = (a: Omit<FleetAsk, 'short'>) => {
+    asks.push({ short: null, ...a })
   }
 
   // The time of an ask that has none of its own: the first build that saw it (kept by the builder), never this build's.
@@ -299,7 +222,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     }
   }
 
-  // The factory's own asks: a lead's `blocked` Issue and a review held at the deep cap. Open decisions have their own asks below, and a
+  // The factory's own asks: a lead's `blocked` Issue Open decisions have their own asks below, and a
   // blocked session its hc ask.
   for (const line of status.attention) {
     if (/^Issue \d+ asks: /.test(line)) continue
@@ -314,7 +237,7 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
       (subject.issue === undefined ? undefined : issueRepo.get(subject.issue))
     const at = seen(id)
     if (now.getTime() - Date.parse(at) >= EXPIRE_FACTORY_ASK_MS) {
-      input.expired?.set(id, at)
+      expired[id] = at
       continue
     }
     ask({
@@ -398,14 +321,14 @@ export function assemble(input: ModelInput): Omit<Fleet, 'fingerprint' | 'digest
     builtAt: now.toISOString(),
     summary,
     asks,
+    expired,
     health,
     repos,
+    issues: input.issues,
     unplaced,
     quota: status.accounts,
     queue: status.queue,
     errors: input.errors,
-    // The reaper's part is the builder's, put in after the triage.
-    reaper: NO_REAPER,
   }
 }
 

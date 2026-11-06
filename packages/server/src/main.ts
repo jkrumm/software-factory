@@ -4,11 +4,8 @@ import { loadRoleTable } from '@software-factory/contract'
 import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
-import { FleetActions } from './fleet/act.ts'
 import { Digest } from './fleet/digest.ts'
 import { Places } from './fleet/place.ts'
-import type { SinceReader } from './fleet/since.ts'
-import { WindowDigest } from './fleet/window.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
@@ -16,8 +13,6 @@ import { serve, serveHooks } from './http.ts'
 import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
 import { AgwReview } from './issues/review.ts'
-import { FileReplies } from './fleet/transcript.ts'
-import { AgwSubmitter, ReviewTransport } from './review/transport.ts'
 import { finalizePorts } from './issues/finalize.ts'
 import { holdPorts, MakeAndProbes, VERIFY_SETTLE_MS } from './issues/hold.ts'
 import { leadPorts } from './issues/lead.ts'
@@ -88,27 +83,14 @@ const fleet = new FleetBuilder({
   visibleRoots: config.visibleRoots,
   home: process.env.HOME ?? '',
   hc: hcTerminals,
-  reaper: { mode: config.reaper, closer: hcTerminals },
   queue: askHuman,
-  // The queue's commands run on the machine named `macbook`; a probe on a machine not listed says nothing.
-  triage: { hosts: config.probeHosts, queueMachine: config.probeHosts.has('macbook') ? 'macbook' : undefined },
   digest:
     config.fleetDigestEveryMs === null
       ? undefined
       : new Digest({ sql, now: () => clock.now(), bin: config.agwBin, everyMs: config.fleetDigestEveryMs }),
   alertLeads: config.alertLeads,
 })
-const fleetActions = new FleetActions({
-  sql,
-  clock,
-  queue: askHuman,
-  roles,
-  repoRoots: config.repoRoots,
-  visibleRoots: config.visibleRoots,
-  home: process.env.HOME ?? '',
-  refresh: () => fleet.refreshNow(),
-})
-// IuRoot's items are only ever counted in the since reading's headline and the morning message: the same places the digest's scope uses.
+// IuRoot's items are only ever counted in the morning message: the same places the digest's scope uses.
 const visible = async (): Promise<(path: string) => boolean> => {
   const places = await Places.of({
     visibleRoots: config.visibleRoots,
@@ -117,10 +99,6 @@ const visible = async (): Promise<(path: string) => boolean> => {
   })
   return (path) => places.isVisible(path)
 }
-// The headline paragraph is the digest's `window` kind: off when the digest is (`FACTORY_DIGEST_EVERY=off`).
-const windows =
-  config.fleetDigestEveryMs === null ? undefined : new WindowDigest({ sql, now: () => clock.now(), bin: config.agwBin })
-const since: SinceReader = { sql, now: () => clock.now(), visible, windows }
 const runner = new HcRunner({
   bin: config.hcBin,
   session: config.hcSession,
@@ -132,16 +110,6 @@ const spaces = new Spaces({ file: config.spacesFile, roots: config.repoRoots, ru
 // A pass that runs a start may outlast several intervals; one past its lease is wedged.
 // Review v4's router and coverage, asked by `ship`: agw owns both judgments, the factory only reads them.
 const review = new AgwReview({ bin: config.agwBin })
-// Review v4's hidden transport: a reviewer's last reply goes to `agw review submit` when its turn ends (docs/design.md §3).
-const reviewTransport = new ReviewTransport({
-  sql,
-  clock,
-  runner,
-  roles,
-  replies: new FileReplies(),
-  submitter: new AgwSubmitter({ bin: config.agwBin }),
-  limits: config.review,
-})
 const monitor = new TickMonitor(clock, TICK_INTERVAL_MS, DEFAULT_LEASE_MS)
 // Bind first: a port that is taken must fail the boot before the ticker claims anything.
 const server = serve({
@@ -156,13 +124,11 @@ const server = serve({
   quota,
   projects,
   alertLeads: config.alertLeads,
-  reviewLimits: config.review,
+  admission: config.admission,
   notifier,
   notifyTarget: config.notifyTarget,
   review,
   fleet,
-  fleetActions,
-  since,
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
@@ -182,7 +148,7 @@ try {
     roles,
     slots: config.slots,
     review,
-    reviewLimits: config.review,
+    admission: config.admission,
   })
 } finally {
   process.umask(umask)
@@ -240,9 +206,7 @@ const ticker = startTicker(
     classification,
     leadWorktrees,
     fleet,
-    windows,
-    reviewLimits: config.review,
-    reviews: reviewTransport,
+    admission: config.admission,
     spaces,
     alertLeads: config.alertLeads,
     notify: { notifier, target: config.notifyTarget, digestAt: config.digestAt, digestTz: config.digestTz, visible },
@@ -270,8 +234,6 @@ async function shutdown(signal: string): Promise<void> {
     await hooks.stop()
     await ticker.stop()
     await fleet.settled()
-    await windows?.settled(15_000)
-    await reviewTransport.settled()
     await spaces.settled()
     await leadWorktrees.stop(15_000)
     await offTick.stop(15_000)

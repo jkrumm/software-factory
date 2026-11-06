@@ -1,14 +1,11 @@
-import type { Effort, Placement, ReviewMeta, Tier } from '@software-factory/contract'
+import type { Effort, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import { admit, type Decision, HOLD_RECHECK_MS } from './admission.ts'
+import { type AdmissionLimits, admit, type Decision, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
 import { DEFAULT_RETRY_BUDGET_MS } from './config.ts'
 import type { FleetBuilder } from './fleet/index.ts'
-import type { WindowDigest } from './fleet/window.ts'
 import type { TickMonitor } from './health.ts'
-import { DEFAULT_REVIEW_LIMITS, type ReviewLimits } from './review/limits.ts'
-import type { ReviewTransport } from './review/transport.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, RunnerError, type StartResult } from './runner.ts'
 import type { Classification } from './issues/classify.ts'
 import type { WorktreeMaker } from './issues/leadtree.ts'
@@ -47,7 +44,7 @@ export interface TickDeps {
   quota?: QuotaPoller
   /** the ports of an Issue's effects; a kind with none stays recorded until the wave that brings it */
   issuePorts?: EffectPorts
-  /** the steward's verifier; its limits are `reviewLimits`. Without it no steward runs */
+  /** the steward's verifier; Without it no steward runs */
   steward?: Pick<StewardDeps, 'verify'>
   /** starts Classify for queued Issues that have none; without it no Issue is classified and none admitted */
   classification?: Classification
@@ -61,12 +58,8 @@ export interface TickDeps {
   notify?: NotifyDeps
   /** the fleet read model: the tick starts a build when one is due and does not wait for it; without it none is built */
   fleet?: Pick<FleetBuilder, 'kick'>
-  /** the since reading's headline paragraph: the tick starts a pass when a window waits and none runs (behind its back, like the fleet build) */
-  windows?: Pick<WindowDigest, 'kick'>
-  /** review v4's limits (slots, deep cap): admission at every claim; the defaults without */
-  reviewLimits?: ReviewLimits
-  /** review v4's transport: the tick starts a pass (submit on Stop, the idle watchdog) behind its back, like the fleet build */
-  reviews?: Pick<ReviewTransport, 'kick'>
+  /** the lead cap: admission at every claim; the defaults without */
+  admission?: AdmissionLimits
   /** the fixed spaces (`spaces.ts`): its own interval, behind the tick's back */
   spaces?: Pick<Spaces, 'kick'>
 }
@@ -90,11 +83,8 @@ export interface Claim {
   /** the path whose space the tab goes into */
   space: string
   newSpace: boolean
-  placement: Placement | null
   /** the space an earlier try used, if one got far enough to make it */
   workspace: string | null
-  /** the terminal the parent session runs in (its `pane`), if the spawn has a parent that has one */
-  parentPane: string | null
   role: string
   prompt: string
   account: string
@@ -106,8 +96,6 @@ export interface Claim {
   firstClaimedAt: Date
   /** the archived session this spawn forks */
   fork?: { session: string; archive: string }
-  /** a reviewer's job: its effort is the session's `--effort` */
-  review?: ReviewMeta
 }
 
 interface DueRow {
@@ -115,9 +103,7 @@ interface DueRow {
   repo: string
   space: string
   new_space: boolean
-  placement: Placement | null
   workspace: string | null
-  parent_pane: string | null
   prompt: string
   role: string
   tier: Tier
@@ -130,10 +116,6 @@ interface DueRow {
   first_claimed_at: Date | null
   fork_session: string | null
   fork_archive: string | null
-  review_job: string | null
-  review_tier: ReviewMeta['tier'] | null
-  review_effort: ReviewMeta['effort'] | null
-  deep_allowed: boolean
 }
 
 /** One line per spawn that leaves the queue for good, so the reason is in the log whatever else is read. */
@@ -149,7 +131,7 @@ const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
  * Due means `resume_at` has passed (a queued spawn has none), or a claim whose lease ran out. Waiting spawns sort
  * after queued ones and held ones last of all, and a spawn that cannot start leaves the due set (a held one for 30 s), so
  * it does not hold up the rest.
- * Admission (queue state, one wave per repo, pace, the Issue's claim, capacity) is decided again here: a stored account is only a hint.
+ * Admission (queue state, pace, the Issue's claim, capacity) is decided again here: a stored account is only a hint.
  */
 export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; failed: string[]; skipped: number }> {
   const { sql, clock } = deps
@@ -159,8 +141,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive, review_job, review_tier, review_effort, deep_allowed,
-        (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
@@ -201,12 +182,10 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
                 role: row.role,
                 prefer: row.account,
                 issueId: row.issue_id,
-                review: row.review_tier ? { tier: row.review_tier } : null,
-                deepAllowed: row.deep_allowed,
               },
               now,
               live,
-              deps.reviewLimits ?? DEFAULT_REVIEW_LIMITS,
+              deps.admission,
             )
       if (decision.kind !== 'start') {
         // Waiting is not failing: the retry clock starts over when the spawn is claimed again.
@@ -236,9 +215,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         repo: row.repo,
         space: row.space,
         newSpace: row.new_space,
-        placement: row.placement,
         workspace: row.workspace,
-        parentPane: row.parent_pane,
         role: row.role,
         prompt: row.prompt,
         account: decision.account,
@@ -248,9 +225,6 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         firstClaimedAt: row.first_claimed_at ?? now,
         ...(row.fork_session && row.fork_archive
           ? { fork: { session: row.fork_session, archive: row.fork_archive } }
-          : {}),
-        ...(row.review_job && row.review_tier && row.review_effort
-          ? { review: { jobId: row.review_job, tier: row.review_tier, effort: row.review_effort } }
           : {}),
       })
     }
@@ -320,16 +294,13 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       repo: claim.repo,
       space: claim.space,
       newSpace: claim.newSpace,
-      placement: claim.placement ?? undefined,
       workspace: claim.workspace,
-      parentTerminal: claim.parentPane ?? undefined,
       role: claim.role,
       prompt: claim.prompt,
       account: claim.account,
       tier: claim.tier,
       effort: claim.effort,
       fork: claim.fork,
-      review: claim.review,
     })
   } catch (error) {
     return recordFailure(deps, claim, error)
@@ -406,7 +377,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
         classification: deps.classification,
         worktrees: deps.leadWorktrees,
         alertLeads: deps.alertLeads ?? false,
-        steward: deps.steward && { ...deps.steward, limits: deps.reviewLimits ?? DEFAULT_REVIEW_LIMITS },
+        steward: deps.steward,
       })),
     )
   } catch (error) {
@@ -422,8 +393,6 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
   // The fleet model builds behind the tick's back (bounded reads, no transaction); the next pass finds it done or still running.
   deps.fleet?.kick()
-  deps.windows?.kick()
-  deps.reviews?.kick()
   deps.spaces?.kick()
   return result
 }

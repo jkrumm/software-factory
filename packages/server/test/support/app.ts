@@ -4,9 +4,7 @@ import { loadRoleTable, type RoleTable } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from '../../src/clock.ts'
 import { TickMonitor } from '../../src/health.ts'
-import type { FleetActions } from '../../src/fleet/act.ts'
 import type { FleetBuilder } from '../../src/fleet/index.ts'
-import type { SinceReader } from '../../src/fleet/since.ts'
 import type { Commits } from '../../src/issues/commits.ts'
 import type { Review } from '../../src/issues/review.ts'
 import { serve } from '../../src/http.ts'
@@ -58,8 +56,6 @@ export function startApp(deps: {
   commits?: Commits
   review?: Review
   fleet?: Pick<FleetBuilder, 'refreshNow'>
-  fleetActions?: Pick<FleetActions, 'act'>
-  since?: SinceReader
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)

@@ -5,33 +5,23 @@ describe('config/roles.json', () => {
   test('is the table of the checkout, with every role the fleet uses', async () => {
     expect(DEFAULT_ROLES_FILE).toMatch(/\/config\/roles\.json$/)
     const table = await loadRoleTable()
-    expect([...table.keys()]).toEqual([
-      'mother',
-      'lead',
-      'wave',
-      'worker',
-      'mechanical',
-      'deep',
-      'implementer',
-      'verifier',
-      'reviewer',
-      'Explore',
-    ])
+    expect([...table.keys()]).toEqual(['lead', 'implementer', 'verifier', 'reviewer', 'Explore'])
   })
 
-  test('seeds from today: waves and workers Sonnet/high, the Issue lead Sonnet/high, sweeps Haiku', async () => {
+  test('seeds from today: the Issue lead and the implementer Sonnet/high, the reviewer Sonnet/medium, Explore Haiku', async () => {
     const table = await loadRoleTable()
-    expect(table.get('wave')).toEqual({ role: 'wave', tier: 'sonnet', effort: 'high' })
-    expect(table.get('worker')).toEqual({ role: 'worker', tier: 'sonnet', effort: 'high' })
     expect(table.get('lead')).toEqual({ role: 'lead', tier: 'sonnet', effort: 'high' })
-    expect(table.get('mechanical')?.tier).toBe('haiku')
-    expect(table.get('deep')).toEqual({ role: 'deep', tier: 'opus', effort: 'high' })
+    expect(table.get('implementer')).toEqual({ role: 'implementer', tier: 'sonnet', effort: 'high' })
+    expect(table.get('reviewer')).toEqual({ role: 'reviewer', tier: 'sonnet', effort: 'medium' })
+    expect(table.get('Explore')?.tier).toBe('haiku')
+  })
+
+  test.each(['mother', 'wave', 'worker', 'mechanical', 'deep'])('%s is gone', async (role) => {
+    expect((await loadRoleTable()).has(role)).toBe(false)
   })
 
   test('an entry prints as exactly role, tier, effort, in that order', async () => {
-    expect(JSON.stringify((await loadRoleTable()).get('worker'))).toBe(
-      '{"role":"worker","tier":"sonnet","effort":"high"}',
-    )
+    expect(JSON.stringify((await loadRoleTable()).get('lead'))).toBe('{"role":"lead","tier":"sonnet","effort":"high"}')
   })
 })
 

@@ -393,12 +393,8 @@ describe('seeding a new space in the app document', () => {
     expect((await docSpaces()).map((s) => s.id)).toEqual([workspace as string])
   })
 
-  test('a hidden worker, and a foreign space with a terminal in it, seed nothing', async () => {
-    await start('lead', '/work/app')
+  test('a foreign space with a terminal in it seeds nothing', async () => {
     const before = (await hc.callsOf('doc.set')).length
-    await start('w', '/work/app', { role: 'worker', parentTerminal: 't1' })
-    expect((await hc.callsOf('doc.set')).length).toBe(before)
-
     await hc.mutate((state) => {
       state.terminals.push({
         address: 't90',

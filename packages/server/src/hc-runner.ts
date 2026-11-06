@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
-import { REVIEWER_ROLE } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './exec.ts'
@@ -13,7 +12,6 @@ import {
   DEFAULT_DELIVER_WAIT_MS,
   DEFAULT_START_BUDGET_MS,
   isPlanKey,
-  LOCAL_TERMINAL,
   PLAN_PREFIX,
   real,
   type Runner,
@@ -57,7 +55,6 @@ const Terminal = z
     turn: z.number().default(0),
     exit_code: z.number().nullable().default(null),
     argv: z.array(z.string()).default([]),
-    parent: z.string().nullable().default(null),
   })
   .loose()
 type Terminal = z.infer<typeof Terminal>
@@ -86,42 +83,7 @@ const defaultSpaceId = (root: string): string => `sp-${basename(root)}-${sha(roo
 /** A space of a spawn's own: the key is in the hash, so its retry makes the same one. */
 const ownSpaceId = (root: string, key: string): string => `sp-${basename(root)}-${sha(`${root}\0${key}`)}`
 
-/** Whether this role is a hidden child of its parent's terminal unless the caller says otherwise (`deep`: a worker raised for novel hard logic). */
-const isWorker = (role: string): boolean => role === 'worker' || role === 'mechanical' || role === 'deep'
-
-/** What the spawn is placed as: the caller's word, else the role's default (a reviewer is hidden). */
-const placementOf = (input: StartInput): 'tab' | 'child' | 'hidden' =>
-  input.placement ?? (input.role === REVIEWER_ROLE ? 'hidden' : isWorker(input.role) ? 'child' : 'tab')
-
-/**
- * What a reviewer session may not use: every built-in tool that writes a file or runs a command, confirmed from the tools reference
- * (Bash, PowerShell and Monitor run commands; Write, Edit and NotebookEdit change files; EnterWorktree, Artifact, Workflow and
- * RemoteTrigger change state outside the conversation). The `reviewer` agent's own tool list (Read, Grep, Glob, Agent) is the first
- * fence; this is the second, from the command line.
- */
-export const REVIEWER_DISALLOWED_TOOLS = [
-  'Bash',
-  'PowerShell',
-  'Monitor',
-  'Write',
-  'Edit',
-  'NotebookEdit',
-  'EnterWorktree',
-  'Artifact',
-  'Workflow',
-  'RemoteTrigger',
-]
-
-/** How far up a hidden child's parents its space is looked for. */
-const MAX_ANCESTORS = 8
-
-type Placement =
-  /** a tab of its own: named after the key once the app has adopted it */
-  | { kind: 'tab'; space: string; tab: string; params: Record<string, unknown> }
-  /** a hidden child of its parent's terminal: no tab, no space of its own */
-  | { kind: 'child'; params: Record<string, unknown> }
-  /** no parent, no space, no tab: only the key label, which is how it is found and closed */
-  | { kind: 'hidden'; params: Record<string, unknown> }
+type TabPlacement = { space: string; tab: string; params: Record<string, unknown> }
 
 /**
  * Starts Claude Code in a herdr-core terminal and types into running ones, over `hc connect` (one short-lived process per
@@ -133,8 +95,7 @@ type Placement =
  * No call is made without a process timeout, and all of them together stay inside `startBudgetMs`.
  *
  * Placement is by labels, no window needed: a tab carries `herdr.space` (the app's space for the path, else a stable
- * id) and `herdr.tab` (a stable id for the key) and has no parent; a hidden child (`placement: child`, or a worker by
- * default) whose parent's terminal is known is that terminal's child instead.
+ * id) and `herdr.tab` (a stable id for the key) and has no parent: every spawn is a tab.
  */
 export class HcRunner implements Runner {
   private readonly hc: HcClient
@@ -173,7 +134,7 @@ export class HcRunner implements Runner {
     const outcome = await this.serialized(async () => this.findOrRun(input, await env, budget, noteSpace))
     // Proving takes as long as the agent does to report: outside the lock, other starts go on.
     if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
-    return this.resultOf(outcome.terminal, budget)
+    return this.resultOf(outcome.terminal)
   }
 
   private serialized<T>(step: () => Promise<T>): Promise<T> {
@@ -209,8 +170,8 @@ export class HcRunner implements Runner {
     }
 
     const root = real(input.space ?? input.repo)
-    let placement = await this.place(input, root, budget)
-    if (placement.kind === 'tab') noteSpace(placement.space)
+    const placement = await this.tabPlacement(input, root, budget)
+    noteSpace(placement.space)
     await this.pretrust(input.repo, budget)
     await stageFork(input, env, this.options.home ?? process.env.HOME ?? '')
     // A terminal whose program has ended, or was replaced by a shell, is not an agent: a retry starts one again, on whatever
@@ -219,7 +180,7 @@ export class HcRunner implements Runner {
       if (stale.state === 'live') await this.kill(stale.address, budget)
       await this.rpc('terminal.rm', { terminal: stale.address }, Removed, budget)
     }
-    const run = (where: Placement) =>
+    const run = (where: TabPlacement) =>
       this.rpc(
         'terminal.run',
         {
@@ -228,29 +189,19 @@ export class HcRunner implements Runner {
           env,
           labels: {
             'factory.key': input.key,
-            ...(where.kind === 'tab'
-              ? { 'herdr.space': where.space, 'herdr.tab': where.tab, 'factory.tab_name': input.key }
-              : {}),
+            'herdr.space': where.space,
+            'herdr.tab': where.tab,
+            'factory.tab_name': input.key,
           },
-          // A reviewer is never kept: a kept terminal is resumed (by `hc-resume`) without the reviewer's read-only argv.
-          keep: input.role !== REVIEWER_ROLE,
+          keep: true,
           name: terminalName(input.key),
           ...where.params,
         },
         Terminal,
         budget,
       )
-    let created: Terminal
-    try {
-      created = await run(placement)
-    } catch (error) {
-      // The parent terminal is gone: this try is a tab instead of retrying until the budget is spent.
-      if (!(placement.kind === 'child' && error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
-      placement = await this.tabPlacement(input, root, budget)
-      noteSpace(placement.space)
-      created = await run(placement)
-    }
-    if (placement.kind === 'tab') await nameTab(this.docRpc(budget), placement.tab, input.key)
+    const created = await run(placement)
+    await nameTab(this.docRpc(budget), placement.tab, input.key)
     return { terminal: created, proven: false }
   }
 
@@ -352,16 +303,14 @@ export class HcRunner implements Runner {
   // --- steps -----------------------------------------------------------------------------------------------------
 
   /** The program and its arguments; the prompt is last. */
-  private argv({ tier, effort, resume, fork, prompt, review }: StartInput): string[] {
+  private argv({ tier, effort, resume, fork, prompt }: StartInput): string[] {
     return [
       this.options.claudeBin ?? 'claude',
       '--dangerously-skip-permissions',
       '--model',
       tier,
       '--effort',
-      review?.effort ?? effort,
-      // `--disallowed-tools` takes a list and would swallow the prompt that follows it: an option comes after it.
-      ...(review ? ['--disallowed-tools', REVIEWER_DISALLOWED_TOOLS.join(','), '--agent', REVIEWER_ROLE] : []),
+      effort,
       ...(resume ? ['--resume', resume] : []),
       ...(fork ? ['--resume', fork.session, '--fork-session'] : []),
       prompt,
@@ -374,56 +323,20 @@ export class HcRunner implements Runner {
     return list.terminals
   }
 
-  /**
-   * What the tick records. A tab has its ids in its labels; a hidden child has no tab (null) and sits in its parent's space
-   * (the parent's label, null when the parent has none or cannot be read).
-   */
-  private async resultOf(terminal: Terminal, budget: Budget): Promise<StartResult> {
-    let workspace = terminal.labels['herdr.space'] ?? null
-    // A hidden child of a hidden child (a lead's wave under the night's mother) has the space of the nearest ancestor that has one.
-    let up = terminal.parent
-    for (let hops = 0; workspace === null && up && hops < MAX_ANCESTORS; hops++) {
-      try {
-        const ancestor = await this.rpc('terminal.get', { terminal: up }, Terminal, budget)
-        workspace = ancestor.labels['herdr.space'] ?? null
-        up = ancestor.parent
-      } catch (error) {
-        if (!(error instanceof HcError)) throw error
-        break
-      }
+  /** What the tick records: the tab's ids are in its labels. */
+  private resultOf(terminal: Terminal): StartResult {
+    return {
+      session: terminal.address,
+      tab: terminal.labels['herdr.tab'] ?? null,
+      workspace: terminal.labels['herdr.space'] ?? null,
     }
-    return { session: terminal.address, tab: terminal.labels['herdr.tab'] ?? null, workspace }
   }
 
-  /** Where the terminal goes: a hidden child of its parent's terminal (asked for, or a worker by default), else a tab of its own in the path's space. */
-  private async place(input: StartInput, root: string, budget: Budget): Promise<Placement> {
-    // The reviewer's terminal has nobody to wake and no tab to show in: `no_parent` and the key label are all it gets.
-    if (placementOf(input) === 'hidden') return { kind: 'hidden', params: { no_parent: true } }
-    const parent = input.parentTerminal
-    // A spawn that asks for a space of its own is a tab, whatever its role: a hidden child has no space. A child with no
-    // known parent terminal is a tab too.
-    if (placementOf(input) === 'child' && parent && LOCAL_TERMINAL.test(parent) && !input.newSpace) {
-      // No labels: the app shows it as a sub-agent of its parent, not as a tab. The factory wakes the parent itself, so
-      // the core must not type its own notes into it. It outlives the parent's program: the factory decides when it ends.
-      return { kind: 'child', params: { parent, outlive_parent: true, no_notify: true } }
-    }
-    return this.tabPlacement(input, root, budget)
-  }
-
-  private async tabPlacement(
-    input: StartInput,
-    root: string,
-    budget: Budget,
-  ): Promise<Extract<Placement, { kind: 'tab' }>> {
+  private async tabPlacement(input: StartInput, root: string, budget: Budget): Promise<TabPlacement> {
     const { id, seed } = await this.spaceId(input, root, budget)
     // The app adopts a terminal into the space its label names; with no entry it makes one named after the terminal's cwd.
     if (seed) await seedSpace(this.docRpc(budget), { id, folder: root })
-    return {
-      kind: 'tab',
-      space: id,
-      tab: tabId(input.key),
-      params: { no_parent: true },
-    }
+    return { space: id, tab: tabId(input.key), params: { no_parent: true } }
   }
 
   private async kill(address: string, budget: Budget): Promise<void> {

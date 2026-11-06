@@ -96,9 +96,7 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
-      reaper: 'dry',
-      review: { sessions: 2, deepCap: 15, idleMs: 600_000, leadsPerAccount: 2 },
-      probeHosts: new Map(),
+      admission: { leadsPerAccount: 2 },
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -118,22 +116,9 @@ describe('config (finding 5)', () => {
     }
   })
 
-  test("the review limits: slots, the day's deep cap and the idle watchdog, and a mistake is refused", () => {
-    expect(
-      loadConfig({
-        ...env,
-        FACTORY_REVIEW_SESSIONS: '3',
-        FACTORY_REVIEW_DEEP_CAP: '5',
-        FACTORY_REVIEW_IDLE_MS: '120000',
-      }).review,
-    ).toEqual({ sessions: 3, deepCap: 5, idleMs: 120_000, leadsPerAccount: 2 })
-    for (const name of ['FACTORY_REVIEW_SESSIONS', 'FACTORY_REVIEW_DEEP_CAP', 'FACTORY_REVIEW_IDLE_MS'])
-      expect(() => loadConfig({ ...env, [name]: '0' })).toThrow(name)
-  })
-
   test('FACTORY_LEADS_PER_ACCOUNT is the Issue-lead cap per account, two by default, and a mistake is refused', () => {
-    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '3' }).review.leadsPerAccount).toBe(3)
-    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '' }).review.leadsPerAccount).toBe(2)
+    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '3' }).admission.leadsPerAccount).toBe(3)
+    expect(loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: '' }).admission.leadsPerAccount).toBe(2)
     for (const bad of ['0', '-1', '1.5', 'many', '17'])
       expect(() => loadConfig({ ...env, FACTORY_LEADS_PER_ACCOUNT: bad })).toThrow('FACTORY_LEADS_PER_ACCOUNT')
   })
@@ -165,23 +150,8 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '90s' }).fleetDigestEveryMs).toBe(90_000)
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: '1h' }).fleetDigestEveryMs).toBe(3_600_000)
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: 'off' }).fleetDigestEveryMs).toBeNull()
-    expect(loadConfig({ ...env, FACTORY_PROBE_HOSTS: 'MacBook=mac-alias, mini=local' }).probeHosts).toEqual(
-      new Map([
-        ['macbook', 'mac-alias'],
-        ['mini', 'local'],
-      ]),
-    )
-    expect(() => loadConfig({ ...env, FACTORY_PROBE_HOSTS: 'macbook=-oProxyCommand=x' })).toThrow('FACTORY_PROBE_HOSTS')
     for (const bad of ['5', '10s', '25h', 'often', '5 m'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_EVERY: bad })).toThrow('FACTORY_DIGEST_EVERY')
-  })
-
-  test('FACTORY_REAPER: dry unless set, on or off; a mistake is refused', () => {
-    expect(loadConfig(env).reaper).toBe('dry')
-    expect(loadConfig({ ...env, FACTORY_REAPER: 'on' }).reaper).toBe('on')
-    expect(loadConfig({ ...env, FACTORY_REAPER: 'off' }).reaper).toBe('off')
-    for (const bad of ['yes', 'ON', 'true'])
-      expect(() => loadConfig({ ...env, FACTORY_REAPER: bad })).toThrow('FACTORY_REAPER')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {

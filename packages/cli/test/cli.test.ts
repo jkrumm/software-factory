@@ -11,7 +11,6 @@ const ROLE = {
   effort: 'high',
   hold: null,
   parent: null,
-  placement: null,
   repo: '/work/repo',
   space: '/work/repo',
   pane: null,
@@ -61,7 +60,6 @@ const SESSION = {
   role: null,
   account: null,
   parent: null,
-  placement: null,
   since: '2026-10-30T11:59:00.000Z',
 }
 const QUOTA = {
@@ -593,6 +591,23 @@ describe('usage errors', () => {
       expect(r.stdout).toContain('usage: factory')
     }
   })
+
+  test('the help lists no fleet verb but `fleet [--refresh]`, and the removed ones are usage errors', async () => {
+    const help = (await factory(['--help'])).stdout
+    expect(help).toContain('fleet [--refresh]')
+    for (const verb of ['fleet act', 'fleet triage', 'fleet presence', 'fleet since', 'fleet seen'])
+      expect(help).not.toContain(verb)
+    for (const args of [
+      ['fleet', 'act', 'queue:x', 'resolve'],
+      ['fleet', 'triage'],
+      ['fleet', 'presence', 'desk', 'focus'],
+      ['fleet', 'since'],
+      ['fleet', 'seen', '--until', '2026-11-01T00:00:00Z'],
+    ]) {
+      const r = await factory(args)
+      expect(r.code).toBe(EXIT.usage)
+    }
+  })
 })
 
 describe('factory session', () => {
@@ -785,64 +800,16 @@ describe('factory spawn create', () => {
     ])
   })
 
-  test('--placement travels in the body, and anything but tab|child|hidden is a usage error', async () => {
+  test('--placement is gone: it is an unknown flag, nothing is sent', async () => {
     spawnCalls.length = 0
-    await factory(['spawn', 'create', 'p1', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'child'], {
-      FACTORY_SESSION: '',
-    })
-    expect(spawnCalls).toEqual([{ key: 'p1', repo: '/work/repo', prompt: 'x', placement: 'child' }])
-    const bad = await factory(
-      ['spawn', 'create', 'p2', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'floating'],
+    const r = await factory(
+      ['spawn', 'create', 'p1', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'child'],
       {
         FACTORY_SESSION: '',
       },
     )
-    expect(bad.code).toBe(2)
-    expect(spawnCalls).toHaveLength(1)
-    await factory(['spawn', 'create', 'p3', '--repo', '/work/repo', '--prompt', 'x', '--placement', 'hidden'], {
-      FACTORY_SESSION: '',
-    })
-    expect(spawnCalls[1]).toMatchObject({ key: 'p3', placement: 'hidden' })
-  })
-
-  test('the review flags travel as one review object, and a part of them is a usage error', async () => {
-    spawnCalls.length = 0
-    const flags = ['--repo', '/work/repo', '--prompt', 'job=/tmp/j tier=deep round=1', '--role', 'reviewer']
-    await factory(
-      [
-        'spawn',
-        'create',
-        'review-rv_ddx2xwgrsnyz7mh4rrwy-a1',
-        ...flags,
-        '--placement',
-        'hidden',
-        '--review-job',
-        'rv_ddx2xwgrsnyz7mh4rrwy',
-        '--review-tier',
-        'deep',
-        '--effort',
-        'high',
-      ],
-      { FACTORY_SESSION: '' },
-    )
-    expect(spawnCalls).toEqual([
-      {
-        key: 'review-rv_ddx2xwgrsnyz7mh4rrwy-a1',
-        repo: '/work/repo',
-        prompt: 'job=/tmp/j tier=deep round=1',
-        role: 'reviewer',
-        placement: 'hidden',
-        review: { jobId: 'rv_ddx2xwgrsnyz7mh4rrwy', tier: 'deep', effort: 'high' },
-      },
-    ])
-    for (const partial of [
-      ['--review-job', 'rv_x'],
-      ['--review-job', 'rv_x', '--review-tier', 'deep', '--effort', 'max'],
-    ]) {
-      const bad = await factory(['spawn', 'create', 'review-rv_x-a1', ...flags, ...partial], { FACTORY_SESSION: '' })
-      expect(bad.code).toBe(2)
-    }
-    expect(spawnCalls).toHaveLength(1)
+    expect(r.code).toBe(2)
+    expect(spawnCalls).toHaveLength(0)
   })
 
   test('without a token it goes by the socket, with the caller as parent; with one, by the port', async () => {
@@ -995,12 +962,12 @@ describe('the token', () => {
 describe('factory role', () => {
   // This is the interface rd reads: exactly these three fields, no server, no token.
   test('get prints {role, tier, effort} and needs neither server nor token', async () => {
-    const r = await factory(['role', 'get', 'worker', '--format', 'json'], {
+    const r = await factory(['role', 'get', 'lead', '--format', 'json'], {
       FACTORY_URL: 'http://127.0.0.1:1',
       FACTORY_TOKEN: '',
     })
     expect(r).toMatchObject({ code: EXIT.ok, stderr: '' })
-    expect(r.stdout).toBe('{"role":"worker","tier":"sonnet","effort":"high"}\n')
+    expect(r.stdout).toBe('{"role":"lead","tier":"sonnet","effort":"high"}\n')
   })
 
   test('plain is tier and effort on one tab-separated line with the role', async () => {
@@ -1012,19 +979,16 @@ describe('factory role', () => {
     const r = await factory(['role', 'list'])
     expect(r.code).toBe(EXIT.ok)
     const { roles } = JSON.parse(r.stdout) as { roles: { role: string; tier: string; effort: string }[] }
-    expect(roles.map((x) => x.role)).toEqual([
-      'mother',
-      'lead',
-      'wave',
-      'worker',
-      'mechanical',
-      'deep',
-      'implementer',
-      'verifier',
-      'reviewer',
-      'Explore',
-    ])
+    expect(roles.map((x) => x.role)).toEqual(['lead', 'implementer', 'verifier', 'reviewer', 'Explore'])
   })
+
+  test.each(['mother', 'wave', 'worker', 'mechanical', 'deep'])(
+    'the deleted role %s is not_found (4)',
+    async (role) => {
+      const r = await factory(['role', 'get', role])
+      expect(r).toMatchObject({ code: EXIT.not_found, stdout: '' })
+    },
+  )
 
   test('an unknown role is not_found (4) with the roles named', async () => {
     const r = await factory(['role', 'get', 'nobody'])

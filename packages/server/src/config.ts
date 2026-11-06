@@ -1,7 +1,5 @@
-import { DEFAULT_ROLES_FILE, ReaperMode } from '@software-factory/contract'
-import { parseProbeHosts } from './fleet/probes.ts'
+import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT } from './admission.ts'
-import { DEFAULT_REVIEW_LIMITS } from './review/limits.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 
 export interface Config {
@@ -28,8 +26,6 @@ export interface Config {
   visibleRoots: string[]
   /** `dotfiles/scripts/ask-human.sh`, the human queue's reader and its `resolve` (`FACTORY_ASK_HUMAN`) */
   askHumanBin: string
-  /** the machines the fleet triage's probes may look at (`FACTORY_PROBE_HOSTS`, `<name>=<ssh alias|local>,…`; none by default): a probe on any other machine says nothing */
-  probeHosts: Map<string, string>
   /** the repos that get a space and a `plan:` tab, in the owner's order (`FACTORY_SPACES_FILE`, written by dotfiles `make setup`) */
   spacesFile: string
   /** where the hooks append their events (`FACTORY_SPOOL_DIR`) */
@@ -51,12 +47,10 @@ export interface Config {
   digestTz: string
   /** `FACTORY_DIGEST_EVERY` (`5m`, `90s`, `1h`, or `off`): how often the fleet digest asks `agw digest` about what changed; null is off (not the owner's morning line above) */
   fleetDigestEveryMs: number | null
-  /** `FACTORY_REAPER` (`on`, `dry`, `off`; default `dry`): whether the fleet build closes finished, merged worker sessions, only lists them, or reads nothing */
-  reaper: ReaperMode
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
-  /** what admission is bounded by: review v4's reviewer sessions (`FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`) and the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
-  review: AdmissionLimits
+  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) */
+  admission: AdmissionLimits
 }
 
 const DOTFILES = 'SourceRoot/dotfiles'
@@ -94,7 +88,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     retryBudgetMs: retryBudgetMs(env.FACTORY_RETRY_BUDGET_MS),
     repoRoots: repoRoots(env.FACTORY_REPO_ROOTS, env.HOME),
     visibleRoots: visibleRoots(env.FACTORY_VISIBLE_ROOTS, env.HOME),
-    probeHosts: parseProbeHosts(env.FACTORY_PROBE_HOSTS),
     askHumanBin: env.FACTORY_ASK_HUMAN || `${required('HOME')}/${DOTFILES}/scripts/ask-human.sh`,
     spacesFile: env.FACTORY_SPACES_FILE || `${required('HOME')}/.config/factory/spaces.json`,
     spoolDir: env.FACTORY_SPOOL_DIR || defaultSpoolDir(required('HOME')),
@@ -108,29 +101,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
-    reaper: reaperMode(env.FACTORY_REAPER),
-    review: {
-      sessions: wholeNumber(
-        'FACTORY_REVIEW_SESSIONS',
-        env.FACTORY_REVIEW_SESSIONS,
-        DEFAULT_REVIEW_LIMITS.sessions,
-        1,
-        16,
-      ),
-      deepCap: wholeNumber(
-        'FACTORY_REVIEW_DEEP_CAP',
-        env.FACTORY_REVIEW_DEEP_CAP,
-        DEFAULT_REVIEW_LIMITS.deepCap,
-        1,
-        1000,
-      ),
-      idleMs: wholeNumber(
-        'FACTORY_REVIEW_IDLE_MS',
-        env.FACTORY_REVIEW_IDLE_MS,
-        DEFAULT_REVIEW_LIMITS.idleMs,
-        60_000,
-        86_400_000,
-      ),
+    admission: {
       leadsPerAccount: wholeNumber(
         'FACTORY_LEADS_PER_ACCOUNT',
         env.FACTORY_LEADS_PER_ACCOUNT,
@@ -165,14 +136,6 @@ function digestAt(value: string | undefined): string | null {
   // The digest is sent from this time until noon (a server that was down catches up before then): a later time could never be due.
   if (value >= '12:00') throw new Error(`FACTORY_DIGEST_AT must be before 12:00, got: ${value}`)
   return value
-}
-
-/** `on`, `dry` or `off`; unset is `dry`: a new switch lists before it acts. */
-function reaperMode(value: string | undefined): ReaperMode {
-  if (value === undefined || value === '') return 'dry'
-  const mode = ReaperMode.safeParse(value)
-  if (!mode.success) throw new Error(`FACTORY_REAPER must be on, dry or off, got: ${value}`)
-  return mode.data
 }
 
 const DURATION_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000 } as const

@@ -2,11 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path'
 import type { HcTerminal } from '../../src/fleet/sources.ts'
 
-/**
- * A recorded estate (2026-11-02, the mini): the plans of its repos with their statuses, a stale one, a done one, a scheduled one,
- * the teamchat plan nested in an IuRoot repo, and the terminals hc listed. The paths are moved under temp roots; the texts are the
- * real ones, shortened.
- */
+/** A recorded estate (2026-11-02, the mini): the repos of two roots, and the terminals hc listed. The paths are moved under temp roots. */
 
 const DAY = 86_400_000
 
@@ -60,66 +56,17 @@ export function makeRepo(
   return path
 }
 
-const PLAN_FACTORY = `# Software factory: the program plan
-**Goal:** the lifecycle server runs the fleet end to end.
-
-## Wave 1 — Program lead, rotation 1            <!-- status: done -->
-## Wave 2 — Program lead, rotation 2            <!-- status: done -->
-## Wave 6 — The night of 2026-11-01            <!-- short: The night run --> <!-- status: active -->
-`
-
-const FV_PLAN = `# FV: the fleet view
-**Goal:** one read model of the fleet, served by the factory.
-
-## Wave 1 — The read model, deterministic            <!-- status: pending -->
-## Wave 2 — The digest            <!-- status: pending -->
-`
-
-const PLAN_AGW = `# agent-workflows: the gateway
-**Goal:** one gateway for every model call.
-
-## Wave 1 — Gateway spike and registry            <!-- status: done 2026-11-01, release 767f643 -->
-## Wave 2 — Gateway            <!-- status: done 2026-11-02, release b25aac5 -->
-## Wave 5 — Eval foundations            <!-- status: active -->
-## Wave 6 — Claude seats, measured            <!-- status: pending -->
-`
-
-const PLAN_DONE = `# homelab: the router move
-## Wave 1 — Cutover            <!-- status: done 2026-10-20, release 3e6026e -->
-## Wave 2 — Cleanup            <!-- status: done -->
-`
-
-const PLAN_PLANNED = `# modelpick: benchmarks
-## Wave 1 — Harness            <!-- status: pending -->
-`
-
-const PLAN_SCHEDULED = `# linewatch: the second line
-## Wave 8 — Cutover (owner-timed, ends live terminals on each machine)            <!-- status: later until 2099-01-01, the owner's call -->
-`
-
-const PLAN_TEAMCHAT = `# Teamchat: Wave 62 and on
-**Goal:** the team chat ships to every channel.
-
-## Wave 62 — Channel pinning and the long running migration of the threads            <!-- status: active -->
-`
-
-/** Builds the estate on disk: the git history says when each plan was last touched. */
+/** Builds the estate on disk: git repos under a repo root and a visible-only root. */
 export function buildEstate(now: Date): Estate {
   const base = realpathSync(mkdtempSync('/tmp/factory-fleet-'))
   const src = join(base, 'SourceRoot')
   const iu = join(base, 'IuRoot')
   mkdirSync(src)
   mkdirSync(iu)
-  makeRepo(src, 'software-factory', { 'docs/waves/PLAN.md': PLAN_FACTORY, 'docs/waves/fv.md': FV_PLAN }, 1, now)
-  // Eight days untouched, an active wave: stale.
-  makeRepo(src, 'agent-workflows', { 'docs/waves/PLAN.md': PLAN_AGW }, 8, now)
-  makeRepo(src, 'homelab', { 'docs/waves/PLAN.md': PLAN_DONE }, 2, now)
-  makeRepo(src, 'modelpick', { 'docs/waves/PLAN.md': PLAN_PLANNED }, 20, now)
-  makeRepo(src, 'linewatch', { 'docs/waves/PLAN.md': PLAN_SCHEDULED }, 5, now)
-  makeRepo(src, 'rb', { 'README.md': 'a repo with a session and no plan\n' }, 3, now)
-  makeRepo(src, 'dotfiles', { 'README.md': 'no plan, no session: not in the model\n' }, 3, now)
-  makeRepo(iu, 'prometheus-scripts', { 'wip/waves-teamchat/docs/waves/PLAN.md': PLAN_TEAMCHAT }, 1, now)
-  makeRepo(iu, 'prometheus-epx', { 'README.md': 'IuRoot, a session and no plan\n' }, 1, now)
+  for (const name of ['software-factory', 'agent-workflows', 'homelab', 'modelpick', 'linewatch', 'rb', 'dotfiles']) {
+    makeRepo(src, name, { 'README.md': `${name}\n` }, 1, now)
+  }
+  for (const name of ['prometheus-scripts', 'prometheus-epx']) makeRepo(iu, name, { 'README.md': `${name}\n` }, 1, now)
   return { src, iu, now, cleanup: () => rmSync(base, { recursive: true, force: true }) }
 }
 
@@ -133,7 +80,6 @@ export function estateTerminals(estate: Estate): HcTerminal[] {
     factoryKey: null,
     statusMessage: null,
     parent: null,
-    prompt: null,
     role: null,
     account: null,
   }
@@ -160,7 +106,6 @@ export function estateTerminals(estate: Estate): HcTerminal[] {
       status: 'working',
       statusAt: ago(now, 0),
       parent: 't4h',
-      prompt: `Branch: fv-w1-read-model\n# Brief: FV Wave 1, the fleet read model\nRead docs/waves/fv.md (the plan) first, and docs/waves/fv.md again.\nNever: docs/waves/PLAN.md\n${'x'.repeat(80)}`,
     },
     // IuRoot: visible, read-only. The teamchat orchestrator sits in a plan's directory inside a repo.
     {

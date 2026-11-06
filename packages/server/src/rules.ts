@@ -1,4 +1,4 @@
-import { REVIEWER_ROLE, type StopCheck } from '@software-factory/contract'
+import type { StopCheck } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { isFresh, latestReadings, type Reading } from './capacity.ts'
 import { issueStop } from './issues/sendback.ts'
@@ -27,7 +27,7 @@ const WALL_USE = 95
 /** Rotation: a long-lived session's account at this share of its week. One point below admission's 95 %. */
 export const ROTATE_AT = 94
 /** The roles that live long enough to need a handoff. */
-export const ROTATING_ROLES: readonly string[] = ['mother', 'lead']
+export const ROTATING_ROLES: readonly string[] = ['lead']
 /** A session that sits on a confirmation this long is reported, and its parent told. */
 export const BLOCKED_AFTER_MS = 2 * 60_000
 /** A runner restart is acted on after the witness has had two passes at it and only while it is recent. */
@@ -269,9 +269,7 @@ export interface RulesResult {
  * records each effect under its key. Idempotent: the same facts record nothing the second time.
  */
 export async function evaluateRules(sql: SQL, now: Date): Promise<RulesResult> {
-  // A reviewer is never resumed, woken, rotated or continued: a resumed one would come back without its read-only argv. A lost one is
-  // a failed attempt for the review transport, which starts a fresh session.
-  const sessions = (await loadSessions(sql, now)).filter((s) => s.view.role !== REVIEWER_ROLE)
+  const sessions = await loadSessions(sql, now)
   const readings = await latestReadings(sql)
   const candidates = [
     ...(await resumeWatchdog(sql, sessions, now)),

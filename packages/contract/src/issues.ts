@@ -223,14 +223,10 @@ const Evidence = z
   .strictObject({ kind: EvidenceKind, link: Words(1000).optional(), note: Words(1000).optional() })
   .refine((item) => item.link !== undefined || item.note !== undefined, 'evidence needs a link or a note')
 
-/** The causes of a timed wait that the steward checks (`issues/steward.ts`); any other wait is left to its timer. */
-export const WAIT_CAUSES = ['deep_cap'] as const
-
 /** The body of each verb. `session` is the caller's `FACTORY_SESSION`; a session may only report on the Issue it works. */
 export const IssueVerbBody = {
   phase: z.strictObject({ ...common, phase: Words(80), note: Words(2000).optional() }),
-  /** `on`: the cause the wait is for, when the factory can know it lifted (`deep_cap`: the day's deep review cap has room) and wakes the Issue then */
-  wait: z.strictObject({ ...common, until: At, why: Words(500).optional(), on: z.enum(WAIT_CAUSES).optional() }),
+  wait: z.strictObject({ ...common, until: At, why: Words(500).optional() }),
   /** `commits`: what was merged. Required evidence is derived from them, never declared. */
   ship: z.strictObject({
     ...common,

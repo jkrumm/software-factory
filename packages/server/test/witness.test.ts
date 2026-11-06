@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { HcClient } from '../src/hc.ts'
 import { HcEvents } from '../src/hc-events.ts'
 import { HcRunner } from '../src/hc-runner.ts'
-import { agentName, LOCAL_TERMINAL, TERMINAL_ADDRESS } from '../src/runner.ts'
+import { agentName, TERMINAL_ADDRESS } from '../src/runner.ts'
 import { getSession, recordEvent } from '../src/sessions.ts'
 import { type AgentSeen, gitProbe, type RunnerChange, type RunnerView, startWitness, witness } from '../src/witness.ts'
 import { FakeClock } from './support/clock.ts'
@@ -166,8 +166,6 @@ describe('the witness', () => {
   test('the address of a terminal of this core is t plus base 36, optionally behind a machine; a classic pane is none', () => {
     for (const address of ['t7', 't19', 't1n', 't3d', 'mini/t1n']) expect(TERMINAL_ADDRESS.test(address)).toBe(true)
     for (const address of ['w4V:p3J', 'w8:t2', 't', '', 't7 ', 'T7']) expect(TERMINAL_ADDRESS.test(address)).toBe(false)
-    expect(LOCAL_TERMINAL.test('t1n')).toBe(true)
-    expect(LOCAL_TERMINAL.test('mini/t1n')).toBe(false)
   })
 
   test('a pane that came back between the two passes is not gone', async () => {

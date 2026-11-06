@@ -85,7 +85,7 @@ describe('a spawn with capacity', () => {
     await spawn('s1')
     const again = await app.send('POST', '/spawns', { key: 's1', repo: TEST_REPO, prompt: 'do it', role: 'retired' })
     expect(again.status).toBe(200)
-    expect(await again.json()).toMatchObject({ key: 's1', role: 'worker' })
+    expect(await again.json()).toMatchObject({ key: 's1', role: 'implementer' })
   })
 
   test('a repeated key returns the existing row', async () => {

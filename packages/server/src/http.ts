@@ -6,8 +6,6 @@ import {
   DoorRouteList,
   DoorUnroutedList,
   EventAck,
-  ActBody,
-  ActResult,
   Fleet,
   Health,
   IntakeAck,
@@ -38,8 +36,6 @@ import {
   ProjectList,
   ProjectName,
   ProjectSyncResult,
-  Presence,
-  PresenceBody,
   Prompt,
   Quota,
   QuotaList,
@@ -47,7 +43,6 @@ import {
   type RoleTable,
   Session,
   SessionList,
-  Since,
   Slot,
   SlotRelease,
   ErrorBody,
@@ -55,19 +50,13 @@ import {
   SpawnList,
   Status,
   StopCheck,
-  TriageEntry,
-  TriageList,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { z } from 'zod'
+import type { AdmissionLimits } from './admission.ts'
 import { latestReadings, recordReading, toQuota } from './capacity.ts'
 import type { Clock } from './clock.ts'
-import type { FleetActions } from './fleet/act.ts'
-import { reportPresence } from './fleet/away.ts'
-import { NoFleetBuild, readPresence } from './fleet/presence.ts'
-import { readSince, type SinceReader } from './fleet/since.ts'
 import { type FleetBuilder, readSnapshot } from './fleet/index.ts'
-import { listEntries, undoEntry } from './fleet/triage-store.ts'
 import { type Commits, GitCommits } from './issues/commits.ts'
 import type { Review } from './issues/review.ts'
 import { createIssue } from './issues/create.ts'
@@ -104,7 +93,6 @@ import { declareWait, getSession, listSessions, recordEvent } from './sessions.t
 import { heartbeat, type TickMonitor } from './health.ts'
 import { RepoRefused, resolveRepo } from './repos.ts'
 import { releaseSlot, touchSlot } from './slots.ts'
-import type { ReviewLimits } from './review/limits.ts'
 import { cancelSpawn, createSpawn, getSpawn, listSpawns, requeueSpawn } from './spawns.ts'
 
 export interface AppDeps {
@@ -126,8 +114,8 @@ export interface AppDeps {
   projects: Pick<ProjectSync, 'syncNow'>
   /** `FACTORY_ALERT_LEADS`: `factory status` says why an alert Issue starts no lead */
   alertLeads?: boolean
-  /** review v4's limits (slots, deep cap): admission of a reviewer spawn, and the reviews line of `/status`; the defaults without */
-  reviewLimits?: ReviewLimits
+  /** the lead cap for admission of a spawn; the default without */
+  admission?: AdmissionLimits
   /** the owner's line, for `POST /notifications/test`; without it the line is off */
   notifier?: Notifier
   /** `FACTORY_NOTIFY_TARGET`: `off` is said in the answer to a test */
@@ -138,10 +126,6 @@ export interface AppDeps {
   review?: Review
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
-  /** the owner's intents on the fleet's asks (`POST /fleet/asks/:id/act`); without it that route is 503 */
-  fleetActions?: Pick<FleetActions, 'act'>
-  /** presence and the since reading (`POST /fleet/presence`, `GET /fleet/since`); without it those routes are 503 */
-  since?: SinceReader
 }
 
 /** Largest request body the server reads. */
@@ -322,7 +306,7 @@ const replay = (spawn: Spawn): Response =>
  * repo-roots check, so a pane that can reach the socket asks for no more than a holder of the token.
  */
 const spawnHandler =
-  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[], reviewLimits?: ReviewLimits) =>
+  (sql: SQL, clock: Clock, roles: RoleTable, repoRoots: readonly string[], admission?: AdmissionLimits) =>
   async (req: Request): Promise<Response> => {
     const input = await parseBody(req, SpawnInput)
     // A replay of a known key answers with the row it made, whatever the role table says now. A spent key (its agent is
@@ -348,17 +332,15 @@ const spawnHandler =
         newSpace: input.new_space,
         tier: entry.tier,
         effort: entry.effort,
-        // A reviewer has no tab: the row says so, whatever the caller left out.
-        placement: input.placement ?? (input.review ? 'hidden' : undefined),
       },
       clock.now(),
-      reviewLimits,
+      admission,
     )
     return created ? respond(Spawn, spawn, 201) : replay(spawn)
   }
 
 /**
- * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels the review it asked for): a queued or waiting spawn
+ * `POST /spawns/:key/cancel`, on the port and on the socket (a pane's script cancels what it asked for): a queued or waiting spawn
  * becomes `cancelled`, the same call again answers the same row; one that was claimed is 409 `not_cancellable` carrying
  * the spawn row (`spawn.status`), so a caller reads the state from the body, not from the message.
  */
@@ -663,108 +645,25 @@ const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => (
 
 /**
  * `GET /fleet`: the stored snapshot, never a build. 503 before the first one (the builder runs on the tick, 30 s). **Token API only,
- * never on the socket**: the model holds the text of IuRoot's repos, sessions and plans, and what a pane reads goes to its model; no
+ * never on the socket**: the model holds the text of IuRoot's repos and sessions, and what a pane reads goes to its model; no
  * filter over free text can be made tight, so the whole route stays behind the token.
  */
-const fleetGetHandler = (sql: SQL, clock: Clock) => async () => {
+const fleetGetHandler = (sql: SQL) => async () => {
   const snapshot = await readSnapshot(sql)
   if (!snapshot) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
-  // Presence is derived by the clock at the read, never stored in the snapshot.
-  return respond(Fleet, { ...snapshot, presence: await readPresence(sql, clock.now()) })
+  return respond(Fleet, snapshot)
 }
 
 /** `POST /fleet/refresh`: a build now, answered with its model. */
-const fleetRefreshHandler = (sql: SQL, clock: Clock, fleet: AppDeps['fleet']) => async () => {
+const fleetRefreshHandler = (fleet: AppDeps['fleet']) => async () => {
   if (!fleet) return json({ error: 'the fleet builder is not running', code: 'not_ready' }, 503)
   try {
-    return respond(Fleet, { ...(await fleet.refreshNow()), presence: await readPresence(sql, clock.now()) })
+    return respond(Fleet, await fleet.refreshNow())
   } catch (error) {
     console.error('fleet refresh failed', error)
     return json({ error: 'the fleet model could not be built; see the server log', code: 'build_failed' }, 503)
   }
 }
-
-/**
- * `POST /fleet/asks/:id/act {intent, note?, until?}`: the owner's intent on an ask (resolve, deny, later, archive_plan, hand_off), only
- * when the ask offers it. 201 for the first, 200 for a repeat (the first one's result). Token API only, like `/fleet`.
- */
-const fleetActHandler =
-  (actions: AppDeps['fleetActions']) =>
-  async (req: Bun.BunRequest<'/fleet/asks/:id/act'>): Promise<Response> => {
-    const body = await parseBody(req, ActBody)
-    if (!actions) return json({ error: 'the fleet actions are not running', code: 'not_ready' }, 503)
-    const outcome = await actions.act(decodeId(req.params.id), body)
-    if (!outcome.ok) return json({ error: outcome.error, code: outcome.code }, outcome.status)
-    return respond(ActResult, outcome.result, outcome.created ? 201 : 200)
-  }
-
-/** Bun may or may not have decoded the `%3A` of an ask id (`queue:…`); a plain id is the same either way. */
-function decodeId(id: string): string {
-  try {
-    return decodeURIComponent(id)
-  } catch {
-    return id
-  }
-}
-
-/**
- * `POST /fleet/presence {place, act, until?}`: one act of a person at a place (FV Wave 4). Token API only. `act` is a short enum; `memo` and
- * `foreground` are the phone's only; `caught_up` alone takes `until`, and is 409 when no fleet build exists. Answers the presence as the
- * clock derives it. Nothing else moves presence.
- */
-const fleetPresenceHandler =
-  (since: AppDeps['since']) =>
-  async (req: Request): Promise<Response> => {
-    const body = await parseBody(req, PresenceBody)
-    if (!since) return json({ error: 'presence is not running', code: 'not_ready' }, 503)
-    try {
-      const until = body.until ? new Date(body.until) : undefined
-      return respond(Presence, await reportPresence(since, { ...body, until }), 201)
-    } catch (error) {
-      // A `caught_up` with no fleet build has nothing to catch up with: nothing is recorded.
-      if (error instanceof NoFleetBuild) return json({ error: error.message, code: 'no_build' }, 409)
-      throw error
-    }
-  }
-
-/**
- * `GET /fleet/since?t=<iso>`: what happened in the window, grouped, from recorded facts (FV Wave 4). `t` defaults to the cursor, is cut to
- * 7 days back, and a later or malformed one is 400. Never waits on agw: the headline is `ready`, `pending` (queued for the digest pass),
- * `failed` or `none`. Token API only.
- */
-const fleetSinceHandler =
-  (since: AppDeps['since'], clock: Clock) =>
-  async (req: Request): Promise<Response> => {
-    const raw = new URL(req.url).searchParams.get('t')
-    let t: Date | null = null
-    if (raw !== null) {
-      if (!IsoTime.safeParse(raw).success) throw new BadRequest('t must be an ISO 8601 time')
-      t = new Date(raw)
-      if (t.getTime() > clock.now().getTime()) throw new BadRequest('t is in the future')
-    }
-    if (!since) return json({ error: 'the since reading is not running', code: 'not_ready' }, 503)
-    const reading = await readSince(since, { t })
-    if (!reading) return json({ error: 'the fleet model is not built yet', code: 'not_ready' }, 503)
-    return respond(Since, reading)
-  }
-
-/** `GET /fleet/triage`: what the triage did on its own, newest first. */
-const fleetTriageListHandler = (sql: SQL) => async () => respond(TriageList, { entries: await listEntries(sql) })
-
-/** `POST /fleet/triage/:id/undo`: takes a decision back (200 when it was undone before); the next build shows the ask or the plan as it was. */
-const fleetTriageUndoHandler =
-  (sql: SQL, clock: Clock, fleet: AppDeps['fleet']) =>
-  async (req: Bun.BunRequest<'/fleet/triage/:id/undo'>): Promise<Response> => {
-    const id = parseParam(z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER), req.params.id)
-    const done = await undoEntry(sql, id, clock.now())
-    if (!done) return json({ error: 'unknown triage entry', code: 'unknown_entry' }, 404)
-    if (done === 'not_undoable') {
-      return json({ error: 'a closed session cannot be brought back: its terminal is gone', code: 'not_undoable' }, 409)
-    }
-    if (!done.duplicate)
-      await fleet?.refreshNow().catch((error: unknown) => console.error('fleet refresh after an undo failed', error))
-    return respond(TriageEntry, done.entry, done.duplicate ? 200 : 201)
-  }
 
 /** `GET /queue[?project=<path>]`. */
 const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: Request) => {
@@ -795,14 +694,12 @@ export function routes({
   quota,
   projects,
   alertLeads,
-  reviewLimits,
+  admission,
   notifier = new NullNotifier(),
   notifyTarget = 'off',
   commits = new GitCommits(),
   review,
   fleet,
-  fleetActions,
-  since,
 }: AppDeps) {
   const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
   const door = doorHandlers(sql, clock, repoRoots)
@@ -841,18 +738,13 @@ export function routes({
     '/sessions/:id/wait': { POST: route(waitHandler(sql, clock)) },
     '/sessions/:id/note': { POST: route(noteHandler(sql, clock)) },
     '/status': {
-      GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads, reviewLimits }))),
+      GET: route(async () => respond(Status, await buildStatus(sql, clock.now(), { alertLeads }))),
     },
-    '/fleet': { GET: route(fleetGetHandler(sql, clock)) },
-    '/fleet/refresh': { POST: route(fleetRefreshHandler(sql, clock, fleet)) },
-    '/fleet/presence': { POST: route(fleetPresenceHandler(since)) },
-    '/fleet/since': { GET: route(fleetSinceHandler(since, clock)) },
-    '/fleet/asks/:id/act': { POST: route(fleetActHandler(fleetActions)) },
-    '/fleet/triage': { GET: route(fleetTriageListHandler(sql)) },
-    '/fleet/triage/:id/undo': { POST: route(fleetTriageUndoHandler(sql, clock, fleet)) },
+    '/fleet': { GET: route(fleetGetHandler(sql)) },
+    '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
-      POST: route(spawnHandler(sql, clock, roles, repoRoots, reviewLimits)),
+      POST: route(spawnHandler(sql, clock, roles, repoRoots, admission)),
     },
     '/spawns/:key': {
       GET: route(spawnGetHandler(sql, clock)),
@@ -968,7 +860,7 @@ export function serveHooks(deps: {
   slots: number
   commits?: Commits
   review?: Review
-  reviewLimits?: ReviewLimits
+  admission?: AdmissionLimits
 }) {
   const commits = deps.commits ?? new GitCommits()
   const open = { open: true }
@@ -989,7 +881,7 @@ export function serveHooks(deps: {
       '/sessions/:id/note': { POST: viaSocket(noteHandler(deps.sql, deps.clock)) },
       '/sessions/:id/stop-check': { POST: viaSocket(stopCheckHandler(deps.sql, deps.clock)) },
       '/slots/:id': { PUT: viaSocket(slot.PUT), DELETE: viaSocket(slot.DELETE) },
-      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.reviewLimits)) },
+      '/spawns': { POST: viaSocket(spawnHandler(deps.sql, deps.clock, deps.roles, deps.repoRoots, deps.admission)) },
       '/spawns/:key': { GET: viaSocket(spawnGetHandler(deps.sql, deps.clock)) },
       '/spawns/:key/cancel': { POST: viaSocket(spawnCancelHandler(deps.sql, deps.clock)) },
       '/queue': { GET: viaSocket(queueGetHandler(deps.sql, deps.repoRoots)) },
@@ -1010,7 +902,7 @@ export function serveHooks(deps: {
       },
       '/projects': { GET: viaSocket(projectListHandler(deps.sql)) },
       '/projects/:name': { GET: viaSocket(projectGetHandler(deps.sql)) },
-      // Not here, on purpose: `/fleet`, `/fleet/refresh`, `/fleet/presence`, `/fleet/since`, the asks' acts and the triage. The model holds IuRoot's text and what a pane reads goes to its model.
+      // Not here, on purpose: `/fleet` and `/fleet/refresh`. The model holds IuRoot's text and what a pane reads goes to its model.
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },

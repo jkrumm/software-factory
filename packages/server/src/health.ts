@@ -113,6 +113,13 @@ export async function heartbeat(sql: SQL, now: Date, tickAt: string | null): Pro
   }
 }
 
+/**
+ * A health line about something that has finished (a failed spawn, a failed note, an undelivered notification, a kept worktree)
+ * ends this long after it finished; a line about something ongoing (a park, a silent lead, a live wall) stays while it is true.
+ * The one constant: every source of a finished line reads it, so `factory status` and `/fleet` agree.
+ */
+export const FINISHED_HEALTH_MS = 72 * 3_600_000
+
 // --- the health line (design v3 §6) ---------------------------------------------------------------------------------------
 
 /** An Issue `working` whose lead has stored no event for this long. */

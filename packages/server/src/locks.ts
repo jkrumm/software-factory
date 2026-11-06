@@ -11,6 +11,4 @@ export const LOCKS = {
   singleton: 7_093_003,
   /** transaction-level: serializes the test-slot semaphore */
   slots: 7_093_004,
-  /** transaction-level: serializes the since reading's headline requests (`fleet_windows`) */
-  windows: 7_093_005,
 } as const

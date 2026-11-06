@@ -143,54 +143,6 @@ describe('the session of a spawn', () => {
   })
 })
 
-describe('the parent terminal', () => {
-  const startedWith = async (parentPane: string | null) => {
-    await db.sql`INSERT INTO factory.sessions (id, pane, created_at) VALUES ('lead', ${parentPane}, ${clock.now()})`
-    await createSpawn(
-      db.sql,
-      { key: 'kid', repo: '/work/repo', prompt: 'do it', parent: 'lead', ...WORKER },
-      clock.now(),
-    )
-    const seen: (string | undefined)[] = []
-    const runner: Runner = {
-      ...noType,
-      start: async (input) => {
-        seen.push(input.parentTerminal)
-        return { session: 't9', tab: 'tb-x', workspace: 'sp-x' }
-      },
-    }
-    await tick(deps(runner))
-    return seen
-  }
-
-  test('is the pane of the parent session, handed to the Runner', async () => {
-    expect(await startedWith('t7')).toEqual(['t7'])
-  })
-
-  test('is absent while the parent has no pane', async () => {
-    expect(await startedWith(null)).toEqual([undefined])
-  })
-
-  test("the spawn's placement reaches the Runner, absent when none was asked for", async () => {
-    const seen: (string | undefined)[] = []
-    const runner: Runner = {
-      ...noType,
-      start: async (input) => {
-        seen.push(input.placement)
-        return { session: `t${seen.length}`, tab: null, workspace: null }
-      },
-    }
-    await createSpawn(db.sql, { key: 'plain', repo: '/work/repo', prompt: 'x', ...WORKER }, clock.now())
-    await createSpawn(
-      db.sql,
-      { key: 'kid', repo: '/work/repo', prompt: 'x', placement: 'child', ...WORKER },
-      clock.now(),
-    )
-    await tick(deps(runner))
-    expect([...seen].sort()).toEqual(['child', undefined])
-  })
-})
-
 describe('failures', () => {
   test('a permanent refusal marks the spawn failed and does not stop the others', async () => {
     await addSpawn('bad')

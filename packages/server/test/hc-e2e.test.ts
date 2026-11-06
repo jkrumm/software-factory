@@ -127,14 +127,6 @@ describe.skipIf(!enabled)('HcRunner against a real herdr-core (HC_E2E=1)', () =>
     expect(await runner.type({ pane: again.session, text: 'x' })).toBe('busy')
   }, 60_000)
 
-  test('a worker with a parent terminal is its hidden child', async () => {
-    const lead = await runner.start({ ...input, key: 'e2e-lead' })
-    const kid = await runner.start({ ...input, key: 'e2e-kid', role: 'worker', parentTerminal: lead.session })
-    const got = JSON.parse(await hc('get', kid.session)) as { parent: string; labels: Record<string, string> }
-    expect(got.parent).toBe(lead.session)
-    expect(got.labels).toEqual({ 'factory.key': 'e2e-kid' })
-  }, 60_000)
-
   test("a plan tab is the machine's own login shell, kept, found again by its key, and started afresh once it ended", async () => {
     const repo = await mkdtemp(join(dir, 'plan-repo-'))
     expect(await runner.ensurePlan({ name: 'e2e-plan', repo })).toBe('started')

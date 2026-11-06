@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { BUDGET_HOURS, HEARTBEAT_STALE_MS, healthKind, healthLines, heartbeat, SILENT_AFTER_MS } from '../src/health.ts'
+import {
+  BUDGET_HOURS,
+  FINISHED_HEALTH_MS,
+  HEARTBEAT_STALE_MS,
+  healthKind,
+  healthLines,
+  heartbeat,
+  SILENT_AFTER_MS,
+} from '../src/health.ts'
 import { MAX_REGRESSIONS } from '../src/issues/lifecycle.ts'
+import { recordPrompt } from '../src/prompts.ts'
 import { buildStatus } from '../src/status.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -206,20 +215,6 @@ describe('asks and health are two lists', () => {
     expect(s.attention).toEqual([])
     expect(s.health).toEqual([`Issue ${id}: no hook event for 30 min`])
   })
-
-  test('a review that needs a human is health; one held at the deep cap is an ask', async () => {
-    // Unfinished work: the reviewer's repo has an open Issue (a finished job's line is gone: `steward.test.ts`).
-    await issue('working')
-    await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, review_job, review_tier, review_effort, created_at)
-      VALUES ('review-j1-a2', '/r', 'p', 'started', 'reviewer', 'j1', 'light', 'low', ${clock.now()})`
-    await sql()`INSERT INTO factory.review_outcomes (spawn_key, job_id, attempt, outcome, detail, at)
-      VALUES ('review-j1-a2', 'j1', 2, 'needs_human', 'refused', ${clock.now()})`
-    await sql()`INSERT INTO factory.spawns (key, repo, prompt, status, role, hold, review_job, review_tier, review_effort, created_at)
-      VALUES ('review-j2-a1', '/r', 'p', 'queued', 'reviewer', 'deep_cap', 'j2', 'deep', 'high', ${clock.now()})`
-    const s = await buildStatus(sql(), clock.now())
-    expect(s.attention.map((l) => l.split(' held')[0])).toEqual(['review review-j2-a1'])
-    expect(s.health).toEqual(['review j1 needs a human: attempt 2 failed: refused'])
-  })
 })
 
 describe('healthKind', () => {
@@ -235,5 +230,67 @@ describe('healthKind', () => {
     ]) {
       expect(healthKind(line)).toBe('machine')
     }
+  })
+})
+
+describe('a line about something finished ends 72 h after it finished', () => {
+  const health = async (): Promise<string[]> => (await buildStatus(sql(), clock.now())).health
+
+  async function failedSpawn(key: string, at: Date): Promise<void> {
+    await sql()`
+      INSERT INTO factory.spawns (key, repo, prompt, status, error, created_at)
+      VALUES (${key}, '/r', 'p', 'failed', 'hc exited 1', ${at})`
+  }
+  async function failedNotification(key: string, at: Date): Promise<void> {
+    await sql()`
+      INSERT INTO factory.notifications (key, kind, text, created_at, next_at, attempts, error, failed_at)
+      VALUES (${key}, 'test', 't', ${at}, ${at}, 5, 'gone', ${at})`
+  }
+
+  test('the constant is 72 h', () => {
+    expect(FINISHED_HEALTH_MS).toBe(72 * HOUR)
+  })
+
+  test('a failed spawn: present at 71 h, gone at 73 h', async () => {
+    await failedSpawn('young', ago(71 * HOUR))
+    await failedSpawn('old', ago(73 * HOUR))
+    expect(await health()).toEqual(['spawn young failed: hc exited 1'])
+  })
+
+  test('a failed note: present at 71 h, gone at 73 h', async () => {
+    await recordPrompt(
+      sql(),
+      { id: 'n-young', session: 's', source: 'note', text: 'x', failed: 'gave up' },
+      ago(71 * HOUR),
+    )
+    await recordPrompt(
+      sql(),
+      { id: 'n-old', session: 's', source: 'note', text: 'x', failed: 'gave up' },
+      ago(73 * HOUR),
+    )
+    expect(await health()).toEqual(['note n-young to s failed: gave up'])
+  })
+
+  test('a failed notification: present at 71 h, gone at 73 h', async () => {
+    await failedNotification('notify:test:young', ago(71 * HOUR))
+    await failedNotification('notify:test:old', ago(73 * HOUR))
+    expect(await health()).toEqual(['notification notify:test:young was not delivered: gone'])
+  })
+
+  test('a kept worktree: present at 71 h, gone at 73 h', async () => {
+    const id = await issue('queued')
+    await sql()`
+      INSERT INTO factory.issue_events (issue_id, key, kind, payload, at) VALUES
+        (${id}, 'wk1', 'worktree_kept', '{"path":"/w/a","kept":"dirty"}'::jsonb, ${ago(71 * HOUR)}),
+        (${id}, 'wk2', 'worktree_kept', '{"path":"/w/b","kept":"dirty"}'::jsonb, ${ago(73 * HOUR)})`
+    expect(await health()).toEqual([`Issue ${id}: its worktree was kept (dirty): /w/a`])
+  })
+
+  test('an ongoing line of the same age stays, with its id unchanged', async () => {
+    const id = await issue('waiting', { reason: 'lead_gone', updatedAt: ago(100 * HOUR) })
+    const silent = await issue('working', { workingAt: ago(100 * HOUR), size: 'l' })
+    const lines = await health()
+    expect(lines).toContain(`Issue ${id} parked for 100 h: its lead is gone`)
+    expect(lines).toContain(`Issue ${silent}: no hook event for 6000 min`)
   })
 })

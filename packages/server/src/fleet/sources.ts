@@ -1,11 +1,10 @@
 import { stat } from 'node:fs/promises'
 import { z } from 'zod'
 import { childEnv, EXIT_TIMEOUT, runProcess } from '../exec.ts'
-import { HcError, type HcClient } from '../hc.ts'
+import type { HcClient } from '../hc.ts'
 
 /** Every read of a source is bounded: a hung `git` or `hc` costs this long, never the build. */
 export const SOURCE_TIMEOUT_MS = 10_000
-export const GIT_TIMEOUT_MS = 5_000
 
 /** One live terminal of herdr-core, as far as the fleet reads it. */
 export interface HcTerminal {
@@ -22,12 +21,8 @@ export interface HcTerminal {
   parent: string | null
   /** whether the foreground program is Claude Code */
   claude: boolean
-  /** what the terminal was started with: the prompt of an agent started by `rd` is in here */
-  prompt: string | null
   role: string | null
   account: string | null
-  /** whether the core's reading says it still runs Claude Code, by the close's own strict test; absent in a stand-in means yes */
-  closable?: boolean
 }
 
 export interface HcLister {
@@ -65,35 +60,6 @@ const envOf = (argv: readonly string[], name: string): string | null => {
   return found ? found.slice(prefix.length) || null : null
 }
 
-/**
- * Ends one terminal for good (the reaper, FV Wave 5): `hc kill`, then `hc rm`. It looks again first and refuses when the agent is no longer
- * where the build saw it: working or blocked, a different directory, or not Claude Code. A terminal that is gone is what was wanted.
- * herdr-core has no call that settles the app's tab, so the app drops the tab when the terminal is removed.
- */
-export interface HcCloser {
-  /**
-   * Resolves when the terminal is gone. Throws `NotClosed` when nothing was done (it is not where the build saw it, or the core refused
-   * the kill and left it running); any other error leaves it unknown whether the kill happened.
-   */
-  close(target: { address: string; cwd: string }): Promise<void>
-  /** Finishes a close that may have half happened, never killing: `gone` when the terminal is not there any more (a finished one is removed), `live` when it still runs. */
-  finish(address: string): Promise<'gone' | 'live'>
-}
-
-/** The close did nothing: the terminal was not touched. */
-export class NotClosed extends Error {}
-
-/**
- * Whether a terminal still runs Claude Code, for the close only (the list's flag is broader on purpose). When the core reports a foreground program, that program
- * decides (its name or program is `claude`, or `node`/`bun` runs a script named `claude`); a status or label can outlive the program, so a shell
- * in its place is never Claude Code. With no foreground reported, the status app, the program or Claude's session label say.
- */
-function runsClaude(t: z.output<typeof Record_>): boolean {
-  const fg = t.foreground
-  if (fg && (fg.name || fg.argv.length > 0)) return fg.name === 'claude' || runs(fg.argv)
-  return t.status?.app === 'claude-code' || runs(t.argv) || 'jk.claude.session' in t.labels
-}
-
 /** The program is `claude`, or `claude` is the script a `node` or `bun` runs: an editor with a file named claude in its arguments is not. */
 function runs(argv: readonly string[]): boolean {
   const base = (arg: string | undefined) => arg?.split('/').at(-1)
@@ -102,59 +68,8 @@ function runs(argv: readonly string[]): boolean {
 }
 
 /** `hc ls --json` is this RPC's summary (`terminal.list`); the RPC also has the title, the labels and the argv. */
-export class HcTerminals implements HcLister, HcCloser {
+export class HcTerminals implements HcLister {
   constructor(private readonly client: HcClient) {}
-
-  async finish(address: string): Promise<'gone' | 'live'> {
-    let seen: z.output<typeof Record_>
-    try {
-      seen = await this.client.call('terminal.get', { terminal: address }, Record_, SOURCE_TIMEOUT_MS)
-    } catch (error) {
-      if (error instanceof HcError && error.refusal?.kind === 'not_found') return 'gone'
-      throw error
-    }
-    if (seen.state === 'live') return 'live'
-    try {
-      await this.client.call('terminal.rm', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
-    } catch (error) {
-      if (!(error instanceof HcError && error.refusal?.kind === 'not_found')) throw error
-    }
-    return 'gone'
-  }
-
-  async close({ address, cwd }: { address: string; cwd: string }): Promise<void> {
-    const gone = (error: unknown): boolean => error instanceof HcError && error.refusal?.kind === 'not_found'
-    let seen: z.output<typeof Record_>
-    try {
-      seen = await this.client.call('terminal.get', { terminal: address }, Record_, SOURCE_TIMEOUT_MS)
-    } catch (error) {
-      if (gone(error)) return
-      throw error
-    }
-    if (seen.state === 'live') {
-      // Only Claude Code is closed: a shell that took the terminal's place (a kept terminal after a loss) is somebody's work.
-      if (!runsClaude(seen)) throw new NotClosed(`${address} does not run Claude Code; not closed`)
-      const state = seen.status?.state
-      if (state !== 'idle' && state !== 'done')
-        throw new NotClosed(`${address} is ${state ?? 'not reporting'} again; not closed`)
-      if (seen.cwd !== cwd) throw new NotClosed(`${address} is in ${seen.cwd ?? 'no directory'} now; not closed`)
-      try {
-        await this.client.call('terminal.kill', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
-      } catch (error) {
-        // Already finished or gone is what was wanted. Any other refusal means the core looked and left it running, and a timeout or a
-        // dead process says nothing: not closed, the next pass looks again.
-        const kind = error instanceof HcError ? error.refusal?.kind : undefined
-        if (kind === undefined) throw error
-        if (kind !== 'not_found' && kind !== 'finished')
-          throw new NotClosed(`${address}: the core refused the kill (${kind})`)
-      }
-    }
-    try {
-      await this.client.call('terminal.rm', { terminal: address }, z.object({}).loose(), SOURCE_TIMEOUT_MS)
-    } catch (error) {
-      if (!gone(error)) throw error
-    }
-  }
 
   async list(): Promise<HcTerminal[]> {
     const { terminals } = await this.client.call('terminal.list', {}, TerminalList, SOURCE_TIMEOUT_MS)
@@ -162,7 +77,7 @@ export class HcTerminals implements HcLister, HcCloser {
       .filter((t) => t.state === 'live')
       .map((t) => {
         const argv = t.foreground?.argv.length ? t.foreground.argv : t.argv
-        // The broad test: the fleet must not lose a session it can see. Only the close is strict (`runsClaude`).
+        // The broad test: the fleet must not lose a session it can see.
         const claude =
           t.status?.app === 'claude-code' ||
           t.foreground?.name === 'claude' ||
@@ -170,8 +85,6 @@ export class HcTerminals implements HcLister, HcCloser {
           runs(argv) ||
           runs(t.argv) ||
           'jk.claude.session' in t.labels
-        // The prompt an agent started with is its longest argument; a short one is a flag.
-        const prompt = [...t.argv].sort((a, b) => b.length - a.length)[0] ?? null
         return {
           address: t.address,
           name: t.name,
@@ -183,8 +96,6 @@ export class HcTerminals implements HcLister, HcCloser {
           statusAt: t.status_ms === null ? null : new Date(t.status_ms).toISOString(),
           parent: t.parent,
           claude,
-          closable: runsClaude(t),
-          prompt: prompt && prompt.length > 80 ? prompt : null,
           role: envOf(t.argv, 'FACTORY_ROLE'),
           account: envOf(t.argv, 'CLAUDE_ACCOUNT_PICKED'),
         }
@@ -196,8 +107,6 @@ export class HcTerminals implements HcLister, HcCloser {
 export interface QueueRequest {
   id: string
   text: string
-  /** the command the request would run once the owner approves it: data, read by the probes for what it names, never run by the factory */
-  cmd?: string | null
   askedAt: string
   state: string | null
 }
@@ -206,28 +115,11 @@ export interface QueueReader {
   list(): Promise<QueueRequest[]>
 }
 
-export type QueueOutcome = 'done' | 'denied' | 'superseded'
-
-/** The queue refused or could not take an answer: `reason` is what the owner is told (503). */
-export class QueueUnavailable extends Error {}
-
-/**
- * What `resolve` did: wrote the result, or found the request already had one (an earlier call whose record here failed, a human's
- * answer) and says what it shows. `status` is the queue's word (`done`, `denied`, `failed`), `resolvedAs` the outcome a `resolve` gave it.
- */
-export type QueueResolved = { written: true } | { written: false; status: string; resolvedAs: QueueOutcome | null }
-
-/** Writes a result into the human queue. It never runs the request's command: `resolve` only records how the request ended. */
-export interface QueueActor {
-  resolve(id: string, as: QueueOutcome, note?: string): Promise<QueueResolved>
-}
-
 const QueueList = z.array(
   z
     .object({
       id: z.string().min(1),
       text: z.string(),
-      cmd: z.string().nullable().optional(),
       askedAt: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'askedAt is not a time'),
       state: z.string().optional(),
     })
@@ -238,7 +130,7 @@ const QueueList = z.array(
  * The queue is dotfiles': `ask-human.sh list --json`, one JSON array. A script without the flag yet answers in plain text or
  * fails; that is an error line in the model, not a crash.
  */
-export class AskHumanQueue implements QueueReader, QueueActor {
+export class AskHumanQueue implements QueueReader {
   constructor(
     private readonly bin: string,
     private readonly run: typeof runProcess = runProcess,
@@ -267,70 +159,15 @@ export class AskHumanQueue implements QueueReader, QueueActor {
     return parsed.data.map((r) => ({
       id: r.id,
       text: r.text,
-      cmd: r.cmd ?? null,
       askedAt: new Date(r.askedAt).toISOString(),
       state: r.state ?? null,
     }))
-  }
-
-  /**
-   * `ask-human.sh resolve <id> --as done|denied|superseded [--note <text>]` (dotfiles': it lands beside this wave). Until the script
-   * has it, the answer is `QueueUnavailable` with the reason: the help text is read first, so a script without the subcommand is
-   * never asked to run an unknown one. The id is the queue's own (`list --json`), checked against its shape before it reaches argv.
-   */
-  async resolve(id: string, as: QueueOutcome, note?: string): Promise<QueueResolved> {
-    if (!/^\w[\w.-]*$/.test(id)) throw new QueueUnavailable(`queue id ${id} is not a queue id`)
-    if (
-      !(await stat(this.bin).then(
-        (s) => s.isFile(),
-        () => false,
-      ))
-    )
-      throw new QueueUnavailable(`${this.bin} does not exist`)
-    const help = await this.run([this.bin, 'help'], SOURCE_TIMEOUT_MS, childEnv())
-    if (help.exitCode !== 0 || !/\bresolve\b/.test(help.stdout))
-      throw new QueueUnavailable(
-        'the human queue has no `resolve` yet (ask-human.sh resolve lands with the dotfiles wave)',
-      )
-    const args = [this.bin, 'resolve', id, '--as', as, ...(note ? ['--note', note] : [])]
-    const done = await this.run(args, SOURCE_TIMEOUT_MS, childEnv())
-    if (done.exitCode === EXIT_TIMEOUT) throw new QueueUnavailable('ask-human.sh resolve did not answer in time')
-    if (done.exitCode === 0) return { written: true }
-    // Exit 2 is every refusal, "already has a result" among them (its line is on stderr, which is not read): ask the queue what the
-    // request shows, so an answer written by an earlier call whose record failed here converges instead of failing for good.
-    if (done.exitCode === 2) {
-      const shown = await this.result(id)
-      if (shown) return { written: false, ...shown }
-    }
-    throw new QueueUnavailable(`ask-human.sh resolve exited ${done.exitCode}`)
-  }
-
-  /** The result a request shows in `ask-human.sh status <id>` (the request's JSON, then its result's): its status and how it was resolved. */
-  private async result(id: string): Promise<{ status: string; resolvedAs: QueueOutcome | null } | undefined> {
-    const done = await this.run([this.bin, 'status', id], SOURCE_TIMEOUT_MS, childEnv())
-    if (done.exitCode !== 0) return undefined
-    for (const line of done.stdout.split('\n').reverse()) {
-      if (!line.trim().startsWith('{')) continue
-      try {
-        const parsed = z
-          .object({ status: z.string(), resolvedAs: z.enum(['done', 'denied', 'superseded']).nullish() })
-          .loose()
-          .safeParse(JSON.parse(line))
-        // Only a result the queue has written is one: an open or pending request is a refusal for another reason.
-        if (parsed.success && ['done', 'denied', 'failed', 'superseded'].includes(parsed.data.status))
-          return { status: parsed.data.status, resolvedAs: parsed.data.resolvedAs ?? null }
-      } catch {
-        // not a result line
-      }
-    }
-    return undefined
   }
 }
 
 /**
  * Whether every source an ask comes from answered in this build (hc, the database, the human queue, the digest's reply asks, the stored
- * snapshot it restarts from): only then does an ask that is not listed have left, and its occurrence end. A plan or a repo that could not be
- * read changes no ask's existence.
+ * snapshot it restarts from): only then does an ask that is not listed have left.
  */
 export const askSourcesAnswered = (errors: readonly string[]): boolean =>
   !errors.some((e) => /^(hc|database|human queue|digest|snapshot)/.test(e))

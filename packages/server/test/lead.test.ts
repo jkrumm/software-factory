@@ -125,7 +125,7 @@ const ports = () => ({
 
 /** One tick of the server, then the classifies it started finish. */
 async function pass(
-  extra: { issuePorts?: ReturnType<typeof ports>; settle?: boolean; reviewLimits?: AdmissionLimits } = {},
+  extra: { issuePorts?: ReturnType<typeof ports>; settle?: boolean; admission?: AdmissionLimits } = {},
 ) {
   const result = await tick({
     sql: db.sql,
@@ -136,7 +136,7 @@ async function pass(
     leadWorktrees: maker,
     projects: sync,
     alertLeads: alerts,
-    reviewLimits: extra.reviewLimits,
+    admission: extra.admission,
   })
   if (extra.settle !== false) {
     await classification.settled()
@@ -433,12 +433,12 @@ describe('classify, then admission', () => {
       await db.sql`DELETE FROM factory.quota_readings WHERE account = 'b'`
       await file(newRepo())
       await file(newRepo())
-      const reviewLimits = { sessions: 2, deepCap: 15, idleMs: 600_000, leadsPerAccount: 1 }
+      const admission = { leadsPerAccount: 1 }
       for (let i = 0; i < 2; i++) {
-        for (let j = 0; j < 4; j++) await pass({ reviewLimits })
+        for (let j = 0; j < 4; j++) await pass({ admission })
         await sample(['a'])
       }
-      await pass({ reviewLimits })
+      await pass({ admission })
       expect(Object.values(await states()).sort()).toEqual(['started on a', 'waiting'])
     })
   })
