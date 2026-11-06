@@ -52,11 +52,13 @@ The registry is in the database (`factory.door_routes`), never in git: monitor n
 ```
 factory door route set <source> <monitor> <repo>   # the repo must be inside FACTORY_REPO_ROOTS and never IuRoot
 factory door route list | rm <source> <monitor>
-factory door unrouted                              # monitors that alerted with no route: count, last seen, last title
+factory door unrouted                              # monitors that alerted with no route: count, last seen, last title, status, Issue
 ```
 
-An alert with no route files nothing and is counted once per event (every alert the homelab has arrives here, Kuma attaches
-every provider to every monitor). Routed: an open Issue of that monitor gets a `signal` (a regression while the monitor is
+An alert with no route files nothing at once and is counted once per event (every alert the homelab has arrives here, Kuma attaches
+every provider to every monitor). A down that outlasts 10 minutes is a health line and is filed once by the factory: in the repo a
+`<name> - Push` or `<name> - Door` monitor maps to, else as an Issue in the dotfiles repo to pick its home and add the route; an up clears
+it, and a group monitor ('Child monitors down') never files. Routed: an open Issue of that monitor gets a `signal` (a regression while the monitor is
 down); with none open, a down creates an Issue (`source: alert`) in the route's repo and an up only counts on the route.
 
 ## Sources

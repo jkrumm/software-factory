@@ -161,6 +161,22 @@ describe('a mapped repo with a heal rule', () => {
   })
 })
 
+describe('an Issue filed later by a heal rule', () => {
+  test('the line and the list name it once it exists', async () => {
+    await alert('forecast - Push')
+    settle()
+    await db.sql`
+      INSERT INTO factory.projects (name, repo, manifest, make_targets, synced_at, created_at)
+      VALUES ('forecast', ${MAPPED}, '{}'::jsonb, '{}'::jsonb, ${clock.now()}, ${clock.now()})`
+    await pass()
+    const [{ id }] = await db.sql`SELECT id FROM factory.issues`
+    // what settle.ts does when the grace ends: the Issue exists, the unrouted row never heard of it
+    await db.sql`UPDATE factory.door_unrouted SET filed_issue = NULL`
+    expect(await lines()).toEqual([expect.stringContaining(`filed as Issue ${id}`)])
+    expect((await listUnrouted(db.sql)).map((row) => row.issue)).toEqual([id])
+  })
+})
+
 describe('group monitors', () => {
   test('never raise a line or file anything, however they say it', async () => {
     await alert('Homelab', 'down', { title: 'Homelab is down: Child monitors down' })

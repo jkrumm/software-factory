@@ -37,6 +37,11 @@ const DUE = (sql: SQL, now: Date) => sql`
   u.status = 'down' AND NOT u.is_group AND u.down_since <= ${new Date(now.getTime() - UNROUTED_GRACE_MS)}
   AND NOT EXISTS (SELECT 1 FROM factory.door_routes r WHERE r.source = u.source AND r.monitor = u.monitor)`
 
+/** The Issue of the monitor's current down: the one the steward filed, else an open Issue of the monitor (a `heal:` grace files it later, off the row). */
+export const ISSUE_OF = (sql: SQL) => sql`COALESCE(u.filed_issue, (
+  SELECT max(d.issue_id) FROM factory.door_issues d JOIN factory.issues i ON i.id = d.issue_id AND i.state <> 'closed'
+  WHERE d.source = u.source AND d.monitor = u.monitor))`
+
 const SUFFIX = /\s+[-–—]\s+(push|door)$/i
 
 /**
@@ -149,7 +154,7 @@ const since = (ms: number): string =>
 export async function unroutedLines(sql: SQL, now: Date): Promise<string[]> {
   const rows: (DownRow & { filed_at: Date | null; filed_issue: number | null; file_error: string | null })[] =
     await sql`
-    SELECT u.source, u.monitor, u.last_event, u.last_title, u.down_since, u.filed_at, u.filed_issue, u.file_error
+    SELECT u.source, u.monitor, u.last_event, u.last_title, u.down_since, u.filed_at, ${ISSUE_OF(sql)} AS filed_issue, u.file_error
     FROM factory.door_unrouted u WHERE ${DUE(sql, now)} ORDER BY u.down_since, u.source, u.monitor LIMIT 50`
   return rows.map((row) => {
     const name = row.monitor.length > 80 ? `${row.monitor.slice(0, 79)}…` : row.monitor
