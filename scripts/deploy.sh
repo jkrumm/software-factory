@@ -107,21 +107,36 @@ unload_wait_secs() { # $1 plist or template
   echo $(( ${t:-120} + 10 ))
 }
 
-# The pid launchd runs for the service ("" = not running). The server holds the database lock until that process is gone.
-service_pid() {
-  launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }'
+# The pid launchd runs for the service and everything below it ("" = not running). launchd runs the secrets-run wrapper and
+# the server is its child: the wrapper can end (and launchd drop the job) while the server is still in its SIGTERM
+# shutdown, holding the database lock.
+service_pids() {
+  local root child
+  root=$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }')
+  [[ -n "$root" ]] || return 0
+  echo "$root"
+  for child in $(pgrep -P "$root" 2>/dev/null); do
+    echo "$child"
+    pgrep -P "$child" 2>/dev/null
+  done
 }
 
-# Waits until the service is unloaded AND its process is gone: launchd can drop the job while the old server is still in
-# its SIGTERM shutdown, holding the database lock, and the next server would exit on the taken lock.
+any_alive() { # $@ pids
+  local p
+  for p in "$@"; do kill -0 "$p" 2>/dev/null && return 0; done
+  return 1
+}
+
+# Waits until the service is unloaded AND every process it ran is gone, so the next server finds the lock free.
 stop_service() { # $1 max seconds to wait
-  local pid i=0
-  pid=$(service_pid)
+  local pids i=0
   loaded || return 0
+  # shellcheck disable=SC2207
+  pids=($(service_pids))
   mark_deliberate_restart
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
   while (( i < $1 )); do
-    if ! loaded && { [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; }; then return 0; fi
+    if ! loaded && ! any_alive "${pids[@]:-}"; then return 0; fi
     sleep 1; i=$((i + 1))
   done
   return 1
