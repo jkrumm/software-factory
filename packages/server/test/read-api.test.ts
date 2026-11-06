@@ -450,6 +450,14 @@ describe('read API round 3', () => {
     expect(detail.about).toBe('Something else.')
   })
 
+  test('about reads a string goal only: an empty goal falls through to the request, an object is no goal', async () => {
+    const empty = await file(TEST_REPO, 'T1', { goal: '  ', request: 'Fix X now. More.' }, 'g1')
+    const object = await file(TEST_REPO, 'Keep the title', { goal: { a: 1 } }, 'g2')
+    const found = await cards()
+    expect(found.find((c) => c.id === empty.id)?.about).toBe('Fix X now.')
+    expect(found.find((c) => c.id === object.id)?.about).toBe('Keep the title')
+  })
+
   test('a queued Issue names its real hold; with no spawn or hold the fixed sentence stays', async () => {
     const issue = await file(TEST_REPO, 'Queued work', {}, 'q1')
     const spawn = (extra: Record<string, unknown>) => ({

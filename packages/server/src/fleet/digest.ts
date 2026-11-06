@@ -70,7 +70,12 @@ export async function loadGoals(sql: SQL, ids: readonly number[]): Promise<Map<n
   const goals = new Map<number, string>()
   if (ids.length === 0) return goals
   const rows: { id: number; goal: string | null }[] = await sql`
-    SELECT id, left(COALESCE(facts->>'goal', facts->>'request', facts->>'text', facts->>'description'), ${GOAL_MAX * 2}) AS goal
+    SELECT id, left(COALESCE(
+      CASE WHEN jsonb_typeof(facts->'goal') = 'string' THEN NULLIF(btrim(facts->>'goal'), '') END,
+      CASE WHEN jsonb_typeof(facts->'request') = 'string' THEN NULLIF(btrim(facts->>'request'), '') END,
+      CASE WHEN jsonb_typeof(facts->'text') = 'string' THEN NULLIF(btrim(facts->>'text'), '') END,
+      CASE WHEN jsonb_typeof(facts->'description') = 'string' THEN NULLIF(btrim(facts->>'description'), '') END
+    ), ${GOAL_MAX * 2}) AS goal
     FROM factory.issues WHERE id IN ${sql(ids)}`
   for (const row of rows) {
     const goal = row.goal?.replace(/\s+/g, ' ').trim()
