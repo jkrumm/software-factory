@@ -245,20 +245,34 @@ export function nextOpening(readings: readonly Reading[], options: PickOptions):
 
 /**
  * Live Issue-lead sessions per account: sessions whose spawn has role `lead` and an Issue (a program lead or a wave has none and is
- * not counted), as `liveSessions` reads them. A lead whose Issue waits on the owner's decision, or for its repo's claim after the answer, holds no capacity and is not counted. `except` leaves the spawn being admitted out. An Issue lead is "live" from its claim on.
+ * not counted), as `liveSessions` reads them. A lead whose Issue waits on the owner's decision, in a timed wait, or for its repo's claim
+ * again holds no capacity and is not counted: asleep it uses neither CPU nor quota, and when its wait ends it simply runs (the load
+ * ceiling still guards new starts). `except` leaves the spawn being admitted out. An Issue lead is "live" from its claim on.
  */
+export async function issueLeadHolders(
+  sql: SQL,
+  sessions: readonly LiveSession[],
+  except?: string,
+): Promise<Map<string, number[]>> {
+  const keys = sessions.filter((s) => s.role === 'lead' && s.id !== except).map((s) => s.id)
+  if (keys.length === 0) return new Map()
+  const rows: { account: string; issue_id: number }[] = await sql`
+    SELECT p.account, p.issue_id FROM factory.spawns p
+    JOIN factory.issues i ON i.id = p.issue_id
+    WHERE p.key IN ${sql(keys)} AND p.role = 'lead' AND p.account IS NOT NULL
+      AND NOT (i.state = 'waiting' AND i.reason IN ('decision', 'claim', 'wait'))
+    ORDER BY p.issue_id`
+  const holders = new Map<string, number[]>()
+  for (const row of rows) holders.set(row.account, [...(holders.get(row.account) ?? []), row.issue_id])
+  return holders
+}
+
+/** `issueLeadHolders` as counts, per account. */
 export async function issueLeadsByAccount(
   sql: SQL,
   sessions: readonly LiveSession[],
   except?: string,
 ): Promise<Map<string, number>> {
-  const keys = sessions.filter((s) => s.role === 'lead' && s.id !== except).map((s) => s.id)
-  if (keys.length === 0) return new Map()
-  const rows: { account: string; n: number }[] = await sql`
-    SELECT p.account, count(*)::int AS n FROM factory.spawns p
-    JOIN factory.issues i ON i.id = p.issue_id
-    WHERE p.key IN ${sql(keys)} AND p.role = 'lead' AND p.account IS NOT NULL
-      AND NOT (i.state = 'waiting' AND i.reason IN ('decision', 'claim'))
-    GROUP BY p.account`
-  return new Map(rows.map((r) => [r.account, r.n]))
+  const holders = await issueLeadHolders(sql, sessions, except)
+  return new Map([...holders].map(([account, issues]) => [account, issues.length]))
 }

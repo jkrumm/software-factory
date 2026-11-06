@@ -252,8 +252,13 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
     case 'wake':
       // The end of a decision wait: the repo was free for other work meanwhile, so what landed is yours to build on before you go on.
       if (payload?.for === 'claim') {
+        // An answered question carries its answer; a timed wait that ended has none to tell.
+        const opening =
+          fieldOf(payload, 'answer') || fieldOf(payload, 'text')
+            ? answerLine(head, payload)
+            : `${head} your wait is over.`
         return clip(
-          `${answerLine(head, payload)} The repo was free for other work while you waited and is yours again. Before you carry on, \`git fetch\` and rebase your branch onto the default branch (resolve conflicts, rerun the checks), then continue. Notes that came while you waited: \`factory issue show ${issueId}\`.`,
+          `${opening} The repo was free for other work while you waited and is yours again. Before you carry on, \`git fetch\` and rebase your branch onto the default branch (resolve conflicts, rerun the checks), then continue. Notes that came while you waited: \`factory issue show ${issueId}\`.`,
         )
       }
       return `${head} your wait is over. Carry on from where you stopped.`
@@ -279,10 +284,10 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
 async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const { sql, clock } = deps
   const key = leadKey(effect.issueId, attemptOf(effect))
-  // A lead in a decision wait, or waiting to take its repo's claim again, is not typed to: it would work with no place in the repo. The
-  // note comes with the wake that gives the place back (the effects of an Issue run in order, so it is not lost).
+  // A lead in a decision wait, a timed wait, or waiting to take its repo's claim again, is not typed to: it would work with no place in the repo
+  // (a wait gave it back). The note comes with the wake that gives the place back (the effects of an Issue run in order, so it is not lost).
   const [waiting]: { reason: string }[] = await sql`
-    SELECT reason FROM factory.issues WHERE id = ${effect.issueId} AND state = 'waiting' AND reason IN ('decision', 'claim')`
+    SELECT reason FROM factory.issues WHERE id = ${effect.issueId} AND state = 'waiting' AND reason IN ('decision', 'claim', 'wait')`
   if (waiting)
     throw new Waiting(`Issue ${effect.issueId} has no place in its repo (${waiting.reason}); the note waits for it`)
   const spawn = await getSpawn(sql, key, clock.now())

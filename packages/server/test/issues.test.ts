@@ -87,6 +87,13 @@ async function step(issueId: number, kind: string, payload?: Record<string, unkn
   expect(await pass(ports)).toEqual([])
 }
 
+/** A timed wait ends through its repo's claim (as an answer does): `waiting`/`claim`, and the next pass gives the place back and wakes the lead. */
+async function backToWork(id: number): Promise<void> {
+  expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'claim' })
+  expect(await pass()).toEqual([])
+  expect((await state(id)).state).toBe('working')
+}
+
 const state = async (id: number): Promise<Issue> => {
   const issue = await getIssue(db.sql, id)
   if (!issue) throw new Error(`no issue ${id}`)
@@ -386,9 +393,9 @@ describe('golden paths: transitions and effects', () => {
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
     clock.advance(60_000)
     await pass()
-    expect((await state(id)).state).toBe('working')
+    await backToWork(id)
     await pass()
-    expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(1)
+    expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(2)
     expect(await effects(id)).toEqual(['start_lead', 'note_lead'])
   })
 
@@ -398,12 +405,13 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'wait', { until })
     clock.advance(60_000)
     await pass()
-    expect((await state(id)).state).toBe('working')
+    await backToWork(id)
 
     await step(id, 'wait', { until })
     await pass()
-    expect((await state(id)).state).toBe('working')
-    expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(2)
+    await backToWork(id)
+    // the timer's wake and the claim's wake, for each of the two waits
+    expect((await inbox(id)).filter((r) => r.kind === 'wake')).toHaveLength(4)
   })
 
   test.each([
@@ -621,7 +629,8 @@ describe('golden paths: transitions and effects', () => {
     const id = await working()
     await step(id, 'wait', { until: new Date(clock.now().getTime() + 3_600_000).toISOString() })
     await step(id, verb, verb === 'phase' ? { phase: 'build' } : undefined)
-    expect((await state(id)).state).toBe(verb === 'phase' ? 'working' : 'closed')
+    if (verb === 'phase') await backToWork(id)
+    else expect((await state(id)).state).toBe('closed')
   })
 
   test('a lead waits again from a timed wait, for a new time', async () => {
@@ -632,7 +641,7 @@ describe('golden paths: transitions and effects', () => {
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
     clock.advance(60_000)
     await pass()
-    expect((await state(id)).state).toBe('working')
+    await backToWork(id)
   })
 
   test('a blocked or decision wait does not end by a lead verb', async () => {
@@ -652,8 +661,8 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'note', { text: 'go on' })
     expect((await state(id)).state).toBe('waiting')
     await step(id, 'note', { text: 'go on', wake: true })
-    expect((await state(id)).state).toBe('working')
-    expect(await effects(id)).toEqual(['start_lead', 'note_lead', 'note_lead'])
+    await backToWork(id)
+    expect(await effects(id)).toEqual(['start_lead', 'note_lead', 'note_lead', 'note_lead'])
   })
 
   test("the owner's note with wake takes a blocked or parked Issue back to working, and not a question, a dependency or a lost lead", async () => {
@@ -687,7 +696,7 @@ describe('golden paths: transitions and effects', () => {
     await step(id, 'wake', { for: 'wait', wait: 0 })
     expect(await state(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
     await step(id, 'wake', { for: 'wait', wait: 1 })
-    expect((await state(id)).state).toBe('working')
+    await backToWork(id)
   })
 
   test('a wake is checked against what is open now: a new blocker keeps it waiting', async () => {

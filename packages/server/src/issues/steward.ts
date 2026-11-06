@@ -25,8 +25,6 @@ const BACKOFF_MS = [30 * MIN, 120 * MIN, 360 * MIN] as const
 /** A cause that is already a condition of its own (a silent lead, a queue behind a claim) starts its first act at that condition. */
 const CLAIM_QUEUED_MS = 15 * MIN
 const FIRST_MS: Partial<Record<Cause, number>> = { silent: SILENT_AFTER_MS, claim: CLAIM_QUEUED_MS }
-/** A timed `wait` is no stall for this long after it began: a claim wake does not cut short a wait the lead just set (a CI run). */
-export const WAIT_GRACE_MS = 5 * MIN
 /** The retries are spent for the owner this long after the last act, the length of the last backoff. */
 const EXHAUSTED_AFTER_MS = BACKOFF_MS[2]
 
@@ -123,12 +121,12 @@ async function verification(
   return read()
 }
 
-/** The holders of a project's claim, waiting in a wakeable reason with another Issue queued (or answered and waiting for its claim) behind it for 15 min and no lead working: when the oldest began waiting. */
+/** The holders of a project's claim, waiting in a wakeable reason (a timed wait holds none: it gave the claim back) with another Issue queued (or answered and waiting for its claim) behind it for 15 min and no lead working: when the oldest began waiting. */
 async function claimHolders(sql: SQL, now: Date): Promise<Map<number, Date>> {
   const rows: { holder: number; queued_at: Date }[] = await sql`
     SELECT h.issue_id AS holder, min(q.queued_at) AS queued_at
     FROM factory.claims h
-    JOIN factory.issues hi ON hi.id = h.issue_id AND hi.state = 'waiting' AND hi.reason IN ${sql([...WAKEABLE])}
+    JOIN factory.issues hi ON hi.id = h.issue_id AND hi.state = 'waiting' AND hi.reason IN ${sql(WAKEABLE.filter((reason) => reason !== 'wait'))}
     JOIN factory.claims q ON q.key = h.key AND q.held_at IS NULL
     JOIN factory.issues qi ON qi.id = q.issue_id AND (qi.state = 'queued' OR (qi.state = 'waiting' AND qi.reason = 'claim'))
     WHERE h.held_at IS NOT NULL AND q.queued_at <= ${new Date(now.getTime() - CLAIM_QUEUED_MS)}
@@ -156,7 +154,6 @@ function candidates(
   holders: ReadonlyMap<number, Date>,
   background: ReadonlySet<number>,
   checkouts: ReadonlyMap<number, Date>,
-  now: Date,
 ): Candidate[] {
   if (issue.state === 'watching') {
     const since = checkouts.get(issue.id)
@@ -166,12 +163,7 @@ function candidates(
   const found: Candidate[] = []
   if (issue.state === 'waiting') {
     const queued = holders.get(issue.id)
-    // A `wait` is the lead's own choice: not a stall while its stated time lies ahead, nor in the minutes after it was set.
-    const waitingOnPurpose =
-      issue.reason === 'wait' &&
-      ((issue.wake_at !== null && issue.wake_at.getTime() > now.getTime()) ||
-        now.getTime() - issue.entered.getTime() < WAIT_GRACE_MS)
-    if (queued && hasLead && !waitingOnPurpose) found.push({ cause: 'claim', anchor: queued })
+    if (queued && hasLead) found.push({ cause: 'claim', anchor: queued })
     if (hasLead && (issue.reason === 'blocked' || issue.reason === 'parked' || issue.reason === 'unreported')) {
       found.push({ cause: issue.reason, anchor: issue.entered })
     }
@@ -287,7 +279,7 @@ export async function runSteward(sql: SQL, now: Date, deps: StewardDeps): Promis
   const told = new Set(spentRows.map((row) => row.key))
 
   for (const issue of issues) {
-    for (const { cause, anchor } of candidates(issue, live, holders, background, checkouts, now)) {
+    for (const { cause, anchor } of candidates(issue, live, holders, background, checkouts)) {
       const done = acted.get(`${issue.id}:${cause}`)
       const n = done?.n ?? 0
       if (n >= MAX_ACTS) {

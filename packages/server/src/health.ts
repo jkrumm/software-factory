@@ -2,9 +2,11 @@ import type { Health, HealthKind, Heartbeat } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
 import { hasTurned } from './briefs.ts'
+import { issueLeadHolders } from './capacity.ts'
 import { leadsOnBackgroundWork } from './issues/lead-activity.ts'
 import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
 import { planLines } from './projects/plan-status.ts'
+import { liveSessions } from './sessions.ts'
 
 /** Unhealthy once no pass has succeeded for this many intervals. */
 export const STALE_INTERVALS = 3
@@ -176,6 +178,7 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   lines.push(...(await unsentBriefLines(sql, now)))
   lines.push(...(await checkoutLines(sql)))
   lines.push(...(await loadHoldLines(sql)))
+  lines.push(...(await capHoldLines(sql, now)))
   lines.push(...(await planLines(sql, now)))
   return lines
 }
@@ -223,6 +226,32 @@ async function loadHoldLines(sql: SQL): Promise<string[]> {
   return [
     `held by load: Issue ${first}${more} waits for the machine, new leads start when its load is under the ceiling`,
   ]
+}
+
+/** How long an Issue lead may be held by the per-account lead cap before the line names what holds it. */
+export const CAP_HOLD_LINE_MS = 15 * 60_000
+
+/**
+ * `Issue N: held by the lead cap for K min, running leads: account a: Issue X, Issue Y`: an Issue lead whose spawn has been held (hold `cap`)
+ * for 15 min, with the leads that count against each account (a lead asleep in a wait is not one of them). Derived at read; the spawn's age
+ * stands for the time held, and the line is gone once the lead starts.
+ */
+async function capHoldLines(sql: SQL, now: Date): Promise<string[]> {
+  const rows: { issue_id: number; created_at: Date }[] = await sql`
+    SELECT issue_id, created_at FROM factory.spawns
+    WHERE status = 'queued' AND hold = 'cap' AND issue_id IS NOT NULL AND created_at <= ${new Date(now.getTime() - CAP_HOLD_LINE_MS)}
+    ORDER BY issue_id`
+  if (rows.length === 0) return []
+  const holders = await issueLeadHolders(sql, await liveSessions(sql, now))
+  const named =
+    [...holders]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([account, issues]) => `${account}: ${issues.map((id) => `Issue ${id}`).join(', ')}`)
+      .join('; ') || 'none'
+  return rows.map(
+    (row) =>
+      `Issue ${row.issue_id}: held by the lead cap for ${minutes(now.getTime() - row.created_at.getTime())} min, running leads: ${named}`,
+  )
 }
 
 /** Which kind of health line a line is (the one place that decides; `/fleet` carries it). */

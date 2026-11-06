@@ -77,14 +77,15 @@ export async function releaseClaim(tx: SQL, issueId: number): Promise<string[]> 
 }
 
 /**
- * Gives back the claims of Issues that wait on the owner's decision (held or queued) and says which keys: the lead's worktree stays,
- * the repo's place does not wait for an answer that can take hours. The Issue takes a place again when answered (`tryClaim`, in a
- * `claim` wait). Idempotent, so it is also what releases a claim an Issue held before it asked. Callers hold the capacity lock.
+ * Gives back the claims of Issues that wait on the owner's decision or in a timed wait (held or queued) and says which keys: the lead's
+ * worktree stays, the repo's place does not wait for an answer that can take hours or a wait that can take a day. The Issue takes a place
+ * again when it is answered or its wait ends (`tryClaim`, in a `claim` wait). Idempotent, so it is also what releases a claim an Issue held
+ * before it asked or waited. Callers hold the capacity lock.
  */
-export async function releaseDecisionClaims(tx: SQL): Promise<string[]> {
+export async function releaseWaitClaims(tx: SQL): Promise<string[]> {
   const rows: { key: string }[] = await tx`
     DELETE FROM factory.claims c USING factory.issues i
-    WHERE i.id = c.issue_id AND i.state = 'waiting' AND i.reason = 'decision'
+    WHERE i.id = c.issue_id AND i.state = 'waiting' AND i.reason IN ('decision', 'wait')
     RETURNING c.key`
   return [...new Set(rows.map((row) => row.key))]
 }

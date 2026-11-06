@@ -73,7 +73,7 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
  * calls nothing outside the database; the one write is the claim, taken or queued (no account is reserved by a hold).
  *
  * A spawn with role `lead` and an Issue also counts the live Issue-lead sessions per account (`limits.leadsPerAccount`, `FACTORY_LEADS_PER_ACCOUNT`):
- * an account at the cap is passed over, and with none left the spawn waits (a timed wait, `HOLD_RECHECK_MS`) rather than start. Decided at every claim.
+ * an account at the cap is passed over, and with none left the spawn is held (hold `cap`, looked at again every `HOLD_RECHECK_MS`) rather than start. A lead asleep in a timed wait or a decision wait is not counted. Decided at every claim.
  *
  * `live` is the caller's list of live sessions, for a caller that claims several spawns in one transaction and
  * adds each claim to it; without it the sessions are read when a rule needs them.
@@ -116,9 +116,8 @@ export async function admit(
       options,
     )
     if (picked) return { kind: 'start', account: picked.account }
-    // An account that would take it but for the cap: look again soon, a lead ending gives no reading to wake it.
-    if (pickEligible(readings, loads, options))
-      return { kind: 'wait', resumeAt: new Date(now.getTime() + HOLD_RECHECK_MS) }
+    // An account that would take it but for the cap: held (hold `cap`, a health line after 15 min) and looked at again soon, a lead ending gives no reading to wake it.
+    if (pickEligible(readings, loads, options)) return { kind: 'hold', reason: 'cap' }
     return { kind: 'wait', resumeAt: nextOpening(readings, options) ?? null }
   }
   const picked = pickEligible(readings, loads, options)
