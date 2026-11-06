@@ -1,8 +1,6 @@
 import {
   AccountList,
   AskList,
-  type FleetAsk,
-  type FleetHealth,
   ErrorBody,
   FleetFrame,
   HealthList,
@@ -13,6 +11,8 @@ import {
   IssueDetail,
   IssueFrame,
   Overview,
+  type ReadAsk,
+  type ReadHealth,
   SessionCard,
   SessionCards,
   SessionFrame,
@@ -98,16 +98,18 @@ const accountRow = (a: Overview['accounts'][number]) =>
     a.fresh ? 'fresh' : 'stale',
   ].join('\t')
 
-const askRow = (a: FleetAsk) => [a.at, a.kind, cell(a.repo), oneLine(a.short ?? a.text)].join('\t')
+const askRow = (a: ReadAsk) =>
+  [oneLine(a.short), oneLine(a.summary), a.at, a.kind, cell(a.repo), a.stale ? 'stale' : ''].join('\t')
 
-const healthRow = (h: FleetHealth) => [h.since, h.kind, cell(h.repo), oneLine(h.text)].join('\t')
+const healthRow = (h: ReadHealth) => [oneLine(h.short), oneLine(h.summary), h.since, h.kind, cell(h.repo)].join('\t')
 
 function overviewScreen(o: Overview): string {
   const c = o.counts
   return [
-    `${c.working} working · ${c.waiting} waiting · ${c.queued} queued · ${c.watching} watching · ${c.asks} asks · ${c.health} health`,
+    `${c.working} working · ${c.waiting} waiting · ${c.queued} queued · ${c.watching} watching · ${c.asks} asks · ${c.humanQueue} human queue · ${c.health} health`,
     `queue ${o.queue.effective}`,
     ...o.asks.map((a) => `ask\t${askRow(a)}`),
+    ...o.humanQueue.map((a) => `human queue\t${askRow(a)}`),
     ...o.health.map((h) => `health\t${healthRow(h)}`),
     ...o.accounts.map((a) => `account\t${accountRow(a)}`),
   ].join('\n')
@@ -168,7 +170,7 @@ export async function readVerb(words: string[], format: Format, flags: ReadFlags
     }
     case 'asks': {
       const body = await get('/v1/asks', AskList)
-      return print(body, body.asks.map(askRow))
+      return print(body, [...body.asks.map(askRow), ...body.humanQueue.map((a) => `human queue\t${askRow(a)}`)])
     }
     case 'health': {
       const body = await get('/v1/health', HealthList)

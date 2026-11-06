@@ -1,5 +1,5 @@
 import { basename, dirname, join, resolve } from 'node:path'
-import { realpath, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { type Fleet, type FleetIssue, NO_DIGEST, type Session, type Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { buildStatus } from '../status.ts'
@@ -245,6 +245,7 @@ export class FleetBuilder {
       sessions: db.status.sessions,
       isVisible: (path) => places.isVisible(path),
       issues: db.issues,
+      visibleNames: await directoryNames(visibleRoots),
     })
     const complete = askSourcesAnswered(errors)
     const model = applyDigest(base, view, scope, now)
@@ -348,6 +349,12 @@ async function realPath(path: string): Promise<string> {
     const parent = dirname(path)
     return parent === path ? path : join(await realPath(parent), basename(path))
   }
+}
+
+/** The names of the directories directly under these roots: what a text may call a visible repo. An unreadable root has none. */
+async function directoryNames(roots: readonly string[]): Promise<string[]> {
+  const lists = await Promise.all(roots.map((root) => readdir(root).catch((): string[] => [])))
+  return lists.flat()
 }
 
 async function realRoots(roots: readonly string[]): Promise<string[]> {

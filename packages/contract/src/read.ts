@@ -23,6 +23,7 @@ export const Insights = z.object({
   startedAt: z.string(),
   endedAt: z.string().nullable(),
   elapsedMs: z.number().int(),
+  /** time a turn was open, including the time it waited on background work it started; summed over an Issue's sessions */
   workingMs: z.number().int(),
   turns: z.number().int(),
   toolCalls: z.number().int(),
@@ -156,10 +157,25 @@ export const OverviewCounts = z.object({
   queued: z.number().int(),
   /** an Issue held for its check after a ship (additive) */
   watching: z.number().int(),
+  /** the asks the factory owns (every source but the human queue): what `factory status` attention lists */
   asks: z.number().int(),
+  /** the human queue's asks that are not stale (additive) */
+  humanQueue: z.number().int().default(0),
   health: z.number().int(),
 })
 export type OverviewCounts = z.infer<typeof OverviewCounts>
+
+/** An ask as the read API words it: `text` is one line cut at a word, `short` and `summary` are plain words without ids. */
+export const ReadAsk = FleetAsk.extend({
+  short: z.string(),
+  summary: z.string(),
+  /** older than 24 h */
+  stale: z.boolean(),
+})
+export type ReadAsk = z.infer<typeof ReadAsk>
+
+export const ReadHealth = FleetHealth.extend({ short: z.string(), summary: z.string() })
+export type ReadHealth = z.infer<typeof ReadHealth>
 
 export const Overview = z.object({
   version: z.literal(API_VERSION),
@@ -167,17 +183,20 @@ export const Overview = z.object({
   /** when the fleet snapshot behind asks, health, accounts and queue was built */
   builtAt: z.string(),
   counts: OverviewCounts,
-  asks: z.array(FleetAsk),
-  health: z.array(FleetHealth),
+  /** the asks the factory owns */
+  asks: z.array(ReadAsk),
+  /** the dotfiles human queue's asks, oldest first, each with `stale` set (additive) */
+  humanQueue: z.array(ReadAsk).default([]),
+  health: z.array(ReadHealth),
   accounts: z.array(AccountQuota),
   queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
 })
 export type Overview = z.infer<typeof Overview>
 
-export const AskList = z.object({ asks: z.array(FleetAsk) })
+export const AskList = z.object({ asks: z.array(ReadAsk), humanQueue: z.array(ReadAsk).default([]) })
 export type AskList = z.infer<typeof AskList>
 
-export const HealthList = z.object({ health: z.array(FleetHealth) })
+export const HealthList = z.object({ health: z.array(ReadHealth) })
 export type HealthList = z.infer<typeof HealthList>
 
 export const AccountList = z.object({ accounts: z.array(AccountQuota) })

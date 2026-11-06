@@ -206,12 +206,17 @@ export class TranscriptInsights {
 export interface TimedEvent {
   kind: string
   at: Date
+  /** of a `turn_ended`: it ended with background tasks still running (payload `backgroundTasks`) */
+  background?: boolean
 }
 
 /**
- * Working time and turns from one session's events, ordered by time: `turn_started` opens a turn, `turn_ended` closes it. A turn
- * a new life, the session's end or a pane that is gone interrupts ends there; one still open at the end counts to `now`, unless
- * the session is over (`endedAt`), then it counts to that.
+ * Working time and turns from one session's events, ordered by time. `workingMs` is the time the session was busy: a span opens
+ * at a `turn_started` and closes at the next `turn_ended` that is not a background one, a `session_ended`, a `pane_gone` or a
+ * `session_started` (a new life). A `turn_ended` with `background` set (the agent ended its turn while background subagents
+ * or tasks it started ran) does not close the span: the session is still busy and the next `turn_started` is only the wake-up.
+ * A span still open at the end counts to `now`, unless the session is over (`endedAt`), then to that. `turns` counts every
+ * `turn_started`.
  */
 export function workingOf(
   events: readonly TimedEvent[],
@@ -230,7 +235,9 @@ export function workingOf(
     if (event.kind === 'turn_started') {
       if (open === null) open = at
       turns++
-    } else if (event.kind === 'turn_ended' || event.kind === 'session_ended' || event.kind === 'pane_gone') {
+    } else if (event.kind === 'turn_ended') {
+      if (!event.background) close(at)
+    } else if (event.kind === 'session_ended' || event.kind === 'pane_gone') {
       close(at)
     } else if (event.kind === 'session_started') {
       close(at)

@@ -13,7 +13,7 @@ import {
   SessionCards,
 } from '@software-factory/contract'
 import { cleanHeading } from '../src/fleet/digest-text.ts'
-import { headingKey } from '../src/fleet/digest.ts'
+import { headingKey, lineKey, lineText } from '../src/fleet/digest.ts'
 import { writeSnapshot } from '../src/fleet/store.ts'
 import { serveHooks } from '../src/http.ts'
 import { createIssue } from '../src/issues/create.ts'
@@ -21,6 +21,7 @@ import { TABLE } from '../src/issues/lifecycle.ts'
 import { openSession } from '../src/sessions.ts'
 import { logEvent } from '../src/issues/shared.ts'
 import { describeEvent } from '../src/read/describe.ts'
+import { dropReplyDuplicates } from '../src/read/index.ts'
 import { TranscriptInsights, workingOf } from '../src/read/insights.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -268,11 +269,101 @@ describe('the projection', () => {
       builtAt: NOW.toISOString(),
     })
     expect(overview.accounts.map((a) => a.account)).toEqual(['a'])
-    expect(AskList.parse(await (await app.get('/v1/asks')).json())).toEqual({ asks: [] })
+    expect(AskList.parse(await (await app.get('/v1/asks')).json())).toEqual({ asks: [], humanQueue: [] })
     expect(HealthList.parse(await (await app.get('/v1/health')).json())).toEqual({ health: [] })
     expect(AccountList.parse(await (await app.get('/v1/accounts')).json()).accounts).toHaveLength(1)
     const sessions = SessionCards.parse(await (await app.get('/v1/sessions?live=1&role=lead')).json())
     expect(sessions.sessions.map((s) => s.role)).toEqual(['lead'])
+  })
+
+  describe('asks and health in plain words', () => {
+    const RUNBOOK = `Set up the App Store Connect record for iris.\n${'Then check every screenshot size carefully. '.repeat(12)}\n1. Open /Users/me/SourceRoot/iris/docs/runbook.md\n2. Ask lead-9-1 about note:881da3f6-c525-4b5e-b1f6-64571bd1b853`
+    const HEALTH_TEXT = 'spawn lead-119-1 failed: Issue 119 closed before the spawn started'
+    const ask = (id: string, source: string, text: string, at: Date, extra: Record<string, unknown> = {}) => ({
+      id,
+      kind: source === 'queue' ? 'human' : 'question',
+      repo: null,
+      session: null,
+      short: null,
+      text,
+      source,
+      at: at.toISOString(),
+      ...extra,
+    })
+    const health = (id: string, text: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      kind: 'machine',
+      text,
+      repo: null,
+      since: w.at(30).toISOString(),
+      ...extra,
+    })
+    const store = (asks: unknown[], healthLines: unknown[] = []) =>
+      writeSnapshot(db.sql, Fleet.parse({ ...snapshot('fp2'), asks, health: healthLines }))
+    const overview = async () => Overview.parse(await (await app.get('/v1/overview')).json())
+
+    test('every line has plain short and summary and a one-line text; the human queue is apart, stale ones uncounted', async () => {
+      await store(
+        [
+          ask('queue:old', 'queue', RUNBOOK, new Date(NOW.getTime() - 30 * 3_600_000)),
+          ask('queue:new', 'queue', 'Review the iris notes', w.at(60)),
+          ask('factory:1', 'factory', 'Issue 7 waits on the owner', w.at(50)),
+          ask('decision:7:1:ask:a', 'decision', 'Keep the old cache?', w.at(40)),
+        ],
+        [health('health:a', HEALTH_TEXT)],
+      )
+      const o = await overview()
+      expect(o.asks.map((a) => a.id)).toEqual(['factory:1', 'decision:7:1:ask:a'])
+      expect(o.humanQueue.map((a) => [a.id, a.stale])).toEqual([
+        ['queue:old', true],
+        ['queue:new', false],
+      ])
+      expect(o.counts).toMatchObject({ asks: o.asks.length, humanQueue: 1, health: 1 })
+      for (const a of [...o.asks, ...o.humanQueue]) {
+        expect(a.short).not.toBe('')
+        expect(a.summary).not.toBe('')
+        expect(a.text).not.toContain('\n')
+        expect(a.text.length).toBeLessThanOrEqual(240)
+      }
+      const runbook = o.humanQueue[0]
+      expect(runbook?.short).toBe('Set up the App Store Connect record for iris.')
+      expect(`${runbook?.short} ${runbook?.summary}`).not.toMatch(/lead-9-1|881da3f6|\/Users/)
+      const line = o.health[0]
+      expect(line?.short).toBe('A spawn failed: an Issue closed before the spawn started')
+      expect(line?.short).not.toMatch(/lead-119-1|Issue \d/)
+      const lists = AskList.parse(await (await app.get('/v1/asks')).json())
+      expect(lists.asks.map((a) => a.id)).toEqual(['factory:1', 'decision:7:1:ask:a'])
+      expect(lists.humanQueue).toHaveLength(2)
+      expect(HealthList.parse(await (await app.get('/v1/health')).json()).health[0]?.short).toBe(line?.short)
+    })
+
+    test('a reply ask of a lead is dropped when its Issue has a decision; a reply ask keeps its own short', async () => {
+      await store([
+        ask('reply:lead-7-1:2', 'reply', 'Shall I go on?', w.at(20), { session: 'lead-7-1', short: 'Go on?' }),
+        ask('decision:7:1:ask:a', 'decision', 'Keep the old cache?', w.at(40)),
+        ask('reply:lead-8-1:2', 'reply', 'Shall I stop?', w.at(20), { session: 'lead-8-1', short: 'Stop?' }),
+        ask('reply:helper-1:2', 'reply', 'Which one?', w.at(20), { session: 'helper-1', short: 'Which one?' }),
+      ])
+      const o = await overview()
+      expect(o.asks.map((a) => a.id)).toEqual(['decision:7:1:ask:a', 'reply:lead-8-1:2', 'reply:helper-1:2'])
+      expect(o.asks[1]?.short).toBe('Stop?')
+      expect(o.counts.asks).toBe(3)
+    })
+
+    test('a digest answer for the line is used; never for a line of a visible repo', async () => {
+      const visibleText = 'Issue 3 waits on the owner for the portal'
+      await db.sql`
+        INSERT INTO factory.fleet_digest (key, fingerprint, answer, at)
+        VALUES (${lineKey(lineText(HEALTH_TEXT))}, 'f', ${{ short: 'Spawn failed', headline: 'The lead never started.' }}, ${NOW}),
+               (${lineKey(lineText(visibleText))}, 'f', ${{ short: 'Model words', headline: 'Model sentence.' }}, ${NOW})`
+      await store(
+        [ask('factory:v', 'factory', visibleText, w.at(10), { repo: VISIBLE_REPO })],
+        [health('health:a', HEALTH_TEXT)],
+      )
+      const o = await overview()
+      expect(o.health[0]).toMatchObject({ short: 'Spawn failed', summary: 'The lead never started.' })
+      expect(o.asks[0]?.short).toBe('An Issue waits on the owner for the portal')
+    })
   })
 
   test('every /v1 route needs the token and a loopback host; the socket answers 404', async () => {
@@ -481,5 +572,75 @@ describe('insights', () => {
     expect(workingOf(events, at(20), null)).toEqual({ workingMs: (3 + 10) * 60_000, turns: 2 })
     expect(workingOf(events, at(20), at(12))).toEqual({ workingMs: (3 + 2) * 60_000, turns: 2 })
     expect(workingOf([], at(20), null)).toEqual({ workingMs: 0, turns: 0 })
+  })
+
+  test('working time: a turn ended with background tasks keeps the span open until a plain turn end', () => {
+    const at = (m: number) => new Date(NOW.getTime() + m * 60_000)
+    const ended = [
+      { kind: 'turn_started', at: at(0) },
+      { kind: 'turn_ended', at: at(5), background: true },
+      { kind: 'turn_started', at: at(20) },
+      { kind: 'turn_ended', at: at(30) },
+    ]
+    expect(workingOf(ended, at(60), null)).toEqual({ workingMs: 30 * 60_000, turns: 2 })
+
+    const sessionEnd = [...ended.slice(0, 2), { kind: 'session_ended', at: at(12) }]
+    expect(workingOf(sessionEnd, at(60), null)).toEqual({ workingMs: 12 * 60_000, turns: 1 })
+
+    const open = ended.slice(0, 2)
+    expect(workingOf(open, at(60), null)).toEqual({ workingMs: 60 * 60_000, turns: 1 })
+    expect(workingOf(open, at(60), at(40))).toEqual({ workingMs: 40 * 60_000, turns: 1 })
+
+    const newLife = [...open, { kind: 'session_started', at: at(15) }]
+    expect(workingOf(newLife, at(60), null)).toEqual({ workingMs: 15 * 60_000, turns: 1 })
+  })
+
+  test('working time: the lead-85-1 shape, seven turns with background ends, counts the whole 44 minutes', () => {
+    const start = new Date('2026-01-01T05:15:26Z').getTime()
+    const at = (s: number) => new Date(start + s * 1000)
+    const events = [
+      { kind: 'turn_started', at: at(0) },
+      { kind: 'turn_ended', at: at(60), background: true },
+      { kind: 'turn_started', at: at(400) },
+      { kind: 'turn_ended', at: at(460), background: true },
+      { kind: 'turn_started', at: at(800) },
+      { kind: 'turn_ended', at: at(860), background: true },
+      { kind: 'turn_started', at: at(1200) },
+      { kind: 'turn_ended', at: at(1260), background: true },
+      { kind: 'turn_started', at: at(1600) },
+      { kind: 'turn_ended', at: at(1660), background: true },
+      { kind: 'turn_started', at: at(2000) },
+      { kind: 'turn_ended', at: at(2060), background: true },
+      { kind: 'turn_started', at: at(2400) },
+      { kind: 'turn_ended', at: at(2634) },
+    ]
+    expect(workingOf(events, at(5000), null)).toEqual({ workingMs: 2634 * 1000, turns: 7 })
+  })
+})
+
+describe('dropReplyDuplicates', () => {
+  const at = '2026-11-06T10:00:00.000Z'
+  const a = (id: string, source: 'decision' | 'reply', session: string | null) => ({
+    id,
+    kind: 'question' as const,
+    repo: null,
+    session,
+    short: null,
+    text: 't',
+    source,
+    at,
+  })
+  test('only a lead reply for an Issue with a decision goes', () => {
+    const asks = [
+      a('decision:12:1:ask:x', 'decision', null),
+      a('reply:lead-12-1:3', 'reply', 'lead-12-1'),
+      a('reply:lead-13-1:3', 'reply', 'lead-13-1'),
+      a('reply:rv-12:3', 'reply', 'rv-12'),
+    ]
+    expect(dropReplyDuplicates(asks).map((x) => x.id)).toEqual([
+      'decision:12:1:ask:x',
+      'reply:lead-13-1:3',
+      'reply:rv-12:3',
+    ])
   })
 })

@@ -106,6 +106,8 @@ export interface Fact {
   detail?: string | null
   /** of a `session_started`: how the life began (`startup`, `resume`, `clear`, `compact`) */
   source?: string | null
+  /** of a `turn_ended`: the turn ended while background tasks it started were still running */
+  background?: boolean
 }
 
 export interface Witnessed {
@@ -272,6 +274,7 @@ interface FactRow {
   at: Date
   detail: string | null
   source: string | null
+  background: boolean | null
 }
 
 function view(row: SessionRow, facts: readonly Fact[], now: Date): Session | undefined {
@@ -308,7 +311,8 @@ function factRows(sql: SQL, ids: readonly string[]): Promise<FactRow[]> {
   if (ids.length === 0) return Promise.resolve([])
   return sql`
     SELECT session, key, kind, at, COALESCE(payload->>'on', payload->>'state', payload->>'message') AS detail,
-           CASE WHEN kind = 'session_started' THEN payload->>'source' END AS source
+           CASE WHEN kind = 'session_started' THEN payload->>'source' END AS source,
+           CASE WHEN kind = 'turn_ended' THEN payload->>'backgroundTasks' = 'true' END AS background
     FROM factory.events WHERE session IN ${sql(ids)} ORDER BY session, at, id`
 }
 
@@ -316,7 +320,14 @@ function groupFacts(rows: readonly FactRow[]): Map<string, Fact[]> {
   const bySession = new Map<string, Fact[]>()
   for (const row of rows) {
     const list = bySession.get(row.session) ?? []
-    list.push({ kind: row.kind, at: row.at, key: row.key, detail: row.detail, source: row.source })
+    list.push({
+      kind: row.kind,
+      at: row.at,
+      key: row.key,
+      detail: row.detail,
+      source: row.source,
+      background: row.background === true,
+    })
     bySession.set(row.session, list)
   }
   return bySession
