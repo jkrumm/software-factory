@@ -291,7 +291,14 @@ describe('the guards', () => {
   test('a default is taken only when it leaves things open', () => {
     const fact = 'Record and internal group created'
     expect(guard({ options: [], default: fact }, verdict(fact, 'default'))).toMatchObject({ ok: false })
-    expect(guard({ options: [], default: fact }, verdict(fact.toUpperCase(), 'plan: x'))).toMatchObject({ ok: false })
+    // an answer that merely repeats a declared fact stands only with a plan document behind it, not the lead's own facts
+    expect(guard({ options: [], default: fact }, verdict(fact.toUpperCase(), 'facts: x'))).toMatchObject({ ok: false })
+    expect(guard({ options: [], default: fact }, verdict(fact.toUpperCase(), 'plan: AGENTS.md "x"'))).toMatchObject({
+      ok: true,
+    })
+    expect(guard({ options: ['Yes', 'No'], default: 'No' }, verdict('No', 'plan: AGENTS.md "never"'))).toMatchObject({
+      ok: true,
+    })
     expect(guard({ options: [], default: null }, verdict('x', 'default'))).toMatchObject({ ok: false })
     expect(guard({ options: [], default: 'Do nothing' }, verdict('do nothing', 'default'))).toMatchObject({ ok: true })
     expect(guard({ options: ['wait', 'ship'], default: 'wait' }, verdict('wait', 'default: the lead’s'))).toMatchObject(
