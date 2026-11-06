@@ -177,7 +177,7 @@ that applies wins.
 |-|-|-|-|
 | **Resume watchdog** (FL2) | a session is `walled`, its account's reset has passed, no new turn for 5 minutes | one delivery-checked "continue" | `resume:<session>:<reset_at>` |
 | **Send-back** (FL5) | `Stop` with live child sessions and no declared wait, `stop_hook_active` false, the turn did not end on a limit | the hook exits 2 with one line | turn number |
-| **Rotation** | a `mother` or `lead` session's account reaches 94 % of its week | one note: write the handoff and rotate; the next rotation lands on another account | `rotate:<session>:<week>` |
+| **Rotation** | a `lead` session's account reaches 94 % of its week | one note: write the handoff and rotate; the next rotation lands on another account | `rotate:<session>:<week>` |
 | **Folder trust** | any spawn | pre-trust the path before starting the agent, for new repos as well as worktrees | none, idempotent |
 | **Blocked** | `blocked` for 2 minutes | a line in `factory status`, and to the session's parent if it has one | event id |
 | **Wake** | a session `waiting` on its workers, with child sessions, none unfinished (`dead`, or `idle` after a turn; a spawn without a session yet is unfinished) | one note listing the children and their states; once a turn proves it, the wait it answers is cleared (unless a newer wait was declared) | `wake:<session>:<wait event id>` |
@@ -204,7 +204,7 @@ leased row, two slots to start and tuned from the load record, released on exit 
 contention and open only on an outage (RS10 (b)): with the server down the command runs anyway, because a dead factory must
 not block the work that repairs it; with the server up the caller keeps waiting, and a wait over its limit exits 75 without running.
 
-**The role table (FL4).** One table for mother, lead, worker, mechanical and the subagent types, giving tier and
+**The role table (FL4).** One table for lead, implementer, verifier, reviewer and Explore, giving tier and
 effort. `rd --role` and agent frontmatter read it; values move only on data from track U. Model ids stay in agw's
 and dotfiles' route tables; this repo names tiers.
 
@@ -243,7 +243,7 @@ conflict reads again (3 tries), a value of null (never written) starts `{ spaces
 checkout for a worktree). A second space for a folder that already has an entry is named `<basename> <n>` (`app 2`). An entry
 with the id is never touched, nor a document with no `spaces` array or with an entry that has no id (not the app's). Best effort like `nameTab`: a failure does not fail the
 start, the id stays the label's, and the next start for that id seeds again. Not seeded: an id found in the document, a foreign
-id with a terminal in it, a hidden child. The result names the terminal, the tab and
+id with a terminal in it. The result names the terminal, the tab and
 the space (`spawns.session|tab|workspace`; `Spawn.pane` is `session`). A try that fails reports its space
 (`RunnerError.workspace`), the tick records it, and a retry or a runner-restart resume passes it back as `StartInput.workspace`:
 it wins when it is an id the Runner made (`sp…`) or a live terminal is in it.
@@ -287,27 +287,13 @@ a status or `turn >= 1`) inside the deliver window (30 s). A terminal that is li
 spawn (a test pins that a path never seen before is trusted first). A prompt cannot start with `-`. The account is in the `env` of
 `terminal.run` (`accountEnv`): `CLAUDE_CONFIG_DIR` only for a non-default account, never empty, never inherited, plus
 `CLAUDE_ACCOUNT_PICKED`, `USAGE_LANE`, `FACTORY_SESSION`, `FACTORY_ROLE`.
-Placement is by labels, no window needed: a **tab** (any role, or a worker whose parent session has no known terminal) has
+Placement is by labels, no window needed: every spawn is a **tab** (any role, with or without a parent session; child and hidden placement are gone, Reset row 8) and has
 `no_parent`, `herdr.space`, `herdr.tab` (`tb-<12 hex of sha256 of the key>`) and `factory.tab_name`; its entry in the app's
 document is named after the key once the app has one (compare-and-set on `version`, `app-doc.ts`; the witness retries on a label
-or document event). A **hidden child** is a spawn whose parent session has a terminal (`StartInput.parentTerminal`, the parent's `pane`), is not
-`new_space`, and is placed `child`: by the caller's `placement` (`POST /spawns`, token and socket; `factory spawn create
---placement tab|child`; stored in `spawns.placement`, answered by `Spawn.placement`, part of the idempotent replay, which answers
-the stored row), else by the role's default (`worker`/`mechanical`/`deep` child, every other role a tab). The caller says it
-because the role cannot: a lead spawns both its waves (children) and its successor (a tab). Such a child is that terminal's
-hidden child, whatever its role: `parent`, `outlive_parent`, `no_notify` (the factory wakes parents itself), no
-labels but the key; its result has no tab (null) and the space of the nearest ancestor that has a `herdr.space` label (up to 8 hops, so a lead's wave under a mother has the mother's; null if none or unreadable); a resume of a child (`prompts.ts`) passes the parent session's current pane again, except for a `new_space` spawn; a parent
-that is gone (`not_found`), or a `child` with no parent terminal at all, makes that try a tab. An older server drops an unknown
-`placement` (the schema is not strict) and answers a row without it, so a client can tell by the missing field. The app's document is read for spaces: only a confirmed absence (`not_found`, never
+or document event). `spawns.placement` stays as an unread column (an old `child` or `hidden` is a tab); `POST /spawns` and `factory spawn create` no longer take `placement` (an unknown body field is dropped, the CLI flag is a usage error). The app's document is read for spaces: only a confirmed absence (`not_found`, never
 written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
 refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
 `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely; the live document (2026-11-01) confirms it.
-
-**A hidden terminal** (`placement: hidden`) is the third placement: `terminal.run` with `no_parent: true` and the single
-label `factory.key=<spawn key>`: no `parent`, no `herdr.space`, no `herdr.tab`, no `factory.tab_name`, nothing seeded in the app's document and no tab named
-(`StartResult.tab` and `workspace` are null). The key label is how the Runner finds and closes it (`Runner.close`). The params are herdr-core 0.1.15's
-`terminal.run` (`no_parent`: "No parent, even when started from a terminal"); the terminal is **not kept** (`keep: false` would keep `hc-resume` from bringing it back; the Runner keeps every terminal today); whether the Herdr app shows an unlabelled, parentless terminal anywhere is the
-app's choice and is not asserted here. A caller may ask for `hidden` on any role (`--placement hidden`).
 
 **A failed spawn leaves its terminal.** It is labelled with the key and `factory spawn requeue` finds it again (an agent already
 running keeps the account it started on); closing it is a decision, not a side effect of `failed`. A finished terminal is
@@ -394,7 +380,7 @@ effect under a key, so a replay records nothing):
   cannot wait for, 300 ms, spends that turn's send-back). The hook then exits 2 with the one line on stderr. A server that is down, slow or odd means exit 0. A pane has no token and
   starts work through the socket (below), so the children of a session in a pane carry its `FACTORY_SESSION` as `parent`:
   the send-back sees them whoever started the pane.
-- *Rotation*: role `mother` or `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
+- *Rotation*: role `lead`, its account at 94 % of the week or more on a fresh reading: one note, `rotate:<session>:<week reset>`.
 - *Blocked*: `blocked` for 2 minutes is a line in `factory status`; if the session has a live parent, also a note to it,
   `blocked:<event key>`.
 - *Wake*: a session `waiting` with `--on workers`, with at least one child session and none unfinished, gets one note,
@@ -557,7 +543,7 @@ is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first o
 #### Roles
 
 **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
-model id) and effort (`low|medium|high|xhigh|max`). `deep` is a worker raised for novel hard logic (opus, high): placed like a worker. `reviewer` (sonnet, medium) stays in the table (roles are Reset commit C's). `POST /spawns` takes `role` (default `worker`; unknown = 422, but a replay
+model id) and effort (`low|medium|high|xhigh|max`). The table is `lead`, `implementer`, `verifier`, `reviewer` (sonnet, medium) and `Explore`; `mother`, `wave`, `worker`, `mechanical` and `deep` are gone (Reset row 8): a stored row with one still reads, `factory role get <it>` is exit 4. `POST /spawns` takes `role` (default `implementer`; unknown = 422, but a replay
 of a known key answers with its row) and
 stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
 at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one), so an edit needs a deploy or restart, and a

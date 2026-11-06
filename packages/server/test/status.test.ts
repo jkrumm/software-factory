@@ -81,7 +81,7 @@ describe('factory status', () => {
       ['busy', 'working'],
       ['quiet', 'idle'],
     ])
-    expect(s.sessions[0]).toMatchObject({ role: 'worker', account: 'a', since: w.at(30).toISOString() })
+    expect(s.sessions[0]).toMatchObject({ role: 'implementer', account: 'a', since: w.at(30).toISOString() })
   })
 
   test('asks: a blocked session, only after two minutes; health: walls, failed notes and spawns', async () => {

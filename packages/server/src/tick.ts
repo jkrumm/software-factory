@@ -1,4 +1,4 @@
-import type { Effort, Placement, Tier } from '@software-factory/contract'
+import type { Effort, Tier } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { type AdmissionLimits, admit, type Decision, HOLD_RECHECK_MS } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
@@ -83,11 +83,8 @@ export interface Claim {
   /** the path whose space the tab goes into */
   space: string
   newSpace: boolean
-  placement: Placement | null
   /** the space an earlier try used, if one got far enough to make it */
   workspace: string | null
-  /** the terminal the parent session runs in (its `pane`), if the spawn has a parent that has one */
-  parentPane: string | null
   role: string
   prompt: string
   account: string
@@ -106,9 +103,7 @@ interface DueRow {
   repo: string
   space: string
   new_space: boolean
-  placement: Placement | null
   workspace: string | null
-  parent_pane: string | null
   prompt: string
   role: string
   tier: Tier
@@ -146,8 +141,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
   const outcome = await sql.begin(async (tx) => {
     await lockCapacity(tx)
     const due: DueRow[] = await tx`
-      SELECT key, repo, COALESCE(space, repo) AS space, new_space, placement, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive,
-        (SELECT p.pane FROM factory.sessions p WHERE p.id = factory.spawns.parent) AS parent_pane
+      SELECT key, repo, COALESCE(space, repo) AS space, new_space, workspace, prompt, role, tier, effort, status, issue_id, account, attempts, error, first_claimed_at, fork_session, fork_archive
       FROM factory.spawns
       WHERE (status = 'queued' AND (resume_at IS NULL OR resume_at <= ${now}))
          OR (status = 'waiting' AND resume_at <= ${now})
@@ -221,9 +215,7 @@ export async function claimDue(deps: TickDeps): Promise<{ claims: Claim[]; faile
         repo: row.repo,
         space: row.space,
         newSpace: row.new_space,
-        placement: row.placement,
         workspace: row.workspace,
-        parentPane: row.parent_pane,
         role: row.role,
         prompt: row.prompt,
         account: decision.account,
@@ -302,9 +294,7 @@ async function execute(deps: TickDeps, claim: Claim): Promise<'started' | 'faile
       repo: claim.repo,
       space: claim.space,
       newSpace: claim.newSpace,
-      placement: claim.placement ?? undefined,
       workspace: claim.workspace,
-      parentTerminal: claim.parentPane ?? undefined,
       role: claim.role,
       prompt: claim.prompt,
       account: claim.account,

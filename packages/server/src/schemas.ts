@@ -1,4 +1,4 @@
-import { EVENT_KINDS, Placement, QueueState, RoleName, WaitOn } from '@software-factory/contract'
+import { EVENT_KINDS, QueueState, RoleName, WaitOn } from '@software-factory/contract'
 import { ACCOUNT_NAME } from '@software-factory/contract/spool'
 import { z } from 'zod'
 
@@ -50,18 +50,16 @@ const RepoPath = z
   .regex(/^\/[^\0]*$/, 'not an absolute path')
 
 /** What a spawn is started as when the caller says nothing. */
-export const DEFAULT_ROLE = 'worker'
+export const DEFAULT_ROLE = 'implementer'
 
 export const SpawnInput = z.object({
   key: SpawnKey,
   repo: RepoPath,
   role: RoleName.default(DEFAULT_ROLE),
-  /** the path whose space the tab goes into (FL6); the repo when absent. A fan worker's worktree names its main checkout */
+  /** the path whose space the tab goes into (FL6); the repo when absent. */
   space: RepoPath.optional(),
   /** a space of its own even if the path already has one: for a separate plan or worktree */
   new_space: z.boolean().default(false),
-  /** `child`: a hidden child of the parent's terminal, `tab`: a tab; absent is the role's default (worker roles child) */
-  placement: Placement.optional(),
   /** the `FACTORY_SESSION` of the caller: the session this one is a worker of */
   parent: z.string().min(1).max(256).optional(),
   prompt: z

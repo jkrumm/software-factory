@@ -34,7 +34,6 @@ export async function resumeArchived(
       key: `resume-${issueId}-${attempt}-${input.id ?? crypto.randomUUID().slice(0, 8)}`,
       repo,
       space: repo,
-      placement: 'tab',
       prompt: `This is a fork of the lead of Issue ${issueId}, attempt ${attempt}, opened by the owner from the archive. Wait for the owner's question.`,
       role: 'lead',
       tier: role.tier,

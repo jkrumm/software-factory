@@ -22,7 +22,11 @@ export const usage = (
 })
 
 /** What a spawn looks like once the role table has been looked up. */
-export const WORKER: { role: string; tier: Tier; effort: Effort } = { role: 'worker', tier: 'sonnet', effort: 'high' }
+export const WORKER: { role: string; tier: Tier; effort: Effort } = {
+  role: 'implementer',
+  tier: 'sonnet',
+  effort: 'high',
+}
 
 /** A quota source the test drives: it returns what `readings` holds, or fails with `failure`. */
 export class FakeQuotaSource implements QuotaSource {

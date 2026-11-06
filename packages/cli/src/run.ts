@@ -34,7 +34,6 @@ import {
   ProjectSyncResult,
   Prompt,
   type Quota,
-  Placement,
   QueueState,
   QueueView,
   QuotaList,
@@ -60,12 +59,9 @@ commands:
   health          the server's /health
   spawn list      the spawn queue, newest first
   spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]
-                  [--placement tab|child|hidden]
                   queue a spawn (idempotent by key; the parent defaults to $FACTORY_SESSION: the send-back rule counts a
-                  session's workers). The tab goes into the space of --space (default: the repo; a fan worker's
-                  worktree names its main checkout); --new-space asks for a space of its own; --placement child makes it a hidden
-                  child of the parent's terminal (a tab if there is none), tab a tab (default: worker roles child, others
-                  tab). Uses the token when FACTORY_TOKEN is set and
+                  session's workers). The tab goes into the space of --space (default: the repo);
+                  --new-space asks for a space of its own. Every spawn is a tab. Uses the token when FACTORY_TOKEN is set and
                   the socket otherwise
   spawn get <key> one spawn: status, hold, account, pane, tab, workspace (token or socket, as spawn create)
   spawn cancel <key>
@@ -186,7 +182,7 @@ commands:
 --session <id>   session wait: the session (default $FACTORY_SESSION)
 --id <id>        session note, issue note|prio: the call's idempotency key
 --wake           issue note: also end a timed wait, a block or a park
---repo, --prompt, --role, --parent, --space, --new-space, --placement  spawn create
+--repo, --prompt, --role, --parent, --space, --new-space  spawn create
 --title, --facts, --key, --source, --after  issue new
 --rotate         door token new: replace the source's token
 --decision      issue answer: the question it is for
@@ -530,7 +526,6 @@ interface Flags {
   parent?: string
   space?: string
   'new-space'?: boolean
-  placement?: string
   name?: string
   title?: string
   facts?: string
@@ -741,11 +736,9 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
     const name = words[2]
     if (!name || words.length > 3 || !flags.repo || !flags.prompt) {
       throw usage(
-        'usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space] [--placement tab|child|hidden]',
+        'usage: spawn create <key> --repo <path> --prompt <text> [--role <role>] [--parent <session>] [--space <path>] [--new-space]',
       )
     }
-    const placement = flags.placement === undefined ? undefined : Placement.safeParse(flags.placement).data
-    if (flags.placement !== undefined && !placement) throw usage('--placement is tab, child or hidden')
     const parent = flags.parent ?? io.env.FACTORY_SESSION
     // With a token it is the HTTP route; a pane has none, and goes by the socket (the same body, the same checks).
     const { body } = await call(io, '/spawns', {
@@ -761,7 +754,6 @@ async function execute(words: string[], format: Format, flags: Flags, io: Io): P
         ...(parent ? { parent } : {}),
         ...(flags.space ? { space: resolve(flags.space) } : {}),
         ...(flags['new-space'] ? { new_space: true } : {}),
-        ...(placement ? { placement } : {}),
       },
     })
     return print(body, spawnLine(body))
@@ -1251,7 +1243,6 @@ const OPTIONS = {
   parent: { type: 'string' },
   space: { type: 'string' },
   'new-space': { type: 'boolean' },
-  placement: { type: 'string' },
   name: { type: 'string' },
   title: { type: 'string' },
   facts: { type: 'string' },

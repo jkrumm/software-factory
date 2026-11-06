@@ -27,7 +27,7 @@ const WALL_USE = 95
 /** Rotation: a long-lived session's account at this share of its week. One point below admission's 95 %. */
 export const ROTATE_AT = 94
 /** The roles that live long enough to need a handoff. */
-export const ROTATING_ROLES: readonly string[] = ['mother', 'lead']
+export const ROTATING_ROLES: readonly string[] = ['lead']
 /** A session that sits on a confirmation this long is reported, and its parent told. */
 export const BLOCKED_AFTER_MS = 2 * 60_000
 /** A runner restart is acted on after the witness has had two passes at it and only while it is recent. */

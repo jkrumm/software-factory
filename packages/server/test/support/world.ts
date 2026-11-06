@@ -49,7 +49,7 @@ export function world(sql: SQL, clock: FakeClock & Clock) {
     const when = at(options.startedMinutesAgo ?? 60)
     await sql`
       INSERT INTO factory.spawns (key, repo, prompt, role, tier, effort, status, account, assigned_at, session, created_at, parent)
-      VALUES (${key}, ${options.repo ?? '/work/repo'}, 'work', ${options.role ?? 'worker'}, 'sonnet', 'high', 'started',
+      VALUES (${key}, ${options.repo ?? '/work/repo'}, 'work', ${options.role ?? 'implementer'}, 'sonnet', 'high', 'started',
               ${options.account ?? 'a'}, ${when}, ${`w1:${key}`}, ${when}, ${options.parent ?? null})`
     await openSession(sql, { id: key, spawnKey: key, pane: `w1:${key}`, at: when })
     await emit(key, 'session_started', when, { claudeSessionId: `claude-${key}` })

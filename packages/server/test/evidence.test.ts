@@ -2041,7 +2041,7 @@ describe('resume', () => {
     const response = await post(id, 'resume', { id: 'r1' })
     expect(response.status).toBe(201)
     const spawn = Spawn.parse(await response.json())
-    expect(spawn).toMatchObject({ key: `resume-${id}-1-r1`, repo, role: 'lead', placement: 'tab' })
+    expect(spawn).toMatchObject({ key: `resume-${id}-1-r1`, repo, role: 'lead' })
     await drive(1)
     const started = runner.started.find((s) => s.key === spawn.key)
     expect(started?.fork).toEqual({

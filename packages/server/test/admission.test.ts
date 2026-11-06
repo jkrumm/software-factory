@@ -234,26 +234,21 @@ describe('pace', () => {
 })
 
 describe('the role', () => {
-  test('is worker by default, and the spawn carries the tier and effort of the table', async () => {
-    expect(await (await spawn('plain')).json()).toMatchObject({ role: 'worker', tier: 'sonnet', effort: 'high' })
-    expect(await (await spawn('boss', { role: 'deep' })).json()).toMatchObject({
-      role: 'deep',
-      tier: 'opus',
-      effort: 'high',
-    })
-    expect(await (await spawn('sweep', { role: 'mechanical' })).json()).toMatchObject({
-      role: 'mechanical',
+  test('is implementer by default, and the spawn carries the tier and effort of the table', async () => {
+    expect(await (await spawn('plain')).json()).toMatchObject({ role: 'implementer', tier: 'sonnet', effort: 'high' })
+    expect(await (await spawn('look', { role: 'Explore' })).json()).toMatchObject({
+      role: 'Explore',
       tier: 'haiku',
       effort: 'low',
     })
   })
 
   test("the agent starts with the role's tier and effort", async () => {
-    await spawn('boss', { role: 'deep' })
+    await spawn('look', { role: 'Explore' })
     await spawn('plain')
     await runTick()
     const argvs = (await hc.state()).terminals.map((t) => t.argv.slice(0, 6).join(' '))
-    expect(argvs).toContain('claude --dangerously-skip-permissions --model opus --effort high')
+    expect(argvs).toContain('claude --dangerously-skip-permissions --model haiku --effort low')
     expect(argvs).toContain('claude --dangerously-skip-permissions --model sonnet --effort high')
   })
 

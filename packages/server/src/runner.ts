@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, realpathSync } from 'node:fs'
 import { copyFile, cp, link, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Effort, Placement, Tier } from '@software-factory/contract'
+import type { Effort, Tier } from '@software-factory/contract'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 
@@ -13,8 +13,6 @@ export interface StartInput {
   space?: string
   /** a space of its own, even if the path already has one */
   newSpace?: boolean
-  /** what the caller asked for: `child` a hidden child of `parentTerminal`, `tab` a tab, `hidden` a terminal with no parent, space or tab; absent is the role's default (worker roles child, `reviewer` hidden) */
-  placement?: Placement
   /**
    * The space an earlier try of this spawn used, as the spawn row recorded it: kept while it still counts, whatever the
    * path says. A retry (or a resume) goes back into it, so a new-space spawn never makes a second space for itself.
@@ -32,16 +30,14 @@ export interface StartInput {
   resume?: string
   /** a fork of an archived session: `claude --resume <session> --fork-session`, the archived transcript put back first */
   fork?: { session: string; archive: string }
-  /** the terminal the spawn's parent session runs in, if the factory knows it: a hidden child is started in it */
-  parentTerminal?: string
 }
 
 export interface StartResult {
   /** the pane the agent runs in */
   session: string
-  /** null for a hidden child: it has no tab */
+  /** the tab the terminal is in; null when its labels carry none */
   tab: string | null
-  /** the space (workspace) the tab is in; a hidden child's is its parent's, null when that is not known */
+  /** the space (workspace) the tab is in; null when its labels carry none */
   workspace: string | null
 }
 
@@ -99,10 +95,9 @@ const Registry = z.object({ accounts: z.record(z.string(), z.object({ dir: z.str
 
 /**
  * An address of a terminal of the current core: `t7`, `t1n` (base 36, so letters come after `t19`), or `machine/t7`. A classic
- * herdr pane (`w4V:p3J`) is none. `LOCAL_TERMINAL` is the form a parent is named by.
+ * herdr pane (`w4V:p3J`) is none.
  */
 export const TERMINAL_ADDRESS = /^(?:[\w-]+\/)?t[0-9a-z]+$/
-export const LOCAL_TERMINAL = /^t[0-9a-z]+$/
 
 /** The owner's planner shell of a repo, `factory.key=plan:<repo>`: not a spawn, never closed by the factory. */
 export const PLAN_PREFIX = 'plan:'

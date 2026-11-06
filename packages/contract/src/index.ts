@@ -27,13 +27,6 @@ export type SpawnStatus = z.infer<typeof SpawnStatus>
 export const HoldReason = z.enum(['drain', 'pace', 'claim'])
 export type HoldReason = z.infer<typeof HoldReason>
 
-/**
- * Where a spawn's terminal goes: a hidden child of its parent's terminal, a tab of its own, or `hidden`: a terminal with no parent and
- * no space or tab (found and closed by its `factory.key` label alone).
- */
-export const Placement = z.enum(['tab', 'child', 'hidden'])
-export type Placement = z.infer<typeof Placement>
-
 export const Spawn = z.object({
   key: z.string(),
   /** `queued` with a `hold` is held; `starting` is claimed (the Runner is at work); `waiting` is waiting for capacity */
@@ -56,8 +49,6 @@ export const Spawn = z.object({
   error: z.string().nullable(),
   /** the session that asked for it, when one did */
   parent: z.string().nullable(),
-  /** what the caller asked for; null is the role's default (worker roles child, others tab). A server of before placement sends no field */
-  placement: Placement.nullish(),
 })
 export type Spawn = z.infer<typeof Spawn>
 

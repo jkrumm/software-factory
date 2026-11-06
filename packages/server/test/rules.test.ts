@@ -206,8 +206,9 @@ describe('resume watchdog (FL2)', () => {
 describe('rotation', () => {
   const week = () => new Date(clock.now().getTime() + 3 * 86_400_000)
 
-  test('a mother or lead whose account reaches 94 % of its week gets one note per week', async () => {
+  test('a lead whose account reaches 94 % of its week gets one note per week', async () => {
     await w.spawned('lead-1', { role: 'lead', account: 'a' })
+    // Sessions with a role the table no longer has rotate nothing and read without error.
     await w.spawned('mother-1', { role: 'mother', account: 'a' })
     await w.spawned('worker-1', { role: 'worker', account: 'a' })
     await w.spawned('lead-b', { role: 'lead', account: 'b' })
@@ -220,10 +221,7 @@ describe('rotation', () => {
 
     clock.advance(minutes(1))
     await reading(94, 10, new Date(clock.now().getTime() + minutes(60)), resets)
-    expect((await evaluate()).created.sort()).toEqual([
-      `rotate:lead-1:${resets.toISOString()}`,
-      `rotate:mother-1:${resets.toISOString()}`,
-    ])
+    expect((await evaluate()).created.sort()).toEqual([`rotate:lead-1:${resets.toISOString()}`])
     expect((await prompts())[0]?.text).toContain('Write the handoff and rotate')
     await replayIsSilent()
 
@@ -231,10 +229,7 @@ describe('rotation', () => {
     const next = new Date(resets.getTime() + 7 * 86_400_000)
     clock.advance(minutes(1))
     await reading(94.5, 10, new Date(clock.now().getTime() + minutes(60)), next)
-    expect((await evaluate()).created.sort()).toEqual([
-      `rotate:lead-1:${next.toISOString()}`,
-      `rotate:mother-1:${next.toISOString()}`,
-    ])
+    expect((await evaluate()).created.sort()).toEqual([`rotate:lead-1:${next.toISOString()}`])
   })
 
   test('is held while the session works and typed when it is at its prompt', async () => {
