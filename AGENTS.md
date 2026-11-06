@@ -93,7 +93,7 @@ state, roles, process/health/contract/schema/API.
   role table's schema and loader (`roles.ts`); `spool.ts` is the zod-free half the hook uses (event kinds, the spool line, key and time counting).
 - `project.yaml` — this repo's manifest (`docs/design.md` §9); the schema is `packages/contract/src/projects.ts`.
 - `config/roles.json` — the role table (FL4).
-- `packages/server/src/notify/` — the owner's line (`docs/design.md` §11): the `Notifier` port (`port.ts`: Hermes, null, and the tests' fake), the outbox (`outbox.ts`), the rules and templates (`rules.ts`, `text.ts`), the morning reading (`digest.ts`), `index.ts` the tick's pass. Migration `018`; the away rule is in `outbox.ts`. Config: `FACTORY_NOTIFY_TARGET`, `HERMES_BIN`, `FACTORY_DIGEST_AT`, `FACTORY_DIGEST_TZ`.
+- `packages/server/src/notify/` — the owner's line (`docs/design.md` §11): the `Notifier` port (`port.ts`: ntfy over HTTP, null, and the tests' fake), the outbox (`outbox.ts`), the rules and templates (`rules.ts`, `text.ts`), the morning reading (`digest.ts`), `index.ts` the tick's pass. Migration `018`; the away rule is in `outbox.ts`. Config: `FACTORY_NOTIFY_TARGET` (`off|ntfy:<topic>`), `FACTORY_NTFY_URL`, `NTFY_TOKEN`, `FACTORY_DIGEST_AT`, `FACTORY_DIGEST_TZ`.
 - `packages/door` — the factory door: a Bun server, `POST /alert/<source>`, the parsers (`src/parsers.ts`), the tokens file; its README has the HyperDX template.
   Server side: `issues/intake.ts`. LaunchAgent `deploy/com.jkrumm.factory-door.plist.template`, `scripts/launch-door.sh`.
 - `packages/cli` — the `factory` binary (`bin/factory.ts`): `version`, `health`, `status`, `spawn list|create|get|cancel|requeue`, `session

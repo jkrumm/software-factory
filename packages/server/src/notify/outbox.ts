@@ -130,7 +130,7 @@ async function deliver(sql: SQL, row: Claimed, options: SendOptions): Promise<st
 
 /**
  * Sends what is due: claim and commit, call the notifier outside any transaction (every call has a process timeout, and the
- * calls of one pass run side by side, so a Hermes that is down costs one timeout, not five), record each result. Returns the keys
+ * calls of one pass run side by side, so an ntfy that is down costs one timeout, not five), record each result. Returns the keys
  * sent and the errors of those that were not. Safe beside a second caller: a claimed row is not due to anyone else.
  */
 export async function sendDue(

@@ -129,7 +129,8 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 
 ## Wave 12 — What is left of the build order, as Issues            <!-- status: active -->
 - [ ] Issue 148: a wait on the owner frees the repo's claim (learnings, the first unattended night).
-- [ ] Issue 149: row 14, intake; Issue 150: row 15, surfaces and the owner's line off Slack (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
+- [ ] Issue 149: row 14, intake; Issue 150: row 15, surfaces and the owner's line on ntfy (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
+  Row 15 as Issues (RS11, RS13): the factory's own line is ntfy (Issue 150: `NtfyNotifier`, topic `factory`); `/v1` from the MacBook is an SSH local forward (design §11 "Reaching `/v1`"). One Issue per repo, each moves its senders to ntfy and drops Slack for them, and states in its ask what stops: 171 iris (reads `/v1`, decision cards, APNs), 172 dotfiles (job alerts, the human-queue line), 173 homelab (Kuma, watchdog, Watchtower), 174 vps (HyperDX, RollHook), 175 agent-workflows (podcast notice, `agw agents` on `/v1`), 176 hermes-agent (`--after 171 172`: chat in Iris, Slack gateway off), 177 argo (`--after 172 173 174 175 176`: the Slack proxy goes), 178 dotfiles-private (`--after 177`: the Slack refs leave the mini's cache). Topics on the owner's ntfy account: `factory` (asks and notices), `alerts` (machines), `updates` (deploys). `GET /fleet` stays until 175 has moved `agw agents` to `/v1`.
 - [ ] Issue 151: row 10, Apple verify on the mini (`--after 148`, so iris's wait on the App Store Connect record does not hold it). Issue 152: the machine budget for sessions outside the factory.
 - Rows not filed yet (13 the repo contract audit, 16 the docs sweep, 17 parallel leads after a stable week) now live in `docs/plan.yaml`; the server files each when its dependencies are closed (design §4 "The plan files its next Issue").
 

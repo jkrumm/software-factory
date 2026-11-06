@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Issue } from '@software-factory/contract'
 import { createIssue } from '../src/issues/create.ts'
@@ -20,7 +19,7 @@ import {
   sendDue,
   sendNow,
 } from '../src/notify/outbox.ts'
-import { HermesNotifier, NullNotifier } from '../src/notify/port.ts'
+import { makeNotifier, NtfyNotifier, NullNotifier } from '../src/notify/port.ts'
 import { notifyDigest, notifyFailures } from '../src/notify/rules.ts'
 import { quote, redact } from '../src/notify/text.ts'
 import { buildStatus } from '../src/status.ts'
@@ -46,7 +45,7 @@ beforeEach(async () => {
 })
 
 const now = () => clock.now()
-const deps = () => ({ notifier, target: 'slack:#agents', digestAt: null, digestTz: 'Europe/Berlin' })
+const deps = () => ({ notifier, target: 'ntfy:factory', digestAt: null, digestTz: 'Europe/Berlin' })
 
 async function file(): Promise<Issue> {
   const made = await createIssue(
@@ -276,10 +275,10 @@ describe('the outbox', () => {
 
   test('a failing send is retried after a backoff and fails after five attempts, with a line in factory status', async () => {
     await record(db.sql, message, now())
-    notifier.failWith('hermes send exited 1')
+    notifier.failWith('ntfy answered 503')
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const result = await sendDue(db.sql, { notifier, now })
-      expect(result.errors).toEqual(['notify:test:1: hermes send exited 1'])
+      expect(result.errors).toEqual(['notify:test:1: ntfy answered 503'])
       const [row] = await rows()
       expect(row?.attempts).toBe(attempt)
       expect(row?.status).toBe(attempt === MAX_ATTEMPTS ? 'failed' : 'pending')
@@ -294,10 +293,10 @@ describe('the outbox', () => {
     expect((await sendDue(db.sql, { notifier, now })).errors).toEqual([])
     expect(notifier.calls).toBe(MAX_ATTEMPTS)
     expect(await notificationAttention(db.sql, new Date(now().getTime() - 20 * 3600_000))).toEqual([
-      'notification notify:test:1 was not delivered: hermes send exited 1',
+      'notification notify:test:1 was not delivered: ntfy answered 503',
     ])
     const status = await buildStatus(db.sql, new Date(now().getTime() - 20 * 3600_000))
-    expect(status.health).toContain('notification notify:test:1 was not delivered: hermes send exited 1')
+    expect(status.health).toContain('notification notify:test:1 was not delivered: ntfy answered 503')
     expect(status.attention).toEqual([])
   })
 
@@ -419,43 +418,97 @@ describe('the outbox', () => {
   })
 })
 
-describe('HermesNotifier', () => {
-  let dir: string
+describe('NtfyNotifier', () => {
+  const TOKEN = 'tk_secret_value_0000'
+  let seen: { path: string; auth: string | null; title: string | null; body: string }[]
+  let respond: () => Promise<Response> | Response
+  let server: ReturnType<typeof Bun.serve>
+  let base: string
+
   beforeAll(() => {
-    dir = mkdtempSync('/tmp/factory-hermes-')
-  })
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
-
-  const script = (name: string, body: string) => {
-    const path = join(dir, name)
-    writeFileSync(path, `#!/bin/sh\n${body}\n`)
-    chmodSync(path, 0o755)
-    return path
-  }
-
-  test('runs `hermes send --to <target> --quiet` with the text on stdin and no secrets in its environment', async () => {
-    const out = join(dir, 'out.txt')
-    process.env.FACTORY_TOKEN = 'must-not-reach-hermes-0000'
-    const bin = script('ok', `echo "$@" > ${out}; cat >> ${out}; echo "token=$FACTORY_TOKEN" >> ${out}`)
-    const result = await new HermesNotifier({ bin, target: 'slack:#agents' }).send('Issue 1 (repo) asks: “q”')
-    delete process.env.FACTORY_TOKEN
-    expect(result).toEqual({ ok: true })
-    expect(readFileSync(out, 'utf8')).toBe('send --to slack:#agents --quiet\nIssue 1 (repo) asks: “q”token=\n')
-  })
-
-  test('a non-zero exit, a timeout and a missing binary are errors, never throws', async () => {
-    const fail = script('fail', 'cat >/dev/null; exit 3')
-    expect(await new HermesNotifier({ bin: fail, target: 't' }).send('x')).toEqual({
-      ok: false,
-      error: 'hermes send exited 3',
+    server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        seen.push({
+          path: new URL(req.url).pathname,
+          auth: req.headers.get('authorization'),
+          title: req.headers.get('title'),
+          body: await req.text(),
+        })
+        return respond()
+      },
     })
-    const slow = script('slow', 'sleep 5')
-    expect(await new HermesNotifier({ bin: slow, target: 't', timeoutMs: 100 }).send('x')).toEqual({
+    base = `http://127.0.0.1:${server.port}`
+  })
+  afterAll(async () => {
+    await server.stop(true)
+  })
+  beforeEach(() => {
+    seen = []
+    respond = () => new Response('ok')
+  })
+
+  const notifier = (options: Partial<ConstructorParameters<typeof NtfyNotifier>[0]> = {}) =>
+    new NtfyNotifier({ url: base, topic: 'factory', token: TOKEN, ...options })
+
+  test('posts the text to <url>/<topic> with the bearer token and a title', async () => {
+    expect(await notifier().send('Issue 1 (repo) asks: “q”')).toEqual({ ok: true })
+    expect(seen).toEqual([
+      { path: '/factory', auth: `Bearer ${TOKEN}`, title: 'Software factory', body: 'Issue 1 (repo) asks: “q”' },
+    ])
+  })
+
+  test('a non-2xx answer is an error without the token', async () => {
+    respond = () => new Response('no', { status: 500 })
+    const result = await notifier().send('x')
+    expect(result).toEqual({ ok: false, error: 'ntfy answered 500' })
+  })
+
+  test('a slow server is a timeout', async () => {
+    respond = async () => {
+      await Bun.sleep(500)
+      return new Response('ok')
+    }
+    expect(await notifier({ timeoutMs: 100 }).send('x')).toEqual({
       ok: false,
-      error: 'hermes send timed out after 100 ms',
+      error: 'ntfy publish timed out after 100 ms',
     })
-    const missing = await new HermesNotifier({ bin: join(dir, 'nope'), target: 't' }).send('x')
-    expect(missing.ok).toBe(false)
+  })
+
+  test('a dead port is an error, never a throw, and never names the token', async () => {
+    const dead = Bun.serve({ port: 0, fetch: () => new Response('') })
+    const url = `http://127.0.0.1:${dead.port}`
+    await dead.stop(true)
+    const result = await notifier({ url }).send('x')
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toStartWith('ntfy publish failed:')
+    expect(result.error).not.toContain(TOKEN)
+  })
+
+  test('a long multibyte text is cut to 4000 bytes on a character boundary, ending with an ellipsis', async () => {
+    const text = '€'.repeat(3000)
+    expect(await notifier().send(text)).toEqual({ ok: true })
+    const body = seen[0]?.body ?? ''
+    expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(4000)
+    expect(body.endsWith('…')).toBe(true)
+    expect(body.slice(0, -1)).toBe('€'.repeat(body.length - 1))
+    await notifier().send('short')
+    expect(seen[1]?.body).toBe('short')
+  })
+
+  test('an empty url or token is said, and nothing is sent', async () => {
+    expect(await notifier({ url: '' }).send('x')).toEqual({ ok: false, error: 'FACTORY_NTFY_URL is not set' })
+    expect(await notifier({ token: '' }).send('x')).toEqual({ ok: false, error: 'NTFY_TOKEN is not set' })
+    expect(seen).toEqual([])
+  })
+
+  test('makeNotifier: off is null, ntfy:<topic> publishes to it, anything else is refused', async () => {
+    expect(makeNotifier({ notifyTarget: 'off', ntfyUrl: '', ntfyToken: '' })).toBeInstanceOf(NullNotifier)
+    const made = makeNotifier({ notifyTarget: 'ntfy:ops', ntfyUrl: `${base}//`, ntfyToken: TOKEN })
+    expect(await made.send('x')).toEqual({ ok: true })
+    expect(seen[0]?.path).toBe('/ops')
+    expect(() => makeNotifier({ notifyTarget: 'ntfy:bad topic', ntfyUrl: base, ntfyToken: TOKEN })).toThrow()
   })
 })
 

@@ -1,6 +1,7 @@
 import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT, DEFAULT_LOAD_CEILING } from './admission.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
+import { isNotifyTarget } from './notify/port.ts'
 
 export interface Config {
   databaseUrl: string
@@ -40,10 +41,12 @@ export interface Config {
   alertLeads: boolean
   /** `FACTORY_ASK_JUDGE`: whether `agw factory-ask` judges asks and spent escalations before the owner hears of them. Unset: yes; `off` or `0`: every one goes to the owner */
   askJudge: boolean
-  /** `FACTORY_NOTIFY_TARGET`: where Hermes delivers the owner's messages; `off` sends nothing */
+  /** `FACTORY_NOTIFY_TARGET`: `ntfy:<topic>` publishes the owner's messages to that ntfy topic; `off` sends nothing */
   notifyTarget: string
-  /** `HERMES_BIN` */
-  hermesBin: string
+  /** `FACTORY_NTFY_URL`: the ntfy server's base URL (http or https); empty until set, and a send then answers that it is not set */
+  ntfyUrl: string
+  /** `NTFY_TOKEN` (from `secrets-run`): the bearer token for the publish */
+  ntfyToken: string
   /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
   digestAt: string | null
   digestTz: string
@@ -103,8 +106,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     alertLeads: switchOn('FACTORY_ALERT_LEADS', env.FACTORY_ALERT_LEADS, true),
     askJudge: switchOn('FACTORY_ASK_JUDGE', env.FACTORY_ASK_JUDGE, true),
     archiveDir: env.FACTORY_ARCHIVE_DIR || `${required('HOME')}/.local/share/factory/archive`,
-    notifyTarget: env.FACTORY_NOTIFY_TARGET || DEFAULT_NOTIFY_TARGET,
-    hermesBin: env.HERMES_BIN || `${required('HOME')}/.local/bin/hermes`,
+    notifyTarget: notifyTarget(env.FACTORY_NOTIFY_TARGET),
+    ntfyUrl: ntfyUrl(env.FACTORY_NTFY_URL),
+    ntfyToken: env.NTFY_TOKEN || '',
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
@@ -131,11 +135,24 @@ function wholeNumber(name: string, value: string | undefined, fallback: number, 
   return n
 }
 
-/** A channel's name is not a secret, and a message to it never makes Hermes answer. */
-const DEFAULT_NOTIFY_TARGET = 'slack:#agents'
+/** A topic name is not a secret. */
+const DEFAULT_NOTIFY_TARGET = 'ntfy:factory'
 const DEFAULT_DIGEST_AT = '07:30'
 const DEFAULT_DIGEST_TZ = 'Europe/Berlin'
 const DEFAULT_FLEET_DIGEST_EVERY_MS = 5 * 60_000
+
+function notifyTarget(value: string | undefined): string {
+  const target = value || DEFAULT_NOTIFY_TARGET
+  if (!isNotifyTarget(target))
+    throw new Error(`FACTORY_NOTIFY_TARGET must be off or ntfy:<topic> (letters, digits, - and _), got: ${target}`)
+  return target
+}
+
+function ntfyUrl(value: string | undefined): string {
+  if (!value) return ''
+  if (!/^https?:\/\/\S+$/.test(value)) throw new Error('FACTORY_NTFY_URL must be an http(s) URL')
+  return value
+}
 
 function digestAt(value: string | undefined): string | null {
   if (value === undefined || value === '') return DEFAULT_DIGEST_AT

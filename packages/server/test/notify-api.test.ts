@@ -27,7 +27,7 @@ let n = 0
 beforeAll(async () => {
   db = await startTestDb()
   notifier = new FakeNotifier()
-  app = startApp({ sql: db.sql, clock, notifier, notifyTarget: 'slack:#agents' })
+  app = startApp({ sql: db.sql, clock, notifier, notifyTarget: 'ntfy:factory' })
   dir = mkdtempSync('/tmp/factory-notify-')
   socket = join(dir, 'h.sock')
   hooks = serveHooks({
@@ -189,9 +189,9 @@ describe('notifications', () => {
   })
 
   test('a test that does not arrive says why and stays pending for the tick to retry', async () => {
-    notifier.failWith('hermes send exited 1')
+    notifier.failWith('ntfy answered 503')
     const row = Notification.parse(await (await app.send('POST', '/notifications/test', {})).json())
-    expect(row).toMatchObject({ status: 'pending', error: 'hermes send exited 1' })
+    expect(row).toMatchObject({ status: 'pending', error: 'ntfy answered 503' })
   })
 })
 
@@ -244,7 +244,7 @@ describe('factory issue answer, factory notify', () => {
     const ok = await factory(['notify', 'test'])
     expect(ok.code).toBe(0)
     expect(Notification.parse(JSON.parse(ok.stdout)).status).toBe('sent')
-    notifier.failWith('hermes send exited 1')
+    notifier.failWith('ntfy answered 503')
     const bad = await factory(['notify', 'test'])
     expect(bad.code).toBe(1)
     expect(bad.stderr).toContain('not delivered')

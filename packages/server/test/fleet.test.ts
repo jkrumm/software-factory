@@ -104,7 +104,7 @@ async function factoryRows() {
     VALUES ('lw-fix', ${`${estate.src}/linewatch`}, 'p', 'worker', 'sonnet', 'high', 'failed', 'the pane never came up', ${w.at(30)})`
   await db.sql`
     INSERT INTO factory.notifications (key, kind, text, created_at, next_at, failed_at, attempts, error)
-    VALUES ('notify:failed:x', 'failed', 'x', ${w.at(100)}, ${w.at(100)}, ${w.at(90)}, 5, 'Hermes did not answer')`
+    VALUES ('notify:failed:x', 'failed', 'x', ${w.at(100)}, ${w.at(100)}, ${w.at(90)}, 5, 'ntfy did not answer')`
   const { issue } = await createIssue(
     db.sql,
     { source: 'request', sourceKey: 'q1', repo: `${estate.src}/modelpick`, title: 'Which harness?', facts: {} },
@@ -258,7 +258,7 @@ describe('the estate', () => {
       at: '2026-11-01T21:26:07.000Z',
     })
     expect(fleet.health.map((h) => h.text).sort()).toEqual([
-      'notification notify:failed:x was not delivered: Hermes did not answer',
+      'notification notify:failed:x was not delivered: ntfy did not answer',
       'spawn lw-fix failed: the pane never came up',
     ])
     expect(fleet.health.find((h) => h.text.startsWith('spawn'))?.repo).toBe(join(estate.src, 'linewatch'))

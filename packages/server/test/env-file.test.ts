@@ -57,6 +57,7 @@ describe('scripts/env-file.sh', () => {
       'FACTORY_ALERT_LEADS',
       'FACTORY_ASK_JUDGE',
       'FACTORY_NOTIFY_TARGET',
+      'FACTORY_NTFY_URL',
       'FACTORY_DIGEST_AT',
       'FACTORY_DIGEST_TZ',
       'FACTORY_LEADS_PER_ACCOUNT',
