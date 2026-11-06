@@ -169,9 +169,15 @@ export class ProjectSync {
       SELECT r.repo FROM (SELECT repo FROM factory.issues UNION SELECT repo FROM factory.spawns) r
       WHERE ${full} OR NOT EXISTS (
         SELECT 1 FROM factory.projects p WHERE r.repo = p.repo OR starts_with(r.repo, p.repo || '/'))`
+    // A repo whose directory is no valid project name is no project. Only an open Issue naming it is told (its lead has no project to work
+    // in); a closed Issue's or a spawn's repo of the past would repeat the same line every full pass.
+    const open: { repo: string }[] = await sql`SELECT DISTINCT repo FROM factory.issues WHERE state <> 'closed'`
+    const openRepos = new Set(open.map((row) => row.repo))
     for (const { repo } of named) {
       const enclosing = enclosingRepo(repo, roots)
-      if (enclosing) paths.add(enclosing)
+      if (!enclosing) continue
+      if (!isProjectDirName(basename(enclosing)) && !openRepos.has(repo)) continue
+      paths.add(enclosing)
     }
     if (full) this.lastFull = this.deps.now().getTime()
 

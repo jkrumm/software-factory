@@ -363,6 +363,20 @@ describe('a directory that cannot be a project’s name', () => {
     expect(ProjectList.parse(await list.json()).projects.map((p) => p.name)).toEqual(['good'])
   })
 
+  test('a closed Issue naming such a repo is no project and no error, an open one is told', async () => {
+    const hidden = fixture.repo('.hidden', { 'README.md': 'hi' })
+    const spaced = fixture.repo('has space', { 'README.md': 'hi' })
+    await fileIssue(hidden, 'h1')
+    const closed = await fileIssue(spaced, 's1')
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped', closed_at = now() WHERE id = ${closed}`
+
+    const result = await runSync()
+    expect(result.errors).toEqual([
+      '.hidden: the directory name is not a valid project name (letters, digits, dot, dash, underscore; no leading dot)',
+    ])
+    expect(await db.sql`SELECT name FROM factory.projects`).toEqual([])
+  })
+
   test('a git directory with an odd name and no manifest, row or Issue is no project and no error', async () => {
     fixture.repo('good', { 'README.md': 'hi' })
     fixture.repo('has space', { 'README.md': 'hi' })
