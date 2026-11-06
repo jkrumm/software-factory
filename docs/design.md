@@ -4,7 +4,7 @@
 Issues. Interactive Claude Code in herdr-core terminals does all the thinking; `agw` workflows do every model call the
 factory needs; plain code does the rest. Hooks report what sessions do as facts, the server derives state from
 those facts when read, and every effect carries a deterministic key, so a replay never spawns, types or posts
-twice. The fleet layer (§3) ships first and carries today's `/wave`. The Issue machine (§4) sits on top of it.
+twice. The fleet layer (§3) is the base. The Issue machine (§4) sits on top of it.
 
 **This page wins over TDD v2.4 wherever they disagree.** The reasons behind each choice are in `docs/decisions.md`,
 the build order is in `docs/program.md`. The code is plain TypeScript and zod (SF6).
@@ -22,7 +22,7 @@ A design choice that breaks one is wrong.
 4. **Hand over the problem, not a conclusion.** A brief holds facts, evidence and verified history, never a
    cheaper model's guess at the cause.
 5. **One lifecycle, no side doors.** Every piece of work enters as an Issue and leaves with evidence or a stated
-   reason. Until F2, a wave is the unit and the same rule applies to its close-out.
+   reason.
 6. **Facts are stored, state is derived.** The one stored exception: an Issue's lifecycle state (§4), written by
    one module with an event per transition. Liveness ("working", "stuck", "walled") is always computed on read.
 7. **Done means observed in production.** A lead's "done" is a claim. The evidence and the factory's own
@@ -89,7 +89,7 @@ flowchart TB
 
 ## 3. The fleet layer (F1)
 
-Deterministic babysitting of the sessions `/wave` and `rd` start today. It replaces `wave-watch.sh`,
+Deterministic babysitting of the sessions `rd` and the factory start. It replaced `wave-watch.sh`,
 `fleet-keepalive.sh` and the Hermes babysitter cron (FL8). Issues do not exist yet at this layer, and the layer
 does not need them: `issue_id` on a session is nullable.
 
@@ -147,7 +147,7 @@ in the table; nothing is dropped. The tick starts it when the time comes and adm
 A key is spent when its spawn has ended. `ended` is derived at read time, never stored: the spawn is `started`, and its
 session is `dead` or its pane is no terminal of the current core. Creating under a spent key is a `409 key_spent` that
 carries the stored spawn; a live or queued key still answers 200 with its row. Reviving the row would start work a second
-time, so the caller picks a new key (`rd`: `-r2`, `-r3`).
+time, so the caller picks a new key.
 
 **Queue state** is `run`, `pace` or `drain`, set per scope: global, project, initiative. The most restrictive scope
 that applies wins.
@@ -156,7 +156,7 @@ that applies wins.
 |-|-|
 | `run` | admission decides |
 | `pace` | lower concurrency; spends only toward weekly pace |
-| `drain` | no new spawn. A running wave finishes its current wave; the chain stops at the boundary: its successor's spawn is held (`queued: drain`) and starts by itself when the drain lifts. Nothing is interrupted |
+| `drain` | no new spawn. A held spawn stays `queued: drain` and starts by itself when the drain lifts. Nothing is interrupted |
 
 ### Capacity and admission
 
@@ -195,7 +195,7 @@ a hook; that gap stays until a measured failure says otherwise.
   the ones behind it. The tick loop itself survives any single failure and logs it.
 - **Eligibility is rechecked at start,** not only when the spawn is queued. A stored account is a hint.
 
-**Prompt delivery.** `factory session note` is the one way anything types into a session; `rd say` becomes this. The full behaviour is under "Prompt delivery" in *As built* below.
+**Prompt delivery.** `factory session note` is the one way anything types into a session; `rd say` goes through it. The full behaviour is under "Prompt delivery" in *As built* below.
 
 **One space per repo (FL6).** A space is keyed by path; a second space for the same path is explicit (`new_space`), for a separate plan or worktree; the full rules are under "Spaces (FL6)" in *As built* below.
 
@@ -205,14 +205,14 @@ contention and open only on an outage (RS10 (b)): with the server down the comma
 not block the work that repairs it; with the server up the caller keeps waiting, and a wait over its limit exits 75 without running.
 
 **The role table (FL4).** One table for lead, implementer, verifier, reviewer and Explore, giving tier and
-effort. `rd --role` and agent frontmatter read it; values move only on data from track U. Model ids stay in agw's
+effort. `rd work --role` and agent frontmatter read it; values move only on data from track U. Model ids stay in agw's
 and dotfiles' route tables; this repo names tiers.
 
-### `rd` becomes a client
+### `rd` is a client
 
-`rd wave`, `fan`, `say` and `close` call the server when it answers and keep today's path when it does not. A dead
-factory must never stop the waves that would repair it. The gate logic (`wave-gate.py`) stays until the server
-covers each check. The verbs move under `factory` once F4 is running, and `rd` stays as an alias.
+`rd` (dotfiles) drives the mini's herdr-core agents with five verbs: `work` (a labelled tab and Claude Code for a repo, an owner
+session that sets `FACTORY_SESSION`), `issue` (files an Issue through the server), `agents`, `read` (an agent's output) and `say`
+(a prompt to a running agent, through `factory session note` when the server answers). It starts no factory work and gates nothing.
 
 ### As built
 
@@ -287,10 +287,10 @@ a status or `turn >= 1`) inside the deliver window (30 s). A terminal that is li
 spawn (a test pins that a path never seen before is trusted first). A prompt cannot start with `-`. The account is in the `env` of
 `terminal.run` (`accountEnv`): `CLAUDE_CONFIG_DIR` only for a non-default account, never empty, never inherited, plus
 `CLAUDE_ACCOUNT_PICKED`, `USAGE_LANE`, `FACTORY_SESSION`, `FACTORY_ROLE`.
-Placement is by labels, no window needed: every spawn is a **tab** (any role, with or without a parent session; child and hidden placement are gone, Reset row 8) and has
+Placement is by labels, no window needed: every spawn is a **tab** (any role, with or without a parent session) and has
 `no_parent`, `herdr.space`, `herdr.tab` (`tb-<12 hex of sha256 of the key>`) and `factory.tab_name`; its entry in the app's
 document is named after the key once the app has one (compare-and-set on `version`, `app-doc.ts`; the witness retries on a label
-or document event). `spawns.placement` stays as an unread column (an old `child` or `hidden` is a tab); `POST /spawns` and `factory spawn create` no longer take `placement` (an unknown body field is dropped, the CLI flag is a usage error). The app's document is read for spaces: only a confirmed absence (`not_found`, never
+or document event). `spawns.placement` is an unread column; `POST /spawns` and `factory spawn create` take no `placement` (an unknown body field is dropped, the CLI flag is a usage error). The app's document is read for spaces: only a confirmed absence (`not_found`, never
 written) falls back to a hashed id; a call that fails is an error for the retry. `type` reads `terminal.get` and sends only to `idle` (guarded with `if`) or `done`, otherwise `busy`; a core
 refusal is nothing typed (`blocked` or a changed status: `busy`), a lost call is `UncertainTyping`. The doc shape of
 `herdr-app` (`spaces[].{id, folder, tabs[].{id, name}}`) is read loosely; the live document (2026-11-01) confirms it.
@@ -417,7 +417,7 @@ effect under a key, so a replay records nothing):
 Issue's open question (`Issue N asks`), an Issue its lead blocked (`Issue N blocked`) `health` is everything else that needs a look and no decision: every
 park (`Issue N parked for <age>: …`, reasons `wall`, `lead_gone`, `unreported`, `parked`), stuck and walled sessions, failed notes and spawns, notifications not delivered, an alert that starts no lead, a wait for the claim, a lead that did not start, a worktree not made or kept, a finalize that failed, the digest's failed passes, and the three
 lines below. A line is in one list only. **A line about something finished ends 72 h after it finished** (`FINISHED_HEALTH_MS`, `health.ts`): a failed spawn (no failure time is stored, so the newer of `created_at` and `assigned_at` stands for it), a failed note (`failed_at`), a notification not delivered (`failed_at`), a kept worktree (the event's `at`); a line about something ongoing (a park, a silent or over-budget lead, regressions, a live wall or stuck session, a lead or worktree that cannot start, a finalize that failed) stays while it is true. Derived at read; `/fleet` reads these lines, so both agree. Sessions not `dead` (walled, blocked, stuck, working, waiting, starting, idle), the queue with hold reasons,
-the accounts' readings, a line `reviews: <live>/<slots> live, deep today <n>/<cap> per account (<account n>, …)` (`Status.reviews`; n is the most any one account has started since 00:00 UTC), the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
+the accounts' readings, the open Issues (§4 "Following an Issue": at most 40, the rest counted), prompts not delivered (failed first, at most 100, the rest counted as "N more not shown"). `--format plain` prints it as one screen.
 
 #### The spool and the event key
 
@@ -477,11 +477,11 @@ stored spawn, 200) **while the key is live**. A `started` spawn whose agent is g
 (`spawn list|get`, the create's answer; nothing stores it): its session is `dead`, or its pane is no terminal of the
 current core (a classic-herdr pane, or none). A create under an ended spawn's key answers **409** `{error, code:
 "key_spent", spawn}` and never revives the row; the CLI exits 5 (`conflict`) with `code` and `details.spawn` on the error
-line, and `rd` derives the next key (`<key>-r2`, …). `factory status` lists neither `started` nor `ended` spawns. The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
+line. `factory status` lists neither `started` nor `ended` spawns. The caller is `parent`, which the CLI takes from `--parent`, else `FACTORY_SESSION`. `factory spawn create`
 uses the token when `FACTORY_TOKEN` is set and the socket otherwise; `spawn get`, `session get` and `queue get` the same. The
 socket has no caller identity, so a pane can name any `parent`: the accepted boundary of SF11, now with spawning in it (the
 repo roots still bound where it can start, and a same-user pane can already start Claude Code through hc).
-The contract `rd` reads: `Spawn` (`status` `queued` with a `hold` is held, `starting` claimed, `waiting` for capacity; `pane`, `tab`,
+The contract a client reads: `Spawn` (`status` `queued` with a `hold` is held, `starting` claimed, `waiting` for capacity; `pane`, `tab`,
 `workspace`, `space`, `repo`), `Session` (`pane`, `tab`, `role`), `QueueView` (`effective`), all in `packages/contract`.
 
 #### Test slots (FL7)
@@ -514,7 +514,7 @@ deleted, the newest of each account kept.
 #### Admission
 
 **Admission** (`admission.ts`, one function, used at `POST /spawns` and at every claim; first rule that says no wins):
-1. queue state `drain`: hold. 2. (the one-wave-per-repo hold is gone, Reset row 8) 3. `pace` and any live session of the project: hold `pace`. 4. an account: enabled,
+1. queue state `drain`: hold. 2. an Issue lead while the machine's load is over the ceiling: hold `load`. 3. `pace` and any live session of the project: hold `pace`. 4. a spawn with an Issue whose project claim is taken: hold `claim`. 5. an account: enabled,
 auth fine, a sample, not `exhausted_until`, below 85 % of its 5-hour window and below 95 % of its week; under `pace` also
 weekly use at or below the elapsed share of its week. Never spills: with no account open the spawn is `waiting` with
 `resume_at` the first time any account opens by its own reading (a window's reset; both windows closed: the later one; under
@@ -526,7 +526,7 @@ can show it); a started one holds it until a sample is taken after the moment it
 minute). A burst starts as many spawns as there are open accounts
 and the rest wait for the next sample.
 
-**Retired (Reset row 8):** the review transport (hidden `reviewer` sessions, `review_slots`, `deep_cap`, the review ceiling, `FACTORY_REVIEW_SESSIONS`, `FACTORY_REVIEW_DEEP_CAP`, `FACTORY_REVIEW_IDLE_MS`, `spawn create --review-job`) and the `wave` hold are deleted. The spawn columns `review_job`, `review_tier`, `review_effort`, `deep_allowed` and the table `review_outcomes` were dropped by migration `035` (Reset row 9). `factory spawn cancel <key>` (`POST /spawns/:key/cancel`, token and socket; `cancelSpawn` in `spawns.ts`) stays: a `queued` or `waiting` spawn never claimed becomes `cancelled`, the same call again answers the same row, a claimed one is 409 `not_cancellable` carrying the spawn row; a cancelled key is spent. The Issue-evidence review at `ship` (`issues/review.ts`) is unchanged.
+**Retired (Reset row 8):** the hidden-reviewer path (hidden `reviewer` sessions, `review_slots`, `deep_cap`, the review ceiling, the `FACTORY_REVIEW_*` settings, `spawn create --review-job`) and the `wave` hold are deleted. The spawn columns `review_job`, `review_tier`, `review_effort`, `deep_allowed` and the table `review_outcomes` were dropped by migration `035` (Reset row 9). `factory spawn cancel <key>` (`POST /spawns/:key/cancel`, token and socket; `cancelSpawn` in `spawns.ts`) stays: a `queued` or `waiting` spawn never claimed becomes `cancelled`, the same call again answers the same row, a claimed one is 409 `not_cancellable` carrying the spawn row; a cancelled key is spent. The Issue-evidence review at `ship` (`issues/review.ts`) is unchanged.
 
 #### Queue state
 
@@ -538,19 +538,19 @@ stays `queued` with `hold` set (`drain|pace|claim|load`) and no account, looked 
 
 **The lead cap** (v3 §7): a spawn with role `lead` **and an Issue** is not started on an account that already has `FACTORY_LEADS_PER_ACCOUNT` (default 2, a whole number 1 to 16, listed in `scripts/env-file.sh`)
 live Issue-lead sessions (sessions `liveSessions` reads whose spawn has role `lead` and an `issue_id`; `issueLeadsByAccount` in `capacity.ts`). An account at the cap is passed over and another with room is picked; with none the spawn
-is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first opening, never spilled. A lead whose Issue waits on the owner's decision (`waiting`, reason `decision`) holds no capacity and is not counted. A program lead and a wave have no Issue: not counted, not capped. Decided again at every claim (a reclaim does not ask). **Not built:** a `lead_cap` hold reason: `spawns.hold` has a CHECK constraint, so the new reason needs a migration (and `HoldReason` in the contract); until then the wait is a plain `waiting` with no reason shown.
+is `waiting`, looked at again after `HOLD_RECHECK_MS` and started at the first opening, never spilled. A lead whose Issue waits on the owner's decision (`waiting`, reason `decision`) holds no capacity and is not counted. Decided again at every claim (a reclaim does not ask). **Not built:** a `lead_cap` hold reason: `spawns.hold` has a CHECK constraint, so the new reason needs a migration (and `HoldReason` in the contract); until then the wait is a plain `waiting` with no reason shown.
 
-**The load ceiling:** a spawn with role `lead` **and an Issue** is not admitted while the machine's 1-minute load average (`os.loadavg()`, read on the server's host, the mini) is above `FACTORY_LOAD_CEILING` (default 60, a whole number from 1, listed in `scripts/env-file.sh`): it stays `queued` with hold `load` (migration `034`), is looked at again every `HOLD_RECHECK_MS`, and starts at the first look under the ceiling. The rule is `heldByLoad(load, ceiling)` with the reading passed in, checked before the claim so a held lead queues behind nothing. Running leads, resumes, program leads and waves are never held. While any spawn is held, `factory status` shows the health line `held by load: Issue N (and K more) waits for the machine, new leads start when its load is under the ceiling`. No model is involved.
+**The load ceiling:** a spawn with role `lead` **and an Issue** is not admitted while the machine's 1-minute load average (`os.loadavg()`, read on the server's host, the mini) is above `FACTORY_LOAD_CEILING` (default 60, a whole number from 1, listed in `scripts/env-file.sh`): it stays `queued` with hold `load` (migration `034`), is looked at again every `HOLD_RECHECK_MS`, and starts at the first look under the ceiling. The rule is `heldByLoad(load, ceiling)` with the reading passed in, checked before the claim so a held lead queues behind nothing. Running leads and resumes are never held. While any spawn is held, `factory status` shows the health line `held by load: Issue N (and K more) waits for the machine, new leads start when its load is under the ceiling`. No model is involved.
 
 #### Roles
 
 **Roles** (`config/roles.json`, schema in `packages/contract/src/roles.ts`): role → tier (`haiku|sonnet|opus`, never a
-model id) and effort (`low|medium|high|xhigh|max`). The table is `lead`, `implementer`, `verifier`, `reviewer` (sonnet, medium) and `Explore`; `mother`, `wave`, `worker`, `mechanical` and `deep` are gone (Reset row 8): a stored row with one still reads, `factory role get <it>` is exit 4. `POST /spawns` takes `role` (default `implementer`; unknown = 422, but a replay
+model id) and effort (`low|medium|high|xhigh|max`). The table is `lead`, `implementer`, `verifier`, `reviewer` (sonnet, medium) and `Explore`; a stored row with a role that left the table still reads, `factory role get <it>` is exit 4. `POST /spawns` takes `role` (default `implementer`; unknown = 422, but a replay
 of a known key answers with its row) and
 stores the table's tier and effort on the row; the Runner starts Claude Code with exactly those. The server reads the file
 at boot (`FACTORY_ROLES_FILE`; it refuses to start on an unusable one), so an edit needs a deploy or restart, and a
 spawn keeps the tier and effort it was queued with. `factory role list|get <role>` reads the file
-itself, with no server and no token: `rd --role` depends on `role get <role> --format json` printing exactly
+itself, with no server and no token: `rd work --role` depends on `role get <role> --format json` printing exactly
 `{"role","tier","effort"}` (exit 0; unknown role is exit 4). Values change only on measured data.
 
 #### Process, health, contract, schema and API
@@ -635,7 +635,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
 | `phase`, `wait`, `ship`, `close`, `block`, `ask`, `drop` | the lead, via `factory issue` (`POST /issues/:id/:verb`, port or socket; the call id is `--id` or generated; the attempt is in the key, so a second attempt's `--id 1` is its own event, and a verb filed for an earlier attempt that is handled after a new one began is refused) | `<issue>:<attempt>:<verb>:<call id>` |
 | `unreported` | the send-back: a second stop of a turn with nothing reported | `unreported:<issue>:<session>:<turn>` |
 | `restart` | the steward: a `lead_gone` park whose lead is still gone (`waiting` → `queued`, finalize first) | `steward:<issue>:lead_gone:<n>` |
-| `note`, `wake` | also the steward's, `payload.who = 'steward'` | `steward:<issue>:<cause>:<n>`; a deep-cap wait's wake has the timer's `wake:<issue>:<waits>` |
+| `note`, `wake` | also the steward's, `payload.who = 'steward'` | `steward:<issue>:<cause>:<n>` |
 | `reopen` | `factory issue reopen` (`POST /issues/:id/reopen`, token or socket) | `reopen:<issue>:<call id>` |
 | `stop` | `factory issue stop` (`POST /issues/:id/stop`, token only) | `stop:<issue>:<call id>` |
 | `lead_gone` | `note_lead` when the lead's spawn failed or ended (the Issue working), `start_lead` when the worktree could not be made, and the tick's sweep of a working Issue whose lead's spawn failed, or ended (see below); each names the `attempt` that lost its lead, and one for an earlier attempt than the Issue is on is refused | `lead_gone:<effect key>`, `lead_gone:sweep:<issue>:<revision>`, `lead_gone:ended:<issue>:<revision>` |
@@ -701,7 +701,7 @@ is closed as dropped, from any open state: `outcome` is `done`, `dropped` or `he
   request); `factory status` says which. Requests are not asked. Decision 3 held alert leads back until evidence and the hold were live: since
   Wave 4 the switch defaults on (`config.ts`), and `FACTORY_ALERT_LEADS=0` turns it off.
 - **A lead that is gone starts the next attempt, at most twice** (RS3). The first two `lead_gone` of an Issue (counted from its `issue_events`: those that moved it to `queued`, so nothing is stored) move it `working → queued` and plan `finalize` for the attempt that lost its lead (its tab closed, its transcripts archived, the claim given back, the worktree removed or kept with a `worktree_kept` line); admission then waits for that finalize and makes `admit:<issue>:<attempt+1>` through the usual path, so a replayed tick makes one attempt. No message goes out for a restart (`notify:failed:spawn` skips a failed lead of a `queued` Issue, of an earlier attempt, and of a `lead_gone` park, which sends its own). The news a `note_lead` could not type to the gone lead (a regression, an answer, a wake) rides in that `lead_gone` as `news` (at most 4,000 characters), and the next attempt's brief shows it in a fenced "What happened before this attempt" section. The brief of the next attempt has a "The previous attempt" section when finalize kept the branch: the branch and the kept worktree's path and why, so the new lead can pick the work up (nothing is said when it was removed, as it held nothing). The third `lead_gone` parks the Issue (`waiting`, `lead_gone`) with the one message every park gets. **An ended lead is found without a note:** the sweep also files `lead_gone` (detail `spawn <key> ended`, no `news`) for a `working` Issue whose current lead spawn is `started` but reads as `ended` (session `dead`, or a pane that is no terminal of the current core), once the session has been dead 10 minutes (`LEAD_GONE_GRACE_MS`: its last `session_ended` or `pane_gone`, else the spawn's start, `assigned_at`) and never within 10 minutes of the latest `runner_restarted`, so a core restart's hc-resume is not met by a second lead.
-- **Attach or start.** `start_lead` asks for the worktree `factory/<issue>-<attempt>` of the repo, made the way `rd fan` does (`issues/worktree.ts`:
+- **Attach or start.** `start_lead` asks for the worktree `factory/<issue>-<attempt>` of the repo, made by `issues/worktree.ts` (
   fetch origin, branch from the default branch, `wtp` where `origin/<default>` has a `.wtp.yml`; each step under a timeout; the same branch answers its
   worktree again, with the sha it was cut from, if a marker in its git directory says the setup finished; one without it is removed and made again unless the branch has commits, and a failed setup removes what it made) and **made off the tick** by `WorktreeMaker` (`issues/leadtree.ts`), because `git fetch` can take 90 s and `wtp` five
   minutes: the row in `lead_worktrees` is written first (`pending`), at most two are made at once and one at a time per Issue, a failed try
@@ -818,7 +818,7 @@ Nothing used to act on an Issue that stalled: a block, a park, a timed wait whos
 | `silent` | `working`, no event of the lead for 20 min (since the last wake) | `note` without `wake`: "report: continue, ship, block, or narrow" |
 | `over_budget` | `working` past the size's budget (`BUDGET_HOURS`) | the same nudge |
 
-A timed wait is left to its timer; **a `decision` wait (a question) is never touched.** **Backoff:** act `n` of a cause is due 30 min, 2 h, 6 h after the cause began (the Issue's entry into that wait, block or park; the lead's last word for `silent`, whose first act is at 20 min; the first queued Issue's claim for `claim`, at 15 min; the end of the budget for `over_budget`), at most 3 per Issue and cause. **A block that names the verification** (its `reason` matches `/verif/i` and the Issue has shipped) re-runs the hold's check first, off the tick through `OffTick` keyed by the act (`proofInputOf` of `hold.ts`, the same `Proof` as the hold; the answer is an `issue_events` row `steward_verify:<issue>:<n>`), and the note carries one line, "verify re-run just now: green|red …"; the act waits until the run has answered, and with no verifier wired the line says it was not re-run. **Retries spent:** 3 acts for a cause, 6 h (the last backoff) after the last one, the Issue still in that state: an `issue_events` row `steward_exhausted:<issue>:<cause>` and one outbox line `notify:steward:<issue>:<cause>` (kind `failed`) with every act's time and result, once per Issue and cause even over replayed ticks. The away rule treats it as a decision, not as a park: only a present desk folds it. A block or park with **no live lead** is not woken (nobody to type to; the health line shows it).
+A timed wait is left to its timer; **a `decision` wait (a question) is never touched.** **Backoff:** act `n` of a cause is due 30 min, 2 h, 6 h after the cause began (the Issue's entry into that wait, block or park; the lead's last word for `silent`, whose first act is at 20 min; the first queued Issue's claim for `claim`, at 15 min; the end of the budget for `over_budget`), at most 3 per Issue and cause. **A block that names the verification** (its `reason` matches `/verif/i` and the Issue has shipped) re-runs the hold's check first, off the tick through `OffTick` keyed by the act (`proofInputOf` of `hold.ts`, the same `Proof` as the hold; the answer is an `issue_events` row `steward_verify:<issue>:<n>`), and the note carries one line, "verify re-run just now: green|red …"; the act waits until the run has answered, and with no verifier wired the line says it was not re-run. **Retries spent:** 3 acts for a cause, 6 h (the last backoff) after the last one, the Issue still in that state: an `issue_events` row `steward_exhausted:<issue>:<cause>` and one outbox line `notify:steward:<issue>:<cause>` (kind `failed`) with every act's time and result, once per Issue and cause even over replayed ticks. The owner's line treats it as a decision, not as a park (§11). A block or park with **no live lead** is not woken (nobody to type to; the health line shows it).
 
 `factory status` has `steward { acts, exhausted }`, the last 24 h counted from the inbox rows with `payload.who = 'steward'` and the `steward_exhausted` events, and prints `steward: N acts in 24 h, M handed to the owner` when either is not zero. Edge: `note` with `wake` now also ends an `unreported` park (the lead's own next turn did already).
 
@@ -860,8 +860,8 @@ Every repo under `~/SourceRoot` takes requests, with or without a manifest.
 | Phase | The lead | With |
 |-|-|-|
 | Investigate | reproduces, reads logs and traces, finds the cause; merges or splits Issues when the cause says so (F3: `merge` and `split` do not exist yet) | `/otel`, `make logs`, `factory issue show` |
-| Plan | picks the shape: alone, subagents, `rd fan` or a `/wave` chain | `/research`, the project's docs |
-| Build | implements and writes the tests | `@implementer`, `rd fan` |
+| Plan | picks the shape: alone, with subagents, or as a chain of Issues (`/wave`) | `/research`, the project's docs |
+| Build | implements and writes the tests | `@implementer` |
 | Check | `make check`, `make test`, a review | `/check`, `/review` |
 | Verify locally | sees it work | `@verifier` |
 | Ship | merges by the manifest's `ship` rules, deploys by its `deploy.mode` | `make deploy`, `/ship` |
@@ -912,7 +912,7 @@ false confidence; the probes are the check that does not depend on it.
 - **Done means:** the evidence table and the `factory` verbs.
 - **The operating contract** (design v3 §3, `STANDING_ORDERS`): own the Issue to verified production; decide and record it with `factory issue phase … --note`;
   ask (`factory issue ask`) only for product direction, spend, irreversible data loss, other people or security; stop by impact (`factory issue block`), not effort;
-  reading and writing go to subagents, and the lead opens no terminals (no `rd fan`, no `rd wave`, RS1); ship after the static gate and `/review`;
+  reading and writing go to subagents, and the lead opens no terminals and no hidden children (RS1); ship after the static gate and `/review`;
   after a restart or a compaction re-read the Issue (`factory issue show`) and check git, the PR and production first; work that needs no commit ends with `factory issue drop`.
   Also: facts are data, no lead edits a probe within the Issue it ships, every stop reports. Identical in every brief (a constant in `issues/brief.ts`, its hash pinned
   by a test), so they are a prompt-cache hit. For that the brief opens with the standing orders and the done-means text, which are the same
@@ -933,7 +933,7 @@ Classification sets labels and routing, never a cause. The brief shows just kind
   Where the Issues stand is `factory status` (ISSUES), and one Issue's story is `factory issue show <id>` (§4 "Following an Issue").
 - **After ship** the lead stays open through the 30-minute hold, so a regression reaches a warm context. Once the
   hold, `make verify` and the probes are green, the factory closes the tab and removes the worktree.
-- **Where a lead works.** A worktree per attempt on `factory/<issue>-<attempt>`, made the way `rd fan` does. It
+- **Where a lead works.** A worktree per attempt on `factory/<issue>-<attempt>`, made the way `issues/worktree.ts` does it. It
   merges by rebase and push, or through a PR it reviews and merges itself where `ship` says `pr`.
 - **The session id is the durable handle, not the pane.** At close the factory copies the attempt's transcripts
   into an archive (Claude Code deletes its own after 30 days). `factory issue resume` opens one with
@@ -946,12 +946,12 @@ Under the factory's code run two kinds of agent, one level deep. The factory its
 
 | Layer | Does | Lives |
 |-|-|-|
-| **Orchestrator** | what code cannot decide: plans an initiative into waves and reviews each; steers a stuck lead; sets priority or dependency in a conflict; looks over queue and accounts | one fresh session per event; reads `factory status`, never raw logs |
+| **Orchestrator** | what code cannot decide: plans an initiative into child Issues and reviews each; steers a stuck lead; sets priority or dependency in a conflict; looks over queue and accounts | one fresh session per event; reads `factory status`, never raw logs |
 | **Lead** | one Issue, root cause to production evidence | spawn → end of the hold |
 
 **Wakes:**
 
-- an initiative to plan, or one of its waves shipped
+- an initiative to plan, or one of its Issues shipped
 - a stalled lead: two hours of work time with no commit, phase change or declared wait
 - a second unreported stop
 - a pane dying three times in ten minutes
@@ -961,7 +961,7 @@ Under the factory's code run two kinds of agent, one level deep. The factory its
 
 **It acts through `factory` only:** `issue prio|dep|note|retier|park`, split and merge, `project pause`, a card for
 the business classes, an upkeep Issue for a policy change. It never writes code, touches a repo or starts work the
-queue does not hold. Until F4 runs, the program lead does this job.
+queue does not hold.
 
 Queue order, first rule first: stop the line, urgent, dependencies, the orchestrator's priority within a class, age.
 
@@ -972,13 +972,13 @@ Extends §3. The scarce unit is the Max window.
 | Class | Examples | Gets an account when |
 |-|-|-|
 | urgent | an owner app is down, data at risk | any account is eligible |
-| normal | bugs, requests, initiative waves | an account is under its weekly pace |
+| normal | bugs, requests, initiative Issues | an account is under its weekly pace |
 | upkeep | upgrades, docs, code health, security | capacity would otherwise lapse at the next reset; every manifest repo still gets one a week |
 
 - **5-hour headroom.** A lead starts on an account only if headroom covers a share per tier, set from measured
   session cost; leads admitted but not yet measured count against it.
 - **Stop the line.** While a project's production is red, it gets only fixes.
-- **Tier and effort.** xs and mechanical: Haiku, low. s–m: Sonnet, medium. l–xl, novel design, security: Opus,
+- **Tier and effort.** xs: Haiku, low. s–m: Sonnet, medium. l–xl, novel design, security: Opus,
   medium. A second attempt goes one tier up with its predecessor's notes. Values come from the role table.
 - **Balance.** Every account's week ends close to full and work rarely changes account. Switching happens at spawn.
   One exception: a walled lead that would wait more than an hour resumes elsewhere if headroom exists, counted as a
@@ -1097,8 +1097,7 @@ ticktick: { list: WeatherOrb }
   `hold: "claim"`, no account reserved, and looked at again every 30 s like `pace`. A place that frees goes to the oldest queued
   Issue by id (urgent ones first); only an Issue with a spawn still queued, waiting or starting counts as queued. A repo whose
   project has no row yet is held the same way: the tick syncs a named repo before it claims. A spawn for a closed Issue is
-  refused (`IssueClosed`, nothing stored), and a queued or waiting one whose Issue closed fails in the tick's sweep. A spawn without an Issue (waves, fan
-  workers, `rd`) takes no claim. The session of a spawn is not bound to its Issue here (Wave 3 does it with the lead).
+  refused (`IssueClosed`, nothing stored), and a queued or waiting one whose Issue closed fails in the tick's sweep. A spawn without an Issue (a resume) takes no claim. The session of a spawn is not bound to its Issue here (Wave 3 does it with the lead).
 - **Release.** `releaseClaim` is what finalize calls (Wave 4); until then `releaseClosed` in the tick's project pass gives back the
   claims of closed Issues, and the held claim of an Issue whose every spawn failed (no lead ever ran; `factory spawn requeue` asks
   again), before the spawns are claimed, so the next Issue is promoted in the same pass. The sweep and `requeueSpawn` run under the capacity
@@ -1128,7 +1127,7 @@ tuning at 50 closed Issues, security audits per repo at about 2,000 changed line
 
 | Surface | Talks to the factory | Gets |
 |-|-|-|
-| **iris** | factory API | the live glance at fleet, waves and quota; decision cards and push (APNs waits on the Apple developer enrolment; until then cards go through `ask-human.sh`) |
+| **iris** | factory API | the live glance at fleet and quota; decision cards and push (APNs waits on the Apple developer enrolment; until then cards go through `ask-human.sh`) |
 | **Hermes** | factory API | "do X" becomes `factory issue new`; "how is X going" reads the factory. It never implements |
 | **Argo** | reads `factory` views directly, forwards intents to the API | depth: queue history, scorecard, cost per Issue |
 | **Agents** | `factory` CLI | §2's small block |
@@ -1136,7 +1135,7 @@ tuning at 50 closed Issues, security audits per repo at about 2,000 changed line
 ### The factory door (owner decision 2, 2026-11-01)
 
 Today every alert goes to Slack only. The door makes a real alert one Issue, from the tailnet, before F3's dedup, settle and
-runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and the hold) is live (decision 3).
+runbooks exist (decision 3).
 
 - **A process of its own,** `packages/door`: one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
   `tailscale serve` terminates TLS on the mini's tailnet name and the ACL gives that port, and nothing else, to `tag:homelab` and
@@ -1164,7 +1163,7 @@ runbooks exist: an alert-born Issue only queues until F2 Wave 4 (evidence and th
 
 ### The owner's line (owner decision 4, 2026-11-01)
 
-Until now the factory reached the owner nowhere but `factory status` and the board. It now writes to Slack through Hermes, which only
+The factory writes to Slack through Hermes, which only
 delivers: a message is a template filled with facts, never a model's words (SF2).
 
 - **The `Notifier` port** (`notify/port.ts`) has one call, `send(message)`, answering `ok` or an error and never throwing. `HermesNotifier`
@@ -1197,7 +1196,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 - **The away rule** is decided at send time, in the claim's transaction (`foldReason`, the key only): **the owner is always treated as away.** `notify:ask:*` (a decision), `notify:steward:*` (the steward gave up on an Issue), `notify:digest:*` and `notify:test:*` go out;
   every other message (`parked`, `failed`, `regression`) is **`folded`** (`folded_at`, `folded_reason`; `status: folded` in `factory notify list`): it is never sent later, its
   facts are on `factory status` and the fleet view, and its `next_at` is `infinity`, so a release that does not know the column never finds it due. A delivery wins over a fold made while the send was in flight (a lease that ran out): the delivery clears the fold, as a delivery is always recorded.
-  Presence (desk and phone acts) is gone; the rule reads nothing but the key.
+  The rule reads nothing but the key.
 - **The morning reading** (`renderMorning`, the 07:30 message) is facts only, as plain text under 3000 characters (a list is cut at six items and 450 characters): Needs you (the stored fleet snapshot's asks), Health (its health lines), Shipped (Issues closed `done` in the last 24 h, from the Issues table), Open Issues (the snapshot's `issues[]`),
   and a count of the read-only area (a line says so when the fleet model was never built, so a reading with no asks does not read as a quiet night). A message is a template filled with facts (SF2):
   **no model text** (a reply ask's `short` is not used), agent words are cut, quoted and scrubbed (`notify/text.ts`), and an IuRoot item is a count only.
@@ -1215,7 +1214,7 @@ delivers: a message is a template filled with facts, never a model's words (SF2)
 
 One read model of the fleet that every surface reads instead of building its own (`docs/research/2026-11-01-fleet-view.md`, plan
 `docs/waves/archive/fv.md`). The deterministic half; "The digest" (below) adds the model text: `short`, `headline` and the asks found
-in a session's last message. Reset row 8 slimmed it: no plans, git state, tiers, suggestions, actions, presence or reaper (their tables `fleet_triage_log`, `fleet_ask_seen`, `fleet_acts`, `fleet_presence_acts`, `fleet_seen` and `fleet_windows` were dropped by migration `035`, Reset row 9); it only reads.
+in a session's last message. It only reads: it holds no plans, git state, tiers, suggestions or actions (Reset rows 8 and 9 dropped the triage, act, presence, window and seen tables with migration `035`).
 
 - **Shape** (`packages/contract/src/fleet.ts`, strict zod, `Fleet` in `index.ts`): `summary { working, idle, done, asks, staleAsks }`,
   `asks[]`, `health[]`, `issues[]` (the open Issues: `id`, `title`, `repo`, `state`, `kind`, `size`, `lead` the live lead's session id or null, `updatedAt`; read from the Issues table, no model call), `repos[]` (`name`, `space`, `visible`, `sessions[]`), `unplaced[]` (live sessions with no repo of
@@ -1396,8 +1395,8 @@ group.
 | `quota_readings` | account, 5-hour and weekly use, reset times, read at | F1 |
 | `prompts` | prompt id, session, text, typed at, delivered at; a lead's brief is one, source `brief`, id `issue:<id>:brief:<attempt>`, recorded `delivered`, written in the spawn's own transaction | F1 |
 | `slots` | holder, lease, command | F1 |
-| `spawns` | key, repo, prompt, role, tier, effort, status (`queued`, `waiting`, `starting`, `started`, `failed`, `cancelled`), hold, placement, account, `resume_at`, session; the review-transport columns and `review_outcomes` went with migration `035` | F1 |
-| `fleet_snapshot`, `fleet_digest*` | the newest fleet read model (one row) and the digest's cache, runs, pending batch and backoff; `fleet_triage_log`, `fleet_ask_seen`, `fleet_acts`, `fleet_presence_acts`, `fleet_seen` and `fleet_windows` were dropped by migration `035` | FV |
+| `spawns` | key, repo, prompt, role, tier, effort, status (`queued`, `waiting`, `starting`, `started`, `failed`, `cancelled`), hold, account, `resume_at`, session | F1 |
+| `fleet_snapshot`, `fleet_digest*` | the newest fleet read model (one row) and the digest's cache, runs, pending batch and backoff | FV |
 | `projects` | every project: the last valid `project.yaml` (none: defaults) with its content hash and any error, make targets, pause flag; filled by sync since Wave 2 | F2 |
 | `issues`, `issue_deps` | source, source key, repo, facts, kind, class, size, the lead's tier and effort, what Classify answered (`classify`) and when (`classified_at`), title, state, reason, outcome, attempt, parent, root cause, fix, summary, `wake_at` | F2 |
 | `issue_inbox` | every event for an Issue, key, the session it came from, handled at, result, detail, error | F2 |
@@ -1427,7 +1426,7 @@ F1 may not drop below 0.889.
 |-|-|-|
 | the server is killed mid-spawn and while sessions work | F1 | sessions keep working; on restart it reconciles; no duplicate effect |
 | a usage wall, injected through `quota_readings` | F1 | the watchdog resumes the session once; nobody types "continue" |
-| `drain` during a multi-wave run | F1 | the current wave finishes, the next does not start |
+| `drain` with spawns queued | F1 | no new spawn starts, nothing running is interrupted, held spawns start when the drain lifts |
 | a spawn with no capacity | F1 | it waits with a `resume_at` and starts by itself |
 | the database restored from last night's dump | F1 | reconciliation; ids move past running panes; no duplicate effect |
 | a lead stops with its Issue open and nothing reported | F2 | the hook sends it back |
@@ -1436,7 +1435,7 @@ F1 may not drop below 0.889.
 | the server is killed mid-runbook | F3 | the runbook runs once to its end |
 | every account walled with an outage open | F4 | settle and runbooks run; leads wait; nothing spills |
 
-F1's own gate: an overnight multi-wave run across two repos with an injected limit wall and one `drain` needs no
+F1's own gate: an overnight run of leads across two repos with an injected limit wall and one `drain` needs no
 owner "continue".
 
 **Six numbers,** from SQL views the loop cannot edit, over 14 days:

@@ -34,8 +34,8 @@ log "run $key: release $(fx health --format json | jq -r .version | cut -c1-12),
 watcher_pid=$!
 # A watcher left armed would kill the server later, whatever stopped this script.
 trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
-log "run $key: spawn create (role worker, repo $REPO_NAME), watcher $moment armed"
-fx spawn create "$key" --repo "$repo" --prompt "$prompt" --role worker --format json | jq -c '{key,status,account,role,tier,effort}' | scrub | tee -a "$TIMELINE"
+log "run $key: spawn create (role implementer, repo $REPO_NAME), watcher $moment armed"
+fx spawn create "$key" --repo "$repo" --prompt "$prompt" --role implementer --format json | jq -c '{key,status,account,role,tier,effort}' | scrub | tee -a "$TIMELINE"
 if wait "$watcher_pid"; then watcher_ok=1; else watcher_ok=0; fi
 trap - EXIT # the pid is reaped and may be reused
 if ((!watcher_ok)); then

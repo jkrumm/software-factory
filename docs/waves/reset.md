@@ -7,8 +7,8 @@ alone is a load flake: record the rerun); `/review` over the wave's range at its
 `docs/strategy/2026-11-reset/learnings.md`.
 
 Decisions: `docs/decisions.md` RS1–RS11. **From Wave 8b on (RS11) every row is a factory Issue chained with `--after`**, filed from
-the owner's session and built, reviewed, shipped and verified by its lead; there is no program-lead rotation. Waves 1–8: each code wave was one `rd fan` worker (`worker`, Sonnet) in a worktree, briefed with
-its row of §13 plus the design section it implements; the program lead reviews the diff, lands it with `rd merge`, deploys
+the owner's session and built, reviewed, shipped and verified by its lead; there are no program-lead rotations. Waves 1–8: each code wave was one worker (`worker`, Sonnet) in a worktree, briefed with
+its row of §13 plus the design section it implements; the program lead reviews the diff, lands it itself, deploys
 and proves it. One wave at a time: the mini is the bottleneck (load reached 385 on 12 cores on 2026-11-04 from parallel checks
 and the iOS simulator). One `make check` or `agw check` at a time; no `xcodebuild` or simulator run before 07:00.
 
@@ -77,26 +77,26 @@ The lead does this itself; no worker.
 ## The owner's read (2026-11-05 08:00)
 
 The owner read the learnings and the handoff and let the loop run on (RS10). From here the program lead is the owner's
-session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
+session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as factory Issues chained with `--after` and built by leads.
 
 ## Wave 8 — dotfiles: the Issue path beside the wave path (row 7, expand)            <!-- status: done -->
-- [x] Brief `archive/briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), `rd wave|fan|merge` deprecated but working, `/wave`
+- [x] Brief `archive/briefs/reset-w8-dotfiles.md`: `rd issue` (a thin `factory issue new`), the dotfiles wave commands deprecated but working, `/wave`
   the plan playbook (Issues with `--after`; the chain modes under Legacy), hc-reap's orphaned-shell rule, the lanes docs. Built by one
-  `implementer` in a dotfiles worktree (this session is not a factory session, so `rd fan` would go hc-direct).
+  `implementer` in a dotfiles worktree (this session is not a factory session, so a worker spawn would go hc-direct).
 - [x] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
-**Why expand:** six repos have a wave marked active; iris runs one on `rd wave --child`, `rd fan`, `rd merge` (the inventory of 2026-11-05).
+**Why expand:** six repos have a wave marked active; iris runs one on the dotfiles wave, worker and merge commands (the inventory of 2026-11-05).
 **Repos:** dotfiles
 **Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.athena-repo-sync`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
 
 ## Wave 8b — the contract of row 7, as Issues            <!-- status: active -->
 - [x] The stale active waves (2026-11-05): basalt-expr-trial and -v1 archived (local-only repos, pages built 10-18); modelpick Wave 5 →
   Issue 73, ntfy-mac Wave 6 → Issue 74 (closed `done`); basalt-ui Wave 55 back to `pending` (PR #570, `6f1007a8`), paused by the owner (RS11).
-- [ ] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off `rd wave|close`. agent-workflows: `agw review request` (the
-  hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete `rd wave|fan|merge|close`
+- [ ] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off the dotfiles wave and close commands. agent-workflows: `agw review request` (the
+  hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete the dotfiles wave, worker, merge and close commands
   for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and tests, hc-reap's agent rules; keep
   `rd work|agents|read|say|issue`. Filed: Issue 80 (software-factory), 81 (agent-workflows), 82 (dotfiles, `--after 80 81`).
-- [x] Issue 80 closed `done` (62fc594 verified); 81 closed `done` (the hidden review transport gone from agw, a6b9271).
-- [ ] Issue 82: merged and deployed (dotfiles 96ed564, `rd wave` gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
+- [x] Issue 80 closed `done` (62fc594 verified); 81 closed `done` (the hidden review sessions gone from agw, a6b9271).
+- [ ] Issue 82: merged and deployed (dotfiles 96ed564, the wave command gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
   unrelated verify rows forward (0622894), but it sits `waiting blocked`: no transition leaves `blocked` but a drop. Issue 97 (Issue 98 was
   dropped into it) is the exit: `factory issue note <id> --wake` takes a blocked, parked or timed-wait Issue back to working; then wake 82,
   its lead ships it, 83 to 85 move.
@@ -110,7 +110,7 @@ session. Row 7 removes `rd fan`, so rows 7b, 8 and 9 are filed as factory Issues
 - [ ] Live proof: two checks started at once run one after the other; load under 40 through a full check.
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: done -->
-- [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the review transport (after Issue 67's fix is
+- [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the hidden review sessions (after Issue 67's fix is
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
 - [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
