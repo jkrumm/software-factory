@@ -51,6 +51,7 @@ const commits: Commits = {
     commits: [...reported],
     paths: ['docs/x.md'],
     mergedAt: null,
+    reviewRanges: [],
   }),
 }
 
