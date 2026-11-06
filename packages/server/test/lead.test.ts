@@ -383,15 +383,22 @@ describe('classify, then admission', () => {
           ],
         ),
       )
+    /** The started leads have begun their first turn: a started spawn without one keeps holding its account whatever the sample says. */
+    const began = async () => {
+      const keys: { key: string }[] = await db.sql`SELECT key FROM factory.spawns WHERE status = 'started'`
+      for (const { key } of keys) await emit(key, 'turn_started')
+    }
     /** Three Issues in three repos, one account: the first two leads start on it, the third waits at the cap. */
     async function twoOnOne() {
       await db.sql`DELETE FROM factory.quota_readings WHERE account = 'b'`
       const ids = [await file(newRepo()), await file(newRepo()), await file(newRepo())]
       for (let i = 0; i < 3; i++) {
         await drive(4)
+        await began()
         await sample(['a'])
       }
       await drive(4)
+      await began()
       return ids
     }
 

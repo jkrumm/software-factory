@@ -16,6 +16,8 @@ export interface FakeTerminal {
   status: { app: string; state: string } | null
   reported: boolean
   turn: number
+  /** what `terminal.read` answers */
+  screen_text?: string
   foreground?: { argv: string[]; cwd: string; name: string; pid: number } | null
 }
 
@@ -28,6 +30,8 @@ export interface FakeHcState {
   sent: { terminal: string; text: string; if?: string }[]
   docs: Record<string, { value: unknown; version: number }>
   calls: string[]
+  /** Enters an `unsent` terminal (`terminal.run:unsent`) swallows before it takes one; default 1 */
+  swallow?: number
 }
 
 export interface FakeHc {

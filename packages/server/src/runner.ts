@@ -51,6 +51,8 @@ export interface Runner {
    * (a lead's note that has waited too long: Claude Code queues it for its next turn); a blocked one is still `busy`. An error means nothing is known to have arrived.
    */
   type(input: { pane: string; text: string; enterOnly?: boolean; force?: true }): Promise<'typed' | 'busy'>
+  /** The terminal's visible screen as text: how the factory sees whether a brief sits unsent in Claude Code's input box. */
+  screen(pane: string): Promise<string>
   /** Ends the spawn's agent and takes its terminal away, found by the key like a start. No terminal left is what was asked for. */
   close(key: string): Promise<void>
 }

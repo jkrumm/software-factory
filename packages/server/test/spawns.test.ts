@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { HcRunner } from '../src/hc-runner.ts'
+import { recordEvent } from '../src/sessions.ts'
 import { tick } from '../src/tick.ts'
 import { startApp, TEST_REPO, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -39,6 +40,12 @@ const runTick = () =>
       deliverWaitMs: 3_000,
     }),
   })
+/** The agents of these spawns began their first turn, as the hooks report it: a started spawn without one keeps holding its account. */
+const turned = async (...keys: string[]) => {
+  for (const key of keys) {
+    await recordEvent(db.sql, { key: `${key}:turn_started`, session: key, kind: 'turn_started', at: clock.now() })
+  }
+}
 const tabs = async () => (await hc.state()).terminals.map((t) => t.labels['factory.key'])
 const inHours = (h: number) => new Date(clock.now().getTime() + h * 3_600_000).toISOString()
 const reading = (account: string, weeklyUsed: number, fiveHourUsed: number, resetsAt: string) =>
@@ -224,6 +231,7 @@ describe('an account takes one spawn per sample', () => {
 
     // It starts. A sample whose picker data is older than the start does not show it.
     expect(await runTick()).toMatchObject({ started: ['first'] })
+    await turned('first')
     clock.advance(60_000)
     await app.send('PUT', '/quota/accounts/a', {
       weeklyUsed: 10,
@@ -262,6 +270,7 @@ describe('an account takes one spawn per sample', () => {
 
     // The tick looks at it again only when a reading wakes it; one taken before the starts does not show them.
     expect((await runTick()).started.toSorted()).toEqual(['s0', 's1'])
+    await turned('s0', 's1')
     clock.advance(60_000)
     for (const account of ['a', 'b']) {
       await app.send('PUT', `/quota/accounts/${account}`, {
@@ -285,6 +294,7 @@ describe('an account takes one spawn per sample', () => {
     await spawn('first')
     await spawn('second')
     await runTick()
+    await turned('first')
     clock.advance(60_000)
     // Still taken: nothing is woken, so the waiting spawn keeps its resume_at.
     await app.send('PUT', '/quota/accounts/a', {

@@ -139,23 +139,25 @@ export async function latestReadings(sql: SQL): Promise<Reading[]> {
 
 /**
  * Spawns that hold an account against its current reading: queued or starting ones always (no agent runs for them yet,
- * so no sample can show them), started ones until a sample is taken after the moment they started (`assigned_at` is moved
- * to it). `except` leaves one spawn out, for a spawn that is re-checking its own account.
+ * so no sample can show them), started ones until a turn began (a brief may sit unsent, and no sample shows an agent that
+ * does not work) and a sample is taken after the moment they started (`assigned_at` is moved to it). `except` leaves one spawn out, for a spawn that is re-checking its own account.
  */
 export async function currentLoads(
   sql: SQL,
   readings: readonly Reading[],
   except?: string,
 ): Promise<Map<string, number>> {
-  const rows: { account: string; status: string; assigned_at: Date }[] = await sql`
-    SELECT account, status, assigned_at FROM factory.spawns
+  const rows: { account: string; status: string; assigned_at: Date; turned: boolean }[] = await sql`
+    SELECT account, status, assigned_at,
+      EXISTS (SELECT 1 FROM factory.events e WHERE e.session = factory.spawns.key AND e.kind = 'turn_started' AND e.at >= factory.spawns.assigned_at) AS turned
+    FROM factory.spawns
     WHERE status IN ('queued', 'starting', 'started') AND account IS NOT NULL AND assigned_at IS NOT NULL
       AND key IS DISTINCT FROM ${except ?? null}`
   const sampled = new Map(readings.map((r) => [r.account, r.sampledAt]))
   const loads = new Map<string, number>()
   for (const row of rows) {
     const at = sampled.get(row.account)
-    if (row.status !== 'started' || (at && row.assigned_at >= at))
+    if (row.status !== 'started' || !row.turned || (at && row.assigned_at >= at))
       loads.set(row.account, (loads.get(row.account) ?? 0) + 1)
   }
   return loads
