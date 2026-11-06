@@ -219,7 +219,9 @@ export const TABLE: Record<string, Partial<Record<IssueState, Step>>> = {
     waiting: { ...noted, otherwise: { when: noteWakes, step: { to: 'working', effects: ['note_lead'] } } },
     watching: noted,
   },
-  answer: { waiting: { to: 'working', only: 'decision', effects: ['note_lead'], apply: answerDecision } },
+  // A decision wait gave its repo's claim back (`settleClaims`, which also takes it again): the answer is recorded and the Issue waits for a
+  // place; the lead is woken, with the answer, by the `wake` the pass files once it holds the claim.
+  answer: { waiting: { to: 'waiting', reason: 'claim', only: 'decision', apply: answerDecision } },
   park: { working: { to: 'waiting', reason: 'parked' } },
   stop: { settling: stopped, queued: stopped, working: stopped, waiting: stopped, watching: stopped },
   prio: { queued: recorded, working: recorded, waiting: recorded, watching: recorded },

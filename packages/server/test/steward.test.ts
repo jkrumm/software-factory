@@ -389,6 +389,18 @@ describe('rule 4: a silent or over-budget lead is nudged, a claim holder is woke
     expect(await state(holder)).toMatchObject({ state: 'working' })
   })
 
+  test('an answered Issue waiting for its claim counts as queued behind a blocked holder', async () => {
+    const holder = await working()
+    await lead(holder)
+    await report(holder, 'block', { reason: 'waiting for something' })
+    const waiter = await queuedBehind(holder, 20)
+    await db.sql`UPDATE factory.issues SET state = 'waiting', reason = 'claim' WHERE id = ${waiter}`
+    await pass()
+    const [wake] = await acts()
+    expect(wake?.payload).toMatchObject({ cause: 'claim', wake: true, who: 'steward' })
+    expect(await state(holder)).toMatchObject({ state: 'working' })
+  })
+
   const claimActs = async () =>
     (await acts()).filter((a: { payload: { cause: string } }) => a.payload.cause === 'claim')
 

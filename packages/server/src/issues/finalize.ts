@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
-import { releaseClaim } from '../projects/claims.ts'
+import { releaseClaim, wakeClaimWaiters } from '../projects/claims.ts'
 import { isPlanKey, type Runner } from '../runner.ts'
 import { dropEmptySession } from '../sessions.ts'
 import { archiveAttempt, type ProjectsDir, type TranscriptStore } from './archive.ts'
@@ -48,11 +48,7 @@ async function giveBack({ sql, clock }: FinalizeDeps, issueId: number, attempt: 
       WHERE (key = ${lead} OR parent = ${lead}) AND status IN ('queued', 'waiting', 'starting')
       RETURNING key`
     for (const { key } of stopped) await dropEmptySession(tx, key)
-    if (keys.length === 0) return
-    await tx`
-      UPDATE factory.spawns SET resume_at = ${now}
-      WHERE status = 'queued' AND hold = 'claim'
-        AND issue_id IN (SELECT issue_id FROM factory.claims WHERE key IN ${tx(keys)} AND held_at IS NULL)`
+    await wakeClaimWaiters(tx, keys, now)
   })
 }
 

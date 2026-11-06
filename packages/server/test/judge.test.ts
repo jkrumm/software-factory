@@ -87,6 +87,7 @@ async function step(issueId: number, kind: string, payload?: Record<string, unkn
   await enqueue(db.sql, { issueId, key: `${issueId}:${kind}:${++n}`, kind, at: clock.now(), payload })
   // The ports are empty: a `note_lead` effect has no port in these tests, only the inbox is under test.
   await issuePass(db.sql, { now, ports: {}, judgement: judge ?? judgement(undefined) })
+  if (kind === 'answer') await issuePass(db.sql, { now, ports: {}, judgement: judge ?? judgement(undefined) })
 }
 
 /** An Issue that asked a question; the pass that made it did not judge it (the judge is gated by the caller). */
@@ -132,6 +133,7 @@ describe('a verdict answer', () => {
     })
     expect(await marker('ask_judged:1')).toMatchObject({ outcome: 'answered', source: 'plan: docs/decisions.md' })
 
+    await issuePass(db.sql, { now, ports: {}, judgement: neverRuns })
     await issuePass(db.sql, { now, ports: {}, judgement: neverRuns })
     expect(await decision(id)).toMatchObject({ answer: '8080', answered_by: 'steward' })
     expect(await notifications()).toEqual([])

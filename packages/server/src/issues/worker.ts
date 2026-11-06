@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { admitIssues } from './admission.ts'
+import { admitIssues, settleClaims } from './admission.ts'
 import type { Classification } from './classify.ts'
 import { type EffectPorts, runEffects } from './effects.ts'
 import { AskJudgement } from './judge.ts'
@@ -142,6 +142,7 @@ export async function issuePass(
   await fireTimers(sql, input.now())
   if (input.steward) await runSteward(sql, input.now(), input.steward)
   await parkGoneLeads(sql, input.now())
+  await settleClaims(sql, input.now())
   await admitIssues(sql, { now: input.now(), alertLeads: input.alertLeads ?? false })
   const errors = await processInbox(sql, input.now)
   // After the inbox: an ask or a spent escalation made in this pass is judged (or, with no judge, told to the owner) in it.

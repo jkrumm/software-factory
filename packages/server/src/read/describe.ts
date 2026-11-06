@@ -43,6 +43,7 @@ const REASON_WORDS: Record<string, string> = {
   parked: 'parked',
   unreported: 'stopped without reporting',
   lead_gone: 'without a running lead',
+  claim: 'waiting for the repo to be free',
 }
 
 /**

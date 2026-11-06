@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import { lockCapacity } from '../capacity.ts'
-import { tryClaim } from '../projects/claims.ts'
+import { projectOfPath, releaseDecisionClaims, tryClaim, wakeClaimWaiters } from '../projects/claims.ts'
 import { effectiveState, loadQueueStates } from '../queue.ts'
 import { enqueue } from './inbox.ts'
 
@@ -75,5 +75,50 @@ export async function admitIssues(sql: SQL, options: AdmitOptions): Promise<numb
       admitted++
     }
     return admitted
+  })
+}
+
+/**
+ * Claims for Issues that wait on the owner, once per tick before admission (under the capacity lock like every admission): an Issue in a
+ * decision wait gives its repo's claim back, so the next Issue of the project can run while the owner may take hours; an Issue
+ * whose question was answered (`waiting`, reason `claim`) takes a place again through `tryClaim`, in the same order as admission (urgent
+ * first, then by id) and behind a holder that works, so a project never has more working leads than its `leads`. Having the place, it gets
+ * a `wake` (key `wake:<issue>:claim:<question key>`) that moves it to `working` and types the answer to its lead, with the order to rebase.
+ * The lead's worktree is never touched here. Idempotent: it is also what releases a claim an Issue held when it asked.
+ */
+export async function settleClaims(sql: SQL, now: Date): Promise<{ released: number; resumed: number }> {
+  return sql.begin(async (tx) => {
+    await lockCapacity(tx)
+    const keys = await releaseDecisionClaims(tx)
+    await wakeClaimWaiters(tx, keys, now)
+    const waiting: { id: number; repo: string }[] = await tx`
+      SELECT id, repo FROM factory.issues WHERE state = 'waiting' AND reason = 'claim'
+      ORDER BY (class = 'urgent' OR kind = 'incident') DESC, id LIMIT ${BATCH}`
+    let resumed = 0
+    for (const { id, repo } of waiting) {
+      // A repo that has no project row any more has no claim to wait for: an Issue that was admitted once is not held back by that.
+      if ((await projectOfPath(tx, repo)) && (await tryClaim(tx, id, now)) !== 'held') continue
+      const [answer]: { payload: Record<string, unknown> | null }[] = await tx`
+        SELECT payload FROM factory.issue_inbox
+        WHERE issue_id = ${id} AND kind = 'answer' AND result = 'applied' ORDER BY id DESC LIMIT 1`
+      // The wake is keyed by the question it ends (its key is the ask's own), so a replay of the run files the same one.
+      const [question]: { key: string }[] = await tx`
+        SELECT key FROM factory.decisions WHERE issue_id = ${id} AND answered_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+      const carried = Object.fromEntries(
+        ['answer', 'who', 'text'].flatMap((name) => {
+          const value = answer?.payload?.[name]
+          return typeof value === 'string' ? [[name, value]] : []
+        }),
+      )
+      await enqueue(tx, {
+        issueId: id,
+        key: `wake:${id}:claim:${question?.key ?? 'none'}`,
+        kind: 'wake',
+        at: now,
+        payload: { for: 'claim', ...carried },
+      })
+      resumed++
+    }
+    return { released: keys.length, resumed }
   })
 }

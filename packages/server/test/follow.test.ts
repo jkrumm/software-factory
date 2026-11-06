@@ -438,7 +438,8 @@ describe('factory issue show: the timeline', () => {
       'event:phase',
       'event:ask→waiting',
       'event:ask_judged',
-      'event:answer→working',
+      'event:answer→waiting',
+      'event:wake→working',
       'inbox:phase',
     ])
     const times = view.timeline.map((t) => Date.parse(t.at))

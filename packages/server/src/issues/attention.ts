@@ -80,7 +80,7 @@ export async function issueAttention(
 
   const waiting: { id: number; project: string }[] = await sql`
     SELECT i.id, substr(c.key, 6) AS project FROM factory.issues i JOIN factory.claims c ON c.issue_id = i.id
-    WHERE i.state = 'queued' AND c.held_at IS NULL ORDER BY i.id LIMIT ${PER_KIND}`
+    WHERE (i.state = 'queued' OR (i.state = 'waiting' AND i.reason = 'claim')) AND c.held_at IS NULL ORDER BY i.id LIMIT ${PER_KIND}`
   for (const issue of waiting) health.push(`Issue ${issue.id} waits for the claim on ${issue.project}`)
 
   const stuck: { issue_id: number; error: string }[] = await sql`
