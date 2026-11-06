@@ -903,6 +903,19 @@ function allowedMethods(table: Record<string, object>): (pathname: string) => st
   return (pathname) => patterns.find((p) => p.regex.test(pathname))?.methods ?? []
 }
 
+/**
+ * Stops accepting and lets requests in flight finish for `graceMs`, then closes whatever is still open: the SSE stream and a
+ * session's long-poll `wait` never end by themselves, and a plain `stop()` waits for them forever (a shutdown then sat in
+ * it until its backstop, 210 s, holding the database lock).
+ */
+export async function stopListening(
+  listener: { stop(closeActiveConnections?: boolean): Promise<void> },
+  graceMs: number,
+): Promise<void> {
+  const settled = await Promise.race([listener.stop().then(() => true), Bun.sleep(graceMs).then(() => false)])
+  if (!settled) await listener.stop(true)
+}
+
 export function serve(deps: AppDeps & { port: number }) {
   // The stream is quiet between keepalives: Bun's idle timer would cut it, so its handler takes its connection out of the timer.
   const table = routes(deps, { noTimeout: (req) => server.timeout(req, 0) })

@@ -11,7 +11,7 @@ import { Places } from './fleet/place.ts'
 import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
-import { serve, serveHooks } from './http.ts'
+import { serve, serveHooks, stopListening } from './http.ts'
 import { FileTranscripts } from './issues/archive.ts'
 import { AgwClassifier, Classification } from './issues/classify.ts'
 import { AgwReview } from './issues/review.ts'
@@ -36,6 +36,9 @@ import { gitProbe, startWitness } from './witness.ts'
 
 /** Longest a shutdown may take: one in-flight start is bounded by the start budget; the plist ExitTimeOut is longer. */
 const SHUTDOWN_BACKSTOP_MS = DEFAULT_START_BUDGET_MS + 30_000
+
+/** How long requests in flight get to finish at shutdown before their connections are closed. */
+const SHUTDOWN_GRACE_MS = 5_000
 
 /** How long a new server asks for the one-process lock while the old one is still stopping. */
 const LOCK_WAIT_MS = 45_000
@@ -263,9 +266,9 @@ async function shutdown(signal: string): Promise<void> {
   try {
     // Stop taking requests, let the tick in flight record its result, only then release the lock and close the pool.
     stoppingStep = 'server.stop'
-    await server.stop()
+    await stopListening(server, SHUTDOWN_GRACE_MS)
     stoppingStep = 'hooks.stop'
-    await hooks.stop()
+    await stopListening(hooks, SHUTDOWN_GRACE_MS)
     stoppingStep = 'ticker.stop'
     await ticker.stop()
     stoppingStep = 'fleet.settled'
