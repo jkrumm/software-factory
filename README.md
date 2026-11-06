@@ -12,7 +12,8 @@ The factory runs the lifecycle in plain code. Every judgment that needs a model 
 [agent-workflows](https://github.com/jkrumm/agent-workflows), and every change to a repo is made by
 Claude Code.
 
-Status: planning and early build. Start with [`docs/decisions.md`](docs/decisions.md).
+Status: live on one machine. Start with [`docs/program.md`](docs/program.md) for the current state and
+[`docs/decisions.md`](docs/decisions.md) for what was decided and why.
 
 ## Develop
 
@@ -27,7 +28,9 @@ make check   # format, lint, shellcheck, types, tests
 
 | Path | What |
 |-|-|
-| `packages/server` | the server: HTTP API, tick, `Runner` port, queue, migrations (schema `factory`) |
-| `packages/cli` | the `factory` CLI: `version`, `health`, `spawn list` |
-| `scripts/`, `deploy/` | release-directory deploy, verify, LaunchAgent template |
-| `docs/` | decisions, program, design, research, spikes |
+| `packages/server` | the server: HTTP API, tick, `Runner` port, Issue lifecycle, read API, migrations (schema `factory`) |
+| `packages/contract` | the zod schemas shared by the server and the CLI |
+| `packages/cli` | the `factory` CLI: `status`, `issue`, `spawn`, `session`, `read`, `follow`, `fleet`, `hook` and more |
+| `packages/door` | the door: tailnet alerts become Issues |
+| `scripts/`, `deploy/` | release-directory deploy, verify, LaunchAgent templates |
+| `docs/` | decisions, program, design, research, evidence, strategy, spikes |
