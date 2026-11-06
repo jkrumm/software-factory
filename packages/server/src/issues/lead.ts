@@ -284,10 +284,10 @@ export function noteText(issueId: number, payload: Effect['payload']): string {
 async function noteLead(deps: LeadDeps, effect: Effect): Promise<void> {
   const { sql, clock } = deps
   const key = leadKey(effect.issueId, attemptOf(effect))
-  // A lead in a decision wait, or waiting to take its repo's claim again, is not typed to: it would work with no place in the repo. The
-  // note comes with the wake that gives the place back (the effects of an Issue run in order, so it is not lost).
+  // A lead in a decision wait, a timed wait, or waiting to take its repo's claim again, is not typed to: it would work with no place in the repo
+  // (a wait gave it back). The note comes with the wake that gives the place back (the effects of an Issue run in order, so it is not lost).
   const [waiting]: { reason: string }[] = await sql`
-    SELECT reason FROM factory.issues WHERE id = ${effect.issueId} AND state = 'waiting' AND reason IN ('decision', 'claim')`
+    SELECT reason FROM factory.issues WHERE id = ${effect.issueId} AND state = 'waiting' AND reason IN ('decision', 'claim', 'wait')`
   if (waiting)
     throw new Waiting(`Issue ${effect.issueId} has no place in its repo (${waiting.reason}); the note waits for it`)
   const spawn = await getSpawn(sql, key, clock.now())

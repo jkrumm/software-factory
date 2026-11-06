@@ -562,10 +562,13 @@ describe('factory issue note', () => {
     await note(id, { id: 'plain', text: 'still waiting' })
     await drive(2)
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'wait' })
+    // the sleeping lead gave its repo's place back: a plain note is held until it has one again
+    expect((await promptsOf(key)).map((p) => p.id)).not.toContain(`issue:${id}:note:plain`)
     expect((await note(id, { id: 'go', text: 'cap is lifted', wake: true })).status).toBe(201)
     await drive(2)
     expect(await issue(id)).toMatchObject({ state: 'working', reason: null, wake_at: null })
     expect((await promptsOf(key)).map((p) => p.id)).toContain(`issue:${id}:note:go`)
+    expect((await promptsOf(key)).map((p) => p.id)).toContain(`issue:${id}:note:plain`)
   })
 
   test('a running lead is typed it through the session notes, under issue:<id>:note:<call id>', async () => {
