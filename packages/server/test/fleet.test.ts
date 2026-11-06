@@ -619,6 +619,26 @@ describe('the lead’s review', () => {
     expect((await builder.refreshNow()).asks.find((a) => a.id === 'hc:software-factory-w6')?.at).toBe(ask?.at)
   })
 
+  test('1c: an Issue lead at an hc blocked prompt raises no ask, however long; a session of another name still does', async () => {
+    await w.spawned('lead-9-1', { repo: `${estate.src}/software-factory`, role: 'lead' })
+    await db.sql`UPDATE factory.sessions SET pane = 't4h' WHERE id = 'lead-9-1'`
+    await w.emit('lead-9-1', 'turn_started', w.at(5))
+    terminals = terminals.map((t) =>
+      t.address === 't4h'
+        ? {
+            ...t,
+            status: 'blocked',
+            statusMessage: 'Allow Bash?',
+            statusAt: new Date(clock.now().getTime() - 60_000).toISOString(),
+          }
+        : t,
+    )
+    clock.advance(30 * 60_000)
+    const fleet = await builder.refreshNow()
+    expect(fleet.repos.flatMap((r) => r.sessions).some((x) => x.id === 'lead-9-1')).toBe(true)
+    expect(fleet.asks.some((a) => a.id === 'hc:lead-9-1')).toBe(false)
+  })
+
   test('2, 8: a health line keeps its id and its time across builds', async () => {
     await factoryRows()
     const first = await builder.refreshNow()

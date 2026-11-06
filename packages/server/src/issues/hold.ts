@@ -216,15 +216,18 @@ export async function proofInputOf(
   return { repo: issue.repo, makeVerify: targets?.verify === true, version, probes: manifest.deploy.probes }
 }
 
-/** The key of the second check of a hold: the first red one asks for it, and only a red second one is a regression. */
-export const rerunKey = (verifyKey: string): string => `${verifyKey}:rerun`
+/** How long after a red check each retry is due: 1, 2 and 4 minutes, so a deploy in progress or a restarting service settles. */
+export const VERIFY_RETRY_DELAYS_MS: readonly number[] = [60_000, 120_000, 240_000]
+
+/** The key of retry `n` (1-based) of a hold's check, from the key of the first check. */
+export const retryKey = (rootKey: string, n: number): string => `${rootKey}:retry${n}`
 
 /**
- * The check after the hold, off the tick (`make verify` can take minutes): `verified` when every check passes. A red first check is not
- * yet an answer: it files a second `verify` effect (`<key>:rerun`, once) and a line in the Issue's events, because a flaky probe or a
- * deploy still settling must not send a lead back to work. Only a red second check is a `regression` naming its hold, which goes back to
- * the same lead. The answers are keyed by the hold, and a check whose answer is filed already, or whose hold is over, runs nothing: a
- * crash anywhere replays to one answer.
+ * The check after the hold, off the tick (`make verify` can take minutes): `verified` when every check passes. A red check is not yet
+ * an answer: it files the next `verify` effect (`<key>:retry1..3`, due 1, 2 and 4 minutes after the red; the port waits for its
+ * `notBefore`) and a line in the Issue's events, because a flaky probe or a deploy still settling must not send a lead back to work.
+ * Only a red after the last retry is a `regression` naming its hold, which goes back to the same lead. The answers are keyed by the
+ * hold, and a check whose answer is filed already, or whose hold is over, runs nothing: a crash anywhere replays to one answer.
  */
 async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signal: AbortSignal): Promise<void> {
   const issueId = effect.issueId
@@ -247,13 +250,34 @@ async function verifyHold({ sql, clock, proof }: HoldDeps, effect: Effect, signa
   // A check takes minutes: a stop or a regression may have ended the hold since.
   if (!(await current())) return
   const green = checks.every((check) => check.ok)
-  if (!green && effect.payload?.rerun !== true) {
+  // `rerun` is the payload of the one retry an earlier server filed: it counts as the last.
+  const retry = effect.payload?.rerun === true ? VERIFY_RETRY_DELAYS_MS.length : Number(effect.payload?.retry ?? 0)
+  const delay = VERIFY_RETRY_DELAYS_MS[retry]
+  if (!green && delay !== undefined) {
     const now = clock.now()
+    const rootKey = typeof effect.payload?.root === 'string' ? effect.payload.root : effect.key
+    const next = {
+      ...effect.payload,
+      root: rootKey,
+      retry: retry + 1,
+      notBefore: new Date(now.getTime() + delay).toISOString(),
+    }
     await sql.begin(async (tx) => {
-      await markEvent(tx, issueId, `verify_red:${issueId}:${hold}`, 'verify_red', now, { hold, checks })
+      await markEvent(
+        tx,
+        issueId,
+        `verify_red:${issueId}:${hold}${retry === 0 ? '' : `:${retry}`}`,
+        'verify_red',
+        now,
+        {
+          hold,
+          retry: retry + 1,
+          checks,
+        },
+      )
       await tx`
         INSERT INTO factory.issue_effects (issue_id, key, kind, payload, created_at)
-        VALUES (${issueId}, ${rerunKey(effect.key)}, 'verify', ${{ ...effect.payload, rerun: true }}, ${now})
+        VALUES (${issueId}, ${retryKey(rootKey, retry + 1)}, 'verify', ${next}, ${now})
         ON CONFLICT (key) DO NOTHING`
     })
     return
@@ -283,6 +307,9 @@ export function holdPorts(deps: HoldDeps): Pick<EffectPorts, 'verify'> {
   return {
     verify: async (effect) => {
       if (deps.settledAt && deps.clock.now() < deps.settledAt) throw new Waiting('the server has only just started')
+      const notBefore =
+        typeof effect.payload?.notBefore === 'string' ? Date.parse(effect.payload.notBefore) : Number.NaN
+      if (deps.clock.now().getTime() < notBefore) throw new Waiting('the retry of a red check is not due yet')
       await deps.offTick.run(effect.key, (signal) => verifyHold(deps, effect, signal))
     },
   }

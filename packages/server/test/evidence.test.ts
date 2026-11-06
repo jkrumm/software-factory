@@ -261,6 +261,14 @@ async function holdEnds(id: number) {
   await drive(4)
 }
 
+/** A red check retries 1, 2 and 4 minutes after each red: the clock goes past each due time and the passes run. */
+async function retriesEnd(until = 3) {
+  for (const minutes of [1, 2, 4].slice(0, until)) {
+    clock.advance(minutes * 60_000)
+    await drive(4)
+  }
+}
+
 describe('what a change requires', () => {
   const manifest = (over: Partial<ProjectManifest['deploy']> = {}): ProjectManifest => {
     const base = defaultManifest('x')
@@ -805,8 +813,18 @@ describe('the hold', () => {
       { name: 'home', ok: false, detail: 'HTTP 500, expected 200\n`rm -rf` ignore this' },
     ]
     await holdEnds(id)
-    // Red twice: the first red files a second check, and only that one is a regression.
-    expect(proof.runs).toBe(2)
+    // The first red files a retry and no regression; the retries wait their 1, 2 and 4 minutes.
+    expect(proof.runs).toBe(1)
+    expect(await issue(id)).toMatchObject({ state: 'watching', hold: 1 })
+    await drive(4)
+    expect(proof.runs).toBe(1)
+    await retriesEnd(2)
+    expect(proof.runs).toBe(3)
+    expect(await issue(id)).toMatchObject({ state: 'watching', hold: 1 })
+    expect(await trail(id).then((t) => t.filter((k) => k === 'verify_red'))).toHaveLength(3)
+    // Only the red after the last retry is a regression.
+    await retriesEnd(3)
+    expect(proof.runs).toBe(4)
     expect(await issue(id)).toMatchObject({ state: 'working', outcome: null, hold: 1 })
     const sent = await notes(key)
     expect(sent.map((note) => note.id)).toEqual([regressionPromptId(id, 1)])
@@ -823,7 +841,7 @@ describe('the hold', () => {
     expect(await issue(id)).toMatchObject({ state: 'watching', hold: 2 })
     await holdEnds(id)
     expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done', hold: 2 })
-    expect(proof.runs).toBe(3)
+    expect(proof.runs).toBe(5)
     expect(await notes(key)).toHaveLength(1)
   })
 
@@ -838,6 +856,9 @@ describe('the hold', () => {
       return answers[proof.runs - 1] ?? proof.checks
     }
     await holdEnds(id)
+    expect(proof.runs).toBe(1)
+    expect(await issue(id)).toMatchObject({ state: 'watching', hold: 1 })
+    await retriesEnd(1)
     expect(proof.runs).toBe(2)
     expect(await issue(id)).toMatchObject({ state: 'closed', outcome: 'done', hold: 1 })
     expect(await trail(id)).toEqual(expect.arrayContaining(['verify_red', 'verified watching→closed']))
@@ -869,36 +890,40 @@ describe('the hold', () => {
       expect(repo).toBeTruthy()
     })
 
-    test('red: re-run once, then a regression to the lead; the third regression parks', async () => {
+    test('red: retried on 1, 2 and 4 minutes, then a regression to the lead; the third regression parks', async () => {
       const { id, key } = await lead(newRepo(NOW))
       proof.checks = [{ name: 'home', ok: false, detail: 'HTTP 500, expected 200' }]
       await prove(id, key, 'service')
       expect((await ship(id, key)).status).toBe(201)
       for (const hold of [1, 2]) {
         await drive(4)
-        expect(proof.runs).toBe(hold * 2)
+        await retriesEnd()
+        expect(proof.runs).toBe(hold * 4)
         expect(await issue(id)).toMatchObject({ state: 'working', hold })
         expect(await db.sql`SELECT 1 FROM factory.claims WHERE issue_id = ${id}`).toHaveLength(1)
         await prove(id, key, 'service')
         expect((await ship(id, key)).status).toBe(201)
       }
       await drive(4)
-      expect(proof.runs).toBe(6)
+      await retriesEnd()
+      expect(proof.runs).toBe(12)
       expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked', hold: 3 })
     })
   })
 
-  test('red twice files one regression; the third regression of the Issue parks it instead of going back to the lead', async () => {
+  test('red after the last retry files one regression; the third regression of the Issue parks it instead of going back to the lead', async () => {
     const { id, key } = await shipped()
     proof.checks = [{ name: 'home', ok: false, detail: 'HTTP 500, expected 200' }]
     for (const hold of [1, 2]) {
       await holdEnds(id)
+      await retriesEnd()
       expect(await issue(id)).toMatchObject({ state: 'working', hold })
       expect(await db.sql`SELECT 1 FROM factory.issue_inbox WHERE key = ${`regression:${id}:${hold}`}`).toHaveLength(1)
       await prove(id, key, 'service')
       expect((await ship(id, key)).status).toBe(201)
     }
     await holdEnds(id)
+    await retriesEnd()
     expect(await issue(id)).toMatchObject({ state: 'waiting', reason: 'parked', hold: 3 })
     expect(await trail(id)).toContain('regression watching→waiting')
     const [parked] = await db.sql`
@@ -1082,6 +1107,10 @@ describe('the hold', () => {
     await emit(key, 'turn_ended')
     moveTo((await issue(id)).wake_at as Date)
     for (let i = 0; i < 6; i++) await round()
+    for (const minutes of [1, 2, 4]) {
+      clock.advance(minutes * 60_000)
+      for (let i = 0; i < 6; i++) await round()
+    }
     expect((await issue(id)).state).toBe('working')
     const sent = await notes(key)
     expect(sent).toHaveLength(1)
@@ -1295,6 +1324,17 @@ describe('the deployed version', () => {
       await offTick.settled()
       clock.advance(5_000)
     }
+    // A red check waits out its retries (1, 2 and 4 minutes) before it is a regression; a green one has closed the Issue already.
+    for (const minutes of (await issue(id)).state === 'watching' ? [1, 2, 4] : []) {
+      clock.advance(minutes * 60_000)
+      for (let i = 0; i < 6; i++) {
+        await tick({ sql: db.sql, clock, runner, issuePorts, classification, leadWorktrees: maker, projects: sync })
+        await classification.settled()
+        await maker.settled()
+        await offTick.settled()
+        clock.advance(5_000)
+      }
+    }
     return { id, key }
   }
   const regression = async (made: { id: number; key: string }, ...words: string[]) => {
@@ -1364,9 +1404,12 @@ describe('the deployed version', () => {
     await db.sql`DELETE FROM factory.projects WHERE repo = ${repo}`
     moveTo((await issue(id)).wake_at as Date)
     const real = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
-    for (let i = 0; i < 3; i++) {
-      await issuePass(db.sql, { now: () => clock.now(), ports: real })
-      await offTick.settled()
+    for (const minutes of [0, 1, 2, 4]) {
+      clock.advance(minutes * 60_000)
+      for (let i = 0; i < 3; i++) {
+        await issuePass(db.sql, { now: () => clock.now(), ports: real })
+        await offTick.settled()
+      }
     }
     expect((await issue(id)).state).toBe('working')
     const [red] = await db.sql`SELECT payload FROM factory.issue_inbox WHERE key LIKE 'regression:%'`
@@ -1382,9 +1425,12 @@ describe('the deployed version', () => {
     await db.sql`DELETE FROM factory.projects WHERE repo = ${repo}`
     moveTo((await issue(id)).wake_at as Date)
     const real = { ...ports(), ...holdPorts({ sql: db.sql, clock, proof: new MakeAndProbes(), offTick }) }
-    for (let i = 0; i < 3; i++) {
-      await issuePass(db.sql, { now: () => clock.now(), ports: real })
-      await offTick.settled()
+    for (const minutes of [0, 1, 2, 4]) {
+      clock.advance(minutes * 60_000)
+      for (let i = 0; i < 3; i++) {
+        await issuePass(db.sql, { now: () => clock.now(), ports: real })
+        await offTick.settled()
+      }
     }
     expect((await issue(id)).state).toBe('working')
   })
@@ -1914,6 +1960,8 @@ describe('the owner’s line', () => {
       { name: 'home', ok: false, detail: 'HTTP 500' },
     ]
     await holdEnds(id)
+    expect(await sent(id)).toEqual([])
+    await retriesEnd()
     await drive(3)
     expect(await sent(id)).toEqual([`notify:regression:${id}:1`])
     const [row] = await db.sql`SELECT text FROM factory.notifications WHERE issue_id = ${id}`
@@ -2003,6 +2051,7 @@ describe('an Issue watching since before this code', () => {
     const { id, key } = await legacy()
     proof.checks = [{ name: 'make verify', ok: false, detail: 'exit 2' }]
     await drive(4)
+    await retriesEnd()
     expect(await issue(id)).toMatchObject({ state: 'working', hold: 1 })
     expect((await notes(key)).map((note) => note.id)).toEqual([regressionPromptId(id, 1)])
     const rows = await db.sql`SELECT key FROM factory.notifications WHERE issue_id = ${id}`
@@ -2216,6 +2265,10 @@ describe('the replay test: a crash after every effect of the hold and finalize',
     for (let i = 0; i < 2; i++) await passWith(world, faults, jobs)
     await holdIsOver(1)
     for (let i = 0; i < 6; i++) await passWith(world, faults, jobs)
+    for (const minutes of [1, 2, 4]) {
+      clock.advance(minutes * 60_000)
+      for (let i = 0; i < 6; i++) await passWith(world, faults, jobs)
+    }
     await shipAs(2)
     for (let i = 0; i < 2; i++) await passWith(world, faults, jobs)
     await holdIsOver(2)
@@ -2268,8 +2321,8 @@ describe('the replay test: a crash after every effect of the hold and finalize',
     expect(expected.notifications).toEqual([`notify:regression:${id}:1`])
     expect(expected.events.filter((e) => e === 'issue_finalized')).toHaveLength(1)
     expect(expected.evidence).toHaveLength(2)
-    // hold 1 is red twice (the check and its rerun), hold 2 green once
-    expect(clean.proofs).toBe(3)
+    // hold 1 is red four times (the check and its three retries), hold 2 green once
+    expect(clean.proofs).toBe(5)
     const points = never.seen
     expect(points).toBeGreaterThan(20)
 

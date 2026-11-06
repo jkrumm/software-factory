@@ -165,7 +165,8 @@ const lastIndex = (facts: readonly Fact[], ...kinds: EventKind[]): number =>
  * - `starting`: nothing yet proves the session is up (no session_started, no turn).
  * - `walled`: a limit_stop or quota_resume with no turn_started after it. A `quota_resume` that says `fired` means
  *   Claude carried on by itself, so the turn that ends after it also ends the wall.
- * - `blocked`: a prompt_blocked with no turn_started or turn_ended after it (answering the prompt does not start a turn).
+ * - `blocked`: a prompt_blocked with no turn_started or turn_ended after it (answering the prompt does not start a turn), unless
+ *   the runner has shown the agent `working` since the prompt appeared.
  * - `working`: the latest turn_started has no turn_ended after it; `stuck` when the runner agrees and neither the worktree
  *   nor the turn has moved for 45 minutes.
  * - `waiting`: a declared wait is open and no turn is. `--done` ends a wait, and so does a delivered wake (`clearAnsweredWait`).
@@ -210,8 +211,17 @@ export function deriveState(input: DeriveInput): Derived | undefined {
     return { state: 'walled', wait, turn, since: here[first]?.at ?? null }
   }
 
+  // Answering a prompt starts no turn, so hc's reading ends it: the runner saw the agent working after the prompt appeared.
   const iBlocked = lastIndex(here, 'prompt_blocked')
-  if (iBlocked > Math.max(iStart, iEnd)) return { state: 'blocked', wait, turn, since: here[iBlocked]?.at ?? null }
+  const blockedAt = here[iBlocked]?.at
+  const answered =
+    blockedAt !== undefined &&
+    agent?.status === 'working' &&
+    agent.seenAt !== null &&
+    agent.seenAt > blockedAt &&
+    now.getTime() - agent.seenAt.getTime() <= AGENT_FRESH_MS
+  if (iBlocked > Math.max(iStart, iEnd) && !answered)
+    return { state: 'blocked', wait, turn, since: here[iBlocked]?.at ?? null }
 
   if (iStart > iEnd) {
     const startedAt = here[iStart]?.at.getTime() ?? 0

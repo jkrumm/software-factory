@@ -3,6 +3,8 @@
 **TLDR.** Since RS11 (2026-11-05) the program runs as factory Issues: the owner's session files each row with
 `factory issue new --after …` (or `rd issue`), and the Issue's lead builds, reviews, ships and verifies it. There are no
 program-lead rotations or wave plans in this repo any more; the earlier ones are in `docs/waves/archive/`.
+The owner's session no longer needs a watcher (RS12): the steward acts on a stalled Issue, and every ask and spent escalation is
+judged by `agw factory-ask` first (`docs/design.md` §4 "The ask judge"); only what the plan docs cannot settle reaches him.
 
 ## How the program runs
 
