@@ -8,9 +8,8 @@ Conventions: `<rw>` is the checkout on branch `rewrite` (its `scripts/` are the 
 checkout still on `master`). `admin_sql <file>` is the database admin's psql, defined once:
 
 ```bash
-admin_sql() { # <file in <rw>/scripts/cutover>
-  (cd ~/SourceRoot/vps && secrets-run run --env-file=.env.dev.tpl -- \
-    sh -c 'docker exec -i postgres psql -X -U "$POSTGRES_USER" -d shared -v ON_ERROR_STOP=1' <"$1")
+admin_sql() { # <file in <rw>/scripts/cutover>: vps' own target (Docker runs through Makefile targets only)
+  { printf '\\connect shared\n'; cat "$1"; } | make -s -C ~/SourceRoot/vps sql-postgres
 }
 ```
 
