@@ -1,0 +1,8 @@
+# <path> <term or *>  # <reason>. One line per file and term the check must let through; a stale line fails it.
+scripts/retired-words.ts *  # the list of retired words itself
+scripts/test/retired-words.test.ts *  # the fixtures that prove each word is caught
+scripts/env-file.sh ask judge  # the old core's settings allow-list (FACTORY_ASK_JUDGE); package 9 rewrites it with the deploy scripts
+scripts/gameday/f2/lib.sh manifest  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
+scripts/gameday/f2/seeded-bug.sh park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
+scripts/gameday/f2/silent-lead.sh *  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
+scripts/gameday/f2/templates/silent/AGENTS.md park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
