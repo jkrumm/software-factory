@@ -4,11 +4,14 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
+import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 
 export interface ApiDeps {
   health: HealthSource
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
+  /** signals in and the door's registry; absent, the routes answer 503 (the OpenAPI document needs no database) */
+  intake?: IntakeApi
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -55,6 +58,7 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
 }
 
