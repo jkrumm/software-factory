@@ -39,6 +39,7 @@ export function atPrompt(screen: string, options: { pressOnly?: boolean } = {}):
   const [first = ''] = found.lines
   if (!PROMPT_LINE.test(first)) return false
   if (RUNNING.test(screen.split('\n').slice(-12).join('\n'))) return false
-  if (DIALOG.test([...found.lines, ...found.after].join('\n'))) return false
+  // The first box line is what sits in the input (a note may say anything); a dialog's own text is on the lines after it.
+  if (DIALOG.test([...found.lines.slice(1), ...found.after].join('\n'))) return false
   return options.pressOnly === true || inputBoxText(screen) === ''
 }

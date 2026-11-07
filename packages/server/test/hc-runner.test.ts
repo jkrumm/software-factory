@@ -605,6 +605,11 @@ describe('hc adapter: type', () => {
       expect(await ask()).toBe('typed')
     })
 
+    test('enterOnly presses Enter for a note that itself asks a question', async () => {
+      await showing([RULE, '❯ Do you want to close it?', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await runner.type({ pane: 't1', text: 'x', enterOnly: true })).toBe('typed')
+    })
+
     test('is busy while a turn runs, and when text already sits in the box', async () => {
       await showing(['✻ Thinking… (esc to interrupt)', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
       expect(await ask()).toBe('busy')
