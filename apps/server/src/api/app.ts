@@ -10,8 +10,6 @@ import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type QualityWrites, qualityRoutes, unwiredQuality } from './quality.ts'
 import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
-import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
-import { leadsTestRoutes } from './leads-test.ts'
 import { type IssueApi, issueRoutes } from './issues.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
@@ -28,14 +26,10 @@ export interface ApiDeps {
   health: HealthSource
   /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
   checkpoints?: CheckpointUses
-  /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
-  internalTest?: InternalTestWrites
   /** the quality use cases (ship, reopen, what was recorded); absent, they answer unavailable */
   quality?: QualityWrites
   /** the lead's verbs and its session read (package 4); absent, the routes answer 503 */
   leads?: LeadRoutes
-  /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
-  leadsTick?: Parameters<typeof leadsTestRoutes>[0]
   /** the owner's Issue verbs (new, cancel, note, answer) and the session note; absent, the routes answer 503 */
   issues?: IssueApi
   /** signals in and the door's registry; absent, the routes answer 503 (the OpenAPI document needs no database) */
@@ -132,8 +126,6 @@ export function createApp(deps: ApiDeps) {
     .use(loopRoutes(deps.loops))
     .use(readRoutes(deps.read))
     .use(readModelRoutes(deps.readModels))
-    .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
-    .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }
 
 export type App = ReturnType<typeof createApp>

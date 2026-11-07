@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { join } from 'node:path'
-import { statePathOf, withState } from '../fakes/hc-state.ts'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { admit, fileIssue, killTerminal, runLoop, admitted } from '../flow.ts'
+import { startServer } from '../harness.ts'
 import { type LeadsWorld, startLeadsWorld } from './support.ts'
 
 let w: LeadsWorld
@@ -13,16 +14,6 @@ afterAll(async () => {
   await w.stop()
 })
 
-/** The lead's terminal ends, as if its process died: the core keeps it finished. */
-const kill = (address: string) =>
-  withState(statePathOf(join(w.world.bin, 'calls.jsonl')), (state) => {
-    const terminal = state.terminals[address]
-    if (!terminal) throw new Error(`no terminal ${address}`)
-    terminal.state = 'finished'
-    terminal.status = null
-    terminal.exit_code = 137
-  })
-
 test('lose a terminal: lead_gone, a new attempt up to the limit, then a stall', async () => {
   const issue = await w.admitted()
   await w.tick()
@@ -30,14 +21,14 @@ test('lose a terminal: lead_gone, a new attempt up to the limit, then a stall', 
   for (const attempt of [1, 2]) {
     const live = w.terminals().filter((t) => t.state === 'live' && t.labels['factory.key'] === `lead-1-${attempt}`)
     expect(live).toHaveLength(1)
-    await kill(live[0]?.address ?? '')
+    await killTerminal(w.world, live[0]?.address ?? '')
     const tick = await w.tick()
     expect(tick.lost).toBe(1)
 
     const [row] = await w.world.db.sql`SELECT state FROM factory.issues WHERE id = ${issue}`
     expect(row?.state).toBe('queued')
-    // Capacity admits the next attempt (package 3); the next tick starts its lead.
-    await w.record(issue, `admitted:${attempt + 1}`, 'admitted', {}, 'factory')
+    // Capacity admits the next attempt; the next tick starts its lead.
+    expect((await admit(w)).admitted.map((a) => [a.issue, a.attempt])).toEqual([[issue, attempt + 1]])
     await w.tick()
     expect(
       w.terminals().filter((t) => t.labels['factory.key'] === `lead-1-${attempt + 1}` && t.state === 'live'),
@@ -46,7 +37,7 @@ test('lose a terminal: lead_gone, a new attempt up to the limit, then a stall', 
 
   // The third lead is lost: no new attempt, a stall the steward ends.
   const third = w.terminals().find((t) => t.labels['factory.key'] === 'lead-1-3' && t.state === 'live')
-  await kill(third?.address ?? '')
+  await killTerminal(w.world, third?.address ?? '')
   await w.tick()
   const [stalled] = await w.world.db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issue}`
   expect(stalled).toEqual({ state: 'waiting', wait_reason: 'lead_gone' })
@@ -61,17 +52,19 @@ test('lose a terminal: lead_gone, a new attempt up to the limit, then a stall', 
   expect(left.map((t) => [t.labels['factory.key'], t.state])).toEqual([['lead-1-3', 'finished']])
 })
 
-test('a lead that cannot start (a repo outside the roots) is gone at once, with the reason', async () => {
-  const filed = await w.post('/internal/test/issues', {
-    key: 'filed:outside',
-    kind: 'filed',
-    payload: { repo: '/etc', title: 'outside', kind: 'chore', origin: 'you' },
-    actor: 'factory',
-  })
-  const issue = filed.issue.id
-  await w.record(issue, 'settled', 'settled', {}, 'factory')
-  await w.record(issue, 'admitted:1', 'admitted', {}, 'factory')
-  await w.tick()
+test('a lead that cannot start (a repo that left the roots) is gone at once, with the reason', async () => {
+  const issue = await fileIssue(w, { repo: 'example', title: 'outside' })
+  await admitted(w, issue)
+  // The same database under a server whose allowed roots no longer hold the repo.
+  await w.server.stop()
+  const elsewhere = await mkdtemp('/tmp/factory-elsewhere-')
+  const later = await startServer(w.world, { env: { FACTORY_REPO_ROOTS: elsewhere, FACTORY_GRACE_MS: '0' } })
+  try {
+    await runLoop({ world: w.world, server: later }, 'leads')
+  } finally {
+    await later.stop()
+    await rm(elsewhere, { recursive: true, force: true })
+  }
   const [event] = await w.world.db.sql`
     SELECT payload->>'detail' AS detail FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'lead_gone'`
   expect(event?.detail).toContain('allowed roots')

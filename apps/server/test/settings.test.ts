@@ -3,20 +3,30 @@ import { loadSettings } from '../src/settings.ts'
 
 const base = { FACTORY_TOKEN: 'owner-token-0123456789', DATABASE_URL: 'x', PORT: '1' }
 
-test('the defaults: version dev, the 45 s lock wait, no internal test routes', () => {
+test('the defaults: version dev, the 45 s lock wait, no clock offset', () => {
   expect(loadSettings({ ...base, DATABASE_URL: 'postgres://x', PORT: '7793' })).toMatchObject({
     databaseUrl: 'postgres://x',
     port: 7793,
     version: 'dev',
     lockWaitMs: 45_000,
-    internalTestRoutes: false,
+    clockOffsetMs: 0,
   })
-  expect(
-    loadSettings({ ...base, DATABASE_URL: 'x', PORT: '1', FACTORY_INTERNAL_TEST_ROUTES: '1' }).internalTestRoutes,
-  ).toBe(true)
-  expect(() => loadSettings({ ...base, DATABASE_URL: 'x', PORT: '1', FACTORY_INTERNAL_TEST_ROUTES: 'yes' })).toThrow(
-    /FACTORY_INTERNAL_TEST_ROUTES/,
-  )
+})
+
+describe('the test clock', () => {
+  test('is honored only together with FACTORY_TEST_MODE=1', () => {
+    expect(loadSettings({ ...base, FACTORY_TEST_MODE: '1', FACTORY_TEST_CLOCK_OFFSET_MS: '5000' }).clockOffsetMs).toBe(
+      5000,
+    )
+  })
+
+  test('an offset without the mode refuses the start, naming both keys', () => {
+    for (const mode of [{}, { FACTORY_TEST_MODE: '0' }]) {
+      expect(() => loadSettings({ ...base, ...mode, FACTORY_TEST_CLOCK_OFFSET_MS: '5000' })).toThrow(
+        /FACTORY_TEST_CLOCK_OFFSET_MS.*FACTORY_TEST_MODE=1/,
+      )
+    }
+  })
 })
 
 test('a bad or missing key refuses the start, naming the key', () => {

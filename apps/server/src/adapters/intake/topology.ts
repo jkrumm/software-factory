@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { parseInfra } from '../../domains/intake/infra.ts'
 import type { Infra } from '../../domains/intake/infra.ts'
 import type { IntakeTopology } from '../../domains/intake/ports.ts'
-import { err, ok, portError } from '../../kernel/result.ts'
+import { ok } from '../../kernel/result.ts'
 
 /** `config/infra.json` (or the owner's copy), read and checked; a missing or bad file is a startup error, never a fallback. */
 export async function loadInfra(path: string): Promise<Infra> {
@@ -29,7 +29,3 @@ export function infraTopology(infra: Infra): IntakeTopology {
   const topology = { hostOfRepo, hosts: new Set(infra.hosts.keys()) }
   return { load: () => Promise.resolve(ok(topology)) }
 }
-
-export const unreachableTopology = (detail: string): IntakeTopology => ({
-  load: () => Promise.resolve(err(portError('unreadable', detail))),
-})

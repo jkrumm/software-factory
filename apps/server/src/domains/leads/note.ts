@@ -7,17 +7,6 @@ export const MAX_NOTE_CHARS = 4_000
 
 const oneLine = (value: unknown): string => JSON.stringify(typeof value === 'string' ? value : String(value))
 
-/** The event kinds a lead hears about; its own verbs and the machine's bookkeeping are not news. */
-export const NEWS: readonly string[] = [
-  'noted',
-  'answered',
-  'verdict_given',
-  'errand_done',
-  'woken',
-  'regressed',
-  'reopened',
-]
-
 function item(record: HistoryRecord): string | null {
   switch (record.kind) {
     case 'noted':

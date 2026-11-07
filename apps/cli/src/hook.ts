@@ -26,7 +26,6 @@ export const HOOK_EVENTS = [
   'notification',
   'session-end',
 ] as const
-export type HookEvent = (typeof HOOK_EVENTS)[number]
 
 /** How long a hook waits for another hook of its session before it writes a key that cannot collide. */
 export const LOCK_BUDGET_MS = 200

@@ -120,19 +120,15 @@ describe('the OpenAPI document', () => {
   })
 })
 
-describe('the internal test routes', () => {
-  test('do not exist unless mounted, and are never in the OpenAPI document', async () => {
-    const owner = 'o'.repeat(16)
-    const app = createApp({ tokens: { owner }, health: { read: async () => ok }, docs: true, log: () => {} })
-    const response = await app.handle(
-      new Request('http://localhost/internal/test/issues', {
-        method: 'POST',
-        body: '{}',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${owner}` },
-      }),
-    )
-    expect(response.status).toBe(404)
+describe('the OpenAPI document and the scaffolding', () => {
+  test('has no path under /internal', async () => {
+    const app = createApp({
+      tokens: { owner: 'o'.repeat(16) },
+      health: { read: async () => ok },
+      docs: true,
+      log: () => {},
+    })
     const document = OpenApiDocument.parse(await (await get(app, OPENAPI_PATH)).json())
-    expect(Object.keys(document.paths).some((path) => path.startsWith('/internal'))).toBe(false)
+    expect(Object.keys(document.paths).filter((path) => path.startsWith('/internal'))).toEqual([])
   })
 })

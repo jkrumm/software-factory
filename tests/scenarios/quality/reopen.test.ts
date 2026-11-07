@@ -41,7 +41,7 @@ async function closed(tag: string): Promise<string> {
   const sha = await commit(lw, `src/${tag}.ts`, `export const ${tag} = 1\n`, `feat: ${tag}`)
   const shipped = await ship(lw.world, server, id, { call: 'ship-1', commits: [sha] })
   expect(shipped.code).toBe(0)
-  await until('the Issue to close', async () => (await stateOf(server, id)) === 'closed:done')
+  await until('the Issue to close', async () => (await stateOf(lw.world, id)) === 'closed:done')
   return id
 }
 
@@ -50,7 +50,7 @@ test('the owner reopens a closed Issue within the window: it is queued again; th
   const reopened = await reopen(lw.world, server, id, { call: 'reopen-1', reason: 'it broke again on a phone' })
   expect(reopened.code).toBe(0)
   expect(reopened.json).toMatchObject({ result: 'applied', issue: { id, state: 'queued', outcome: null } })
-  expect(await stateOf(server, id)).toBe('queued')
+  expect(await stateOf(lw.world, id)).toBe('queued')
 
   const again = await reopen(lw.world, server, id, { call: 'reopen-1', reason: 'it broke again on a phone' })
   expect(again.json.result).toBe('replayed')
@@ -69,13 +69,12 @@ test('past 30 days a reopen is refused: file a new Issue; a restarted server doe
   await server.stop()
   // The same world and database, a server whose clock is 31 days on.
   later = await startServer(lw.world, {
+    clockOffsetMs: 31 * DAY_MS,
     env: {
       ...QUALITY_ENV,
       ...WINDOW,
-      FACTORY_INTERNAL_TEST_ROUTES: '1',
       FACTORY_REPO_ROOTS: lw.root,
       FACTORY_GRACE_MS: '0',
-      FACTORY_CLOCK_OFFSET_MS: String(31 * DAY_MS),
     },
   })
   server = later
@@ -83,7 +82,7 @@ test('past 30 days a reopen is refused: file a new Issue; a restarted server doe
   const late = await reopen(lw.world, server, id, { call: 'reopen-1', reason: 'too late' })
   expect(late.code).toBe(5)
   expect(late.refusal).toContain('closed more than 30 days ago: file a new Issue')
-  expect(await stateOf(server, id)).toBe('closed:done')
+  expect(await stateOf(lw.world, id)).toBe('closed:done')
 
   await Bun.sleep(600)
   expect(await show(lw.world, server, id)).toEqual(before)

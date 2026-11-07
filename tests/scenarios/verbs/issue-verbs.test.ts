@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { admitted } from '../flow.ts'
 import { bearer } from '../harness.ts'
 import { startVerbsWorld, type VerbsWorld } from './support.ts'
 
@@ -17,9 +18,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await v.stop()
 })
-
-const lead = async (issue: string, name: string, kind: string, payload: unknown) =>
-  v.w.record(issue, name, kind, payload, 'lead')
 
 test('issue new files through the CLI; the same key files nothing; text and facts reach the lead brief', async () => {
   const filed = await v.run([
@@ -53,9 +51,8 @@ test('issue new files through the CLI; the same key files nothing; text and fact
   expect(again.json).toMatchObject({ issue: first, filed: false })
   expect(await v.issueCount()).toBe(1)
 
-  // The triage loop settles it; here the scenario does, then admits it and ticks.
-  await v.w.record(first, 'settled', 'settled', {}, 'factory')
-  await v.w.record(first, 'admitted:1', 'admitted', {}, 'factory')
+  // The triage loop settles it; here the scenario settles and admits it through planning and capacity, then ticks.
+  await admitted(v.w, first)
   await v.w.tick()
   const brief = v.w.terminals()[0]?.argv.at(-1) ?? ''
   expect(brief).toContain('Fix the login redirect')
@@ -134,7 +131,8 @@ test('issue note: the lead hears it once; a wake ends a timer wait; a person wai
 
   // The lead waits for a time; a note with wake ends the wait and the lead hears the note in the news that ends it.
   const until = new Date(Date.now() + 3_600_000).toISOString()
-  expect((await lead(first, 'defer:1', 'deferred', { attempt: 1, until })).issue.state).toBe('waiting')
+  const deferred = await v.run(['issue', 'defer', first, '--attempt', '1', '--until', until], 'agent')
+  expect(deferred.json).toMatchObject({ issue: { state: 'waiting' } })
   const woke = await v.run(['issue', 'note', 'issue_1', 'go on, the data is ready', '--wake'])
   expect(woke.json).toMatchObject({ noted: true, woken: true, issue: { state: 'working' } })
   await v.w.tick()

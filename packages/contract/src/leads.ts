@@ -89,7 +89,7 @@ export const LeadSession = z
   .meta({ id: 'LeadSession' })
 export type LeadSession = z.infer<typeof LeadSession>
 
-/** One pass of the lead tick, for the scenarios' entry (`POST /internal/test/tick`). */
+/** What one pass of the lead tick did (the `leads` loop's summary). */
 export const TickAnswer = z
   .object({
     outbox: z.object({ ran: z.number().int(), failed: z.number().int() }),

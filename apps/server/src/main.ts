@@ -35,7 +35,6 @@ import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
-import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
 import { reopenIssue } from './app/quality-reopen.ts'
@@ -99,9 +98,11 @@ async function main(): Promise<void> {
     loops: postgresLoopStore(tx),
     loopReads: loopReads(tx),
   }))
-  // The scenarios move this clock to reach a date a real one would take 30 days to; the leads' own keep the system's.
+  // A test moves this clock to reach a date a real one would take 30 days to (settings refuse it outside test mode).
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
+  if (settings.clockOffsetMs !== 0)
+    console.warn(`TEST CLOCK: the write clock runs ${settings.clockOffsetMs} ms from real time (FACTORY_TEST_MODE=1)`)
   const writes = { uow, clock, ids: systemIds }
   // No call of an earlier process is running: an open call to agw is taken up again under its own key (agw hands back its run).
   const lapsed = await uow.run(async ({ loops }) => ok(await loops.lapseOpen(new Date())))
@@ -340,10 +341,6 @@ async function main(): Promise<void> {
         return view.ok ? queueReasonMap(view.value.queue) : null
       },
     },
-    leadsTick: settings.internalTestRoutes ? () => leads.tick() : undefined,
-    internalTest: settings.internalTestRoutes
-      ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
-      : undefined,
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   intake.start()
   runner.start()

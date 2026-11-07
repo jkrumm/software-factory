@@ -1,7 +1,8 @@
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { InternalTestEventAnswer, type InternalTestEventBody } from '@software-factory/contract'
-import { bearer, factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
+import { fileIncident, fileIssue } from '../flow.ts'
+import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
+import { type AccountRow, setAccounts, setMemory } from '../host.ts'
 
 /** What a repo of the lab has on its default branch. */
 export interface RepoFiles {
@@ -11,12 +12,7 @@ export interface RepoFiles {
   plan?: string
 }
 
-export interface AccountRow {
-  id: string
-  five_hour?: number
-  seven_day?: number
-  enabled?: boolean
-}
+export type { AccountRow }
 
 const git = async (cwd: string, ...args: string[]) => {
   const proc = Bun.spawn(['git', '-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
@@ -59,16 +55,8 @@ export interface Lab {
   root: string
   /** runs `factory <args>` against the server */
   cli(args: string[], env?: Record<string, string>): Promise<CliResult>
-  /** files an Issue through the internal test route (until package 8) and returns its id */
-  file(repo: string, title: string, kind?: 'feature' | 'bug' | 'incident'): Promise<string>
-  /** records an event on an Issue through the internal test route */
-  event(
-    issue: string,
-    name: string,
-    kind: string,
-    payload: object,
-    actor?: InternalTestEventBody['actor'],
-  ): Promise<string>
+  /** files an Issue and returns its id: `issue new` for a feature, a door alert for an incident */
+  file(repo: string, title: string, kind?: 'feature' | 'incident'): Promise<string>
   /** replaces the picker's accounts (read at the next poll: `factory capacity refresh`) */
   accounts(rows: AccountRow[]): Promise<void>
   /** sets what the host's memory reads */
@@ -78,23 +66,12 @@ export interface Lab {
   stop(): Promise<void>
 }
 
-const SYSCTL = (dir: string) => `#!/bin/sh
-case "$2" in
-  hw.pagesize) echo 16384;;
-  vm.compressor.swapper.swapouts_total) cat "${dir}/swapouts";;
-  hw.memsize) echo 34359738368;;
-  vm.swapusage) echo "total = 40960.00M  used = $(cat "${dir}/swapused").00M  free = 1.00M  (encrypted)";;
-esac
-`
-
-const PICKER = (dir: string) => `#!/bin/sh
-cat "${dir}/accounts.json"
-`
-
 export async function startLab(options: {
   repos: Record<string, RepoFiles>
   accounts?: AccountRow[]
   env?: Record<string, string>
+  /** gives every repo a bare `origin` with its default branch pushed, so a lead can start in a worktree of it */
+  leads?: boolean
 }): Promise<Lab> {
   const world = await startWorld()
   const base = await mkdtemp('/tmp/factory-lab-')
@@ -111,63 +88,30 @@ export async function startLab(options: {
     }
     await git(path, 'add', '-A')
     await git(path, 'commit', '-q', '-m', 'init')
+    if (!options.leads) continue
+    const origin = join(base, 'origins', `${name}.git`)
+    await mkdir(origin, { recursive: true })
+    await git(origin, 'init', '-q', '--bare', '-b', 'main')
+    await git(path, 'remote', 'add', 'origin', origin)
+    await git(path, 'push', '-q', 'origin', 'main')
+    await git(path, 'fetch', '-q', 'origin')
   }
-  const picker = join(base, 'claude-account')
-  const sysctl = join(base, 'sysctl')
-  await writeFile(picker, PICKER(base))
-  await writeFile(sysctl, SYSCTL(base))
-  await chmod(picker, 0o755)
-  await chmod(sysctl, 0o755)
 
-  const accounts = async (rows: AccountRow[]) => {
-    const now = Math.floor(Date.now() / 1000)
-    await writeFile(
-      join(base, 'accounts.json'),
-      JSON.stringify({
-        accounts: rows.map((r) => ({
-          id: r.id,
-          enabled: r.enabled ?? true,
-          auth_ok: true,
-          five_hour: r.five_hour ?? 10,
-          seven_day: r.seven_day ?? 20,
-          five_hour_resets_at: now + 3600,
-          seven_day_resets_at: now + 3 * 86_400,
-          // sampled at the poll itself: a later poll is a later sample, which is what frees an account for a new lead
-          age_s: 0,
-          exhausted_until: null,
-        })),
-      }),
-    )
-  }
-  const memory = async (input: { swapUsedMb: number; swapouts?: number }) => {
-    await writeFile(join(base, 'swapused'), String(input.swapUsedMb))
-    await writeFile(join(base, 'swapouts'), String(input.swapouts ?? 1000))
-  }
+  const accounts = (rows: AccountRow[]) => setAccounts(world.bin, rows)
+  const memory = (input: { swapUsedMb: number; swapouts?: number }) => setMemory(world.bin, input)
   await accounts(options.accounts ?? [{ id: 'me' }])
   await memory({ swapUsedMb: 1024 })
 
   const server = await startServer(world, {
     env: {
-      FACTORY_INTERNAL_TEST_ROUTES: '1',
       FACTORY_REPO_ROOTS: root,
-      FACTORY_CLAUDE_ACCOUNT_BIN: picker,
-      FACTORY_SYSCTL_BIN: sysctl,
-      FACTORY_MEMORY_SAMPLE_MS: '0',
+      // a lost terminal is noticed at the next pass
+      FACTORY_GRACE_MS: '0',
       ...options.env,
     },
   })
 
-  const post = async (path: string, body: InternalTestEventBody) => {
-    const response = await fetch(`${server.url}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...bearer() },
-      body: JSON.stringify(body),
-    })
-    const text = await response.text()
-    if (response.status !== 200) throw new Error(`${path} answered ${response.status}: ${text}`)
-    return InternalTestEventAnswer.parse(JSON.parse(text))
-  }
-  let counter = 0
+  const flow = { world, server }
 
   return {
     world,
@@ -189,25 +133,8 @@ export async function startLab(options: {
       }
       return { ...result, json, failure }
     },
-    file: async (repo, title, kind = 'feature') => {
-      counter++
-      const answer = await post('/internal/test/issues', {
-        key: `lab:filed:${counter}`,
-        kind: 'filed',
-        payload: { repo, title, kind, origin: 'you' },
-        actor: 'factory',
-      })
-      return answer.issue.id
-    },
-    event: async (issue, name, kind, payload, actor = 'factory') => {
-      const answer = await post(`/internal/test/issues/${issue}/events`, {
-        key: `lab:${issue}:${name}`,
-        kind,
-        payload,
-        actor,
-      })
-      return answer.issue.state
-    },
+    file: (repo, title, kind = 'feature') =>
+      kind === 'incident' ? fileIncident(flow, { repo, title }) : fileIssue(flow, { repo, title }),
     accounts,
     memory,
     commit: async (repo, files) => {
@@ -218,6 +145,7 @@ export async function startLab(options: {
       }
       await git(path, 'add', '-A')
       await git(path, 'commit', '-q', '-m', 'update')
+      if (options.leads) await git(path, 'push', '-q', 'origin', 'main')
     },
     stop: async () => {
       await server.stop()

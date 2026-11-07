@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { admitted } from '../flow.ts'
 import { bearer } from '../harness.ts'
 import { startVerbsWorld, type VerbsWorld } from './support.ts'
 
@@ -43,8 +44,7 @@ test("an alert Issue's brief carries the alert's title and facts as data, and ev
   )
   expect(filed.status).toBe(200)
   const { issue } = (await filed.json()) as { issue: string }
-  await v.w.record(issue, 'settled', 'settled', {}, 'factory')
-  await v.w.record(issue, 'admitted:1', 'admitted', {}, 'factory')
+  await admitted(v.w, issue)
   await v.w.tick()
 
   const brief = v.w.terminals()[0]?.argv.at(-1) ?? ''
@@ -68,6 +68,23 @@ test("an alert Issue's brief carries the alert's title and facts as data, and ev
 })
 
 test('the lead calls its verbs in the forms the brief lists, with the agent token', async () => {
+  // The alert's Issue stops the line for its repo until it closes: its lead ends it, then a feature may be admitted.
+  const alerted = v.w.terminals().at(-1)?.labels['factory.key'] ?? ''
+  const closed = await v.run(
+    [
+      'issue',
+      'close',
+      `issue_${alerted.split('-')[1]}`,
+      '--attempt',
+      '1',
+      '--outcome',
+      'done',
+      '--reason',
+      'not a fault',
+    ],
+    'agent',
+  )
+  expect(closed.code).toBe(0)
   const issue = await v.w.admitted('a spec to hand over')
   await v.w.tick()
   const session = v.w.terminals().at(-1)?.labels['factory.key'] ?? ''

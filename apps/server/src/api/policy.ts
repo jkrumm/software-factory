@@ -18,7 +18,7 @@
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs, `ship`,
  *   `quality`, a revision, its own session read, a note to a session, the signal it files and the test slots it takes.
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
- *   capacity, loops, the door's registry, the scenarios' test routes). When in doubt, the owner alone.
+ *   capacity, loops, the door's registry). When in doubt, the owner alone.
  * - machine: exactly `POST /signals/alerts` and `POST /door/reports`, the door's two calls (the owner may make them too).
  *
  * Adding a route: add its row here, in the class it belongs to. `test/policy.test.ts` walks the OpenAPI document and
@@ -104,10 +104,6 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/queue/order', OWNER),
   rule('GET', '/queue', OWNER),
   rule('PUT', '/queue', OWNER),
-  // the scenarios' routes (mounted only with FACTORY_INTERNAL_TEST_ROUTES=1)
-  rule('POST', '/internal/test/issues', OWNER),
-  rule('POST', '/internal/test/issues/:id/events', OWNER),
-  rule('POST', '/internal/test/tick', OWNER),
 ]
 
 /** `/x/` and `/x` are one route (a group's `/` route carries the prefix's trailing slash). */

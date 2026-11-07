@@ -43,7 +43,7 @@ test('an owner signal that matches an open Issue amends it: one noted event, no 
   const first = await signalFile({ from: 'owner:hermes', repo: 'argo', title: 'The login page crashes on submit' })
   expect(first).toMatchObject({ outcome: 'filed', detail: 'new' })
   const issue = first.issue as string
-  expect(await observe(server, issue)).toMatchObject({ state: 'settling', version: 1 })
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling', version: 1 })
 
   const second = await signalFile({
     from: 'owner:hermes',
@@ -52,7 +52,7 @@ test('an owner signal that matches an open Issue amends it: one noted event, no 
     text: 'it is the 500 from /session',
   })
   expect(second).toMatchObject({ outcome: 'amended', detail: 'matched', issue })
-  expect(await observe(server, issue)).toMatchObject({ state: 'settling', version: 2 })
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling', version: 2 })
 
   const stored = (await get(server, '/v1/signals')).body.signals as { issue: string }[]
   expect(stored.map((s) => s.issue)).toEqual([issue, issue])
@@ -81,10 +81,10 @@ test('a replayed alert is one effect', async () => {
   const first = await door.post('kuma', kuma)
   expect(first).toMatchObject({ status: 200, body: { outcome: 'filed', detail: 'new' } })
   const issue = first.body.issue as string
-  const version = (await observe(server, issue)).version
+  const version = (await observe(world, issue)).version
   const again = await door.post('kuma', kuma)
   expect(again).toMatchObject({ status: 200, body: { detail: 'replayed', issue } })
-  expect((await observe(server, issue)).version).toBe(version)
+  expect((await observe(world, issue)).version).toBe(version)
 }, 20000)
 
 test('outside text is held, never filed, until the owner promotes it', async () => {

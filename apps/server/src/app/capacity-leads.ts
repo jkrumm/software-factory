@@ -6,9 +6,8 @@ import type { PlanningDeps } from './planning-deps.ts'
  * Capacity's side of the leads' ports: the account an attempt was admitted on (`Seats`), the repo claim given back when
  * the attempt ends (`Claims`) and the window that can run out (`Windows`).
  *
- * An attempt that was admitted outside capacity (the scenarios record `admitted` themselves) has no account on file and
- * runs on `default`: no `CLAUDE_CONFIG_DIR`, whatever account the terminal's launcher picks. Admission by the pass always
- * stores one.
+ * An attempt with no account on file (one imported as already working) runs on `default`: no `CLAUDE_CONFIG_DIR`, whatever account the
+ * terminal's launcher picks. Admission by the pass always stores one.
  */
 export function capacityForLeads(deps: PlanningDeps): { seats: Seats; claims: Claims; windows: Windows } {
   return {

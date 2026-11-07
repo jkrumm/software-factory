@@ -23,8 +23,6 @@ import type { SQL } from 'bun'
  * id: another database, a reset), is `CursorGone`: the client starts again from `GET /v1/changes` without `since`.
  */
 
-export const START_CURSOR = '0.0'
-
 export interface Cursor {
   txid: bigint
   seq: bigint

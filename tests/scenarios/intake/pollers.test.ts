@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { writeFile } from 'node:fs/promises'
+import { must } from '../flow.ts'
 import { startWorld, type ServerProcess, type World } from '../harness.ts'
 import {
   type Estate,
@@ -8,7 +9,6 @@ import {
   get,
   makeEstate,
   observe,
-  post,
   startIntakeServer,
   until,
 } from './support.ts'
@@ -86,13 +86,8 @@ test("a labelled GitHub issue files once; a stranger's unlabelled one is held; t
 
   // closing the Issue answers GitHub once: a marker comment, the issue closed only when it is the owner's own and done
   const issue = github7?.issue as string
-  const cancelled = await post(server, `/internal/test/issues/${issue}/events`, {
-    key: 'cancel:7',
-    kind: 'cancelled',
-    payload: { reason: 'not needed' },
-    actor: 'owner',
-  })
-  expect(cancelled.body.issue.state).toBe('closed')
+  const cancelled = await must({ world, server }, ['issue', 'cancel', issue, '--reason', 'not needed'])
+  expect(cancelled.json).toMatchObject({ issue: { state: 'closed', outcome: 'cancelled' } })
   const comment = await until('the write-back comment', async () => github.comments.find((c) => c.number === 7))
   expect(comment.body).toContain(`<!-- factory-issue:${issue} -->`)
   expect(comment.body).toContain('Closed by the factory without a change: cancelled.')
@@ -114,16 +109,16 @@ test('a failed launchd job files an Issue, a healthy one heals it, a work repo i
   )
   expect(filed).toMatchObject({ trust: 'machine', repo: 'argo', state: 'filed' })
   const issue = filed.issue as string
-  expect(await observe(server, issue)).toMatchObject({ state: 'settling' })
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling' })
 
   await writeFile(
     estate.launchctlFile,
     JSON.stringify({ 'com.example.backup': { state: 'not running', runs: 4, exit: 0 } }),
   )
   await until('the Issue to close as healed', async () =>
-    (await observe(server, issue)).state === 'closed' ? true : null,
+    (await observe(world, issue)).state === 'closed' ? true : null,
   )
-  expect(await observe(server, issue)).toMatchObject({ state: 'closed', outcome: 'healed' })
+  expect(await observe(world, issue)).toMatchObject({ state: 'closed', outcome: 'healed' })
 
   const calls = (await world.calls()).filter((c) => c.tool === 'launchctl').map((c) => c.args.join(' '))
   expect(calls.length).toBeGreaterThan(0)

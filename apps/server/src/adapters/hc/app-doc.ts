@@ -85,33 +85,6 @@ export async function nameTab(rpc: Rpc, tab: string, name: string): Promise<void
 }
 
 /**
- * Name a space the app created without a name. A name that is set is the owner's and is never overwritten, and an absent
- * entry is left alone. Best effort, never throwing; written against the version just read, a conflict reads again.
- */
-export async function nameSpace(rpc: Rpc, space: { id: string; name: string }): Promise<void> {
-  try {
-    for (let attempt = 0; attempt < DOC_RETRIES; attempt++) {
-      const doc = await rpc('doc.get', { name: APP_DOC }, DocGet)
-      const entry =
-        isRecord(doc.value) && Array.isArray(doc.value.spaces)
-          ? doc.value.spaces.find((candidate) => isRecord(candidate) && candidate.id === space.id)
-          : undefined
-      if (!isRecord(entry)) return
-      if (typeof entry.name === 'string' && entry.name.trim() !== '') return
-      entry.name = space.name
-      try {
-        await rpc('doc.set', { name: APP_DOC, version: doc.version, value: doc.value }, DocSet)
-        return
-      } catch (error) {
-        if (!(error instanceof HcError && error.refusal?.kind === 'conflict')) return
-      }
-    }
-  } catch {
-    // the name is a courtesy
-  }
-}
-
-/**
  * Make sure the app's document has an entry for a space the factory is about to put a terminal in, so the app adopts the
  * terminal into a space named after the repo and rooted at its folder, not one named after the terminal's cwd (a worktree's).
  * `folder` is the space's resolved path (the main checkout of a worktree). The entry is `{ id, name, folder, tabs: [] }`, as

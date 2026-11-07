@@ -97,7 +97,7 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
   expect(signals.map((s) => s.issue)).toEqual([issue, issue, issue])
   expect(new Set(signals.map((s) => s.source))).toEqual(new Set(['beszel', 'hyperdx', 'kuma']))
   // filed + two notes: three applied events, nothing else, and still `settling`
-  expect(await observe(server, issue)).toMatchObject({ state: 'settling', outcome: null, version: 3 })
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling', outcome: null, version: 3 })
 
   // The ups: Kuma and HyperDX through the door amend, the hub recovering heals it.
   expect(await door.post('kuma', kuma(1, '2026-11-07 10:20:00.000'))).toMatchObject({
@@ -108,10 +108,10 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
   })
   hub.setMemory(30)
   await until('the Issue to close as healed', async () => {
-    const seen = await observe(server, issue)
+    const seen = await observe(world, issue)
     return seen.state === 'closed' ? seen : null
   })
-  expect(await observe(server, issue)).toMatchObject({ state: 'closed', outcome: 'healed' })
+  expect(await observe(world, issue)).toMatchObject({ state: 'closed', outcome: 'healed' })
 
   // Never a second Issue: every stored signal points at the one.
   const after = (await get(server, '/v1/signals')).body.signals as { issue: string | null }[]

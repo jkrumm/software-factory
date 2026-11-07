@@ -93,6 +93,3 @@ export const MAX_RESTARTS = 2
 export const MAX_REGRESSIONS = 2
 /** A closed Issue reopens within this long; after it, file a new one. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
-
-export const isPersonWait = (wait: WaitSpec): wait is Extract<WaitSpec, { holds: Checkpoint }> =>
-  WAITS[wait.reason].exit === 'person'

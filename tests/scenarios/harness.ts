@@ -3,6 +3,7 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import * as z from 'zod'
 import { startTestCluster, type TestCluster } from '../support/pg.ts'
+import { hostEnv, installHost } from './host.ts'
 
 const ROOT = join(import.meta.dir, '..', '..')
 const SERVER_MAIN = join(ROOT, 'apps', 'server', 'src', 'main.ts')
@@ -68,6 +69,7 @@ export async function startWorld(): Promise<World> {
     await chmod(shim, 0o755)
   }
   await writeFile(log, '')
+  await installHost(bin)
   return {
     db,
     bin,
@@ -98,6 +100,7 @@ function worldEnv(world: World, extra: Record<string, string>): Record<string, s
     FACTORY_TICK_MS: '0',
     FACTORY_AGW_BIN: join(world.bin, 'agw'),
     FACTORY_FAKE_LOG: join(world.bin, 'calls.jsonl'),
+    ...hostEnv(world.bin),
     ...extra,
   }
 }
@@ -107,10 +110,13 @@ async function drain(stream: ReadableStream<Uint8Array>, sink: (text: string) =>
   for await (const chunk of stream) sink(decoder.decode(chunk, { stream: true }))
 }
 
-/** Starts the real server process on the world's database; `ready: false` returns at once instead of waiting for /health. */
+/**
+ * Starts the real server process on the world's database; `ready: false` returns at once instead of waiting for /health.
+ * `clockOffsetMs` moves the server's write clock, which the server honors only in test mode, so it is switched on here.
+ */
 export async function startServer(
   world: World,
-  options: { env?: Record<string, string>; ready?: boolean } = {},
+  options: { env?: Record<string, string>; ready?: boolean; clockOffsetMs?: number } = {},
 ): Promise<ServerProcess> {
   const port = await freePort()
   const proc = Bun.spawn([process.execPath, SERVER_MAIN], {
@@ -123,6 +129,9 @@ export async function startServer(
       FACTORY_AGENT_TOKEN: TOKENS.agent,
       FACTORY_DOOR_TOKEN: TOKENS.machine,
       FACTORY_READ_TOKEN: TOKENS.read,
+      ...(options.clockOffsetMs
+        ? { FACTORY_TEST_MODE: '1', FACTORY_TEST_CLOCK_OFFSET_MS: String(options.clockOffsetMs) }
+        : {}),
       ...options.env,
     }),
     stdout: 'pipe',

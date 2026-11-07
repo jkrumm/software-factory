@@ -4,14 +4,6 @@ import type { PolicyRule } from '../../domains/checkpoints/decision.ts'
 import type { StandingPolicies } from '../../domains/checkpoints/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 
-/**
- * Honest about being a stub: no project has standing policy until package 3 (planning and capacity) brings the adapter
- * that reads `project.yaml`. The empty answer means every Decision goes on to the Judge.
- */
-export const stubStandingPolicies: StandingPolicies = {
-  rulesFor: () => Promise.resolve(ok([])),
-}
-
 const Rules = z.record(
   z.string(),
   z.array(z.object({ when: z.string().min(1), answer: z.string().min(1), reason: z.string().min(1) })),

@@ -16,9 +16,9 @@ const Env = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535),
   FACTORY_VERSION: z.string().min(1).optional(),
   FACTORY_LOCK_WAIT_MS: z.coerce.number().int().min(0).optional(),
-  FACTORY_INTERNAL_TEST_ROUTES: z.enum(['0', '1']).optional(),
+  FACTORY_TEST_MODE: z.enum(['0', '1']).optional(),
   FACTORY_AGW_BIN: z.string().min(1).optional(),
-  FACTORY_CLOCK_OFFSET_MS: z.coerce.number().int().optional(),
+  FACTORY_TEST_CLOCK_OFFSET_MS: z.coerce.number().int().optional(),
   FACTORY_WATCH_WINDOW_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_VERIFY_RETRY_MS: z.coerce.number().int().min(1).optional(),
   FACTORY_VERIFY_SETTLE_MS: z.coerce.number().int().min(0).optional(),
@@ -41,11 +41,9 @@ export interface Settings {
   version: string
   /** how long a second copy waits for the process lock before it exits 1; the scenarios shorten it */
   lockWaitMs: number
-  /** mounts `/internal/test/...`, the scenarios' entry into the write path until package 8 deletes it */
-  internalTestRoutes: boolean
   /** the agw binary the review reads go through */
   agwBin: string
-  /** moves the server's clock; the scenarios use it to reach a date a real clock would take 30 days to */
+  /** moves the server's clock; only ever non-zero in a test (`FACTORY_TEST_MODE=1`), to reach a date a real clock would take 30 days to */
   clockOffsetMs: number
   /** the project's setting for the watch and verify, until the project file brings it (`domains/quality/watch.ts`) */
   quality: {
@@ -65,6 +63,9 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
   const data = parsed.data
+  if (data.FACTORY_TEST_CLOCK_OFFSET_MS !== undefined && data.FACTORY_TEST_MODE !== '1') {
+    throw new Error('FACTORY_TEST_CLOCK_OFFSET_MS is honored only together with FACTORY_TEST_MODE=1: refusing to start')
+  }
   const present: [string, string][] = []
   for (const key of ['FACTORY_TOKEN', 'FACTORY_AGENT_TOKEN', 'FACTORY_DOOR_TOKEN', 'FACTORY_READ_TOKEN'] as const) {
     const value = data[key]
@@ -85,9 +86,8 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     port: parsed.data.PORT,
     version: parsed.data.FACTORY_VERSION ?? 'dev',
     lockWaitMs: parsed.data.FACTORY_LOCK_WAIT_MS ?? PROCESS_LOCK_WAIT_MS,
-    internalTestRoutes: parsed.data.FACTORY_INTERNAL_TEST_ROUTES === '1',
     agwBin: parsed.data.FACTORY_AGW_BIN ?? 'agw',
-    clockOffsetMs: parsed.data.FACTORY_CLOCK_OFFSET_MS ?? 0,
+    clockOffsetMs: parsed.data.FACTORY_TEST_CLOCK_OFFSET_MS ?? 0,
     quality: {
       windowMs: parsed.data.FACTORY_WATCH_WINDOW_MS ?? 0,
       retryMs: parsed.data.FACTORY_VERIFY_RETRY_MS ?? DEFAULT_RETRY_MS,

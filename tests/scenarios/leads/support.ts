@@ -1,11 +1,9 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { InternalTestEventAnswer, InternalTestEventBody, TickAnswer } from '@software-factory/contract'
+import type { TickAnswer } from '@software-factory/contract'
 import { readState, statePathOf, type FakeHcState, type FakeTerminal } from '../fakes/hc-state.ts'
-import { bearer, factory, startServer, startWorld, type ServerProcess, type World } from '../harness.ts'
-
-const ROOT = join(import.meta.dir, '..', '..', '..')
-const CLI = join(ROOT, 'apps', 'cli', 'bin', 'factory.ts')
+import { admitted, fileIssue, hook, must, tick, type Run } from '../flow.ts'
+import { type Caller, factory, startServer, startWorld, type ServerProcess, type World } from '../harness.ts'
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const proc = Bun.spawn(['git', ...args], {
@@ -25,7 +23,7 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
   return out.trim()
 }
 
-/** A scenario world for the leads: the fakes, a real git repo `example` inside an allowed root, and a server with the test routes on. */
+/** A scenario world for the leads: the fakes, a real git repo `example` inside an allowed root, and a server whose project is read. */
 export interface LeadsWorld {
   world: World
   server: ServerProcess
@@ -35,14 +33,16 @@ export interface LeadsWorld {
   /** the hook socket and spool of the world's server */
   socket: string
   spool: string
-  post(path: string, body: InternalTestEventBody): Promise<InternalTestEventAnswer>
-  /** files an Issue, settles it and admits it; returns its id */
+  /** files an Issue with `issue new`, settles it and admits it through capacity; returns its id */
   admitted(title?: string): Promise<string>
-  record(issue: string, name: string, kind: string, payload: unknown, actor: string): Promise<InternalTestEventAnswer>
+  /** the owner's note for the lead (`issue note`), with the answer the CLI printed */
+  note(issue: string, text: string, options?: { wake?: boolean }): Promise<Run>
+  /** one pass of the leads' loop: it starts the admitted leads, follows lost ones and runs the outbox */
   tick(): Promise<TickAnswer>
   hc(): FakeHcState
   terminals(): FakeTerminal[]
-  cli(args: string[]): ReturnType<typeof factory>
+  /** `factory <args>` as the owner, or as another caller */
+  cli(args: string[], as?: Caller): ReturnType<typeof factory>
   /** runs `factory hook <event>` the way Claude Code does: JSON on stdin, the session in the environment */
   hook(
     event: string,
@@ -63,6 +63,7 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
   await mkdir(repo)
   await git(repo, 'init', '-q', '-b', 'master')
   await Bun.write(join(repo, 'README.md'), '# example\n')
+  await Bun.write(join(repo, 'project.yaml'), 'apiVersion: factory/v2\nname: example\nleads: 8\n')
   await git(repo, 'add', '.')
   await git(repo, 'commit', '-q', '-m', 'init')
   await git(repo, 'remote', 'add', 'origin', origin)
@@ -70,29 +71,14 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
   await git(repo, 'fetch', '-q', 'origin')
 
   const server = await startServer(world, {
-    env: { FACTORY_INTERNAL_TEST_ROUTES: '1', FACTORY_REPO_ROOTS: root, FACTORY_GRACE_MS: '0', ...env },
+    env: { FACTORY_REPO_ROOTS: root, FACTORY_GRACE_MS: '0', FACTORY_LEADS_PER_ACCOUNT: '16', ...env },
   })
+  const flow = { world, server }
+  // Admission is capacity's: the repo is a project with room for several leads, read the way the tick would.
+  await must(flow, ['project', 'sync'])
   const socket = join(world.bin, 'hook.sock')
   const spool = join(world.bin, 'spool')
   const statePath = statePathOf(join(world.bin, 'calls.jsonl'))
-
-  async function post(path: string, body: InternalTestEventBody): Promise<InternalTestEventAnswer> {
-    const response = await fetch(`${server.url}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...bearer() },
-      body: JSON.stringify(body),
-    })
-    const text = await response.text()
-    if (response.status !== 200) throw new Error(`${path} answered ${response.status}: ${text}`)
-    return JSON.parse(text) as InternalTestEventAnswer
-  }
-  const record = (issue: string, name: string, kind: string, payload: unknown, actor: string) =>
-    post(`/internal/test/issues/${issue}/events`, {
-      key: `${issue}:${name}`,
-      kind,
-      payload,
-      actor: actor as InternalTestEventBody['actor'],
-    })
 
   return {
     world,
@@ -101,47 +87,18 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
     repo,
     socket,
     spool,
-    post,
-    record,
     admitted: async (title = 'the probe on /health fails') => {
-      const filed = await post('/internal/test/issues', {
-        key: `filed:${Math.random().toString(36).slice(2)}`,
-        kind: 'filed',
-        payload: { repo: 'example', title, kind: 'bug', origin: 'infrastructure' },
-        actor: 'factory',
-      })
-      const issue = filed.issue.id
-      await record(issue, 'settled', 'settled', {}, 'factory')
-      await record(issue, 'admitted:1', 'admitted', {}, 'factory')
+      const issue = await fileIssue(flow, { repo: 'example', title })
+      await admitted(flow, issue)
       return issue
     },
-    tick: async () => {
-      const response = await fetch(`${server.url}/internal/test/tick`, { method: 'POST', headers: bearer() })
-      const text = await response.text()
-      if (response.status !== 200) throw new Error(`tick answered ${response.status}: ${text}`)
-      return JSON.parse(text) as TickAnswer
-    },
+    note: (issue, text, options = {}) =>
+      must(flow, ['issue', 'note', issue, text, ...(options.wake ? ['--wake'] : [])]),
+    tick: () => tick(flow),
     hc: () => readState(statePath),
     terminals: () => Object.values(readState(statePath).terminals),
-    cli: (args) => factory(world, args, { FACTORY_URL: server.url }),
-    hook: async (event, session, input, hookEnv = {}) => {
-      const proc = Bun.spawn([process.execPath, CLI, 'hook', event], {
-        cwd: ROOT,
-        env: {
-          PATH: process.env.PATH ?? '',
-          HOME: process.env.HOME ?? '/tmp',
-          FACTORY_SESSION: session,
-          FACTORY_SOCKET: socket,
-          FACTORY_SPOOL_DIR: spool,
-          ...hookEnv,
-        },
-        stdin: new Blob([JSON.stringify(input)]),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-      const [out, err, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
-      return { code, out, err }
-    },
+    cli: (args, as = 'owner') => factory(world, args, { FACTORY_URL: server.url }, { as }),
+    hook: (event, session, input, hookEnv = {}) => hook(world, event, session, input, hookEnv),
     stop: async () => {
       await server.stop()
       await world.stop()
