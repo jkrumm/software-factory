@@ -28,3 +28,9 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   piecemeal; a response the contract refuses (now 422 `invalid_response`, exit 2) becomes a 500 in package 8; `/health`
   gains tick staleness in the package that brings the tick (package 4 or 7); `FACTORY_LOCK_WAIT_MS` joins the settings
   allow-list in package 9; "only `app/` opens a transaction" becomes a boundary rule in package 1.
+- **2026-11-07, package 1 start: an empty `CLAUDE_CONFIG_DIR` makes Claude Code use the cwd as its config dir.** The
+  first start's `eval "$(claude-account pick ...)"` left the variable empty, so `env CLAUDE_CONFIG_DIR=` was passed:
+  the session showed the trust and bypass prompts of a fresh config, ran on another plan than the picked Max account,
+  and wrote `settings.json`, `projects/`, `sessions/` and more into the worktree. Caught within two minutes from the
+  screen; killed, the junk removed, restarted. The start command now parses the dir and checks `test -d` before
+  `hc run` (`docs/rewrite/state.md`). Always read the screen once right after a start.
