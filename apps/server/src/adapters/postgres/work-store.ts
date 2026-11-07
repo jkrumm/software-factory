@@ -6,7 +6,7 @@ import { OUTCOMES, STATES, type Wait } from '../../domains/work/issue.ts'
 import type { AppliedRecord, Transition } from '../../domains/work/machine.ts'
 import type { ClaimedEffect, EffectRun, StoredEvent, WorkStore } from '../../domains/work/ports.ts'
 import { ACTORS } from '../../kernel/events.ts'
-import type { EventId, IssueId } from '../../kernel/ids.ts'
+import { type EventId, type IssueId, issueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
 /** A wait as this adapter wrote it: the machine's own value, checked for its shape only. */
@@ -68,6 +68,11 @@ function eventOf(raw: unknown): StoredEvent {
 /** The work domain's tables on one transaction's connection. */
 export function postgresWorkStore(tx: SQL): WorkStore {
   return {
+    async nextIssueId() {
+      const [row] = await tx`SELECT nextval('factory.issue_numbers')::int AS n`
+      return issueId(z.object({ n: z.number().int() }).parse(row).n)
+    },
+
     async eventByKey(key) {
       const [row] = await tx`SELECT * FROM factory.issue_events WHERE key = ${key}`
       return row ? eventOf(row) : null

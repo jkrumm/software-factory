@@ -28,6 +28,8 @@ export type EffectRun = { at: Date; ok: true } | { at: Date; ok: false; error: P
  * work turns it into a `PortError`.
  */
 export interface WorkStore {
+  /** the next Issue's id, `issue_<n>`, from the Issue number sequence */
+  nextIssueId(): Promise<IssueId>
   eventByKey(key: Key): Promise<StoredEvent | null>
   /** the Issue's applied events in version order; null when there is no such Issue */
   history(id: IssueId): Promise<AppliedRecord[] | null>

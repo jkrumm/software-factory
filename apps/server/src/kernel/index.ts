@@ -1,5 +1,15 @@
 export { type Clock, type FixedClock, fixedClock, systemClock } from './clock.ts'
 export { ACTORS, type Actor, type EventEnvelope } from './events.ts'
-export { type EventId, type Id, type IdSource, idOf, type IssueId, sequentialIds, systemIds } from './ids.ts'
+export {
+  type EventId,
+  type Id,
+  type IdSource,
+  idOf,
+  type IssueId,
+  issueId,
+  issueNumber,
+  sequentialIds,
+  systemIds,
+} from './ids.ts'
 export { type Key, key, keyOf } from './keys.ts'
 export { err, ok, type PortError, portError, type Result } from './result.ts'

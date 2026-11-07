@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { fixedClock } from '../src/kernel/clock.ts'
-import { idOf, sequentialIds, systemIds } from '../src/kernel/ids.ts'
+import { idOf, issueId, issueNumber, sequentialIds, systemIds } from '../src/kernel/ids.ts'
 import { key } from '../src/kernel/keys.ts'
 import { err, ok } from '../src/kernel/result.ts'
 
@@ -24,6 +24,14 @@ test('ids: one kind is not another, a test source counts per kind', () => {
   expect(idOf('issue', 'event_1')).toBeNull()
   expect(idOf('issue', 'issue_')).toBeNull()
   expect(idOf('event', systemIds.next('event'))).not.toBeNull()
+})
+
+test('an Issue id is its number', () => {
+  expect(String(issueId(286))).toBe('issue_286')
+  expect(issueNumber(issueId(286))).toBe(286)
+  expect(idOf('issue', 'issue_286')).not.toBeNull()
+  expect(() => issueId(0)).toThrow('whole number from 1')
+  expect(() => issueId(1.5)).toThrow('whole number from 1')
 })
 
 test('a fixed clock moves only when told to', () => {

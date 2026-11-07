@@ -2,8 +2,13 @@
 -- Facts are stored, state is derived: an Issue's state, wait reason, outcome and version are the result of its applied
 -- events, kept on the row because the version guards the write. Counts and times are read from issue_events.
 
+-- An Issue's number: its id is issue_<n>. The cutover imports the old core's Issues with their numbers, then moves this
+-- past the largest one (SELECT setval('factory.issue_numbers', <imported max>)), so a new Issue never takes an old number.
+-- A number taken by a transaction that rolled back is skipped: the numbers have gaps, never repeats.
+CREATE SEQUENCE factory.issue_numbers AS integer START 1;
+
 CREATE TABLE factory.issues (
-  id text PRIMARY KEY,
+  id text PRIMARY KEY CHECK (id ~ '^issue_[1-9][0-9]*$'),
   -- the one repo it works in, from its filed event; never changes
   repo text NOT NULL,
   state text NOT NULL CHECK (state IN ('settling', 'queued', 'working', 'waiting', 'watching', 'closed')),

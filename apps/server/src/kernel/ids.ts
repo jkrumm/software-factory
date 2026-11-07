@@ -3,10 +3,20 @@ declare const brand: unique symbol
 /** An id of one kind: an `Id<'issue'>` is not a string, and not an `Id<'event'>`. A domain names its own kinds. */
 export type Id<K extends string> = string & { readonly [brand]: K }
 
+/** `issue_<n>`: an Issue is a number, as the owner and every surface say it ("Issue 286"). */
 export type IssueId = Id<'issue'>
 export type EventId = Id<'event'>
 
-/** Where new ids come from, a port so a test can make them in order. An id is `<kind>_<unique part>`. */
+/** The Issue of number `n`; the work store takes `n` from a Postgres sequence. */
+export function issueId(n: number): IssueId {
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error(`an Issue number is a whole number from 1: ${n}`)
+  return `issue_${n}` as IssueId
+}
+
+/** The number in an Issue id, for "Issue 286" and pane names. */
+export const issueNumber = (id: IssueId): number => Number(id.slice('issue_'.length))
+
+/** Where new ids come from (events and the like; an Issue's number comes from the work store), a port so a test can make them in order. An id is `<kind>_<unique part>`. */
 export interface IdSource {
   next<K extends string>(kind: K): Id<K>
 }

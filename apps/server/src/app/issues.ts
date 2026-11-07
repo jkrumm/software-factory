@@ -120,7 +120,7 @@ export async function recordIn(
   return ok({ result: 'applied', issue: next, event, effects: decided.effects })
 }
 
-/** Files a new Issue inside a transaction the caller holds (intake's, with its signal rows). */
+/** Files a new Issue inside a transaction the caller holds (intake's, with its signal rows); its number is the store's. */
 export async function fileIn(
   work: WorkStore,
   deps: WriteDeps,
@@ -132,7 +132,7 @@ export async function fileIn(
       return err({ kind: 'key_taken', key: input.key, detail: `stored for ${existing.kind}` })
     return replayed(work, existing)
   }
-  const id = deps.ids.next('issue')
+  const id = await work.nextIssueId()
   const decided = file(id, input.event)
   if (decided.result !== 'applied') return err({ kind: 'filing_refused', detail: decided.detail })
   const event = stored({

@@ -105,6 +105,21 @@ describe('the write path', () => {
     ])
   })
 
+  test('an Issue id is the next number; a filing that rolls back leaves a gap, never a repeat', async () => {
+    expect(String(await newIssue())).toBe('issue_1')
+    const refused = await fileIssue(deps, { key: key('filed', 'by-a-lead'), event: { ...filed, actor: 'lead' } })
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'filing_refused' } })
+    expect(String(await newIssue())).toBe('issue_3')
+    // The cutover: the imported Issues keep their numbers, and the sequence moves past the largest.
+    await db.sql`SELECT setval('factory.issue_numbers', 286)`
+    expect(String(await newIssue())).toBe('issue_287')
+    expect(
+      await rejection(
+        db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_x', 'r', 'queued', 1)`,
+      ),
+    ).toContain('check')
+  })
+
   test('a refusal is stored as a fact and moves no version', async () => {
     const id = await newIssue()
     const refused = value(await record(id, 'ship', ev('shipped', { attempt: 1 }, 'lead')))
@@ -187,19 +202,19 @@ describe('the write path', () => {
   })
 
   test('the tables take every state, wait reason and outcome of the machine', async () => {
-    await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_x', 'r', 'queued', 1)`
+    await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_9', 'r', 'queued', 1)`
     for (const state of STATES) {
       const reason = state === 'waiting' ? 'timer' : null
       const outcome = state === 'closed' ? 'done' : null
-      await db.sql`UPDATE factory.issues SET state = ${state}, wait_reason = ${reason}, outcome = ${outcome} WHERE id = 'issue_x'`
+      await db.sql`UPDATE factory.issues SET state = ${state}, wait_reason = ${reason}, outcome = ${outcome} WHERE id = 'issue_9'`
     }
     for (const reason of WAIT_REASONS) {
-      await db.sql`UPDATE factory.issues SET state = 'waiting', wait_reason = ${reason}, outcome = NULL WHERE id = 'issue_x'`
+      await db.sql`UPDATE factory.issues SET state = 'waiting', wait_reason = ${reason}, outcome = NULL WHERE id = 'issue_9'`
     }
     for (const outcome of OUTCOMES) {
-      await db.sql`UPDATE factory.issues SET state = 'closed', wait_reason = NULL, outcome = ${outcome} WHERE id = 'issue_x'`
+      await db.sql`UPDATE factory.issues SET state = 'closed', wait_reason = NULL, outcome = ${outcome} WHERE id = 'issue_9'`
     }
-    expect(await rejection(db.sql`UPDATE factory.issues SET state = 'paused' WHERE id = 'issue_x'`)).toContain('check')
+    expect(await rejection(db.sql`UPDATE factory.issues SET state = 'paused' WHERE id = 'issue_9'`)).toContain('check')
   })
 })
 
