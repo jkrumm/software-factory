@@ -255,3 +255,187 @@ describe('the GitHub label source', () => {
     expect(JSON.stringify(logged)).toContain('full page')
   })
 })
+
+const SHA1 = 'a'.repeat(40)
+const SHA2 = 'b'.repeat(40)
+
+/** A default branch whose head, check runs and commit statuses a test sets; the label poll finds no issues. */
+function checksWorld() {
+  const world = { sha: SHA1, runs: [] as unknown[], statuses: [] as unknown[], branch: 'main' }
+  const answer = (url: string): Response => {
+    if (url === 'https://api.github.com/repos/o/r') return Response.json({ default_branch: world.branch })
+    if (url.includes('/check-runs')) return Response.json({ check_runs: world.runs })
+    if (url.includes('/status')) return Response.json({ sha: world.sha, statuses: world.statuses })
+    return Response.json([])
+  }
+  const run = (name: string, conclusion: string | null, status = 'completed') => ({
+    name,
+    head_sha: world.sha,
+    status,
+    conclusion,
+    html_url: `https://github.com/o/r/actions/runs/${name}`,
+  })
+  return { world, answer, run }
+}
+
+const CHECKS = 'signals:\n  github: {checks: true}'
+
+describe('the GitHub red checks source', () => {
+  test('a failed check on the default branch head files one Issue; the next pass files nothing', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    const { world, answer, run } = checksWorld()
+    world.runs = [run('ci', 'failure'), run('lint', 'success')]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(gh.calls.map((c) => c.url)).toContain(
+      'https://api.github.com/repos/o/r/commits/main/check-runs?filter=latest&per_page=100',
+    )
+    expect(gh.calls.map((c) => c.url)).toContain('https://api.github.com/repos/o/r/commits/main/status?per_page=100')
+    expect(gh.calls.every((c) => c.headers.Authorization === `Bearer ${TOKEN}`)).toBe(true)
+    const [issue, ...rest] = await rows('issues')
+    expect(rest).toEqual([])
+    expect(issue).toMatchObject({ source: 'checks', repo: TEST_REPO, title: 'Failing check "ci" on o/r (main)' })
+    expect(issue?.facts).toMatchObject({
+      source: 'checks',
+      monitor: 'o/r:ci',
+      status: 'down',
+      details: { check: 'ci', kind: 'check_run', result: 'failure', sha: SHA1, branch: 'main' },
+    })
+    expect(await rows('door_issues')).toMatchObject([{ source: 'checks', monitor: 'o/r:ci' }])
+    await gh.pass()
+    expect(await rows('issues')).toHaveLength(1)
+    expect(await rows('issue_inbox')).toEqual([])
+    expect(JSON.stringify(logged)).not.toContain(TOKEN)
+  })
+
+  test('the same check red on a new sha is one Issue and one signal', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    const { world, answer, run } = checksWorld()
+    world.runs = [run('ci', 'failure')]
+    const gh = setup({ answer })
+    await gh.pass()
+    world.sha = SHA2
+    world.runs = [run('ci', 'timed_out')]
+    await gh.pass()
+    await gh.pass()
+    expect(await rows('issues')).toHaveLength(1)
+    expect(await rows('issue_inbox')).toMatchObject([{ kind: 'signal', payload: { regression: true, status: 'down' } }])
+    expect(await rows('door_issues')).toHaveLength(1)
+  })
+
+  test('a green check with no episode files nothing; the green of an open episode closes nothing', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    const { world, answer, run } = checksWorld()
+    world.runs = [run('ci', 'success')]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(await rows('issues')).toEqual([])
+    expect(await rows('issue_inbox')).toEqual([])
+    expect(await rows('intake_seen')).toEqual([])
+
+    world.runs = [run('ci', 'failure')]
+    await gh.pass()
+    world.sha = SHA2
+    world.runs = [run('ci', 'success')]
+    await gh.pass()
+    await gh.pass()
+    const issues = await rows('issues')
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.state).not.toBe('closed')
+    expect(await rows('issue_inbox')).toMatchObject([{ kind: 'signal', payload: { regression: false, status: 'up' } }])
+  })
+
+  test('an up heals a pending down: nothing is filed', async () => {
+    await project('r', TEST_REPO, `${CHECKS}\nheal:\n  - {when: checks.down, grace: 5m}`)
+    const { world, answer, run } = checksWorld()
+    world.runs = [run('ci', 'failure')]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(await rows('issues')).toEqual([])
+    expect(await rows('intake_pending')).toMatchObject([{ source: 'checks', subject: 'o/r:ci' }])
+    await gh.pass()
+    expect(await rows('intake_pending')).toHaveLength(1)
+
+    world.sha = SHA2
+    world.runs = [run('ci', 'success')]
+    await gh.pass()
+    expect(await rows('intake_pending')).toEqual([])
+    expect(await rows('issues')).toEqual([])
+  })
+
+  test('running, neutral, skipped, cancelled and stale checks say nothing', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    const { world, answer, run } = checksWorld()
+    world.runs = [
+      run('queued', null, 'queued'),
+      run('running', null, 'in_progress'),
+      run('neutral', 'neutral'),
+      run('skipped', 'skipped'),
+      run('cancelled', 'cancelled'),
+      run('stale', 'stale'),
+    ]
+    world.statuses = [{ context: 'ext', state: 'pending', target_url: null }]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(await rows('issues')).toEqual([])
+    expect(await rows('intake_pending')).toEqual([])
+  })
+
+  test('a failing commit status is a down, under its context', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    const { world, answer } = checksWorld()
+    world.statuses = [
+      { context: 'ci/legacy', state: 'error', target_url: 'https://ci.example.com/1' },
+      { context: 'ci/ok', state: 'success', target_url: null },
+    ]
+    const gh = setup({ answer })
+    await gh.pass()
+    const [issue, ...rest] = await rows('issues')
+    expect(rest).toEqual([])
+    expect(issue?.facts).toMatchObject({
+      monitor: 'o/r:ci/legacy',
+      details: { kind: 'status', result: 'error', sha: SHA1, url: 'https://ci.example.com/1' },
+    })
+  })
+
+  test('without checks: true, only the label is polled', async () => {
+    await project('r', TEST_REPO)
+    const { world, answer, run } = checksWorld()
+    world.runs = [run('ci', 'failure')]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(gh.calls.map((c) => c.url)).toHaveLength(1)
+    expect(gh.calls[0]?.url).toContain('/issues?labels=')
+    expect(await rows('issues')).toEqual([])
+  })
+
+  test('a repo in IuRoot is never polled for checks', async () => {
+    await project('iu', IU_REPO, CHECKS)
+    const gh = setup({ remotes: { [IU_REPO]: 'https://github.com/o/iu.git' } })
+    await gh.pass()
+    expect(gh.calls).toEqual([])
+  })
+
+  test('a failing request is one line without the token or the body, and the next project is still polled', async () => {
+    await project('r', TEST_REPO, CHECKS)
+    await project('s', SECOND_REPO, CHECKS)
+    const { world, answer, run } = checksWorld()
+    const gh = setup({
+      remotes: { [TEST_REPO]: 'https://github.com/o/r', [SECOND_REPO]: 'https://github.com/o/s' },
+      answer: (url) => {
+        if (url.startsWith('https://api.github.com/repos/o/r')) return new Response('boom', { status: 500 })
+        if (url === 'https://api.github.com/repos/o/s') return Response.json({ default_branch: 'trunk' })
+        if (url.includes('/commits/trunk/check-runs'))
+          return Response.json({ check_runs: [{ ...run('ci', 'failure'), head_sha: SHA2 }] })
+        if (url.includes('/commits/trunk/status')) return Response.json({ sha: SHA2, statuses: [] })
+        return answer(url)
+      },
+    })
+    world.runs = []
+    await gh.pass()
+    expect((await rows('issues')).map((r) => r.facts.monitor)).toEqual(['o/s:ci'])
+    expect(logged).toContainEqual(['github intake', { repo: 'o/r', step: 'repo', status: 500 }])
+    expect(JSON.stringify(logged)).not.toContain(TOKEN)
+    expect(JSON.stringify(logged)).not.toContain('boom')
+  })
+})

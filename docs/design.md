@@ -1075,7 +1075,7 @@ sender's route or the project's, never the payload's; the IuRoot refusal of `cre
 |-|-|-|-|-|
 | Kuma, HyperDX (door) | stateful | the monitor | the alert's status | Issue 149 (moved onto `fileSignal`, Part A built) |
 | GitHub label | stateless | `<owner>/<repo>#<n>` | one `event` | Issue 149 |
-| GitHub red checks | stateful | `<owner>/<repo>:<check>` on the default branch | failure / success | follow-up Issue |
+| GitHub red checks | stateful | `<owner>/<repo>:<check>` on the default branch | failure / success | Issue 164 |
 | failed launchd jobs | stateful | the job's label | exit status ≠ 0 / 0 | follow-up Issue |
 
 **Dedup, at intake, by rules.**
@@ -1109,6 +1109,14 @@ episode Issue, an `urgent` or incident one. It starts at the head of the order, 
 the GitHub poll (`FACTORY_GITHUB_POLL`, default `5m`, `off`; the token `FACTORY_GITHUB_TOKEN` from `secrets-run`, none = the source is off and one line is logged). Only open issues, never pull requests; the repo is `owner/name` from the project's `origin`. The Issue is source `github`, title =
 the GitHub title, facts `{url, number, body (clipped), labels}`: the body is someone else's text and is data, the label is the owner's act (only
 triage access can set it). Nothing is written back to GitHub.
+
+**Red checks** (`signals: {github: {checks: true}}`, off by default; the same poll, token and trust as the label, so a project that opts in is also polled for its label). Per pass and project:
+`GET /repos/{o}/{r}` for `default_branch`, then `commits/{branch}/check-runs?filter=latest` and `commits/{branch}/status` (100 each; a full page logs one line). Each check run or commit status is a
+stateful subject `<owner>/<repo>:<name>` of source `checks`. A completed run with conclusion `failure`, `timed_out` or `startup_failure`, or a status `failure` or `error`, is `down`; `success` is `up`;
+queued, running, `neutral`, `skipped`, `cancelled`, `stale`, `action_required` and `pending` say nothing (a cancel names no failure; the failing job has its own `down`). The event is `<down|up>@<head sha>:<name>`: a
+re-run on a new commit is a new event of the same episode (a signal on the open Issue, never a second Issue), and a pass on the same commit is a replay. A `down` is sent every pass; an `up` only while the subject has an Issue
+that is not closed or a `down` waiting in `intake_pending`, so a healthy repo costs no transaction. An `up` closes nothing (the lead closes), it heals a pending `down` (`heal: {when: checks.down}`). The title is
+`Failing check "<name>" on <o/r> (<branch>)`; facts `{check, kind (check_run|status), result, sha, branch, url}`, the check's own text is not copied. A failed request is one log line (step and status, never the body), no signals.
 
 **Beszel: a host that chokes files its own Issue** (`intake/beszel.ts` `BeszelIntake`, `intake/beszel-rules.ts`, `intake/infra.ts`, `config/infra.json`). Deterministic, no model. The hub (PocketBase)
 is polled every `FACTORY_BESZEL_POLL` (default `1m`, `off`; the hub's `FACTORY_BESZEL_URL` is non-secret and may sit in the env file, `FACTORY_BESZEL_EMAIL` and
@@ -1177,7 +1185,7 @@ ticktick: { list: WeatherOrb }
 - **The schema.** `apiVersion: factory/v2`, `name`, `deploy {mode auto|make|agentic|none, targets[{name, host, verify}], hold,
   migrations[], probes[{name, http, expect}]}`, `ship[{paths[], via push|pr}]`, `leads`. `verify` is an `http(s)` URL or `make <target>`; `hold` is
   `30s`, `30m`, `2h` or `1d`, at most `7d`, default `0m` (no artificial wait: the hold ends on the next timer pass, the check runs at once and a green one closes the Issue and frees the claim; a red one keeps the re-run and regression rules); `expect` defaults to 200; `leads` is 1 to 8. Objects are strict: a key
-  that is not in the schema is an error (a typo is not read as a default), except `jobs` and `ticktick`, which are accepted and dropped. `heal` and `signals` are parsed and kept (output defaults `[]` and `{}`): `heal[{when: <kuma|hyperdx|github|checks|launchd>.down, grace (as `hold`, at most `1d`), runbook: make restart (optional), max 1 to 5, default 1}]` at most 32, `signals` a loose object with `github: {label}` (default `factory`), `launchd: [label]`, and `kuma`, `hyperdx` unread; a `signals` that is not an object is a manifest error. `project sync` names a project only from a valid directory name (letters, digits, dot, dash, underscore, no leading dot; else a line in the result's `errors`), waits at most 40 s for the remotes before it reads what is there, and `project list` hides a legacy row with an invalid name. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
+  that is not in the schema is an error (a typo is not read as a default), except `jobs` and `ticktick`, which are accepted and dropped. `heal` and `signals` are parsed and kept (output defaults `[]` and `{}`): `heal[{when: <kuma|hyperdx|github|checks|launchd>.down, grace (as `hold`, at most `1d`), runbook: make restart (optional), max 1 to 5, default 1}]` at most 32, `signals` a loose object with `github: {label, checks}` (label default `factory`, `checks` default `false`), `launchd: [label]`, and `kuma`, `hyperdx` unread; a `signals` that is not an object is a manifest error. `project sync` names a project only from a valid directory name (letters, digits, dot, dash, underscore, no leading dot; else a line in the result's `errors`), waits at most 40 s for the remotes before it reads what is there, and `project list` hides a legacy row with an invalid name. Parsed with `yaml` (pinned): YAML 1.2 core, one document, duplicate keys refused, no merge keys, at
   most 100 aliases, at most 64 KiB. `name` must be the directory's name. **No manifest** is `defaultManifest`: one lead,
   `deploy.mode none`, `ship: [{ paths: ["**"], via: push }]` (the factory does not read `pr-required-repos`; a repo that needs a PR
   says so in a manifest), done means the commit or the document.
