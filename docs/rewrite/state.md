@@ -44,3 +44,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 7 started in t1fc.
 - 2026-11-07: package 7 integrated at f637cef; agent-workflows' red master test filed as factory Issue 292 (old core).
 - 2026-11-07: package 8 started in t1ff.
+- 2026-11-07: owner: the cutover runs in watched windows, then a burn-in with reports on day 3 and day 7 (NL24).
