@@ -201,3 +201,8 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   template without it until the token exists.
 - **2026-11-07, window 2: the shutdown fix holds live.** Three deploys and one `core_restart` in a row: every PID ended
   on its own within the deadline, no lock left behind.
+- **2026-11-07, window 2: the kill drill is green.** Scratch Issue 300 with `kill -9` of the server at 19:30:00, after
+  admission (19:29:55) and before the lead started: launchd brought the server back healthy in 1.2 s, the leads loop
+  started the lead once (attempt 1, 19:30:18, no double start), the lead committed and pushed `e6fcb15` and closed
+  `done` at 19:30:27. The drill's green check (9c) now reads a `close` from a no-deploy repo as green. The gameday
+  library took the raw template like import and verify did; it now goes through `effective_template` as well.

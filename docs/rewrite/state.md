@@ -64,3 +64,4 @@ compaction, before acting. Updated on every start, integration and send-back.
   The CLI and the import need the optional signal ref left out until the token is seeded (`/tmp/rw-fx.env.tpl`; import.sh
   does it itself now).
 - 2026-11-07 19:00: window 2 verified live (`make verify` all checks passed); window watch cron at :07 and :37 (session-only; re-arm after a restart).
+- 2026-11-07 19:31: window 2: kill drill green (Issue 300: kill -9 between admit and lead, one lead, closed done).
