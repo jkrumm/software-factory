@@ -12,3 +12,5 @@ apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `h
 apps/server/src/read/surface.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/test/read/api.test.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 packages/contract/src/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+tests/scenarios/clients/requests.ts human queue  # the recorded requests read the legacy wire name `humanQueue`
+tests/scenarios/clients/dotfiles.test.ts human queue  # ask-human.sh's own note text and its queue directory are the dotfiles' words
