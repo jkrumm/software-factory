@@ -446,7 +446,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <div class="shell">
 <nav class="side" aria-label="Sections">
   <div class="brand">Software factory</div>
-  <div class="date">Concept, 2026-11-07</div>
+  <div class="date">Concept, 2026-11-07, updated 07:00Z</div>
   <a href="#tldr">The short version</a>
   <a href="#alerts">1. Are alerts triaged?</a>
   <a href="#stand">2. Where it stands</a>
@@ -467,69 +467,78 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <main>
 <div class="prose">
 <h1>The factory ships. Your side of it was never built.</h1>
-<p class="lede" id="tldr">In the last 38 hours the factory closed 100 Issues as done, at a median of 47 minutes from start to close, and 91% of the verified ones passed the first time. You still read it through five partial views, cannot comment on a plan or report, and step in on one Issue in four.</p>
+<p class="lede" id="tldr">In 43 hours the factory closed 140 Issues as done, at a median of 37 minutes from start to close, and 90% of the verified ones passed the first time. You still read it through four partial views, cannot comment on a plan or report, and step in on one Issue in five.</p>
+<h3>What changed since the first version, written at 01:04Z</h3>
+<ul>
+<li><b>The night ran without you.</b> 39 Issues closed as done in six hours, with no owner touch after 01:03Z. 16 of the 39 are one-line manifest edits from #255. The steward answered one ask and sent three notes.</li>
+<li><b>I had HyperDX wrong.</b> The path to a lead works, and none of the 23 live alerts uses it. No real HyperDX alert reaches a lead. <a href="#d5">Decision 5</a> now covers that.</li>
+<li><b>Most of stage 0 shipped:</b> notes reach leads (#254), your GitHub issues come in (#255), a factory deploy no longer pages (#228), Warden is gone (#257), this repo's docs were swept (#179), and red CI, failed launchd jobs and Beszel file Issues (#164, #165, #250).</li>
+<li><b>The queue ran down.</b> 10 Issues were open at 06:53Z, down from 28, and <code>docs/plan.yaml</code> holds one unfiled row. What the factory builds next depends on your decisions.</li>
+<li><b>Refusals did not fall.</b> 61 more overnight, 30 of them from one batch of manifest edits. See <a href="#gaps">section 3</a>.</li>
+<li><b>One ask waits on you:</b> #177, delete Argo's Slack proxy. The lead found no caller, and #178 waits behind it.</li>
+</ul>
 <h3>What I recommend</h3>
 <ul>
 <li><b>One web Console, in this repo.</b> It holds what needs rendering: decisions, artifact review, the dependency chain. Herdr stays the terminal room, Iris the pocket, Argo the deep analysis. This reverses the rule from 2026-10-30 that the factory has no UI.</li>
 <li><b>Build the artifact chain before the screens.</b> A lead hands over a spec or report, you comment on it, and your comments arrive as its next turn. The first two Console routes are the decision page and the artifact page.</li>
 <li><b>A taste gate, used rarely.</b> A new screen or interaction starts with a concept artifact you react to. Bug fixes and small changes keep today's reversible default.</li>
 <li><b>A friction ledger, not an agent loop.</b> The events already exist. A SQL view counts them, and a model runs only when a signature crosses a threshold.</li>
-<li><b>Fix the gates in the way first.</b> Three faults from tonight are filed. Parallel leads sit behind a gate that your own notes keep resetting.</li>
+<li><b>Clear what is left in the way.</b> HyperDX has no route to a lead, admission has no memory ceiling, and parallel leads sit behind a gate that your own notes keep resetting.</li>
 </ul>
 <p>Decision 1 carries most of the rest. The other six have a default I would run with. <a href="#decisions">Go to the decisions</a>, or read on: the order below is the argument.</p>
 </div>
 
 <h2 id="alerts">1. Are alerts received and triaged?</h2>
 <div class="prose">
-<p><b>Kuma yes, HyperDX barely, GitHub no.</b> I checked live on 2026-11-07, not from the docs.</p>
+<p><b>Kuma yes, GitHub yes since this morning, HyperDX no.</b> I checked live at 07:00Z on 2026-11-07, not from the docs.</p>
 </div>
 <div class="tablewrap"><table>
-<tr><th>Source</th><th>Reality</th><th>Now filed</th></tr>
-<tr><td>Uptime Kuma</td><td><span class="st good">Works</span> 191 posts reached the door, 21 alert Issues filed. Of the 14 alert Issues since #100, 10 were dropped, most of them restarts of the factory itself (#228 is queued for that).</td><td>#197, #228 existed</td></tr>
-<tr><td>HyperDX</td><td><span class="st warn">Barely proven</span> Ten alerts are wired, no route has a hit, and the door log holds one successful post ever. 169 POSTs got a 401. The log has no time or source, so the caller is unknown.</td><td>#256</td></tr>
-<tr><td>GitHub, yours</td><td><span class="st bad">Off</span> Only <code>ntfy-mac</code> has <code>signals.github</code>, and it filters by label. About 50 open issues are invisible, many on deleted repos.</td><td>#255</td></tr>
-<tr><td>GitHub, others</td><td><span class="st warn">Too open once on</span> The same poller would hand another author's text to a lead that runs with skipped permissions, if labelled. #255 holds them for you.</td><td>#255</td></tr>
+<tr><th>Source</th><th>Reality</th><th>Issue</th></tr>
+<tr><td>Uptime Kuma</td><td><span class="st good">Works</span> About 190 posts reached the door. Of the 16 alert Issues since #100, 12 were dropped, most of them restarts of the factory itself. #228 fixed that at 02:05Z, and repeated deploys since have filed no restart alert. The door log shows no real Kuma post since it got timestamps at 03:13Z. #258 at 02:13Z was the same false page from a Hermes restart.</td><td>#228 done. #197 counts its 24 h at 14:45Z</td></tr>
+<tr><td>HyperDX</td><td><span class="st bad">Not connected</span> The path works: #256 fired a scratch alert through the door to a lead at 03:14Z (#261). No real alert uses it. Of the 23 live alerts, 13 go to ntfy and 10 to WeatherOrb's own webhook, and none to the "Factory door" webhook. All 9 routes have zero hits. The 169 unexplained 401s were the factory's own deploy probes, now labelled in the log.</td><td>#256 done. The wiring is open: <a href="#d5">decision 5</a></td></tr>
+<tr><td>GitHub, yours</td><td><span class="st good">On</span> Issues you open after 06:30Z are filed by author, with no label. Proven live: <code>ntfy-mac#15</code> became Issue 283 and got one comment back. The rollout covers 20 repos (#263 to #282), and 4 of those were still open at 06:53Z. The roughly 50 older issues stay out.</td><td>#255 done</td></tr>
+<tr><td>GitHub, others</td><td><span class="st good">Held</span> Someone else's unlabelled issue is never fetched, so its text cannot reach a lead that runs with skipped permissions. Your label is the admit.</td><td>#255 done</td></tr>
 </table></div>
 <div class="prose">
-<h3>Why "MacMini Dev Host - Push" keeps firing</h3>
+<h3>Why "MacMini Dev Host - Push" kept firing</h3>
 <ul>
-<li><b>The cause was real.</b> <code>fseventsd</code> grew to 61 G, swap reached 66 G on a 32 G machine, and heartbeats missed their window. <code>sudo killall fseventsd</code> fixed it at 00:03Z. The monitor still went down at 00:11Z and 00:21Z, because 9 G of parked swap kept tripping the 25% rule. #239 shipped the fix at 01:03Z: a warning above 25%, a failure above 75%, and a warning when <code>fseventsd</code> passes 10 G. It is in its hold now.</li>
+<li><b>The cause was real.</b> <code>fseventsd</code> grew to 61 G, swap reached 66 G on a 32 G machine, and heartbeats missed their window. <code>sudo killall fseventsd</code> fixed it at 00:03Z. The monitor still went down at 00:11Z and 00:21Z, because 9 G of parked swap kept tripping the 25% rule. #239 shipped the fix at 01:03Z: a warning above 25%, a failure above 75%, and a warning when <code>fseventsd</code> passes 10 G. It closed verified at 01:20Z, and no MacMini alert has been filed since. At 06:54Z swap held 6.4 G, 20% of RAM, and <code>fseventsd</code> 12 MB. If the leak returns, the restart is still manual.</li>
 <li><b>You get paged regardless.</b> Every Kuma monitor sends to ntfy and to the door in parallel, so triage cannot spare you the alert. That is <a href="#d5">decision 5</a>.</li>
-<li><b>Triage stalled without saying so.</b> Lead 239's terminal never reported a status to <code>hc</code>, and <code>HcRunner.type</code> reads that as <code>busy</code> for ever. A steward note from 21:01Z and a wake from 23:13Z never arrived, so the lead sat idle for 90 minutes after its wait ended. Your close instruction waited 39 minutes until I typed it in by hand. #254 is filed and first in the queue.</li>
+<li><b>Triage stalled without saying so.</b> Lead 239's terminal never reported a status to <code>hc</code>, and <code>HcRunner.type</code> reads that as <code>busy</code> for ever. A steward note from 21:01Z and a wake from 23:13Z never arrived, so the lead sat idle for 90 minutes after its wait ended. Your close instruction waited 39 minutes until I typed it in by hand. #254 fixed it at 02:39Z: a terminal with no status gets its note when the screen shows the input box, and an undelivered note is a health line.</li>
 </ul>
 </div>
 
 <h2 id="stand">2. Where it stands</h2>
-<div class="prose"><p>Window: every Issue filed since 2026-11-05 12:00Z, read from <code>factory issue facts</code>. The reading of 2026-11-05 looked better (0.05 asks, 94% zero-touch) on 16 closed Issues. This one counts 91 of the 100, those the KPIs score.</p></div>
+<div class="prose"><p>Window: every Issue filed since 2026-11-05 12:00Z, read from <code>factory issue facts</code>. The reading of 2026-11-05 looked better (0.05 asks, 94% zero-touch) on 16 closed Issues. These numbers were read at 06:53Z. 20 of the Issues are one batch of one-line manifest edits from #255, so the tiles say where that moves a number.</p></div>
 <div class="tiles">
-<div class="tile"><div class="k">Closed as done</div><div class="v">100</div><div class="c">in about 38 h, median 47 min, p90 3.5 h from admission to close</div></div>
-<div class="tile"><div class="k">First verification passes</div><div class="v">91%</div><div class="bullet" title="91%, target at least 80%"><i style="width:91%"></i><b style="left:80%"></b></div><div class="c">target at least 80%: met</div></div>
-<div class="tile"><div class="k">Zero owner touch</div><div class="v">75%</div><div class="bullet" title="75%, target at least 90%"><i style="width:75%"></i><b style="left:90%"></b></div><div class="c">target at least 90%: missed, 68 of 91</div></div>
-<div class="tile"><div class="k">Asks per Issue</div><div class="v">0.18</div><div class="bullet" title="0.18, target at most 0.05, scale 0 to 0.25"><i style="width:72%"></i><b style="left:20%"></b></div><div class="c">target at most 0.05: missed, 29 of 158</div></div>
-<div class="tile"><div class="k">Queue wait</div><div class="v">5.5 h</div><div class="c">p90; the median is 30 s. Repo claims and <code>--after</code> chains both feed it, I did not separate them</div></div>
+<div class="tile"><div class="k">Closed as done</div><div class="v">140</div><div class="c">in about 43 h, median 37 min (45 without the batch), p90 2.9 h from admission to close</div></div>
+<div class="tile"><div class="k">First verification passes</div><div class="v">90%</div><div class="bullet" title="90%, target at least 80%"><i style="width:90%"></i><b style="left:80%"></b></div><div class="c">target at least 80%: met, 114 of 126. 93% without the batch</div></div>
+<div class="tile"><div class="k">Zero owner touch</div><div class="v">78%</div><div class="bullet" title="78%, target at least 90%"><i style="width:78%"></i><b style="left:90%"></b></div><div class="c">target at least 90%: missed, 97 of 125. Also 78% without the batch</div></div>
+<div class="tile"><div class="k">Asks per Issue</div><div class="v">0.17</div><div class="bullet" title="0.17, target at most 0.05, scale 0 to 0.25"><i style="width:68%"></i><b style="left:20%"></b></div><div class="c">target at most 0.05: missed, 31 of 185</div></div>
+<div class="tile"><div class="k">Queue wait</div><div class="v">8.8 h</div><div class="c">p90, up from 5.5 h as long chains were admitted overnight (#177 waited 13.5 h behind its five dependencies). The median is 37 s. I did not separate repo claims from <code>--after</code></div></div>
 <div class="tile"><div class="k">Window points per Issue</div><div class="v">none</div><div class="c">the KPI reads null, so token cost per Issue is unknown</div></div>
 </div>
 <div class="prose">
 <h3>The roadmap against the docs</h3>
-<p><code>docs/program.md</code> says several tracks are pending that are half built, and <code>docs/waves/reset.md</code> leaves finished waves unchecked. The docs cannot tell you where things stand, so this table replaces them for now.</p>
+<p>#179 rewrote <code>docs/program.md</code>, <code>docs/waves/reset.md</code> and <code>docs/decisions.md</code> overnight, so the docs now agree with the factory on most rows. They still call #179 itself "working". This table shows the rows where the docs say little or lag.</p>
 </div>
 <div class="tablewrap"><table>
 <tr><th>Item</th><th>Docs say</th><th>Actually</th></tr>
-<tr><td>Reset rows 0 to 15</td><td>Wave 12 active</td><td><span class="st good">Live</span> Steward, ask judge, read API, plan files, door, ntfy line. Slack retirement in flight: #176, #177, #178.</td></tr>
-<tr><td>Intake (F3)</td><td>Pending</td><td><span class="st warn">Half</span> Door and label poller live. Red CI #164, failed launchd jobs #165 and Beszel #250 are queued.</td></tr>
-<tr><td>Parallel leads (row 17)</td><td>After a stable week</td><td><span class="st bad">Stuck</span> Reads "first true 2026-11-14", but any touch on any Issue resets it. 57 touches landed in three days.</td></tr>
-<tr><td>Argo pages (A2)</td><td>Pending</td><td><span class="st warn">Stale mix</span> Agents works through a 10-minute push from agw. Warden shows a snapshot from a system switched off on 2026-10-27, and its action route answers 410.</td></tr>
-<tr><td>Iris screens (IR)</td><td>Pending</td><td><span class="st warn">Started</span> Decisions tab and push live since 2026-11-06, with device bugs open: #212, #215, #220, #223.</td></tr>
+<tr><td>Reset rows 0 to 15</td><td>Built, Slack remainder open</td><td><span class="st good">Live</span> Steward, ask judge, read API, plan files, door, ntfy line. #176 is done, #177 waits on your answer, and #178 follows it.</td></tr>
+<tr><td>Intake (F3)</td><td>Done</td><td><span class="st warn">Nearly</span> Door, GitHub by author, red CI #164 and failed launchd jobs #165 are live. Beszel #250 is in its wait until 13:32Z. HyperDX reaches nothing, see section 1.</td></tr>
+<tr><td>Parallel leads (row 17)</td><td>After a stable week</td><td><span class="st bad">Stuck</span> Reads "first true 2026-11-14 01:03". A note, answer, stop, reopen or retier on any Issue resets it. The last reset was my own correction note on #254, and answering #177 resets it again.</td></tr>
+<tr><td>Argo pages (A2)</td><td>Not tracked here</td><td><span class="st warn">Thin</span> Agents works through a 10-minute push from agw. Warden is removed (#257).</td></tr>
+<tr><td>Iris screens (IR)</td><td>Iris's own plan</td><td><span class="st warn">Unproven on a device</span> Decisions tab and push live since 2026-11-06. #212, #215 and #223 closed overnight on server evidence, and #223 lists its device run as still to do. #220 was already fixed.</td></tr>
 <tr><td>Herdr board</td><td>Not on the program</td><td><span class="st good">Live</span> 1,211-line mod on <code>/v1</code>, sidebar and full-screen Kanban, using the full token.</td></tr>
 <tr><td>Basalt rewrite</td><td>Paused (RS11)</td><td><span class="st warn">Contradictory</span> <code>basalt-ui#567</code> plans Mantine to shadcn on Base UI. The brain still says "no shadcn", and <code>MAINTAINING.md</code> says a 3.0 is never sanctioned.</td></tr>
-<tr><td>Orchestrator, initiatives (F4)</td><td>Pending</td><td><span class="st">Overtaken</span> <code>docs/plan.yaml</code> covers it per repo. Nothing spans repos.</td></tr>
+<tr><td>Orchestrator, initiatives (F4)</td><td>Pending, not filed</td><td><span class="st">Overtaken</span> <code>docs/plan.yaml</code> covers it per repo. Nothing spans repos.</td></tr>
 <tr><td>Scorecard, changelog, briefing jobs</td><td>Designed</td><td><span class="st">Not built</span> Only the 07:30 reading and the weekly usage report run.</td></tr>
 <tr><td>Cost program (U), wave 6</td><td>Judge on W46</td><td><span class="st">Waiting</span> Due 2026-11-16. W45 arrives Monday.</td></tr>
 </table></div>
 
 <h2 id="gaps">3. What is missing</h2>
 <div class="prose">
-<p>I read all 57 owner touches on Issues since #100 and sorted them by hand. Only 14 were decisions that needed you.</p>
+<p>I read all 57 owner touches on Issues since #100 and sorted them by hand. Only 14 were decisions that needed you. One touch has landed since I counted, my correction note on #254 at 01:03Z, and none after it.</p>
 </div>
 <div class="bars">
 <div class="bar hi"><span>A real decision or domain ruling</span><span class="t"><i style="width:93%"></i></span><span class="n">14</span></div>
@@ -540,19 +549,19 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 </div>
 <div class="prose">
 <p class="small muted">Sorting is my reading of the note text, and one note can fit two rows. Most "owner" notes were typed by your session's agent, not by you.</p>
-<p>The lead's side has its own friction: <b>145 refused verbs on 148 Issues</b>. Each one is a turn spent. One does not fit the rows below.</p>
+<p>The lead's side has its own friction: <b>207 refused verbs on 175 Issues</b>, up from 145 on 148. Each one is a turn spent. 30 of the 61 new ones come from the batch of manifest edits: 15 close refusals and 15 review refusals, all the same two. That is the pattern a ledger should catch.</p>
 </div>
 <div class="bars">
-<div class="bar"><span>Ship refused: no review yet</span><span class="t"><i style="width:100%"></i></span><span class="n">46</span></div>
-<div class="bar"><span>Ship refused: evidence missing or older than the commit</span><span class="t"><i style="width:80%"></i></span><span class="n">37</span></div>
-<div class="bar"><span>A verb that does not apply to the Issue's state</span><span class="t"><i style="width:67%"></i></span><span class="n">31</span></div>
-<div class="bar"><span>Ship refused: <code>agw review covered</code> timed out (longer limit since #226)</span><span class="t"><i style="width:54%"></i></span><span class="n">25</span></div>
-<div class="bar"><span>Close refused: deployable paths touched</span><span class="t"><i style="width:11%"></i></span><span class="n">5</span></div>
+<div class="bar"><span>Ship refused: no review yet</span><span class="t"><i style="width:100%"></i></span><span class="n">76</span></div>
+<div class="bar"><span>Ship refused: evidence missing or older than the commit</span><span class="t"><i style="width:70%"></i></span><span class="n">53</span></div>
+<div class="bar"><span>A verb that does not apply to the Issue's state</span><span class="t"><i style="width:42%"></i></span><span class="n">32</span></div>
+<div class="bar"><span>Ship refused: <code>agw review covered</code> could not be read (longer limit since #226)</span><span class="t"><i style="width:33%"></i></span><span class="n">25</span></div>
+<div class="bar"><span>Close refused: deployable paths touched</span><span class="t"><i style="width:28%"></i></span><span class="n">21</span></div>
 </div>
 <div class="prose">
 <h3>The six gaps</h3>
 <ol>
-<li><b>No owner surface.</b> Herdr board, Argo Agents, Argo Warden, Iris Decisions, <code>factory status</code>: each answers part of the question, none says what happens next.</li>
+<li><b>No owner surface.</b> Herdr board, Argo Agents, Iris Decisions, <code>factory status</code>: each answers part of the question, none says what happens next.</li>
 <li><b>No artifact chain.</b> A plan or report lives in a chat turn or a file. Your feedback is a note in prose with no anchor and no record of what you approved.</li>
 <li><b>Questions are poorly prepared.</b> An ask is a question string with options. It has no evidence, no cost per option, and no statement of what happens if you do not answer.</li>
 <li><b>No design step.</b> Every Issue goes from brief to code. The lead has no place to show you a direction first, and that is where the slop comes from.</li>
@@ -592,7 +601,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <div class="tablewrap"><table>
 <tr><th>Option</th><th>Gives you</th><th>Costs you</th><th>Public story</th></tr>
 <tr><td>Herdr mods only</td><td>Same window as the terminals, jump to a lead in one click, already 1,211 lines in</td><td>No styled HTML review, no phone. Upstream app that updates itself hourly with no off switch (#207). A lead on the mini cannot look at the result, since the app runs on the MacBook</td><td>Weak: needs Herdr</td></tr>
-<tr><td>Iris as control plane</td><td>Native feel, push, voice</td><td>Two SwiftUI apps per screen, simulator load on a 32 GB host, 7 of 28 open Issues already here, device bugs a lead cannot test</td><td>None: Apple-only and personal</td></tr>
+<tr><td>Iris as control plane</td><td>Native feel, push, voice</td><td>Two SwiftUI apps per screen, simulator load on a 32 GB host, device bugs a lead cannot test: three closed overnight on server evidence alone</td><td>None: Apple-only and personal</td></tr>
 <tr><td>Argo pages</td><td>Exists, deep data next door</td><td>Mixed with health and finance, so it can never be shown. Mantine, with a rewrite pending</td><td>None</td></tr>
 <tr class="pick"><td><b>Web Console in this repo (my pick)</b></td><td>Styled HTML review, phone through the tailnet, a lead can screenshot and verify it on the mini, one implementation</td><td>A frontend to maintain. A new perimeter to design. Reverses "the factory has no UI"</td><td>Strong: the repo gets a face and a demo</td></tr>
 </table></div>
@@ -602,7 +611,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <tr><td><b>Console</b> (new)</td><td>Decide, review, see the flow and the chain, read the ledger</td><td>Tailnet only, through <code>tailscale serve</code> like the door. Holds the read-only token plus one narrow answer verb, never the full token.</td></tr>
 <tr><td><b>Herdr</b></td><td>Work in terminals. A glance: count of what needs you, live leads, quota, one click to the lead</td><td>The board shrinks to the glance and links to the Console. Stop growing the full-screen Kanban.</td></tr>
 <tr><td><b>Iris</b></td><td>Voice, Hermes chat, push, one-tap answers</td><td>Keep the native decision card. Depth opens the Console in a web view. See <a href="#iris">section 10</a>.</td></tr>
-<tr><td><b>Argo</b></td><td>Personal dashboard and deep data: usage, cost, agw telemetry, infra</td><td>Warden goes now (#257). Agents goes when the Console has the flow.</td></tr>
+<tr><td><b>Argo</b></td><td>Personal dashboard and deep data: usage, cost, agw telemetry, infra</td><td>Warden is gone (#257). Agents goes when the Console has the flow.</td></tr>
 <tr><td><b>ntfy</b></td><td>The line out when you are away</td><td>A notification links straight to its decision page.</td></tr>
 </table></div>
 
@@ -626,7 +635,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <tr><td><b>Moments</b></td><td>The decision card. The chain, when a blocked row turns ready.</td></tr>
 <tr><td><b>Signature</b></td><td>A single line per run that reads as a sentence, with the phase strip beneath it.</td></tr>
 </table>
-<p>Click through the mock. It is a concept in plain HTML with tonight's real Issues and basalt's tokens, so react to the structure more than the polish. Numbers marked "example" are invented.</p>
+<p>Click through the mock. It is a concept in plain HTML with real Issues as they stood at 01:00Z and basalt's tokens, so react to the structure more than the polish. Numbers marked "example" are invented.</p>
 </div>
 
 <div class="mock" id="mock">
@@ -661,7 +670,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
         <div class="ask">
           <div class="meta">software-factory · concept · taste review · 2 h old · 4 Issues wait</div>
           <h4>Console home: which layout do you want?</h4>
-          <p>Two rendered variants with tonight's data. Comment on either one.</p>
+          <p>Two rendered variants with real data. Comment on either one.</p>
           <div class="btns"><span class="p">Open the concept</span><span>Snooze until tonight</span></div>
         </div>
         <p class="small muted">Shelved: 1 (the Apple portal step, until you are at a Mac).</p>
@@ -724,13 +733,13 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 Put the lead's recommendation first, and say why in its label.</code></pre>
   </div>
   <div class="mview" id="m6">
-    <p class="small muted" style="margin-top:0">Counted by SQL from the event log, tonight's real numbers. A model runs only when you open a proposal or a threshold fires.</p>
+    <p class="small muted" style="margin-top:0">Counted by SQL from the event log, real numbers from 06:53Z. A model runs only when you open a proposal or a threshold fires.</p>
     <div class="tablewrap" style="margin:0"><table>
     <tr><th>Friction</th><th>Count</th><th>Proposal</th><th></th></tr>
-    <tr><td>Ship refused: no review yet</td><td>46</td><td>Brief states the order: review, evidence, ship</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
-    <tr><td>Ship refused: evidence older than the commit</td><td>37</td><td>The refusal names the exact command to run</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
+    <tr><td>Ship refused: no review yet</td><td>76</td><td>Brief states the order: review, evidence, ship</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
+    <tr><td>Ship refused: evidence older than the commit</td><td>53</td><td>The refusal names the exact command to run</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
     <tr><td>Standing permission repeated in notes</td><td>8</td><td>A policy line in the repo's manifest</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
-    <tr><td>Alert from the factory's own restart</td><td>7</td><td>#228 covers it</td><td class="muted small">Filed</td></tr>
+    <tr><td>Alert from the factory's own restart</td><td>7</td><td>#228 fixed it, none since</td><td class="muted small">Done</td></tr>
     <tr><td>Ask answered with the lead's own pick</td><td>example 6</td><td>Teach the judge this class</td><td><span class="small" style="color:var(--vx-accent)">File Issue</span></td></tr>
     </table></div>
   </div>
@@ -821,12 +830,12 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 </div>
 <div class="tablewrap"><table>
 <tr><th>KPI</th><th>Now</th><th>Target</th><th>Why this one</th></tr>
-<tr><td>Avoidable touches per Issue</td><td>about 0.29 (43 of 148)</td><td>at most 0.05</td><td>Replaces zero-touch, which also punishes your real decisions</td></tr>
-<tr><td>Asks per Issue</td><td>0.18</td><td>at most 0.05</td><td>Kept</td></tr>
+<tr><td>Avoidable touches per Issue</td><td>about 0.25 (44 of 175)</td><td>at most 0.05</td><td>Replaces zero-touch, which also punishes your real decisions</td></tr>
+<tr><td>Asks per Issue</td><td>0.17</td><td>at most 0.05</td><td>Kept</td></tr>
 <tr><td>Asks that needed you</td><td>not measured</td><td>at least 80%</td><td>New: the rule above</td></tr>
-<tr><td>First verification passes</td><td>91%</td><td>at least 80%</td><td>Kept</td></tr>
-<tr><td>Refusals per Issue</td><td>0.98</td><td>at most 0.25</td><td>New: turns wasted against gates</td></tr>
-<tr><td>Cycle p50, queue wait p90</td><td>47 min, 5.5 h</td><td>set after parallel leads</td><td>New: flow</td></tr>
+<tr><td>First verification passes</td><td>90%</td><td>at least 80%</td><td>Kept</td></tr>
+<tr><td>Refusals per Issue</td><td>1.18</td><td>at most 0.25</td><td>New: turns wasted against gates</td></tr>
+<tr><td>Cycle p50, queue wait p90</td><td>37 min, 8.8 h</td><td>set after parallel leads</td><td>New: flow</td></tr>
 <tr><td>Window points per Issue</td><td>null</td><td>trend only</td><td>Needs the usage join</td></tr>
 </table></div>
 <div class="prose">
@@ -834,8 +843,8 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <ul>
 <li><b>No role change now.</b> Your rule is measured data, and W46 on 2026-11-16 is the first clean comparison after implementer effort went from high to medium and the wave skill was cut.</li>
 <li><b>Known hot spots from W44:</b> the subagent lane took 41.5% of attributed weekly points, and <code>implementer</code> ranks first. The W44 5-hour window moved 2,444 points.</li>
-<li><b>The biggest cheap win is above:</b> 145 refused verbs and 8 repeated permissions are turns nobody needs, whatever the model.</li>
-<li><b>Tonight's data point:</b> six Haiku research runs used 1.33 M tokens. Good for reach, and one was flatly wrong (see <a href="#limits">section 13</a>). Verify what a decision rests on.</li>
+<li><b>The biggest cheap win is above:</b> 207 refused verbs and 8 repeated permissions are turns nobody needs, whatever the model.</li>
+<li><b>A data point from this report:</b> six Haiku research runs used 1.33 M tokens. Good for reach, and one was flatly wrong (see <a href="#limits">section 13</a>). Verify what a decision rests on.</li>
 </ul>
 </div>
 
@@ -847,13 +856,13 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <tr><td>8 notes repeated one standing permission</td><td>A policy line per repo in <code>project.yaml</code>, enforced by the existing hook.</td></tr>
 <tr><td>Scratch proofs held slots, and 10 were stopped by hand</td><td>Scratch Issues get a class that holds no claim and closes itself.</td></tr>
 <tr><td>Plans live in chat until someone files them</td><td>Plan into <code>docs/plan.yaml</code>, as RS14 intends, and add a plan row that spans repos. <code>/wave</code> becomes the one way to do it.</td></tr>
-<tr><td>Stale instructions: agw's <code>AGENTS.md</code> names mothers and <code>rd fan</code>, <code>agent-platform.md</code> dates from October, the brain's project page mentions rotations</td><td>#179 is queued but waits on its dependency. Run it first, since agents read these files.</td></tr>
-<tr><td>Hermes held the full token</td><td>Read-only token done (#209). Iris and the board should move to it, except for the narrow answer verb.</td></tr>
+<tr><td>Stale instructions: agw's <code>AGENTS.md</code> still names mothers and <code>rd fan</code></td><td>#179 closed as done, and its notes name only this repo's files. #285 is filed for agw.</td></tr>
+<tr><td>Hermes held the full token</td><td>Read-only token done (#209), and Hermes reads <code>/v1</code> (#176). Iris and the board should move to it, except for the narrow answer verb.</td></tr>
 <tr><td>Issues from outside (GitHub, alerts, Iris) reach leads directly</td><td>Everything enters through <code>fileSignalIn</code>, as it does now. Add Plane's loop guard: nothing the factory itself produced can file again.</td></tr>
 </table></div>
 
 <h2 id="iris">10. Iris and Hermes</h2>
-<div class="prose"><p><b>Keep Iris personal and small: voice, Hermes, push, one-tap answers.</b> Everything else lives behind one URL. Iris is the one place where a device bug cannot be tested by a lead, so native screens are the most expensive screens you can have.</p></div>
+<div class="prose"><p><b>Keep Iris personal and small: voice, Hermes, push, one-tap answers.</b> Everything else lives behind one URL. Iris is the one place where a device bug cannot be tested by a lead, so native screens are the most expensive screens you can have. Last night showed it: three device bugs closed as done, and only you can confirm them on the phone.</p></div>
 <div class="tablewrap"><table>
 <tr><th>Future</th><th>What it means</th><th>Verdict</th></tr>
 <tr><td>Wrapper around Hermes only</td><td>Remove Decisions and the factory watcher</td><td>Too small: a push with one tap is exactly what a phone is for, and it exists already</td></tr>
@@ -901,14 +910,14 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <h2 id="road">12. The road</h2>
 <div class="prose"><p>Each box is one or a few Issues, filed as rows in <code>docs/plan.yaml</code> with <code>after</code> edges, so the server files them and leads build them. Boxes in the same column can run in parallel. The four highlighted ones wait on you: Console direction, decision card, chain view, public launch.</p></div>
 <div class="dagwrap" id="roaddag"></div>
-<div class="legend"><span><i class="now"></i>Start now</span><span><i class="taste"></i>Waits on your taste review</span><span><i></i>Follows its arrows</span></div>
+<div class="legend"><span><i class="done"></i>Shipped</span><span><i class="now"></i>Start now</span><span><i class="taste"></i>Waits on your taste review</span><span><i></i>Follows its arrows</span></div>
 <div class="tablewrap"><table>
 <tr><th>Stage</th><th>Contents</th><th>Done when</th></tr>
-<tr><td><b>0 Truth and calm</b></td><td>#254, #256, #255, #257, #197, #228. <code>program.md</code> and <code>reset.md</code> rewritten to reality, docs sweep #179, one KPI set, memory ceiling in admission</td><td>No note stays undeliverable. One real HyperDX alert closes through a lead. Monitors page as you decide</td></tr>
+<tr><td><b>0 Truth and calm</b></td><td>Shipped: #254, #255, #256, #257, #228, #179. Open: #197's count at 14:45Z, #285, HyperDX wiring per decision 5, one KPI set, memory ceiling in admission</td><td>No note stays undeliverable. One real HyperDX alert closes through a lead. Monitors page as you decide</td></tr>
 <tr><td><b>1 Artifact core</b></td><td>Schema, <code>factory artifact</code>, verdict to next turn, decision spec with zod, <code>/v1</code> edges and plan rows, Console perimeter</td><td>A lead's spec gets an answer that arrives as its next turn. Works from the CLI, no UI needed</td></tr>
 <tr><td><b>2 Console v0</b></td><td>Direction review, then decision page, artifact page, Needs you, tailnet serve, ntfy and APNs links</td><td>A week of asks answered in the Console only</td></tr>
 <tr><td><b>3 Full view</b></td><td>Flow, Run, Chain. Herdr shrinks to the glance. Argo Agents leaves</td><td>Your morning read happens there and you do not miss the old views. Your judgment, no eval</td></tr>
-<tr><td><b>4 Parallel leads</b></td><td>Gate change, then <code>leads: N</code>, merge-base ranges, fail-closed deploy lock, on software-factory and iris first</td><td>Row 17's acceptance holds, and p90 queue wait falls</td></tr>
+<tr><td><b>4 Parallel leads</b></td><td>Gate change, then <code>leads: N</code>, merge-base ranges, fail-closed deploy lock, on software-factory first</td><td>Row 17's acceptance holds, and p90 queue wait falls</td></tr>
 <tr><td><b>5 Ledger</b></td><td>The SQL view, thresholds, <code>improve</code> Issues, usage join. The Improve screen joins stage 3</td><td>A signature's count falls after its fix, three times</td></tr>
 <tr><td><b>6 Clients</b></td><td>Iris web view and deep links, read-only tokens everywhere. Basalt 3 extracted from the Console once it is stable</td><td>One implementation per screen</td></tr>
 <tr><td><b>7 Public</b></td><td>License, generalise, redact, <code>make demo</code>, README, first article</td><td>A stranger can run the demo, which you check once</td></tr>
@@ -927,7 +936,9 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <li><b>Vendor claims are the vendor's.</b> Warp, Blume and Plannotator's outcomes are self-reported, and nothing was installed or run. Warp's blog was read through a cheap extraction, with six posts checked against the raw text.</li>
 <li><b>Not verified:</b> a Herdr web view may exist outside the type definitions. Whether Plannotator's sandbox is sound. Provider terms for several accounts. ISA-18.2's alarm rates. Whether a Console holds up on a phone in daily use.</li>
 <li><b>Not separated:</b> how much of queue wait comes from claims and how much from <code>--after</code>.</li>
-<li><b>Did tonight, beyond the report:</b> typed your note into lead 239, filed #254, #255, #256 and #257, and set the priority of #254 and #256. Nothing else changed.</li>
+<li><b>Did beyond the report:</b> typed your note into lead 239, filed #254, #255, #256 and #257, set the priority of #254 and #256, and filed #285 this morning. Nothing else changed.</li>
+<li><b>Corrected at 07:00Z:</b> the first version said ten HyperDX alerts were wired and that the 401 caller was unknown. Both were wrong, and section 1 has what #256 and a live read of the alerts show. The new text did not go through the prose pipeline again.</li>
+<li><b>The door log has timestamps only since 03:13Z,</b> so its "no real Kuma post" covers only that stretch. Before it I read the alert Issues.</li>
 </ul>
 </div>
 
@@ -946,15 +957,15 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 </div>
 <script>
 var D=[
-{id:'d1',t:'Where does the cockpit live?',q:'You read and decide in five partial views today. If you do not answer, stage 0 and the artifact core still run, and every screen waits.',o:[
+{id:'d1',t:'Where does the cockpit live?',q:'You read and decide in four partial views today. If you do not answer, stage 0 and the artifact core still run, and every screen waits.',o:[
 ['a','Web Console in this repo, with Herdr as the glance (my pick: the only option that renders reports, reaches the phone and can be checked by a lead)','A frontend to maintain, and it reverses the rule that the factory has no UI.'],
 ['b','Herdr mods only','Reports cannot be reviewed with their styling, nothing on the phone beyond Iris, and a public demo needs Herdr.'],
 ['c','Native in Iris','Two SwiftUI apps per screen, simulator load on the mini, and no public face.']]},
-{id:'d2',t:'What is Iris for?',q:'This decides how many Iris Issues stay in the queue. If you do not answer, the current device fixes run and no new screens start.',o:[
+{id:'d2',t:'What is Iris for?',q:'This decides whether new Iris screens get filed. The device fixes closed overnight, so one Iris Issue was open at 06:53Z. If you do not answer, no new screens start.',o:[
 ['a','Pocket client: voice, Hermes, push, one-tap answers, Console in a web view (my pick: uses what exists, builds nothing twice)','Web views feel less native than SwiftUI, and you may want more later.'],
 ['b','Personal control plane with native Kanban, quota and artifacts','Each screen is built twice, and annotation needs a web view anyway.'],
 ['c','A product other factories can feed','Accounts, multi-tenancy and support, with no second user today.']]},
-{id:'d3',t:'What stays in Argo?',q:'The Warden tab goes either way (#257). If you do not answer, Agents stays until you do.',o:[
+{id:'d3',t:'What stays in Argo?',q:'The Warden tab is gone (#257). If you do not answer, Agents stays until you do.',o:[
 ['a','Personal dashboard and deep data; Agents leaves once the Console has the flow (my pick: Argo can then stay private)','Cross-links between Console and Argo for cost analysis.'],
 ['b','Keep Agents in Argo too','Two fleet views to keep true.'],
 ['c','Build the Console as Argo pages','No public face, and the factory takes on a dependency on your personal app.']]},
@@ -962,12 +973,12 @@ var D=[
 ['a','Owned shadcn-style components on Base UI and Tailwind v4, using basalt\'s Mantine-free tokens and charts, extracted into basalt 3 once proven (my pick: the Console becomes the rewrite\'s first real consumer, and neither waits)','You sanction a 3.0 and update the brain\'s "no shadcn" line. Versions need /research at build time.'],
 ['b','Wait for the basalt rewrite first','The Console waits on a paused project.'],
 ['c','Today\'s basalt 2 on Mantine','Fastest start, and it migrates later with everything else.']]},
-{id:'d5',t:'Do routed monitors still page your phone directly?',q:'Every monitor posts to ntfy and the door, so you are paged even while a lead is on it. If you do not answer, both stay on.',o:[
-['a','Factory first: only the watchers of the factory page directly, and an unsolved alert reaches you after 30 min (my pick: fits "only decisions reach the owner")','A real outage reaches you up to 30 min later. The watchers stay direct, so a dead factory still pages.'],
-['b','Keep both','The noise stays, and triage saves you nothing.'],
-['c','Door only','A dead factory and a dead door would be silent. I advise against this.']]},
-{id:'d6',t:'When may one repo run several leads?',q:'The gate needs 7 days with no owner touch on any Issue, and your session\'s notes count. If you do not answer, the gate keeps resetting.',o:[
-['a','New gate: no regression streak and a memory ceiling in admission; file it now for software-factory and iris (my pick: these two hold 19 of 28 open Issues)','More merge conflicts and more load on a 32 GB host, which is why the ceiling comes first.'],
+{id:'d5',t:'Do routed monitors still page your phone directly?',q:'Every Kuma monitor posts to ntfy and the door, so you are paged even while a lead is on it. HyperDX is the opposite: an alert has one channel, and the 13 that page you never reach a lead. If you do not answer, both stay as they are.',o:[
+['a','Factory first: Kuma and those 13 HyperDX alerts go to the door, only the watchers of the factory page directly, and an unsolved alert reaches you after 30 min (my pick: fits "only decisions reach the owner")','A real outage reaches you up to 30 min later, and the 30-minute forward has to be built. The watchers stay direct, so a dead factory still pages.'],
+['b','Keep Kuma on both, and connect HyperDX through the door with an immediate forward to ntfy','The door gains a forward, and you are still paged for what a lead is handling. #228 and #239 removed the two biggest sources of Kuma noise.'],
+['c','Door only, for both','A dead factory and a dead door would be silent. I advise against this.']]},
+{id:'d6',t:'When may one repo run several leads?',q:'The gate needs 7 days with no owner touch on any Issue, and your session\'s notes and answers count. If you do not answer, the gate resets with your next note or answer.',o:[
+['a','New gate: no regression streak and a memory ceiling in admission; file it now for software-factory (my pick: the queue has drained, but stages 1 to 3 land almost entirely in this repo)','More merge conflicts and more load on a 32 GB host, which is why the ceiling comes first.'],
 ['b','Keep the gate, and stop touching Issues for a week','Safest for the machine, slowest, and it may not open.'],
 ['c','After the Console ships','You work through one lead per repo a while longer.']]},
 {id:'d7',t:'When does it go public properly?',q:'It has no license yet (section 11). If you do not answer, it stays that way, and stage 7 waits.',o:[
@@ -1002,9 +1013,9 @@ edges.forEach(function(e){var a=by[e[0]],b=by[e[1]],x1=X(a)+W,y1=Y(a)+H/2,x2=X(b
 nodes.forEach(function(n){var g=document.createElementNS(NS,'g');g.setAttribute('class','n-'+(n.k||'x'));var r=document.createElementNS(NS,'rect');r.setAttribute('x',X(n));r.setAttribute('y',Y(n));r.setAttribute('width',W);r.setAttribute('height',H);r.setAttribute('rx',6);g.appendChild(r);
 var t=document.createElementNS(NS,'text');t.setAttribute('x',X(n)+8);t.setAttribute('y',Y(n)+20);t.textContent=n.t;g.appendChild(t);var u=document.createElementNS(NS,'text');u.setAttribute('class','s');u.setAttribute('x',X(n)+8);u.setAttribute('y',Y(n)+37);u.textContent=n.s||'';g.appendChild(u);s.appendChild(g)});el.appendChild(s)}
 var N=[
-{id:'s0',t:'Faults: notes, door',s:'#254 #256 #255',c:0,r:0,k:'now'},
-{id:'s0b',t:'Truth: docs, KPIs',s:'#179, program.md',c:0,r:1,k:'now'},
-{id:'s0c',t:'Calm: paging, Warden',s:'#197 #228 #257',c:0,r:2,k:'now'},
+{id:'s0',t:'Faults: notes, door',s:'#254 #256 #255',c:0,r:0,k:'done'},
+{id:'s0b',t:'Truth: KPIs, agw docs',s:'one KPI set, #285',c:0,r:1,k:'now'},
+{id:'s0c',t:'Calm: paging, HyperDX',s:'decision 5, #197',c:0,r:2,k:'now'},
 {id:'s0d',t:'Memory ceiling',s:'admission',c:0,r:3,k:'now'},
 {id:'s1',t:'Artifact core',s:'verdict to next turn',c:1,r:0},
 {id:'s1b',t:'/v1 edges, plan rows',s:'decision spec',c:1,r:1},
