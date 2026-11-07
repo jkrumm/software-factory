@@ -14,6 +14,7 @@ import type { WorktreeMaker } from './issues/leadtree.ts'
 import type { EffectPorts } from './issues/effects.ts'
 import { type NotifyDeps, notifyPass } from './notify/index.ts'
 import type { StewardDeps } from './issues/steward.ts'
+import type { BeszelIntake } from './intake/beszel.ts'
 import type { GithubIntake } from './intake/github.ts'
 import type { Settler } from './issues/settle.ts'
 import { issuePass } from './issues/worker.ts'
@@ -64,6 +65,7 @@ export interface TickDeps {
   settler?: Pick<Settler, 'kick' | 'takeErrors'>
   /** the GitHub label source: the tick kicks it and it paces itself; without it none is polled */
   github?: Pick<GithubIntake, 'kick'>
+  beszel?: Pick<BeszelIntake, 'kick'>
   /** the owner's line: the rules that read state, then the outbox; without it nothing is sent */
   notify?: NotifyDeps
   /** the fleet read model: the tick starts a build when one is due and does not wait for it; without it none is built */
@@ -330,6 +332,7 @@ function settleStep(deps: TickDeps): string[] {
 function kickBackground(deps: TickDeps): void {
   deps.fleet?.kick()
   deps.github?.kick()
+  deps.beszel?.kick()
   deps.spaces?.kick()
 }
 

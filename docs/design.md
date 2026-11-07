@@ -1069,7 +1069,7 @@ Plan, short. No model, no eval set, no judge (RS13): rules decide, real use tune
 **One entry, `fileSignal`** (`issues/signals.ts`). Every source, the door and the pollers alike, hands it one signal
 `{source, subject, event, status: down|up|event, title, facts, repo, fingerprint?}` and gets one outcome back. The repo is the
 sender's route or the project's, never the payload's; the IuRoot refusal of `createIssueIn` holds for every intake source (`alert`,
-`github`, `checks`, `launchd`), and a poller never reads a repo under `scopeOf` `visible`.
+`github`, `checks`, `launchd`, `beszel`), and a poller never reads a repo under `scopeOf` `visible`.
 
 | Source | Kind | Subject | Down / up | Built in |
 |-|-|-|-|-|
@@ -1109,6 +1109,24 @@ episode Issue, an `urgent` or incident one. It starts at the head of the order, 
 the GitHub poll (`FACTORY_GITHUB_POLL`, default `5m`, `off`; the token `FACTORY_GITHUB_TOKEN` from `secrets-run`, none = the source is off and one line is logged). Only open issues, never pull requests; the repo is `owner/name` from the project's `origin`. The Issue is source `github`, title =
 the GitHub title, facts `{url, number, body (clipped), labels}`: the body is someone else's text and is data, the label is the owner's act (only
 triage access can set it). Nothing is written back to GitHub.
+
+**Beszel: a host that chokes files its own Issue** (`intake/beszel.ts` `BeszelIntake`, `intake/beszel-rules.ts`, `intake/infra.ts`, `config/infra.json`). Deterministic, no model. The hub (PocketBase)
+is polled every `FACTORY_BESZEL_POLL` (default `1m`, `off`; the hub's `FACTORY_BESZEL_URL` is non-secret and may sit in the env file, `FACTORY_BESZEL_EMAIL` and
+`FACTORY_BESZEL_PASSWORD` come from `secrets-run`; a missing one = the source is off and one line is logged). The system list gives the hosts; for each non-paused system named in
+`config/infra.json` (matched case-insensitively; another system files nothing and is logged once per process) the last 240 one-minute stat samples are read. A sample counts once it has
+`mp` or `dp`; the hub omits zeros, so absent swap is 0 GB. `infra.json` holds the routing (`hosts.<name>.repo`: a directory under `~/SourceRoot`; `local: true` marks the mini) and
+every threshold (`defaults`, partly overridden per host; the file's absent numbers are the ones below).
+
+- **Rules** (each with `sustainMin` to breach, `clearMin` below it to recover; a rule needs 60% of the expected samples and a newest sample at most 3 min old, else it holds):
+  `memory` mem % >= 92 for 15 min; `swap` used >= 8 GB for 10 min; `swap_growth` over 120 min the median of the newest 10 samples minus the oldest 10 is >= 2 GB and the
+  newest median >= 1 GB; `disk` disk % >= 90 for 10 min, or filling fast (growth between the medians > 0.5 GB/h, disk >= 50% and full in under 24 h); `load` 1-minute load per
+  thread >= 3 for 15 min (20 absolute when the threads are unknown); `silent` the newest sample older than 10 min or the system `down` that long (the only rule that speaks without fresh samples).
+  A paused system is ignored.
+- **Episodes.** Subject `<system>:<rule>`, `down@<since>` and `up@<recovered>` (ISO to the minute) are the event keys, so a replay is one effect. One query per pass reads the latest
+  episode per subject from `door_issues`. A `clear` is sent only for an open episode. A `breach` on an open episode is sent once per process and per `up` (it attaches as a regression
+  signal); with no open episode it files, unless the latest Issue is younger than `refileAfterMin` (default 360): a lead that closed it while still hot is not pestered every minute.
+- **Facts** carry the numbers (latest, window max, threshold, minutes sustained), the thresholds used, the last hour every fifth sample and a subset of the system's info. On the mini
+  (`local`), a `down` of memory, swap or swap_growth adds `processes` (top 5 by resident memory, `ps` with a 5 s timeout), a `load` down `processesByCpu`; a failing `ps` is no key.
 
 **Split.** Issue 149 builds the engine, the door on it, settle + heal, order, and the GitHub label source. Red checks and failed launchd jobs
 are two follow-up Issues on the same engine (`--after 149`). Done when, live: a labelled GitHub issue in a scratch repo becomes one Issue; a

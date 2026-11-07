@@ -9,7 +9,7 @@ import { findIssue, type IssueRow, toIssue } from './read.ts'
 import { logEvent } from './shared.ts'
 
 /** The sources the intake files for: none of them reaches IuRoot (decision 3). */
-export const INTAKE_SOURCES = new Set(['alert', 'github', 'checks', 'launchd'])
+export const INTAKE_SOURCES = new Set(['alert', 'github', 'checks', 'launchd', 'beszel'])
 
 /** A create the policy refuses; the message is the 422 body. */
 class IssueRefused extends RepoRefused {}

@@ -6,7 +6,9 @@ import { SQL } from 'bun'
 import { systemClock } from './clock.ts'
 import { loadConfig } from './config.ts'
 import { Digest } from './fleet/digest.ts'
+import { BeszelIntake } from './intake/beszel.ts'
 import { GithubIntake } from './intake/github.ts'
+import { loadInfra } from './intake/infra.ts'
 import { Settler } from './issues/settle.ts'
 import { Places } from './fleet/place.ts'
 import { AskHumanQueue, directoryNames, FleetBuilder, HcTerminals } from './fleet/index.ts'
@@ -221,6 +223,24 @@ const github =
         token: config.githubToken,
         everyMs: config.githubPollMs,
       })
+const infra = await loadInfra().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})
+const beszel =
+  config.beszelPollMs === null
+    ? undefined
+    : new BeszelIntake({
+        sql,
+        now: () => clock.now(),
+        roots: config.repoRoots,
+        sourceRoot: join(process.env.HOME ?? homedir(), 'SourceRoot'),
+        infra,
+        url: config.beszelUrl,
+        email: config.beszelEmail,
+        password: config.beszelPassword,
+        everyMs: config.beszelPollMs,
+      })
 const ticker = startTicker(
   {
     sql,
@@ -233,6 +253,7 @@ const ticker = startTicker(
     projects,
     settler,
     github,
+    beszel,
     issuePorts,
     steward: {
       verify: { proof, offTick },
@@ -279,6 +300,8 @@ async function shutdown(signal: string): Promise<void> {
     await settler.settled()
     stoppingStep = 'github.settled'
     await github?.settled()
+    stoppingStep = 'beszel.settled'
+    await beszel?.settled()
     stoppingStep = 'spaces.settled'
     await spaces.settled()
     stoppingStep = 'leadWorktrees.stop'

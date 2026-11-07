@@ -82,6 +82,7 @@ describe('childEnv', () => {
       'FACTORY_DB_PASSWORD',
       'DATABASE_URL',
       'FACTORY_GITHUB_TOKEN',
+      'FACTORY_BESZEL_PASSWORD',
       'NTFY_TOKEN',
     ]
     const saved = Object.fromEntries(secrets.map((name) => [name, process.env[name]]))

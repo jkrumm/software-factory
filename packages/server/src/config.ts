@@ -58,6 +58,12 @@ export interface Config {
   githubPollMs: number | null
   /** `FACTORY_GITHUB_TOKEN` (from `secrets-run`): the GitHub label source is off without it */
   githubToken: string | undefined
+  /** `FACTORY_BESZEL_POLL` (`1m`, `off`): how often the Beszel source polls; null is off */
+  beszelPollMs: number | null
+  /** `FACTORY_BESZEL_URL`, `FACTORY_BESZEL_EMAIL`, `FACTORY_BESZEL_PASSWORD` (the last two from `secrets-run`): the source is off without all three */
+  beszelUrl: string | undefined
+  beszelEmail: string | undefined
+  beszelPassword: string | undefined
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
   /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) and the load ceiling (`FACTORY_LOAD_CEILING`) */
@@ -121,6 +127,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
     ...githubSource(env),
+    ...beszelSource(env),
     admission: {
       leadsPerAccount: wholeNumber(
         'FACTORY_LEADS_PER_ACCOUNT',
@@ -175,8 +182,12 @@ function digestAt(value: string | undefined): string | null {
 const DURATION_UNIT_MS = { s: 1_000, m: 60_000, h: 3_600_000 } as const
 
 /** `5m`, `90s`, `1h`; `off` for none; unset is five minutes. Between 30 s and 24 h: a shorter spacing is spend, a longer one is a stale board. */
-function fleetDigestEvery(value: string | undefined, name = 'FACTORY_DIGEST_EVERY'): number | null {
-  if (value === undefined || value === '') return DEFAULT_FLEET_DIGEST_EVERY_MS
+function fleetDigestEvery(
+  value: string | undefined,
+  name = 'FACTORY_DIGEST_EVERY',
+  fallback = DEFAULT_FLEET_DIGEST_EVERY_MS,
+): number | null {
+  if (value === undefined || value === '') return fallback
   if (value === 'off') return null
   const found = /^(\d+)([smh])$/.exec(value)
   const ms = found ? Number(found[1]) * DURATION_UNIT_MS[found[2] as 's' | 'm' | 'h'] : Number.NaN
@@ -190,6 +201,17 @@ function githubSource(env: Record<string, string | undefined>): Pick<Config, 'gi
   return {
     githubPollMs: fleetDigestEvery(env.FACTORY_GITHUB_POLL, 'FACTORY_GITHUB_POLL'),
     githubToken: env.FACTORY_GITHUB_TOKEN || undefined,
+  }
+}
+
+function beszelSource(
+  env: Record<string, string | undefined>,
+): Pick<Config, 'beszelPollMs' | 'beszelUrl' | 'beszelEmail' | 'beszelPassword'> {
+  return {
+    beszelPollMs: fleetDigestEvery(env.FACTORY_BESZEL_POLL, 'FACTORY_BESZEL_POLL', 60_000),
+    beszelUrl: env.FACTORY_BESZEL_URL || undefined,
+    beszelEmail: env.FACTORY_BESZEL_EMAIL || undefined,
+    beszelPassword: env.FACTORY_BESZEL_PASSWORD || undefined,
   }
 }
 
