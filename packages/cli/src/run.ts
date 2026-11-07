@@ -74,7 +74,7 @@ commands:
                   the fleet read model (plain: asks first, then the health line, then the open Issues, then the repos with their sessions, then the digest; --format json: all of it, the digest's spend per day under "digest").
                   --refresh builds it now instead of reading the last build. Token only (exit 3 without FACTORY_TOKEN): the model holds
                   IuRoot's text, which a pane's model must not read, so the socket does not serve it
-  read overview|issues [--state open|closed|all] [--limit n]|issue <id>|sessions [--issue n] [--role r] [--live]|session <id>|asks|health|accounts
+  read overview|issues [--state open|closed|all] [--limit n]|issue <id>|sessions [--issue n] [--role r] [--live]|session <id>|asks|health|accounts|alerts [--hours 1-24] [--limit n]
                   the read API (/v1), for people: titles, one-sentence summaries, insights (tool calls, subagents, tokens, time
                   working). --format json prints the body as the contract has it; plain prints one row per item, an id leading
                   the row. Token only
@@ -583,6 +583,7 @@ interface Flags {
   limit?: string
   issue?: string
   live?: boolean
+  hours?: string
   'until-closed'?: boolean
 }
 
@@ -1309,6 +1310,7 @@ const OPTIONS = {
   limit: { type: 'string' },
   issue: { type: 'string' },
   live: { type: 'boolean' },
+  hours: { type: 'string' },
   'until-closed': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const

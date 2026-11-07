@@ -58,6 +58,7 @@ export function startApp(deps: {
   review?: Review
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   read?: AppDeps['read']
+  alerts?: AppDeps['alerts']
   /** the server accepts the read token (`TEST_READ_TOKEN`) */
   readToken?: string
 }): TestApp {

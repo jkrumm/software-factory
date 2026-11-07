@@ -96,6 +96,7 @@ describe('config (finding 5)', () => {
       notifyTarget: 'ntfy:factory',
       ntfyUrl: '',
       ntfyToken: '',
+      alertsTopic: 'alerts',
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
@@ -165,6 +166,8 @@ describe('config (finding 5)', () => {
     for (const bad of ['slack:#agents', 'ntfy:bad topic', 'ntfy:', 'matrix:x'])
       expect(() => loadConfig({ ...env, FACTORY_NOTIFY_TARGET: bad })).toThrow('FACTORY_NOTIFY_TARGET')
     expect(() => loadConfig({ ...env, FACTORY_NTFY_URL: 'ftp://x' })).toThrow('FACTORY_NTFY_URL')
+    expect(loadConfig({ ...env, FACTORY_ALERTS_TOPIC: 'overnight' }).alertsTopic).toBe('overnight')
+    expect(() => loadConfig({ ...env, FACTORY_ALERTS_TOPIC: 'bad topic' })).toThrow('FACTORY_ALERTS_TOPIC')
     expect(loadConfig({ ...env, FACTORY_DIGEST_AT: '06:05', FACTORY_DIGEST_TZ: 'UTC' })).toMatchObject({
       digestAt: '06:05',
       digestTz: 'UTC',
