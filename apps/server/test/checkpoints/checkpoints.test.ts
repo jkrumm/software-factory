@@ -52,12 +52,15 @@ let judgeCalls: { question: string; precedents: number }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let sent: string[]
 let sendResult: () => Result<void>
+/** what happens while a Judge call is out: the world moves on under it */
+let duringJudge: (() => Promise<unknown>) | null
 
 const policies: StandingPolicies = { rulesFor: () => Promise.resolve(ok(rules)) }
 const judge: JudgePort = {
-  judge: (input) => {
+  judge: async (input) => {
     judgeCalls.push({ question: input.question, precedents: input.precedents.length })
-    return Promise.resolve(judgeAnswer())
+    await duringJudge?.()
+    return judgeAnswer()
   },
 }
 const notifier: Notifier = {
@@ -79,6 +82,7 @@ beforeEach(async () => {
   judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
   sent = []
   sendResult = () => ok(undefined)
+  duringJudge = null
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
@@ -351,6 +355,53 @@ describe('settling, in turn', () => {
     expect(value(await showDecision(deps, decision.id)).withdrawnReason).toContain('no longer waits')
   })
 
+  test("the owner answering while the Judge is out: the Judge's pass-on pages no one", async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    duringJudge = () => answerDecision(deps, { decisionId: decision.id, answer: 'winston' })
+    expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'answered', settledBy: 'owner' })
+    expect(await rows('checkpoint_pages')).toBe(0)
+    expect(await eventsOf(issueId)).toContain('answered')
+  })
+
+  test('the Issue cancelled while the Judge is out: the Decision is withdrawn and no one is paged', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    duringJudge = () => record(issueId, 'cancel', { kind: 'cancelled', payload: { reason: 'stop' }, actor: 'owner' })
+    expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'withdrawn' })
+    expect(await rows('checkpoint_pages')).toBe(0)
+  })
+
+  test('an answer that could not be recorded lets go of its step: the next pass goes on to the owner', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    judgeAnswer = () => ok({ verdict: 'answer', answer: 'pino', reason: 'r', source: 'plan: docs/x.md' })
+    const real = deps.uow
+    let blink = false
+    duringJudge = async () => {
+      blink = true
+    }
+    deps = {
+      ...deps,
+      uow: {
+        inTransaction: () => real.inTransaction(),
+        run: (work) => {
+          if (!blink) return real.run(work)
+          blink = false
+          return Promise.resolve(err(portError('gone', 'the database blinked')))
+        },
+      },
+    }
+    expect(errorOf(await settleDecision(deps, decision.id))).toMatchObject({ kind: 'gone' })
+    const shown = value(await showDecision(deps, decision.id))
+    expect(shown.steps.find((step) => step.step === 'judge')).toMatchObject({ outcome: 'failed' })
+    expect(shown.steps.find((step) => step.step === 'judge')?.detail).toContain('could not be recorded')
+
+    duringJudge = null
+    expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'open' })
+    expect(await rows('checkpoint_pages')).toBe(1)
+  })
+
   test('a pass over the open Decisions settles each, oldest first', async () => {
     const one = await workingIssue()
     const two = await workingIssue()
@@ -572,6 +623,19 @@ describe('artifacts', () => {
     // Looked at on the revision it was made on, it is anchored again.
     const first = value(await showArtifact(deps, { artifactId: artifact.id, revision: 1 }))
     expect(first.annotations.every((a) => a.anchor === 'anchored')).toBe(true)
+  })
+
+  test('revising back to older content is a new revision; the latest content again is a replay', async () => {
+    const issueId = await workingIssue()
+    const { artifact } = value(
+      await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'report', title: 'R', content: 'X' } }),
+    )
+    const revise = (content: string) =>
+      reviseArtifact(deps, { artifactId: artifact.id, attempt: null, content, note: null })
+    expect(value(await revise('Y')).revisions).toHaveLength(2)
+    expect(value(await revise('X')).revisions).toHaveLength(3)
+    expect(value(await revise('X'))).toMatchObject({ result: 'replayed' })
+    expect(await rows('artifact_revisions')).toBe(3)
   })
 
   test('a revision of a Concept needs the attempt; a Decision is not revised', async () => {

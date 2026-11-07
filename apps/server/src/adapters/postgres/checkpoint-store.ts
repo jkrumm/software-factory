@@ -269,6 +269,11 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return (await decisionsOf(rows))[0] ?? null
     },
 
+    async lockDecision(id) {
+      const rows: unknown[] = await tx`SELECT * FROM factory.decisions WHERE id = ${id} FOR UPDATE`
+      return (await decisionsOf(rows))[0] ?? null
+    },
+
     async decisionByKey(key) {
       const rows: unknown[] = await tx`SELECT * FROM factory.decisions WHERE key = ${key}`
       return (await decisionsOf(rows))[0] ?? null
@@ -411,11 +416,6 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async revisions(id) {
       const rows: unknown[] = await tx`SELECT * FROM factory.artifact_revisions WHERE artifact_id = ${id} ORDER BY n`
       return rows.map(revisionOf)
-    },
-
-    async revisionByKey(key) {
-      const [row] = await tx`SELECT * FROM factory.artifact_revisions WHERE key = ${key}`
-      return row ? revisionOf(row) : null
     },
 
     async insertAnnotation(a) {

@@ -134,6 +134,8 @@ export interface CheckpointStore {
     >,
   ): Promise<boolean>
   decision(id: DecisionId): Promise<DecisionRecord | null>
+  /** the Decision with its row locked until the transaction ends: whoever settles it or plans its page reads it this way, so the two cannot pass each other */
+  lockDecision(id: DecisionId): Promise<DecisionRecord | null>
   decisionByKey(key: Key): Promise<DecisionRecord | null>
   /** false when it is answered or withdrawn already */
   answerDecision(id: DecisionId, answer: { text: string; by: Settler; source: string; at: Date }): Promise<boolean>
@@ -165,7 +167,6 @@ export interface CheckpointStore {
   artifacts(filter: { issueId?: IssueId; kind?: ArtifactKind; limit: number }): Promise<ArtifactRecord[]>
   insertRevision(revision: RevisionRecord & { key: Key }): Promise<boolean>
   revisions(id: ArtifactId): Promise<RevisionRecord[]>
-  revisionByKey(key: Key): Promise<RevisionRecord | null>
   insertAnnotation(annotation: AnnotationRecord): Promise<boolean>
   annotationByKey(key: Key): Promise<AnnotationRecord | null>
   annotations(id: ArtifactId): Promise<AnnotationRecord[]>

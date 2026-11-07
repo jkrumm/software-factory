@@ -215,7 +215,7 @@ export async function answerIn(
   answering: Answering,
 ): Promise<Result<AnswerOutcome, CheckpointError>> {
   const at = deps.clock.now()
-  const fresh = await checkpoints.decision(answering.decision.id)
+  const fresh = await checkpoints.lockDecision(answering.decision.id)
   if (!fresh) return err(notFound('Decision', answering.decision.id))
   if (fresh.answeredAt && fresh.settledBy && fresh.answer !== null) {
     return err({ kind: 'already_answered', by: fresh.settledBy, answer: fresh.answer })
@@ -444,18 +444,17 @@ export async function reviseArtifact(
   }
   const blob = await deps.blobs.put(content)
   if (!blob.ok) return blob
-  const reviseKey = key('revise', input.artifactId, blob.value.sha256)
-
   return deps.uow.run(async ({ work, checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
     const issue = await issueOf(work, artifact.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
-    if (await checkpoints.revisionByKey(reviseKey)) {
-      return ok(await written(checkpoints, artifact.id, 'replayed', moveOf(issue)))
-    }
     if (artifact.kind === 'decision') return err({ kind: 'invalid', detail: 'a Decision is not revised: ask again' })
     const revisions = await checkpoints.revisions(artifact.id)
+    // The same content as the latest revision is the lead sending it again; going back to an older one is a new revision.
+    if (revisions.at(-1)?.sha256 === blob.value.sha256) {
+      return ok(await written(checkpoints, artifact.id, 'replayed', moveOf(issue)))
+    }
     const n = (revisions.at(-1)?.n ?? 0) + 1
     let move: IssueMove | null = null
     if (waitsForReview(artifact.kind)) {
@@ -485,7 +484,7 @@ export async function reviseArtifact(
     const stored = await checkpoints.insertRevision({
       artifactId: artifact.id,
       n,
-      key: reviseKey,
+      key: key('revise', artifact.id, n),
       blob: blob.value.path,
       sha256: blob.value.sha256,
       bytes: blob.value.bytes,

@@ -123,7 +123,7 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
   if (claimed.value === 'done') return ok(null)
 
   const rules = await deps.policies.rulesFor(decision.repo)
-  return deps.uow.run(async (stores) => {
+  const recorded = await deps.uow.run(async (stores) => {
     const at = deps.clock.now()
     const { checkpoints } = stores
     if (!rules.ok) {
@@ -149,6 +149,7 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
     })
     return outcome.ok && outcome.value.status === 'answered' ? answered(outcome) : outcome.ok ? ok(null) : outcome
   })
+  return releaseOnError(deps, decision, 'policy', recorded)
 }
 
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
@@ -175,7 +176,7 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
   })
   const verdict = await deps.judge.judge(input, key('factory-ask', decision.id))
 
-  return deps.uow.run(async (stores) => {
+  const recorded = await deps.uow.run(async (stores) => {
     const at = deps.clock.now()
     const { checkpoints } = stores
     const done = async (outcome: 'passed' | 'rejected' | 'failed', detail: string): Promise<Result<null, never>> => {
@@ -197,6 +198,27 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
     })
     return outcome.ok && outcome.value.status === 'answered' ? answered(outcome) : outcome.ok ? ok(null) : outcome
   })
+  return releaseOnError(deps, decision, 'judge', recorded)
+}
+
+/**
+ * A call was made and its record rolled back (the Issue moved under the answer, the database blinked): the step would stay
+ * claimed for its whole lease and the Decision would sit untouched. Let go of the claim as `failed`, so the next pass goes on
+ * to the next step. A lost race needs none of it: the Decision is answered.
+ */
+async function releaseOnError(
+  deps: SettleDeps,
+  decision: DecisionRecord,
+  step: 'policy' | 'judge',
+  recorded: Awaited<StepResult>,
+): StepResult {
+  if (recorded.ok || lostRace(recorded.error)) return recorded
+  await deps.uow.run(async ({ checkpoints }) => {
+    const detail = `the result could not be recorded: ${JSON.stringify(recorded.error)}`.slice(0, 300)
+    await checkpoints.finishStep(decision.id, step, { outcome: 'failed', detail, at: deps.clock.now() })
+    return ok(null)
+  })
+  return recorded
 }
 
 /** The default: a reversible option the lead named, taken once its wait has run out with no answer. */
@@ -226,11 +248,21 @@ async function defaultStep(deps: SettleDeps, decision: DecisionRecord): StepResu
  */
 async function ownerStep(deps: SettleDeps, decision: DecisionRecord): Step<null> {
   if (decision.form.noAnswer.default !== null) return ok(null)
-  return deps.uow.run(async (stores: CheckpointStores) => {
+  return deps.uow.run(async ({ work, checkpoints }: CheckpointStores) => {
     const at = deps.clock.now()
-    const first = await stores.checkpoints.recordStep(decision.id, 'owner', { outcome: 'open', detail: null, at })
+    // The Decision was read before the Judge ran, which can take minutes: the owner may have answered it since, or the
+    // Issue stopped waiting. Read it again under its lock, so no page is planned for a Decision that is settled.
+    const fresh = await checkpoints.lockDecision(decision.id)
+    if (!fresh || statusOf(fresh) !== 'open') return ok(null)
+    const issue = await issueOf(work, fresh.issueId)
+    if (!issue || !waitingOn(issue, 'decision', fresh.id)) {
+      await checkpoints.withdrawDecision(fresh.id, 'the Issue no longer waits for it', at)
+      await checkpoints.cancelPages(fresh.id, at)
+      return ok(null)
+    }
+    const first = await checkpoints.recordStep(decision.id, 'owner', { outcome: 'open', detail: null, at })
     if (!first) return ok(null)
-    await stores.checkpoints.planPage(
+    await checkpoints.planPage(
       decisionPage({
         issue: { id: decision.issueId, repo: decision.repo },
         link: deepLink(deps.consoleUrl, decision.id),
