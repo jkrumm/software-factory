@@ -10,6 +10,16 @@ const OLD_SHA = 'b'.repeat(40)
 /** The dry run needs macOS's launchd tools and the secrets shim; elsewhere (CI) it cannot run. */
 const canRun = Bun.which('launchctl') !== null && Bun.which('plutil') !== null && Bun.which('secrets-run') !== null
 
+const NEW_DOOR_LAUNCHER = await Bun.file(join(ROOT, 'scripts', 'launch-door.sh')).text()
+/** The old core's launcher as `master` ships it: no template, no secret, `packages/door`. */
+const OLD_DOOR_LAUNCHER = `#!/bin/bash
+# factory door launcher (old core): holds no secret; the tokens file is the door's own.
+set -u
+DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DIR" || exit 78
+exec bun packages/door/src/main.ts
+`
+
 let work = ''
 
 beforeAll(async () => {
@@ -28,6 +38,9 @@ beforeAll(async () => {
     await cp(join(ROOT, 'deploy'), join(dir, 'deploy'), { recursive: true })
     await mkdir(join(dir, 'scripts'), { recursive: true })
     await cp(join(ROOT, 'scripts', 'env-file.sh'), join(dir, 'scripts', 'env-file.sh'))
+    // the door's launcher is the release's own: the new core's resolves .env.door.tpl, the old core's holds no secret and has none
+    await writeFile(join(dir, 'scripts', 'launch-door.sh'), dir === live ? NEW_DOOR_LAUNCHER : OLD_DOOR_LAUNCHER)
+    if (dir === live) await cp(join(ROOT, '.env.door.tpl'), join(dir, '.env.door.tpl'))
     await writeFile(join(dir, '.complete'), '')
   }
   await mkdir(join(work, 'data'), { recursive: true })
@@ -62,6 +75,10 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(out).toContain('apps/cli/bin/factory.ts')
     expect(out).toContain('scripts/launch.sh')
     expect(out).toContain('scripts/launch-door.sh')
+    expect(out).toMatch(
+      /door: new door \(apps\/door\) from [0-9a-f<>a-z]+, launcher .*launch-door\.sh, credentials: FACTORY_DOOR_TOKEN from its \.env\.door\.tpl/,
+    )
+    expect(out).not.toContain('old door (packages/door)')
     expect(out).toContain('the settings file is accepted')
     expect(out).not.toContain('packages/cli')
   })
@@ -74,6 +91,11 @@ describe.skipIf(!canRun)('the plans', () => {
     )
     expect(out).toContain('packages/cli/bin/factory.ts')
     expect(out).toContain('the door of the old core (packages/server)')
+    expect(out).toContain(
+      `door: old door (packages/door) from ${OLD_SHA.slice(0, 12)}, launcher ${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh, credentials: none (the tokens file only)`,
+    )
+    expect(out).toContain(`${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh`)
+    expect(out).not.toContain('new door (apps/door)')
     expect(out).toContain('the two trade places')
   })
 
@@ -84,5 +106,71 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(refused.code).not.toBe(0)
     expect(refused.out).toContain('FACTORY_NOT_A_SETTING')
     expect(refused.out).toContain('nothing was changed')
+  })
+})
+
+/**
+ * `deploy_door` itself, against a fake launchctl, curl and secrets-run: it renders the release's own plist, starts that door and
+ * says which door it started. The old release has no `.env.door.tpl` and needs none: no warning.
+ */
+describe.skipIf(!canRun)('starting the door of a release', () => {
+  async function startDoor(sha: string): Promise<{ out: string; plist: string; calls: string[] }> {
+    const home = await mkdtemp('/tmp/factory-door-plan-')
+    const bin = join(home, 'bin')
+    await mkdir(bin, { recursive: true })
+    await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true })
+    const calls = join(home, 'calls.log')
+    // launchctl: `print` shows the launcher of the plist last bootstrapped (and is "not loaded" before any); the rest is logged
+    await writeFile(
+      join(bin, 'launchctl'),
+      `#!/bin/bash
+echo "$*" >> ${calls}
+case "$1" in
+  bootstrap) cp "$3" ${home}/loaded.plist ;;
+  bootout) rm -f ${home}/loaded.plist ;;
+  print) [[ -f ${home}/loaded.plist ]] || exit 113
+    echo "	arguments = {"; echo "		/bin/bash"; echo "		$(grep -o '[^<>]*launch-door.sh' ${home}/loaded.plist)"; echo "	}" ;;
+esac
+`,
+      { mode: 0o755 },
+    )
+    await writeFile(join(bin, 'curl'), '#!/bin/bash\necho 401\n', { mode: 0o755 })
+    await writeFile(join(bin, 'secrets-run'), '#!/bin/bash\nexit 0\n', { mode: 0o755 })
+    const proc = Bun.spawn(
+      ['bash', '-c', `source ${DEPLOY} && DOOR_WAIT_SECS=2 && deploy_door ${join(work, 'releases', sha)} ${sha}`],
+      {
+        cwd: ROOT,
+        env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH ?? ''}`, FACTORY_ROOT: work },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    )
+    const [out, err] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    const plist = await Bun.file(join(home, 'loaded.plist')).text()
+    const log = await Bun.file(calls).text()
+    await rm(home, { recursive: true, force: true })
+    return { out: `${out}\n${err}`, plist, calls: log.split('\n').filter(Boolean) }
+  }
+
+  test('the new core is deployed: the door of the new release starts with its secret, and is confirmed', async () => {
+    const run = await startDoor(NEW_SHA)
+    expect(run.plist).toContain(`${join(work, 'releases', NEW_SHA)}/scripts/launch-door.sh`)
+    expect(run.out).toContain('door: new door (apps/door)')
+    expect(run.out).toContain(`door OK: the new door (apps/door) of ${NEW_SHA.slice(0, 12)}`)
+    expect(run.out).not.toContain('WARNING')
+  })
+
+  test('the way back: the door of the old release starts with no secret, no .env.door.tpl warning, and is confirmed', async () => {
+    const run = await startDoor(OLD_SHA)
+    expect(run.plist).toContain(`${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh`)
+    expect(run.plist).not.toContain(NEW_SHA)
+    expect(run.out).toContain('door: old door (packages/door)')
+    expect(run.out).toContain(`door OK: the old door (packages/door) of ${OLD_SHA.slice(0, 12)}`)
+    expect(run.out).not.toContain('WARNING')
+    expect(run.out).not.toContain('.env.door.tpl')
   })
 })

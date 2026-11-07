@@ -98,6 +98,23 @@ door_template_of() { echo "$1/deploy/$DOOR_LABEL.plist.template"; } # $1 release
 core_of() { if [[ -f "$1/apps/server/src/main.ts" ]]; then echo "new core (apps/server)"; else echo "old core (packages/server)"; fi; } # $1 release dir
 cli_of() { if [[ -f "$1/apps/cli/bin/factory.ts" ]]; then echo "apps/cli/bin/factory.ts"; else echo "packages/cli/bin/factory.ts"; fi; } # $1 release dir
 
+# Which door a release holds, and what its launcher needs. A door is the release's own: the new core's (apps/door) posts to the
+# server's HTTP API with FACTORY_DOOR_TOKEN, resolved from the release's .env.door.tpl; the old core's (packages/door) posts to the
+# server's hook socket and holds no secret. Both read the tokens file of their sources. The 401 of an unauthenticated POST is the
+# same from either, so it proves a door is up, never which one: `door_runs_from` reads that from launchd.
+door_of() { if [[ -f "$1/apps/door/src/main.ts" ]]; then echo "new door (apps/door)"; else echo "old door (packages/door)"; fi; } # $1 release dir
+door_needs_secret() { grep -qs '\.env\.door\.tpl' "$1/scripts/launch-door.sh"; } # $1 release dir: does its launcher resolve a template
+door_credentials() { # $1 release dir
+  if door_needs_secret "$1"; then echo "FACTORY_DOOR_TOKEN from its .env.door.tpl, and the tokens file"; else echo "none (the tokens file only)"; fi
+}
+door_plan() { # $1 release dir, $2 sha: the one line that says which door starts
+  log "door: $(door_of "$1") from ${2:0:12}, launcher $1/scripts/launch-door.sh, credentials: $(door_credentials "$1")"
+}
+# The launcher the loaded door job runs ("" = not loaded).
+door_runs_from() {
+  launchctl print "gui/$(id -u)/$DOOR_LABEL" 2>/dev/null | awk '/arguments = \{/ { f = 1; next } f && /launch-door\.sh/ { print $1; exit }'
+}
+
 tail_logs() {
   local f
   for f in "$HOME/Library/Logs/software-factory.err.log" "$HOME/Library/Logs/software-factory.out.log"; do
@@ -274,13 +291,16 @@ deploy_door() { # $1 release dir, $2 sha
   local template tmp i=0
   template=$(door_template_of "$1")
   if [[ ! -f "$template" ]]; then log "WARNING: $template missing: the door is left as it is"; return 0; fi
-  if [[ ! -f "$1/.env.door.tpl" ]]; then
-    log "WARNING: $1/.env.door.tpl is missing: the door cannot start"
-  else
-    local key ref
-    while IFS='=' read -r key ref; do
-      secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: the door's $key ($ref) does not resolve through secrets-run: the door will not start"
-    done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.door.tpl")
+  door_plan "$1" "$2"
+  if door_needs_secret "$1"; then
+    if [[ ! -f "$1/.env.door.tpl" ]]; then
+      log "WARNING: $1/.env.door.tpl is missing: the door cannot start"
+    else
+      local key ref
+      while IFS='=' read -r key ref; do
+        secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: the door's $key ($ref) does not resolve through secrets-run: the door will not start"
+      done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.door.tpl")
+    fi
   fi
   tmp="$DOOR_PLIST.tmp.$$"
   if ! { render_plist "$template" "$1" "$2" > "$tmp" && plutil -lint "$tmp" >/dev/null; }; then
@@ -295,7 +315,14 @@ deploy_door() { # $1 release dir, $2 sha
   launchctl bootstrap "gui/$(id -u)" "$DOOR_PLIST" || { log "WARNING: launchctl bootstrap of the door failed"; return 0; }
   i=0
   while (( i < DOOR_WAIT_SECS )); do
-    if door_answers; then log "door OK: 127.0.0.1:$DOOR_PORT refuses an unauthenticated POST (401)"; return 0; fi
+    if door_answers; then
+      if [[ "$(door_runs_from)" == "$1/scripts/launch-door.sh" ]]; then
+        log "door OK: the $(door_of "$1") of ${2:0:12} answers on 127.0.0.1:$DOOR_PORT (401 to an unauthenticated POST)"
+      else
+        log "WARNING: a door answers on 127.0.0.1:$DOOR_PORT but launchd runs '$(door_runs_from)', not $1/scripts/launch-door.sh: read launchctl print gui/$(id -u)/$DOOR_LABEL"
+      fi
+      return 0
+    fi
     sleep 1; i=$((i + 1))
   done
   log "WARNING: the door does not answer on 127.0.0.1:$DOOR_PORT after ${DOOR_WAIT_SECS}s (make verify fails until it does; create its tokens with: factory door token new <source>)"
@@ -350,6 +377,9 @@ rollback() {
     act ln -sfn "$release" "$CURRENT"
     act ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK"
     act "write $SHA_FILE ($prev) and $PREV_FILE (${live:-none}): the two trade places"
+    log "rendered $DOOR_PLIST (the door of the $(core_of "$release"), from the previous release):"
+    render_plist "$(door_template_of "$release")" "$release" "$prev"
+    door_plan "$release" "$prev"
     act "launchctl bootout $DOOR_LABEL if loaded, then bootstrap it from $release (the door of the $(core_of "$release"))"
     return 0
   fi
@@ -432,6 +462,7 @@ main() {
     act "write $SHA_FILE ($sha) and $PREV_FILE (${old:-none})"
     log "rendered $DOOR_PLIST (the door of the $(core_of "$SELF_DIR/.."), from the same release):"
     render_plist "$(door_template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
+    door_plan "$SELF_DIR/.." "$sha"
     act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
     act "wait up to ${DOOR_WAIT_SECS}s for an unauthenticated POST to 127.0.0.1:$DOOR_PORT/alert/kuma to answer 401; a door that does not start (no tokens file) is a warning, never a failed deploy"
     act "prune releases beyond the newest $KEEP_RELEASES"
