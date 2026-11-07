@@ -149,8 +149,11 @@ export class LaunchdIntake {
 
   private async signalOf(repo: string, label: string, isOpen: boolean): Promise<Signal | undefined> {
     const job = await this.read(label)
-    if (job?.exitCode === undefined) return undefined
-    if (job.exitCode !== 0 && job.state !== 'running') {
+    if (!job) return undefined
+    const running = job.state === 'running'
+    // Not running and never exited: it never ran (or is not up yet), which says nothing either way.
+    if (job.exitCode === undefined && !running) return undefined
+    if (job.exitCode !== undefined && job.exitCode !== 0 && !running) {
       return {
         source: 'launchd',
         subject: label,
@@ -168,7 +171,12 @@ export class LaunchdIntake {
       event: `up@runs${job.runs}`,
       status: 'up',
       title: cleanText(`Launchd job "${label}" is healthy`.slice(0, MAX_TITLE_CHARS)),
-      facts: storable({ label, exitCode: job.exitCode, runs: job.runs, ...(job.state ? { state: job.state } : {}) }),
+      facts: storable({
+        label,
+        runs: job.runs,
+        ...(job.exitCode === undefined ? {} : { exitCode: job.exitCode }),
+        ...(job.state ? { state: job.state } : {}),
+      }),
       repo,
     }
   }

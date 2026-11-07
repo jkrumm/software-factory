@@ -190,6 +190,21 @@ describe('the failed launchd job source', () => {
     expect(await rows('issues')).toEqual([])
   })
 
+  test('a running job that never exited heals a pending down; with no episode it says nothing', async () => {
+    await project('r', TEST_REPO, `signals:\n  launchd: [${JOB}]\nheal:\n  - {when: launchd.down, grace: 5m}`)
+    const ld = setup()
+    ld.say(JOB, printed('running', '(never exited)', 1))
+    await ld.pass()
+    expect(await rows('intake_seen')).toEqual([])
+    ld.say(JOB, FAILED())
+    await ld.pass()
+    expect(await rows('intake_pending')).toHaveLength(1)
+    ld.say(JOB, printed('running', '(never exited)', 4))
+    await ld.pass()
+    expect(await rows('intake_pending')).toEqual([])
+    expect(await rows('issues')).toEqual([])
+  })
+
   test('an up of an open Issue is a signal on it and closes nothing; a healthy job with no episode files nothing', async () => {
     await project('r', TEST_REPO)
     const ld = setup()
