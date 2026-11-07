@@ -138,3 +138,6 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   **Hermes keeps the read token** (it is not given the owner's): during window 1 its filing fails and the old core
   takes it again after the window; before window 2 a narrow caller is built whose only write is `POST /signals` as the
   owner, with its own token, so no surface holds the owner token; Beszel polling stays off as before.
+- **2026-11-07, before window 1: software-factory is never a window repo until the cutover holds.** The runbook named
+  it as `<repo-a>`; its master is the old core, so a lead's ship there runs `make deploy` of master and puts the old
+  core back mid-window. Window 1 runs on agent-workflows (and the scratch drill); the runbook says so now.
