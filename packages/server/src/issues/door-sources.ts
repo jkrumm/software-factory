@@ -21,7 +21,7 @@ export async function recordDoorReport(sql: SQL, report: DoorReport, now: Date):
       await sql`INSERT INTO factory.door_sources (source, first_seen) VALUES (${source}, ${now}) ON CONFLICT (source) DO NOTHING`
     }
     // A source the door no longer holds a token for is retired: its row would be a silence line for ever.
-    await sql`DELETE FROM factory.door_sources WHERE source <> ALL(${report.sources})`
+    await sql`DELETE FROM factory.door_sources WHERE source NOT IN ${sql(report.sources)}`
     return
   }
   await sql`
