@@ -21,10 +21,191 @@ rows:
       change: Rewrite what is stale, cut what lookup can reveal, keep one place per fact, following rules/writing-for-agents.md.
       acceptance: No document names a retired mechanism (fleet triage, presence, the review transport, Slack as the owner's line); each AGENTS.md states only what lookup cannot reveal; make check passes in every repo touched.
   - key: parallel-leads
-    stable_days: 7
     title: Parallel leads in one repo
     facts:
       why: One lead per repo serializes unrelated work. It waits for a stable week so the machine is known to run on its own first.
       what: leads N in project.yaml, review ranges that start at the merge base, and a deploy lock that fails closed.
       change: Let admission start up to leads N leads in one repo, each in its own worktree; review each lead's range from its merge base with the default branch; take one deploy lock per project that refuses when it cannot be read.
       acceptance: Two leads in one repo ship independent changes without a shared review range, and two deploys never run at once, including when the lock cannot be read.
+
+  # After the cutover (docs/rewrite.md "After the cutover"). The new core runs on master from 2026-11-08.
+  - key: cutover-close
+    kind: chore
+    title: The old core leaves the repo
+    facts:
+      why: The new core is live on master (docs/rewrite/state.md). legacy/ is the old core kept as a read-only reference, and it misleads every reader.
+      what: legacy/, the Makefile's legacy note, every tracked reference to packages/server, packages/door or legacy/, /tmp-style leftovers named in docs/rewrite/state.md.
+      change: Delete legacy/ and every reference to it. Keep the way back working until the day-7 burn-in report — the old core's built release stays pinned in data/keep-releases and make rollback still reaches it — so deploy.sh keeps telling the two cores apart; say so in one comment.
+      acceptance: No tracked file under legacy/; grep for packages/server and legacy/ finds only the deploy.sh core check and docs/rewrite; DRY_RUN=1 make rollback still plans the pinned old release; make check passes; make deploy and make verify are green.
+  - key: docs-new-core
+    kind: docs
+    after: [cutover-close]
+    title: AGENTS.md and the docs describe the new core
+    facts:
+      why: AGENTS.md and docs/design.md still describe the old core (src/hook.ts, issues/lifecycle.ts, scopeOf, the review gate). Every lead in this repo reads them first.
+      what: AGENTS.md, docs/design.md, docs/architecture.md, docs/program.md, README.md; docs/rewrite/ stays as the record.
+      change: Rewrite AGENTS.md's rules to the new core's paths and contracts (keep only what lookup cannot reveal; drop scopeOf and the review gate per NL22 and NL23). Retire docs/design.md, or cut it to the behaviour architecture.md does not hold, and make architecture.md describe what is built rather than a target. Words from docs/language.md.
+      acceptance: Every path AGENTS.md names exists; no doc names a retired mechanism (scopeOf, the review gate, stable_days, the old lifecycle module); make check passes, including the retired-word check.
+  - key: server-only-refs
+    kind: chore
+    title: Server-only secret refs live in a template only the launcher reads
+    facts:
+      why: An optional ref only the server reads (FACTORY_SIGNAL_TOKEN) sat in the .env.tpl every client shares; while it was unseeded it blocked rd, verify, import and the gameday drill in turn (docs/rewrite/learnings.md, window 2).
+      change: Move server-only refs into their own template read only by the launcher; clients keep .env.tpl with what they need.
+      acceptance: A missing server-only ref never blocks secrets-run run --env-file=.env.tpl for the CLI, verify or import; the launcher still warns and starts without an optional one; make check passes.
+  - key: triage-kind
+    kind: bug
+    title: Triage gives an owner request its real kind
+    facts:
+      why: In window 1 triage filed a docs fix as kind feature; the deterministic rules call every owner request a feature and the triage workflow is only asked when unsure.
+      change: Let the triage pass refine kind (feature, bug, chore, docs) for owner and agent requests; keep the deterministic rules for alerts.
+      acceptance: "Scenarios: an owner request for a docs fix is filed as docs, a bug report as bug; alert kinds unchanged; make check passes."
+  - key: queue-summary
+    kind: bug
+    title: An Issue's summary names its real queue reason
+    facts:
+      why: A queued Issue held by drain or by a claim says "Queued, waiting for a free account." in factory issue list.
+      change: Build the summary from the queue reason the queue order already computes.
+      acceptance: Under drain the summary says the queue is draining; under a full repo it names the claim; make check passes.
+  - key: readme
+    kind: docs
+    title: The README tells a stranger what the factory is
+    facts:
+      why: NL7 says the README starts now and improves continuously; the repo goes MIT after Console v0.
+      what: README.md, from docs/product.md, docs/language.md and docs/architecture.md, in the style of domain-driven-hexagon's README (a reference implementation of its patterns).
+      acceptance: A reader learns what it is, its position (dark for code, lit for decisions), the domain words, the architecture and how to run it; no hostnames, secrets or work-repo names; voice per the owner's voice guide.
+
+  # Console v0 (NL1, NL4; docs/architecture.md "The Console"; the mock in docs/strategy/2026-11-next/definition.html)
+  - key: console-shell
+    after: [cutover-close]
+    title: "Console v0: the shell, served on the tailnet"
+    facts:
+      why: The Console is the owner's place for decisions (NL1); everything else of v0 builds on its shell.
+      what: apps/console (Vite 8, React 19, Base UI with shadcn components via shadcn init -b base -t vite, Tailwind 4 with Basalt tokens through an @theme inline bridge, Phosphor, TanStack Router and Query), the server's second loopback listener for the Console, tailscale serve.
+      change: Build the shell (navigation for Needs you, Flow, Chain, Improve; a palette with cmdk; TanStack Hotkeys pinned exactly), served as static files by the server's second loopback listener that accepts only the owner's Tailscale-User-Login and can never start a session; Query invalidated from the event stream with polling as fallback; vite-plugin-pwa with the last snapshot shown with its age. Check every version with /research first.
+      acceptance: The Console loads over the tailnet as an installable PWA; a request without the owner's Tailscale-User-Login gets 403; a test fails on any raw colour; Playwright runs in make check against a seeded server; screenshots in the Issue's evidence.
+  - key: console-needs-you
+    after: [console-shell]
+    title: "Console v0: Needs you"
+    facts:
+      why: The owner's one list of what only he can settle, replacing nudges and pings.
+      change: The Needs you screen from the read API's needs read model - open Decisions with recommendation, cost per option and consequence of no answer, artifacts waiting for a verdict, errands - answered in place (answer, verdict, comment, errand done, promote). Deep links from ntfy open the item. No ids, pane, lead or PR numbers on screen; origin as a word.
+      acceptance: Playwright - an answer from the Console reaches the lead as its next turn; a deep link opens the item; empty state when nothing needs him.
+  - key: console-artifact
+    after: [console-shell]
+    title: "Console v0: the artifact page"
+    facts:
+      why: Concepts, Specs, Decisions and Reports need one place to read, mark and judge (docs/architecture.md "Artifacts").
+      change: Render Markdown through a sanitiser and HTML in a sandbox="allow-scripts" iframe with a network-blocking CSP and an injected annotator; anchors are a quote plus a path with an Unanchored group; global comments; a verdict; revisions side by side. Shared Markdown and HTML templates in Basalt's look so a lead produces artifacts easily.
+      acceptance: Playwright - mark text, comment, give a verdict, and the lead hears it; an HTML artifact cannot reach the network; a new revision keeps its anchors or lists them as unanchored.
+  - key: console-first-look
+    kind: chore
+    after: [console-needs-you, console-artifact]
+    title: "Console v0: the owner's first look"
+    facts:
+      why: v0 is a taste checkpoint before the full Console is built on it.
+      change: Seed nothing; use the live data. Write a Report artifact with screenshots of every v0 screen on desktop and phone, what is not built yet, and three questions worth his time; ask for his verdict through the artifact.
+      acceptance: The owner's verdict is recorded; his comments become signals on this repo.
+
+  # The full Console
+  - key: console-flow
+    after: [console-first-look]
+    title: "Console: Flow, the board of all work"
+    facts:
+      why: "\"It's like a Kanban board\": every Issue across projects by state, so the owner sees what moves."
+      change: A board by state (settling, queued, working, waiting, watching, closed recently) with cards that carry title, project, origin as a word, the queue or wait reason and age; filters by project and origin; virtualised; cards under a breakpoint.
+      acceptance: Playwright on a seeded server; the board updates from the stream without reload.
+  - key: console-issue
+    after: [console-first-look]
+    title: "Console: the Issue page"
+    facts:
+      change: One Issue end to end - facts, triage outcome and amendments, attempts and session state, notes, Decisions, evidence of ship, watch and verify, the event log in plain words; actions note and cancel.
+      acceptance: Playwright; every number on the page comes from the API.
+  - key: console-chain
+    after: [console-flow]
+    title: "Console: the Chain"
+    facts:
+      change: The dependency graph of Issues and plan rows across projects with @xyflow/react and @dagrejs/dagre; a linear chain reads cleanly; blocked edges are visible.
+      acceptance: Playwright on a seeded chain across two projects.
+  - key: console-improve
+    after: [console-first-look]
+    title: "Console: Improve, the factory's KPIs"
+    facts:
+      why: The KPIs live in the Console, not Argo (NL3); read in 7-day windows (docs/product.md "How we know it works").
+      change: Show the product.md KPIs, first-pass rate against its target, owner touches and asks, queue p90, friction counts; usage by join on the usage schema, weekly window first; never copy Argo's usage tracking.
+      acceptance: The numbers match SQL over the event log for the same window; Playwright.
+
+  # Loops (docs/architecture.md "Loops and agw")
+  - key: queue-workflow
+    repo: agent-workflows
+    after: [cutover-close]
+    title: The factory-queue workflow
+    facts:
+      why: The factory's queue loop needs a judgment it must not make itself (the factory never calls a model).
+      change: An agw workflow factory-queue in the style of factory-steward, factory-ask and factory-triage - it reads the queued Issues, their facts and chain, and proposes after edges and an order; it never overrides the owner's prio.
+      acceptance: Typed output, a test with fixtures, deployed; one live call recorded in the Issue.
+  - key: queue-loop
+    after: [queue-workflow]
+    title: The queue loop
+    facts:
+      change: An app/loops tick that checks cycles and real blockers deterministically, asks factory-queue when the order is unclear, and applies proposed after edges that do not form a cycle; budgeted; a change it made never fires it again.
+      acceptance: Scenarios with a fake agw; one live pass recorded.
+  - key: friction-loop
+    after: [cutover-close]
+    title: The friction loop
+    facts:
+      why: Friction is how the factory learns where it gets in its own way (touches, refusals, stalls, ships without a review per NL23).
+      change: A SQL view over the event log with thresholds and a weekly pass that files one signal per pattern on this repo, with the evidence.
+      acceptance: Scenarios; the first weekly pass's signals listed in the Issue.
+  - key: hygiene-loop
+    after: [friction-loop]
+    title: The hygiene loop
+    facts:
+      why: The owner asked for a loop that untangles, unslops, updates deps, checks perf and docs.
+      change: A deterministic pass per project (make check, outdated deps, retired words, broken links, co-change scan) and an agw judgment for staleness and unslop findings, filing signals with evidence and a budget per week.
+      acceptance: Scenarios; one live pass on this repo.
+
+  # Surfaces
+  - key: hermes-factory-skill
+    repo: hermes-agent
+    after: [docs-new-core]
+    title: Hermes knows what the factory is
+    facts:
+      why: Hermes files signals and reads state; it needs a good description of the factory and its words, and it never decides the factory's work.
+      change: Rewrite Hermes' fleet skill from software-factory's docs/product.md and docs/language.md - signals in, reads of needs, flow and Issues, never issue new.
+      acceptance: Hermes answers "what is the factory doing" from the read API in the factory's words; a voice request becomes one signal.
+  - key: herdr-glance
+    repo: dotfiles
+    after: [console-shell]
+    title: Herdr shows a glance that links to the Console
+    facts:
+      why: Herdr shrinks to a glance (NL1); the old board-style mod goes.
+      change: A small glance in the Herdr layout (what needs the owner, what runs) that links to the Console's item; shared mods move into software-factory's integrations/ later.
+      acceptance: A screenshot of the app with the glance; clicking opens the Console.
+  - key: argo-pages-out
+    repo: argo
+    after: [console-improve]
+    title: Argo's factory pages leave for the Console
+    facts:
+      why: NL3 - Argo keeps personal dashboards and deep data; the factory's own pages and KPIs live in the Console.
+      change: Remove Argo's factory pages and their API calls; link to the Console where a page was.
+      acceptance: Argo builds and deploys; no factory page remains; the Console covers what they showed.
+
+  # Burn-in (NL24)
+  - key: burn-in-day-3
+    kind: docs
+    not_before: 2026-11-11T08:00:00Z
+    title: Burn-in report, day 3
+    facts:
+      why: NL24 - on day 3 after the cutover a Report for the owner says what the new core does better and worse than the old, and what to change next.
+      change: A Report artifact from the docs/product.md KPIs, the friction counts, docs/rewrite/learnings.md and the event log since 2026-11-08; file a signal on this repo per concrete change it recommends.
+      acceptance: The Report reaches the owner as an artifact for his verdict.
+  - key: burn-in-day-7
+    kind: docs
+    not_before: 2026-11-15T08:00:00Z
+    after: [burn-in-day-3]
+    title: Burn-in report, day 7
+    facts:
+      why: NL24 - the second burn-in Report; after it the rewrite orchestrator's exception (NL14) ends.
+      change: The same Report as day 3 over seven days, compared with day 3, plus whether the way back (the pinned old core) can now be removed.
+      acceptance: The Report reaches the owner as an artifact for his verdict.

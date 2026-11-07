@@ -18,11 +18,19 @@ const plan = (rows: object[]): PlanFile => {
 const row = (key: string, extra: object = {}) => ({ key, title: key, facts: { why: key }, ...extra })
 
 describe('docs/plan.yaml', () => {
-  test("the factory's own plan parses; the retired stable_days is read, flagged and never evaluated", async () => {
+  test("the factory's own plan parses without a warning", async () => {
     const result = parsed(await Bun.file(join(ROOT, 'docs', 'plan.yaml')).text())
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.rows.some((r) => r.issue === 149)).toBe(true)
+    expect(result.plan.rows.some((r) => r.not_before !== undefined)).toBe(true)
+    expect(result.warnings).toEqual([])
+  })
+
+  test('the retired stable_days is read, flagged and never evaluated', () => {
+    const result = parsePlan({ version: 1, rows: [row('a', { stable_days: 7 })] })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
     expect(result.warnings.some((w) => w.includes('stable_days is retired'))).toBe(true)
   })
 

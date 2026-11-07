@@ -77,6 +77,11 @@ beforeAll(async () => {
     await chmod(path, 0o755)
   }
   await write(join(shimDir, 'factory'), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`)
+  // rd resolves the owner's token through `secrets-run run --env-file=… -- factory …`; here FACTORY_TOKEN is already set.
+  await write(
+    join(shimDir, 'secrets-run'),
+    '#!/usr/bin/env bash\n[ "$1" = run ] || exit 2\nshift\nwhile [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
+  )
   await write(join(shimDir, 'claude-account'), '#!/usr/bin/env bash\necho "unset CLAUDE_CONFIG_DIR"\n')
   await write(join(home, 'SourceRoot', 'dotfiles', 'scripts', 'claude-pretrust.sh'), '#!/usr/bin/env bash\nexit 0\n')
   await write(
