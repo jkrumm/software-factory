@@ -17,7 +17,12 @@
     "typescript/no-non-null-assertion": "error",
     "typescript/no-non-null-asserted-optional-chain": "error",
     "typescript/no-extra-non-null-assertion": "error",
-    "typescript/ban-ts-comment": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-expect-error": true
+      }
+    ],
     "typescript/no-empty-object-type": "error",
     "typescript/no-wrapper-object-types": "error",
     "typescript/no-unsafe-function-type": "error",
@@ -136,5 +141,18 @@
     "oxc/no-accumulating-spread": "error",
     "oxc/no-const-enum": "error"
   },
-  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**", "legacy/**"]
+  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**", "legacy/**"],
+  "overrides": [
+    {
+      "files": ["apps/server/test/work/table-types.test.ts"],
+      "rules": {
+        "typescript/ban-ts-comment": [
+          "error",
+          {
+            "ts-expect-error": "allow-with-description"
+          }
+        ]
+      }
+    }
+  ]
 }
