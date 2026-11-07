@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { NeedsModel } from '@software-factory/contract'
+import { ChainModel, FlowModel, NeedsModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { createApp } from '../../src/api/app.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -37,6 +37,17 @@ beforeAll(async () => {
       VALUES (${`event_${n}`}, ${id}, ${`key_${n}`}, 'filed', ${JSON.stringify({ repo, title, kind: 'feature', origin: 'you' })}::text::jsonb,
         'factory', now(), 'applied', 1, 'settling')`
   }
+  // a work project (defaults only) with two plan rows, one after the other, and a queue scope of its own
+  await db.sql`INSERT INTO factory.planning_projects (name, repo, source, project, plan)
+    VALUES ('work-plan', '/src/work-plan', 'defaults', '{}'::jsonb, ${JSON.stringify({
+      version: 1,
+      rows: [
+        { key: 'fix-payroll-export', title: 'SECRET plan row', facts: {} },
+        { key: 'second', title: 'Second SECRET row', facts: {}, after: ['fix-payroll-export'] },
+      ],
+    })}::text::jsonb)`
+  await db.sql`INSERT INTO factory.capacity_queue_states (project, state, set_at)
+    VALUES ('work-plan', 'drain', now()), ('open-app', 'pace', now())`
   app = createApp({ ...base, readModels: { sql: db.sql } })
 })
 afterAll(() => db.stop())
@@ -112,4 +123,23 @@ test('signals: the read token gets no word of any signal', async () => {
   ])
   expect(JSON.stringify(out)).not.toMatch(/SECRET|work-app|example\.com/)
   expect(out).toMatchObject({ id: 'signal_1', trust: 'owner', state: 'filed', issue: 'issue_1', redacted: true })
+})
+
+test('chain and flow: a work project’s plan rows, edges and queue scope leave no name for the read token', async () => {
+  const owner = await (await get(app, '/v1/chain', TOKENS.owner)).text()
+  expect(owner).toContain('row:work-plan:fix-payroll-export')
+  const read = await (await get(app, '/v1/chain', TOKENS.read)).text()
+  expect(read).not.toMatch(/work-plan|fix-payroll-export|SECRET/)
+  const chain = ChainModel.parse(JSON.parse(read))
+  // the two rows are still there, with an edge between them, under opaque ids
+  const rows = chain.nodes.filter((node) => node.kind === 'row')
+  expect(rows).toHaveLength(2)
+  expect(chain.edges).toHaveLength(1)
+  expect(rows.map((node) => node.id)).toContain(chain.edges[0]?.from ?? '')
+  expect(rows.map((node) => node.id)).toContain(chain.edges[0]?.to ?? '')
+
+  const flowOwner = FlowModel.parse(await (await get(app, '/v1/flow', TOKENS.owner)).json())
+  expect(flowOwner.queueStates.projects).toEqual({ 'work-plan': 'drain', 'open-app': 'pace' })
+  const flowRead = FlowModel.parse(await (await get(app, '/v1/flow', TOKENS.read)).json())
+  expect(flowRead.queueStates.projects).toEqual({ 'open-app': 'pace' })
 })

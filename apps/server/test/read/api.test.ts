@@ -265,6 +265,17 @@ describe('as the read token', () => {
     }
   })
 
+  test('the overview lists the queue scope of an ordinary project and not of a work one', async () => {
+    const { sql } = db
+    await sql`INSERT INTO factory.capacity_queue_states (project, state, set_at) VALUES ('chat', 'drain', now()), ('argo', 'pace', now())`
+    try {
+      expect((await json('/v1/overview', OWNER)).body.queue.projects).toEqual({ chat: 'drain', argo: 'pace' })
+      expect((await json('/v1/overview', READER)).body.queue.projects).toEqual({ argo: 'pace' })
+    } finally {
+      await sql`DELETE FROM factory.capacity_queue_states WHERE project IN ('chat', 'argo')`
+    }
+  })
+
   test('a write is 403, no token is 401', async () => {
     const write = await call('/v1/issues/1/close', READER, {
       method: 'POST',

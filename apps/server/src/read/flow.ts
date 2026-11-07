@@ -114,7 +114,10 @@ export async function readFlow(
       .sort((a, b) => a.repo.localeCompare(b.repo)),
     queueStates: {
       global: states.find((row) => row.project === '')?.state ?? 'run',
-      projects: Object.fromEntries(states.filter((row) => row.project !== '').map((row) => [row.project, row.state])),
+      // a work project's name is its words: under the read token its scope is not listed
+      projects: Object.fromEntries(
+        states.filter((row) => row.project !== '' && !hidden(row.project)).map((row) => [row.project, row.state]),
+      ),
     },
   }
 }

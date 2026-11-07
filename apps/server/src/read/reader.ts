@@ -23,6 +23,7 @@ import {
 } from './surface.ts'
 import { deriveLeads, issueRefOf, loadAttempts, loadBriefs, type SessionDeps } from './sessions.ts'
 import { changesAfter, follow, formatCursor, resolveCursor, type StreamEvent } from './stream.ts'
+import { isWorkRepo, loadOpenProjects } from './work.ts'
 
 export { DEFAULT_LIMIT, MAX_LIMIT }
 
@@ -66,6 +67,7 @@ export function createReader(deps: ReadDeps): ReadApi {
 
   async function overview({ redact }: Surface): Promise<ReadOverview> {
     const now = clock.now()
+    const openProjects = redact ? await loadOpenProjects(sql) : []
     const accounts = await readAccounts(sql, now)
     const quota = new Map(accounts.map((account) => [account.account, account]))
     const counts: { state: string; n: number }[] = await sql`
@@ -100,7 +102,12 @@ export function createReader(deps: ReadDeps): ReadApi {
       queue: {
         effective: states.find((row) => row.project === '')?.state ?? 'run',
         spawns: [],
-        projects: Object.fromEntries(states.filter((row) => row.project !== '').map((row) => [row.project, row.state])),
+        // a work project's name is its words: under the read token its scope is not listed
+        projects: Object.fromEntries(
+          states
+            .filter((row) => row.project !== '' && !(redact && isWorkRepo(row.project, openProjects)))
+            .map((row) => [row.project, row.state]),
+        ),
       },
     }
     return redact ? redactOverview(body) : body

@@ -23,7 +23,7 @@ export async function loadOpenProjects(sql: SQL): Promise<OpenProject[]> {
 /**
  * Whether a repo is a work repo: it belongs to no project with a `project.yaml` of its own (a project with defaults, or
  * a repo the factory does not know). Fails closed: text of a repo nobody listed is not shown to the read token. This is
- * the one rule; the SQL in `issues.ts` and `sessions.ts` says the same thing in a WHERE clause and a test holds them equal.
+ * the one rule; the SQL in `issues.ts` and `sessions.ts` says the same thing in a WHERE clause (a literal prefix, no LIKE wildcards) and `work-rule.test.ts` holds them equal.
  */
 export function isWorkRepo(repo: string | null, open: readonly OpenProject[]): boolean {
   if (repo === null) return false

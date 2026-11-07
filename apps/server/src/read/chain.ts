@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
@@ -162,5 +163,26 @@ export async function readChain(
     if (node.state !== 'queued') continue
     blocking[node.id] = unique.filter((edge) => edge.from === node.id && !edge.closed).map((edge) => edge.to)
   }
-  return { at: now.toISOString(), nodes: [...issueNodes, ...rowNodes], edges: unique, blocking }
+  if (!options.redact) return { at: now.toISOString(), nodes: [...issueNodes, ...rowNodes], edges: unique, blocking }
+
+  // A row's id carries its project's name and its key: for a work repo it becomes an opaque one, everywhere it appears.
+  const hiddenRows = new Set(
+    unfiled
+      .filter(({ project, row }) => hidden(project) || hidden(row.repo ?? project))
+      .map(({ project, row }) => rowId(project, row.key)),
+  )
+  const idOut = (id: string): string =>
+    hiddenRows.has(id) ? `row:${createHash('sha256').update(id).digest('hex').slice(0, 12)}` : id
+  return {
+    at: now.toISOString(),
+    nodes: [...issueNodes, ...rowNodes].map((node) => ({
+      ...node,
+      id: idOut(node.id),
+      ...(hiddenRows.has(node.id) ? { repo: REDACTED_REPO, title: REDACTED_TITLE } : {}),
+    })),
+    edges: unique.map((edge) => ({ ...edge, from: idOut(edge.from), to: idOut(edge.to) })),
+    blocking: Object.fromEntries(
+      Object.entries(blocking).map(([id, blockers]) => [idOut(id), blockers.map((blocker) => idOut(blocker))]),
+    ),
+  }
 }
