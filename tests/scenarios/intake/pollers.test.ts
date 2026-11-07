@@ -67,7 +67,8 @@ test("a labelled GitHub issue files once; a stranger's unlabelled one is held; t
   ]
   const filed = await until("the labelled and the owner's issues to be filed", async () => {
     const all = await stored()
-    return all.filter((s) => s.source === 'github' && s.state === 'filed').length >= 2 ? all : null
+    const done = all.filter((s) => s.source === 'github' && s.state === 'filed').length >= 2
+    return done && all.some((s) => s.state === 'held') ? all : null
   })
   const github7 = filed.find((s) => s.title === 'Crash on login')
   expect(github7).toMatchObject({ trust: 'machine', repo: 'argo' })
