@@ -51,12 +51,12 @@ the rehearsal held
 ==> retired words (scripts/retired-words.ts)      no retired words
 ==> Issue diagram is current (issue-diagram.ts --check)
 ==> generated CLI is current (generate.ts --check)
-==> unit tests (bun test apps packages scripts)    966 pass, 0 fail, 5951 expect() calls, 72 files
+==> unit tests (bun test apps packages scripts)    969 pass, 0 fail, 73 files
 ==> scenarios (bun test tests)                     195 pass, 8 skip (the cutover scenarios: they need the rehearsal's copy), 0 fail
 ==> check passed
 ```
 
-(Package 8 ended at 941 unit and 195 scenarios. The final run is the one after the review's fixes: see Review.)
+(Package 8 ended at 941 unit and 195 scenarios. This is the run on the final tree, after the review's fixes.)
 
 ## `DRY_RUN` plans
 
@@ -70,7 +70,14 @@ The import records these events on Issues, all with the key `import:<n>:…` and
 
 ## Review
 
-(see below)
+Deep, thread `rw-9a-cutover-tools`, two rounds over `c109dd1..HEAD` (the first submit was refused because the reply left out the files the range deletes; the second attempt was accepted).
+
+| Round | Outcome | Finding | Disposition |
+|-|-|-|-|
+| 1 | actionable | important: `.env.door.tpl` was gitignored (`.env*` ignores all but `.env.tpl`), so a `git archive` release had no door template and the door launcher exited 78 under KeepAlive; the rehearsal boots only `launch.sh`, so it never saw it | fixed (`1115b7c`): the file is tracked, `!.env.door.tpl` in `.gitignore`, `deploy_door` warns when the template is missing, `scripts/test/launchers.test.ts` fails when a template a script or plist names is untracked |
+| 1 | actionable | important: a Decision answered in the old core between two imports stayed open in the new one (`ON CONFLICT DO NOTHING`) | fixed (`b4ff75b`): the answer and withdrawal are upserted while the stored row is still open; the new test fails without the fix |
+| 1 | (reviewer's own nit, dropped by its verifier) | claims re-inserted for a legacy `working` Issue the new core has since released | fixed anyway in `1115b7c`: a claim only for an Issue this run brought over or extended and the new core still has `working`; test added |
+| 2 | clean | nit: the claims step runs outside the per-Issue transactions, so a failure between them leaves a working Issue without a claim that no rerun adds | intentional: a failed run exits 1 and the undo is the way back, after which a fresh run takes the claim; claims for every ledger row would re-take released ones. A working Issue is also absent after the drain |
 
 ## Open points
 
@@ -93,3 +100,4 @@ The import records these events on Issues, all with the key `import:<n>:…` and
 10. **Small import choices to confirm:** a Decision the old core had keeps its question and options; its recommendation is the old default, and `checked`, the options' costs and the consequence say `not recorded: imported from the old core`. All imported options are `reversible: true` (the old core had no such field; only an open Decision could ever matter, and none is open today). A `signal` event on an Issue becomes a `noted` from the factory. The old queue states, projects and runtime tables are not carried (listed in the runbook).
 11. **The cutover scenarios are a smoke set, not the full suite.** They run the key routes on the imported data (read API, show, a new Issue past the old numbers, reopen and cancel an imported Issue, a refused note on a closed one, the Decision forms readable, the door's routes, the loops on demand). The scenario suite proper starts its own worlds and cannot be pointed at an existing database; a lead's full cycle on imported data is the live scratch drill (W13).
 12. **Two postgres test clusters from other sessions** (`/tmp/factory-pg-*`, started with `listen_addresses=` empty) were still running when I finished; they are not mine and I left them.
+13. **Test slack in the review of the range:** the reviewer saw `apps/server/scripts/` as outside the boundary rule (it only covers `apps/server/src`); the importer opens its own transactions on purpose and reads `factory_legacy` by name, which no `src` module may.
