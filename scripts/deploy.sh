@@ -258,7 +258,7 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
 
 # The door's health is its 401: an unauthenticated POST is refused by a door that is up, whatever its tokens are.
 door_answers() {
-  [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST -H 'content-type: application/json' -d '{}' \
+  [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 -X POST -H 'x-factory-probe: 1' -H 'content-type: application/json' -d '{}' \
     "http://127.0.0.1:$DOOR_PORT/alert/kuma" 2>/dev/null)" == "401" ]]
 }
 

@@ -77,6 +77,17 @@ export type IntakeOutcome = z.infer<typeof IntakeOutcome>
 export const IntakeAck = z.object({ outcome: IntakeOutcome, issue: z.number().int().nullable() })
 export type IntakeAck = z.infer<typeof IntakeAck>
 
+/**
+ * `POST /intake/report`, on the socket only: what the door tells the server about its sources. `start`: the sources it holds a token
+ * for (at boot). `refused`: a 401 for such a source (never a probe). `accepted`: a message that passed auth and was ignored.
+ */
+export const DoorReport = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('start'), sources: z.array(DoorSource).min(1).max(16) }),
+  z.strictObject({ kind: z.literal('refused'), source: DoorSource }),
+  z.strictObject({ kind: z.literal('accepted'), source: DoorSource }),
+])
+export type DoorReport = z.infer<typeof DoorReport>
+
 /** `PUT /door/routes`: which repo an alert of this monitor concerns. */
 export const DoorRouteInput = z.strictObject({
   source: DoorSource,

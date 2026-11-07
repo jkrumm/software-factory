@@ -294,3 +294,36 @@ describe('a line about something finished ends 72 h after it finished', () => {
     expect(lines).toContain(`Issue ${silent}: no hook event for 6000 min`)
   })
 })
+
+describe('door source lines', () => {
+  const source = (
+    name: string,
+    fields: { first?: number; accepted?: number | null; refused?: number; last?: number },
+  ) =>
+    sql()`
+      INSERT INTO factory.door_sources (source, first_seen, last_accepted, refused, refused_since, last_refused)
+      VALUES (${name}, ${ago(fields.first ?? HOUR)}, ${fields.accepted == null ? null : ago(fields.accepted)}, ${fields.refused ?? 0},
+        ${fields.refused ? ago(fields.last ?? HOUR) : null}, ${fields.refused ? ago(fields.last ?? HOUR) : null})`
+  const lines = async () => (await healthLines(sql(), clock.now())).filter((line) => line.startsWith('door source'))
+
+  test('three refusals with a recent last one are a line; two are not; one older than 72 h is gone', async () => {
+    await source('two', { refused: 2 })
+    await source('three', { refused: 3 })
+    await source('old', { refused: 5, last: FINISHED_HEALTH_MS + MIN })
+    expect(await lines()).toEqual([
+      expect.stringMatching(/^door source three: 3 POSTs refused since \S+ \(last \S+\), none accepted since$/),
+    ])
+  })
+
+  test('nothing accepted for 14 days is a line, counted from first seen when nothing was ever accepted', async () => {
+    const day = 24 * HOUR
+    await source('fresh', { first: 13 * day })
+    await source('never', { first: 15 * day })
+    await source('stale', { first: 40 * day, accepted: 20 * day })
+    await source('alive', { first: 40 * day, accepted: 2 * day })
+    expect(await lines()).toEqual([
+      'door source never: nothing accepted for 15 days',
+      'door source stale: nothing accepted for 20 days',
+    ])
+  })
+})

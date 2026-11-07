@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
+import { type DoorReport, type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
 import { createDoor, fileViaSocket, type Filed, MAX_BODY_BYTES } from '../src/door.ts'
 
 const KUMA_TOKEN = 'kuma-token-0123456789-abcdef'
@@ -11,6 +11,8 @@ const fixture = (name: string): Promise<unknown> => Bun.file(join(import.meta.di
 let filed: IntakeInput[]
 let answer: () => Promise<Filed>
 let logs: string[]
+let reports: DoorReport[]
+let reportFails = false
 
 const door = createDoor({
   tokens: { kuma: KUMA_TOKEN, hyperdx: HYPERDX_TOKEN },
@@ -19,12 +21,19 @@ const door = createDoor({
     return answer()
   },
   log: (line) => logs.push(line),
+  now: () => new Date('2026-11-07T10:00:00.000Z'),
+  report: async (r) => {
+    reports.push(r)
+    if (reportFails) throw new Error('server down')
+  },
 })
 const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: door })
 afterAll(() => server.stop(true))
 beforeEach(() => {
   filed = []
   logs = []
+  reports = []
+  reportFails = false
   answer = async () => ({ status: 201, body: { outcome: 'created', issue: 7 } })
 })
 
@@ -154,8 +163,8 @@ describe('the token', () => {
     ]) {
       expect(text).not.toContain(secret)
     }
-    expect(logs[0]).toMatch(/^POST kuma 201 \d+ms$/)
-    expect(logs[1]).toMatch(/^POST - 401 \d+ms$/)
+    expect(logs[0]).toMatch(/^\S+ POST kuma 201 \d+ms$/)
+    expect(logs[1]).toMatch(/^\S+ POST refused kuma 401 \d+ms$/)
   })
 })
 
@@ -246,5 +255,44 @@ describe('the server', () => {
     const base = (await fixture('kuma-down.json')) as Record<string, unknown>
     await send('/alert/kuma', { body: JSON.stringify({ ...base, repo: '/etc', path: '/etc', command: 'x' }) })
     expect(Object.keys(filed[0] ?? {}).sort()).toEqual(['event', 'facts', 'monitor', 'source', 'status', 'title'])
+  })
+})
+
+describe('refusals, probes and reports', () => {
+  const T = '2026-11-07T10:00:00.000Z'
+
+  test('a refusal is logged with the time and the claimed source, never the token, and reported', async () => {
+    const response = await send('/alert/kuma', { token: 'wrong-token-secret', body: '{}' })
+    expect(response.status).toBe(401)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatch(new RegExp(`^${T} POST refused kuma 401 \\d+ms$`))
+    expect(logs.join()).not.toContain('wrong-token-secret')
+    expect(reports).toEqual([{ kind: 'refused', source: 'kuma' }])
+  })
+
+  test('a request with the probe header is logged as a probe and not reported', async () => {
+    const response = await send('/alert/kuma', { token: null, body: '{}', headers: { 'x-factory-probe': '1' } })
+    expect(response.status).toBe(401)
+    expect(logs[0]).toMatch(new RegExp(`^${T} POST probe kuma 401 \\d+ms$`))
+    expect(reports).toEqual([])
+  })
+
+  test('a source without a token is logged but never reported', async () => {
+    expect((await send('/alert/nobody', { token: 'x', body: '{}' })).status).toBe(401)
+    expect(logs[0]).toContain('refused nobody 401')
+    expect(reports).toEqual([])
+  })
+
+  test('a Kuma test message that passed auth is reported accepted; an ordinary line has the time in front', async () => {
+    expect((await alert('kuma-test.json')).status).toBe(200)
+    expect(reports).toEqual([{ kind: 'accepted', source: 'kuma' }])
+    expect(logs[0]).toMatch(new RegExp(`^${T} POST kuma 200 \\d+ms$`))
+  })
+
+  test('a failing report changes nothing in the response', async () => {
+    reportFails = true
+    expect((await send('/alert/kuma', { token: 'wrong', body: '{}' })).status).toBe(401)
+    expect((await alert('kuma-test.json')).status).toBe(200)
+    expect(reports).toHaveLength(2)
   })
 })

@@ -9,6 +9,7 @@ import type {
 import type { SQL } from 'bun'
 import { notifyDoorRefused } from '../notify/rules.ts'
 import { RepoRefused } from '../repos.ts'
+import { markAccepted } from './door-sources.ts'
 import { createIssueIn } from './create.ts'
 import { ISSUE_OF } from './unrouted.ts'
 import { fileSignalIn } from './signals.ts'
@@ -52,7 +53,10 @@ export interface IntakeResult {
  */
 export async function intakeAlert(sql: SQL, input: IntakeInput, context: IntakeContext): Promise<IntakeResult> {
   try {
-    return await fileAlert(sql, input, context)
+    const result = await fileAlert(sql, input, context)
+    // Bookkeeping for a health line: the alert is filed, so a failure here is never the sender's.
+    await markAccepted(sql, input.source, context.now).catch(() => undefined)
+    return result
   } catch (error) {
     // The filing rolled back, so the owner is told from outside it: the alert is refused (the sender gets its 422 and retries), and
     // a route that points where no alert may file is the owner's to fix.
