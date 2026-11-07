@@ -14,12 +14,15 @@ Branch `rw/9c-before-window-2` on `0676d45` (the brief); six commits plus this r
 - **The door after a rollback (build 4).** Finding: it already started the right door. A rollback renders the door plist from the *previous release*, so it runs that release's `launch-door.sh`: the old core's runs `packages/door` (posts to the hook socket, holds no secret, has no `.env.door.tpl`); a deploy runs the new core's `apps/door` with `.env.door.tpl`. `launchctl print gui/501/com.jkrumm.factory-door` on the live mini (rolled back) shows `releases/089b35c…/scripts/launch-door.sh`, the old release. What was wrong: the `.env.door.tpl` warning was spurious for the old door, and the 401 proof is the same for both doors, so it never said which one ran. `scripts/deploy.sh`: `door_of`, `door_credentials`, `door_plan`, `door_runs_from`; both dry-run plans now print the rendered door plist and `door: <old|new> door (…) from <sha>, launcher …, credentials: …`; `deploy_door` checks the secret only if the release's launcher resolves a template, and its `door OK:` line names the door after confirming launchd runs that release's launcher (warning otherwise).
 - **The plist comment (build 5).** `deploy/com.jkrumm.software-factory.plist.template`: the new core ends within its own 30 s deadline (draining aborts a lead start in flight); `ExitTimeOut` 240 stays as the outer bound and for a rollback onto the old core; the 180 s/210 s sentence is gone.
 
+- **One list of secrets for every child (orchestrator's change after the report).** `apps/server/src/adapters/secret-env.ts` is the single `SECRET_ENV` (all five bearer tokens, the agent's and the door's included, plus `FACTORY_DB_PASSWORD`, `DATABASE_URL`, `FACTORY_GITHUB_TOKEN`, `NTFY_TOKEN`) and `withoutSecrets(extra, base)`; `hc/process.ts` and `quality/process.ts` build `childEnv` from it, and the two private lists are gone. The order changed on purpose: the base environment is stripped first, then `extra` is applied, so a secret reaches a child only when its caller names it. The lead's token already was explicit: `hc/terminals.ts` puts `FACTORY_TOKEN` (the agent token) into the terminal's own environment in the RPC params, not through `childEnv` (`tests/scenarios/leads/start.test.ts` asserts it); the `hc` client, git and `make verify` children never get it, and none can post as the door.
+
 ## Tests
 
 - `apps/server/test/policy.test.ts`: the signal token is on exactly `POST /signals`, refused (403) on reads, owner verbs, lead verbs and the door's routes. `settings.test.ts`, `intake/receive.test.ts`: the token's presence, distinctness and `from` rule.
 - `tests/scenarios/intake/signal-token.test.ts` (against the real server process): the signal token files an owner signal as `owner:hermes` through the CLI, any other `from` is refused and stores nothing, and it is 403 on nine other routes. `tests/scenarios/clients/replay.test.ts`: the patched Hermes skill's call.
 - `scripts/test/gameday-verdict.test.ts`: both shapes (closed by `close`; closed after a ship, with and without the watch), the non-green cases, and the commit lookup on a real bare remote.
 - `scripts/test/deploy-plan.test.ts`: the dry-run plan for deploy and for rollback names its door and credentials; `deploy_door` against a fake `launchctl`/`curl`/`secrets-run` for each direction (right launcher in the plist, no warning for the old door); `check_refs` with an unresolved optional ref (warns) and a required one (refuses).
+- `apps/server/test/secret-env.test.ts`: every token/password setting named in `settings.ts` is on the list (read from the source, so a new token setting fails until it is listed); both `childEnv`s strip every listed name and keep the rest; a secret named in `extra` is handed through, the base one never.
 - `scripts/test/launchers.test.ts`: `launch.sh` with and without the optional ref, and a required one still refusing (exit 78). `scripts/test/core-stop.test.ts`: `reap` kills a process that ignores SIGTERM by PID and leaves a bystander alone; `core_pids`, `core_stop`, `core_restart` against a fake `launchctl`; the script run under bash.
 
 ## `make check`
@@ -34,14 +37,14 @@ no retired words
 ==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)
 ==> generated CLI is current (apps/cli/scripts/generate.ts --check)
 ==> unit tests (bun test apps packages scripts)
- 992 pass
+ 995 pass
  0 fail
-Ran 992 tests across 76 files. [71.39s]
+Ran 995 tests across 77 files. [72.36s]
 ==> scenarios (bun test tests)
  201 pass
  8 skip
  0 fail
-Ran 209 tests across 34 files. [169.05s]
+Ran 209 tests across 34 files. [167.87s]
 ==> check passed
 ```
 
@@ -53,7 +56,7 @@ None declared, no event recorded: this package adds a caller and tooling, no use
 
 ## Review
 
-`--thread rw-9c-before-window-2`. Round 1 (deep, because `.env.tpl` and `deploy.sh` are sensitive paths): 1 important, 2 nits, 1 pre-existing. Fixed: `check_refs` refusing the unresolved optional token (shared `optional-refs.sh`, test); `core-stop.sh` sourced in zsh would not split the PID list (now run through `bash`, dispatches its own functions); the drill header. Declined: `FACTORY_AGENT_TOKEN`/`FACTORY_DOOR_TOKEN` missing from the child-env strip lists (pre-existing; a lead's terminal receives its agent token through `childEnv`'s extras, which the strip runs after, so listing it would take the token from the lead). Round 2 (standard): clean.
+`--thread rw-9c-before-window-2`. Round 1 (deep, because `.env.tpl` and `deploy.sh` are sensitive paths): 1 important, 2 nits, 1 pre-existing. Fixed: `check_refs` refusing the unresolved optional token (shared `optional-refs.sh`, test); `core-stop.sh` sourced in zsh would not split the PID list (now run through `bash`, dispatches its own functions); the drill header. The pre-existing finding (`FACTORY_AGENT_TOKEN`/`FACTORY_DOOR_TOKEN` missing from the child-env strip lists) I first declined on a wrong premise: I thought the lead's token travelled through `childEnv`, but it travels in the terminal's RPC environment. The orchestrator's change above fixes it; that change was not reviewed again. Round 2 (standard): clean.
 
 ## Open points
 
