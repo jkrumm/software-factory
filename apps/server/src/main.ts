@@ -32,6 +32,25 @@ const stubStartLead: EffectPorts['start_lead'] = async () => ok(undefined)
 const stubNoteLead: EffectPorts['note_lead'] = async () => ok(undefined)
 const stubFinalize: EffectPorts['finalize'] = async () => ok(undefined)
 
+/** Runs `pass` every `ms`, never two at once: a fire while the last pass still runs is skipped. `stop` waits for the running pass. */
+function every(ms: number, pass: () => Promise<void>): { stop(): Promise<void> } {
+  let running: Promise<void> | undefined
+  const timer = setInterval(() => {
+    if (running) return
+    running = pass()
+      .catch((error: unknown) => console.error(`tick: ${String(error)}`))
+      .finally(() => {
+        running = undefined
+      })
+  }, ms)
+  return {
+    stop: async () => {
+      clearInterval(timer)
+      await running
+    },
+  }
+}
+
 const fail = (message: string): never => {
   console.error(message)
   process.exit(1)
@@ -77,10 +96,11 @@ async function main(): Promise<void> {
     finalize: stubFinalize,
     start_watch: startWatchPort({ uow, clock, projects }),
   }
-  let pass: Promise<void> = Promise.resolve()
-  const tick = async () => {
+  const outboxPass = async () => {
     const outbox = await runOutbox({ uow, clock, ports })
-    if (!outbox.ok) return console.error(`outbox: ${outbox.error.detail}`)
+    if (!outbox.ok) console.error(`outbox: ${outbox.error.detail}`)
+  }
+  const watchPass = async () => {
     const watched = await checkWatches({
       uow,
       clock,
@@ -93,13 +113,8 @@ async function main(): Promise<void> {
     })
     if (!watched.ok) console.error(`watches: ${watched.error.detail}`)
   }
-  const ticking =
-    settings.tickMs === null
-      ? undefined
-      : setInterval(() => {
-          // A pass that is still running (a long `make verify`) is not started twice.
-          pass = pass.then(tick).catch((error: unknown) => console.error(`tick: ${String(error)}`))
-        }, settings.tickMs)
+  // Two loops, so a `make verify` of minutes never holds the outbox; each is skipped while its last pass still runs.
+  const loops = settings.tickMs === null ? [] : [every(settings.tickMs, outboxPass), every(settings.tickMs, watchPass)]
 
   const app = createApp({
     health: {
@@ -122,10 +137,9 @@ async function main(): Promise<void> {
     if (stopping) return
     stopping = true
     console.log(`${signal}: stopping`)
-    clearInterval(ticking)
     draining.abort()
     await app.stop()
-    await pass
+    await Promise.all(loops.map((loop) => loop.stop()))
     await lock.release()
     await sql.close()
     process.exit(0)
