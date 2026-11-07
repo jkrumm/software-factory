@@ -12,8 +12,9 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { DoorRoute, DoorRouteList, DoorUnroutedList, IntakeAck, Issue } from '@software-factory/contract'
-import { createDoor, fileViaSocket } from '../../door/src/door.ts'
+import { createDoor, fileViaSocket, reportViaSocket } from '../../door/src/door.ts'
 import { serveHooks } from '../src/http.ts'
+import { doorSourceLines, DOOR_SOURCE_QUIET_MS } from '../src/issues/door-sources.ts'
 import { processInbox } from '../src/issues/worker.ts'
 import { startApp, TEST_REPO, TEST_ROLES, TEST_ROOT, TEST_TOKEN, type TestApp } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -468,6 +469,87 @@ describe('the registry', () => {
       })
       expect(response.status).toBe(401)
     }
+  })
+})
+
+describe('the door’s report of its sources', () => {
+  const report = (body: unknown) =>
+    fetch('http://localhost/intake/report', {
+      unix: socket,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  const MS = 24 * 3_600_000
+
+  test('start, refused and accepted are stored on the server’s clock; an accepted message resets the count', async () => {
+    expect((await report({ kind: 'start', sources: ['kuma'] })).status).toBe(200)
+    expect(await rows('door_sources')).toMatchObject([{ source: 'kuma', refused: 0, last_accepted: null }])
+    await report({ kind: 'refused', source: 'kuma' })
+    clock.advance(1000)
+    await report({ kind: 'refused', source: 'kuma' })
+    const [refused] = await rows('door_sources')
+    expect(refused).toMatchObject({ refused: 2 })
+    expect(refused?.last_refused.getTime()).toBe(clock.now().getTime())
+    expect(refused?.refused_since.getTime()).toBe(clock.now().getTime() - 1000)
+    await report({ kind: 'accepted', source: 'kuma' })
+    expect(await rows('door_sources')).toMatchObject([{ refused: 0, refused_since: null, last_accepted: clock.now() }])
+  })
+
+  test('a start keeps the rows there; a bad body is 400', async () => {
+    await report({ kind: 'refused', source: 'kuma' })
+    await report({ kind: 'start', sources: ['kuma', 'hyperdx'] })
+    expect(await rows('door_sources')).toMatchObject([
+      { source: 'hyperdx', refused: 0 },
+      { source: 'kuma', refused: 1 },
+    ])
+    expect((await report({ kind: 'refused', source: '../x' })).status).toBe(400)
+    expect((await report({ kind: 'start', sources: [] })).status).toBe(400)
+  })
+
+  test('a start drops the row of a source the door no longer holds', async () => {
+    await report({ kind: 'start', sources: ['kuma', 'hyperdx'] })
+    await report({ kind: 'start', sources: ['kuma'] })
+    expect(await rows('door_sources')).toMatchObject([{ source: 'kuma' }])
+  })
+
+  test('a filed alert marks its source accepted', async () => {
+    await report({ kind: 'refused', source: 'kuma' })
+    const door = createDoor({
+      tokens: { kuma: 'kuma-token-0123456789-abcdef' },
+      file: fileViaSocket(socket),
+      log: () => {},
+    })
+    const response = await door(
+      new Request('http://localhost/alert/kuma', {
+        method: 'POST',
+        headers: { authorization: 'Bearer kuma-token-0123456789-abcdef', 'content-type': 'application/json' },
+        body: JSON.stringify(
+          await Bun.file(join(import.meta.dir, '..', '..', 'door', 'test', 'fixtures', 'kuma-down.json')).json(),
+        ),
+      }),
+    )
+    expect(response.status).toBe(202)
+    expect(await rows('door_sources')).toMatchObject([{ source: 'kuma', refused: 0, last_accepted: clock.now() }])
+  })
+
+  test('the door reports over the socket and the lines follow the thresholds', async () => {
+    const send = reportViaSocket(socket)
+    await send({ kind: 'start', sources: ['kuma'] })
+    for (let i = 0; i < 2; i++) await send({ kind: 'refused', source: 'kuma' })
+    const finished = 72 * 3_600_000
+    expect(await doorSourceLines(db.sql, clock.now(), finished)).toEqual([])
+    await send({ kind: 'refused', source: 'kuma' })
+    expect(await doorSourceLines(db.sql, clock.now(), finished)).toMatchObject([
+      expect.stringMatching(/^door source kuma: 3 POSTs refused since \d{4}-.*Z \(last .*Z\), none accepted since$/),
+    ])
+    clock.advance(finished + 1)
+    expect(await doorSourceLines(db.sql, clock.now(), finished)).toEqual([])
+    clock.advance(DOOR_SOURCE_QUIET_MS - finished)
+    expect(await doorSourceLines(db.sql, clock.now(), finished)).toEqual([
+      'door source kuma: nothing accepted for 14 days',
+    ])
+    expect(MS * 14).toBe(DOOR_SOURCE_QUIET_MS)
   })
 })
 

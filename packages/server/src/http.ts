@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import {
   AccountList,
   AskList,
+  DoorReport,
   DoorRoute,
   DoorRouteInput,
   DoorRouteKey,
@@ -69,6 +70,7 @@ import { type Commits, GitCommits } from './issues/commits.ts'
 import type { Review } from './issues/review.ts'
 import { createIssue } from './issues/create.ts'
 import { enqueue } from './issues/inbox.ts'
+import { recordDoorReport } from './issues/door-sources.ts'
 import { intakeAlert, listRoutes, listUnrouted, removeRoute, setRoute } from './issues/intake.ts'
 import { listFacts, kpis } from './issues/facts.ts'
 import { getIssueView } from './issues/follow.ts'
@@ -654,6 +656,14 @@ const intakeHandler =
     return respond(IntakeAck, ack, status)
   }
 
+/** `POST /intake/report`, on the socket only: the door's refusals, accepted messages and start (docs/design.md §11). */
+const doorReportHandler =
+  (sql: SQL, clock: Clock) =>
+  async (req: Request): Promise<Response> => {
+    await recordDoorReport(sql, await parseBody(req, DoorReport), clock.now())
+    return json({ ok: true })
+  }
+
 /** `PUT|DELETE|GET /door/routes` and `GET /door/unrouted`: the registry the owner keeps, on the token API. */
 const doorHandlers = (sql: SQL, clock: Clock, repoRoots: readonly string[]) => ({
   routes: {
@@ -975,7 +985,7 @@ export function serve(deps: AppDeps & { port: number }) {
  * The sessions' way in: a unix socket in the owner's directory. It serves `POST /events`, `POST /sessions/:id/wait|note|stop-check`,
  * `PUT|DELETE /slots/:id` (the test-slot semaphore), `POST /spawns` and `POST /issues` (a pane starting or filing work: the same
  * body, validation and repo-roots check as the port), the reads a spawner needs to follow what it started (`GET /spawns/:key`,
- * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`, `GET /issues/:id/timeline`, `GET /issues/facts`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), and `POST /intake` (the door's alerts), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
+ * `GET /sessions/:id`, `GET /queue`) the Issue reads (`GET /issues[/:id]`, `GET /issues/:id/timeline`, `GET /issues/facts`), a lead's verbs and evidence (`POST /issues/:id/:verb|evidence`), `POST /issues/:id/reopen|resume`, the project reads (`GET /projects[/:name]`), and `POST /intake` (the door's alerts) and `POST /intake/report` (its refusals), and nothing else. A session has no token (the runner keeps secrets out of the panes), and the socket's mode 0600
  * is what only the owner's processes can pass.
  */
 export function serveHooks(deps: {
@@ -1034,6 +1044,7 @@ export function serveHooks(deps: {
       // The door's alerts. The door is a same-user process on this socket like a pane (SF11): it holds no token and no database
       // credential, but it can call every route here, `POST /issues` and `POST /spawns` among them.
       '/intake': { POST: viaSocket(intakeHandler(deps.sql, deps.clock, deps.repoRoots)) },
+      '/intake/report': { POST: viaSocket(doorReportHandler(deps.sql, deps.clock)) },
     },
     fetch: () => json({ error: 'not found' }, 404),
     error: failure,

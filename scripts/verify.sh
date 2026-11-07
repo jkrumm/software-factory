@@ -75,7 +75,7 @@ ok "factory health and factory spawn list"
 
 # 5. the door answers an unauthenticated POST with 401 (it has no health route: the 401 is the health check). When it does not,
 #    the reason is the one its launcher left: most often the tokens file, which `make deploy` does not create.
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST -H 'content-type: application/json' -d '{}' \
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST -H 'x-factory-probe: 1' -H 'content-type: application/json' -d '{}' \
   "http://127.0.0.1:$DOOR_PORT/alert/kuma")
 if [[ "$code" != "401" ]]; then
   reason="POST /alert/kuma without a token answered $code, expected 401"

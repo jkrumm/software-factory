@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { IntakeAck, type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
+import { type DoorReport, IntakeAck, type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
 import { type Parser, PARSERS, PayloadError } from './parsers.ts'
 import type { Tokens } from './tokens.ts'
 
@@ -15,9 +15,16 @@ export interface DoorOptions {
   /** files one alert with the server (the unix socket); throws when it cannot be reached */
   file: (input: IntakeInput) => Promise<Filed>
   parsers?: Readonly<Record<string, Parser>>
-  /** one line per request: the status and the source, never a body or a token */
+  /** one line per request: the time, the status and the source, never a body or a token */
   log?: (line: string) => void
+  /** tells the server a refusal or an accepted message; best effort, never awaited by the response, its errors are swallowed */
+  report?: (report: DoorReport) => Promise<void>
+  /** the clock of the log lines */
+  now?: () => Date
 }
+
+/** A request with this header is the factory's own health probe: logged as `probe`, never reported as a refusal. */
+export const PROBE_HEADER = 'x-factory-probe'
 
 const ROUTE = /^\/alert\/([a-z][a-z0-9-]{0,31})$/
 const digest = (value: string) => createHash('sha256').update(value).digest()
@@ -64,7 +71,17 @@ async function readBody(req: Request): Promise<string> {
  */
 export function createDoor(options: DoorOptions): (req: Request) => Promise<Response> {
   const parsers = options.parsers ?? PARSERS
-  const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`))
+  const write = options.log ?? ((line: string) => process.stderr.write(`${line}\n`))
+  const now = options.now ?? (() => new Date())
+  const log = (line: string) => write(`${now().toISOString()} ${line}`)
+  const report = (body: DoorReport) => {
+    if (!options.report) return
+    try {
+      options.report(body).catch(() => undefined)
+    } catch {
+      // best effort: a report never fails the response
+    }
+  }
 
   async function handle(req: Request, source: string): Promise<Response> {
     const parse = own(parsers, source)
@@ -94,7 +111,10 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
       if (error instanceof PayloadError) return reply(400, { error: `not a ${source} payload: ${error.message}` })
       throw error
     }
-    if (parsed.kind === 'ignore') return reply(200, { outcome: 'ignored' })
+    if (parsed.kind === 'ignore') {
+      report({ kind: 'accepted', source })
+      return reply(200, { outcome: 'ignored' })
+    }
 
     let filed: Filed
     try {
@@ -122,6 +142,11 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
       else if (req.method !== 'POST') response = reply(405, undefined, { allow: 'POST' })
       else if (!authorized(req, own(options.tokens, source))) {
         response = reply(401, undefined, { 'www-authenticate': 'Bearer' })
+        if (req.headers.get(PROBE_HEADER) === '1') label = `probe ${source}`
+        else {
+          label = `refused ${source}`
+          if (own(options.tokens, source) !== undefined) report({ kind: 'refused', source })
+        }
       } else {
         label = source
         response = await handle(req, source)
@@ -133,6 +158,20 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
     const method = /^[A-Z]{1,8}$/.test(req.method) ? req.method : '-'
     log(`${method} ${label} ${response.status} ${Math.round(performance.now() - started)}ms`)
     return response
+  }
+}
+
+/** Reports to the server over its unix socket. */
+export function reportViaSocket(socket: string): NonNullable<DoorOptions['report']> {
+  return async (report) => {
+    const response = await fetch('http://localhost/intake/report', {
+      unix: socket,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(report),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) throw new Error(`report answered ${response.status}`)
   }
 }
 

@@ -31,6 +31,18 @@ JSON of the source's shape (400). Then the source's parser, then the server. The
 A Kuma test message and a beat that is neither down nor up (pending, maintenance) answer 200 and file nothing. There is no
 health route: the 401 to an unauthenticated `POST /alert/kuma` is the health check (`make verify` does exactly that).
 
+## Log lines, refusals and health
+
+One line per request on stderr: `<ISO time> POST kuma 202 13ms`. A 401 names the source the path claimed, never a token or body:
+`<ISO time> POST refused kuma 401 0ms`. The factory's own health probes (`make deploy`, `make verify`) send
+`x-factory-probe: 1` and log `POST probe kuma 401 0ms`; they are not refusals. The header is a label, not a control: anyone who can reach the door can set it and keep their own refusals out of the health line.
+
+The door reports to the server's socket, best effort (`POST /intake/report`, errors swallowed, never delaying the response):
+`start` at boot (six tries, 5 s apart, in the background), `refused` for a 401 on a source it holds a token for (not a probe, and an
+unknown source is only logged), `accepted` for a Kuma test message that passed auth. A filed alert also counts as accepted. Two health
+lines follow: `door source <s>: <n> POSTs refused since …` (at least 3 refusals, the last within 72 h, none accepted since) and
+`door source <s>: nothing accepted for <n> days` (14 days).
+
 ## Tokens
 
 `~/.config/factory/door-tokens.json` (`FACTORY_DOOR_TOKENS_FILE`), mode 0600, read at start:

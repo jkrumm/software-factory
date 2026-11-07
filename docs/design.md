@@ -328,7 +328,7 @@ pane's `--env`, `rd` its agent name). Otherwise it appends one line to `~/.local
 keeps secrets out of the panes, so the socket (mode 0600, owner only) is its credential; the socket serves
 `POST /events`, `POST /sessions/:id/wait` (`factory session wait`), `POST /sessions/:id/note` (`factory session note`),
 `POST /sessions/:id/stop-check`, `PUT|DELETE /slots/:id` (`factory slot run`), `POST /spawns` (a pane starts work, below),
-`POST /issues` and `GET /issues[/:id]`, `GET /issues/:id/timeline` and `GET /issues/facts` (a pane files work and reads it back, §4), `POST /intake` (the door's alerts, §11), and
+`POST /issues` and `GET /issues[/:id]`, `GET /issues/:id/timeline` and `GET /issues/facts` (a pane files work and reads it back, §4), `POST /intake` and `POST /intake/report` (the door's alerts and its refusal counts, §11), and
 three reads a spawner needs to follow it, `GET /spawns/:key`, `GET /sessions/:id` and `GET /queue[?project=]` (`factory spawn get`,
 `session get`, `queue get` use the socket when `FACTORY_TOKEN` is not set), which a session in a pane runs without a token, and
 nothing else (not the spawn list, requeue, status, quota or any write to the queue); bound under umask 0177. Any session on it can note any other and file events for any other (the socket is the trust boundary and has no caller
@@ -1261,9 +1261,9 @@ runbooks exist (decision 3).
 - **A process of its own,** `packages/door`: one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
   `tailscale serve` terminates TLS on the mini's tailnet name and the ACL gives that port, and nothing else, to `tag:homelab` and
   `tag:vps`. A bearer token per source (`~/.config/factory/door-tokens.json`, mode 0600, `factory door token new <source>`) is
-  checked in constant time, the body is capped at 64 KiB as it is read, JSON only. Nothing is logged but a status line.
+  checked in constant time, the body is capped at 64 KiB as it is read, JSON only. Nothing is logged but a status line (ISO time, method, `refused <source>` for a 401, `probe <source>` when the request carries `x-factory-probe: 1`, as the deploy and verify probes do).
 - **It holds no factory token and no database credential.** It posts one line to the server's unix socket (`POST /intake`, the
-  hook's boundary, SF11: a compromised door has what a pane has, see the trust boundary in §3). The socket down is a 503 (Kuma retries); nothing is spooled.
+  hook's boundary, SF11: a compromised door has what a pane has, see the trust boundary in §3). The socket down is a 503 (Kuma retries); nothing is spooled. It also tells the server, best effort, which sources it holds (`start`), a 401 for one of them that is no probe (`refused`) and a Kuma test message that passed auth (`accepted`) on `POST /intake/report`; `factory.door_sources` (migration `041`) keeps the counts, a filed alert also marks its source accepted, and two health lines read them: a source refused at least 3 times with the last refusal within 72 h, and a source with nothing accepted for 14 days.
 - **A parser per source** is a pure function from the payload to `{ monitor, event, status, title, facts }`: `kuma` and `hyperdx`
   (README of the package: the template the vps repo uses). The payload is data. Nothing in it picks a repo, a role, a path or a command.
 - **The registry** is `factory.door_routes (source, monitor, repo)` in the database, not in git: monitor names and repos are the
