@@ -5,8 +5,9 @@ work against the available Claude Code subscriptions, starts interactive Claude 
 own a piece of work from root cause to production evidence, follows them through hooks, and closes and
 learns. CLI `factory`. Status: live on the mini; `docs/program.md` is the current state.
 
-**Start here:** `docs/decisions.md` (what was decided and why) → `docs/program.md` (tracks, who runs them) →
-`docs/design.md` (the design and, in §3 "As built" and §11, the behaviour) → `docs/research/` → `docs/evidence/`.
+**Start here:** `docs/product.md` (what it is) → `docs/language.md` (the words) → `docs/decisions.md` (what was decided
+and why) → `docs/architecture.md` (the target the rewrite builds, `docs/rewrite.md`) → `docs/design.md` (the running
+factory until the cutover: §3 "As built" and §11, the behaviour) → `docs/research/` → `docs/evidence/`.
 A directory listing, `package.json`, the Makefile and `--help` say what exists; this file says what they cannot.
 
 ## Rules

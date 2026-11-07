@@ -160,3 +160,17 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL8 A person reviews a concept rarely.** Holistic UX, product or architecture concepts only, three or four times in a project's life. A new screen, interaction or public text is not a reason. Never a merge.
 - **NL9 Fix forward.** No undo records, no restore machinery, no apply guards. A bad change gets a new change.
 - **NL10 This is a reference implementation, not a product.** Factory engineers build their own; the repo shares the language, the pain points and the loops that worked.
+
+**Signed (owner, 2026-11-07, afternoon).** `docs/product.md`, `docs/language.md`, `docs/architecture.md` and `docs/rewrite.md` carry the definition with the owner's comments applied.
+
+- **NL11 The core stays plain TypeScript and zod.** A total transition table that fails `tsc` on a missing cell, a Result on every port and a model test give the forcing function Effect was wanted for. Effect stays out of the factory.
+- **NL12 Review is the lead's, once per ship range, standard or deep.** Light review goes; static checks cover small changes. The factory never runs or repeats a review; the lead owns its Issue from build to verified production. How much review pays is learned from use.
+- **NL13 Pause and rewrite the core** to `docs/architecture.md` on a branch, proven live with `FACTORY_REF`, then resume. The factory builds the Console afterwards.
+- **NL14 A temporary orchestrator runs the rewrite** and may start terminals with `hc run` for it, an exception to the two lanes and to RS1 and RS4 that ends at the cutover (`docs/rewrite.md`).
+- **NL15 Everything enters as a signal.** Triage decides new Issue, amend, incident, held or drop, and correlates alerts with one root cause. The owner, Hermes and agents file signals; `factory issue new` stays for plan rows and the orchestrator.
+- **NL16 Screens name an origin a person uses** (you, application, infrastructure, GitHub, feedback, factory) and a kind, never a tool.
+- **NL17 Steward and Judge are deterministic first and call dedicated agw workflows** for judgment, each with its own prompt, tools and skills.
+- **NL18 Work repos hear only the owner's signals;** no monitoring files work into them.
+- **NL19 Modular monolith:** domains without I/O behind ports, Elysia with OpenAPI and Eden, a generated CLI, `apps/` and `packages/`, unit, scenario and Playwright tests on Bun with oxlint and oxfmt.
+- **NL20 Usage and cost come from the `usage` schema by join;** Argo's collectors are not rebuilt. ntfy carries checkpoints only.
+- **NL21 Argo's Slack proxy is deleted** (Issue 177).
