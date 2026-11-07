@@ -92,3 +92,19 @@ describe('the OpenAPI document', () => {
     }
   })
 })
+
+describe('the internal test routes', () => {
+  test('do not exist unless mounted, and are never in the OpenAPI document', async () => {
+    const app = appWith(ok)
+    const response = await app.handle(
+      new Request('http://localhost/internal/test/issues', {
+        method: 'POST',
+        body: '{}',
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(response.status).toBe(404)
+    const document = OpenApiDocument.parse(await (await get(app, OPENAPI_PATH)).json())
+    expect(Object.keys(document.paths).some((path) => path.startsWith('/internal'))).toBe(false)
+  })
+})

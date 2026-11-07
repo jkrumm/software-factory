@@ -34,6 +34,12 @@ const DOMAIN_BUN_ALLOWED = new Set(['hash', 'deepEquals', 'escapeHTML', 'stringW
 const WRITING_SQL =
   /\b(INSERT\s+INTO|UPDATE\s+[\w."]+\s+SET|DELETE\s+FROM|TRUNCATE|ALTER\s+TABLE|DROP\s+\w+|CREATE\s+\w+)\b/i
 
+/** Opens a transaction on Bun's SQL client. */
+const OPENS_TRANSACTION = /\.(begin|beginDistributed|transaction)\s*\(/
+
+/** The only two files that may open one: the unit of work (which `app/` gets as a port) and the migration runner. */
+const TRANSACTION_ADAPTERS = new Set(['adapters/postgres/unit-of-work.ts', 'adapters/postgres/migrate.ts'])
+
 interface Import {
   specifier: string
   typeOnly: boolean
@@ -119,6 +125,9 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
       if (here.layer === 'read' && there?.layer === 'app') {
         flag('read/ imports no use case: they write', specifier)
       }
+      if (here.layer === 'app' && there?.layer === 'adapters') {
+        flag('app/ imports no adapter: it gets ports, main.ts composes them', specifier)
+      }
       if (there?.layer === 'domains' && there.domain) domainsReached.add(there.domain)
     }
 
@@ -131,6 +140,10 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
         if (match[1] && !DOMAIN_BUN_ALLOWED.has(match[1])) flag('a domain does no I/O: no Bun.* I/O', `Bun.${match[1]}`)
       }
       if (/\bfetch\s*\(/.test(code)) flag('a domain does no I/O: no fetch', 'fetch(')
+    }
+    const opens = OPENS_TRANSACTION.exec(stripComments(source))
+    if (opens && !TRANSACTION_ADAPTERS.has(name.split(sep).join('/'))) {
+      flag('only the Postgres unit of work and the migration runner open a transaction', opens[0])
     }
     if (here.layer === 'read') {
       const write = WRITING_SQL.exec(stripComments(source))

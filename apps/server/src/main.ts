@@ -1,7 +1,12 @@
 import { connect, ping } from './adapters/postgres/connection.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
+import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
+import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { createApp } from './api/app.ts'
+import { fileIssue, recordIssueEvent } from './app/issues.ts'
+import { systemClock } from './kernel/clock.ts'
+import { systemIds } from './kernel/ids.ts'
 import { healthOf } from './read/health.ts'
 import { loadSettings } from './settings.ts'
 
@@ -31,11 +36,18 @@ async function main(): Promise<void> {
   const applied = await migrate(sql, await loadMigrations())
   if (applied.length) console.log(`migrated: ${applied.join(', ')}`)
 
+  // The composition: each domain's store on the transaction's connection, the ports the use cases get.
+  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx) }))
+  const writes = { uow, clock: systemClock, ids: systemIds }
+
   const app = createApp({
     health: {
       read: async () =>
         healthOf({ version: settings.version, databaseFailure: await ping(sql), tickAt: null, queueMovedAt: null }),
     },
+    internalTest: settings.internalTestRoutes
+      ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
+      : undefined,
   }).listen({ hostname: HOSTNAME, port: settings.port })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
