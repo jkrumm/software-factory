@@ -39,6 +39,8 @@ import {
 } from '../domains/checkpoints/ports.ts'
 import { idOf } from '../kernel/ids.ts'
 import type { PortError } from '../kernel/result.ts'
+import { type ErrorStatus, errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 const iso = (at: Date): string => at.toISOString()
 
@@ -124,14 +126,14 @@ const pageView = (p: PageRecord) => ({
   status: p.status,
 })
 
-const failure = (status: number, error: string, code: string): Response =>
-  Response.json(ErrorBody.parse({ error, code }), { status })
+const failure = (status: number, error: string, code: string, details?: Record<string, unknown>): Response =>
+  Response.json(ErrorBody.parse({ error, code, ...(details ? { details } : {}) }), { status })
 
 /** The error of a use case as the HTTP answer: 404 for what is not there, 409 for what the state refuses, 422 for the lead's form. */
-function failed(error: CheckpointError | PortError): Response {
+export function failed(error: CheckpointError | PortError): Response {
   switch (error.kind) {
     case 'missing_field':
-      return failure(422, error.detail, 'missing_field')
+      return failure(422, error.detail, 'missing_field', { fields: error.fields })
     case 'invalid':
       return failure(422, error.detail, 'invalid_request')
     case 'not_found':
@@ -153,19 +155,18 @@ function failed(error: CheckpointError | PortError): Response {
   }
 }
 
-/**
- * Only the success is declared: the CLI prints a declared non-2xx body to stdout and loses its code, while an undeclared
- * one reaches stderr as `{ error: { code, message } }`, which is what a lead reads when its form is refused.
- */
-const RESPONSES = (ok: z.ZodType) => ({ 200: ok })
+/** The success of a route plus every refusal it can answer, all `ErrorBody`: the CLI prints a refused form's fields from them. */
+const RESPONSES = (ok: z.ZodType, ...codes: ErrorStatus[]) => ({
+  200: ok,
+  ...errorResponses(...codes),
+})
 
 const Id = z.object({ id: z.string() })
 const unknownId = (what: string, id: string): Response => failure(404, `no ${what} ${id}`, 'not_found')
 
 /**
  * The checkpoints routes. The lead's verbs (`issue ask`, `artifact submit`, `errand raise`) and the owner's (`decision
- * answer`, `artifact verdict`, `errand done`) share the contract; there is no auth until package 8, and the listener is
- * loopback.
+ * answer`, `artifact verdict`, `errand done`) share the contract; `policy.ts` says who may call which.
  */
 export const checkpointRoutes = (uses: CheckpointUses) =>
   new Elysia({ prefix: '/v1' })
@@ -173,7 +174,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/ask',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...form } = body
         const result = await uses.ask({ issueId, attempt, form })
@@ -189,7 +190,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: AskBody,
-        response: RESPONSES(AskReply),
+        response: RESPONSES(AskReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'issue.ask',
           summary:
@@ -200,7 +201,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/decisions',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.decisions({
           ...(issueId ? { issueId } : {}),
@@ -218,7 +219,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           worth: z.enum(['yes', 'no']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
-        response: RESPONSES(DecisionList),
+        response: RESPONSES(DecisionList, 400, 404, 422, 503),
         detail: {
           operationId: 'decision.list',
           summary: 'the ledger: every Decision with its path to the answer and the worth-asking flag',
@@ -236,7 +237,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       },
       {
         params: Id,
-        response: RESPONSES(DecisionView),
+        response: RESPONSES(DecisionView, 404, 503),
         detail: { operationId: 'decision.show', summary: 'one Decision with the path to its answer' },
       },
     )
@@ -254,8 +255,12 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: AnswerBody,
-        response: RESPONSES(DecisionReply),
-        detail: { operationId: 'decision.answer', summary: "the owner's answer to a Decision" },
+        response: RESPONSES(DecisionReply, 400, 404, 409, 422, 503),
+        detail: {
+          operationId: 'decision.answer',
+          summary: "the owner's answer to a Decision",
+          'x-cli': { args: ['answer'] },
+        },
       },
     )
     .post(
@@ -270,7 +275,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: WorthBody,
-        response: RESPONSES(DecisionReply),
+        response: RESPONSES(DecisionReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'decision.worth-asking',
           summary: "the owner's flag on an answered Decision: was it worth asking him",
@@ -281,7 +286,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/artifacts',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...raw } = body
         const result = await uses.submit({ issueId, attempt, raw })
@@ -299,7 +304,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: SubmitBody,
-        response: RESPONSES(ArtifactReply),
+        response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'artifact.submit',
           summary:
@@ -310,7 +315,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/artifacts',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.artifacts({
           ...(issueId ? { issueId } : {}),
@@ -327,7 +332,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           kind: z.enum(ARTIFACT_KINDS).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
-        response: RESPONSES(ArtifactList),
+        response: RESPONSES(ArtifactList, 400, 404, 422, 503),
         detail: { operationId: 'artifact.list', summary: 'artifacts, newest first' },
       },
     )
@@ -357,7 +362,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         query: z.object({ revision: z.coerce.number().int().min(1).optional() }),
-        response: RESPONSES(ArtifactDetail),
+        response: RESPONSES(ArtifactDetail, 400, 404, 422, 503),
         detail: {
           operationId: 'artifact.show',
           summary: 'an artifact with one revision, its annotations (and the Unanchored ones) and verdicts',
@@ -389,7 +394,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: ReviseBody,
-        response: RESPONSES(ArtifactReply),
+        response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
         detail: { operationId: 'artifact.revise', summary: 'the lead adds a revision after a verdict of Changes' },
       },
     )
@@ -418,7 +423,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: AnnotateBody,
-        response: RESPONSES(ArtifactReply),
+        response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
         detail: { operationId: 'artifact.annotate', summary: 'a comment anchored by a quote and a path' },
       },
     )
@@ -447,7 +452,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: VerdictBody,
-        response: RESPONSES(ArtifactReply),
+        response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'artifact.verdict',
           summary:
@@ -459,7 +464,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/errands',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...raw } = body
         const result = await uses.raiseErrand({ issueId, attempt, raw })
@@ -475,7 +480,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: ErrandBody,
-        response: RESPONSES(ErrandReply),
+        response: RESPONSES(ErrandReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'errand.raise',
           summary: "the lead needs the owner's hands: a portal step, a device run, a prompt",
@@ -485,7 +490,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/errands',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.errands({
           ...(issueId ? { issueId } : {}),
@@ -501,7 +506,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           open: z.enum(['yes', 'no']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
-        response: RESPONSES(ErrandList),
+        response: RESPONSES(ErrandList, 400, 404, 422, 503),
         detail: { operationId: 'errand.list', summary: 'Errands, newest first' },
       },
     )
@@ -523,7 +528,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       {
         params: Id,
         body: ErrandDoneBody,
-        response: RESPONSES(ErrandReply),
+        response: RESPONSES(ErrandReply, 400, 404, 409, 422, 503),
         detail: { operationId: 'errand.done', summary: 'the owner did it: the lead hears it as its next turn' },
       },
     )
@@ -537,7 +542,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       },
       {
         query: z.object({ limit: z.coerce.number().int().min(1).max(500).optional() }),
-        response: RESPONSES(PageList),
+        response: RESPONSES(PageList, 400, 422, 503),
         detail: {
           operationId: 'page.list',
           summary: "what is on the owner's line: checkpoints only, with whether each was sent",
@@ -552,7 +557,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(PassReply.parse(result.value))
       },
       {
-        response: RESPONSES(PassReply),
+        response: RESPONSES(PassReply, 503),
         detail: {
           operationId: 'checkpoint.pass',
           summary:

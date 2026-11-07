@@ -24,6 +24,8 @@ test('the server boots on Postgres and /health answers through the contract', as
     version: 'scenario',
     reason: null,
     heartbeat: { ok: true, reason: null, tickAt: null, queueMovedAt: null },
+    lines: [],
+    loops: expect.any(Array),
   })
   const [row] = await world.db.sql`SELECT array_agg(name ORDER BY name) AS names FROM factory.schema_migrations`
   // every migration of the release, applied: a package adding one does not touch this line

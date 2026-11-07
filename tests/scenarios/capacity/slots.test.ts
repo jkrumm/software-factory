@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { CapacityView, Slot } from '@software-factory/contract'
+import { bearer } from '../harness.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /** `factory slot run`: a lease on the host's test slots from the real server, with the contract's exits. */
@@ -94,11 +95,11 @@ test("a command past its run limit is killed and the exit is 124; the limit is t
   const put = async (cwd: string | undefined) => {
     const response = await fetch(`${lab.server.url}/slots/resolve-${cwd ? 'project' : 'none'}`, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...bearer() },
       body: JSON.stringify({ name: 'probe', ...(cwd ? { cwd } : {}) }),
     })
     const slot = Slot.parse(await response.json())
-    await fetch(`${lab.server.url}/slots/resolve-${cwd ? 'project' : 'none'}`, { method: 'DELETE' })
+    await fetch(`${lab.server.url}/slots/resolve-${cwd ? 'project' : 'none'}`, { method: 'DELETE', headers: bearer() })
     return slot
   }
   expect((await put(join(lab.root, 'app'))).runMs).toBe(60_000)

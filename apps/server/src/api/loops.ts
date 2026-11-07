@@ -1,6 +1,7 @@
 import { ErrorBody, LOOP_NAMES, LoopList, LoopRunReply, type LoopName, type LoopView } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import { errorResponses } from './errors.ts'
 
 /** The loop runner as the routes see it. */
 export interface LoopsApi {
@@ -28,7 +29,7 @@ export const loopRoutes = (loops: LoopsApi | undefined) =>
           ? Response.json(LoopList.parse({ loops: loops.view() }))
           : failure(503, 'the loops are not wired in this process', 'unavailable'),
       {
-        response: { 200: LoopList },
+        response: { 200: LoopList, ...errorResponses(503) },
         detail: {
           operationId: 'loop.list',
           summary: 'every loop: its interval, what it ran, when it last ended ok, and the kicks the loop guard dropped',
@@ -47,7 +48,7 @@ export const loopRoutes = (loops: LoopsApi | undefined) =>
       },
       {
         params: Name,
-        response: { 200: LoopRunReply },
+        response: { 200: LoopRunReply, ...errorResponses(404, 503) },
         detail: {
           operationId: 'loop.run',
           summary:

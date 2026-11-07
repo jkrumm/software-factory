@@ -10,8 +10,10 @@ import {
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
-import { idOf, type IssueId } from '../kernel/ids.ts'
+import type { IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 type Written = Result<Recorded, IssueWriteError | PortError>
 
@@ -25,10 +27,7 @@ export interface LeadRoutes {
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
 
-/** `issue_12`, or the bare number the owner says ("Issue 12"). */
-function issueOf(text: string): IssueId | null {
-  return idOf('issue', /^[1-9][0-9]*$/.test(text) ? `issue_${text}` : text)
-}
+const issueOf = issueRef
 
 const answerOf = ({ issue, event }: Recorded, result: Recorded['result']): LeadVerbAnswer =>
   LeadVerbAnswer.parse({
@@ -44,12 +43,7 @@ const answerOf = ({ issue, event }: Recorded, result: Recorded['result']): LeadV
     event: { id: event.id, key: event.key, version: event.version },
   })
 
-const VERB_RESPONSES = {
-  200: LeadVerbAnswer,
-  404: ErrorBody,
-  409: ErrorBody,
-  503: ErrorBody,
-}
+const VERB_RESPONSES = { 200: LeadVerbAnswer, ...errorResponses(400, 404, 409, 422, 503) }
 
 type Answer = { status: 200; body: LeadVerbAnswer } | { status: 404 | 409 | 503; body: ErrorBody }
 
@@ -87,8 +81,7 @@ const unwired: LeadRoutes = {
 }
 
 /**
- * The lead's verbs (`factory issue close|defer|block`) and the read of its session (`factory lead get`). No auth yet
- * (package 8 brings it): the routes bind loopback as the app does.
+ * The lead's verbs (`factory issue close|defer|block`) and the read of its session (`factory lead get`).
  */
 export const leadRoutes = (wired: LeadRoutes | undefined) => {
   const routes = wired ?? unwired
@@ -122,7 +115,14 @@ export const leadRoutes = (wired: LeadRoutes | undefined) => {
       async ({ params, body, status }) => {
         const issue = issueOf(params.id)
         if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
-        const out = answer(await routes.defer(issue, body))
+        const after = body.after?.map(issueRef)
+        if (after?.some((id) => id === null)) return status(404, failure('an after is not an Issue', 'not_found'))
+        const out = answer(
+          await routes.defer(
+            issue,
+            after ? { ...body, after: after.filter((id): id is IssueId => id !== null) } : body,
+          ),
+        )
         switch (out.status) {
           case 200:
             return status(200, out.body)
@@ -177,7 +177,7 @@ export const leadRoutes = (wired: LeadRoutes | undefined) => {
       },
       {
         params: z.object({ id: z.string() }),
-        response: { 200: LeadSession, 404: ErrorBody, 503: ErrorBody },
+        response: { 200: LeadSession, ...errorResponses(404, 503) },
         detail: { operationId: 'lead.get', summary: "the current attempt's lead and its session state" },
       },
     )

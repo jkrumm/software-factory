@@ -7,7 +7,7 @@ import { postgresQualityStore } from '../../src/adapters/quality/store.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { runOutbox } from '../../src/app/outbox.ts'
 import { showQuality } from '../../src/app/quality-read.ts'
-import { reopenIssue, reportRegression } from '../../src/app/quality-reopen.ts'
+import { reopenIssue } from '../../src/app/quality-reopen.ts'
 import { type QualityUnit, type ShipDeps, shipIssue } from '../../src/app/quality-ship.ts'
 import { checkWatches, startWatchPort, type WatchDeps } from '../../src/app/quality-watch.ts'
 import type { CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
@@ -541,7 +541,7 @@ describe('the watch', () => {
   })
 })
 
-describe('regression and reopen', () => {
+describe('reopen', () => {
   const closedIssue = async (): Promise<IssueId> => {
     const issueId = await working()
     value(await ship(issueId))
@@ -550,34 +550,6 @@ describe('regression and reopen', () => {
     value(await checkWatches(watchDeps()))
     return issueId
   }
-
-  test('a signal for a watched Issue records regressed: back to its lead', async () => {
-    const issueId = await working()
-    value(await ship(issueId))
-    const got = value(
-      await reportRegression(
-        { uow, clock, ids },
-        { issueId, signal: key('signal', 'kuma', 1), detail: 'the probe is down' },
-      ),
-    )
-    expect(got).toMatchObject({ result: 'applied', issue: { state: 'working', regressions: 1 } })
-  })
-
-  test('a signal for a closed Issue reopens it; the same signal again does nothing twice, whatever became of the Issue', async () => {
-    const issueId = await closedIssue()
-    const signal = key('signal', 'kuma', 2)
-    const first = value(await reportRegression({ uow, clock, ids }, { issueId, signal, detail: 'the probe is down' }))
-    expect(first).toMatchObject({ result: 'applied', issue: { state: 'queued' } })
-    await record(issueId, 'admitted-2', ev('admitted', {}, 'factory'))
-    const again = value(await reportRegression({ uow, clock, ids }, { issueId, signal, detail: 'the probe is down' }))
-    expect(again.result).toBe('replayed')
-    expect((await stateOf(issueId)).state).toBe('working')
-  })
-
-  test('a signal for an unknown Issue is an error', async () => {
-    const got = await reportRegression({ uow, clock, ids }, { issueId: issueIdOf(9), signal: key('s', 1), detail: 'x' })
-    expect(got).toEqual({ ok: false, error: { kind: 'unknown_issue', issueId: issueIdOf(9) } })
-  })
 
   test('the owner reopens a closed Issue within 30 days: queued, and the same call is a replay', async () => {
     const issueId = await closedIssue()

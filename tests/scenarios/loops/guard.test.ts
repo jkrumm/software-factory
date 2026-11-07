@@ -18,6 +18,7 @@ beforeAll(async () => {
     { match: 'guard test', answer: { action: 'wake', note: 'Carry on.', reason: 'the cause is gone', decision: null } },
   ])
   lab = await startLab({
+    leads: true,
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\nleads: 8\n' } },
     env: {
       FACTORY_LOOP_STEWARD_MS: '3600000',
@@ -26,6 +27,7 @@ beforeAll(async () => {
       FACTORY_FAKE_PENDING: '1',
     },
   })
+  expect((await lab.cli(['project', 'sync'])).code).toBe(0)
 })
 
 afterAll(async () => {

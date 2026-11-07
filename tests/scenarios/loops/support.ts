@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { LoopList, LoopRunReply } from '@software-factory/contract'
+import { admitted, block, fileIssue, tick } from '../flow.ts'
 import { type Lab } from '../planning/lab.ts'
 
 /** A call the fake agw saw: the workflow, and the input it was given. */
@@ -37,19 +38,18 @@ export const eventsOf = async (lab: Lab, issue: string): Promise<{ kind: string;
   return rows.map((row: { kind: string; actor: string }) => ({ kind: row.kind, actor: row.actor }))
 }
 
-/** An Issue with its lead working on attempt 1. */
+/** An Issue with its lead working on attempt 1: filed, settled, admitted and started the way the factory does it. */
 export async function working(lab: Lab, repo: string, title: string): Promise<string> {
-  const issue = await lab.file(repo, title)
-  await lab.event(issue, 'settled', 'settled', {})
-  await lab.event(issue, 'admitted', 'admitted', {})
-  await lab.event(issue, 'lead_started', 'lead_started', { attempt: 1, terminal: `t-${issue}` })
+  const issue = await fileIssue(lab, { repo, title })
+  await admitted(lab, issue)
+  await tick(lab)
   return issue
 }
 
 /** The lead reports it is blocked: a stall the steward's rules cannot read. */
 export async function blocked(lab: Lab, repo: string, title: string, detail: string): Promise<string> {
   const issue = await working(lab, repo, title)
-  await lab.event(issue, 'blocked', 'stalled', { attempt: 1, cause: 'blocked', detail }, 'lead')
+  await block(lab, issue, detail)
   return issue
 }
 

@@ -45,5 +45,5 @@ export function decideStop(facts: StopFacts): StopDecision {
 }
 
 export function sendBackMessage(issue: IssueId): string {
-  return `Issue ${issue}: you stopped with nothing reported. Report where it stands with \`factory issue ship|close|block|ask|defer ${issue} …\`, or keep working. Stopping again unreported stalls the Issue.`
+  return `Issue ${issue}: you stopped with nothing reported. Report where it stands with \`factory issue ship|close|block|ask|defer ${issue} --attempt <n> …\` (or \`factory artifact submit ${issue} --attempt <n> …\`, \`factory errand raise ${issue} --attempt <n> …\`), or keep working. Stopping again unreported stalls the Issue.`
 }

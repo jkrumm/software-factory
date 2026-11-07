@@ -1,13 +1,16 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { type QualityView, type ReopenAnswer, ShipAnswer } from '@software-factory/contract'
+import { stateOf as issueState, tick } from '../flow.ts'
 import { factory, type ServerProcess, type World } from '../harness.ts'
 import { type LeadsWorld, startLeadsWorld } from '../leads/support.ts'
 
-/** The server's environment for a quality scenario: a quick tick, no settle, a short retry, the entry into the write path. */
+/** The server's environment for a quality scenario: a quick tick, no settle, a short retry. */
 export const QUALITY_ENV = {
-  FACTORY_INTERNAL_TEST_ROUTES: '1',
   FACTORY_TICK_MS: '100',
+  // Admission and triage happen when the scenario asks (a reopened Issue stays queued; the scenario settles what it files).
+  FACTORY_LOOP_PLANNING_MS: '0',
+  FACTORY_LOOP_TRIAGE_MS: '0',
   FACTORY_VERIFY_SETTLE_MS: '0',
   FACTORY_VERIFY_RETRY_MS: '100',
 }
@@ -24,34 +27,17 @@ export interface Answer<T = unknown> {
   err: string
 }
 
-async function post(server: ServerProcess, path: string, body: unknown): Promise<unknown> {
-  const response = await fetch(`${server.url}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const text = await response.text()
-  if (response.status !== 200) throw new Error(`${path} answered ${response.status}: ${text}`)
-  return JSON.parse(text)
-}
-
-const event = (server: ServerProcess, id: string, body: object) =>
-  post(server, `/internal/test/issues/${id}/events`, body) as Promise<{
-    result: string
-    detail: string | null
-    issue: { id: string; state: string; waitReason: string | null; outcome: string | null; version: number }
-  }>
-
 /**
  * An Issue whose attempt 1 has a lead working: admitted, and started by the leads' own tick against the fake `hc`, so
  * the attempt row (the repo's directory, the branch, the commit its worktree was cut from) is the one quality reads.
  */
 export async function workingIssue(lw: LeadsWorld, title: string): Promise<string> {
   const id = await lw.admitted(title)
+  await tick(lw)
   // The terminal carries the lead's name (`lead-<n>-<attempt>`) as its key, whether it still lives or finished.
   const name = `lead-${id.slice('issue_'.length)}-1`
   await until('the lead to start', async () => lw.terminals().some((t) => t.labels['factory.key'] === name))
-  await until('the Issue to work', async () => (await stateOf(lw.server, id)) === 'working')
+  await until('the Issue to work', async () => (await stateOf(lw.world, id)) === 'working')
   return id
 }
 
@@ -92,27 +78,10 @@ export async function commit(lw: LeadsWorld, file: string, text: string, message
   return git(lw.repo, 'rev-parse', 'HEAD')
 }
 
-let notes = 0
-
-/**
- * Where the Issue stands, read the one way there is until package 8: a note from the owner answers with the Issue. The
- * lead's tick writes to the same Issue, so a version conflict is asked again.
- */
-export async function stateOf(server: ServerProcess, id: string): Promise<string> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const answer = await event(server, id, {
-        key: `${id}:look:${++notes}`,
-        kind: 'noted',
-        payload: { text: 'where does it stand' },
-        actor: 'owner',
-      })
-      const { state, waitReason, outcome } = answer.issue
-      return [state, waitReason, outcome].filter(Boolean).join(':')
-    } catch (error) {
-      if (attempt >= 10 || !String(error).includes('version_conflict')) throw error
-    }
-  }
+/** Where the Issue stands as `state[:wait][:outcome]`, read-only. */
+export async function stateOf(world: World, id: string): Promise<string> {
+  const { state, wait, outcome } = await issueState(world, id)
+  return [state, wait, outcome].filter(Boolean).join(':')
 }
 
 export async function until<T>(what: string, look: () => Promise<T | undefined | false>, ms = 20_000): Promise<T> {
@@ -127,7 +96,9 @@ export async function until<T>(what: string, look: () => Promise<T | undefined |
 
 function parse<T>(raw: { code: number; out: string; err: string }): Answer<T> {
   const json = (raw.out ? JSON.parse(raw.out) : null) as T
-  const refusal = raw.code === 0 ? '' : String((json as { error?: unknown } | null)?.error ?? '')
+  // A failure is one JSON line on stderr: `{ error: { kind, code, message, hint, details } }`.
+  const refusal =
+    raw.code === 0 ? '' : String((JSON.parse(raw.err) as { error?: { message?: unknown } }).error?.message ?? '')
   return { code: raw.code, json, refusal, err: raw.err }
 }
 
@@ -139,7 +110,7 @@ export async function ship(
 ): Promise<Answer<ShipAnswer>> {
   const raw = await factory(
     world,
-    ['quality', 'ship', id, '--body', JSON.stringify({ attempt: 1, ...body }), '--format', 'json'],
+    ['issue', 'ship', id, '--body', JSON.stringify({ attempt: 1, ...body }), '--format', 'json'],
     { FACTORY_URL: server.url },
   )
   const answer = parse<ShipAnswer>(raw)
@@ -153,15 +124,15 @@ export async function reopen(
   id: string,
   body: { call: string; reason: string },
 ): Promise<Answer<ReopenAnswer>> {
-  const raw = await factory(world, ['quality', 'reopen', id, '--body', JSON.stringify(body), '--format', 'json'], {
+  const raw = await factory(world, ['issue', 'reopen', id, '--body', JSON.stringify(body), '--format', 'json'], {
     FACTORY_URL: server.url,
   })
   return parse<ReopenAnswer>(raw)
 }
 
 export async function show(world: World, server: ServerProcess, id: string): Promise<QualityView> {
-  const raw = await factory(world, ['quality', 'show', id, '--format', 'json'], { FACTORY_URL: server.url })
-  if (raw.code !== 0) throw new Error(`quality show exited ${raw.code}: ${raw.err}`)
+  const raw = await factory(world, ['issue', 'quality', id, '--format', 'json'], { FACTORY_URL: server.url })
+  if (raw.code !== 0) throw new Error(`issue quality exited ${raw.code}: ${raw.err}`)
   return JSON.parse(raw.out) as QualityView
 }
 

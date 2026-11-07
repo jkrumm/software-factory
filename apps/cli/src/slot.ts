@@ -3,7 +3,7 @@ import { constants } from 'node:os'
 import { send } from '@software-factory/client'
 import { DEFAULT_SLOT_RUN_MS, Slot } from '@software-factory/contract'
 import { usage } from './exit.ts'
-import { DEFAULT_URL, type Io } from './operation.ts'
+import { DEFAULT_URL, type Io, tokenOf } from './operation.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
 const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
@@ -123,6 +123,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   if (!program) throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
+  const token = tokenOf(io.env)
   const name = input.name ?? program
   const id = `${process.pid}-${crypto.randomUUID()}`
   const waitMs = number(io.env.FACTORY_SLOT_WAIT_MS, DEFAULT_SLOT_WAIT_MS)
@@ -141,9 +142,12 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   // The limit the server resolved for the grant; a server that does not say leaves it to the env or the default.
   let grantedRunMs: number | undefined
   const ask = async (): Promise<Asked> => {
-    const answer = await send({ base, method: 'PUT', path, body: { name, cwd, limitMs: envLimit } })
+    const answer = await send({ base, method: 'PUT', path, body: { name, cwd, limitMs: envLimit }, token })
     if (!answer.reached) return { kind: 'outage', why: answer.reason }
     if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}` }
+    if (answer.status === 401 || answer.status === 403) {
+      return { kind: 'outage', why: `the server refused the token (${answer.status}): set FACTORY_TOKEN` }
+    }
     const parsed = Slot.safeParse(answer.json)
     if (!parsed.success)
       return { kind: 'outage', why: `the server answered ${answer.status} with a body this CLI does not know` }
@@ -157,7 +161,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const release = async (): Promise<void> => {
     if (!engaged) return
     engaged = false
-    await send({ base, method: 'DELETE', path })
+    await send({ base, method: 'DELETE', path, token })
   }
   // A signal while waiting leaves the line; while the command runs it is passed on to the command (from the terminal it
   // reaches the command as well, and a command that is told twice still ends), and the slot goes back when it has ended.

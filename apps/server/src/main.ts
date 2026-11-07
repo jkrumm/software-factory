@@ -28,11 +28,13 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
+import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
+import { composeIssues } from './compose-issues.ts'
+import { rootedRepos } from './adapters/git/repos.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
-import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
 import { reopenIssue } from './app/quality-reopen.ts'
@@ -46,6 +48,7 @@ import { systemIds } from './kernel/ids.ts'
 import { healthOf, tickProblem } from './read/health.ts'
 import { planningSettings } from './app/planning-settings.ts'
 import { queueMovedAt } from './read/queue.ts'
+import { queueReasonMap } from './api/read-models.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
@@ -55,6 +58,9 @@ const HOSTNAME = '127.0.0.1'
 
 /** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
 const IDLE_TIMEOUT_S = 255
+
+/** A door source refused within this long is a health line; an older refusal has passed. */
+const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
 const fail = (message: string): never => {
   console.error(message)
@@ -92,9 +98,11 @@ async function main(): Promise<void> {
     loops: postgresLoopStore(tx),
     loopReads: loopReads(tx),
   }))
-  // The scenarios move this clock to reach a date a real one would take 30 days to; the leads' own keep the system's.
+  // A test moves this clock to reach a date a real one would take 30 days to (settings refuse it outside test mode).
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
+  if (settings.clockOffsetMs !== 0)
+    console.warn(`TEST CLOCK: the write clock runs ${settings.clockOffsetMs} ms from real time (FACTORY_TEST_MODE=1)`)
   const writes = { uow, clock, ids: systemIds }
   // No call of an earlier process is running: an open call to agw is taken up again under its own key (agw hands back its run).
   const lapsed = await uow.run(async ({ loops }) => ok(await loops.lapseOpen(new Date())))
@@ -278,11 +286,23 @@ async function main(): Promise<void> {
   const leadsTick = loopSettings.intervalMs.leads
 
   const app = createApp({
+    tokens: settings.tokens,
     intake: intake.api,
     health: {
       read: async () => {
         const tickAt = runner.lastOkAt('leads')
+        const door = await intake
+          .doorLines(DOOR_LINES_RECENT_MS)
+          .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
         return healthOf({
+          lines: door.map((text) => ({ source: 'door', text, since: null })),
+          loops: runner.view().map((loop) => ({
+            name: loop.name,
+            ok: loop.lastError === null,
+            lastOkAt: loop.lastOkAt,
+            lastError: loop.lastError,
+            intervalMs: loop.intervalMs,
+          })),
           version: settings.version,
           databaseFailure: await ping(sql),
           tickAt: tickAt?.toISOString() ?? null,
@@ -292,6 +312,11 @@ async function main(): Promise<void> {
       },
     },
     planning: planning.planning,
+    issues: composeIssues({
+      writes,
+      filing: { ...writes, locate: (repo) => rootedRepos(leadSettings.repoRoots).locate(repo) },
+      checkpoints,
+    }),
     capacity: planning.capacity,
     quality: {
       ship: (input) => shipIssue(shipping, input),
@@ -301,10 +326,21 @@ async function main(): Promise<void> {
     checkpoints,
     leads: leads.routes,
     loops: runner,
-    leadsTick: settings.internalTestRoutes ? () => leads.tick() : undefined,
-    internalTest: settings.internalTestRoutes
-      ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
-      : undefined,
+    read: composeRead({
+      sql,
+      clock,
+      env: process.env,
+      doorLines: () => intake.doorLines(DOOR_LINES_RECENT_MS),
+      loops: () => runner.view(),
+      blockedStreak: loopSettings.blockedChecks,
+    }),
+    readModels: {
+      sql,
+      queueReasons: async () => {
+        const view = await planning.capacity.queue()
+        return view.ok ? queueReasonMap(view.value.queue) : null
+      },
+    },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   intake.start()
   runner.start()

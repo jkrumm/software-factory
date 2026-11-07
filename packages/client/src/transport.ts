@@ -10,6 +10,8 @@ export interface Call {
   query?: Record<string, string>
   /** sent as JSON */
   body?: unknown
+  /** sent as `Authorization: Bearer <token>`; none, nothing is sent and the server answers 401 */
+  token?: string
   timeoutMs?: number
 }
 
@@ -28,7 +30,10 @@ export async function send(call: Call): Promise<Answer> {
   try {
     response = await fetch(url, {
       method: call.method,
-      headers: hasBody ? { 'content-type': 'application/json' } : {},
+      headers: {
+        ...(hasBody ? { 'content-type': 'application/json' } : {}),
+        ...(call.token ? { authorization: `Bearer ${call.token}` } : {}),
+      },
       body: hasBody ? JSON.stringify(call.body) : undefined,
       signal: AbortSignal.timeout(call.timeoutMs ?? TIMEOUT_MS),
     })

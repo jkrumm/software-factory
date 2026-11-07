@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
-import type { AlertRequest, Signal } from '@software-factory/contract'
+import type { AlertRequest, Signal, SignalRequest } from '@software-factory/contract'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { postgresIntakeStore } from '../../src/adapters/intake/store.ts'
 import { postgresOpenIssues } from '../../src/read/open-issues.ts'
-import { createIntake, DEFAULT_INTAKE_SETTINGS, type Intake } from '../../src/app/intake.ts'
+import { createIntake, DEFAULT_INTAKE_SETTINGS, envelopeOfRequest, type Intake } from '../../src/app/intake.ts'
 import { recordIssueEvent } from '../../src/app/issues.ts'
 import type { Received, RepoSignals, Triaged } from '../../src/domains/intake/model.ts'
 import type {
@@ -649,5 +649,49 @@ describe("the poller's view of a source", () => {
     await send('issue_1' as IssueId, 'cancel', { kind: 'cancelled', payload: { reason: 'x' }, actor: 'owner' })
     const after = await intake.sink.subjects('checks', 'o/r:')
     expect(after.ok && after.value.map((s) => s.open)).toEqual([false])
+  })
+})
+
+describe('the token decides the trust, the claimed from only lowers it', () => {
+  const request = (from: string, extra: Partial<SignalRequest> = {}): SignalRequest => ({
+    from,
+    kind: 'request',
+    title: 'Fix the footer',
+    text: '',
+    repo: 'argo',
+    ...extra,
+  })
+  const trustOf = (result: Result<Signal, unknown>): string => {
+    if (!result.ok) throw new Error(`expected a signal, got ${JSON.stringify(result.error)}`)
+    return result.value.trust
+  }
+
+  test('the owner token: owner* is owner, agent:<repo> is agent, feedback:<app> is outside', () => {
+    expect(trustOf(envelopeOfRequest(request('owner:hermes'), 'owner'))).toBe('owner')
+    expect(trustOf(envelopeOfRequest(request('agent:vps', { repo: null }), 'owner'))).toBe('agent')
+    expect(trustOf(envelopeOfRequest(request('feedback:argo'), 'owner'))).toBe('outside')
+  })
+
+  test('the agent token: agent:<repo> is agent, feedback is outside, owner* is refused', () => {
+    expect(trustOf(envelopeOfRequest(request('agent:vps', { repo: null }), 'agent'))).toBe('agent')
+    expect(trustOf(envelopeOfRequest(request('feedback:argo'), 'agent'))).toBe('outside')
+    expect(envelopeOfRequest(request('owner'), 'agent')).toMatchObject({
+      ok: false,
+      error: { kind: 'trust_refused' },
+    })
+  })
+
+  test('filing as owner under the agent token stores nothing', async () => {
+    const refused = await intake.file(request('owner:hermes', { repo: 'chat' }), 'agent')
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'trust_refused' } })
+    expect(await intake.list(null)).toEqual({ ok: true, value: [] })
+  })
+
+  test('a signal filed under the agent token is taken as an agent signal, not held as an outsider', async () => {
+    const filed = done(
+      await intake.file(request('agent:argo', { repo: null, title: 'The deploy has no rollback' }), 'agent'),
+    )
+    expect(filed.outcome).toBe('filed')
+    expect(await intake.list('held')).toEqual({ ok: true, value: [] })
   })
 })

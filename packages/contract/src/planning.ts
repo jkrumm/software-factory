@@ -118,8 +118,7 @@ export const AfterAnswer = z.object({ issue: IssueRef, edges: z.number().int() }
 export type AfterAnswer = z.infer<typeof AfterAnswer>
 
 export const PrioBody = z
-  .object({
-    issue: IssueRef,
+  .strictObject({
     value: z.number().int().min(-1000).max(1000),
     /** a repeated key records nothing again; generated when absent */
     key: z.string().min(1).max(200).optional(),

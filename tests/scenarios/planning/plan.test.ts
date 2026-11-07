@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { AdmitAnswer, PlanningPassAnswer, ProjectList, ProjectView, QueueOrder } from '@software-factory/contract'
+import { must, tick } from '../flow.ts'
 import { type Lab, startLab } from './lab.ts'
 
 let lab: Lab
@@ -21,6 +22,7 @@ rows:
 
 beforeAll(async () => {
   lab = await startLab({
+    leads: true,
     env: { FACTORY_LEADS_PER_ACCOUNT: '16' },
     repos: {
       app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN },
@@ -54,8 +56,8 @@ test('projects are read from the default branch: leads, the slot limit and the s
   expect(synced.json).toMatchObject({ synced: 2, broken: [], errors: [] })
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => [p.name, p.source, p.leads, p.slotRun, p.branch])).toEqual([
-    ['app', 'file', 1, null, 'main'],
-    ['lib', 'file', 3, '45m', 'main'],
+    ['app', 'file', 1, null, 'origin/main'],
+    ['lib', 'file', 3, '45m', 'origin/main'],
   ])
   expect((await lab.cli(['project', 'show', 'nothing'])).code).toBe(4)
 })
@@ -88,7 +90,7 @@ test('a row is filed once when its after row closes: replayed passes file nothin
   expect((await show('app')).plan?.rows.find((r) => r.key === 'second')?.reason).toBe('after app:first')
 
   // the first row's Issue closes (in any outcome): the second row is filed, once
-  await lab.event('issue_1', 'cancelled', 'cancelled', { reason: 'not needed' }, 'owner')
+  await must(lab, ['issue', 'cancel', 'issue_1', '--reason', 'not needed'])
   const second = await pass()
   expect(second.filed).toEqual([{ project: 'app', row: 'second', issue: 'issue_3' }])
   expect((await pass()).filed).toEqual([])
@@ -129,18 +131,21 @@ test('an edge that closes a cycle is refused (409, nothing stored); a closed blo
 
   const cycle = await lab.cli(['planning', 'after', '--body', JSON.stringify({ issue: a, after: [b] })])
   expect(cycle.code).toBe(5)
-  // the generated CLI prints a declared answer on stdout, then exits with the kind of its status
-  expect(cycle.json).toEqual({
-    error: `that closes a cycle: Issue ${a.slice(6)} waits for Issue ${b.slice(6)} waits for Issue ${a.slice(6)}`,
+  // a failure is one JSON line on stderr, stdout stays empty, and the cycle's Issues are in details.path
+  expect(cycle.out).toBe('')
+  expect(cycle.failure).toMatchObject({
+    kind: 'conflict',
+    message: `that closes a cycle: Issue ${a.slice(6)} waits for Issue ${b.slice(6)} waits for Issue ${a.slice(6)}`,
     code: 'cycle',
+    details: { status: 409, path: [a, b, a] },
   })
 
   const unknown = await lab.cli(['planning', 'after', '--body', JSON.stringify({ issue: a, after: ['issue_999'] })])
   expect(unknown.code).toBe(4)
-  await lab.event(c, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
+  await must(lab, ['issue', 'cancel', c, '--reason', 'x'])
   const closed = await lab.cli(['planning', 'settle', '--body', JSON.stringify({ issue: a, after: [c] })])
   expect(closed.code).toBe(5)
-  expect(closed.json).toMatchObject({ code: 'issue_closed' })
+  expect(closed.failure).toMatchObject({ code: 'issue_closed' })
   const edges = await lab.world.db.sql`SELECT issue_id, after_issue FROM factory.planning_edges`
   expect(edges.map((e: { issue_id: string; after_issue: string }) => [e.issue_id, e.after_issue])).toEqual([[b, a]])
 })
@@ -158,8 +163,14 @@ test('an Issue behind a blocker stays queued, naming it, until the blocker close
   expect(first.admitted.map((a) => a.issue)).toContain(blocker)
   expect(first.admitted.map((a) => a.issue)).not.toContain(dependent)
 
-  await lab.event(blocker, 'lead_started', 'lead_started', { attempt: 1, terminal: 't' })
-  await lab.event(blocker, 'closed', 'closed', { attempt: 1, outcome: 'dropped', reason: 'not needed' }, 'lead')
+  // Nothing above called hc or agw; now the blocker's lead starts and ends it as the agent.
+  expect(await lab.world.calls()).toEqual([])
+  await tick(lab)
+  await must(
+    lab,
+    ['issue', 'close', blocker, '--attempt', '1', '--outcome', 'dropped', '--reason', 'not needed'],
+    'agent',
+  )
   await lab.cli(['capacity', 'refresh'])
   const second = AdmitAnswer.parse((await lab.cli(['capacity', 'admit'])).json)
   expect(second.admitted.map((a) => a.issue)).toContain(dependent)
@@ -179,6 +190,6 @@ test('a broken project.yaml keeps the last valid one and files one Issue for tha
   expect(lib.projectError?.message).toContain('leads')
 })
 
-test('planning called neither hc nor agw', async () => {
-  expect(await lab.world.calls()).toEqual([])
+test('planning never asked agw', async () => {
+  expect((await lab.world.calls()).filter((call) => call.tool === 'agw')).toEqual([])
 })

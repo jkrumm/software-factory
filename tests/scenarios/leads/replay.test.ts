@@ -26,7 +26,7 @@ async function counts() {
 test('replay a tick: the outbox and the hook replay twice; nothing doubles (terminals, notes, events)', async () => {
   await w.hook('session-start', 'lead-1-1', { source: 'startup', session_id: 's-1', transcript_path: '/x/s-1.jsonl' })
   await w.hook('user-prompt-submit', 'lead-1-1', { session_id: 's-1' })
-  await w.record(issue, 'note:1', 'noted', { text: 'mind the migration' }, 'owner')
+  await w.note(issue, 'mind the migration')
   // The tick reads the spool: the two lines the socket stored already are read, and they are the same events.
   const first = await w.tick()
   expect(first).toMatchObject({ replayed: 2, outbox: { ran: 1 } })

@@ -1,4 +1,4 @@
-import { createDoor, DEFAULT_FACTORY_URL, fileViaHttp, MAX_BODY_BYTES, reportViaHttp } from './door.ts'
+import { createDoor, DEFAULT_FACTORY_URL, doorTokenFrom, fileViaHttp, MAX_BODY_BYTES, reportViaHttp } from './door.ts'
 import { loadTokens, tokensFileFrom } from './tokens.ts'
 
 /** The loopback port `tailscale serve` publishes on the mini's tailnet name. */
@@ -16,7 +16,14 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 const factoryUrl = env.FACTORY_URL || DEFAULT_FACTORY_URL
 
-const report = reportViaHttp(factoryUrl)
+let factoryToken: string
+try {
+  factoryToken = doorTokenFrom(env)
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error))
+}
+
+const report = reportViaHttp(factoryUrl, factoryToken)
 
 let tokens: ReturnType<typeof loadTokens>
 try {
@@ -44,7 +51,7 @@ const server = Bun.serve({
   hostname: '127.0.0.1',
   port,
   maxRequestBodySize: MAX_BODY_BYTES * 4,
-  fetch: createDoor({ tokens, file: fileViaHttp(factoryUrl), report }),
+  fetch: createDoor({ tokens, file: fileViaHttp(factoryUrl, factoryToken), report }),
 })
 console.error(`factory-door listening on 127.0.0.1:${server.port} (sources: ${Object.keys(tokens).join(', ')})`)
 

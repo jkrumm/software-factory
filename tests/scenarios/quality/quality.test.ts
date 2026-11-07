@@ -39,7 +39,7 @@ describe('ship: the gate', () => {
       paths: ['src/a.ts'],
     })
     expect(review).toMatchObject({ kind: 'review', status: 'covered', tier: 'standard', reason: null })
-    expect(await stateOf(it.lw.server, id)).toBe('watching')
+    expect(await stateOf(it.lw.world, id)).toBe('watching')
 
     // The outbox opens the watch on the next tick.
     await until('the watch to open', async () => (await show(it.lw.world, it.lw.server, id)).watches.length > 0)
@@ -83,7 +83,7 @@ describe('ship: the gate', () => {
     const unknown = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: ['deadbeef'] })
     expect(unknown.code).toBe(5)
     expect(unknown.refusal).toContain('is not in')
-    expect(await stateOf(it.lw.server, id)).toBe('working')
+    expect(await stateOf(it.lw.world, id)).toBe('working')
 
     await gitIn(it.lw, 'push', '-q', 'origin', 'master')
     const merged = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [local] })
@@ -101,7 +101,7 @@ describe('ship: the gate', () => {
     const refused = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [old] })
     expect(refused.code).toBe(5)
     expect(refused.refusal).toContain('is older than this attempt')
-    expect(await stateOf(it.lw.server, id)).toBe('working')
+    expect(await stateOf(it.lw.world, id)).toBe('working')
   })
 
   test('a ship is accepted without a review, and the absence is recorded with its reason (NL23)', async () => {
@@ -151,10 +151,10 @@ describe('the watch', () => {
       expect(shipped.code).toBe(0)
 
       await Bun.sleep(1_000)
-      expect(await stateOf(it.lw.server, id)).toBe('watching')
+      expect(await stateOf(it.lw.world, id)).toBe('watching')
       expect((await show(it.lw.world, it.lw.server, id)).watches[0]).toMatchObject({ answer: null, checks: [] })
 
-      expect(await until('the Issue to close', async () => (await stateOf(it.lw.server, id)) === 'closed:done')).toBe(
+      expect(await until('the Issue to close', async () => (await stateOf(it.lw.world, id)) === 'closed:done')).toBe(
         true,
       )
       const watch = (await show(it.lw.world, it.lw.server, id)).watches[0]
@@ -182,7 +182,7 @@ describe('the watch', () => {
       const shipped = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
       expect(shipped.json.evidence[0]).toMatchObject({ deploys: false })
       expect(shipped.json.evidence[1]).toMatchObject({ status: 'not_required' })
-      await until('the Issue to close', async () => (await stateOf(it.lw.server, id)) === 'closed:done')
+      await until('the Issue to close', async () => (await stateOf(it.lw.world, id)) === 'closed:done')
       expect((await show(it.lw.world, it.lw.server, id)).watches[0]?.checks[0]?.checks.map((c) => c.name)).toEqual([
         'make verify',
       ])
@@ -208,7 +208,7 @@ describe('regression', () => {
         expect(shipped.code).toBe(0)
         states.push(
           await until(`regression ${round}`, async () => {
-            const now = await stateOf(it.lw.server, id)
+            const now = await stateOf(it.lw.world, id)
             return now === 'watching' ? undefined : now
           }),
         )
@@ -248,7 +248,7 @@ describe('regression', () => {
         async () => (await show(it.lw.world, it.lw.server, id)).watches[0]?.checks.length,
       )
       await Bun.$`rm ${it.lw.repo}/red`
-      await until('the Issue to close', async () => (await stateOf(it.lw.server, id)) === 'closed:done')
+      await until('the Issue to close', async () => (await stateOf(it.lw.world, id)) === 'closed:done')
       const watch = (await show(it.lw.world, it.lw.server, id)).watches[0]
       expect(watch?.answer).toBe('passed')
       expect(watch?.checks.map((c) => c.outcome)[0]).toBe('red')

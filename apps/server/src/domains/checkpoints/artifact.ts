@@ -55,8 +55,9 @@ export function readSubmission(raw: unknown): Result<Submission, MissingFields> 
   if (content.length > MAX_CONTENT) problems.push(`content (longer than ${MAX_CONTENT} characters)`)
   const kind = SUBMITTABLE_KINDS.find((candidate) => candidate === body.kind)
   if (!kind) problems.push(`kind (${SUBMITTABLE_KINDS.join(', ')})`)
-  const format = body.format === undefined ? 'markdown' : FORMATS.find((candidate) => candidate === body.format)
-  if (!format) problems.push(`format (${FORMATS.join(', ')})`)
+  const format =
+    body.contentFormat === undefined ? 'markdown' : FORMATS.find((candidate) => candidate === body.contentFormat)
+  if (!format) problems.push(`contentFormat (${FORMATS.join(', ')})`)
   if (problems.length > 0 || !kind || !format) return refused(problems, 'an artifact')
   return ok({ kind, title, format, content })
 }

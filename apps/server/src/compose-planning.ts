@@ -1,3 +1,5 @@
+import { rootedRepos } from './adapters/git/repos.ts'
+import { basename } from 'node:path'
 import { claudeAccountSource } from './adapters/planning/claude-accounts.ts'
 import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
@@ -16,7 +18,9 @@ import type { PlanningSettings } from './app/planning-settings.ts'
 import { projectSignals } from './app/planning-signals.ts'
 import { syncProjects } from './app/planning-sync.ts'
 import { projectStates } from './app/planning-views.ts'
+import { projectOf } from './domains/planning/sync.ts'
 import { key } from './kernel/keys.ts'
+import { ok, type PortError, type Result } from './kernel/result.ts'
 
 /** The remote is asked for new commits this often; every other pass reads the default branch as last fetched. */
 const FETCH_EVERY_MS = 10 * 60_000
@@ -53,6 +57,20 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
     accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
   }
   const slots = { ...writes, slots: settings.slots }
+
+  /**
+   * A project by its name, or by a path inside a source root (realpath, the trust boundary): the name the queue keeps its
+   * states under. A path outside the roots is `refused`.
+   */
+  const repos = rootedRepos(settings.repoRoots)
+  async function projectName(text: string): Promise<Result<string, PortError>> {
+    if (!text.includes('/')) return ok(text)
+    const located = await repos.locate(text)
+    if (!located.ok) return located
+    const known = await writes.uow.run(async ({ planning }) => ok(projectOf(await planning.projects(), located.value)))
+    if (!known.ok) return known
+    return ok(known.value?.name ?? basename(located.value))
+  }
 
   let fetchedAt = Number.NEGATIVE_INFINITY
   /** One pass: the planning pass, then admission, which decides again at every claim. */
@@ -91,8 +109,19 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
       refresh: () => refreshState(capacity),
       admit: () => admissionPass(capacity),
       queue: () => queueView(capacity),
-      queueStates: () => getQueueStates(writes),
-      setQueueState: (request) => setQueueState(writes, request),
+      queueStates: async (project) => {
+        const states = await getQueueStates(writes)
+        if (!states.ok || project === undefined) return states
+        const name = await projectName(project)
+        if (!name.ok) return name
+        const own = states.value.projects.get(name.value)
+        return ok({ global: states.value.global, projects: new Map(own ? [[name.value, own]] : []) })
+      },
+      setQueueState: async (request) => {
+        if (request.project === null) return setQueueState(writes, request)
+        const name = await projectName(request.project)
+        return name.ok ? setQueueState(writes, { ...request, project: name.value }) : name
+      },
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),
     },

@@ -48,7 +48,6 @@ export type JudgeVerdictWire = z.infer<typeof JudgeVerdictWire>
 // ---- factory-steward -----------------------------------------------------------------------------------------------------
 
 export const STALL_CAUSES = ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed'] as const
-export type StallCauseWire = (typeof STALL_CAUSES)[number]
 
 export const STEWARD_ACTIONS = ['wake', 'requeue', 'raise_decision', 'none'] as const
 

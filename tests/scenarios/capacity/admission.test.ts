@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { AdmitAnswer, CapacityView, QueueOrder } from '@software-factory/contract'
+import { must, tick } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
@@ -10,6 +11,7 @@ let lab: Lab
 
 beforeAll(async () => {
   lab = await startLab({
+    leads: true,
     repos: {
       duo: { project: 'apiVersion: factory/v2\nname: duo\nleads: 2\n' },
       mem: { project: 'apiVersion: factory/v2\nname: mem\n' },
@@ -49,9 +51,14 @@ const stateOf = async (issue: string) => {
   const [row] = await lab.world.db.sql`SELECT state FROM factory.issues WHERE id = ${issue}`
   return row?.state as string
 }
+/** The Issue's lead starts (the leads' loop, against the fake hc) and closes it, as the agent. */
 const close = async (issue: string, attempt = 1) => {
-  await lab.event(issue, 'lead_started', 'lead_started', { attempt, terminal: `t-${issue}` })
-  await lab.event(issue, 'closed', 'closed', { attempt, outcome: 'done', reason: 'done' }, 'lead')
+  await tick(lab)
+  await must(
+    lab,
+    ['issue', 'close', issue, '--attempt', String(attempt), '--outcome', 'done', '--reason', 'done'],
+    'agent',
+  )
 }
 
 test('leads: 2 admits two leads in one repo, a third waits for a claim and is admitted when one closes', async () => {
@@ -79,6 +86,8 @@ test('leads: 2 admits two leads in one repo, a third waits for a claim and is ad
   const effects = await lab.world.db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'start_lead' ORDER BY key`
   expect(effects.map((e: { key: string }) => e.key)).toEqual([`start_lead:${one}:1`, `start_lead:${two}:1`])
 
+  // Admission alone called nothing: no lead has started, no agw was asked.
+  expect(await lab.world.calls()).toEqual([])
   await close(one)
   const second = await admit()
   expect(second.admitted.map((a) => a.issue)).toEqual([three])
@@ -144,23 +153,13 @@ test('stop the line admits only the fix in its project; other projects go on', a
 })
 
 test('prio orders the queue before age, and never an incident behind it', async () => {
-  await lab.cli(['queue', 'set', '--body', JSON.stringify({ project: 'ordered', state: 'drain' })])
+  await lab.cli(['queue', 'set', 'drain', '--project', 'ordered'])
   const old = await lab.file('ordered', 'old')
   const urgent = await lab.file('ordered', 'urgent to the owner')
   for (const issue of [old, urgent]) await settle(issue)
-  const prio = await lab.cli([
-    'planning',
-    'prio',
-    '--body',
-    JSON.stringify({ issue: urgent, value: 100, key: 'owner-1' }),
-  ])
+  const prio = await lab.cli(['issue', 'prio', urgent, '100', '--key', 'owner-1'])
   expect(prio).toMatchObject({ code: 0, json: { issue: urgent, value: 100, recorded: true } })
-  const again = await lab.cli([
-    'planning',
-    'prio',
-    '--body',
-    JSON.stringify({ issue: urgent, value: 100, key: 'owner-1' }),
-  ])
+  const again = await lab.cli(['issue', 'prio', urgent, '100', '--key', 'owner-1'])
   expect(again.json).toMatchObject({ recorded: false })
   const queue = (await order()).filter((e) => e.project === 'ordered' && e.reason?.kind === 'drain')
   expect(queue.map((e) => [e.issue, e.prio])).toEqual([
@@ -171,6 +170,6 @@ test('prio orders the queue before age, and never an incident behind it', async 
   expect(states.json).toMatchObject({ global: 'run', projects: { ordered: 'drain' } })
 })
 
-test('admitting called neither hc nor agw', async () => {
-  expect(await lab.world.calls()).toEqual([])
+test('admitting never asked agw', async () => {
+  expect((await lab.world.calls()).filter((call) => call.tool === 'agw')).toEqual([])
 })

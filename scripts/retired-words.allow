@@ -7,3 +7,10 @@ scripts/gameday/f2/seeded-bug.sh park  # the old core's game day, kept as it ran
 scripts/gameday/f2/silent-lead.sh *  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 scripts/gameday/f2/templates/silent/AGENTS.md park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tracker's lane name for factory sessions, an external value
+apps/server/src/read/asks.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+apps/server/src/read/surface.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+apps/server/test/read/api.test.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+packages/contract/src/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+tests/scenarios/clients/requests.ts human queue  # the recorded requests read the legacy wire name `humanQueue`
+tests/scenarios/clients/dotfiles.test.ts human queue  # ask-human.sh's own note text and its queue directory are the dotfiles' words

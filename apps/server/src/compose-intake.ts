@@ -17,6 +17,8 @@ import { postgresOpenIssues } from './read/open-issues.ts'
 export interface ComposedIntake {
   /** the routes' use cases */
   api: IntakeApi
+  /** the door's health lines (a refused or silent source, an unrouted monitor that stays down); what the read API shows */
+  doorLines(finishedMs: number): Promise<string[]>
   /** starts the pollers and the settle pass on their schedules */
   start(): void
   /** stops them and waits for the pass in flight */
@@ -86,6 +88,11 @@ export async function composeIntake(input: {
   const stops: (() => Promise<void>)[] = []
   return {
     api: intake,
+    async doorLines(finishedMs) {
+      const lines = await intake.healthLines(finishedMs)
+      if (!lines.ok) throw new Error(`the door's lines could not be read: ${JSON.stringify(lines.error)}`)
+      return lines.value
+    },
     start() {
       const settle = async () => {
         const out = await intake.settle()

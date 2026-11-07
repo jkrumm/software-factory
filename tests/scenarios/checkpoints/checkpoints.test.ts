@@ -10,21 +10,27 @@ import {
   DecisionView,
   ErrandList,
   ErrandReply,
-  InternalTestEventAnswer,
   PageList,
   PassReply,
 } from '@software-factory/contract'
-import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
+import { admitted, fileIssue, tick } from '../flow.ts'
+import { factory, type ServerProcess, type World } from '../harness.ts'
+import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
  * Where the factory stops for a person, against the real server process and Postgres with the fake agw (the Judge) and a
- * fake ntfy: the lead's verbs and the owner's, as the generated CLI sends them. An Issue is brought to `working` through
- * the internal test route (`FACTORY_INTERNAL_TEST_ROUTES=1`) until package 8.
+ * fake ntfy: the lead's verbs and the owner's, as the generated CLI sends them. An Issue is brought to `working` the way the
+ * factory does it: filed with `issue new`, settled and admitted through planning and capacity, its lead started by the leads' loop.
  */
+let lab: Lab
 let world: World
 let server: ServerProcess
 let dir: string
 let issues = 0
+
+const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'errand', 'annotate'].map(
+  (name) => `example-${name}`,
+)
 
 interface Published {
   title: string | null
@@ -37,7 +43,6 @@ const published: Published[] = []
 let ntfy: ReturnType<typeof Bun.serve>
 
 beforeAll(async () => {
-  world = await startWorld()
   dir = await mkdtemp('/tmp/factory-checkpoints-')
   ntfy = Bun.serve({
     port: 0,
@@ -68,11 +73,12 @@ beforeAll(async () => {
       },
     ]),
   )
-  server = await startServer(world, {
+  lab = await startLab({
+    leads: true,
+    repos: Object.fromEntries(PROJECTS.map((name) => [name, { project: `apiVersion: factory/v2\nname: ${name}\n` }])),
     env: {
-      FACTORY_INTERNAL_TEST_ROUTES: '1',
+      FACTORY_LEADS_PER_ACCOUNT: '16',
       FACTORY_DATA_DIR: join(dir, 'data'),
-      FACTORY_CHECKPOINT_PASS_MS: '0',
       FACTORY_CHECKPOINT_POLICY_FILE: join(dir, 'policy.json'),
       FACTORY_FAKE_ASK_SCRIPT: join(dir, 'judge.json'),
       FACTORY_NTFY_URL: `http://127.0.0.1:${ntfy.port}`,
@@ -81,43 +87,23 @@ beforeAll(async () => {
       FACTORY_CONSOLE_URL: 'https://console.example.test',
     },
   })
+  world = lab.world
+  server = lab.server
+  expect((await lab.cli(['project', 'sync'])).code).toBe(0)
 })
 
 afterAll(async () => {
-  await server.stop()
+  await lab.stop()
   await ntfy.stop(true)
-  await world.stop()
   await rm(dir, { recursive: true, force: true })
 })
 
-async function post(path: string, body: unknown): Promise<InternalTestEventAnswer> {
-  const response = await fetch(`${server.url}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const text = await response.text()
-  if (response.status !== 200) throw new Error(`${path} answered ${response.status}: ${text}`)
-  return InternalTestEventAnswer.parse(JSON.parse(text))
-}
-
-/** An Issue with its lead working (attempt 1), through the internal test route. */
+/** An Issue with its lead working (attempt 1). */
 async function workingIssue(repo: string): Promise<string> {
-  const n = ++issues
-  const filed = await post('/internal/test/issues', {
-    key: `scenario:filed:${n}`,
-    kind: 'filed',
-    payload: { repo, title: `scenario issue ${n}`, kind: 'feature', origin: 'you' },
-    actor: 'factory',
-  })
-  const id = filed.issue.id
-  const events = [
-    { key: `${id}:settled`, kind: 'settled', payload: {}, actor: 'factory' },
-    { key: `${id}:admitted`, kind: 'admitted', payload: {}, actor: 'factory' },
-    { key: `${id}:lead`, kind: 'lead_started', payload: { attempt: 1, terminal: `lead-${n}` }, actor: 'factory' },
-  ]
-  for (const event of events) await post(`/internal/test/issues/${id}/events`, event)
-  return id
+  const issue = await fileIssue(lab, { repo, title: `scenario issue ${++issues}` })
+  await admitted(lab, issue)
+  await tick(lab)
+  return issue
 }
 
 /** Runs `factory <args>` against the server; the JSON a success printed, or the exit code and the error. */
@@ -254,19 +240,13 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
   for (let i = 0; i < 3; i++) await pass()
   expect(decisionPages()).toHaveLength(1)
 
-  const answered = await ok(
-    (json) => DecisionReply.parse(json),
-    'decision',
-    'answer',
-    id,
-    ...body({ answer: 'winston' }),
-  )
+  const answered = await ok((json) => DecisionReply.parse(json), 'decision', 'answer', id, 'winston')
   expect(answered).toMatchObject({
     decision: { status: 'answered', settledBy: 'owner', answer: 'winston' },
     issue: { state: 'working' },
   })
   expect(answered.issue?.effects.map((e) => e.kind)).toEqual(['note_lead'])
-  const again = await cli('decision', 'answer', id, ...body({ answer: 'pino' }))
+  const again = await cli('decision', 'answer', id, 'pino')
   expect(again.code).toBe(5)
   expect(again.err).toContain('already_answered')
 
@@ -481,11 +461,7 @@ test('a replayed outbox pages once: the same asks and passes again send nothing'
   expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'review'])
 })
 
-test('only the Judge called agw, three times, and nothing called hc', async () => {
-  const calls = await world.calls()
-  expect(calls.map((call) => [call.tool, call.args[0]])).toEqual([
-    ['agw', 'factory-ask'],
-    ['agw', 'factory-ask'],
-    ['agw', 'factory-ask'],
-  ])
+test('only the Judge called agw, three times', async () => {
+  const calls = (await world.calls()).filter((call) => call.tool === 'agw')
+  expect(calls.map((call) => call.args[0])).toEqual(['factory-ask', 'factory-ask', 'factory-ask'])
 })

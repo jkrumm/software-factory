@@ -22,6 +22,8 @@ import type { SyncResult } from '../app/planning-sync.ts'
 import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 /** The contract's row states and the domain's are one list. */
 const rowStatesMatch: [(typeof ROW_STATES)[number]] extends [RowState]
@@ -50,7 +52,8 @@ export interface PlanningApi {
   }): Promise<Result<{ recorded: boolean }, PlanningError | PortError>>
 }
 
-const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
+const failure = (error: string, code: string, details?: Record<string, unknown>): ErrorBody =>
+  ErrorBody.parse({ error, code, ...(details ? { details } : {}) })
 
 type Failure = { status: 404 | 409 | 503; body: ErrorBody }
 
@@ -68,7 +71,9 @@ export function failureOf(error: PlanningError | PortError): Failure {
     case 'cycle':
       return {
         status: 409,
-        body: failure(`that closes a cycle: ${error.path.map(nameOf).join(' waits for ')}`, 'cycle'),
+        body: failure(`that closes a cycle: ${error.path.map(nameOf).join(' waits for ')}`, 'cycle', {
+          path: error.path,
+        }),
       }
     case 'unknown_project':
       return { status: 404, body: failure(`no project ${error.project}`, 'not_found') }
@@ -101,8 +106,6 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
 
 const syncAnswer = (result: SyncResult): ProjectSyncAnswer => ProjectSyncAnswer.parse(result)
 
-const STATUS_ERRORS = { 404: ErrorBody, 409: ErrorBody, 503: ErrorBody }
-
 /**
  * Projects, the plans, the chain and the owner's priorities. The routes exist whether or not the use cases are bound,
  * so the OpenAPI document (and the generated CLI) is the same everywhere; unbound they answer 503.
@@ -119,7 +122,7 @@ export const planningRoutes = (api?: PlanningApi) => {
         return status(200, ProjectList.parse({ projects: projects.value.map(view) }))
       },
       {
-        response: { 200: ProjectList, 503: ErrorBody },
+        response: { 200: ProjectList, ...errorResponses(503) },
         detail: { operationId: 'project.list', summary: 'the projects the factory has read, with their plans' },
       },
     )
@@ -134,7 +137,7 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
       {
         params: z.object({ name: z.string() }),
-        response: { 200: ProjectView, 404: ErrorBody, 503: ErrorBody },
+        response: { 200: ProjectView, ...errorResponses(404, 503) },
         detail: {
           operationId: 'project.show',
           summary: 'one project: its project.yaml in force and every plan row with its state',
@@ -150,7 +153,7 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
       {
         query: FetchQuery,
-        response: { 200: ProjectSyncAnswer, 503: ErrorBody },
+        response: { 200: ProjectSyncAnswer, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'project.sync',
           summary: 'read project.yaml and docs/plan.yaml of every repo from its default branch',
@@ -171,7 +174,7 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
       {
         query: FetchQuery,
-        response: { 200: PlanningPassAnswer, 503: ErrorBody },
+        response: { 200: PlanningPassAnswer, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'planning.pass',
           summary: 'sync the projects, file the plan rows whose after rows closed, wake the Issues whose chain is done',
@@ -199,7 +202,7 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
       {
         body: SettleBody,
-        response: { 200: SettleAnswer, ...STATUS_ERRORS },
+        response: { 200: SettleAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
           operationId: 'planning.settle',
           summary: 'record settled on a settling Issue once its after edges are known (none is a known answer)',
@@ -227,7 +230,7 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
       {
         body: AfterBody,
-        response: { 200: AfterAnswer, ...STATUS_ERRORS },
+        response: { 200: AfterAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
           operationId: 'planning.after',
           summary: 'make a queued Issue wait for others to close (refuses a cycle)',
@@ -235,11 +238,11 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
     )
     .post(
-      '/planning/prio',
-      async ({ body, status }) => {
+      '/issues/:id/prio',
+      async ({ params, body, status }) => {
         if (!api) return status(503, unbound)
-        const issue = issueOf(body.issue)
-        if (!issue) return status(404, failure(`no ${body.issue}`, 'not_found'))
+        const issue = issueRef(params.id)
+        if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
         const set = await api.prio({ issue, value: body.value, key: body.key })
         if (!set.ok) {
           const out = failureOf(set.error)
@@ -249,14 +252,16 @@ export const planningRoutes = (api?: PlanningApi) => {
               ? status(409, out.body)
               : status(503, out.body)
         }
-        return status(200, PrioAnswer.parse({ issue: body.issue, value: body.value, recorded: set.value.recorded }))
+        return status(200, PrioAnswer.parse({ issue, value: body.value, recorded: set.value.recorded }))
       },
       {
+        params: z.object({ id: z.string() }),
         body: PrioBody,
-        response: { 200: PrioAnswer, ...STATUS_ERRORS },
+        response: { 200: PrioAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
-          operationId: 'planning.prio',
+          operationId: 'issue.prio',
           summary: "set an Issue's priority, the owner's: higher runs first within its class",
+          'x-cli': { args: ['value'] },
         },
       },
     )

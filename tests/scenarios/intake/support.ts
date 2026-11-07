@@ -1,6 +1,7 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { startServer, type ServerProcess, type World } from '../harness.ts'
+import { stateOf } from '../flow.ts'
+import { bearer, startServer, TOKENS, type ServerProcess, type World } from '../harness.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const DOOR_MAIN = join(ROOT, 'apps', 'door', 'src', 'main.ts')
@@ -89,7 +90,7 @@ export const startIntakeServer = (
   world: World,
   estate: Estate,
   extra: Record<string, string> = {},
-): Promise<ServerProcess> => startServer(world, { env: { FACTORY_INTERNAL_TEST_ROUTES: '1', ...estate.env, ...extra } })
+): Promise<ServerProcess> => startServer(world, { env: { ...estate.env, ...extra } })
 
 export async function until<T>(
   what: string,
@@ -135,6 +136,7 @@ export async function startDoor(estate: Estate, server: ServerProcess, sources: 
       FACTORY_DOOR_PORT: String(port),
       FACTORY_DOOR_TOKENS_FILE: tokensFile,
       FACTORY_URL: server.url,
+      FACTORY_DOOR_TOKEN: TOKENS.machine,
     },
     stdout: 'ignore',
     stderr: 'pipe',
@@ -286,20 +288,10 @@ export interface Observed {
   version: number
 }
 
-let probes = 0
-
-/**
- * What an Issue is now, read through the write path's own answer: a lead verb the factory's `settled` is not (the
- * sender rule refuses it), so nothing moves and the refusal tells the state. Scenarios never read another domain's tables.
- */
-export async function observe(server: ServerProcess, issue: string): Promise<Observed> {
-  const response = await fetch(`${server.url}/internal/test/issues/${issue}/events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: `probe:${issue}:${++probes}`, kind: 'settled', payload: {}, actor: 'lead' }),
-  })
-  const body = (await response.json()) as { issue: { state: string; outcome: string | null; version: number } }
-  return body.issue
+/** What an Issue is now, read-only from the world's database. */
+export async function observe(world: World, issue: string): Promise<Observed> {
+  const { state, outcome, version } = await stateOf(world, issue)
+  return { state, outcome, version }
 }
 
 /** An answer body the scenarios read by path. */
@@ -314,7 +306,7 @@ export async function post(
 ): Promise<{ status: number; body: Body }> {
   const response = await fetch(`${server.url}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify(body),
   })
   const text = await response.text()
@@ -322,6 +314,6 @@ export async function post(
 }
 
 export const get = async (server: ServerProcess, path: string): Promise<{ status: number; body: Body }> => {
-  const response = await fetch(`${server.url}${path}`)
+  const response = await fetch(`${server.url}${path}`, { headers: bearer() })
   return { status: response.status, body: await response.json() }
 }

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AdmitAnswer, DecisionList, PageList, PassReply, SignalAck } from '@software-factory/contract'
+import { admit, block, hitWall, loseLead, must, tick } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { blocked, callsOf, eventsOf, loops, runLoop, script, state, working } from './support.ts'
 
@@ -23,6 +24,7 @@ beforeAll(async () => {
   askScript = join(dir, 'ask.json')
   await Promise.all([script(stewardScript, []), script(triageScript, []), script(askScript, [])])
   lab = await startLab({
+    leads: true,
     repos: {
       app: { project: 'apiVersion: factory/v2\nname: app\nleads: 8\n' },
       shop: { project: 'apiVersion: factory/v2\nname: shop\nleads: 8\n' },
@@ -63,7 +65,8 @@ test('every timer of packages 3 to 6 runs through the loop runner: seven named l
 
 test('a stalled Issue whose cause is gone is woken by the steward without agw', async () => {
   const issue = await working(lab, 'app', 'the account hit its window')
-  await lab.event(issue, 'wall', 'stalled', { attempt: 1, cause: 'wall', detail: 'the 5-hour window ran out' })
+  // The lead's session reports the account's rate limit: the hook the factory reads as the window running out.
+  expect((await hitWall(lab.world, issue)).code).toBe(0)
   expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'wall' })
 
   const ran = await runLoop(lab, 'steward')
@@ -81,7 +84,7 @@ test('a stalled Issue whose cause is gone is woken by the steward without agw', 
 
 test('a note that arrived while a lead waited is delivered by the steward, without agw', async () => {
   const issue = await blocked(lab, 'app', 'blocked and then told', 'waiting for the vendor')
-  await lab.event(issue, 'noted', 'noted', { text: 'the vendor answered: use the v2 endpoint' }, 'owner')
+  await must(lab, ['issue', 'note', issue, 'the vendor answered: use the v2 endpoint'])
   await runLoop(lab, 'steward')
   expect(await state(lab, issue)).toMatchObject({ state: 'working' })
   expect(await callsOf(lab, 'factory-steward')).toEqual([])
@@ -202,14 +205,7 @@ test('a later stall of the same Issue is a new Decision, and a lead that is gone
     expect(stewarded.summary).toContain('Decisions 1')
     await lab.cli(['checkpoint', 'pass'])
     expect(await state(lab, issue)).toMatchObject({ state: 'working' })
-    if (round === 1)
-      await lab.event(
-        issue,
-        'blocked-2',
-        'stalled',
-        { attempt: 1, cause: 'blocked', detail: 'recurring block qwerty' },
-        'lead',
-      )
+    if (round === 1) await block(lab, issue, 'recurring block qwerty')
   }
   const decisions = DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions.filter(
     (d) => d.issueId === issue,
@@ -218,13 +214,13 @@ test('a later stall of the same Issue is a new Decision, and a lead that is gone
 
   // a lead that is gone: the steward may requeue it, never raise a Decision (an answer would not start a new attempt)
   const gone = await working(lab, 'app', 'the lead vanished')
-  await lab.event(gone, 'gone-1', 'lead_gone', { attempt: 1, detail: 'terminal gone' })
-  await lab.event(gone, 'gone-2', 'admitted', {})
-  await lab.event(gone, 'gone-3', 'lead_started', { attempt: 2, terminal: 'again' })
-  await lab.event(gone, 'gone-4', 'lead_gone', { attempt: 2, detail: 'terminal gone again' })
-  await lab.event(gone, 'gone-5', 'admitted', {})
-  await lab.event(gone, 'gone-6', 'lead_started', { attempt: 3, terminal: 'third' })
-  await lab.event(gone, 'gone-7', 'lead_gone', { attempt: 3, detail: 'terminal gone a third time' })
+  // Its terminal is lost; the first two times capacity admits a new attempt and the leads' loop starts it, the third is a stall.
+  for (const attempt of [1, 2]) {
+    expect((await loseLead(lab, gone, attempt)).lost).toBe(1)
+    expect((await admit(lab)).admitted.map((a) => [a.issue, a.attempt])).toEqual([[gone, attempt + 1]])
+    await tick(lab)
+  }
+  expect((await loseLead(lab, gone, 3)).lost).toBe(1)
   expect(await state(lab, gone)).toMatchObject({ state: 'waiting', wait: 'lead_gone' })
   await script(stewardScript, [{ match: 'vanished', answer: DECISION('Should the vanished lead be retried?') }])
   await runLoop(lab, 'steward')

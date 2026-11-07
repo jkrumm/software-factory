@@ -1,6 +1,6 @@
-import { buildBrief, fitNotes } from '../domains/leads/brief.ts'
+import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
 import { leadBranch, leadKey } from '../domains/leads/names.ts'
-import type { LeadAttempt } from '../domains/leads/ports.ts'
+import type { BriefSignal, LeadAttempt } from '../domains/leads/ports.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { AppliedRecord } from '../domains/work/machine.ts'
@@ -22,7 +22,14 @@ interface PreviousAttempt {
 
 type Look =
   | { stop: true }
-  | { stop: false; issue: Issue; history: AppliedRecord[]; row: LeadAttempt; previous: PreviousAttempt | null }
+  | {
+      stop: false
+      issue: Issue
+      history: AppliedRecord[]
+      row: LeadAttempt
+      previous: PreviousAttempt | null
+      signals: BriefSignal[]
+    }
 
 /** The notes recorded before the attempt's admission: the new lead has no memory, so all of them. */
 function notesBefore(history: readonly AppliedRecord[], attempt: number) {
@@ -65,11 +72,12 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
             ended: gone ? String((gone.payload as { detail?: unknown }).detail ?? '') : null,
           }
         : null
-    return ok({ stop: false, issue: loaded.issue, history: loaded.history, row, previous })
+    const signals = await leads.signalsOf(issue, MAX_BRIEF_SIGNALS)
+    return ok({ stop: false, issue: loaded.issue, history: loaded.history, row, previous, signals })
   })
   if (!looked.ok) return looked
   if (looked.value.stop) return ok(undefined)
-  const { issue: current, history, row, previous } = looked.value
+  const { issue: current, history, row, previous, signals } = looked.value
 
   const spent = deps.clock.now().getTime() - row.firstTryAt.getTime() > deps.startBudgetMs
   // A refusal retrying cannot fix is the lead gone; so is a start that has outlived its budget.
@@ -122,6 +130,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       worktree: { path: worktree, branch },
       notes: notes.shown,
       notesMore: notes.more,
+      signals,
       ...(previous ? { previous } : {}),
     })
     const started = await deps.terminals.start({

@@ -7,25 +7,19 @@ export const MAX_NOTE_CHARS = 4_000
 
 const oneLine = (value: unknown): string => JSON.stringify(typeof value === 'string' ? value : String(value))
 
-/** The event kinds a lead hears about; its own verbs and the machine's bookkeeping are not news. */
-export const NEWS: readonly string[] = [
-  'noted',
-  'answered',
-  'verdict_given',
-  'errand_done',
-  'woken',
-  'regressed',
-  'reopened',
-]
-
 function item(record: HistoryRecord): string | null {
   switch (record.kind) {
     case 'noted':
       return `a note, as data: ${oneLine(field(record, 'text'))}`
     case 'answered':
       return `your Decision ${oneLine(field(record, 'decision'))} was answered: ${oneLine(field(record, 'answer'))}`
-    case 'verdict_given':
-      return `the verdict on ${oneLine(field(record, 'artifact'))} is ${oneLine(field(record, 'verdict'))}`
+    case 'verdict_given': {
+      const artifact = field(record, 'artifact')
+      const verdict = `the verdict on ${oneLine(artifact)} is ${oneLine(field(record, 'verdict'))}`
+      return field(record, 'verdict') === 'changes'
+        ? `${verdict}; read the annotations with \`factory artifact show ${String(artifact)}\`, then \`factory artifact revise ${String(artifact)} --content @file\``
+        : verdict
+    }
     case 'errand_done':
       return `the Errand ${oneLine(field(record, 'errand'))} is done`
     case 'woken':

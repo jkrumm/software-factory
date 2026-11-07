@@ -19,20 +19,6 @@ export const EXIT = {
 export type ExitKind = keyof typeof EXIT
 export type ErrorKind = Exclude<ExitKind, 'ok'>
 
-export const EXIT_MEANING: Record<ExitKind, string> = {
-  ok: 'success',
-  general: 'other failure: a 5xx, or a server that answers but is not ok',
-  usage: 'unknown command or flag, bad value, or a 400/422',
-  auth: 'a 401/403',
-  not_found: '404',
-  conflict: '409',
-  confirmation_required: 'mutating command without --commit while stdin is not a TTY; nothing was sent',
-  network: 'the server could not be reached',
-  rate_limited: '429; retry after details.retryAfterS',
-  contract_mismatch: 'the server serves another contract and the command does not parse against it',
-  pending: 'the work is still going when the wait budget ran out',
-}
-
 export interface ErrorFields {
   code?: string | null
   hint?: string

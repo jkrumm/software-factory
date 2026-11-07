@@ -71,12 +71,6 @@ export interface CheckRecord {
   detail: string
 }
 
-export type Evidence = { kind: 'commits'; commits: CommitsEvidence } | { kind: 'review'; review: ReviewEvidence }
-
-/** A review that exists: agw's ledger covers the range, or no review was needed. */
-export const hasReview = (review: ReviewEvidence): boolean =>
-  review.status === 'covered' || review.status === 'not_required'
-
 export const MAX_RECORDED = 100
 
 const TEXT_FILE = /\.(md|mdx|txt)$/
