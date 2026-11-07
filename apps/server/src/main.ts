@@ -12,6 +12,9 @@ import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { createApp } from './api/app.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
+import { postgresIntakeStore } from './adapters/intake/store.ts'
+import { loadIntakeEnv } from './adapters/intake/settings.ts'
+import { composeIntake } from './compose-intake.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { loadCheckpointSettings } from './checkpoint-settings.ts'
 import { systemClock } from './kernel/clock.ts'
@@ -51,7 +54,9 @@ async function main(): Promise<void> {
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
     leads: postgresLeadStore(tx),
+    intake: postgresIntakeStore(tx),
   }))
+  const intake = await composeIntake({ sql, uow, env: loadIntakeEnv(process.env), clock: systemClock, ids: systemIds })
   const writes = { uow, clock: systemClock, ids: systemIds }
   const startedAt = new Date()
   const leadSettings = loadLeadSettings(process.env)
@@ -95,6 +100,7 @@ async function main(): Promise<void> {
       : []
 
   const app = createApp({
+    intake: intake.api,
     health: {
       read: async () => {
         const tickAt = leads.lastTickAt()
@@ -114,6 +120,7 @@ async function main(): Promise<void> {
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
   }).listen({ hostname: HOSTNAME, port: settings.port })
+  intake.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   let stopping = false
@@ -125,6 +132,7 @@ async function main(): Promise<void> {
     stopTick()
     await app.stop()
     await socket.stop()
+    await intake.stop()
     await lock.release()
     await sql.close()
     process.exit(0)

@@ -8,6 +8,7 @@ import { type HealthSource, healthRoutes } from './health.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { leadsTestRoutes } from './leads-test.ts'
+import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 
 export interface ApiDeps {
   health: HealthSource
@@ -19,6 +20,8 @@ export interface ApiDeps {
   leads?: LeadRoutes
   /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
   leadsTick?: Parameters<typeof leadsTestRoutes>[0]
+  /** signals in and the door's registry; absent, the routes answer 503 (the OpenAPI document needs no database) */
+  intake?: IntakeApi
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -67,6 +70,7 @@ export function createApp(deps: ApiDeps) {
     .use(healthRoutes(deps.health))
     .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
     .use(leadRoutes(deps.leads))
+    .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
     .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }
