@@ -16,6 +16,7 @@ import { type NotifyDeps, notifyPass } from './notify/index.ts'
 import type { StewardDeps } from './issues/steward.ts'
 import type { BeszelIntake } from './intake/beszel.ts'
 import type { GithubIntake } from './intake/github.ts'
+import type { LaunchdIntake } from './intake/launchd.ts'
 import type { Settler } from './issues/settle.ts'
 import { issuePass } from './issues/worker.ts'
 import { projectPass } from './projects/pass.ts'
@@ -65,6 +66,7 @@ export interface TickDeps {
   settler?: Pick<Settler, 'kick' | 'takeErrors'>
   /** the GitHub label source: the tick kicks it and it paces itself; without it none is polled */
   github?: Pick<GithubIntake, 'kick'>
+  launchd?: Pick<LaunchdIntake, 'kick'>
   beszel?: Pick<BeszelIntake, 'kick'>
   /** the owner's line: the rules that read state, then the outbox; without it nothing is sent */
   notify?: NotifyDeps
@@ -332,6 +334,7 @@ function settleStep(deps: TickDeps): string[] {
 function kickBackground(deps: TickDeps): void {
   deps.fleet?.kick()
   deps.github?.kick()
+  deps.launchd?.kick()
   deps.beszel?.kick()
   deps.spaces?.kick()
 }

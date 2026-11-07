@@ -101,6 +101,7 @@ describe('config (finding 5)', () => {
       fleetDigestEveryMs: 300_000,
       githubPollMs: 300_000,
       githubToken: undefined,
+      launchdPollMs: 300_000,
       beszelPollMs: 60_000,
       beszelUrl: undefined,
       beszelEmail: undefined,
@@ -179,6 +180,12 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_GITHUB_POLL: 'off' }).githubPollMs).toBeNull()
     expect(() => loadConfig({ ...env, FACTORY_GITHUB_POLL: '1s' })).toThrow('FACTORY_GITHUB_POLL')
     expect(loadConfig({ ...env, FACTORY_GITHUB_TOKEN: 'x' }).githubToken).toBe('x')
+  })
+
+  test('FACTORY_LAUNCHD_POLL: five minutes, a duration of 30 s to 24 h, or off', () => {
+    expect(loadConfig({ ...env, FACTORY_LAUNCHD_POLL: '10m' }).launchdPollMs).toBe(600_000)
+    expect(loadConfig({ ...env, FACTORY_LAUNCHD_POLL: 'off' }).launchdPollMs).toBeNull()
+    expect(() => loadConfig({ ...env, FACTORY_LAUNCHD_POLL: '1s' })).toThrow('FACTORY_LAUNCHD_POLL')
   })
 
   test('FACTORY_BESZEL_POLL: one minute, a duration of 30 s to 24 h, or off; URL and credentials are optional', () => {

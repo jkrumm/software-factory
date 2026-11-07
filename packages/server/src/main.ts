@@ -8,6 +8,7 @@ import { loadConfig } from './config.ts'
 import { Digest } from './fleet/digest.ts'
 import { BeszelIntake } from './intake/beszel.ts'
 import { GithubIntake } from './intake/github.ts'
+import { LaunchdIntake } from './intake/launchd.ts'
 import { loadInfra } from './intake/infra.ts'
 import { Settler } from './issues/settle.ts'
 import { Places } from './fleet/place.ts'
@@ -223,6 +224,16 @@ const github =
         token: config.githubToken,
         everyMs: config.githubPollMs,
       })
+const launchd =
+  config.launchdPollMs === null
+    ? undefined
+    : new LaunchdIntake({
+        sql,
+        now: () => clock.now(),
+        roots: config.repoRoots,
+        uid: process.getuid?.() ?? 0,
+        everyMs: config.launchdPollMs,
+      })
 const infra = await loadInfra(config.infraFile).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exit(1)
@@ -253,6 +264,7 @@ const ticker = startTicker(
     projects,
     settler,
     github,
+    launchd,
     beszel,
     issuePorts,
     steward: {
@@ -300,6 +312,8 @@ async function shutdown(signal: string): Promise<void> {
     await settler.settled()
     stoppingStep = 'github.settled'
     await github?.settled()
+    stoppingStep = 'launchd.settled'
+    await launchd?.settled()
     stoppingStep = 'beszel.settled'
     await beszel?.settled()
     stoppingStep = 'spaces.settled'
