@@ -20,7 +20,7 @@ import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { SQL } from 'bun'
-import { startWorldOn, startServer, type ServerProcess, TOKENS } from '../tests/scenarios/harness.ts'
+import { startWorldOn, TOKENS } from '../tests/scenarios/harness.ts'
 import type { TestCluster } from '../tests/support/pg.ts'
 import { hostEnv, installHost } from '../tests/scenarios/host.ts'
 
@@ -141,6 +141,7 @@ async function startCluster(work: string) {
     bin,
     port,
     adminPw,
+    factoryPw,
     factoryUrl,
     adminSql: () => new SQL(adminUrl('shared'), { max: 2 }),
     adminUrl: adminUrl('shared'),
@@ -222,7 +223,7 @@ async function main(): Promise<number> {
   say(`working in ${work}`)
   const keep = flag('--keep')
   let cluster: Awaited<ReturnType<typeof startCluster>> | null = null
-  let server: ServerProcess | null = null
+  let server: { stop(): Promise<number | void> } | null = null
   let fingerprintBefore = ''
   let imported = ''
   const home = join(work, 'home')
@@ -340,13 +341,30 @@ async function main(): Promise<number> {
       sql: new SQL(cluster.factoryUrl, { max: 1 }),
       stop: async () => {},
     } satisfies TestCluster)
-    const booted = await step('boot the new server on the empty schema (paused: no loops)', async () => {
-      server = await startServer(world, { env: { HOME: home, FACTORY_DATA_DIR: dataDir } })
-      const body = await healthy(server.url)
-      const sql = new SQL(cluster?.factoryUrl ?? '', { max: 1 })
+    const booted = await step('boot the new core through scripts/launch.sh (paused by the settings file)', async () => {
+      if (!cluster) throw new Error('no cluster')
+      const launched = await launchViaScript(
+        work,
+        home,
+        { port: cluster.port, password: cluster.factoryPw },
+        { FACTORY_DATA_DIR: dataDir },
+      )
+      server = {
+        stop: async () => {
+          launched.proc.kill('SIGTERM')
+          return launched.proc.exited
+        },
+      }
+      const body = await healthy(launched.url, undefined, 60_000).catch((error: unknown) => {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}\nlauncher output:\n${launched.output().slice(-2000)}`,
+        )
+      })
+      const sql = new SQL(cluster.factoryUrl, { max: 1 })
       const [row] = (await sql`SELECT count(*)::int AS n FROM factory.schema_migrations`) as { n: number }[]
       await sql.close()
-      return `/health ${String(body.status)}, ${row?.n} migrations applied`
+      const loops = JSON.stringify(body.loops ?? '').slice(0, 80)
+      return `/health ${String(body.status)}, ${row?.n} migrations applied, loops ${loops}`
     })
     if (!booted) return 1
 
@@ -483,6 +501,78 @@ async function main(): Promise<number> {
     console.log(failed.length === 0 ? '\nthe rehearsal held' : `\n${failed.length} step(s) failed`)
   }
   return failed.length === 0 ? 0 : 1
+}
+
+/**
+ * The window's own start: `scripts/launch.sh` in this tree, under a fake `secrets-run` that resolves every ref of the template from a
+ * directory of files, with the settings file `~/.config/factory/env` of a paused start. Returns the process (stop it with SIGTERM).
+ */
+async function launchViaScript(
+  work: string,
+  home: string,
+  cluster: { port: number; password: string },
+  env: Record<string, string>,
+) {
+  const secrets = join(work, 'secrets')
+  await mkdir(secrets, { recursive: true })
+  const values: Record<string, string> = {
+    FACTORY_DB_PASSWORD: cluster.password,
+    FACTORY_TOKEN: TOKENS.owner,
+    FACTORY_READ_TOKEN: TOKENS.read,
+    FACTORY_AGENT_TOKEN: TOKENS.agent,
+    FACTORY_DOOR_TOKEN: TOKENS.machine,
+    FACTORY_GITHUB_TOKEN: 'rehearsal-not-a-token',
+    NTFY_TOKEN: 'rehearsal-not-a-token',
+  }
+  for (const [name, value] of Object.entries(values)) await writeFile(join(secrets, name), value)
+  const bin = join(home, '.local', 'bin')
+  await mkdir(bin, { recursive: true })
+  await writeFile(
+    join(bin, 'secrets-run'),
+    `#!/bin/bash
+# the rehearsal's secrets-run: export | run | read, every ref resolved from a file named after its key
+dir="${secrets}"
+cmd=$1; shift
+tpl=""; ref=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in --env-file=*) tpl=\${1#--env-file=}; shift ;; --) shift; break ;; *) ref=$1; shift ;; esac
+done
+keys=$(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=' "$tpl" 2>/dev/null | tr -d =)
+case "$cmd" in
+  read) cat "$dir/\${ref##*/}" ;;
+  export) for k in $keys; do printf "export %s='%s'\n" "$k" "$(cat "$dir/$k")"; done ;;
+  run) for k in $keys; do export "$k=$(cat "$dir/$k")"; done; exec "$@" ;;
+esac
+`,
+    { mode: 0o755 },
+  )
+  const file = join(home, '.config', 'factory', 'env')
+  await mkdir(join(file, '..'), { recursive: true })
+  await writeFile(file, 'FACTORY_TICK_MS=0\n', { mode: 0o600 })
+  const port = await freePort()
+  const proc = Bun.spawn(['/bin/bash', join(ROOT, 'scripts', 'launch.sh')], {
+    cwd: ROOT,
+    env: {
+      PATH: process.env.PATH ?? '',
+      HOME: home,
+      LC_ALL: 'C',
+      PORT: String(port),
+      FACTORY_VERSION: 'rehearsal',
+      HC_BIN: join(work, 'no-hc'),
+      FACTORY_DB_ADDR: `127.0.0.1:${cluster.port}`,
+      ...env,
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  let output = ''
+  void (async () => {
+    for await (const chunk of proc.stderr) output += new TextDecoder().decode(chunk)
+  })()
+  void (async () => {
+    for await (const chunk of proc.stdout) output += new TextDecoder().decode(chunk)
+  })()
+  return { url: `http://127.0.0.1:${port}`, proc, output: () => output }
 }
 
 /** Exports master's release (what `make rollback` would boot), installs it, boots it on the old schema and reads it. */

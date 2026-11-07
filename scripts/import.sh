@@ -24,7 +24,7 @@ exec "$SECRETS_RUN" run --env-file="$DIR/.env.tpl" -- /bin/sh -c '
   case "${FACTORY_DB_PASSWORD:-}" in
     "" | *[!0-9a-f]*) echo "import: FACTORY_DB_PASSWORD is empty or not hex; refusing to run." >&2; exit 78 ;;
   esac
-  export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@127.0.0.1:5432/shared"
+  export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@${FACTORY_DB_ADDR:-127.0.0.1:5432}/shared"
   unset FACTORY_DB_PASSWORD
   exec bun apps/server/scripts/import-legacy.ts "$@"
 ' sh "$@"

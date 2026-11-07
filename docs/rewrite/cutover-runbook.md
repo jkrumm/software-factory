@@ -68,7 +68,7 @@ binds the old hook socket path and refuses to steal a live one: W3 comes first.
 | # | Step | Command | It worked when | Undo |
 |-|-|-|-|-|
 | W5 | Deploy `rewrite` | `cd <rw> && FACTORY_REF=rewrite make deploy` | the last line is `deploy OK: <sha> (new core (apps/server)) healthy; factory -> ~/.local/bin/factory`; `door OK` (a warning that the door does not answer is not a failed deploy: read it) | the way back below (`make rollback`); a failed health check rolls back by itself |
-| W6 | Migrations applied, loops off | `curl -s localhost:7793/health \| jq '{status,version,loops}'` and `make version` | `status ok`, `version` is the sha, every loop `off`; `bash ~/.software-factory/current/scripts/import.sh --compare` is not run yet | the way back |
+| W6 | Migrations applied, loops off | `curl -s localhost:7793/health \| jq '{status,version,loops: [.loops[] \| {name,intervalMs}]}'` and `make version` | `status ok`, `version` is the sha, every loop `intervalMs: 0` (off) | the way back |
 | W7 | The new queue starts drained | `fx queue set drain` | `fx queue get` prints `global drain drain` | `fx queue set run` |
 
 ### The import
@@ -87,7 +87,7 @@ An Issue that is `diverged` or in `conflict` is listed with the reason and left 
 
 | # | Step | Command | It worked when | Undo |
 |-|-|-|-|-|
-| W9 | Loops on | remove the `FACTORY_TICK_MS=0` line from `~/.config/factory/env`, then `launchctl kickstart -k gui/$(id -u)/com.jkrumm.software-factory` and `until curl -fs localhost:7793/health >/dev/null; do sleep 1; done` | `/health` has every loop running (`jq '.loops'`), `.status ok`, `.tickAt` moves | put the line back and kickstart again |
+| W9 | Loops on | remove the `FACTORY_TICK_MS=0` line from `~/.config/factory/env`, then `launchctl kickstart -k gui/$(id -u)/com.jkrumm.software-factory` and `until curl -fs localhost:7793/health >/dev/null; do sleep 1; done` | `/health` shows every loop with an interval above 0 and a `lastOkAt` after the first pass (`jq '.loops'`), `.status ok`, `.tickAt` moves | put the line back and kickstart again |
 | W10 | Only the named repos run | `fx queue set pace` (global), then for every other repo: `for d in ~/SourceRoot/*/ ~/IuRoot/*/; do n=$(basename "$d"); case $n in <repo-a>\|<repo-b>) ;; *) fx queue set drain --project "$n" ;; esac; done` | `fx queue get` shows the global `pace` and `drain` for every other project; the named two are not listed. (A queue state is the more restrictive of the global and the project's own.) | `fx queue set run` globally and `fx queue set run --project <p>` for each drained one |
 | W11 | The door is the new door | `curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'x-factory-probe: 1' -H 'content-type: application/json' -d '{}' http://127.0.0.1:8796/alert/kuma`; `fx door report` | `401`; the sources report their tokens accepted | the way back re-installs the old door |
 | W12 | The live checks | `make verify` (from `<rw>`) | `verify: all checks passed` | none needed |
