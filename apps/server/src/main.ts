@@ -1,11 +1,13 @@
 import { connect, ping } from './adapters/postgres/connection.ts'
 import { agwJudge } from './adapters/agw-ask/judge.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
-import { fileStandingPolicies, stubStandingPolicies } from './adapters/checkpoints/policies.ts'
+import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
+import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
+import { postgresPlanningStore } from './adapters/postgres/planning-store.ts'
 import { postgresLeadStore } from './adapters/leads/store.ts'
 import { loadLeadSettings } from './adapters/leads/settings.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
@@ -20,6 +22,7 @@ import { checkpointUses } from './app/checkpoints-uses.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIntake } from './compose-intake.ts'
+import { composePlanning } from './compose-planning.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
@@ -31,6 +34,9 @@ import { composeLeads } from './compose-leads.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { systemIds } from './kernel/ids.ts'
 import { healthOf, tickProblem } from './read/health.ts'
+import { planningSettings } from './app/planning-settings.ts'
+import { queueMovedAt } from './read/queue.ts'
+import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
 
 /** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
@@ -84,20 +90,35 @@ async function main(): Promise<void> {
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
   const uow = postgresUnitOfWork(sql, (tx) => ({
     work: postgresWorkStore(tx),
+    planning: postgresPlanningStore(tx),
+    capacity: postgresCapacityStore(tx),
+    reads: readIssues(tx),
     checkpoints: postgresCheckpointStore(tx),
     leads: postgresLeadStore(tx),
     quality: postgresQualityStore(tx),
     intake: postgresIntakeStore(tx),
   }))
-  const intake = await composeIntake({ sql, uow, env: loadIntakeEnv(process.env), clock: systemClock, ids: systemIds })
   // The scenarios move this clock to reach a date a real one would take 30 days to; the leads' own keep the system's.
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
   const writes = { uow, clock, ids: systemIds }
   const startedAt = new Date()
   const leadSettings = loadLeadSettings(process.env)
+  // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
+  const planning = composePlanning({
+    writes,
+    settings: planningSettings(process.env, { repoRoots: leadSettings.repoRoots }),
+  })
   const checkout = leadCheckoutOf(uow)
   const projects = makefileProjects({ windowMs: settings.quality.windowMs })
+  const intake = await composeIntake({
+    sql,
+    uow,
+    env: loadIntakeEnv(process.env),
+    clock: systemClock,
+    ids: systemIds,
+    projects: planning.signals,
+  })
   // One outbox runs every effect: the leads' tick, with quality's port for the Watch.
   const leads = composeLeads({
     sql,
@@ -105,11 +126,14 @@ async function main(): Promise<void> {
     clock: systemClock,
     ids: systemIds,
     settings: leadSettings,
+    capacity: planning.leads,
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()
   const stopTick = leads.startLoop()
+  // The planning and admission passes run on the leads' tick: one setting, one meaning.
+  const stopPlanning = planning.startLoop(leadSettings.tickMs)
 
   // The Watch's checks run on a loop of their own, so a `make verify` of minutes never holds the leads' tick. It runs on the
   // leads' interval (FACTORY_TICK_MS, 0 off), one pass at a time.
@@ -142,11 +166,10 @@ async function main(): Promise<void> {
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
     notifier: makeNotifier(checkpointSettings.line),
-    // The Judge's call is a thin one until package 7 brings the agw port; the project's standing policy is package 3's.
+    // The Judge's call is a thin one until package 7 brings the agw port. The standing policy is each project's `policy:`
+    // in its `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
     judge: agwJudge({ bin: checkpointSettings.agwBin }),
-    policies: checkpointSettings.policyFile
-      ? fileStandingPolicies(checkpointSettings.policyFile)
-      : stubStandingPolicies,
+    policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
   })
   // Settling and sending run on timers of their own, one pass of each at a time: a Judge call is an agent run that can take
   // minutes, and the owner's line must not wait for it. Package 7's tick takes both over; the leases make two callers safe.
@@ -179,11 +202,13 @@ async function main(): Promise<void> {
           version: settings.version,
           databaseFailure: await ping(sql),
           tickAt: tickAt?.toISOString() ?? null,
-          queueMovedAt: null,
+          queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null,
           tickFailure: tickProblem({ tickMs: leadSettings.tickMs, now: new Date(), startedAt, tickAt }),
         })
       },
     },
+    planning: planning.planning,
+    capacity: planning.capacity,
     quality: {
       ship: (input) => shipIssue(shipping, input),
       reopen: (input) => reopenIssue(writes, input),
@@ -206,6 +231,7 @@ async function main(): Promise<void> {
     console.log(`${signal}: stopping`)
     for (const timer of passTimers) clearInterval(timer)
     stopTick()
+    stopPlanning()
     draining.abort()
     await app.stop()
     await watchLoop?.stop()

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Health } from '@software-factory/contract'
+import { loadMigrations } from '../../apps/server/src/adapters/postgres/migrate.ts'
 import { factory, type ServerProcess, startServer, startWorld, type World } from './harness.ts'
 
 let world: World
@@ -25,7 +26,8 @@ test('the server boots on Postgres and /health answers through the contract', as
     heartbeat: { ok: true, reason: null, tickAt: null, queueMovedAt: null },
   })
   const [row] = await world.db.sql`SELECT array_agg(name ORDER BY name) AS names FROM factory.schema_migrations`
-  expect(row?.names).toEqual(expect.arrayContaining(['0001_schema.sql', '0002_work.sql', '0600_checkpoints.sql']))
+  // every migration of the release, applied: a package adding one does not touch this line
+  expect(row?.names).toEqual((await loadMigrations()).map((migration) => migration.name))
 })
 
 test('factory health get reads it with the generated CLI', async () => {

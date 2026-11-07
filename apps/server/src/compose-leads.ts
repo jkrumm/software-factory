@@ -6,7 +6,6 @@ import { HcTerminals, claudeProjectsDirs } from './adapters/hc/terminals.ts'
 import { SpoolReplayer } from './adapters/leads/spool.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import type { LeadSettings } from './adapters/leads/settings.ts'
-import { stubClaims, stubSeats, stubWindows } from './adapters/leads/stubs.ts'
 import { fileTranscripts } from './adapters/leads/transcripts.ts'
 import { listenOnSocket, type SocketListener } from './adapters/socket/listener.ts'
 import type { LeadRoutes } from './api/leads.ts'
@@ -37,7 +36,7 @@ export interface LeadsComposition {
 
 /**
  * Wires the leads: adapters behind the domain's ports, the use cases, the routes, the socket and the tick. The ports
- * capacity owns are the stubs of `adapters/leads/stubs.ts` until the orchestrator wires package 3's.
+ * capacity owns (the account, the repo claim, the window) come in from `compose-planning.ts`.
  */
 export function composeLeads(input: {
   sql: SQL
@@ -45,6 +44,7 @@ export function composeLeads(input: {
   clock: Clock
   ids: IdSource
   settings: LeadSettings
+  capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
   /** quality's port: opens the Watch after a ship. The one outbox runs it with the leads' ports. */
   startWatch: EffectPorts['start_watch']
 }): LeadsComposition {
@@ -64,9 +64,9 @@ export function composeLeads(input: {
     worktrees: gitWorktrees(),
     repos: rootedRepos(s.repoRoots),
     roles: fileRoles(s.rolesFile),
-    seats: stubSeats,
-    claims: stubClaims,
-    windows: stubWindows,
+    seats: input.capacity.seats,
+    claims: input.capacity.claims,
+    windows: input.capacity.windows,
     transcripts: fileTranscripts({
       archiveDir: s.archiveDir,
       projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),
