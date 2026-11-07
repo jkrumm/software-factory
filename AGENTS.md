@@ -22,6 +22,8 @@ A directory listing, `package.json`, the Makefile and `--help` say what exists; 
   or a timer that can be read from `issue_events` is never a column.
 - **Every effect has a deterministic key** (pane names, prompt ids, comment markers, inbox keys), so a replayed tick
   never spawns, prompts or posts twice. The Runner looks before it acts: a terminal carries `factory.key=<spawn key>`.
+- **Deploy locks fail closed.** The factory's own deploy and `factory deploy-lock --project <name> -- <cmd>` (other projects' leads) hold a
+  host-local pid symlink; an unreadable or uncreatable lock refuses the deploy (exit 75 / 1), only a dead holder is reclaimed.
 - **Interactive Claude Code in herdr-core only.** Never headless `claude -p`.
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes
   (`src/exit.ts`), never prompts. `rd --role` depends on `factory role get <role> --format json` printing exactly

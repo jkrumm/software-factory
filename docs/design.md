@@ -486,6 +486,17 @@ repo roots still bound where it can start, and a same-user pane can already star
 The contract a client reads: `Spawn` (`status` `queued` with a `hold` is held, `starting` claimed, `waiting` for capacity; `pane`, `tab`,
 `workspace`, `space`, `repo`), `Session` (`pane`, `tab`, `role`), `QueueView` (`effective`), all in `packages/contract`.
 
+#### Deploy locks
+
+Two deploys of one project never run at once, and a lock that cannot be read refuses the deploy (fail closed). The factory's own
+`scripts/deploy.sh` (`take_lock`) holds `data/deploy.lock`; other projects' leads wrap their deploy as `factory deploy-lock --project
+<name> -- <cmd>` (`apps/cli/src/deploy-lock.ts`, purely host-local, no server call). The lock is a symlink whose target is the holder's pid,
+created atomically (`ln -s`, `symlinkSync`), so it never exists without a holder. A live holder is waited for (the CLI: `FACTORY_DEPLOY_LOCK_WAIT_MS`,
+default 30 min, polled every `FACTORY_DEPLOY_LOCK_POLL_MS`, 2 s; `deploy.sh` refuses at once); a dead holder is reclaimed under a `<lock>.reclaim`
+directory taken with `mkdir`, so one reclaimer at a time. A lock that cannot be created or read, a target that is not a pid, or a held reclaim
+directory is never reclaimed: one stderr line, and the command does not run (`deploy-lock` exits 75, `deploy.sh` 1). The state directory is
+`FACTORY_DEPLOY_LOCK_DIR` (default `~/.local/state/factory/deploy-locks`).
+
 #### Test slots (FL7)
 
 **Test slots (FL7)** (`slots.ts`, table `slots`): `factory slot run [--name <label>] -- <cmd>` asks `PUT /slots/:id` on the socket

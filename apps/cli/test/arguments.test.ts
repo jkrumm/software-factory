@@ -293,6 +293,7 @@ describe('aliases', () => {
       'follow [--issue',
       'door token new <source>',
       'slot run',
+      'deploy-lock --project <name>',
       'hook <event>',
       'FACTORY_READ_TOKEN',
       'FACTORY_ROLES_FILE',

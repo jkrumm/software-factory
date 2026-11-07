@@ -41,7 +41,10 @@ function describeLimit(ms: number): string {
 }
 
 /** The command leads its own process group (`detached`): a signal goes to all of it, or to the command alone if that fails. */
-function signalGroup(proc: { pid: number; kill: (signal: NodeJS.Signals) => void }, signal: NodeJS.Signals): void {
+export function signalGroup(
+  proc: { pid: number; kill: (signal: NodeJS.Signals) => void },
+  signal: NodeJS.Signals,
+): void {
   try {
     process.kill(-proc.pid, signal)
   } catch {
@@ -65,7 +68,7 @@ const groupAlive = (pid: number): boolean => {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 /** The exit code a child's end stands for: its own, or 128 plus the signal that killed it, as a shell reports it. */
-function exitCodeOf(proc: { exitCode: number | null; signalCode: NodeJS.Signals | number | null }): number {
+export function exitCodeOf(proc: { exitCode: number | null; signalCode: NodeJS.Signals | number | null }): number {
   if (proc.exitCode !== null) return proc.exitCode
   const signal = typeof proc.signalCode === 'string' ? constants.signals[proc.signalCode] : proc.signalCode
   return 128 + (signal ?? 1)
