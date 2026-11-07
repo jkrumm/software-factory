@@ -47,3 +47,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: owner: the cutover runs in watched windows, then a burn-in with reports on day 3 and day 7 (NL24).
 - 2026-11-07: package 8 integrated at bc3f37c; packages 0 to 8 done; package 9 (cutover in windows, NL24) next.
 - 2026-11-07: package 9a (the cutover's tools, live read-only) started in t1fh.
+- 2026-11-07: FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN created and seeded (owner at the MacBook).

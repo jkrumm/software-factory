@@ -124,3 +124,9 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   neither rename its schema nor create a new one; package 0's note was right. Call: no standing CREATE grant for an app
   role on a shared database; the rename and `CREATE SCHEMA factory AUTHORIZATION factory` are a one-time admin step on
   the vps side, written into the runbook with its undo. Least privilege beats a one-word grant that outlives its use.
+- **2026-11-07, the two new bearers took three dialogs instead of one.** `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN`
+  were made on the MacBook (values generated there, never on the mini), the refs added to `headless.refs`, the cache
+  reseeded; both resolve on the mini. What failed first: a command run through `ask-human.sh --cmd` and `hc run` on the
+  MacBook has no SSH agent, so `git pull` of dotfiles-private needs `SSH_AUTH_SOCK` set to the 1Password agent socket
+  (as `opbackup-seed-auto.sh` does); and `op` there defaults to another account, so every `op` call names
+  `--account tkrumm`. A MacBook command for the owner carries both from the start.
