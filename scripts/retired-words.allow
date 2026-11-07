@@ -14,3 +14,7 @@ apps/server/test/read/api.test.ts human queue  # the legacy read API's wire name
 packages/contract/src/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 tests/scenarios/clients/requests.ts human queue  # the recorded requests read the legacy wire name `humanQueue`
 tests/scenarios/clients/dotfiles.test.ts human queue  # ask-human.sh's own note text and its queue directory are the dotfiles' words
+apps/server/scripts/import/plan.ts classify  # the old core's event kinds (classified, classify_failed) the importer maps or drops
+apps/server/scripts/import/plan.ts park  # the old core's park event and reason, mapped to a stall
+apps/server/scripts/import/run.ts park  # the old core's wait reason `parked`, compared with the new stall
+scripts/rehearse.ts ask judge  # FACTORY_ASK_JUDGE: the old core's setting, switched off when its release is booted on the copy
