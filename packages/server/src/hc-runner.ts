@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import { z } from 'zod'
 import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './exec.ts'
-import { appSpaces, nameTab, seedSpace, type Rpc } from './app-doc.ts'
+import { appSpaces, nameSpace, nameTab, seedSpace, type Rpc } from './app-doc.ts'
 import { HcClient, HcError } from './hc.ts'
 import {
   accountEnv,
@@ -280,7 +280,12 @@ export class HcRunner implements Runner {
         // The budget runs from the turn at the lock, not from the call: a start ahead of it may take its whole budget.
         const budget = new Budget(this.options.clock, this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
         const found = await this.find(key, budget)
-        if (found.some((t) => t.state === 'live')) return 'present'
+        const live = found.find((t) => t.state === 'live')
+        if (live) {
+          const space = live.labels['herdr.space']
+          if (space) await nameSpace(this.docRpc(budget), { id: space, name: input.name })
+          return 'present'
+        }
         const root = real(input.repo)
         const { id, seed } = await this.spaceId({ key }, root, budget)
         if (seed) await seedSpace(this.docRpc(budget), { id, folder: root })
@@ -303,6 +308,7 @@ export class HcRunner implements Runner {
           budget,
         )
         await nameTab(this.docRpc(budget), tab, 'plan')
+        await nameSpace(this.docRpc(budget), { id, name: input.name })
         return 'started'
       })
     } catch (error) {

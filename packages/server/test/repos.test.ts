@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { RepoRefused, resolveRepo } from '../src/repos.ts'
+import { vetIntakeRepo } from '../src/issues/create.ts'
+import { RepoRefused, resolveRepo, resolveSpaceDir } from '../src/repos.ts'
 import { FakeClock } from './support/clock.ts'
 import { startApp, type TestApp } from './support/app.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -97,6 +98,32 @@ describe('resolveRepo', () => {
   })
 })
 
+describe('resolveSpaceDir', () => {
+  const spaceRefused = async (path: string, roots: string[] = [root]): Promise<string> => {
+    const error = await resolveSpaceDir(path, roots).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RepoRefused)
+    return (error as RepoRefused).message
+  }
+
+  test('accepts the root itself, by its real path, and a directory inside it', async () => {
+    expect(await resolveSpaceDir(root, [root])).toBe(root)
+    expect(await resolveSpaceDir(join(base, 'root-link'), [root])).toBe(root)
+    expect(await resolveSpaceDir(join(root, 'proj'), [root])).toBe(join(root, 'proj'))
+  })
+
+  test('still refuses outside, .., a missing path and a root that does not exist', async () => {
+    expect(await spaceRefused(join(root, '..'))).toContain('outside the allowed roots')
+    expect(await spaceRefused(join(base, 'root-evil', 'proj'))).toContain('outside the allowed roots')
+    expect(await spaceRefused(join(root, 'nope'))).toContain('does not exist')
+    await spaceRefused(root, [join(base, 'missing')])
+  })
+
+  test('an Issue is still refused the root itself as its repo', async () => {
+    const error = await vetIntakeRepo('manual', root, [root]).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(RepoRefused)
+  })
+})
+
 describe('POST /spawns and the roots', () => {
   const post = (repo: string, key = 'k1') => app.send('POST', '/spawns', { key, repo, prompt: 'do it' })
   const count = async () => (await db.sql`SELECT count(*)::int AS n FROM factory.spawns`)[0].n as number
@@ -119,6 +146,13 @@ describe('POST /spawns and the roots', () => {
     const body = (await res.json()) as { error: string }
     expect(body.error).toContain('is outside the allowed roots (FACTORY_REPO_ROOTS)')
     expect(body.error).toContain(root)
+    expect(await count()).toBe(0)
+  })
+
+  test('the root itself is 422', async () => {
+    const res = await post(root)
+    expect(res.status).toBe(422)
+    expect(((await res.json()) as { error: string }).error).toContain('is outside the allowed roots')
     expect(await count()).toBe(0)
   })
 

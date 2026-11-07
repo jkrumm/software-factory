@@ -141,6 +141,58 @@ describe('the fixed spaces', () => {
     expect((await terminals()).map((t) => t.labels['factory.key'])).toEqual(['plan:app'])
   })
 
+  test('a listed root gets a plan tab named after the entry; a path outside the roots is still skipped', async () => {
+    const root = join(base, 'SourceRoot')
+    const result = await spacesOf(await list({ name: 'SourceRoot', path: root })).reconcile()
+    expect(result).toEqual({ started: ['SourceRoot'], present: [], skipped: [], errors: [] })
+    const [run] = (await hc.state()).runs
+    expect(run?.params).toMatchObject({ cwd: root, labels: { 'factory.key': 'plan:SourceRoot' } })
+    await repo('x', 'IuRoot')
+    const other = await spacesOf(await list({ name: 'iu', path: join(base, 'IuRoot') })).reconcile()
+    expect(other.skipped.map((s) => s.name)).toEqual(['iu'])
+  })
+
+  describe('a blank-named app space', () => {
+    const names = async () => {
+      const doc = (await hc.state()).docs['herdr-app']?.value as { spaces: { name: string }[] } | undefined
+      return (doc?.spaces ?? []).map((s) => s.name)
+    }
+
+    test('is named after the entry when the tab is started, and a second pass writes nothing', async () => {
+      const path = await repo('app')
+      await hc.setDoc('herdr-app', { spaces: [{ id: 'sp1', name: '', folder: path, tabs: [] }] })
+      const spaces = spacesOf(await list({ name: 'app', path }))
+      await spaces.reconcile()
+      expect(await names()).toEqual(['app'])
+      const before = (await hc.calls()).length
+      await spaces.reconcile()
+      expect((await hc.calls()).slice(before).filter((call) => WRITES.test(call))).toEqual([])
+    })
+
+    test('is named when the plan tab is already live, and the root space is named after its entry', async () => {
+      const root = join(base, 'SourceRoot')
+      const path = await repo('app')
+      const file = await list({ name: 'SourceRoot', path: root }, { name: 'app', path })
+      await spacesOf(file).reconcile()
+      const doc = (await hc.state()).docs['herdr-app']?.value as { spaces: { id: string; name: string }[] }
+      await hc.setDoc('herdr-app', { spaces: doc.spaces.map((s) => ({ ...s, name: '' })) })
+      const result = await spacesOf(file).reconcile()
+      expect(result.present).toEqual(['SourceRoot', 'app'])
+      expect(await names()).toEqual(['SourceRoot', 'app'])
+    })
+
+    test('keeps a name the owner set', async () => {
+      const path = await repo('app')
+      await hc.setDoc('herdr-app', { spaces: [{ id: 'sp1', name: 'mine', folder: path, tabs: [] }] })
+      const spaces = spacesOf(await list({ name: 'app', path }))
+      await spaces.reconcile()
+      await hc.setDoc('herdr-app', { spaces: [{ id: 'sp1', name: 'mine', folder: path, tabs: [] }] })
+      await spaces.reconcile()
+      expect(await names()).toEqual(['mine'])
+      expect(await hc.callsOf('doc.set')).toHaveLength(0)
+    })
+  })
+
   test('a plan terminal that is dead is started again under the same key and tab', async () => {
     const path = await repo('app')
     const spaces = spacesOf(await list({ name: 'app', path }))
