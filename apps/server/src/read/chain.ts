@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
@@ -32,6 +32,9 @@ const Plan = z.object({
 const PlanProject = z.object({ name: z.string(), plan: z.unknown() })
 
 const rowId = (project: string, key: string): string => `row:${project}:${key}`
+
+/** Keys the opaque id of a hidden row: a reader who guesses a project and a key cannot confirm it. Stable while the server runs. */
+const OPAQUE_KEY = randomBytes(32)
 
 /**
  * The chain across projects: the open Issues and the plan rows not yet filed as nodes (a closed blocker appears when an
@@ -172,7 +175,7 @@ export async function readChain(
       .map(({ project, row }) => rowId(project, row.key)),
   )
   const idOut = (id: string): string =>
-    hiddenRows.has(id) ? `row:${createHash('sha256').update(id).digest('hex').slice(0, 12)}` : id
+    hiddenRows.has(id) ? `row:${createHmac('sha256', OPAQUE_KEY).update(id).digest('hex').slice(0, 12)}` : id
   return {
     at: now.toISOString(),
     nodes: [...issueNodes, ...rowNodes].map((node) => ({
