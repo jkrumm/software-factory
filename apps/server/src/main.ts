@@ -1,13 +1,16 @@
 import { connect, ping } from './adapters/postgres/connection.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
+import { postgresLeadStore } from './adapters/leads/store.ts'
+import { loadLeadSettings } from './adapters/leads/settings.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { createApp } from './api/app.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { systemClock } from './kernel/clock.ts'
 import { systemIds } from './kernel/ids.ts'
-import { healthOf } from './read/health.ts'
+import { composeLeads } from './compose-leads.ts'
+import { healthOf, tickProblem } from './read/health.ts'
 import { loadSettings } from './settings.ts'
 
 /** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
@@ -37,14 +40,30 @@ async function main(): Promise<void> {
   if (applied.length) console.log(`migrated: ${applied.join(', ')}`)
 
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
-  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx) }))
+  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx), leads: postgresLeadStore(tx) }))
   const writes = { uow, clock: systemClock, ids: systemIds }
+  const startedAt = new Date()
+  const leadSettings = loadLeadSettings(process.env)
+  const leads = composeLeads({ sql, uow, clock: systemClock, ids: systemIds, settings: leadSettings })
+  // The hook socket comes after the lock and the migrations: a second copy never reaches it.
+  const socket = await leads.listen()
+  const stopTick = leads.startLoop()
 
   const app = createApp({
     health: {
-      read: async () =>
-        healthOf({ version: settings.version, databaseFailure: await ping(sql), tickAt: null, queueMovedAt: null }),
+      read: async () => {
+        const tickAt = leads.lastTickAt()
+        return healthOf({
+          version: settings.version,
+          databaseFailure: await ping(sql),
+          tickAt: tickAt?.toISOString() ?? null,
+          queueMovedAt: null,
+          tickFailure: tickProblem({ tickMs: leadSettings.tickMs, now: new Date(), startedAt, tickAt }),
+        })
+      },
     },
+    leads: leads.routes,
+    leadsTick: settings.internalTestRoutes ? () => leads.tick() : undefined,
     internalTest: settings.internalTestRoutes
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
@@ -56,7 +75,9 @@ async function main(): Promise<void> {
     if (stopping) return
     stopping = true
     console.log(`${signal}: stopping`)
+    stopTick()
     await app.stop()
+    await socket.stop()
     await lock.release()
     await sql.close()
     process.exit(0)

@@ -6,3 +6,4 @@ scripts/gameday/f2/lib.sh manifest  # the old core's game day, kept as it ran; p
 scripts/gameday/f2/seeded-bug.sh park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 scripts/gameday/f2/silent-lead.sh *  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 scripts/gameday/f2/templates/silent/AGENTS.md park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
+apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tracker's lane name for factory sessions, an external value
