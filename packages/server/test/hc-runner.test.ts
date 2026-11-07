@@ -562,11 +562,81 @@ describe('hc adapter: type', () => {
     expect(await count('terminal.send')).toBe(0)
   })
 
-  test('is busy for a program that has said nothing', async () => {
-    await hc.plan('terminal.run:silent')
-    await runner.start(input)
-    expect(await ask()).toBe('busy')
-    expect(await count('terminal.send')).toBe(0)
+  describe('a terminal that has reported no status', () => {
+    const RULE = '─'.repeat(80)
+    const showing = async (text: string) => {
+      await hc.plan('terminal.run:silent')
+      await runner.start(input)
+      await hc.mutate((state) => {
+        const t = state.terminals[0]
+        if (t) t.screen_text = text
+      })
+    }
+
+    test('gets its text when the screen shows the empty input box (no guard: the core cannot give one)', async () => {
+      await showing(['  Ready.', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await ask()).toBe('typed')
+      expect((await hc.state()).sent).toEqual([{ terminal: 't1', text: 'carry on' }])
+    })
+
+    test('is busy at a dialog, and types nothing into it', async () => {
+      await showing(
+        [
+          '  Bash command',
+          '    rm -rf build',
+          '  Do you want to proceed?',
+          '  ❯ 1. Yes',
+          '    2. No',
+          '  Esc to cancel',
+        ].join('\n'),
+      )
+      expect(await ask()).toBe('busy')
+      expect(await count('terminal.send')).toBe(0)
+    })
+
+    test('is busy while a dialog is drawn between two rules', async () => {
+      await showing([RULE, '  Do you want to proceed?', '  ❯ 1. Yes', '    2. No', RULE, '  Esc to cancel'].join('\n'))
+      expect(await ask()).toBe('busy')
+      expect(await count('terminal.send')).toBe(0)
+    })
+
+    test('a question in the conversation above the box is no dialog', async () => {
+      await showing(['  Do you want to proceed with the merge?', '', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await ask()).toBe('typed')
+    })
+
+    test('enterOnly presses Enter for a note that itself asks a question', async () => {
+      await showing([RULE, '❯ Do you want to close it?', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await runner.type({ pane: 't1', text: 'x', enterOnly: true })).toBe('typed')
+    })
+
+    test('is busy while a turn runs, and when text already sits in the box', async () => {
+      await showing(['✻ Thinking… (esc to interrupt)', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await ask()).toBe('busy')
+      await hc.mutate((state) => {
+        const t = state.terminals[0]
+        if (t) t.screen_text = [RULE, '❯ half written', RULE, '  ? for shortcuts'].join('\n')
+      })
+      expect(await ask()).toBe('busy')
+      expect(await count('terminal.send')).toBe(0)
+    })
+
+    test('enterOnly presses Enter when the box holds text; a screen with no box is busy', async () => {
+      await showing([RULE, '❯ the brief', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await runner.type({ pane: 't1', text: 'the brief', enterOnly: true })).toBe('typed')
+      await hc.mutate((state) => {
+        const t = state.terminals[0]
+        if (t) t.screen_text = 'Do you trust this folder?\n1. Yes\n2. No'
+      })
+      expect(await runner.type({ pane: 't1', text: 'the brief', enterOnly: true })).toBe('busy')
+    })
+
+    test('a screen that cannot be read is busy, never typed into', async () => {
+      await showing([RULE, '❯ ', RULE].join('\n'))
+      await hc.plan('terminal.get:ok', 'terminal.read:error')
+      expect(await ask()).toBe('busy')
+      expect(await count('terminal.send')).toBe(0)
+    })
   })
 
   test('the core refusing a blocked program (it changed in between) is busy, nothing typed', async () => {

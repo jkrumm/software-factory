@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import { admit } from './admission.ts'
 import { lockCapacity } from './capacity.ts'
 import type { Clock } from './clock.ts'
+import { failNotesOfClosed } from './closed-notes.ts'
 import { FINISHED_HEALTH_MS } from './health.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner, UncertainTyping } from './runner.ts'
 import { clearAnsweredWait, getSession, HOOK_KINDS, RESUME_LEAD_MS } from './sessions.ts'
@@ -33,6 +34,9 @@ export const PENDING_TTL_MS = { note: 24 * 3_600_000, rule: 6 * 3_600_000 }
  * word back for hours. No other session and no rule's prompt is ever forced.
  */
 export const FORCE_NOTE_AFTER_MS = 5 * 60_000
+
+/** Why a prompt stayed pending when the runner looked: the terminal showed a running turn or a dialog, not an input box. */
+export const NOT_AT_PROMPT_ERROR = 'not typed: the terminal shows a running turn or a dialog, not its input box'
 
 const isLeadNote = (prompt: Pick<PromptRow, 'source' | 'session'>): boolean =>
   prompt.source === 'note' && prompt.session.startsWith('lead-')
@@ -190,6 +194,8 @@ export async function settleDelivered(sql: SQL, now: Date, session?: string): Pr
  * after the retry it is `failed` (a line in status, nothing more).
  */
 export async function settlePrompts(sql: SQL, now: Date): Promise<void> {
+  // Notes that were pending before the close failed them (an Issue closed by an older build) go with the sweep.
+  await failNotesOfClosed(sql, now)
   const leaseEnd = new Date(now.getTime() - TYPING_LEASE_MS)
   await sql`
     UPDATE factory.prompts SET status = 'sent', sent_at = ${now}, sent_count = sent_count + 1
@@ -490,12 +496,14 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     if (outcome === 'busy') {
       // Nothing was typed: the claim goes too, or a later turn of the session would look like the proof of a typing that never was.
-      await sql`UPDATE factory.prompts SET status = 'pending', claimed_at = NULL WHERE id = ${prompt.id} AND status = 'typing'`
+      await sql`
+        UPDATE factory.prompts SET status = 'pending', claimed_at = NULL, error = ${NOT_AT_PROMPT_ERROR}
+        WHERE id = ${prompt.id} AND status = 'typing'`
       continue
     }
     await sql`
       UPDATE factory.prompts
-      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0,
+      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0, error = NULL,
           typed_at = COALESCE(typed_at, ${clock.now()})
       WHERE id = ${prompt.id} AND status = 'typing'`
     result.sent.push(prompt.id)

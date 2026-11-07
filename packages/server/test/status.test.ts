@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Prompt, Status } from '@software-factory/contract'
 import { recordReading } from '../src/capacity.ts'
+import { CLOSED_NOTE_ERROR } from '../src/closed-notes.ts'
 import { serveHooks } from '../src/http.ts'
 import { recordPrompt } from '../src/prompts.ts'
 import { buildStatus } from '../src/status.ts'
@@ -128,6 +129,24 @@ describe('factory status', () => {
     const s = await status()
     expect(s.attention).toEqual([])
     expect(s.health).toEqual(['walled anon for 30 min: account unknown, the watchdog cannot act'])
+  })
+
+  test('a note pending 15 min is a health line naming why; one failed by a closed Issue is none', async () => {
+    await w.spawned('lead-7-1', { role: 'lead' })
+    await w.emit('lead-7-1', 'turn_started', w.at(40))
+    await recordPrompt(db.sql, { id: 'young', session: 'lead-7-1', source: 'note', text: 'x' }, w.at(14))
+    await recordPrompt(db.sql, { id: 'old', session: 'lead-7-1', source: 'note', text: 'x' }, w.at(20))
+    await recordPrompt(db.sql, { id: 'gone', session: 'nobody', source: 'note', text: 'x' }, w.at(30))
+    await recordPrompt(
+      db.sql,
+      { id: 'closed', session: 'lead-7-1', source: 'note', text: 'x', failed: CLOSED_NOTE_ERROR },
+      w.at(30),
+    )
+    await db.sql`UPDATE factory.prompts SET error = 'not typed: the terminal shows a running turn or a dialog, not its input box' WHERE id = 'gone'`
+    expect((await status()).health).toEqual([
+      'note gone to nobody undelivered for 30 min: not typed: the terminal shows a running turn or a dialog, not its input box',
+      'note old to lead-7-1 undelivered for 20 min: the session is working',
+    ])
   })
 
   test('delivered notes and failures older than 72 h are gone from it', async () => {

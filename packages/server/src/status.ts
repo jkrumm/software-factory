@@ -1,6 +1,7 @@
 import type { Session, SessionState, Status } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { latestReadings, toQuota } from './capacity.ts'
+import { CLOSED_NOTE_ERROR } from './closed-notes.ts'
 import { FINISHED_HEALTH_MS, healthLines } from './health.ts'
 import { digestFailures } from './fleet/digest.ts'
 import { issueAttention } from './issues/attention.ts'
@@ -16,6 +17,9 @@ import { listSpawns } from './spawns.ts'
 
 /** Sessions in the order the owner needs them: what is stopped first, what is running last. */
 const ORDER: readonly SessionState[] = ['walled', 'blocked', 'stuck', 'working', 'waiting', 'starting', 'idle']
+
+/** A note still pending this long after it was filed is a health line naming why it has not arrived. */
+export const UNDELIVERABLE_NOTE_MS = 15 * 60_000
 
 const minutesSince = (since: string | null, now: Date): number =>
   since ? Math.max(0, Math.floor((now.getTime() - Date.parse(since)) / 60_000)) : 0
@@ -66,10 +70,19 @@ function attention(
       )
     }
   }
+  const states = new Map(sessions.map(({ view }) => [view.id, view.state]))
   for (const note of notes) {
-    if (note.status === 'failed')
-      lines.health.push(`note ${note.id} to ${note.session} failed: ${note.error ?? 'unknown'}`)
-    else if (note.sentCount > 0 && note.error) lines.health.push(`note ${note.id} to ${note.session}: ${note.error}`)
+    if (note.status === 'failed') {
+      // A note failed because its Issue closed has nothing left to say.
+      if (note.error !== CLOSED_NOTE_ERROR)
+        lines.health.push(`note ${note.id} to ${note.session} failed: ${note.error ?? 'unknown'}`)
+    } else if (note.status === 'pending' && now.getTime() - Date.parse(note.createdAt) >= UNDELIVERABLE_NOTE_MS) {
+      const state = states.get(note.session)
+      const why = note.error ?? (state ? `the session is ${state}` : 'the session is not live')
+      lines.health.push(
+        `note ${note.id} to ${note.session} undelivered for ${minutesSince(note.createdAt, now)} min: ${why}`,
+      )
+    } else if (note.sentCount > 0 && note.error) lines.health.push(`note ${note.id} to ${note.session}: ${note.error}`)
   }
   for (const spawn of spawns) {
     if (spawn.status === 'failed' && !over.has(spawn.key))
