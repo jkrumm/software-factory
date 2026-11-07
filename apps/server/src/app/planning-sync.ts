@@ -1,5 +1,5 @@
 import type { ProjectSource, RepoRef } from '../domains/planning/ports.ts'
-import { projectName, projectOf, synced, type StoredProject } from '../domains/planning/sync.ts'
+import { projectName, projectOf, repoTextOf, synced, type StoredProject } from '../domains/planning/sync.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -114,7 +114,7 @@ async function fileBrokenProject(
     event: {
       kind: 'filed',
       payload: {
-        repo: project.repo,
+        repo: repoTextOf(project),
         title: `project.yaml of ${project.name} does not parse`,
         kind: 'chore',
         origin: 'factory',

@@ -122,6 +122,14 @@ export function synced(input: {
   return next
 }
 
+/**
+ * What an Issue's `repo` says for this project: the directory's name under the source root, which is what intake files
+ * Issues with and what a lead locates a repo by. A second directory of a name has a project name no directory carries,
+ * so its Issues name the absolute path.
+ */
+export const repoTextOf = (project: Pick<StoredProject, 'name' | 'repo'>): string =>
+  project.name.includes('~') ? project.repo : project.name
+
 /** The project a repo text (a project name, a path, a worktree below a path) belongs to: the longest repo wins. */
 export function projectOf(projects: readonly StoredProject[], repo: string): StoredProject | undefined {
   const byName = projects.find((p) => p.name === repo)

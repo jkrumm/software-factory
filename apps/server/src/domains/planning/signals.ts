@@ -1,5 +1,5 @@
 import { durationMs, type ProjectFile } from './project.ts'
-import type { StoredProject } from './sync.ts'
+import { repoTextOf, type StoredProject } from './sync.ts'
 
 /** One `heal:` rule: a `down` of the source waits `graceMs` for its `up`, after the runbook. */
 export interface HealRuleView {
@@ -15,7 +15,7 @@ export interface HealRuleView {
  * `RepoSignals` field for field, so the adapter that wires intake to planning is `projectSignals` below and nothing else.
  */
 export interface RepoSignalsView {
-  /** the repo's absolute path */
+  /** the repo as an Issue names it: its directory's name (`repoTextOf`) */
   repo: string
   /** a repo without a `project.yaml` is a work repo and hears the owner only */
   work: boolean
@@ -36,7 +36,7 @@ export function signalsView(project: StoredProject): RepoSignalsView {
     ...(launchd.length > 0 ? ['launchd'] : []),
   ]
   return {
-    repo: project.repo,
+    repo: repoTextOf(project),
     work: project.source === 'defaults',
     sources,
     github: github

@@ -149,7 +149,7 @@ describe('what intake hears', () => {
       }),
     )
     expect(view).toEqual({
-      repo: '/src/x',
+      repo: 'x',
       work: false,
       sources: ['github', 'checks', 'launchd'],
       github: { label: 'factory', author: 'me', since: '2026-11-07', checks: true },

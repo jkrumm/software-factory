@@ -1,4 +1,4 @@
-import { type AccountReading, POLL_EVERY_MS } from '../domains/capacity/accounts.ts'
+import { type AccountReading, POLL_EVERY_MS, standing } from '../domains/capacity/accounts.ts'
 import { checkAdmission, type RefusalKind } from '../domains/capacity/admission.ts'
 import type { MemoryCeilings, MemoryReading } from '../domains/capacity/host.ts'
 import type { AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
@@ -389,4 +389,17 @@ export async function accountOf(
   attempt: number,
 ): Promise<Result<string | null, PortError>> {
   return deps.uow.run(async ({ capacity }) => ok((await capacity.assignmentOf(issue, attempt))?.account ?? null))
+}
+
+/** When an account's window opens again by its newest reading, if the reading says: what a lead that hit the wall waits for. */
+export async function windowOf(
+  deps: PlanningDeps,
+  account: string,
+): Promise<Result<{ resetAt: Date | null }, PortError>> {
+  return deps.uow.run(async ({ capacity }) => {
+    const reading = (await capacity.latestReadings()).find((r) => r.account === account)
+    if (!reading) return ok({ resetAt: null })
+    const stand = standing(reading, deps.clock.now())
+    return ok({ resetAt: stand.open ? null : stand.until })
+  })
 }

@@ -124,6 +124,14 @@ const Signals = z.looseObject({
   hyperdx: z.unknown().optional(),
 })
 
+/** A rule that settles a recurring Decision once and for all: a phrase of the question and the option label it takes. */
+const PolicyRule = z.strictObject({
+  when: z.string().trim().min(1).max(300),
+  answer: z.string().trim().min(1).max(200),
+  reason: z.string().trim().min(1).max(500),
+})
+export type PolicyRule = z.output<typeof PolicyRule>
+
 /**
  * `project.yaml`. A key the schema does not know is an error, so a typo is not read as a default; `jobs` and `ticktick`
  * are accepted and dropped so a file written for an older core still parses.
@@ -142,6 +150,8 @@ export const ProjectFile = z
     slots: Slots.default({}),
     signals: Signals.default({}),
     heal: z.array(HealRule).max(32).default([]),
+    /** standing policy: the first rule whose phrase the question contains and whose answer is one of its options settles it */
+    policy: z.array(PolicyRule).max(64).default([]),
     jobs: z.unknown().optional(),
     ticktick: z.unknown().optional(),
   })

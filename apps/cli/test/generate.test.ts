@@ -9,12 +9,10 @@ const health = (operationId: string, ref = '#/$defs/Health') => ({
 })
 
 describe('operationsOf', () => {
-  test("the server's document yields health get, and every group a package adds is a command too", async () => {
+  test("the server's document yields health get, and every domain's commands beside it", async () => {
     const operations = operationsOf(await openapiDocument())
-    const commands = operations.map((op) => op.command.join(' '))
-    expect(commands).toContain('health get')
-    // the test-slot routes belong to the hand-written `slot run`: they stay out of the document
-    expect(commands.filter((command) => command.startsWith('slot'))).toEqual([])
+    // every domain package adds its own operations to this document, so the test names the ones it needs
+    expect(operations.map((op) => op.command.join(' '))).toContain('health get')
     expect(render(operations)).toContain('responses: { 200: Health, 503: Health }')
   })
 

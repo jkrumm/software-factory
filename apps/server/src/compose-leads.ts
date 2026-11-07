@@ -1,0 +1,129 @@
+import type { SQL } from 'bun'
+import type { TickAnswer } from '@software-factory/contract'
+import { gitWorktrees } from './adapters/git/worktrees.ts'
+import { rootedRepos } from './adapters/git/repos.ts'
+import { HcTerminals, claudeProjectsDirs } from './adapters/hc/terminals.ts'
+import { SpoolReplayer } from './adapters/leads/spool.ts'
+import { fileRoles } from './adapters/leads/roles.ts'
+import type { LeadSettings } from './adapters/leads/settings.ts'
+import { fileTranscripts } from './adapters/leads/transcripts.ts'
+import { listenOnSocket, type SocketListener } from './adapters/socket/listener.ts'
+import type { LeadRoutes } from './api/leads.ts'
+import type { LeadDeps, LeadsUow } from './app/leads.ts'
+import { replayLines, recordHook, stopCheck } from './app/leads-hooks.ts'
+import { leadSession } from './app/leads-session.ts'
+import { leadPorts, leadTick } from './app/leads-tick.ts'
+import { blockIssue, closeIssue, deferIssue } from './app/leads-verbs.ts'
+import type { EffectPorts } from './domains/work/ports.ts'
+import type { Clock } from './kernel/clock.ts'
+import type { IdSource } from './kernel/ids.ts'
+import { err, portError, type PortError, type Result } from './kernel/result.ts'
+
+/** Passes of the tick that may run at once: a worktree made or removed takes minutes and must not hold the others back. */
+const MAX_PASSES = 4
+
+/**
+ * Honest stub for what quality (package 5) brings: the Watch after a ship. It answers with an error, so the effect stays
+ * pending and visible instead of being marked done for work nobody did.
+ */
+const stubStartWatch: EffectPorts['start_watch'] = async () =>
+  err(portError('refused', 'the Watch is not built yet: start_watch is package 5'))
+
+export interface LeadsComposition {
+  routes: LeadRoutes
+  /** one pass of the lead tick: spool, lost leads, outbox */
+  tick(): Promise<Result<TickAnswer, PortError>>
+  /** the hook socket, bound; stopping it removes the file */
+  listen(): Promise<SocketListener>
+  /** starts the interval; returns the stop. Off when the interval is 0. */
+  startLoop(): () => void
+  /** the last time a pass finished ok, for `/health` */
+  lastTickAt(): Date | null
+}
+
+/**
+ * Wires the leads: adapters behind the domain's ports, the use cases, the routes, the socket and the tick. The ports
+ * capacity owns (the account, the repo claim, the window) come in from `compose-planning.ts`.
+ */
+export function composeLeads(input: {
+  sql: SQL
+  uow: LeadsUow
+  clock: Clock
+  ids: IdSource
+  settings: LeadSettings
+  capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
+}): LeadsComposition {
+  const { settings: s } = input
+  const deps: LeadDeps = {
+    uow: input.uow,
+    clock: input.clock,
+    ids: input.ids,
+    terminals: new HcTerminals({
+      bin: s.hcBin,
+      ...(s.hcSession ? { session: s.hcSession } : {}),
+      ...(s.claudeBin ? { claudeBin: s.claudeBin } : {}),
+      ...(s.pretrustBin ? { pretrustBin: s.pretrustBin } : {}),
+      accountsFile: s.accountsFile,
+      home: s.home,
+    }),
+    worktrees: gitWorktrees(),
+    repos: rootedRepos(s.repoRoots),
+    roles: fileRoles(s.rolesFile),
+    seats: input.capacity.seats,
+    claims: input.capacity.claims,
+    windows: input.capacity.windows,
+    transcripts: fileTranscripts({
+      archiveDir: s.archiveDir,
+      projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),
+    }),
+    startBudgetMs: s.startBudgetMs,
+    forceNoteAfterMs: s.forceNoteAfterMs,
+    graceMs: s.graceMs,
+  }
+  const ports: EffectPorts = { ...leadPorts(deps), start_watch: stubStartWatch }
+  const replayer = new SpoolReplayer({
+    dir: s.spoolDir,
+    now: () => input.clock.now(),
+    sink: async (lines) => {
+      await replayLines(deps, lines)
+    },
+  })
+  const tick = () => leadTick({ leads: deps, ports, replaySpool: async () => (await replayer.replay()).lines })
+
+  let tickAt: Date | null = null
+  return {
+    routes: {
+      close: (issue, body) => closeIssue(deps, issue, body),
+      defer: (issue, body) => deferIssue(deps, issue, body),
+      block: (issue, body) => blockIssue(deps, issue, body),
+      session: (issue) => leadSession(deps, issue),
+    },
+    tick,
+    listen: () =>
+      listenOnSocket(s.socket, {
+        event: (body) => recordHook(deps, body),
+        stopCheck: (session, body) => stopCheck(deps, session, body),
+      }),
+    startLoop() {
+      if (s.tickMs === 0) return () => {}
+      let running = 0
+      const timer = setInterval(() => {
+        if (running >= MAX_PASSES) return
+        running++
+        tick()
+          .then((result) => {
+            if (result.ok) tickAt = input.clock.now()
+            else console.error(`lead tick failed: ${result.error.detail}`)
+          })
+          .catch((error: unknown) =>
+            console.error(`lead tick crashed: ${error instanceof Error ? error.message : String(error)}`),
+          )
+          .finally(() => {
+            running--
+          })
+      }, s.tickMs)
+      return () => clearInterval(timer)
+    },
+    lastTickAt: () => tickAt,
+  }
+}

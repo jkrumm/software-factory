@@ -8,7 +8,7 @@ import {
   rowStatuses,
   type RowStatus,
 } from '../domains/planning/plan.ts'
-import type { StoredProject } from '../domains/planning/sync.ts'
+import { repoTextOf, type StoredProject } from '../domains/planning/sync.ts'
 import type { Kind } from '../domains/work/issue.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
@@ -95,7 +95,12 @@ async function fileFor(
     key: rowKey,
     event: {
       kind: 'filed',
-      payload: { repo: target.repo, title: row.title ?? row.key, kind: row.kind ?? 'feature', origin: 'factory' },
+      payload: {
+        repo: repoTextOf(target),
+        title: row.title ?? row.key,
+        kind: row.kind ?? 'feature',
+        origin: 'factory',
+      },
       actor: 'factory',
     },
   })

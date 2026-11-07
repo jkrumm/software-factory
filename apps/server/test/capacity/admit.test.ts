@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { accountOf, admissionPass, queueView, releaseClaim, resumeClaim } from '../../src/app/capacity-admit.ts'
+import { capacityForLeads } from '../../src/app/capacity-leads.ts'
+import { standingPolicies } from '../../src/app/planning-policies.ts'
+import { queueMovedAt } from '../../src/read/queue.ts'
 import { setQueueState } from '../../src/app/capacity-queue.ts'
 import { setPrio } from '../../src/app/planning-chain.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
@@ -264,5 +267,55 @@ describe('claims and the claim on resume', () => {
     await pass()
     const [{ claims }] = await world.db.sql`SELECT count(*)::int AS claims FROM factory.capacity_claims`
     expect(claims).toBe(0)
+  })
+})
+
+describe('the ports other packages take', () => {
+  test('the leads get the account an attempt was admitted on, default when it was admitted outside capacity, and give a claim back once', async () => {
+    const port = capacityForLeads(world.deps)
+    const admitted = await world.queued({ repo: 'solo' })
+    await pass()
+    expect(value(await port.seats.seat({ issue: admitted, attempt: 1 }))).toEqual({ account: 'me' })
+    expect(value(await port.seats.seat({ issue: admitted, attempt: 2 }))).toEqual({ account: 'default' })
+    expect(value(await port.claims.release({ issue: admitted, attempt: 1 }))).toBeUndefined()
+    expect(value(await port.claims.release({ issue: admitted, attempt: 1 }))).toBeUndefined()
+    const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.capacity_claims`
+    expect(n).toBe(0)
+  })
+
+  test('the window of an account is when its newest reading says it opens again; an open or unknown account has none', async () => {
+    const port = capacityForLeads(world.deps)
+    world.accounts.rows = [account('me', { fiveHourUsed: 90 }), account('open')]
+    value(await admissionPass(world.deps))
+    expect(value(await port.windows.wall('me'))).toEqual({ resetAt: new Date('2026-11-07T15:00:00Z') })
+    expect(value(await port.windows.wall('open'))).toEqual({ resetAt: null })
+    expect(value(await port.windows.wall('nobody'))).toEqual({ resetAt: null })
+  })
+
+  test("the checkpoints' standing policy is the project's policy: rules, none for a repo that is no project", async () => {
+    world.source.add('policed', {
+      project: {
+        state: 'text',
+        sha: 'p',
+        value: {
+          apiVersion: 'factory/v2',
+          name: 'policed',
+          policy: [{ when: 'which database', answer: 'postgres', reason: 'decided once' }],
+        },
+      },
+    })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const policies = standingPolicies(world.deps)
+    expect(value(await policies.rulesFor('policed'))).toEqual([
+      { when: 'which database', answer: 'postgres', reason: 'decided once' },
+    ])
+    expect(value(await policies.rulesFor('app'))).toEqual([])
+    expect(value(await policies.rulesFor('unknown'))).toEqual([])
+  })
+
+  test('the queue last moved when its newest event happened: none before there is one', async () => {
+    expect(await queueMovedAt(world.db.sql)).toBeNull()
+    await world.queued({ repo: 'solo' })
+    expect(await queueMovedAt(world.db.sql)).toEqual(world.clock.now())
   })
 })

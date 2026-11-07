@@ -2,15 +2,28 @@ import { openapi } from '@elysiajs/openapi'
 import { ErrorBody } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import { type CapacityApi, capacityRoutes } from './capacity.ts'
+import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
+import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
+import { leadsTestRoutes } from './leads-test.ts'
+import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
 
 export interface ApiDeps {
   health: HealthSource
+  /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
+  checkpoints?: CheckpointUses
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
+  /** the lead's verbs and its session read (package 4); absent, the routes answer 503 */
+  leads?: LeadRoutes
+  /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
+  leadsTick?: Parameters<typeof leadsTestRoutes>[0]
+  /** signals in and the door's registry; absent, the routes answer 503 (the OpenAPI document needs no database) */
+  intake?: IntakeApi
   /** projects, plans, the chain, priorities (package 3); unbound, the routes answer 503 */
   planning?: PlanningApi
   /** accounts, the host, claims, the queue, admission, test slots (package 3); unbound, the routes answer 503 */
@@ -61,9 +74,13 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
+    .use(leadRoutes(deps.leads))
+    .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(planningRoutes(deps.planning))
     .use(capacityRoutes(deps.capacity))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
+    .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }
 
 export type App = ReturnType<typeof createApp>

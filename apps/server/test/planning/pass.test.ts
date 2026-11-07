@@ -120,7 +120,7 @@ describe('the plan files its rows', () => {
     world.source.add('lib', { project: PROJECT('lib') })
     value(await planningPass(world.deps))
     const [filed] = await world.db.sql`SELECT repo FROM factory.issues WHERE id = 'issue_1'`
-    expect(filed?.repo).toBe('/src/lib')
+    expect(filed?.repo).toBe('lib')
   })
 
   test('a row whose time has not come is filed on the first pass after it, not before', async () => {
@@ -160,11 +160,11 @@ describe('what intake hears', () => {
     await world.file({ repo: 'work' })
     value(await syncProjects(world.deps, { fetch: false }))
     const port = projectSignals(world.deps)
-    expect(value(await port.find('app'))).toMatchObject({ repo: '/src/app', work: false, sources: ['github'] })
-    expect(value(await port.find('/src/app/.claude/worktrees/x'))).toMatchObject({ repo: '/src/app' })
+    expect(value(await port.find('app'))).toMatchObject({ repo: 'app', work: false, sources: ['github'] })
+    expect(value(await port.find('/src/app/.claude/worktrees/x'))).toMatchObject({ repo: 'app' })
     expect(value(await port.find('work'))).toMatchObject({ work: true, sources: [] })
     expect(value(await port.find('unknown'))).toBeNull()
-    expect(value(await port.polled()).map((v) => v.repo)).toEqual(['/src/app'])
+    expect(value(await port.polled()).map((v) => v.repo)).toEqual(['app'])
   })
 })
 

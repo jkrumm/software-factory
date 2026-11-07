@@ -37,16 +37,22 @@ export interface PlanningSettings {
 }
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
-export function planningSettings(env: Record<string, string | undefined>, home = env.HOME ?? '/'): PlanningSettings {
+export function planningSettings(
+  env: Record<string, string | undefined>,
+  options: { home?: string; repoRoots?: readonly string[] } = {},
+): PlanningSettings {
+  const home = options.home ?? env.HOME ?? '/'
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
   const e = parsed.data
-  const repoRoots = (e.FACTORY_REPO_ROOTS ?? '')
-    .split(':')
-    .map((root) => root.trim())
-    .filter(Boolean)
+  // One setting, one meaning: the leads read FACTORY_REPO_ROOTS too, and their default stands when it is not set.
+  const repoRoots = e.FACTORY_REPO_ROOTS
+    ? e.FACTORY_REPO_ROOTS.split(':')
+        .map((root) => root.trim())
+        .filter(Boolean)
+    : [...(options.repoRoots ?? [])]
   const relative = repoRoots.find((root) => !isAbsolute(root))
   if (relative) throw new Error(`FACTORY_REPO_ROOTS: ${relative} is not an absolute path`)
   return {
