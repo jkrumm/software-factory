@@ -493,7 +493,7 @@ button.primary{background:var(--vx-accent-fill);color:var(--vx-on-accent);border
 <div class="prose">
 <h3>Why "MacMini Dev Host - Push" keeps firing</h3>
 <ul>
-<li><b>The cause was real.</b> <code>fseventsd</code> grew to 61 G, swap reached 66 G on a 32 G machine, and heartbeats missed their window. <code>sudo killall fseventsd</code> fixed it at 00:03Z. The monitor still went down at 00:11Z and 00:21Z while swap drained.</li>
+<li><b>The cause was real.</b> <code>fseventsd</code> grew to 61 G, swap reached 66 G on a 32 G machine, and heartbeats missed their window. <code>sudo killall fseventsd</code> fixed it at 00:03Z. The monitor still went down at 00:11Z and 00:21Z, because 9 G of parked swap kept tripping the 25% rule. #239 shipped the fix at 01:03Z: a warning above 25%, a failure above 75%, and a warning when <code>fseventsd</code> passes 10 G. It is in its hold now.</li>
 <li><b>You get paged regardless.</b> Every Kuma monitor sends to ntfy and to the door in parallel, so triage cannot spare you the alert. That is <a href="#d5">decision 5</a>.</li>
 <li><b>Triage stalled without saying so.</b> Lead 239's terminal never reported a status to <code>hc</code>, and <code>HcRunner.type</code> reads that as <code>busy</code> for ever. A steward note from 21:01Z and a wake from 23:13Z never arrived, so the lead sat idle for 90 minutes after its wait ended. Your close instruction waited 39 minutes until I typed it in by hand. #254 is filed and first in the queue.</li>
 </ul>
