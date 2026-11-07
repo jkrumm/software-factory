@@ -40,6 +40,9 @@ const OPENS_TRANSACTION = /\.(begin|beginDistributed|transaction)\s*\(/
 /** The only two files that may open one: the unit of work (which `app/` gets as a port) and the migration runner. */
 const TRANSACTION_ADAPTERS = new Set(['adapters/postgres/unit-of-work.ts', 'adapters/postgres/migrate.ts'])
 
+/** An intake source: it reads the outside world and hands signals to the sink, and touches nothing else of the server. */
+const INTAKE_POLLER = /^adapters\/intake\/(github|beszel|launchd)\.ts$/
+
 interface Import {
   specifier: string
   typeOnly: boolean
@@ -127,6 +130,15 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
       }
       if (here.layer === 'app' && there?.layer === 'adapters') {
         flag('app/ imports no adapter: it gets ports, main.ts composes them', specifier)
+      }
+      if (INTAKE_POLLER.test(name.split(sep).join('/'))) {
+        const resolved = target ? relative(root, target).split(sep).join('/') : ''
+        const reachesStore = /^adapters\/(postgres\/|intake\/store)/.test(resolved)
+        const otherDomain = there?.layer === 'domains' && there.domain !== 'intake'
+        if (internal && (there?.layer === 'app' || there?.layer === 'read' || otherDomain || reachesStore)) {
+          flag('an intake source reaches the server only through the IntakeSink: no app, read, store or other domain', specifier)
+        }
+        if (!internal && specifier === 'bun') flag('an intake source holds no database client', specifier)
       }
       if (there?.layer === 'domains' && there.domain) domainsReached.add(there.domain)
     }

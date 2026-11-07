@@ -23,6 +23,24 @@ async function check(files: Record<string, string>) {
 /** Each rule: a tree that breaks it and the nearest tree that keeps it. */
 const RULES: { rule: string; failing: Record<string, string>; passing: Record<string, string> }[] = [
   {
+    rule: 'an intake source reaches the server only through the IntakeSink: no app, read, store or other domain',
+    failing: { 'adapters/intake/github.ts': "import { createIntake } from '../../app/intake.ts'\n" },
+    passing: {
+      'adapters/intake/github.ts': "import type { IntakeSink } from '../../domains/intake/ports.ts'\n",
+      'domains/intake/ports.ts': '',
+    },
+  },
+  {
+    rule: 'an intake source reaches the server only through the IntakeSink: no app, read, store or other domain',
+    failing: { 'adapters/intake/beszel.ts': "import { postgresIntakeStore } from './store.ts'\n" },
+    passing: { 'adapters/intake/beszel.ts': "import { runProcess } from './process.ts'\n", 'adapters/intake/process.ts': '' },
+  },
+  {
+    rule: 'an intake source holds no database client',
+    failing: { 'adapters/intake/launchd.ts': "import { SQL } from 'bun'\n" },
+    passing: { 'adapters/intake/launchd.ts': "import * as z from 'zod'\n" },
+  },
+  {
     rule: 'kernel imports nothing of the server',
     failing: { 'kernel/ids.ts': "import { x } from '../adapters/postgres/db.ts'\n" },
     passing: { 'kernel/ids.ts': "import { ok } from './result.ts'\n", 'kernel/result.ts': '' },
