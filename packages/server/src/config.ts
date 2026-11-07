@@ -58,6 +58,8 @@ export interface Config {
   githubPollMs: number | null
   /** `FACTORY_GITHUB_TOKEN` (from `secrets-run`): the GitHub label source is off without it */
   githubToken: string | undefined
+  /** `FACTORY_LAUNCHD_POLL` (`5m`, `off`): how often the failed-launchd-job source polls; null is off */
+  launchdPollMs: number | null
   /** `FACTORY_BESZEL_POLL` (`1m`, `off`): how often the Beszel source polls; null is off */
   beszelPollMs: number | null
   /** `FACTORY_BESZEL_URL`, `FACTORY_BESZEL_EMAIL`, `FACTORY_BESZEL_PASSWORD` (the last two from `secrets-run`): the source is off without all three */
@@ -129,6 +131,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
     ...githubSource(env),
+    launchdPollMs: fleetDigestEvery(env.FACTORY_LAUNCHD_POLL, 'FACTORY_LAUNCHD_POLL'),
     ...beszelSource(env),
     admission: {
       leadsPerAccount: wholeNumber(

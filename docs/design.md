@@ -1076,7 +1076,7 @@ sender's route or the project's, never the payload's; the IuRoot refusal of `cre
 | Kuma, HyperDX (door) | stateful | the monitor | the alert's status | Issue 149 (moved onto `fileSignal`, Part A built) |
 | GitHub label | stateless | `<owner>/<repo>#<n>` | one `event` | Issue 149 |
 | GitHub red checks | stateful | `<owner>/<repo>:<check>` on the default branch | failure / success | Issue 164 |
-| failed launchd jobs | stateful | the job's label | exit status ≠ 0 / 0 | follow-up Issue |
+| failed launchd jobs | stateful | the job's label | last exit code ≠ 0 / 0 or running | Issue 165 |
 
 **Dedup, at intake, by rules.**
 - *Stateful:* one episode per `(source, subject)` until it closes. A `down` while an Issue of the episode is not closed is a `signal` on it
@@ -1118,6 +1118,8 @@ re-run on a new commit is a new event of the same episode (a signal on the open 
 that is not closed or a `down` waiting in `intake_pending`, so a healthy repo costs no transaction. An `up` closes nothing (the lead closes), it heals a pending `down` (`heal: {when: checks.down}`). The title is
 `Failing check "<name>" on <o/r> (<branch>)`; facts `{check, kind (check_run|status), result, sha, branch, url}`, the check's own text is not copied. A failed request is one log line (step and status, never the body), no signals.
 
+**Failed launchd jobs** (`signals: {launchd: [label, …]}`, `intake/launchd.ts` `LaunchdIntake`; every `FACTORY_LAUNCHD_POLL`, default `5m`, `off`; no secret). Per pass, for each project that is not paused, not in IuRoot and has the list, `launchctl print gui/<uid>/<label>` is run through the process runner for **each named label and nothing else on the machine** (a label that is not `[A-Za-z0-9._-]+` is skipped with a line). Only three numbers are read from the output, which is data: `state`, `runs`, `last exit code`. A last exit code ≠ 0 with the job not running is `down` (event `down:exit<code>@runs<n>`, so the same failure on the next pass is one event and a new failed run is a signal on the open Issue); a running job or a last exit of 0 is `up` (`up@runs<n>`), sent only while the label's episode is open or pending; a job that never exited, or is not loaded, says nothing (one log line for a failed read). Subject = the label, title `Failed launchd job "<label>" (exit <code>)`, facts `{label, exitCode, runs, state}`. It files through `fileSignalIn` only: a manifest `heal: {when: launchd.down, runbook: make restart}` settles it first, and an `up` heals a pending `down`.
+
 **Beszel: a host that chokes files its own Issue** (`intake/beszel.ts` `BeszelIntake`, `intake/beszel-rules.ts`, `intake/infra.ts`, `config/infra.json`). Deterministic, no model. The hub (PocketBase)
 is polled every `FACTORY_BESZEL_POLL` (default `1m`, `off`; the hub's `FACTORY_BESZEL_URL` is non-secret and may sit in the env file, `FACTORY_BESZEL_EMAIL` and
 `FACTORY_BESZEL_PASSWORD` come from `secrets-run`; a missing one = the source is off and one line is logged). The system list gives the hosts; for each non-paused system named in
@@ -1136,7 +1138,7 @@ every threshold (`defaults`, partly overridden per host; the file's absent numbe
 - **Facts** carry the numbers (latest, window max, threshold, minutes sustained), the thresholds used, the last hour every fifth sample and a subset of the system's info. On the mini
   (`local`), a `down` of memory, swap or swap_growth adds `processes` (top 5 by resident memory, `ps` with a 5 s timeout), a `load` down `processesByCpu`; a failing `ps` is no key.
 
-**Split.** Issue 149 builds the engine, the door on it, settle + heal, order, and the GitHub label source. Red checks and failed launchd jobs
+**Split.** Issue 149 builds the engine, the door on it, settle + heal, order, and the GitHub label source. Red checks (Issue 164) and failed launchd jobs (Issue 165)
 are two follow-up Issues on the same engine (`--after 149`). Done when, live: a labelled GitHub issue in a scratch repo becomes one Issue; a
 repeat of the same alert files no second; a `heal` runbook that fixes the symptom starts no lead.
 
