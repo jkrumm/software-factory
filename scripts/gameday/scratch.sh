@@ -4,14 +4,15 @@
 # run is green when the Issue closes `done` and its commit is on the scratch remote (verdict.sh: an Issue that shipped must
 # also have passed its watch; one closed by the lead's `close`, the scratch repo's normal shape, is not asked to). With --kill-server the server is
 # killed once the lead works, to show that the Issue goes on after the LaunchAgent brings the server back.
-# Usage: scratch.sh [--kill-server] [run-id]      (setup.sh first; teardown.sh after the evidence is written)
+# Usage: scratch.sh [--kill-server|--kill-server=lead] [run-id]   (=lead: the kill waits until the lead's terminal runs)      (setup.sh first; teardown.sh after the evidence is written)
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck disable=SC1091
 source "$GAMEDAY_DIR/verdict.sh"
 
 kill_server=0
-if [[ ${1:-} == --kill-server ]]; then kill_server=1; shift; fi
+kill_at=working
+if [[ ${1:-} == --kill-server || ${1:-} == --kill-server=lead ]]; then kill_server=1; [[ $1 == *=lead ]] && kill_at=lead; shift; fi
 run=${1:-$(date -u +%m%d%H%M)}
 [[ $run =~ ^[a-z0-9]{1,8}$ ]] || { echo "scratch: the run id must be 1-8 characters of [a-z0-9]" >&2; exit 2; }
 repo=$SOURCE_ROOT/$REPO_NAME remote=$REMOTES/$REPO_NAME.git
@@ -40,9 +41,10 @@ for _ in $(seq 1 360); do
   now="$state/$(jq -r '.reason // .outcome // "-"' <<<"$c") phase=$(jq -r '.phase // "-"' <<<"$c") lead=$(jq -r '.lead // "-"' <<<"$c")"
   [[ $now == "$last" ]] || log "run $key: $now"
   last=$now
-  if ((kill_server && !killed)) && [[ $state == working ]]; then
+  lead_now=$(jq -r '.lead // "-"' <<<"$c")
+  if ((kill_server && !killed)) && [[ $state == working ]] && [[ $kill_at == working || $lead_now != - ]]; then
     killed=1
-    "$GAMEDAY_DIR/kill-server.sh" working "$issue" || { log "run $key: the server did not come back"; break; }
+    "$GAMEDAY_DIR/kill-server.sh" "$kill_at" "$issue" || { log "run $key: the server did not come back"; break; }
   fi
   [[ $state == closed ]] && break
   # Waiting on a person is an answer the drill cannot give: stop and say what it holds.
