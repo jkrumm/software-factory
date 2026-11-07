@@ -4,7 +4,7 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import type { Tokens } from '../settings.ts'
-import { auth, Refusal } from './auth.ts'
+import { auth, Refusal, resolveCaller } from './auth.ts'
 import { type CapacityApi, capacityRoutes } from './capacity.ts'
 import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
@@ -81,13 +81,18 @@ export function createApp(deps: ApiDeps) {
         : new Elysia(),
     )
     .use(auth(deps.tokens))
-    .onError(({ code, error, set }) => {
+    .onError(({ code, error, set, request }) => {
       if (error instanceof Refusal) {
         set.status = error.status
         return error.body
       }
       switch (code) {
         case 'NOT_FOUND':
+          // An unknown route tells a caller without a token nothing: 401 like every other route.
+          if (!resolveCaller(deps.tokens, request.headers.get('authorization'))) {
+            set.status = 401
+            return failure('a bearer token is required: set FACTORY_TOKEN', 'unauthorized')
+          }
           set.status = 404
           return failure('no such route', 'not_found')
         case 'PARSE':

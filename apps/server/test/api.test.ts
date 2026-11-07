@@ -63,10 +63,20 @@ describe('GET /health', () => {
 })
 
 describe('errors', () => {
-  test('an unknown route is a 404 ErrorBody', async () => {
-    const response = await get(appWith(ok), '/nope')
-    expect(response.status).toBe(404)
-    expect(ErrorBody.parse(await response.json()).code).toBe('not_found')
+  test('an unknown route is a 404 ErrorBody for a caller with a token, and a 401 for a stranger', async () => {
+    const app = createApp({
+      tokens: { owner: 'owner-token-0000000001' },
+      health: { read: async () => ok },
+      log: () => {},
+    })
+    const known = await app.handle(
+      new Request('http://localhost/nope', { headers: { authorization: 'Bearer owner-token-0000000001' } }),
+    )
+    expect(known.status).toBe(404)
+    expect(ErrorBody.parse(await known.json()).code).toBe('not_found')
+    const stranger = await get(app, '/nope')
+    expect(stranger.status).toBe(401)
+    expect(ErrorBody.parse(await stranger.json()).code).toBe('unauthorized')
   })
 
   // Elysia 1.4 answers a response that fails its zod schema with 422; the server maps it to its own bug, a 500.
@@ -115,8 +125,15 @@ describe('the OpenAPI document', () => {
 
 describe('the OpenAPI document', () => {
   test('is not served unless docs is on', async () => {
-    const app = createApp({ health: { read: async () => ok }, log: () => {} })
-    expect((await get(app, OPENAPI_PATH)).status).toBe(404)
+    const app = createApp({
+      tokens: { owner: 'owner-token-0000000001' },
+      health: { read: async () => ok },
+      log: () => {},
+    })
+    const response = await app.handle(
+      new Request(`http://localhost${OPENAPI_PATH}`, { headers: { authorization: 'Bearer owner-token-0000000001' } }),
+    )
+    expect(response.status).toBe(404)
   })
 })
 

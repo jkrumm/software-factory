@@ -125,6 +125,15 @@ describe('the auth plugin over HTTP', () => {
     }
   })
 
+  test('an unknown route is 401 without a token and 404 with one', async () => {
+    for (const path of ['/spawns', '/v1/nowhere']) {
+      const stranger = await call('GET', path)
+      expect(stranger.status).toBe(401)
+      expect(await stranger.json()).toMatchObject({ code: 'unauthorized' })
+      expect((await call('GET', path, TOKENS.owner)).status).toBe(404)
+    }
+  })
+
   test('a token that is not a bearer is 401', async () => {
     const response = await app.handle(
       new Request('http://localhost/v1/loops', { headers: { authorization: TOKENS.owner } }),
@@ -155,6 +164,7 @@ describe('the auth plugin over HTTP', () => {
   test('the OpenAPI document is public only when docs is on', async () => {
     expect((await call('GET', OPENAPI_PATH)).status).toBe(200)
     const prod = createApp({ tokens: TOKENS, health: { read: () => Promise.reject(new Error('unused')) } })
-    expect((await prod.handle(new Request(`http://localhost${OPENAPI_PATH}`))).status).toBe(404)
+    const authorized = { headers: { authorization: `Bearer ${TOKENS.owner}` } }
+    expect((await prod.handle(new Request(`http://localhost${OPENAPI_PATH}`, authorized))).status).toBe(404)
   })
 })
