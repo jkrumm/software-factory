@@ -21,6 +21,15 @@ export interface BodyField {
   untyped: boolean
 }
 
+/** A query parameter that is a bare flag: a boolean (`--live`, `--live false`) or an enum of one value (`--live` sends it). */
+export interface QueryFlag {
+  name: string
+  /** a boolean also takes `true` and `false` after it; an enum of one value takes nothing */
+  boolean: boolean
+  /** what a bare flag sends: `true` for a boolean, the enum's value otherwise */
+  value: string
+}
+
 /** One operation of the OpenAPI document as the generator writes it: `factory <group> <verb>`. */
 export interface Operation {
   operationId: string
@@ -33,10 +42,14 @@ export interface Operation {
   pathParams: readonly string[]
   /** query parameters: one `--<name> <value>` flag each */
   queryParams: readonly string[]
+  /** the query parameters (a subset of `queryParams`) that are bare flags */
+  queryFlags: readonly QueryFlag[]
   /** whether it takes a JSON body (`--body <json>` and one flag per property) */
   body: boolean
   /** the properties of the body object, one flag each */
   bodyFields: readonly BodyField[]
+  /** body fields (names) that follow the path parameters as positional arguments, in order: `x-cli.args` of the route */
+  args: readonly string[]
   /** the contract schema of every answer it declares, by status */
   responses: Readonly<Record<number, z.ZodType>>
 }
@@ -47,6 +60,10 @@ export interface Io {
   env: Record<string, string | undefined>
   out(text: string): void
   err(text: string): void
+  /** the whole of stdin: the value `-` of a string or json flag */
+  stdin(): Promise<string>
+  /** a file as UTF-8 text: the value `@path` of a string or json flag; rejects when it cannot be read */
+  readFile(path: string): Promise<string>
 }
 
 export type FlagValue = string | boolean | string[] | undefined
@@ -65,8 +82,11 @@ const commandOf = (op: Operation) => `${op.command[0]} ${op.command[1]}`
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-function scalarOf(op: Operation, field: BodyField, text: string): unknown {
-  const bad = (what: string) => usage(`${commandOf(op)}: --${field.flag} must be ${what}, got: ${text}`)
+/** What a flag or positional is called in a message: `--text`, or `<text>` for a positional argument. */
+type Label = string
+
+function scalarOf(op: Operation, field: BodyField, label: Label, text: string): unknown {
+  const bad = (what: string) => usage(`${commandOf(op)}: ${label} must be ${what}, got: ${text}`)
   switch (field.kind) {
     case 'string':
       return text
@@ -87,22 +107,50 @@ function scalarOf(op: Operation, field: BodyField, text: string): unknown {
         return field.untyped && !(isObject(value) || Array.isArray(value)) ? text : value
       } catch {
         if (field.untyped) return text
-        throw usage(`${commandOf(op)}: --${field.flag} is not JSON`)
+        throw usage(`${commandOf(op)}: ${label} is not JSON`)
       }
     }
   }
 }
 
-function fieldValue(op: Operation, field: BodyField, flag: FlagValue): unknown {
-  const texts = Array.isArray(flag) ? flag : [flag]
-  const values = texts.map((text) => scalarOf(op, field, typeof text === 'string' ? text : String(text)))
+/**
+ * The text of a string or json value: `-` is the whole of stdin, `@path` that file, `@@text` the literal `@text`. Any
+ * other kind (a number, a boolean) is the text as given.
+ */
+async function sourceOf(op: Operation, field: BodyField, label: Label, text: string, io: Io): Promise<string> {
+  if (field.kind !== 'string' && field.kind !== 'json') return text
+  if (text === '-') return io.stdin()
+  if (text.startsWith('@@')) return text.slice(1)
+  if (!text.startsWith('@')) return text
+  const path = text.slice(1)
+  try {
+    return await io.readFile(path)
+  } catch {
+    throw usage(`${commandOf(op)}: ${label}: cannot read ${path}`)
+  }
+}
+
+async function fieldValue(op: Operation, field: BodyField, label: Label, given: FlagValue, io: Io): Promise<unknown> {
+  const texts = Array.isArray(given) ? given : [given]
+  const values: unknown[] = []
+  for (const text of texts) {
+    const raw = typeof text === 'string' ? text : String(text)
+    values.push(scalarOf(op, field, label, await sourceOf(op, field, label, raw, io)))
+  }
   return field.repeatable ? values : values[values.length - 1]
 }
 
-function request(op: Operation, invocation: Invocation) {
-  if (invocation.args.length !== op.pathParams.length) {
-    const want = op.pathParams.map((name) => `<${name}>`).join(' ')
-    throw usage(`usage: ${commandOf(op)}${want ? ` ${want}` : ''}`)
+const queryValue = (op: Operation, flag: QueryFlag, text: string): string => {
+  const allowed = flag.boolean ? ['true', 'false'] : [flag.value]
+  if (allowed.includes(text)) return text
+  throw usage(`${commandOf(op)}: --${flag.name} takes ${allowed.map((a) => `"${a}"`).join(' or ')}, got: ${text}`)
+}
+
+async function request(op: Operation, invocation: Invocation, ioOf: Io) {
+  const want = op.pathParams.length + op.args.length
+  if (invocation.args.length !== want) {
+    const names = [...op.pathParams, ...op.args].map((name) => `<${name}>`).join(' ')
+    throw usage(`usage: ${commandOf(op)}${names ? ` ${names}` : ''}`)
   }
   let path = op.path
   op.pathParams.forEach((name, i) => {
@@ -111,7 +159,9 @@ function request(op: Operation, invocation: Invocation) {
   const query: Record<string, string> = {}
   for (const name of op.queryParams) {
     const value = invocation.flags[name]
-    if (typeof value === 'string') query[name] = value
+    if (typeof value !== 'string') continue
+    const bare = op.queryFlags.find((flag) => flag.name === name)
+    query[name] = bare ? queryValue(op, bare, value) : value
   }
   const raw = invocation.flags.body
   if (raw !== undefined && !op.body) throw usage(`${commandOf(op)} takes no --body`)
@@ -123,15 +173,37 @@ function request(op: Operation, invocation: Invocation) {
       throw usage('--body is not JSON')
     }
   }
-  const given = op.bodyFields.filter((field) => invocation.flags[field.flag] !== undefined)
-  if (given.length) {
+  // One read of stdin serves every `-` of the invocation.
+  let stdinText: Promise<string> | undefined
+  const io: Io = {
+    ...ioOf,
+    stdin: () => {
+      stdinText ??= ioOf.stdin()
+      return stdinText
+    },
+  }
+  const entries: [BodyField, Label, FlagValue][] = []
+  op.args.forEach((name, i) => {
+    const field = op.bodyFields.find((f) => f.name === name)
+    if (!field) throw new FactoryError('general', `${commandOf(op)}: positional ${name} is not a body property`)
+    if (invocation.flags[field.flag] !== undefined) {
+      throw usage(`${commandOf(op)}: ${name} is the positional <${name}>, not a flag`)
+    }
+    entries.push([field, `<${name}>`, invocation.args[op.pathParams.length + i]])
+  })
+  for (const field of op.bodyFields) {
+    const given = invocation.flags[field.flag]
+    if (given !== undefined) entries.push([field, `--${field.flag}`, given])
+  }
+  if (entries.length) {
     if (body !== undefined && !isObject(body))
       throw usage(`${commandOf(op)}: --body must be a JSON object to take flags`)
-    // The flags win over the keys of --body.
-    body = {
-      ...(isObject(body) ? body : {}),
-      ...Object.fromEntries(given.map((field) => [field.name, fieldValue(op, field, invocation.flags[field.flag])])),
+    const fields: Record<string, unknown> = {}
+    for (const [field, label, given] of entries) {
+      fields[field.name] = await fieldValue(op, field, label, given, io)
     }
+    // The flags and positionals win over the keys of --body.
+    body = { ...(isObject(body) ? body : {}), ...fields }
   }
   // A missing required field is the server's to refuse (422 with the fields named), not the CLI's.
   if (op.body && body === undefined) body = {}
@@ -145,7 +217,7 @@ function request(op: Operation, invocation: Invocation) {
  */
 export async function runOperation(op: Operation, invocation: Invocation, io: Io): Promise<void> {
   const base = io.env.FACTORY_URL || DEFAULT_URL
-  const { path, query, body } = request(op, invocation)
+  const { path, query, body } = await request(op, invocation, io)
   const answer = await send({ base, method: op.method, path, query, body, token: tokenOf(io.env) })
   if (!answer.reached) {
     throw new FactoryError('network', `server unreachable at ${base}: ${answer.reason}`, {

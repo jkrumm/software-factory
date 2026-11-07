@@ -9,12 +9,12 @@ import { join } from 'node:path'
 import * as contract from '@software-factory/contract'
 import { createApp, OPENAPI_PATH } from '@software-factory/server/app'
 import * as z from 'zod'
-import type { BodyField } from '../src/operation.ts'
+import type { BodyField, QueryFlag } from '../src/operation.ts'
 
 export const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operations.ts')
 
 /** Words the hand-written verbs own; a generated group may not take one. */
-export const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot']
+export const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot', 'follow']
 
 /** Flags the CLI itself owns (`run.ts`); a query parameter or a body property may not take one. */
 export const RESERVED_FLAGS = ['format', 'help', 'body']
@@ -23,7 +23,9 @@ const OPERATION_ID = /^([a-z][a-z0-9-]*)\.([a-z][a-z0-9-]*)$/
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
 const SCHEMA_REF = /^#\/\$defs\/([A-Za-z][A-Za-z0-9]*)$/
 
-const Parameter = z.object({ name: z.string(), in: z.string() })
+const Parameter = z.object({ name: z.string(), in: z.string(), schema: z.unknown().optional() })
+/** `detail['x-cli']` of a route: the body fields that are positional arguments after the path parameters. */
+const CliExtension = z.object({ args: z.array(z.string()) })
 const Response = z.object({
   content: z.record(z.string(), z.object({ schema: z.object({ $ref: z.string().optional() }).loose() })).optional(),
 })
@@ -46,8 +48,10 @@ interface Generated {
   summary: string
   pathParams: string[]
   queryParams: string[]
+  queryFlags: QueryFlag[]
   body: boolean
   bodyFields: BodyField[]
+  args: string[]
   responses: [number, string][]
 }
 
@@ -119,6 +123,18 @@ export const kebab = (name: string): string =>
     .replaceAll('_', '-')
     .toLowerCase()
 
+/** A query parameter that is a boolean or an enum of one value: a bare flag. */
+function queryFlagOf(name: string, schema: unknown): QueryFlag | null {
+  if (!isJson(schema)) return null
+  const typed = typeOf(schema, schema)
+  if (typed?.type === 'boolean') return { name, boolean: true, value: 'true' }
+  const only =
+    typed && Array.isArray(typed.schema.enum) && typed.schema.enum.length === 1
+      ? typed.schema.enum[0]
+      : typed?.schema.const
+  return typeof only === 'string' ? { name, boolean: false, value: only } : null
+}
+
 /** One property of the body as a flag. */
 function fieldOf(name: string, schema: Json, required: boolean, root: Json): BodyField {
   const flag = kebab(name)
@@ -184,7 +200,9 @@ export function operationsOf(document: unknown): Generated[] {
         }
         responses.push([Number(status), name])
       }
-      const queryParams = (op.parameters ?? []).filter((p) => p.in === 'query').map((p) => p.name)
+      const queries = (op.parameters ?? []).filter((p) => p.in === 'query')
+      const queryParams = queries.map((p) => p.name)
+      const queryFlags = queries.flatMap((p) => queryFlagOf(p.name, p.schema) ?? [])
       for (const name of queryParams.filter((q) => RESERVED_FLAGS.includes(q))) {
         problems.push(`${where}: query parameter "${name}" is a flag the CLI owns`)
       }
@@ -204,6 +222,16 @@ export function operationsOf(document: unknown): Generated[] {
         }
         taken.set(field.flag, `the flag of body property "${field.name}"`)
       }
+      const extension = CliExtension.safeParse(op['x-cli'])
+      if (op['x-cli'] !== undefined && !extension.success) problems.push(`${where}: x-cli must be { args: string[] }`)
+      const args = extension.success ? extension.data.args : []
+      for (const name of args) {
+        if (!bodyFields.some((field) => field.name === name)) {
+          problems.push(`${where}: x-cli arg "${name}" is not a property of the body`)
+        }
+        if (args.indexOf(name) !== args.lastIndexOf(name))
+          problems.push(`${where}: x-cli arg "${name}" is listed twice`)
+      }
       out.push({
         operationId: id,
         command: [match[1], match[2]],
@@ -212,8 +240,10 @@ export function operationsOf(document: unknown): Generated[] {
         summary: op.summary ?? '',
         pathParams,
         queryParams,
+        queryFlags,
         body: op.requestBody !== undefined,
         bodyFields,
+        args,
         responses,
       })
     }
@@ -227,6 +257,9 @@ export function operationsOf(document: unknown): Generated[] {
 
 const quote = (value: string): string => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 const list = (values: string[]): string => `[${values.map(quote).join(', ')}]`
+
+const flagText = (flag: QueryFlag): string =>
+  `{ name: ${quote(flag.name)}, boolean: ${String(flag.boolean)}, value: ${quote(flag.value)} }`
 
 const fieldText = (field: BodyField): string =>
   `{ name: ${quote(field.name)}, flag: ${quote(field.flag)}, kind: ${quote(field.kind)}, repeatable: ${String(field.repeatable)}, required: ${String(field.required)}, untyped: ${String(field.untyped)} }`
@@ -245,7 +278,9 @@ export function render(operations: Generated[]): string {
       `    pathParams: ${list(op.pathParams)},`,
       `    queryParams: ${list(op.queryParams)},`,
       `    body: ${String(op.body)},`,
+      `    queryFlags: [${op.queryFlags.map(flagText).join(', ')}],`,
       `    bodyFields: [${op.bodyFields.map(fieldText).join(', ')}],`,
+      `    args: ${list(op.args)},`,
       `    responses: { ${op.responses.map(([status, name]) => `${status}: ${name}`).join(', ')} },`,
       '  },',
     ].join('\n'),

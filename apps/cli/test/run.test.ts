@@ -17,6 +17,7 @@ const healthy: Health = {
 let server: ReturnType<typeof Bun.serve>
 let dir: string
 let answer: { status: number; body: unknown } = { status: 200, body: healthy }
+const stdinText = ''
 let seen: { url: string; method: string; body: string; authorization: string | null } | undefined
 
 beforeAll(async () => {
@@ -41,6 +42,11 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
+const files = {
+  stdin: () => Promise.resolve(stdinText),
+  readFile: (path: string) => Bun.file(path).text(),
+}
+
 async function cli(argv: string[], env: Record<string, string> = {}) {
   let out = ''
   let err = ''
@@ -52,6 +58,7 @@ async function cli(argv: string[], env: Record<string, string> = {}) {
     err: (text) => {
       err += text
     },
+    ...files,
   })
   return { code, out, err }
 }
@@ -196,14 +203,17 @@ describe('runOperation', () => {
     summary: '',
     pathParams: ['id'],
     queryParams: ['wake'],
+    queryFlags: [],
     body: true,
     bodyFields: [],
+    args: [],
     responses: { 200: Echo },
   }
   const io = (out: string[]) => ({
     env: { FACTORY_URL: server.url.href },
     out: (t: string) => void out.push(t),
     err: () => {},
+    ...files,
   })
 
   test('path parameters are positionals, query parameters flags, the body --body JSON', async () => {
@@ -252,7 +262,9 @@ describe('body flags', () => {
     summary: '',
     pathParams: ['id'],
     queryParams: [],
+    queryFlags: [],
     body: true,
+    args: [],
     bodyFields: [
       field('text', 'string'),
       field('count', 'number'),
@@ -265,7 +277,7 @@ describe('body flags', () => {
     ],
     responses: { 200: Echo },
   }
-  const io = { env: { FACTORY_URL: '' }, out: () => {}, err: () => {} }
+  const io = { env: { FACTORY_URL: '' }, out: () => {}, err: () => {}, ...files }
   const call = async (flags: Record<string, string | boolean | string[]>) => {
     answer = { status: 200, body: { ok: true } }
     await runOperation(op, { args: ['t1'], flags, format: 'json' }, { ...io, env: { FACTORY_URL: server.url.href } })
