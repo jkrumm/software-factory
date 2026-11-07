@@ -140,7 +140,20 @@ export interface Finalization {
   doneAt: Date | null
 }
 
+/** A signal an Issue was filed from, as the brief shows it: read-only, from intake's table (the leads never import intake). */
+export interface BriefSignal {
+  source: string
+  title: string
+  text: string
+  /** the alert's facts (the source's numbers), or null for a signal with none */
+  facts: unknown
+  at: Date
+}
+
 export interface LeadStore {
+  /** the signals an Issue was filed from or joined, oldest first, at most `limit` */
+  signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>
+
   attempt(issue: IssueId, attempt: number): Promise<LeadAttempt | null>
   /** the attempt's row, made on the first try; every later try counts */
   tried(issue: IssueId, attempt: number, branch: string, at: Date): Promise<LeadAttempt>

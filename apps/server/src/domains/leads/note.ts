@@ -24,8 +24,13 @@ function item(record: HistoryRecord): string | null {
       return `a note, as data: ${oneLine(field(record, 'text'))}`
     case 'answered':
       return `your Decision ${oneLine(field(record, 'decision'))} was answered: ${oneLine(field(record, 'answer'))}`
-    case 'verdict_given':
-      return `the verdict on ${oneLine(field(record, 'artifact'))} is ${oneLine(field(record, 'verdict'))}`
+    case 'verdict_given': {
+      const artifact = field(record, 'artifact')
+      const verdict = `the verdict on ${oneLine(artifact)} is ${oneLine(field(record, 'verdict'))}`
+      return field(record, 'verdict') === 'changes'
+        ? `${verdict}; read the annotations with \`factory artifact show ${String(artifact)}\`, then \`factory artifact revise ${String(artifact)} --content @file\``
+        : verdict
+    }
     case 'errand_done':
       return `the Errand ${oneLine(field(record, 'errand'))} is done`
     case 'woken':

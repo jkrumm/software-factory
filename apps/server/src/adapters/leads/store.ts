@@ -81,6 +81,14 @@ const FinalizationRow = z.object({
   done_at: z.date().nullable(),
 })
 
+const SignalRow = z.object({
+  source: z.string(),
+  title: z.string(),
+  text: z.string(),
+  facts: z.unknown(),
+  received_at: z.date(),
+})
+
 const COLUMN = {
   claim: 'claim_at',
   terminals: 'terminals_at',
@@ -91,6 +99,16 @@ const COLUMN = {
 /** The leads domain's tables on one transaction's connection. */
 export function postgresLeadStore(tx: SQL): LeadStore {
   return {
+    async signalsOf(issue, limit) {
+      const rows: unknown[] = await tx`
+        SELECT source, title, text, alert -> 'facts' AS facts, received_at
+        FROM factory.intake_signals WHERE issue_id = ${issue} ORDER BY received_at, id LIMIT ${limit}`
+      return rows.map((raw) => {
+        const row = SignalRow.parse(raw)
+        return { source: row.source, title: row.title, text: row.text, facts: row.facts ?? null, at: row.received_at }
+      })
+    },
+
     async attempt(issue, attempt) {
       const [row] = await tx`SELECT * FROM factory.lead_attempts WHERE issue_id = ${issue} AND attempt = ${attempt}`
       return row ? attemptOf(row) : null

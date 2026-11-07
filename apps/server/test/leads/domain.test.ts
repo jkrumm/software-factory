@@ -151,6 +151,18 @@ describe('the note a lead is typed', () => {
     expect(text.startsWith('-')).toBe(false)
   })
 
+  test('a verdict of changes names the commands that read and revise the artifact', () => {
+    const text = noteText(issueId(12), [
+      { kind: 'verdict_given', payload: { artifact: 'artifact_1', verdict: 'changes' }, at, version: 9 },
+    ])
+    expect(text).toContain('`factory artifact show artifact_1`')
+    expect(text).toContain('`factory artifact revise artifact_1 --content @file`')
+    const good = noteText(issueId(12), [
+      { kind: 'verdict_given', payload: { artifact: 'artifact_1', verdict: 'looks_good' }, at, version: 9 },
+    ])
+    expect(good).not.toContain('revise')
+  })
+
   test('an empty range still says there is news; a long one is cut', () => {
     expect(noteText(issueId(12), [])).toContain('there is news')
     const long = noteText(issueId(12), [{ kind: 'noted', payload: { text: 'x'.repeat(10_000) }, at, version: 1 }])
@@ -177,8 +189,52 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '11413e92c7939e9f9e02518920d819f99e582a9b1a4aeec17da09ba6c1b876f5',
+      'd01b87dba5be7862c2e7bb6f6676815e40fd271e9b6c683dbcae0e89d5a91c89',
     )
+  })
+
+  test('the standing orders list every verb in its plain flag form and say how news arrives', () => {
+    for (const form of [
+      'factory issue show <id>',
+      'factory issue close <id> --attempt <n>',
+      'factory issue defer <id> --attempt <n> --until',
+      '--after issue_5',
+      'factory issue block <id> --attempt <n>',
+      'factory issue ship <id> --attempt <n>',
+      '--commit <sha>',
+      'factory issue ask <id> --attempt <n>',
+      'factory artifact submit <id> --attempt <n>',
+      'factory artifact revise <artifact-id> --content @file.md',
+      'factory artifact show <artifact-id>',
+      'factory errand raise <id> --attempt <n>',
+      'factory signal file --from agent:<repo>',
+    ]) {
+      expect(STANDING_ORDERS).toContain(form)
+    }
+    expect(STANDING_ORDERS).not.toContain('<id> --body')
+    expect(STANDING_ORDERS).toMatch(/arrive as notes typed into your session/)
+    expect(STANDING_ORDERS).toMatch(/verdict of changes/)
+  })
+
+  test('the signals an Issue was filed from are data in a fence, clipped', () => {
+    const brief = buildBrief({
+      ...input,
+      signals: [
+        {
+          source: 'kuma',
+          title: 'API down',
+          text: 'x'.repeat(5_000),
+          facts: { monitor: 'api', msg: 'a ``` break' },
+          at: new Date(T0),
+        },
+      ],
+    })
+    expect(brief).toContain('## The signals it was filed from')
+    expect(brief).toContain('title: "API down"')
+    expect(brief).toContain('facts: {"monitor":"api","msg":"a ``` break"}')
+    expect(brief).not.toContain('x'.repeat(2_001))
+    expect(brief).toContain('````\nsource: kuma')
+    expect(buildBrief(input)).not.toContain('The signals it was filed from')
   })
 
   test('uses the language, never the retired words, and names the review rule', () => {
