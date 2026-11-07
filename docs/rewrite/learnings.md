@@ -112,3 +112,11 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   agent-workflows' `make check` was already red on master (a clock-skew test); filed as Issue 292 on the running core
   rather than fixed inside the rewrite. Carried forward for after the cutover: a `watching -> waiting(blocked)` cell so
   a blocked checkout can stall; intake's pollers into the runner; cross-repo triage edges (the queue loop).
+- **2026-11-07, package 8 integrated; packages 0 to 8 are in (941 unit, 195 scenarios).** One policy table decides who
+  may call each route (owner, agent, machine, read), fails closed, and a test walks the OpenAPI document for a route
+  without a row; signal trust follows the token. The read token never sees a work repo's words (one fail-closed rule);
+  NL22 lifted the rule for agw only, and I kept the stricter read-token side. Known and accepted for now: the agent token
+  is one token for every lead session, so a lead could call a verb on another Issue (as the old core allowed); per-session
+  tokens are a later change. For package 9: Iris, Hermes, the Herdr board, `rd` and `ask-human.sh` need the changes in
+  report 8; `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` must exist in 1Password; `verify.sh` and the gameday scripts
+  call retired verbs; `AGENTS.md` contradicts the code until package 9 rewrites it.

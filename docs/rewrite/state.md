@@ -24,7 +24,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 | 5 | Quality | 1 | integrated | t1f9 (removed) | `rw/5-quality` (merged, deleted) | e1390ff (merge), bb10eef | `reports/5-quality.md`; `make check` on `rewrite`: 624 unit, 62 scenarios; one outbox runner, real checkout |
 | 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
 | 7 | Loops and agw | 2, 6 | integrated | t1fc (removed) | `rw/7-loops-agw` (merged, deleted) | f637cef (merge), b49162b; agent-workflows 97dac43 deployed | `reports/7-loops-agw.md`; `make check` on `rewrite`: 759 unit, 98 scenarios; six live agw calls in the report; `agw factory-{steward,triage,ask}` answer on the mini |
-| 8 | API, read models, CLI parity | 2 to 7 | running | t1ff `rw-8-api-parity` (sonnet high, me2) | `rw/8-api-parity` | a586828 (base) | brief `briefs/8-api-parity.md` |
+| 8 | API, read models, CLI parity | 2 to 7 | integrated | t1ff (removed) | `rw/8-api-parity` (merged, deleted) | bc3f37c (merge) | `reports/8-api-parity.md` (parity table, client changes for 9); `make check` on `rewrite`: 941 unit, 195 scenarios |
 | 9 | Cutover | 8 | pending | | | | |
 
 ## Log
@@ -45,3 +45,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 7 integrated at f637cef; agent-workflows' red master test filed as factory Issue 292 (old core).
 - 2026-11-07: package 8 started in t1ff.
 - 2026-11-07: owner: the cutover runs in watched windows, then a burn-in with reports on day 3 and day 7 (NL24).
+- 2026-11-07: package 8 integrated at bc3f37c; packages 0 to 8 done; package 9 (cutover in windows, NL24) next.
