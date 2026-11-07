@@ -184,6 +184,27 @@ describe('what goes to the Judge', () => {
     })
     expect(JSON.stringify(input)).not.toMatch(/hunter2hunter2|sk-abcdefghijklmnop/)
   })
+
+  test("the Judge is told the repo's name, never the path it lives at", () => {
+    const input = judgeInputOf({
+      decision: 'decision_1' as DecisionId,
+      repo: '/Users/someone/SourceRoot/software-factory',
+      issue: 'the probe fails',
+      form: form(),
+      precedents: [
+        {
+          question: 'q',
+          answer: 'a',
+          settledBy: 'owner',
+          worthAsking: true,
+          repo: '/Users/someone/SourceRoot/dotfiles',
+        },
+      ],
+    })
+    expect(input.repo).toBe('software-factory')
+    expect(input.precedents[0]?.repo).toBe('dotfiles')
+    expect(JSON.stringify(input)).not.toContain('/Users')
+  })
 })
 
 describe('artifacts', () => {

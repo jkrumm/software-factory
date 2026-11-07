@@ -235,6 +235,9 @@ const MAX_JUDGE_TEXT = 2000
 
 const cut = (value: string): string => scrub(value).slice(0, MAX_JUDGE_TEXT)
 
+/** A repo as the Judge is told of it: its name, never the path it lives at. */
+export const repoName = (repo: string): string => repo.split('/').filter(Boolean).pop() ?? 'repo'
+
 export function judgeInputOf(input: {
   decision: DecisionId
   repo: string
@@ -245,14 +248,19 @@ export function judgeInputOf(input: {
   const { form } = input
   return {
     decision: input.decision,
-    repo: input.repo,
+    repo: repoName(input.repo),
     issue: cut(input.issue),
     question: cut(form.question),
     recommendation: cut(form.recommendation),
     checked: cut(form.checked),
     options: form.options.map((option) => ({ ...option, label: cut(option.label), cost: cut(option.cost) })),
     noAnswer: { ...form.noAnswer, consequence: cut(form.noAnswer.consequence) },
-    precedents: input.precedents.map((p) => ({ ...p, question: cut(p.question), answer: cut(p.answer) })),
+    precedents: input.precedents.map((p) => ({
+      ...p,
+      repo: repoName(p.repo),
+      question: cut(p.question),
+      answer: cut(p.answer),
+    })),
   }
 }
 

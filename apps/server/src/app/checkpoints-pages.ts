@@ -1,4 +1,4 @@
-import { MAX_SEND_ATTEMPTS, PAGE_LEASE_MS, pageBackoffMs } from '../domains/checkpoints/page.ts'
+import { PAGE_LEASE_MS, pageBackoffMs } from '../domains/checkpoints/page.ts'
 import type { Notifier } from '../domains/checkpoints/ports.ts'
 import type { Clock } from '../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -21,7 +21,8 @@ export interface PagesSent {
 /**
  * The owner's line: claim the due pages and commit, call the notifier with no transaction open (the calls of one pass side
  * by side, so a dead ntfy costs one timeout), record each result in a new transaction. A failed send waits 30 s, doubling to
- * 5 min; the fifth failure is final. A sent page is never sent again; a crash between a send and its record lets the
+ * 5 min, and is tried again for as long as the checkpoint is open (a line that was down or not yet configured still reaches
+ * the owner). A sent page is never sent again; a crash between a send and its record lets the
  * lease run out and the page goes again (at-least-once).
  */
 export async function sendDuePages(
@@ -43,12 +44,11 @@ export async function sendDuePages(
         await checkpoints.recordPage(page.key, { at, ok: true })
         return ok(undefined)
       }
-      const spent = page.attempts >= MAX_SEND_ATTEMPTS
       await checkpoints.recordPage(page.key, {
         at,
         ok: false,
         error: result.error,
-        retryAt: spent ? null : new Date(at.getTime() + pageBackoffMs(page.attempts)),
+        retryAt: new Date(at.getTime() + pageBackoffMs(page.attempts)),
       })
       return ok(undefined)
     })

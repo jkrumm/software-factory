@@ -16,8 +16,8 @@ import {
   showDecision,
   submitArtifact,
 } from './checkpoints.ts'
-import { runCheckpointPass, type PageDeps } from './checkpoints-pages.ts'
-import type { SettleDeps } from './checkpoints-settle.ts'
+import { type PageDeps, runCheckpointPass, sendDuePages } from './checkpoints-pages.ts'
+import { type SettleDeps, settleOpen } from './checkpoints-settle.ts'
 
 /** The checkpoints use cases bound to their dependencies: what the routes call. `main.ts` builds it once. */
 export function checkpointUses(deps: SettleDeps & PageDeps) {
@@ -38,6 +38,9 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     errands: (filter: Parameters<typeof listErrands>[1]) => listErrands(deps, filter),
     pages: (limit: number) => listPages(deps, limit),
     pass: () => runCheckpointPass(deps),
+    /** the two halves of a pass, for timers of their own: a slow Judge call never holds the owner's line */
+    settle: () => settleOpen(deps),
+    send: () => sendDuePages(deps),
   } satisfies Record<string, (input: never) => Promise<CheckpointResult<unknown>>>
 }
 

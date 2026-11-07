@@ -10,6 +10,9 @@ import type { Page } from './page.ts'
 export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open'] as const
 export type StepOutcome = (typeof STEP_OUTCOMES)[number]
 
+/** `claimed`: the caller makes the call. `in_flight`: another caller's call is running, so the Decision is left alone. `done`: the step has an outcome already. */
+export type StepClaim = 'claimed' | 'in_flight' | 'done'
+
 export interface Step {
   step: Settler
   /** null while a call is in flight */
@@ -106,7 +109,8 @@ export interface ErrandRecord {
   doneNote: string | null
 }
 
-export type PageStatus = 'pending' | 'sent' | 'failed' | 'cancelled'
+/** `failing`: unsent after the attempts a healthy line needs; it is still tried, and the error says why. */
+export type PageStatus = 'pending' | 'sent' | 'failing' | 'cancelled'
 
 export interface PageRecord extends Page {
   plannedAt: Date
@@ -116,7 +120,7 @@ export interface PageRecord extends Page {
   status: PageStatus
 }
 
-export type PageRun = { at: Date; ok: true } | { at: Date; ok: false; error: PortError; retryAt: Date | null }
+export type PageRun = { at: Date; ok: true } | { at: Date; ok: false; error: PortError; retryAt: Date }
 
 /**
  * The checkpoints domain's tables, inside one transaction. A database failure throws and aborts the transaction; the
@@ -142,7 +146,7 @@ export interface CheckpointStore {
   /** answered Decisions that look like this question (the `to_tsquery` OR expression), the owner's own answers first */
   precedents(terms: string, input: { excluding: DecisionId; limit: number }): Promise<Precedent[]>
   /** takes the step for a call: true when this caller may make it (not done, not leased to another) */
-  claimStep(id: DecisionId, step: Settler, now: Date, until: Date): Promise<boolean>
+  claimStep(id: DecisionId, step: Settler, now: Date, until: Date): Promise<StepClaim>
   finishStep(
     id: DecisionId,
     step: Settler,

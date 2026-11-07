@@ -121,7 +121,8 @@ CREATE INDEX errands_open ON factory.errands (raised_at) WHERE done_at IS NULL;
 
 -- The owner's line: ntfy carries checkpoints only. The outbox of its own: the key is deterministic per checkpoint, so a
 -- replay plans nothing twice, and a sent page is never sent again. A crash between a send and its record lets the lease
--- run out and the page goes again (at-least-once).
+-- run out and the page goes again (at-least-once). A page is never given up on while its checkpoint is open: a failing
+-- send backs off to 5 minutes and tries again, so a server started before ntfy is configured still tells the owner.
 CREATE TABLE factory.checkpoint_pages (
   key text PRIMARY KEY,
   kind text NOT NULL CHECK (kind IN ('decision', 'review', 'errand')),
@@ -135,11 +136,10 @@ CREATE TABLE factory.checkpoint_pages (
   claimed_until timestamptz,
   attempts integer NOT NULL DEFAULT 0,
   sent_at timestamptz,
-  failed_at timestamptz,
   cancelled_at timestamptz,
   error text
 );
 
 CREATE INDEX checkpoint_pages_due ON factory.checkpoint_pages (planned_at)
-  WHERE sent_at IS NULL AND failed_at IS NULL AND cancelled_at IS NULL;
+  WHERE sent_at IS NULL AND cancelled_at IS NULL;
 CREATE INDEX checkpoint_pages_by_checkpoint ON factory.checkpoint_pages (checkpoint);

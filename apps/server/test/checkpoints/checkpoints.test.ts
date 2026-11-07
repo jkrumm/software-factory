@@ -12,6 +12,7 @@ import {
   askDecision,
   finishErrand,
   giveVerdict,
+  listPages,
   markWorthAsking,
   raiseErrand,
   reviseArtifact,
@@ -362,14 +363,33 @@ describe('settling, in turn', () => {
     expect(value(await settleOpen(deps))).toEqual([])
   })
 
-  test('a step claimed by a call in flight is left to it', async () => {
+  test('a step claimed by a call in flight leaves the Decision alone: no Judge, no owner step, no page', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)
     await db.sql`INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${decision.id}, 'policy', ${new Date('2026-03-01T12:30:00Z')})`
-    value(await settleDecision(deps, decision.id))
+    expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'open', settledBy: null })
     const shown = value(await showDecision(deps, decision.id))
-    // policy is still claimed: the pass went on to the Judge, and the Decision stays open
-    expect(shown.steps.find((s) => s.step === 'policy')?.outcome).toBeNull()
+    expect(shown.steps).toEqual([{ step: 'policy', outcome: null, at: null, detail: null }])
+    expect(judgeCalls).toEqual([])
+    expect(await rows('checkpoint_pages')).toBe(0)
+
+    // The call that held it never reported back: once its lease has lapsed the next pass takes the step over.
+    clock.advance(31 * 60_000)
+    value(await settleDecision(deps, decision.id))
+    expect(judgeCalls).toHaveLength(1)
+    expect(await rows('checkpoint_pages')).toBe(1)
+  })
+
+  test('a Judge call in flight in another pass keeps the owner from being paged for what it may settle', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    await db.sql`INSERT INTO factory.decision_steps (decision_id, step, outcome, detail, at) VALUES (${decision.id}, 'policy', 'passed', 'no rule matches', ${clock.now()})`
+    await db.sql`INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${decision.id}, 'judge', ${new Date('2026-03-01T12:30:00Z')})`
+    value(await settleDecision(deps, decision.id))
+    value(await settleDecision(deps, decision.id))
+    expect(judgeCalls).toEqual([])
+    expect(await rows('checkpoint_pages')).toBe(0)
+    expect(value(await showDecision(deps, decision.id)).steps.map((s) => s.step)).toEqual(['policy', 'judge'])
   })
 })
 
@@ -613,7 +633,7 @@ describe('errands', () => {
 })
 
 describe("the owner's line", () => {
-  test('a failed send waits and tries again, backing off; the fifth failure is final; a delivery is recorded once', async () => {
+  test('a failed send backs off and is tried again for as long as the checkpoint is open; a delivery is recorded once', async () => {
     const issueId = await workingIssue()
     await ask(issueId)
     value(await settleOpen(deps))
@@ -621,18 +641,22 @@ describe("the owner's line", () => {
     expect(value(await sendDuePages(deps)).failed).toHaveLength(1)
     // inside its backoff nothing is due
     expect(value(await sendDuePages(deps))).toEqual({ sent: [], failed: [] })
-    for (let attempt = 2; attempt <= 5; attempt++) {
+    // a line that stays down for an hour: the page is still there, failing, and still tried
+    for (let attempt = 2; attempt <= 12; attempt++) {
       clock.advance(5 * 60_000)
       expect(value(await sendDuePages(deps)).failed).toHaveLength(1)
     }
-    const [page] = await db.sql`SELECT attempts, failed_at, error FROM factory.checkpoint_pages`
-    expect(page).toMatchObject({ attempts: 5, error: 'gone: ntfy answered 503' })
-    expect(page?.failed_at).not.toBeNull()
-    clock.advance(10 * 60_000)
-    expect(value(await sendDuePages(deps))).toEqual({ sent: [], failed: [] })
+    const [page] = await db.sql`SELECT attempts, sent_at, error FROM factory.checkpoint_pages`
+    expect(page).toMatchObject({ attempts: 12, sent_at: null, error: 'gone: ntfy answered 503' })
+    expect(value(await listPages(deps, 10))[0]?.status).toBe('failing')
 
+    // the line comes back: it goes once
     sendResult = () => ok(undefined)
-    expect(sent).toEqual([])
+    clock.advance(5 * 60_000)
+    expect(value(await sendDuePages(deps)).sent).toHaveLength(1)
+    expect(value(await sendDuePages(deps))).toEqual({ sent: [], failed: [] })
+    expect(sent).toHaveLength(1)
+    expect(value(await listPages(deps, 10))[0]?.status).toBe('sent')
   })
 
   test("a send that arrived is never sent again, and an answered checkpoint's page is never sent", async () => {

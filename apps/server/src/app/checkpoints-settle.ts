@@ -7,6 +7,7 @@ import {
   precedentTerms,
   type Settler,
 } from '../domains/checkpoints/decision.ts'
+import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import {
   type JudgePort,
@@ -87,6 +88,9 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
   for (const step of [policyStep, judgeStep, defaultStep]) {
     const stepped = await step(deps, first.value.decision, title)
     if (!stepped.ok) return lostRace(stepped.error) ? current(deps, id) : stepped
+    // A call of another pass is in flight: leave the Decision as it is. Going on to the owner now would page him for work
+    // the factory is about to settle.
+    if (stepped.value === BUSY) return current(deps, id)
     if (stepped.value) return ok(settledOf(stepped.value))
   }
   const owner = await ownerStep(deps, first.value.decision)
@@ -101,7 +105,9 @@ async function current(deps: CheckpointDeps, id: DecisionId): Step<Settled> {
   })
 }
 
-type StepResult = Step<DecisionRecord | null>
+/** What a step came to: it settled the Decision, it passed it on (null), or another pass's call is running (`busy`). */
+const BUSY = 'busy' as const
+type StepResult = Step<DecisionRecord | typeof BUSY | null>
 
 const answered = (outcome: Awaited<ReturnType<typeof answerIn>>): Result<DecisionRecord, CheckpointError> =>
   outcome.ok ? ok(outcome.value.decision) : outcome
@@ -113,7 +119,8 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
     ok(await checkpoints.claimStep(decision.id, 'policy', now, new Date(now.getTime() + STEP_LEASE_MS))),
   )
   if (!claimed.ok) return claimed
-  if (!claimed.value) return ok(null)
+  if (claimed.value === 'in_flight') return ok(BUSY)
+  if (claimed.value === 'done') return ok(null)
 
   const rules = await deps.policies.rulesFor(decision.repo)
   return deps.uow.run(async (stores) => {
@@ -147,15 +154,17 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
 async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: string): StepResult {
   const now = deps.clock.now()
-  const claimed = await deps.uow.run(async ({ checkpoints }) => {
-    if (!(await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS)))) {
-      return ok(null)
-    }
-    const terms = precedentTerms(decision.form.question)
-    return ok({ precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [] })
-  })
+  const claimed = await deps.uow.run<{ precedents: Precedent[] } | 'in_flight' | 'done', never>(
+    async ({ checkpoints }) => {
+      const claim = await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS))
+      if (claim !== 'claimed') return ok(claim)
+      const terms = precedentTerms(decision.form.question)
+      return ok({ precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [] })
+    },
+  )
   if (!claimed.ok) return claimed
-  if (!claimed.value) return ok(null)
+  if (claimed.value === 'in_flight') return ok(BUSY)
+  if (claimed.value === 'done') return ok(null)
 
   const input = judgeInputOf({
     decision: decision.id,

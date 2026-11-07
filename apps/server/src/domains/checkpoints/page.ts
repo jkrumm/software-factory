@@ -110,8 +110,6 @@ export function errandPage(about: About & { errand: string; summary: string }): 
   }
 }
 
-/** Sends before a page is given up on (`failed`). */
-export const MAX_SEND_ATTEMPTS = 5
 /** A claim not recorded within this long was a crashed send's: the page is due again, so it may arrive twice. */
 export const PAGE_LEASE_MS = 120_000
 

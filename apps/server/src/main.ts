@@ -62,19 +62,27 @@ async function main(): Promise<void> {
       ? fileStandingPolicies(checkpointSettings.policyFile)
       : stubStandingPolicies,
   })
-  let passing = false
-  const pass = async () => {
-    if (passing) return
-    passing = true
-    try {
-      const result = await checkpoints.pass()
-      if (!result.ok) console.error(`checkpoints: the pass failed: ${JSON.stringify(result.error)}`)
-    } finally {
-      passing = false
-    }
+  // Settling and sending run on timers of their own, one pass of each at a time: a Judge call is an agent run that can take
+  // minutes, and the owner's line must not wait for it. Package 7's tick takes both over; the leases make two callers safe.
+  const every = (name: string, run: () => Promise<{ ok: boolean; error?: unknown }>) => {
+    let running = false
+    return setInterval(() => {
+      if (running) return
+      running = true
+      run()
+        .then((result) => {
+          if (!result.ok) console.error(`checkpoints: the ${name} pass failed: ${JSON.stringify(result.error)}`)
+        })
+        .catch((error: unknown) => console.error(`checkpoints: the ${name} pass threw: ${String(error)}`))
+        .finally(() => {
+          running = false
+        })
+    }, checkpointSettings.passMs)
   }
-  const passTimer =
-    checkpointSettings.passMs > 0 ? setInterval(() => void pass(), checkpointSettings.passMs) : undefined
+  const passTimers =
+    checkpointSettings.passMs > 0
+      ? [every('settle', () => checkpoints.settle()), every('send', () => checkpoints.send())]
+      : []
 
   const app = createApp({
     health: {
@@ -93,7 +101,7 @@ async function main(): Promise<void> {
     if (stopping) return
     stopping = true
     console.log(`${signal}: stopping`)
-    clearInterval(passTimer)
+    for (const timer of passTimers) clearInterval(timer)
     await app.stop()
     await lock.release()
     await sql.close()

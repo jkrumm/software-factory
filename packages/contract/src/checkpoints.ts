@@ -241,7 +241,7 @@ export const PageView = z.object({
   attempts: z.number().int(),
   sentAt: iso.nullable(),
   error: z.string().nullable(),
-  status: z.enum(['pending', 'sent', 'failed', 'cancelled']),
+  status: z.enum(['pending', 'sent', 'failing', 'cancelled']),
 })
 
 export const PageList = z.object({ pages: z.array(PageView) }).meta({ id: 'PageList' })

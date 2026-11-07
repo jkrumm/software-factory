@@ -127,7 +127,6 @@ const PageRow = z.object({
   planned_at: z.date(),
   attempts: z.number().int(),
   sent_at: z.date().nullable(),
-  failed_at: z.date().nullable(),
   cancelled_at: z.date().nullable(),
   error: z.string().nullable(),
 })
@@ -228,7 +227,7 @@ const errandOf = (raw: unknown): ErrandRecord => {
 }
 
 const pageStatus = (row: z.infer<typeof PageRow>): PageRecord['status'] =>
-  row.sent_at ? 'sent' : row.failed_at ? 'failed' : row.cancelled_at ? 'cancelled' : 'pending'
+  row.sent_at ? 'sent' : row.cancelled_at ? 'cancelled' : row.error !== null ? 'failing' : 'pending'
 
 /** The checkpoints domain's tables on one transaction's connection. */
 export function postgresCheckpointStore(tx: SQL): CheckpointStore {
@@ -350,7 +349,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         WHERE factory.decision_steps.outcome IS NULL
           AND (factory.decision_steps.claimed_until IS NULL OR factory.decision_steps.claimed_until <= ${now})
         RETURNING decision_id`
-      return rows.length === 1
+      if (rows.length === 1) return 'claimed'
+      const [held]: { outcome: string | null }[] = await tx`
+        SELECT outcome FROM factory.decision_steps WHERE decision_id = ${id} AND step = ${step}`
+      return held?.outcome === null ? 'in_flight' : 'done'
     },
 
     async finishStep(id, step, done) {
@@ -500,14 +502,14 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async cancelPages(checkpoint, at) {
       await tx`
         UPDATE factory.checkpoint_pages SET cancelled_at = ${at}
-        WHERE checkpoint = ${checkpoint} AND sent_at IS NULL AND failed_at IS NULL AND cancelled_at IS NULL`
+        WHERE checkpoint = ${checkpoint} AND sent_at IS NULL AND cancelled_at IS NULL`
     },
 
     async claimPages({ now, until, limit }) {
       const rows: unknown[] = await tx`
         WITH due AS (
           SELECT key FROM factory.checkpoint_pages
-          WHERE sent_at IS NULL AND failed_at IS NULL AND cancelled_at IS NULL
+          WHERE sent_at IS NULL AND cancelled_at IS NULL
             AND (not_before IS NULL OR not_before <= ${now})
             AND (claimed_until IS NULL OR claimed_until <= ${now})
           ORDER BY planned_at, key
@@ -540,7 +542,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       await tx`
         UPDATE factory.checkpoint_pages
         SET error = ${`${run.error.kind}: ${run.error.detail}`}, claimed_until = NULL,
-            not_before = ${run.retryAt}, failed_at = ${run.retryAt === null ? run.at : null}
+            not_before = ${run.retryAt}
         WHERE key = ${key} AND sent_at IS NULL`
     },
 
