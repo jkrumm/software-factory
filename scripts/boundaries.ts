@@ -153,10 +153,26 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
   return violations
 }
 
+/** The only modules `factory hook` may load: it runs inside every Claude Code hook and prints on stdout only when told to. */
+const HOOK_ALLOWED = new Set(['node:fs', '@software-factory/contract/spool'])
+
+/** The hook's import rule (`AGENTS.md`, Hooks): `node:fs` and the contract's spool module, nothing else. */
+export function checkHook(source: string, name = 'apps/cli/src/hook.ts'): Violation[] {
+  return importsOf(source)
+    .filter(({ specifier }) => !HOOK_ALLOWED.has(specifier))
+    .map(({ specifier }) => ({
+      file: name,
+      rule: 'the hook imports only node:fs and the contract spool module',
+      detail: specifier,
+    }))
+}
+
+export const HOOK_FILE = join(import.meta.dir, '..', 'apps', 'cli', 'src', 'hook.ts')
+
 export const SERVER_SRC = join(import.meta.dir, '..', 'apps', 'server', 'src')
 
 if (import.meta.main) {
-  const violations = await checkBoundaries(SERVER_SRC)
+  const violations = [...(await checkBoundaries(SERVER_SRC)), ...checkHook(await readFile(HOOK_FILE, 'utf8'))]
   for (const v of violations) console.error(`${v.file}: ${v.rule} (${v.detail})`)
   if (violations.length) {
     console.error(`${violations.length} boundary violation(s); docs/architecture.md §The server has the rules`)

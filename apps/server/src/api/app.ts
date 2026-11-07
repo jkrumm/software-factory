@@ -6,6 +6,8 @@ import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
+import { type LeadRoutes, leadRoutes } from './leads.ts'
+import { leadsTestRoutes } from './leads-test.ts'
 
 export interface ApiDeps {
   health: HealthSource
@@ -13,6 +15,10 @@ export interface ApiDeps {
   checkpoints?: CheckpointUses
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
+  /** the lead's verbs and its session read (package 4); absent, the routes answer 503 */
+  leads?: LeadRoutes
+  /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
+  leadsTick?: Parameters<typeof leadsTestRoutes>[0]
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -60,7 +66,9 @@ export function createApp(deps: ApiDeps) {
     })
     .use(healthRoutes(deps.health))
     .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
+    .use(leadRoutes(deps.leads))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
+    .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }
 
 export type App = ReturnType<typeof createApp>

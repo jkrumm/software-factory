@@ -76,6 +76,12 @@ function worldEnv(world: World, extra: Record<string, string>): Record<string, s
     HOME: process.env.HOME ?? '/tmp',
     LC_ALL: 'C',
     HC_BIN: join(world.bin, 'hc'),
+    // The world's own hook socket, spool and archive, never the host's; and no tick unless a scenario asks for one.
+    FACTORY_SOCKET: join(world.bin, 'hook.sock'),
+    FACTORY_SPOOL_DIR: join(world.bin, 'spool'),
+    FACTORY_ARCHIVE_DIR: join(world.bin, 'archive'),
+    FACTORY_PRETRUST_BIN: '/usr/bin/true',
+    FACTORY_TICK_MS: '0',
     FACTORY_AGW_BIN: join(world.bin, 'agw'),
     FACTORY_FAKE_LOG: join(world.bin, 'calls.jsonl'),
     ...extra,

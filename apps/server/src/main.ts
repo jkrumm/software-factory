@@ -6,6 +6,8 @@ import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
+import { postgresLeadStore } from './adapters/leads/store.ts'
+import { loadLeadSettings } from './adapters/leads/settings.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { createApp } from './api/app.ts'
@@ -14,7 +16,8 @@ import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { loadCheckpointSettings } from './checkpoint-settings.ts'
 import { systemClock } from './kernel/clock.ts'
 import { systemIds } from './kernel/ids.ts'
-import { healthOf } from './read/health.ts'
+import { composeLeads } from './compose-leads.ts'
+import { healthOf, tickProblem } from './read/health.ts'
 import { loadSettings } from './settings.ts'
 
 /** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
@@ -47,8 +50,15 @@ async function main(): Promise<void> {
   const uow = postgresUnitOfWork(sql, (tx) => ({
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
+    leads: postgresLeadStore(tx),
   }))
   const writes = { uow, clock: systemClock, ids: systemIds }
+  const startedAt = new Date()
+  const leadSettings = loadLeadSettings(process.env)
+  const leads = composeLeads({ sql, uow, clock: systemClock, ids: systemIds, settings: leadSettings })
+  // The hook socket comes after the lock and the migrations: a second copy never reaches it.
+  const socket = await leads.listen()
+  const stopTick = leads.startLoop()
 
   const checkpointSettings = loadCheckpointSettings(process.env)
   const checkpoints = checkpointUses({
@@ -86,10 +96,20 @@ async function main(): Promise<void> {
 
   const app = createApp({
     health: {
-      read: async () =>
-        healthOf({ version: settings.version, databaseFailure: await ping(sql), tickAt: null, queueMovedAt: null }),
+      read: async () => {
+        const tickAt = leads.lastTickAt()
+        return healthOf({
+          version: settings.version,
+          databaseFailure: await ping(sql),
+          tickAt: tickAt?.toISOString() ?? null,
+          queueMovedAt: null,
+          tickFailure: tickProblem({ tickMs: leadSettings.tickMs, now: new Date(), startedAt, tickAt }),
+        })
+      },
     },
     checkpoints,
+    leads: leads.routes,
+    leadsTick: settings.internalTestRoutes ? () => leads.tick() : undefined,
     internalTest: settings.internalTestRoutes
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
@@ -102,7 +122,9 @@ async function main(): Promise<void> {
     stopping = true
     console.log(`${signal}: stopping`)
     for (const timer of passTimers) clearInterval(timer)
+    stopTick()
     await app.stop()
+    await socket.stop()
     await lock.release()
     await sql.close()
     process.exit(0)
