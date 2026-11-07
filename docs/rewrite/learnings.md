@@ -190,3 +190,14 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   hang; kind refinement of owner requests waits for the post-cutover triage work; Hermes gets a signal-only caller and
   token (9c) so no surface holds the owner token. The token's dialog could not reach the MacBook (ssh 255): it waits in
   the human queue as `rewrite-signal-bearer`.
+- **2026-11-07, window 2 start, finding: a deploy pruned the old core's release.** `KEEP_RELEASES=3` counted two quick
+  redeploys of the new core and removed 089b35c, the release `make rollback` needs; for a few minutes the way back would
+  have been a rebuild. Rebuilt it at once; `deploy.sh` now never prunes a sha listed in `data/keep-releases`, and the
+  old core is pinned there until `legacy/` is deleted. Related: after a redeploy `previous-sha` names the earlier
+  new-core release, so the way back sets it to the old core before `make rollback`.
+- **2026-11-07, window 2 start, finding: an optional ref that is not seeded blocks every `secrets-run` caller of the
+  template.** 9c taught the launcher and the deploy to leave out an unresolved `FACTORY_SIGNAL_TOKEN`; `import.sh` and a
+  hand-run CLI did not, so the import refused to start. `import.sh` filters it now; the hand-run CLI uses a copy of the
+  template without it until the token exists.
+- **2026-11-07, window 2: the shutdown fix holds live.** Three deploys and one `core_restart` in a row: every PID ended
+  on its own within the deadline, no lock left behind.
