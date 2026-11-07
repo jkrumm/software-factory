@@ -514,7 +514,13 @@ describe('NtfyNotifier', () => {
 
 describe('the away rule', () => {
   test('the owner is always away: a decision, the steward, the morning reading and a test go out; the rest is folded', async () => {
-    for (const key of ['notify:ask:7:q', 'notify:steward:7:blocked', 'notify:digest:2026-11-02', 'notify:test:1'])
+    for (const key of [
+      'notify:ask:7:q',
+      'notify:steward:7:blocked',
+      'notify:digest:2026-11-02',
+      'notify:test:1',
+      'notify:alert:7',
+    ])
       expect(foldReason(key)).toBeNull()
     expect(foldReason('notify:parked:7:3')).toContain('morning reading')
     await record(db.sql, { key: 'notify:parked:7:3', kind: 'parked', issueId: null, text: 'parked' }, now())
@@ -525,6 +531,90 @@ describe('the away rule', () => {
     const [row] =
       await db.sql`SELECT folded_at, folded_reason FROM factory.notifications WHERE key = 'notify:parked:7:3'`
     expect(row.folded_at).not.toBeNull()
+  })
+})
+
+describe('an alert nobody solved', () => {
+  const WINDOW = 30 * 60_000
+  const alertDeps = () => ({ ...deps(), alertPageAfterMs: WINDOW })
+
+  async function alert(monitor = 'api'): Promise<number> {
+    const made = await createIssue(
+      db.sql,
+      {
+        source: 'alert',
+        sourceKey: `kuma:${monitor}:down:${++n}`,
+        repo: TEST_REPO,
+        title: `${monitor} is down`,
+        facts: { source: 'kuma', monitor, status: 'down' },
+      },
+      { repoRoots: [TEST_ROOT], now: clock.now() },
+    )
+    return made.issue.id
+  }
+
+  async function close(id: number): Promise<void> {
+    await db.sql`
+      UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${now()}, reason = NULL WHERE id = ${id}`
+  }
+
+  test('left open past the delay it sends exactly one message, however often the tick or the server runs again', async () => {
+    const id = await alert()
+    await notifyPass(db.sql, alertDeps(), now)
+    clock.advance(WINDOW - 1)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(notifier.sent).toEqual([])
+    clock.advance(1)
+    await notifyPass(db.sql, alertDeps(), now)
+    clock.advance(60_000)
+    await notifyPass(db.sql, alertDeps(), now)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(notifier.sent).toEqual([
+      `Issue ${id} (repo): the alert of kuma “api” is unsolved after 30 min; no lead has started on it. Look: factory issue show ${id}`,
+    ])
+    expect(await keys()).toEqual([`notify:alert:${id}`])
+  })
+
+  test('it names what the lead is doing now', async () => {
+    const id = await alert('db')
+    await step(id, 'admitted')
+    await step(id, 'phase', { phase: 'investigate', attempt: 1 })
+    clock.advance(WINDOW)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(notifier.sent).toHaveLength(1)
+    expect(notifier.sent[0]).toContain('its lead is working, in phase investigate')
+  })
+
+  test('one closed inside the delay sends nothing, and an Issue that is not an alert is not paged', async () => {
+    const healed = await alert('healed')
+    await file()
+    clock.advance(WINDOW - 60_000)
+    await close(healed)
+    clock.advance(60_000)
+    await notifyPass(db.sql, alertDeps(), now)
+    clock.advance(WINDOW)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(notifier.sent).toEqual([])
+    expect(await rows()).toEqual([])
+  })
+
+  test('an alert that closes after the message was recorded still sent it once; off sends nothing; history pages nobody', async () => {
+    const id = await alert()
+    clock.advance(WINDOW)
+    await notifyPass(db.sql, { ...deps(), alertPageAfterMs: null }, now)
+    expect(await rows()).toEqual([])
+    // older than the window plus the lookback: a first deploy must not page for every old open alert
+    clock.advance(25 * 60 * 60_000)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(await rows()).toEqual([])
+    const fresh = await alert('fresh')
+    clock.advance(WINDOW)
+    await notifyPass(db.sql, alertDeps(), now)
+    await close(fresh)
+    await notifyPass(db.sql, alertDeps(), now)
+    expect(notifier.sent).toHaveLength(1)
+    expect(await keys()).toEqual([`notify:alert:${fresh}`])
+    expect(id).not.toBe(fresh)
   })
 })
 

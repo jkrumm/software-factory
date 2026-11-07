@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-/** What the factory tells the owner. `plan` is a finished plan, `test` is `factory notify test`. */
-export const NOTIFICATION_KINDS = ['ask', 'parked', 'failed', 'regression', 'digest', 'plan', 'test'] as const
+/** What the factory tells the owner. `plan` is a finished plan, `alert` is an alert nobody solved in time, `test` is `factory notify test`. */
+export const NOTIFICATION_KINDS = ['ask', 'parked', 'failed', 'regression', 'digest', 'plan', 'alert', 'test'] as const
 export const NotificationKind = z.enum(NOTIFICATION_KINDS)
 export type NotificationKind = z.infer<typeof NotificationKind>
 

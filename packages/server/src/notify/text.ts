@@ -52,7 +52,7 @@ export const issueHead = (issue: { id: number; repo: string }): string =>
 
 export interface Message {
   key: string
-  kind: 'ask' | 'parked' | 'failed' | 'regression' | 'digest' | 'plan' | 'test'
+  kind: 'ask' | 'parked' | 'failed' | 'regression' | 'digest' | 'plan' | 'alert' | 'test'
   issueId: number | null
   text: string
 }
@@ -146,5 +146,24 @@ export function planFinishedMessage(input: { project: string; sha: string }): Me
     kind: 'plan',
     issueId: null,
     text: `The plan of ${input.project} is finished: what next?`,
+  }
+}
+
+/** An alert Issue still unsolved when its window ran out: the system and what its lead is doing now. One per Issue. */
+export function alertMessage(input: {
+  issue: IssueRef
+  source: string | null
+  monitor: string | null
+  title: string
+  afterMs: number
+  doing: string
+}): Message {
+  const minutes = Math.max(1, Math.round(input.afterMs / 60_000))
+  const system = input.monitor ? `${input.source ?? 'alert'} ${quote(input.monitor, 80)}` : quote(input.title, 80)
+  return {
+    key: `notify:alert:${input.issue.id}`,
+    kind: 'alert',
+    issueId: input.issue.id,
+    text: `${issueHead(input.issue)}: the alert of ${system} is unsolved after ${minutes} min; ${input.doing}. Look: factory issue show ${input.issue.id}`,
   }
 }

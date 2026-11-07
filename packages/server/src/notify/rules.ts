@@ -1,7 +1,15 @@
 import type { SQL } from 'bun'
 import { digestDue, loadMorning } from './digest.ts'
 import { record } from './outbox.ts'
-import { askMessage, failedMessage, type IssueRef, parkedMessage, quote, regressionMessage } from './text.ts'
+import {
+  alertMessage,
+  askMessage,
+  failedMessage,
+  type IssueRef,
+  parkedMessage,
+  quote,
+  regressionMessage,
+} from './text.ts'
 
 /**
  * The rules of the owner's line. The ones tied to a transition (`ask`, parked, the hold) are called inside the transaction that
@@ -90,6 +98,59 @@ export async function notifyFailures(sql: SQL, now: Date): Promise<void> {
         id: effect.key,
         what: EFFECT_WHAT[effect.kind] ?? `${effect.kind} failed`,
         detail: effect.error,
+      }),
+      now,
+    )
+  }
+}
+
+/** An alert Issue older than the window plus this is history (a server that was down for a day, a first deploy): it pages nobody. */
+export const ALERT_PAGE_LOOKBACK_MS = 24 * 60 * 60_000
+
+/** What the Issue's lead is doing, in the words of the message. */
+function leadDoing(row: { state: string; reason: string | null; phase: string | null }): string {
+  if (row.state === 'queued') return 'no lead has started on it'
+  if (row.state === 'waiting') return `it is parked${row.reason ? ` (${row.reason})` : ''}`
+  return row.phase ? `its lead is working, in phase ${row.phase}` : 'its lead is working, no phase reported yet'
+}
+
+/**
+ * The safety net of factory-first paging: an Issue filed from the door's alerts that is still unsolved (not closed, not `watching` a
+ * shipped fix) `afterMs` after it was filed sends one message, keyed by the Issue. A tick after a restart finds the key and does nothing;
+ * an Issue that closed inside the window is never read. `null` switches the rule off.
+ */
+export async function notifyUnsolvedAlerts(sql: SQL, now: Date, afterMs: number | null): Promise<void> {
+  if (afterMs === null) return
+  const due = new Date(now.getTime() - afterMs)
+  const floor = new Date(due.getTime() - ALERT_PAGE_LOOKBACK_MS)
+  const rows: {
+    id: number
+    repo: string
+    title: string
+    state: string
+    reason: string | null
+    source: string | null
+    monitor: string | null
+    phase: string | null
+  }[] = await sql`
+    SELECT i.id, i.repo, i.title, i.state, i.reason, i.facts->>'source' AS source, i.facts->>'monitor' AS monitor,
+      (SELECT e.payload->>'phase' FROM factory.issue_events e
+       WHERE e.issue_id = i.id AND e.kind = 'phase' AND e.payload->>'attempt' = i.attempt::text ORDER BY e.id DESC LIMIT 1) AS phase
+    FROM factory.issues i
+    WHERE i.source = 'alert' AND i.state IN ('settling', 'queued', 'working', 'waiting')
+      AND i.created_at <= ${due} AND i.created_at > ${floor}
+      AND NOT EXISTS (SELECT 1 FROM factory.notifications n WHERE n.key = 'notify:alert:' || i.id)
+    ORDER BY i.id LIMIT 20`
+  for (const row of rows) {
+    await record(
+      sql,
+      alertMessage({
+        issue: { id: row.id, repo: row.repo },
+        source: row.source,
+        monitor: row.monitor,
+        title: row.title,
+        afterMs,
+        doing: leadDoing(row),
       }),
       now,
     )
