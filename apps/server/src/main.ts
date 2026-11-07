@@ -51,6 +51,9 @@ function every(ms: number, pass: () => Promise<void>): { stop(): Promise<void> }
   }
 }
 
+/** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
+const IDLE_TIMEOUT_S = 255
+
 const fail = (message: string): never => {
   console.error(message)
   process.exit(1)
@@ -129,7 +132,7 @@ async function main(): Promise<void> {
     internalTest: settings.internalTestRoutes
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
-  }).listen({ hostname: HOSTNAME, port: settings.port })
+  }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   let stopping = false

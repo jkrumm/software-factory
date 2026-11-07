@@ -156,7 +156,6 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
       at,
       outcome,
       checks: record(checks),
-      evidenceId: deps.ids.next('evidence'),
     })
     const step = stepOf(watch.ran, checks)
     if (step.kind === 'again') {

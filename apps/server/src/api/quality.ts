@@ -51,8 +51,6 @@ const evidenceOf = (one: StoredEvidence) => {
       return { kind: 'commits' as const, ...one.payload }
     case 'review':
       return { kind: 'review' as const, ...one.payload }
-    case 'verify':
-      return { kind: 'verify' as const, ...one.payload }
   }
 }
 

@@ -64,16 +64,14 @@ export interface ReviewEvidence {
   reason: string | null
 }
 
-/** What a watch's verify found; the checks as data, whatever they printed. */
-export interface VerifyEvidence {
-  outcome: 'green' | 'red' | 'blocked'
-  checks: { name: string; ok: boolean; detail: string }[]
+/** One check of a run of verify, as data, whatever it printed. */
+export interface CheckRecord {
+  name: string
+  ok: boolean
+  detail: string
 }
 
-export type Evidence =
-  | { kind: 'commits'; commits: CommitsEvidence }
-  | { kind: 'review'; review: ReviewEvidence }
-  | { kind: 'verify'; verify: VerifyEvidence }
+export type Evidence = { kind: 'commits'; commits: CommitsEvidence } | { kind: 'review'; review: ReviewEvidence }
 
 /** A review that exists: agw's ledger covers the range, or no review was needed. */
 export const hasReview = (review: ReviewEvidence): boolean =>

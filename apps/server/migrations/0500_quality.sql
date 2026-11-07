@@ -22,14 +22,14 @@ CREATE UNIQUE INDEX quality_ships_accepted_once ON factory.quality_ships (event_
 CREATE INDEX quality_ships_by_issue ON factory.quality_ships (issue_id, at);
 
 -- What an accepted ship proved: its merged commits, and its review when there was one (its absence is a row too, with
--- the reason). `verify` rows come from the watch.
+-- the reason). What verify found is in `quality_checks`.
 CREATE TABLE factory.quality_evidence (
   id text PRIMARY KEY,
   issue_id text NOT NULL REFERENCES factory.issues (id),
   attempt integer NOT NULL CHECK (attempt >= 1),
-  -- the ship (`quality_ships.event_key`) or the watch (`quality_watches.key`) this belongs to
+  -- the ship (`quality_ships.event_key`) this belongs to
   source_key text NOT NULL,
-  kind text NOT NULL CHECK (kind IN ('commits', 'review', 'verify')),
+  kind text NOT NULL CHECK (kind IN ('commits', 'review')),
   at timestamptz NOT NULL,
   payload jsonb NOT NULL,
   UNIQUE (source_key, kind)

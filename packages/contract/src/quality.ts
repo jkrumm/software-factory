@@ -36,15 +36,9 @@ const ReviewEvidence = z.object({
   reason: z.string().nullable(),
 })
 
-const VerifyEvidence = z.object({
-  kind: z.literal('verify'),
-  outcome: z.enum(['green', 'red', 'blocked']),
-  checks: z.array(z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })),
-})
-
-/** What a ship, or the watch after it, proved. */
+/** What a ship proved: its merged commits, and its review or the record that there was none. */
 export const QualityEvidence = z
-  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence, VerifyEvidence])
+  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence])
   .meta({ id: 'QualityEvidence' })
 export type QualityEvidence = z.infer<typeof QualityEvidence>
 

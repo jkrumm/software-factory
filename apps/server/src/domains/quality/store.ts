@@ -1,6 +1,6 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
-import type { CommitsEvidence, ReviewEvidence, VerifyEvidence } from './evidence.ts'
+import type { CheckRecord, CommitsEvidence, ReviewEvidence } from './evidence.ts'
 import type { Outcome, Ran } from './watch.ts'
 
 /** A ship the gate looked at. */
@@ -20,7 +20,6 @@ export interface ShipRecord {
 export type StoredEvidence =
   | { id: string; kind: 'commits'; payload: CommitsEvidence }
   | { id: string; kind: 'review'; payload: ReviewEvidence }
-  | { id: string; kind: 'verify'; payload: VerifyEvidence }
 
 export type WatchAnswer = 'passed' | 'regressed' | 'ended'
 
@@ -41,7 +40,7 @@ export interface OpenWatch extends WatchRecord {
 
 export interface QualityView {
   ships: (Omit<ShipRecord, 'issueId'> & { evidence: StoredEvidence[] })[]
-  watches: (WatchRecord & { checks: { n: number; at: Date; outcome: Outcome; checks: VerifyEvidence['checks'] }[] })[]
+  watches: (WatchRecord & { checks: { n: number; at: Date; outcome: Outcome; checks: CheckRecord[] }[] })[]
 }
 
 /** The quality domain's tables, inside one transaction. A database failure throws; the unit of work turns it into a `PortError`. */
@@ -59,15 +58,14 @@ export interface QualityStore {
   /** holds the watch until `until`; false when another check holds it */
   claimWatch(key: Key, now: Date, until: Date): Promise<boolean>
   releaseWatch(key: Key): Promise<void>
-  /** a run of verify and the evidence it leaves */
+  /** a run of verify, as it ended */
   recordCheck(input: {
     watch: Key
     issueId: IssueId
     attempt: number
     at: Date
     outcome: Outcome
-    checks: VerifyEvidence['checks']
-    evidenceId: string
+    checks: CheckRecord[]
   }): Promise<void>
   answerWatch(key: Key, answer: WatchAnswer, at: Date): Promise<void>
   view(issueId: IssueId): Promise<QualityView>

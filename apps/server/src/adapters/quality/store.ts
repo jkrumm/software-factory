@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { CommitsEvidence, ReviewEvidence, VerifyEvidence } from '../../domains/quality/evidence.ts'
+import type { CommitsEvidence, ReviewEvidence } from '../../domains/quality/evidence.ts'
 import type {
   OpenWatch,
   QualityStore,
@@ -52,7 +52,7 @@ const ShipRow = z.object({
 const EvidenceRow = z.object({
   id: z.string(),
   source_key: z.string(),
-  kind: z.enum(['commits', 'review', 'verify']),
+  kind: z.enum(['commits', 'review']),
   payload: z.unknown(),
 })
 
@@ -64,8 +64,6 @@ const evidenceOf = (raw: unknown): StoredEvidence => {
       return { id: row.id, kind: 'commits', payload: row.payload as CommitsEvidence }
     case 'review':
       return { id: row.id, kind: 'review', payload: row.payload as ReviewEvidence }
-    case 'verify':
-      return { id: row.id, kind: 'verify', payload: row.payload as VerifyEvidence }
   }
 }
 
@@ -157,12 +155,6 @@ export function postgresQualityStore(tx: SQL): QualityStore {
       await tx`
         INSERT INTO factory.quality_checks (watch_key, n, at, outcome, checks)
         VALUES (${input.watch}, ${n}, ${input.at}, ${input.outcome}, ${input.checks})`
-      // The evidence of a watch is its newest run: a run replaces the one before it.
-      await tx`
-        INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
-        VALUES (${input.evidenceId}, ${input.issueId}, ${input.attempt}, ${input.watch}, 'verify', ${input.at},
-                ${{ outcome: input.outcome, checks: input.checks }})
-        ON CONFLICT (source_key, kind) DO UPDATE SET at = excluded.at, payload = excluded.payload`
     },
 
     async answerWatch(key, answer: WatchAnswer, at) {

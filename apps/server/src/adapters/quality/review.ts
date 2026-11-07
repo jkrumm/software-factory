@@ -19,6 +19,8 @@ const CoveredAnswer = z.object({
  */
 export const REVIEW_TIMEOUT_MS = 180_000
 
+const MAX_RANGES_AT_ONCE = 4
+
 const TIER_ORDER = ['none', 'light', 'standard', 'deep']
 
 /**
@@ -31,7 +33,12 @@ export class AgwReview implements Review {
 
   async read({ repo, ranges }: Parameters<Review['read']>[0]): Promise<Result<ReviewRead>> {
     try {
-      const answers = await Promise.all(ranges.map((range) => this.readRange(repo, range)))
+      // A few ranges at a time, two agw processes each: a ship of many ranges must not start them all at once.
+      const answers: Result<ReviewRead>[] = []
+      for (let at = 0; at < ranges.length; at += MAX_RANGES_AT_ONCE) {
+        const batch = ranges.slice(at, at + MAX_RANGES_AT_ONCE)
+        answers.push(...(await Promise.all(batch.map((range) => this.readRange(repo, range)))))
+      }
       for (const answer of answers) if (!answer.ok) return answer
       const reads = answers.flatMap((answer) => (answer.ok ? [answer.value] : []))
       const tier = reads.reduce(
