@@ -70,7 +70,10 @@ ok "GET /v1/overview without a token is 401"
 # 4. the installed CLI reaches it with the token, which secrets-run resolves from the deployed release's .env.tpl
 export FACTORY_URL="http://127.0.0.1:$PORT"
 factory health >/dev/null || fail "factory health failed"
-secrets-run run --env-file="$ROOT/current/.env.tpl" -- factory capacity get >/dev/null || fail "factory capacity get failed"
+# shellcheck source=scripts/optional-refs.sh
+source "$ROOT/current/scripts/optional-refs.sh"
+TPL=$(effective_template "$ROOT/current/.env.tpl" "$ROOT/env.verify.tpl")
+secrets-run run --env-file="$TPL" -- factory capacity get >/dev/null || fail "factory capacity get failed"
 ok "factory health and factory capacity get (with the owner's token)"
 
 # 5. the door answers an unauthenticated POST with 401 (it has no health route: the 401 is the health check). When it does not,

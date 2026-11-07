@@ -21,18 +21,9 @@ load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 
 # The import needs only the database: an optional ref that does not resolve yet (scripts/optional-refs.sh) is left out of
 # the template it reads, as the launcher does, so an unmade token never blocks an import.
-TPL="$DIR/.env.tpl"
 # shellcheck source=scripts/optional-refs.sh
 source "$DIR/scripts/optional-refs.sh"
-for key in $OPTIONAL_KEYS; do
-  ref=$(grep -hE "^${key}=" "$TPL" | head -1 | cut -d= -f2-)
-  [[ -n "$ref" ]] || continue
-  if ! "$SECRETS_RUN" read "$ref" >/dev/null 2>&1; then
-    mkdir -p "$HOME/.software-factory"
-    grep -v "^${key}=" "$TPL" > "$HOME/.software-factory/env.import.tpl"
-    TPL="$HOME/.software-factory/env.import.tpl"
-  fi
-done
+TPL=$(effective_template "$DIR/.env.tpl" "$HOME/.software-factory/env.import.tpl")
 
 # shellcheck disable=SC2016 # the child script is single-quoted on purpose
 exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
