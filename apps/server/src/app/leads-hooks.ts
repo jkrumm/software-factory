@@ -1,4 +1,4 @@
-import type { HookEventAnswer, StopCheck } from '@software-factory/contract'
+import { HookEventBody, type HookEventAnswer, type StopCheck } from '@software-factory/contract'
 import type { SpoolLine } from '@software-factory/contract/spool'
 import { parseLeadKey } from '../domains/leads/names.ts'
 import { deriveSession } from '../domains/leads/session.ts'
@@ -17,6 +17,8 @@ import { type LeadDeps, loadIssue, toPortError } from './leads.ts'
  * a `wall` stall. Nothing else the hooks say moves the Issue; the session's state is derived when read.
  */
 export async function recordHook(deps: LeadDeps, line: SpoolLine): Promise<Result<HookEventAnswer, PortError>> {
+  // The socket checks a line with this schema; a spool line gets the same check, so a row of a kind the reads cannot parse is never stored.
+  if (!HookEventBody.safeParse(line).success) return ok({ recorded: false, reacted: null })
   const lead = parseLeadKey(line.session)
   // `pane_gone` and `runner_restarted` are the factory's own findings: a session never reports them.
   if (!lead || line.kind === 'pane_gone' || line.kind === 'runner_restarted')

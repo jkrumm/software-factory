@@ -154,15 +154,15 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
 }
 
 /** The only modules `factory hook` may load: it runs inside every Claude Code hook and prints on stdout only when told to. */
-const HOOK_ALLOWED = new Set(['node:fs', 'node:path', '@software-factory/contract/spool'])
+const HOOK_ALLOWED = new Set(['node:fs', '@software-factory/contract/spool'])
 
-/** The hook's import rule (`AGENTS.md`, Hooks): `node:fs`, `node:path` and the contract's spool module, nothing else. */
+/** The hook's import rule (`AGENTS.md`, Hooks): `node:fs` and the contract's spool module, nothing else. */
 export function checkHook(source: string, name = 'apps/cli/src/hook.ts'): Violation[] {
   return importsOf(source)
     .filter(({ specifier }) => !HOOK_ALLOWED.has(specifier))
     .map(({ specifier }) => ({
       file: name,
-      rule: 'the hook imports only node:fs, node:path and the contract spool module',
+      rule: 'the hook imports only node:fs and the contract spool module',
       detail: specifier,
     }))
 }

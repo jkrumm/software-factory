@@ -151,17 +151,16 @@ test('importsOf reads static, type-only, re-exported and dynamic imports, not co
   ])
 })
 
-describe('the hook imports only node:fs, node:path and the contract spool module', () => {
+describe('the hook imports only node:fs and the contract spool module', () => {
   test('a hook that loads the CLI or zod fails', () => {
-    expect(checkHook("import { run } from './run.ts'\nimport * as z from 'zod'\n").map((v) => v.detail)).toEqual([
-      './run.ts',
-      'zod',
-    ])
+    expect(
+      checkHook("import { run } from './run.ts'\nimport { join } from 'node:path'\n").map((v) => v.detail),
+    ).toEqual(['./run.ts', 'node:path'])
   })
 
-  test('a hook with only its three modules passes', () => {
+  test('a hook with only its two modules passes', () => {
     const source =
-      "import { appendFileSync } from 'node:fs'\nimport { join } from 'node:path'\nimport { nextKey } from '@software-factory/contract/spool'\n"
+      "import { appendFileSync } from 'node:fs'\nimport { nextKey } from '@software-factory/contract/spool'\n"
     expect(checkHook(source)).toEqual([])
   })
 

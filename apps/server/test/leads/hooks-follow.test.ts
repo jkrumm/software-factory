@@ -66,6 +66,14 @@ describe('hook events', () => {
     expect(count?.n).toBe(0)
   })
 
+  test('a spool line of a kind the server does not know is skipped, not stored', async () => {
+    await running()
+    const odd = { ...line('turn_started', 1), kind: 'something_new' } as unknown as SpoolLine
+    expect(await recordHook(w.deps, odd)).toEqual({ ok: true, value: { recorded: false, reacted: null } })
+    const [count] = await w.db.sql`SELECT count(*)::int AS n FROM factory.lead_hook_events`
+    expect(count?.n).toBe(0)
+  })
+
   test('a limit stop of a working lead is a wall stall, once, with the window capacity knows', async () => {
     const issue = await running()
     w.windowReset = new Date('2026-11-07T15:00:00Z')

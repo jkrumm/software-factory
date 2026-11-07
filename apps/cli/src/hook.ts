@@ -2,7 +2,6 @@
 // fail the session, so it imports nothing but node:fs and the zod-free half of the contract, and every path ends in
 // exit 0. Order matters: the spool first (the fact survives anything), the server second (best effort, 300 ms).
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   ACCOUNT_NAME,
   defaultHookSocket,
@@ -229,7 +228,7 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
   const dir = io.env.FACTORY_SPOOL_DIR || (home ? defaultSpoolDir(home) : '')
   // No place to spool is no place to lose an event to a stray relative path.
   if (!dir) return undefined
-  const file = join(dir, spoolFileName(session))
+  const file = `${dir.replace(/\/+$/, '')}/${spoolFileName(session)}`
   // Counting the spool and appending are one step: two overlapping hooks of a session must not write the same key.
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   const release = await tryLock(file, LOCK_BUDGET_MS)
