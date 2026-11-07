@@ -1,6 +1,6 @@
 # Package 5: Quality, report
 
-**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, seven commits on `fc5a8ac` (the brief's base): four for the package, three review fixes, and this report. `make check` is green.
+**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, commits on `fc5a8ac` (the brief's base): four for the package, three review fixes, the report, and the integration step (two merges of `rewrite` and the wiring). `make check` is green.
 
 ## What changed
 
@@ -15,6 +15,18 @@
 - **`apps/server/src/api/quality.ts`**, **`packages/contract/src/quality.ts`**: `POST /issues/:id/ship` (`quality.ship`), `POST /issues/:id/reopen` (`quality.reopen`), `GET /issues/:id/quality` (`quality.show`). A refusal is a 409 with the error named, exit 5 in the CLI; the CLI prints the refusal body on stdout. `apps/cli/src/generated/operations.ts` is regenerated.
 - **Shared files** (additive): `main.ts` (the quality store, the use cases, a tick), `api/app.ts` (one `.use()` and an optional `quality` dep), `settings.ts` (below), `packages/contract/src/index.ts`, `tests/scenarios/fakes/agw.ts` (a three-line dispatch to the new `fakes/review.ts`), `tests/package.json` (the `git-repo` export for `tests/support/git-repo.ts`).
 - **Edits to other packages' tests**, each one line: `settings.test.ts` (`toEqual` to `toMatchObject`, since every package adds a setting), `boot.test.ts` (`arrayContaining`, since every package adds a migration), `apps/cli/test/generate.test.ts` (`toContain('health get')`, since every package adds a command).
+
+## The integration step (after the orchestrator's merge of packages 4 and 6, then 2)
+
+`rewrite` is merged into the branch twice (conflicts in `main.ts`, `api/app.ts`, `contract/src/index.ts`, `fakes/agw.ts`, `boot.test.ts` and the generated CLI, each a union; the CLI regenerated). Quality now runs on package 4's wiring:
+
+- **One outbox runner.** `composeLeads` takes quality's `startWatch` port as an input (`compose-leads.ts`: the input, the use in `ports`, and the removed refusing `stubStartWatch`; nothing else). My own outbox loop and `stubStartLead`, `stubNoteLead` and `stubFinalize` are gone from `main.ts`.
+- **One setting.** The watch loop runs on the leads' `FACTORY_TICK_MS` (10 s default, 0 off); my duplicate is out of `settings.ts`. It stays its own loop, one pass at a time, so a `make verify` of minutes never holds the leads' tick.
+- **A real lead checkout.** `stubLeadCheckout` is deleted. `app/quality-checkout.ts` (`leadCheckoutOf`) reads the lead attempt row through the leads store: the branch, the cut (`base_sha`) and the repo directory. `LeadCheckout` now answers `{ repo, branch, cut }`, and `checkoutOf` (`app/quality-ship.ts`) gives git, agw, the project reads and `make` that directory. **An Issue's `repo` is a name inside the allowed roots now, not a path**, so the directory has to come from the lead's attempt (`repo_path`); with no attempt on record the Issue's own repo is used as a path, as before.
+- **The "older than this attempt" gate now runs in production**, and a branch's own unmerged work counts (open point 9 below is closed). A scenario ships a commit from before the lead started and is refused.
+- Scenarios now run on package 4's leads world (`startLeadsWorld`): the lead is started by the real tick against the fake `hc`, so the attempt row is real. They share one repo per describe (new file per scenario), and `stateOf` asks again on a version conflict because the tick writes to the same Issue.
+- Added `test/quality/checkout.test.ts` (the adapter on the real leads store) and a `quality-write` test that git, agw, the project and `make` run in the lead's directory.
+- Intake (package 2) records `regressed` itself (`receive`, a `down` while the Issue is `watching`, `watch` its own). `reportRegression` therefore has no caller yet; see open point 1. A watch whose Issue regressed that way is ended by the next pass.
 
 ## How the pieces run
 
@@ -73,9 +85,9 @@ Beside them: `test/quality/{watch,gate,git,adapters}.test.ts` (pure rules, real 
 | `Review` | same | `AgwReview` (`FACTORY_AGW_BIN`) | |
 | `Proof` | same | `MakeAndProbes` | |
 | `Projects` | same | `makefileProjects`: a `verify` target means verified, a `deploy` target means `make deploy` and so `make version`; the window is `FACTORY_WATCH_WINDOW_MS` (default none, as the old project default was) | the project file brings the window, probes and migrations (package 3) |
-| `LeadCheckout` | same | | `stubLeadCheckout`: nothing is known of where an attempt's worktree was cut, so a ship is judged by the commits it names (package 4 brings the real one) |
+| `LeadCheckout` | same | `leadCheckoutOf` (`app/quality-checkout.ts`): the lead attempt row through the leads store | |
 
-`main.ts` also has `stubStartLead`, `stubNoteLead` and `stubFinalize`, which answer ok and do nothing, so the outbox can run `start_watch`. They are packages 3 and 4's to replace.
+`main.ts` has no stub of mine any more. The one outbox is package 4's, with `startWatchPort` passed in.
 
 ## Events recorded on Issues
 
@@ -105,14 +117,14 @@ The reviewer's file list was refused by agw twice before it matched `stat.txt`, 
 
 ## Open points
 
-1. **Intake must call `reportRegression`** (`app/quality-reopen.ts`): `{ issueId, signal: Key, detail }`, with its own deterministic signal key. A closed Issue is reopened, so the third-regression count does not include a regression that reopened it; the orchestrator should confirm that reading.
+1. **`reportRegression` has no caller.** Intake records `regressed` on a watched Issue itself, so only the other half is unused: a signal for a *closed* Issue should reopen it (`app/quality-reopen.ts`: `{ issueId, signal: Key, detail }`, the signal's own deterministic key), and intake's `regressed` on a closed Issue is ignored by the machine. The orchestrator decides whether intake calls it. A closed Issue is reopened, so the third-regression count does not include a regression that reopened it; the orchestrator should confirm that reading.
 2. **The path-derived evidence kinds are not ported.** The old gate asked a lead for a screenshot (`ui`), status and logs (`infra`), data queries (`data`) or error rate (`service`) by what the commits touched, and `factory issue evidence` filed them. The brief names only merged commits and a review as evidence, so I built those; `isInert` is the one piece kept, for the deployed-version check. If the kinds stay, they are a follow-up: a `file evidence` verb and a freshness rule in `judgeShip`.
-3. **A shared tick is a stand-in.** `main.ts` runs `runOutbox` and `checkWatches` on `FACTORY_TICK_MS` (unset: no tick, which keeps package 1's scenarios as they are). The loops package replaces it. `FACTORY_AGW_BIN`, `FACTORY_TICK_MS`, `FACTORY_WATCH_WINDOW_MS`, `FACTORY_VERIFY_RETRY_MS`, `FACTORY_VERIFY_SETTLE_MS` and `FACTORY_CLOCK_OFFSET_MS` are new settings and, like `FACTORY_LOCK_WAIT_MS`, are not on `scripts/env-file.sh`'s allow-list yet (package 9). The clock offset exists for the scenarios.
+3. **New settings** (`scripts/env-file.sh`'s allow-list is package 9's): `FACTORY_AGW_BIN`, `FACTORY_WATCH_WINDOW_MS`, `FACTORY_VERIFY_RETRY_MS`, `FACTORY_VERIFY_SETTLE_MS` and `FACTORY_CLOCK_OFFSET_MS` (the scenarios use the last to reach 31 days on). The tick is the leads' `FACTORY_TICK_MS`.
 4. **`unwiredQuality`** in `api/quality.ts` is a null object so the CLI generator (which builds `createApp` with only `health`) and the API tests see the quality routes. Package 8 may prefer the generator to pass real dependencies.
 5. **New words** for `docs/language.md`: ship refused, watch (a record per ship: window, checks, answer), `ended` (a watch whose Issue moved on), review status (`covered`, `not_required`, `uncovered`, `unknown`). Retired words stayed out.
 6. **`docs/design.md` §4 describes the old hold.** The new watch keeps its scars: the retries (1, 2, 4 delays) before a regression, the settle time after a restart, the fast-forward-only checkout sync with a blocked state, the deployed-version check against the landed commit. It drops the per-kind evidence (point 2), the review refusal (NL23) and the `close` verb's gate (not in this brief).
 7. **A refused ship from the machine is stored as final for its event key** (package 1's rule), so a lead that was refused by the machine ships again with a new `call`. A gate refusal stores no event, so the same `call` can try again.
 8. **The CLI prints a refusal's body on stdout**, not stderr (package 0's `runOperation` does so for a declared non-2xx body); the scenarios read it there.
-9. **A ship is judged by the commits it names alone until package 4 brings the cut.** `stubLeadCheckout` knows no worktree, so the gate cannot refuse a commit older than the attempt, nor count work on the lead's branch that the lead did not name. A lead can name a commit already on the default branch. The real check is in `GitCommits` and tested with an explicit cut.
+9. **Closed by the integration step:** the lead's cut and branch are read from the attempt row, so a commit older than the attempt is refused and the branch's own unmerged work counts.
 10. **A watch whose checkout stays blocked checks again every five minutes, without end.** Each run is a row in `quality_checks`. The steward should read it and act; no signal is sent today.
 11. **The listener's idle timeout is 255 s** (`main.ts`), since a ship call waits for git and agw inside one request.
