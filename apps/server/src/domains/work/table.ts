@@ -111,6 +111,15 @@ const ask = byLead((ctx: Ctx<'asked'>): Cell => ({
   wait: { reason: 'decision', holds: ctx.event.payload.decision },
   effects: [],
 }))
+/** The steward raises a Decision for a stall it cannot end by itself: only from a stall, only for the attempt there is. */
+const stewardAsk = (ctx: Ctx<'asked'>): Cell =>
+  ctx.issue.wait && WAITS[ctx.issue.wait.reason].stall
+    ? ask(ctx)
+    : refuse('the steward asks only of a stall: the lead asks for itself')
+const askedBy =
+  (lead: (ctx: Ctx<'asked'>) => Cell) =>
+  (ctx: Ctx<'asked'>): Cell =>
+    ctx.event.actor === 'steward' ? stewardAsk(ctx) : lead(ctx)
 const submit = byLead((ctx: Ctx<'submitted'>): Cell => ({
   to: 'waiting',
   wait: { reason: 'review', holds: ctx.event.payload.artifact },
@@ -269,7 +278,7 @@ export const TABLE: Table = {
     lead_started: leadStarted,
     lead_gone: leadGone,
     noted: noteWorking,
-    asked: ask,
+    asked: askedBy(ask),
     answered: said('nothing waits for an answer'),
     submitted: submit,
     verdict_given: said('nothing waits for a verdict'),
@@ -293,7 +302,7 @@ export const TABLE: Table = {
     lead_gone: said('waiting: the wait ends first, and its note finds the lead gone'),
     // Recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief reads it otherwise.
     noted: () => ({ to: 'waiting', effects: [] }),
-    asked: fromTimer(ask),
+    asked: askedBy(fromTimer(ask)),
     answered: (ctx) => endsCheckpoint(ctx, 'decision', ctx.event.payload.decision),
     submitted: fromTimer(submit),
     verdict_given: (ctx) => endsCheckpoint(ctx, 'review', ctx.event.payload.artifact),

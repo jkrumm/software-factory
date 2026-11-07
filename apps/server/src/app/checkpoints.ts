@@ -116,7 +116,7 @@ export interface Asked {
  */
 export async function askDecision(
   deps: CheckpointDeps,
-  input: { issueId: IssueId; attempt: number; form: unknown },
+  input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward' },
 ): Promise<CheckpointResult<Asked>> {
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
@@ -136,7 +136,7 @@ export async function askDecision(
     const event: IssueEvent<'asked'> = {
       kind: 'asked',
       payload: { attempt: input.attempt, decision: { id, summary: form.question.slice(0, 200) } },
-      actor: 'lead',
+      actor: input.by ?? 'lead',
     }
     const recorded = applied(
       await recordIn(work, deps, {

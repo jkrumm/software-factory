@@ -30,7 +30,7 @@ export const PAYLOADS = {
   lead_gone: z.object({ attempt, detail: text }),
   /** an amend or a note reaches the lead */
   noted: z.object({ text }),
-  /** the lead raised a Decision and waits for its answer */
+  /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */
   asked: z.object({ attempt, decision: checkpoint }),
   /** a Decision got its answer */
   answered: z.object({ decision: text, answer: text }),
@@ -91,7 +91,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   lead_started: ['factory'],
   lead_gone: ['factory'],
   noted: ['owner', 'factory', 'steward', 'judge'],
-  asked: ['lead'],
+  asked: ['lead', 'steward'],
   answered: ['owner', 'judge', 'factory'],
   submitted: ['lead'],
   verdict_given: ['owner'],
