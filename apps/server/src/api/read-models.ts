@@ -76,10 +76,13 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
     )
     .get(
       '/flow',
-      async () => {
+      async ({ request }) => {
         if (!deps) return unavailable
         const queue = await deps.queueReasons?.().catch(() => null)
-        return Response.json(FlowModel.parse(await readFlow(deps.sql, { now: now(), queue: queue ?? undefined })))
+        const redact = caller(request) === 'read'
+        return Response.json(
+          FlowModel.parse(await readFlow(deps.sql, { now: now(), queue: queue ?? undefined, redact })),
+        )
       },
       {
         response: { 200: FlowModel, ...errorResponses(503) },
@@ -92,9 +95,9 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
     )
     .get(
       '/chain',
-      async () => {
+      async ({ request }) => {
         if (!deps) return unavailable
-        return Response.json(ChainModel.parse(await readChain(deps.sql, now())))
+        return Response.json(ChainModel.parse(await readChain(deps.sql, now(), { redact: caller(request) === 'read' })))
       },
       {
         response: { 200: ChainModel, ...errorResponses(503) },

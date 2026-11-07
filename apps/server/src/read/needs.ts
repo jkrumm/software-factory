@@ -2,28 +2,13 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
 import { plain } from './words.ts'
+import { isWorkRepo, loadOpenProjects, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
+
+export { isWorkRepo, REDACTED_SUMMARY, REDACTED_TITLE }
+export type { OpenProject } from './work.ts'
 
 /** Waiting longer than this is stale. */
 export const STALE_MS = 24 * 3_600_000
-
-/** What a work-repo item says under the read token: the ids, kinds and times stay, the words go. */
-export const REDACTED_TITLE = 'Work in a private repository'
-export const REDACTED_SUMMARY = 'The text of work in a private repository is not shown here.'
-
-/** A project the factory reads from its own `project.yaml`: its repo text is the owner's, not the work account's. */
-export interface OpenProject {
-  name: string
-  repo: string
-}
-
-/**
- * Whether a repo is a work repo: it belongs to no project with a `project.yaml` of its own (a project with defaults, or
- * a repo the factory does not know). Fails closed: text of a repo nobody listed is not shown to the read token.
- */
-export function isWorkRepo(repo: string | null, open: readonly OpenProject[]): boolean {
-  if (repo === null) return false
-  return !open.some((p) => p.name === repo || p.repo === repo || repo.startsWith(`${p.repo}/`))
-}
 
 /** A need with the scope the redaction needs; the scope never leaves the server. */
 export type ScopedNeed = Omit<NeedItem, 'redacted'> & { work: boolean }
@@ -97,16 +82,12 @@ const SignalRow = z.object({
   issue_id: z.string().nullable(),
 })
 
-const Project = z.object({ name: z.string(), repo: z.string() })
-
 /**
  * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open),
  * Concepts and Specs under review, open Errands of Issues still open, and held signals. Read-only SQL.
  */
 export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
-  const open: OpenProject[] = (await sql`SELECT name, repo FROM factory.planning_projects WHERE source = 'file'`).map(
-    (raw: unknown) => Project.parse(raw),
-  )
+  const open = await loadOpenProjects(sql)
 
   const decisions: unknown[] = await sql`
     SELECT d.id, d.issue_id, d.repo, d.question, d.recommendation, d.asked_at, d.no_answer

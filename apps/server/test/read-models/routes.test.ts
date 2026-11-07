@@ -24,6 +24,19 @@ beforeAll(async () => {
   await db.sql`INSERT INTO factory.issues (id, repo, state, wait_reason, version) VALUES ('issue_1', 'work-app', 'waiting', 'errand', 2)`
   await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at)
     VALUES ('errand_1', 'k1', 'issue_1', 1, 'Rotate the key in the portal', now())`
+  // issue_1 is in a repo no project.yaml describes (a work repo, even though the factory knows no project of that name);
+  // issue_2 is in a project with a project.yaml of its own.
+  await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_2', 'open-app', 'queued', 1)`
+  await db.sql`INSERT INTO factory.planning_projects (name, repo, source, project, plan)
+    VALUES ('open-app', '/src/open-app', 'file', '{}'::jsonb, '{"version":1,"rows":[]}'::jsonb)`
+  for (const [n, id, repo, title] of [
+    [1, 'issue_1', 'work-app', 'Fix SECRET payroll export'],
+    [2, 'issue_2', 'open-app', 'Tidy the open app'],
+  ] as const) {
+    await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES (${`event_${n}`}, ${id}, ${`key_${n}`}, 'filed', ${JSON.stringify({ repo, title, kind: 'feature', origin: 'you' })}::text::jsonb,
+        'factory', now(), 'applied', 1, 'settling')`
+  }
   app = createApp({ ...base, readModels: { sql: db.sql } })
 })
 afterAll(() => db.stop())
@@ -63,4 +76,40 @@ test('unbound, the models answer 503', async () => {
   const response = await get(unbound, '/v1/flow', TOKENS.owner)
   expect(response.status).toBe(503)
   expect(await response.json()).toMatchObject({ code: 'unavailable' })
+})
+
+test('flow and chain: the read token gets no title and no repo name of a work repo, and the owner does', async () => {
+  for (const path of ['/v1/flow', '/v1/chain']) {
+    const owner = await (await get(app, path, TOKENS.owner)).text()
+    expect(owner).toContain('Fix SECRET payroll export')
+    expect(owner).toContain('work-app')
+    const read = await (await get(app, path, TOKENS.read)).text()
+    expect(read).not.toContain('SECRET')
+    expect(read).not.toContain('work-app')
+    // an Issue of a project with its own project.yaml keeps its words
+    expect(read).toContain('Tidy the open app')
+  }
+})
+
+test('signals: the read token gets no word of any signal', async () => {
+  const { redactSignals } = await import('../../src/read/signals.ts')
+  const [out] = redactSignals([
+    {
+      id: 'signal_1',
+      source: 'owner:cli',
+      kind: 'request',
+      origin: 'you',
+      trust: 'owner',
+      repo: 'work-app',
+      title: 'Fix SECRET payroll export',
+      text: 'the text',
+      link: 'https://example.com/secret',
+      receivedAt: '2026-11-07T10:00:00.000Z',
+      state: 'filed',
+      issue: 'issue_1',
+      redacted: false,
+    },
+  ])
+  expect(JSON.stringify(out)).not.toMatch(/SECRET|work-app|example\.com/)
+  expect(out).toMatchObject({ id: 'signal_1', trust: 'owner', state: 'filed', issue: 'issue_1', redacted: true })
 })

@@ -7,6 +7,7 @@ import {
   type QueueReason as QueueReasonSchema,
 } from '@software-factory/contract'
 import { plain } from './words.ts'
+import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
 /** Why each queued Issue stays queued, by Issue id; the capacity use case knows (it reads the host), so the caller passes it. */
 export type QueueReasons = ReadonlyMap<string, z.infer<typeof QueueReasonSchema>>
@@ -33,8 +34,15 @@ const QueueRow = z.object({ project: z.string(), state: z.enum(['run', 'pace', '
 export const RECENT_MS = 24 * 3_600_000
 
 /** The Issues by state, what closed in the last day, the counts per project and the queue state per scope. Read-only SQL. */
-export async function readFlow(sql: SQL, options: { now: Date; queue?: QueueReasons }): Promise<FlowModel> {
+export async function readFlow(
+  sql: SQL,
+  options: { now: Date; queue?: QueueReasons; /** the read token: a work repo's words go */ redact?: boolean },
+): Promise<FlowModel> {
   const { now } = options
+  const openProjects = options.redact ? await loadOpenProjects(sql) : []
+  const hidden = (repo: string): boolean => options.redact === true && isWorkRepo(repo, openProjects)
+  const repoOf = (repo: string): string => (hidden(repo) ? REDACTED_REPO : repo)
+  const titleOf = (repo: string, title: string): string => (hidden(repo) ? REDACTED_TITLE : plain(title, 120))
   const open: unknown[] = await sql`
     SELECT i.id, i.repo, i.state, i.wait_reason, f.payload->>'title' AS title, COALESCE(s.at, f.at) AS since
     FROM factory.issues i
@@ -66,25 +74,25 @@ export async function readFlow(sql: SQL, options: { now: Date; queue?: QueueReas
     waiting: { count: 0, issues: [] },
     watching: { count: 0, issues: [] },
   }
-  const projects = new Map<string, { open: number; working: number; queued: number }>()
+  const perProject = new Map<string, { open: number; working: number; queued: number }>()
   for (const raw of open) {
     const row = Open.parse(raw)
     const issue: FlowIssue = {
       id: row.id,
-      repo: row.repo,
-      title: plain(row.title, 120),
+      repo: repoOf(row.repo),
+      title: titleOf(row.repo, row.title),
       since: row.since.toISOString(),
       waitReason: row.wait_reason,
-      queue: row.state === 'queued' ? (options.queue?.get(row.id) ?? null) : null,
+      queue: row.state === 'queued' && !hidden(row.repo) ? (options.queue?.get(row.id) ?? null) : null,
     }
     const column = columns[row.state]
     column.count++
     column.issues.push(issue)
-    const project = projects.get(row.repo) ?? { open: 0, working: 0, queued: 0 }
-    project.open++
-    if (row.state === 'working') project.working++
-    if (row.state === 'queued') project.queued++
-    projects.set(row.repo, project)
+    const counts = perProject.get(repoOf(row.repo)) ?? { open: 0, working: 0, queued: 0 }
+    counts.open++
+    if (row.state === 'working') counts.working++
+    if (row.state === 'queued') counts.queued++
+    perProject.set(repoOf(row.repo), counts)
   }
 
   const states = scopes.map((raw) => QueueRow.parse(raw))
@@ -95,13 +103,13 @@ export async function readFlow(sql: SQL, options: { now: Date; queue?: QueueReas
       const row = Closed.parse(raw)
       return {
         id: row.id,
-        repo: row.repo,
-        title: plain(row.title, 120),
+        repo: repoOf(row.repo),
+        title: titleOf(row.repo, row.title),
         outcome: row.outcome,
         closedAt: row.closed_at.toISOString(),
       }
     }),
-    perProject: [...projects]
+    perProject: [...perProject]
       .map(([repo, counts]) => ({ repo, ...counts }))
       .sort((a, b) => a.repo.localeCompare(b.repo)),
     queueStates: {

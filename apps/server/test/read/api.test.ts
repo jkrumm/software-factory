@@ -247,6 +247,24 @@ describe('as the read token', () => {
     expect(asks[0]).toMatchObject({ issue: 2, kind: 'decision' })
   })
 
+  test('a repo that no project describes is a work repo too: it fails closed, as the needs do', async () => {
+    const { sql } = db
+    await sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES ('issue_9', '/src/unlisted', 'closed', 'done', 2)`
+    await sql`
+      INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES ('event_9', 'issue_9', 'k9', 'filed',
+        ${{ repo: '/src/unlisted', title: 'The SECRET unlisted fix', kind: 'bug', origin: 'you' }}, 'factory', ${NOW}, 'applied', 1, 'settling')`
+    try {
+      const read = JSON.stringify((await json('/v1/issues?state=closed', READER)).body)
+      expect(read).not.toContain('SECRET')
+      expect(read).not.toContain('/src/unlisted')
+      expect(JSON.stringify((await json('/v1/issues?state=closed', OWNER)).body)).toContain('The SECRET unlisted fix')
+    } finally {
+      await sql`DELETE FROM factory.issue_events WHERE issue_id = 'issue_9'`
+      await sql`DELETE FROM factory.issues WHERE id = 'issue_9'`
+    }
+  })
+
   test('a write is 403, no token is 401', async () => {
     const write = await call('/v1/issues/1/close', READER, {
       method: 'POST',

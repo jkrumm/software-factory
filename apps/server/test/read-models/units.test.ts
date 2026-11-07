@@ -85,7 +85,7 @@ test('needsModel under the read token: work-repo words are replaced, ids, kinds 
   expect(read.counts).toEqual({ decision: 2, review: 0, errand: 1, held_signal: 0 })
 })
 
-test('redactSignals hides the text of every signal that is not the owner’s and flags it', () => {
+test('redactSignals keeps ids, kinds, times and states and drops every word, the owner’s signals too', () => {
   const signal = (trust: StoredSignal['trust']): StoredSignal => ({
     id: `signal_${trust}`,
     source: 'cli',
@@ -95,18 +95,15 @@ test('redactSignals hides the text of every signal that is not the owner’s and
     repo: 'app',
     title: 'a title',
     text: 'the text',
-    link: null,
+    link: 'https://example.com/x',
     receivedAt: '2026-11-07T10:00:00.000Z',
     state: 'filed',
     issue: null,
     redacted: false,
   })
   const out = redactSignals([signal('owner'), signal('agent'), signal('outside'), signal('machine')])
-  expect(out.map((s) => [s.trust, s.text, s.redacted])).toEqual([
-    ['owner', 'the text', false],
-    ['agent', '', true],
-    ['outside', '', true],
-    ['machine', '', true],
-  ])
-  expect(out[1]?.title).toBe('a title')
+  expect(out.map((s) => [s.trust, s.title, s.text, s.link, s.repo, s.redacted])).toEqual(
+    ['owner', 'agent', 'outside', 'machine'].map((trust) => [trust, REDACTED_TITLE, '', null, null, true]),
+  )
+  expect(out.map((s) => s.id)).toEqual(['signal_owner', 'signal_agent', 'signal_outside', 'signal_machine'])
 })

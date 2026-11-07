@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
 import { plain } from './words.ts'
+import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
 const IssueRow = z.object({
   id: z.string(),
@@ -36,7 +37,15 @@ const rowId = (project: string, key: string): string => `row:${project}:${key}`
  * edge names it), the `after` edges with whether the blocker has closed, and per queued node the nodes blocking it now.
  * Read-only SQL.
  */
-export async function readChain(sql: SQL, now: Date): Promise<ChainModel> {
+export async function readChain(
+  sql: SQL,
+  now: Date,
+  options: { /** the read token: a work repo's words go */ redact?: boolean } = {},
+): Promise<ChainModel> {
+  const openProjects = options.redact ? await loadOpenProjects(sql) : []
+  const hidden = (repo: string): boolean => options.redact === true && isWorkRepo(repo, openProjects)
+  const repoOf = (repo: string): string => (hidden(repo) ? REDACTED_REPO : repo)
+  const titleOf = (repo: string, title: string): string => (hidden(repo) ? REDACTED_TITLE : plain(title, 120))
   const parse = <T extends z.ZodType>(schema: T, rows: unknown[]): z.output<T>[] => rows.map((raw) => schema.parse(raw))
   const openRows: unknown[] = await sql`
     SELECT i.id, i.repo, i.state, f.payload->>'title' AS title
@@ -131,8 +140,8 @@ export async function readChain(sql: SQL, now: Date): Promise<ChainModel> {
     .map((row): ChainNode => ({
       id: row.id,
       kind: 'issue',
-      repo: row.repo,
-      title: plain(row.title, 120),
+      repo: repoOf(row.repo),
+      title: titleOf(row.repo, row.title),
       state: row.state,
     }))
   const rowNodes = unfiled.map(({ project, row }): ChainNode => {
@@ -142,8 +151,8 @@ export async function readChain(sql: SQL, now: Date): Promise<ChainModel> {
     return {
       id: rowId(project, row.key),
       kind: 'row',
-      repo: row.repo ?? project,
-      title: plain(row.title ?? row.key, 120),
+      repo: repoOf(row.repo ?? project),
+      title: titleOf(row.repo ?? project, row.title ?? row.key),
       state: waiting ? 'waiting' : 'filable',
     }
   })

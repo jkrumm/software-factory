@@ -69,7 +69,7 @@ export async function loadBriefs(sql: SQL, ids: readonly string[]): Promise<Map<
   if (ids.length === 0) return found
   const rows: { id: string; repo: string; title: string; state: string; work: boolean }[] = await sql`
     SELECT i.id, i.repo, i.state, f.payload->>'title' AS title,
-      EXISTS (SELECT 1 FROM factory.planning_projects p WHERE (p.name = i.repo OR p.repo = i.repo) AND p.source = 'defaults') AS work
+      NOT EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.source = 'file' AND (p.name = i.repo OR p.repo = i.repo OR i.repo LIKE p.repo || '/%')) AS work
     FROM factory.issues i
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
     WHERE i.id IN ${sql(ids)}`
