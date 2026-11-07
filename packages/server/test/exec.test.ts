@@ -76,7 +76,14 @@ setTimeout(() => process.exit(1), 300)
 
 describe('childEnv', () => {
   test('keeps every secret the factory runs on out of a child, and passes the rest on', () => {
-    const secrets = ['FACTORY_TOKEN', 'FACTORY_DB_PASSWORD', 'DATABASE_URL', 'FACTORY_GITHUB_TOKEN', 'NTFY_TOKEN']
+    const secrets = [
+      'FACTORY_TOKEN',
+      'FACTORY_READ_TOKEN',
+      'FACTORY_DB_PASSWORD',
+      'DATABASE_URL',
+      'FACTORY_GITHUB_TOKEN',
+      'NTFY_TOKEN',
+    ]
     const saved = Object.fromEntries(secrets.map((name) => [name, process.env[name]]))
     try {
       for (const name of secrets) process.env[name] = 'must-not-reach-a-child-0000'

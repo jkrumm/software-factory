@@ -112,6 +112,8 @@ export interface AppDeps {
   version: string
   /** the bearer token every route except `GET /health` requires */
   token: string
+  /** `FACTORY_READ_TOKEN`: a second bearer that passes on `GET /v1/*` only and gets IuRoot's text left out */
+  readToken?: string
   /** what the ticker reports; `/health` is unhealthy when it goes quiet */
   monitor: TickMonitor
   /** the directories a spawn's repo must be inside */
@@ -137,7 +139,8 @@ export interface AppDeps {
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   /** the read API (`/v1`): whether a place is IuRoot's (`Places.isVisible`), the transcript counter, and the stream's timing for a test */
-  read?: Pick<ReadDeps, 'isVisible' | 'insights'> & Pick<StreamDeps, 'pollMs' | 'keepaliveMs' | 'sleep'>
+  read?: Pick<ReadDeps, 'isVisible' | 'insights' | 'visibleNames'> &
+    Pick<StreamDeps, 'pollMs' | 'keepaliveMs' | 'sleep'>
 }
 
 /** Largest request body the server reads. */
@@ -179,12 +182,18 @@ function assertLoopbackHost(req: Request): void {
 
 const digest = (value: string) => createHash('sha256').update(value).digest()
 
-function assertBearer(req: Request, token: string): void {
-  const match = /^Bearer (.+)$/i.exec(req.headers.get('authorization') ?? '')
-  // Equal-length digests keep the comparison constant-time whatever the caller sent.
-  if (!match?.[1] || !timingSafeEqual(digest(match[1]), digest(token))) {
-    throw new Refusal('missing or wrong bearer token', 401, { 'www-authenticate': 'Bearer' })
-  }
+/** Who a request is: the owner's token, the read token (surfaces), or null. */
+export type Caller = 'owner' | 'read'
+
+function bearerCaller(req: Request, token: string, readToken?: string): Caller | null {
+  const presented = /^Bearer (.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1]
+  // Equal-length digests keep the comparison constant-time whatever the caller sent; both tokens are always compared.
+  const given = digest(presented ?? '')
+  const owner = timingSafeEqual(given, digest(token))
+  const read = timingSafeEqual(given, digest(readToken ?? ''))
+  if (!presented) return null
+  if (owner) return 'owner'
+  return read && readToken ? 'read' : null
 }
 
 /** A cross-origin form or `fetch` can send `text/plain` without a preflight; JSON it cannot. */
@@ -231,19 +240,24 @@ function parseParam<S extends z.ZodType>(schema: S, value: string): z.output<S> 
 
 /**
  * Every route goes through here: a loopback Host, then (unless `open`) the bearer token, then a JSON content type for
- * anything that sends a body. The handler runs only after all three.
+ * anything that sends a body. The handler runs only after all three. The read token passes only on a route with `reads`
+ * (the `GET /v1` ones); anywhere else it is 403. The handler is told who called.
  */
 function guarded<R extends Request>(
   token: string,
-  handler: (req: R) => Promise<Response>,
-  options: { open?: boolean } = {},
+  handler: (req: R, caller: Caller) => Promise<Response>,
+  options: { open?: boolean; reads?: boolean; readToken?: string } = {},
 ): (req: R) => Promise<Response> {
   return async (req) => {
     try {
       assertLoopbackHost(req)
-      if (!options.open) assertBearer(req, token)
+      const caller = options.open ? 'owner' : bearerCaller(req, token, options.readToken)
+      if (caller === null) {
+        throw new Refusal('missing or wrong bearer token', 401, { 'www-authenticate': 'Bearer' })
+      }
+      if (caller === 'read' && !options.reads) throw new Refusal('this token reads /v1 only', 403)
       assertJsonContentType(req)
-      return await handler(req)
+      return await handler(req, caller)
     } catch (error) {
       return failure(error)
     }
@@ -695,33 +709,41 @@ const readHandlers = (reader: Reader) => {
     throw error
   }
   return {
-    overview: async () => reader.overview().then((body) => respond(Overview, body), notReady),
-    issues: async (req: Request) => {
+    overview: async (_req: Request, caller: Caller) =>
+      reader.overview({ surface: caller === 'read' }).then((body) => respond(Overview, body), notReady),
+    issues: async (req: Request, caller: Caller) => {
       const params = new URL(req.url).searchParams
       const scope = params.get('state') ?? 'open'
       if (scope !== 'open' && scope !== 'closed' && scope !== 'all')
         throw new BadRequest('state must be open, closed or all')
-      return respond(IssueCards, { issues: await reader.issues({ scope, limit: limitParam(params.get('limit')) }) })
+      return respond(IssueCards, {
+        issues: await reader.issues({ scope, limit: limitParam(params.get('limit')), surface: caller === 'read' }),
+      })
     },
-    issue: async (req: Bun.BunRequest<'/v1/issues/:id'>) => {
-      const detail = await reader.issue(parseParam(IssueId, req.params.id))
+    issue: async (req: Bun.BunRequest<'/v1/issues/:id'>, caller: Caller) => {
+      const detail = await reader.issue(parseParam(IssueId, req.params.id), { surface: caller === 'read' })
       return detail ? respond(IssueDetail, detail) : json({ error: 'unknown issue' }, 404)
     },
-    sessions: async (req: Request) => {
+    sessions: async (req: Request, caller: Caller) => {
       const params = new URL(req.url).searchParams
       const rawIssue = params.get('issue')
       const issue = rawIssue === null ? undefined : parseParam(IssueId, rawIssue)
       const role = params.get('role') ?? undefined
       const live = params.get('live') === '1'
-      return respond(SessionCards, { sessions: await reader.sessions({ issue, role, live }) })
+      return respond(SessionCards, {
+        sessions: await reader.sessions({ issue, role, live, surface: caller === 'read' }),
+      })
     },
-    session: async (req: Bun.BunRequest<'/v1/sessions/:id'>) => {
-      const card = await reader.session(req.params.id)
+    session: async (req: Bun.BunRequest<'/v1/sessions/:id'>, caller: Caller) => {
+      const card = await reader.session(req.params.id, { surface: caller === 'read' })
       return card ? respond(SessionCard, card) : json({ error: 'unknown session' }, 404)
     },
-    asks: async () =>
-      reader.lists().then((l) => respond(AskList, { asks: l.asks, humanQueue: l.humanQueue }), notReady),
-    health: async () => reader.lists().then((l) => respond(HealthList, { health: l.health }), notReady),
+    asks: async (_req: Request, caller: Caller) =>
+      reader
+        .lists({ surface: caller === 'read' })
+        .then((l) => respond(AskList, { asks: l.asks, humanQueue: l.humanQueue }), notReady),
+    health: async (_req: Request, caller: Caller) =>
+      reader.lists({ surface: caller === 'read' }).then((l) => respond(HealthList, { health: l.health }), notReady),
     accounts: async () => respond(AccountList, { accounts: await reader.accounts() }),
   }
 }
@@ -750,6 +772,7 @@ export function routes(
     clock,
     version,
     token,
+    readToken,
     monitor,
     repoRoots,
     roles,
@@ -767,7 +790,11 @@ export function routes(
   /** what only a running server can do: take a connection out of its idle timer (the stream) */
   runtime: { noTimeout?: (req: Request) => void } = {},
 ) {
-  const route = <R extends Request>(handler: (req: R) => Promise<Response>) => guarded(token, handler)
+  const route = <R extends Request>(handler: (req: R, caller: Caller) => Promise<Response>) =>
+    guarded(token, handler, { readToken })
+  /** a `GET /v1` route: the read token passes here and nowhere else */
+  const reads = <R extends Request>(handler: (req: R, caller: Caller) => Promise<Response>) =>
+    guarded(token, handler, { readToken, reads: true })
   const door = doorHandlers(sql, clock, repoRoots)
   const reader = new Reader({ sql, clock, ...readOptions })
   const read = readHandlers(reader)
@@ -811,15 +838,15 @@ export function routes(
     },
     '/fleet': { GET: route(fleetGetHandler(sql)) },
     '/fleet/refresh': { POST: route(fleetRefreshHandler(fleet)) },
-    '/v1/overview': { GET: route(read.overview) },
-    '/v1/issues': { GET: route(read.issues) },
-    '/v1/issues/:id': { GET: route(read.issue) },
-    '/v1/sessions': { GET: route(read.sessions) },
-    '/v1/sessions/:id': { GET: route(read.session) },
-    '/v1/asks': { GET: route(read.asks) },
-    '/v1/health': { GET: route(read.health) },
-    '/v1/accounts': { GET: route(read.accounts) },
-    '/v1/stream': { GET: route(stream) },
+    '/v1/overview': { GET: reads(read.overview) },
+    '/v1/issues': { GET: reads(read.issues) },
+    '/v1/issues/:id': { GET: reads(read.issue) },
+    '/v1/sessions': { GET: reads(read.sessions) },
+    '/v1/sessions/:id': { GET: reads(read.session) },
+    '/v1/asks': { GET: reads(read.asks) },
+    '/v1/health': { GET: reads(read.health) },
+    '/v1/accounts': { GET: reads(read.accounts) },
+    '/v1/stream': { GET: reads(stream) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),
       POST: route(spawnHandler(sql, clock, roles, repoRoots, admission)),
@@ -932,6 +959,9 @@ export function serve(deps: AppDeps & { port: number }) {
     routes: table,
     // Bun routes per method: a known path with another method lands here, and must not read as "no such resource".
     fetch: (req) => {
+      // The read token reads /v1 only: a route or method it cannot use is 403 whether or not it exists.
+      if (bearerCaller(req, deps.token, deps.readToken) === 'read')
+        return json({ error: 'this token reads /v1 only' }, 403)
       const methods = allowed(new URL(req.url).pathname)
       if (methods.length === 0) return json({ error: 'not found' }, 404)
       return json({ error: 'method not allowed' }, 405, { allow: methods.join(', ') })

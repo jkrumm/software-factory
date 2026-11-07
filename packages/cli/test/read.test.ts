@@ -93,6 +93,7 @@ const ASK = {
   summary: 'Which way it should go.',
   issue: null,
   stale: false,
+  visible: false,
 }
 const QUEUED = {
   ...ASK,
@@ -102,6 +103,7 @@ const QUEUED = {
   summary: 'Read the release notes.',
   source: 'queue',
   stale: true,
+  visible: false,
 }
 const HEALTH = {
   id: 'health:x:1',
@@ -111,6 +113,7 @@ const HEALTH = {
   summary: 'The lead has been quiet.',
   repo: null,
   since: '2026-11-06T09:00:00.000Z',
+  visible: false,
 }
 
 const frame = (id: string, event: string, data: unknown) =>
@@ -181,7 +184,7 @@ afterAll(async () => {
 
 async function factory(args: string[], env: Record<string, string> = {}) {
   const proc = Bun.spawn(['bun', BIN, ...args], {
-    env: { ...process.env, FACTORY_URL: String(fake.url), FACTORY_TOKEN: TOKEN, ...env },
+    env: { ...process.env, FACTORY_URL: String(fake.url), FACTORY_TOKEN: TOKEN, FACTORY_READ_TOKEN: '', ...env },
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -252,6 +255,16 @@ describe('factory read', () => {
     const health = await factory(['--format', 'plain', 'read', 'health'])
     expect(health.stdout).toBe('A quiet lead\tThe lead has been quiet.\t2026-11-06T09:00:00.000Z\tsilent\t-\n')
     expect(overview.stdout).toContain('account\ta1\t5h 40%\tweek 10%\tavailable\tfresh')
+  })
+
+  test('read works with only FACTORY_READ_TOKEN, and FACTORY_TOKEN wins when both are set', async () => {
+    const only = await factory(['read', 'accounts'], { FACTORY_TOKEN: '', FACTORY_READ_TOKEN: TOKEN })
+    expect(only.code).toBe(EXIT.ok)
+    const both = await factory(['read', 'accounts'], { FACTORY_TOKEN: TOKEN, FACTORY_READ_TOKEN: 'ignored-0123456789' })
+    expect(both.code).toBe(EXIT.ok)
+    const none = await factory(['read', 'accounts'], { FACTORY_TOKEN: '' })
+    expect(none.code).toBe(EXIT.auth)
+    expect(none.stderr).toContain('no FACTORY_TOKEN or FACTORY_READ_TOKEN set')
   })
 
   test('errors keep the exit table', async () => {
@@ -330,6 +343,10 @@ describe('factory follow', () => {
   test('usage and auth errors', async () => {
     expect((await factory(['follow', '--until-closed'])).code).toBe(EXIT.usage)
     expect((await factory(['follow'], { FACTORY_TOKEN: '' })).code).toBe(EXIT.auth)
+    expect(
+      (await factory(['follow'], { FACTORY_TOKEN: '', FACTORY_READ_TOKEN: TOKEN, FACTORY_URL: 'http://127.0.0.1:1' }))
+        .code,
+    ).toBe(EXIT.network)
     expect((await factory(['follow'], { FACTORY_URL: 'http://127.0.0.1:1' })).code).toBe(EXIT.network)
   })
 

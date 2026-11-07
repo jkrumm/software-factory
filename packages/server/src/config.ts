@@ -10,6 +10,8 @@ export interface Config {
   /** another core than the default one (`HC_SESSION`, tests) */
   hcSession?: string
   token: string
+  /** `FACTORY_READ_TOKEN`: the bearer for surfaces (`GET /v1/*` only, IuRoot's text left out); unset = no such caller */
+  readToken: string | undefined
   port: number
   version: string
   /** `claude-pretrust.sh` */
@@ -83,11 +85,17 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   }
   const token = required('FACTORY_TOKEN')
   if (token.length < 16) throw new Error('FACTORY_TOKEN must be at least 16 characters')
+  const readToken = env.FACTORY_READ_TOKEN || undefined
+  if (readToken !== undefined && readToken.length < 16) {
+    throw new Error('FACTORY_READ_TOKEN must be at least 16 characters')
+  }
+  if (readToken === token) throw new Error('FACTORY_READ_TOKEN must differ from FACTORY_TOKEN')
   return {
     databaseUrl: required('DATABASE_URL'),
     hcBin: required('HC_BIN'),
     hcSession: env.HC_SESSION || undefined,
     token,
+    readToken,
     port,
     version: env.FACTORY_VERSION || 'dev',
     pretrustBin: env.FACTORY_PRETRUST_BIN || `${required('HOME')}/${DOTFILES}/scripts/claude-pretrust.sh`,

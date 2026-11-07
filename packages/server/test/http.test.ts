@@ -74,6 +74,7 @@ describe('config (finding 5)', () => {
       databaseUrl: 'postgres://x',
       hcBin: '/usr/local/bin/hc',
       token: 'a-token-of-16-chars',
+      readToken: undefined,
       port: 7793,
       version: 'abc',
       pretrustBin: '/home/me/SourceRoot/dotfiles/scripts/claude-pretrust.sh',
@@ -201,6 +202,15 @@ describe('config (finding 5)', () => {
 
   test('a short token is refused', () => {
     expect(() => loadConfig({ ...env, FACTORY_TOKEN: 'short' })).toThrow(/FACTORY_TOKEN/)
+  })
+
+  test('the read token is optional, long enough and not the owner token', () => {
+    expect(loadConfig({ ...env, FACTORY_READ_TOKEN: '' }).readToken).toBeUndefined()
+    expect(loadConfig({ ...env, FACTORY_READ_TOKEN: 'a-read-token-of-16-chars' }).readToken).toBe(
+      'a-read-token-of-16-chars',
+    )
+    expect(() => loadConfig({ ...env, FACTORY_READ_TOKEN: 'short' })).toThrow(/FACTORY_READ_TOKEN/)
+    expect(() => loadConfig({ ...env, FACTORY_READ_TOKEN: env.FACTORY_TOKEN })).toThrow(/must differ/)
   })
 
   test.each(['DATABASE_URL', 'HC_BIN', 'PORT', 'FACTORY_TOKEN'])('%s is required', (name) => {

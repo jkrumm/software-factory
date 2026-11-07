@@ -38,7 +38,7 @@ const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/
 const NAME_MIN = 3
 
 /** Whether a text mentions IuRoot or a visible repo by name (whole word, any case). */
-function namesVisible(text: string, names: readonly string[]): boolean {
+export function namesVisible(text: string, names: readonly string[]): boolean {
   if (/iuroot/i.test(text)) return true
   const long = [...new Set(names.filter((n) => n.length >= NAME_MIN))]
   if (long.length === 0) return false

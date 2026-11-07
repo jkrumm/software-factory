@@ -32,7 +32,9 @@ export interface StreamDeps {
   sql: SQL
   clock: Clock
   /** names the Issue of a session event */
-  reader: Pick<Reader, 'issuesOf'>
+  reader: Pick<Reader, 'issuesOf' | 'visibleIssues'>
+  /** the read token's stream: an `issue` frame of a visible repo's Issue says its event kind and nothing else */
+  surface?: boolean
   pollMs?: number
   keepaliveMs?: number
   /** waits between two polls and ends early when the signal aborts; real timers unless a test brings its own */
@@ -130,6 +132,9 @@ export async function* frames(
       WHERE id > ${cursor.session} AND session <> '_runner' ORDER BY id LIMIT ${BATCH}`
     const sessionIds = [...new Set(sessionRows.map((r) => r.session))]
     const issues = await reader.issuesOf(sessionIds)
+    const hidden = deps.surface
+      ? await reader.visibleIssues([...new Set(issueRows.map((r) => r.issue_id))])
+      : new Set<number>()
     const states = new Map<string, string | null>()
     for (const id of sessionIds) {
       // Only a session the frame will name is looked up; one outside the `issue` filter is skipped.
@@ -157,7 +162,7 @@ export async function* frames(
             from: a.from_state,
             to: a.to_state,
             at: a.at.toISOString(),
-            text: describeEvent(a.kind, a.from_state, a.to_state, a.payload),
+            text: hidden.has(a.issue_id) ? a.kind : describeEvent(a.kind, a.from_state, a.to_state, a.payload),
           }),
         )
         wrote = true
@@ -212,7 +217,7 @@ const SSE_HEADERS = {
  */
 export function streamHandler(deps: StreamDeps, noTimeout: (req: Request) => void) {
   const encoder = new TextEncoder()
-  return async (req: Request): Promise<Response> => {
+  return async (req: Request, caller: 'owner' | 'read' = 'owner'): Promise<Response> => {
     const url = new URL(req.url)
     const rawIssue = url.searchParams.get('issue')
     const issue = rawIssue === null ? undefined : Number(rawIssue)
@@ -233,7 +238,10 @@ export function streamHandler(deps: StreamDeps, noTimeout: (req: Request) => voi
     noTimeout(req)
     const abort = new AbortController()
     req.signal.addEventListener('abort', () => abort.abort())
-    const source = frames(deps, start, { ...(issue === undefined ? {} : { issue }), signal: abort.signal })
+    const source = frames({ ...deps, surface: caller === 'read' }, start, {
+      ...(issue === undefined ? {} : { issue }),
+      signal: abort.signal,
+    })
     const body = new ReadableStream<Uint8Array>({
       async pull(controller) {
         const next = await source.next()

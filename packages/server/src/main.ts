@@ -9,7 +9,7 @@ import { Digest } from './fleet/digest.ts'
 import { GithubIntake } from './intake/github.ts'
 import { Settler } from './issues/settle.ts'
 import { Places } from './fleet/place.ts'
-import { AskHumanQueue, FleetBuilder, HcTerminals } from './fleet/index.ts'
+import { AskHumanQueue, directoryNames, FleetBuilder, HcTerminals } from './fleet/index.ts'
 import { acquireSingleton, migrate } from './db.ts'
 import { TickMonitor } from './health.ts'
 import { serve, serveHooks, stopServing } from './http.ts'
@@ -127,6 +127,7 @@ const server = serve({
   port: config.port,
   version: config.version,
   token: config.token,
+  readToken: config.readToken,
   monitor,
   repoRoots: config.repoRoots,
   roles,
@@ -138,7 +139,7 @@ const server = serve({
   notifyTarget: config.notifyTarget,
   review,
   fleet,
-  read: { isVisible: await visible() },
+  read: { isVisible: await visible(), visibleNames: () => directoryNames(config.visibleRoots) },
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a

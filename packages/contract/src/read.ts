@@ -179,10 +179,17 @@ export const ReadAsk = FleetAsk.extend({
   issue: z.number().int().nullable().default(null),
   /** older than 24 h */
   stale: z.boolean(),
+  /** it is about a visible (IuRoot) repo or session, or names one: a surface's read token gets it redacted (additive) */
+  visible: z.boolean().default(false),
 })
 export type ReadAsk = z.infer<typeof ReadAsk>
 
-export const ReadHealth = FleetHealth.extend({ short: z.string(), summary: z.string() })
+export const ReadHealth = FleetHealth.extend({
+  short: z.string(),
+  summary: z.string(),
+  /** as on `ReadAsk` (additive) */
+  visible: z.boolean().default(false),
+})
 export type ReadHealth = z.infer<typeof ReadHealth>
 
 export const Overview = z.object({

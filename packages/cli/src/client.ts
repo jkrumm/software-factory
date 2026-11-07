@@ -25,6 +25,8 @@ interface CallOptions<S extends z.ZodType> {
   /** sent as JSON with a POST or PUT; `{}` when absent */
   body?: unknown
   auth: boolean
+  /** a `/v1` read: `FACTORY_READ_TOKEN` stands in when there is no `FACTORY_TOKEN` */
+  read?: boolean
   /**
    * Through the server's unix socket instead of its port: how a session in a pane reaches it, with no token (the socket's
    * file mode is the credential). `'fallback'` goes by the socket only when there is no `FACTORY_TOKEN`. The socket serves
@@ -39,6 +41,17 @@ interface CallOptions<S extends z.ZodType> {
   also?: number[]
 }
 
+/** The bearer for a call: `FACTORY_TOKEN`, and for a `/v1` read `FACTORY_READ_TOKEN` when that is not set. */
+export const readerToken = (env: Io['env'], read?: boolean): string | undefined =>
+  env.FACTORY_TOKEN || (read ? env.FACTORY_READ_TOKEN : undefined) || undefined
+
+export const noToken = (read?: boolean): FactoryError =>
+  new FactoryError('auth', read ? 'no FACTORY_TOKEN or FACTORY_READ_TOKEN set' : 'no FACTORY_TOKEN set', {
+    hint: read
+      ? 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN (or FACTORY_READ_TOKEN to read only)'
+      : 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
+  })
+
 /**
  * Calls the server and returns the body parsed by the contract's schema. Every failure is a `FactoryError` with agw's
  * kind: a body that does not parse is `contract_mismatch` (exit 9), whatever the status was.
@@ -52,11 +65,9 @@ export async function call<S extends z.ZodType>(
   const socket = viaSocket ? io.env.FACTORY_SOCKET || (io.env.HOME ? defaultHookSocket(io.env.HOME) : '') : ''
   if (viaSocket && !socket) throw usage('no socket: set FACTORY_SOCKET or HOME')
   const base = viaSocket ? 'http://localhost' : (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
-  const token = viaSocket ? undefined : io.env.FACTORY_TOKEN
+  const token = viaSocket ? undefined : readerToken(io.env, options.read)
   if (options.auth && !viaSocket && !token) {
-    throw new FactoryError('auth', 'no FACTORY_TOKEN set', {
-      hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
-    })
+    throw noToken(options.read)
   }
   let response: Response
   let text: string
