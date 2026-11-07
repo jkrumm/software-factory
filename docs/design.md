@@ -1115,7 +1115,7 @@ is polled every `FACTORY_BESZEL_POLL` (default `1m`, `off`; the hub's `FACTORY_B
 `FACTORY_BESZEL_PASSWORD` come from `secrets-run`; a missing one = the source is off and one line is logged). The system list gives the hosts; for each non-paused system named in
 `config/infra.json` (matched case-insensitively; another system files nothing and is logged once per process) the last 240 one-minute stat samples are read. A sample counts once it has
 `mp` or `dp`; the hub omits zeros, so absent swap is 0 GB. `infra.json` holds the routing (`hosts.<name>.repo`: a directory under `~/SourceRoot`; `local: true` marks the mini) and
-every threshold (`defaults`, partly overridden per host; the file's absent numbers are the ones below).
+every threshold (`defaults`, partly overridden per host; the file's absent numbers are the ones below). `FACTORY_INFRA_FILE` (an absolute path, non-secret, env file) makes the server load that file instead of the shipped one, so the owner tunes thresholds and routes without a deploy; a missing or bad file is a startup error, never a fallback.
 
 - **Rules** (each with `sustainMin` to breach, `clearMin` below it to recover; a rule needs 60% of the expected samples and a newest sample at most 3 min old, else it holds):
   `memory` mem % >= 92 for 15 min; `swap` used >= 8 GB for 10 min; `swap_growth` over 120 min the median of the newest 10 samples minus the oldest 10 is >= 2 GB and the

@@ -64,6 +64,8 @@ export interface Config {
   beszelUrl: string | undefined
   beszelEmail: string | undefined
   beszelPassword: string | undefined
+  /** `FACTORY_INFRA_FILE` (absolute path, non-secret): loaded instead of the shipped `config/infra.json`; undefined = the shipped file */
+  infraFile: string | undefined
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
   /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) and the load ceiling (`FACTORY_LOAD_CEILING`) */
@@ -206,12 +208,13 @@ function githubSource(env: Record<string, string | undefined>): Pick<Config, 'gi
 
 function beszelSource(
   env: Record<string, string | undefined>,
-): Pick<Config, 'beszelPollMs' | 'beszelUrl' | 'beszelEmail' | 'beszelPassword'> {
+): Pick<Config, 'beszelPollMs' | 'beszelUrl' | 'beszelEmail' | 'beszelPassword' | 'infraFile'> {
   return {
     beszelPollMs: fleetDigestEvery(env.FACTORY_BESZEL_POLL, 'FACTORY_BESZEL_POLL', 60_000),
     beszelUrl: env.FACTORY_BESZEL_URL || undefined,
     beszelEmail: env.FACTORY_BESZEL_EMAIL || undefined,
     beszelPassword: env.FACTORY_BESZEL_PASSWORD || undefined,
+    infraFile: env.FACTORY_INFRA_FILE || undefined,
   }
 }
 
