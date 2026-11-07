@@ -25,6 +25,9 @@ A directory listing, `package.json`, the Makefile and `--help` say what exists; 
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes
   (`src/exit.ts`), never prompts. `rd --role` depends on `factory role get <role> --format json` printing exactly
   `{"role","tier","effort"}`; unknown is exit 4. A role is a tier (`haiku|sonnet|opus`, never a model id) and an effort; role values change only on measured data.
+  The table governs the terminals the factory spawns (the lead, `spawn create`, `rd --role`). A lead's in-session
+  subagents (Explore, `@verifier`, `@implementer`) take model and effort from the global agent files in dotfiles
+  (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`; the table's rows for them describe what runs.
 - **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day
   release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect: the F0 spike decided
   that (`docs/spikes/2026-10-30-effect/verdict.md`).

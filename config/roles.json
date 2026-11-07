@@ -2,8 +2,8 @@
   "roles": {
     "lead": { "tier": "sonnet", "effort": "high" },
     "implementer": { "tier": "sonnet", "effort": "high" },
-    "verifier": { "tier": "sonnet", "effort": "high" },
+    "verifier": { "tier": "haiku", "effort": "high" },
     "reviewer": { "tier": "sonnet", "effort": "medium" },
-    "Explore": { "tier": "haiku", "effort": "low" }
+    "Explore": { "tier": "haiku", "effort": "high" }
   }
 }
