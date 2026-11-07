@@ -210,3 +210,17 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   `kill -9` 0.2 s later, back healthy in 1.2 s; the lead's terminal lived on (herdr-core owns it, not the server), its
   `close` reached the restarted server at 19:32:02 and applied; one attempt, commit `eb9d352` on the remote. The drill
   gained `--kill-server=lead` for this moment. Both kill moments of the gameday now hold on the live new core.
+- **2026-11-07, window 2, finding: filing from outside the factory was broken for the first 3.5 hours.** The window
+  went live with the client patches still unapplied: `rd issue` and the Herdr board called the CLI without a token (the
+  new core requires one; the old one did not), so any filing from a session would have been refused with 401. None was
+  tried (the owner's last filing today was 13:00 UTC; Saturday evening), so nothing was lost, but "the window is
+  quiet" partly hid it. Applied in the window: dotfiles `e21e19f` (rd, board, skills), Iris `81dd1ad` (Decision
+  answers). **Rule for later windows: the client patches go live in the same window as the core, before the queue
+  opens (runbook W10), and the window's first check is one real filing through `rd issue`.**
+- **2026-11-07, window 2: the signal token exists (owner's dialog, 23:10 UTC).** The server restarted with it (the
+  signal caller answers 403 on a read, so it is known), and every `secrets-run` caller of the release's `.env.tpl`
+  works again. Design note for the next optional ref: a ref only the server reads does not belong in the template the
+  clients share (it blocked rd, verify, import and the drill in turn); keep server-only refs in a template only
+  `launch.sh` reads.
+- **2026-11-07, window 2:** Iris' `make check` asks the factory for a test slot and gets 401 when run by hand (no
+  token); a lead's terminal carries the agent token, which the slot routes allow. By design, not a finding.

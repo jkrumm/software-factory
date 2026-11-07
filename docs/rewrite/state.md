@@ -66,3 +66,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07 19:00: window 2 verified live (`make verify` all checks passed); window watch cron at :07 and :37 (session-only; re-arm after a restart).
 - 2026-11-07 19:31: window 2: kill drill green (Issue 300: kill -9 between admit and lead, one lead, closed done).
 - 2026-11-07 19:33: window 2: kill-during-lead drill green (Issue 301).
+- 2026-11-07 23:15: window 2: client patches applied (dotfiles e21e19f, Iris 81dd1ad); FACTORY_SIGNAL_TOKEN made and seeded, core restarted with it; Hermes patch next.
