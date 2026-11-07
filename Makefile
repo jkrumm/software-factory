@@ -2,7 +2,7 @@
 .PHONY: help check test fmt deploy rollback verify version
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, boundaries, retired words, generated CLI, tests, scenarios (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios (the merge gate)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make fmt     apply formatting"
 	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
@@ -27,6 +27,8 @@ check:
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
 	@bun scripts/retired-words.ts
+	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"
+	@bun apps/server/scripts/issue-diagram.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
 	@$(MAKE) --no-print-directory test
