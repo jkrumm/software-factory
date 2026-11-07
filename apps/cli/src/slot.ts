@@ -145,6 +145,9 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     const answer = await send({ base, method: 'PUT', path, body: { name, cwd, limitMs: envLimit }, token })
     if (!answer.reached) return { kind: 'outage', why: answer.reason }
     if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}` }
+    if (answer.status === 401 || answer.status === 403) {
+      return { kind: 'outage', why: `the server refused the token (${answer.status}): set FACTORY_TOKEN` }
+    }
     const parsed = Slot.safeParse(answer.json)
     if (!parsed.success)
       return { kind: 'outage', why: `the server answered ${answer.status} with a body this CLI does not know` }

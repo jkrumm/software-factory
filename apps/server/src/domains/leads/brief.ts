@@ -29,7 +29,7 @@ Also:
 
 # Verbs
 
-Every verb is a plain command with flags. Name your attempt with \`--attempt <n>\` (the number is in this brief); \`--call <id>\` is optional and makes a repeated call one event. \`factory <group> <verb> --help\` lists every flag.
+Every verb is a plain command with flags. Name your attempt with \`--attempt <n>\` (the number is in this brief); \`--call <id>\` is optional and makes a repeated call one event. \`factory <group> <verb> --help\` lists every flag. A value that is \`-\` is read from stdin and one that starts with \`@\` from the file it names; write \`@@\` to start a text with a literal \`@\`.
 
 - Read the Issue: \`factory issue show <id>\`.
 - Close without a deploy: \`factory issue close <id> --attempt <n> --outcome done --reason "nothing to deploy"\` (outcome \`done\` or \`dropped\`).
