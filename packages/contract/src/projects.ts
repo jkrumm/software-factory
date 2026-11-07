@@ -112,6 +112,26 @@ const Signals = z.looseObject({
         .default('factory'),
       /** opt in to the default branch's red checks and commit statuses as `checks` signals */
       checks: z.boolean().default(false),
+      /**
+       * author mode: the GitHub login whose new issues come in without a label (everyone else's need the label). Set together
+       * with `since`
+       */
+      author: z
+        .string()
+        .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/, 'a GitHub login')
+        .optional(),
+      /**
+       * the cut-over of author mode: only issues created at or after it are admitted, so the backlog is not filed. `YYYY-MM-DD` or a
+       * UTC datetime `YYYY-MM-DDTHH:MM(:SS)Z`. Set together with `author`
+       */
+      since: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?Z)?$/, 'YYYY-MM-DD or YYYY-MM-DDTHH:MM(:SS)Z')
+        .refine((value) => !Number.isNaN(Date.parse(value)), 'a real date')
+        .optional(),
+    })
+    .refine((github) => (github.author === undefined) === (github.since === undefined), {
+      message: '`author` and `since` are set together: both or neither',
     })
     .optional(),
   launchd: z.array(z.string().min(1).max(200)).max(64).optional(),
