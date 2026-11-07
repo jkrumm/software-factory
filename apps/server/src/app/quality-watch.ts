@@ -184,8 +184,9 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     return ok(answered)
   })
   if (!recorded.ok) {
-    // The database is gone or the Issue moved under us: nothing was stored, the claim lapses by itself.
-    if ('kind' in recorded.error && recorded.error.kind === 'version_conflict') return ok(undefined)
+    // Nothing was stored. The Issue moved under us: let the watch go, the next pass checks it again (or ends it).
+    if (recorded.error.kind === 'version_conflict') return releaseThen(release, ok(undefined))
+    // The database is gone: the claim lapses by itself.
     return err(portError('gone', 'the check could not be recorded'))
   }
   pass.checked++
