@@ -1,0 +1,11 @@
+2026-11-07T19:31:30.777Z run gd-11071931: release b2367ff7c1b6, server pid 59829, base commit 99d7268
+2026-11-07T19:31:31.010Z run gd-11071931: filed issue_301
+2026-11-07T19:31:36.293Z run gd-11071931: settling/- phase=settling lead=-
+2026-11-07T19:31:41.572Z run gd-11071931: queued/- phase=queued lead=-
+2026-11-07T19:31:46.881Z run gd-11071931: working/- phase=building lead=-
+2026-11-07T19:31:52.216Z run gd-11071931: working/- phase=building lead=lead-301-1
+2026-11-07T19:31:52.454Z kill: -9 server pid 59829 at moment 'lead' for Issue issue_301
+2026-11-07T19:31:53.653Z kill: server back as pid 2607, healthy 1197 ms after the kill (the LaunchAgent restarted it, KeepAlive)
+2026-11-07T19:32:04.268Z run gd-11071931: closed/done phase=closed lead=-
+2026-11-07T19:32:04.551Z run gd-11071931: ended closed/done, commit on the scratch remote: yes
+2026-11-07T19:32:04.582Z run gd-11071931: GREEN: closed done by the lead's close, the commit on the scratch remote (no ship expected)

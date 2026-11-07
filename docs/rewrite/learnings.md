@@ -206,3 +206,7 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   started the lead once (attempt 1, 19:30:18, no double start), the lead committed and pushed `e6fcb15` and closed
   `done` at 19:30:27. The drill's green check (9c) now reads a `close` from a no-deploy repo as green. The gameday
   library took the raw template like import and verify did; it now goes through `effective_template` as well.
+- **2026-11-07, window 2: a kill while the lead runs is green too.** Issue 301: lead started 19:31:52 in `t1fs`, server
+  `kill -9` 0.2 s later, back healthy in 1.2 s; the lead's terminal lived on (herdr-core owns it, not the server), its
+  `close` reached the restarted server at 19:32:02 and applied; one attempt, commit `eb9d352` on the remote. The drill
+  gained `--kill-server=lead` for this moment. Both kill moments of the gameday now hold on the live new core.

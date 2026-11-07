@@ -1,0 +1,147 @@
+{
+  "id": 301,
+  "ref": "issue_301",
+  "filedTitle": "Scratch: gd-11071931",
+  "title": "Scratch: gd-11071931",
+  "state": "closed",
+  "reason": null,
+  "outcome": "done",
+  "phase": "closed",
+  "repo": "factory-gameday",
+  "repoName": "factory-gameday",
+  "visible": true,
+  "kind": "feature",
+  "size": null,
+  "lead": null,
+  "account": "me",
+  "quota": {
+    "account": "me",
+    "fiveHourUsed": 1,
+    "weeklyUsed": 34,
+    "fiveHourResetsAt": "2026-11-08T00:20:00.000Z",
+    "weeklyResetsAt": "2026-11-12T06:00:00.000Z",
+    "exhaustedUntil": null,
+    "fresh": true
+  },
+  "insights": {
+    "startedAt": "2026-11-07T19:31:30.958Z",
+    "endedAt": "2026-11-07T19:32:02.045Z",
+    "elapsedMs": 31087,
+    "workingMs": 11928,
+    "turns": 1,
+    "toolCalls": 0,
+    "subagents": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "models": [],
+    "attempts": 1,
+    "partial": true
+  },
+  "createdAt": "2026-11-07T19:31:30.958Z",
+  "updatedAt": "2026-11-07T19:32:02.045Z",
+  "closedAt": "2026-11-07T19:32:02.045Z",
+  "heldBy": null,
+  "waitingOnOwner": false,
+  "timeline": [
+    {
+      "at": "2026-11-07T19:31:30.958Z",
+      "kind": "filed",
+      "text": "Filed.",
+      "session": null
+    },
+    {
+      "at": "2026-11-07T19:31:30.963Z",
+      "kind": "noted",
+      "text": "A note reached the lead: Scratch gameday gd-11071931, marker MARK-gd-11071931. Do exactly this and nothing else: write the file out/gd-11071931.txt with the single…",
+      "session": null
+    },
+    {
+      "at": "2026-11-07T19:31:40.865Z",
+      "kind": "settled",
+      "text": "Settled and queued.",
+      "session": null
+    },
+    {
+      "at": "2026-11-07T19:31:43.752Z",
+      "kind": "admitted",
+      "text": "A lead was admitted.",
+      "session": null
+    },
+    {
+      "at": "2026-11-07T19:31:52.427Z",
+      "kind": "lead_started",
+      "text": "A lead started.",
+      "session": "lead-301-1"
+    },
+    {
+      "at": "2026-11-07T19:32:02.045Z",
+      "kind": "closed",
+      "text": "Closed: Committed out/gd-11071931.txt and pushed to origin/master via HEAD:master; nothing to deploy",
+      "session": "lead-301-1"
+    }
+  ],
+  "evidence": [],
+  "asks": [],
+  "sessions": [
+    {
+      "id": "lead-301-1",
+      "issue": 301,
+      "issueRef": "issue_301",
+      "parent": null,
+      "role": "lead",
+      "title": "Issue lead: Scratch: gd-11071931",
+      "summary": "Idle: its turn is done.",
+      "state": "idle",
+      "status": "idle",
+      "wait": null,
+      "account": "me",
+      "quota": {
+        "account": "me",
+        "fiveHourUsed": 1,
+        "weeklyUsed": 34,
+        "fiveHourResetsAt": "2026-11-08T00:20:00.000Z",
+        "weeklyResetsAt": "2026-11-12T06:00:00.000Z",
+        "exhaustedUntil": null,
+        "fresh": true
+      },
+      "model": null,
+      "turn": 1,
+      "terminal": {
+        "id": "t1fs",
+        "name": "lead-301-1",
+        "space": "sp-factory-gameday-a6e56e0cce57",
+        "tab": "tb-28e1e98b9037",
+        "workspace": null
+      },
+      "address": "t1fs",
+      "tab": "tb-28e1e98b9037",
+      "transcriptPath": "~/.claude-me/projects/-Users-<user>-SourceRoot-factory-gameday--claude-worktrees-factory-301-1/af1df484-f73e-4399-91a6-8ba95afe9368.jsonl",
+      "repo": "factory-gameday",
+      "visible": true,
+      "since": "2026-11-07T19:31:52.414Z",
+      "lastActivityAt": "2026-11-07T19:32:03.998Z",
+      "insights": {
+        "startedAt": "2026-11-07T19:31:52.414Z",
+        "endedAt": null,
+        "elapsedMs": 12060,
+        "workingMs": 11928,
+        "turns": 1,
+        "toolCalls": 0,
+        "subagents": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "models": [],
+        "attempts": 1,
+        "partial": true
+      }
+    }
+  ]
+}
