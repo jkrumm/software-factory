@@ -10,6 +10,7 @@ import type { SQL } from 'bun'
 import { notifyDoorRefused } from '../notify/rules.ts'
 import { RepoRefused } from '../repos.ts'
 import { createIssueIn } from './create.ts'
+import { ISSUE_OF } from './unrouted.ts'
 import { fileSignalIn } from './signals.ts'
 
 /** The door's intake (docs/design.md §11): one alert becomes a signal on an open Issue, a new Issue, or a count. */
@@ -81,9 +82,6 @@ async function fileAlert(sql: SQL, input: IntakeInput, context: IntakeContext): 
         WHERE last_seen < ${new Date(now.getTime() - UNROUTED_KEEP_MS)} AND status IS DISTINCT FROM 'down'`
       await tx`DELETE FROM factory.door_unrouted WHERE last_seen < ${new Date(now.getTime() - UNROUTED_DOWN_KEEP_MS)}`
       const down = input.status === 'down'
-      // The steward may have handed the down to a project's `heal:` grace (`unrouted.ts`): the `up` cancels it as a routed one does.
-      if (!down)
-        await tx`DELETE FROM factory.intake_pending WHERE source = ${input.source} AND subject = ${input.monitor}`
       await tx`
         INSERT INTO factory.door_unrouted (source, monitor, count, last_seen, last_title, last_event, status, down_since, is_group)
         VALUES (${input.source}, ${input.monitor}, 1, ${now}, ${input.title}, ${input.event}, ${input.status},
@@ -102,6 +100,10 @@ async function fileAlert(sql: SQL, input: IntakeInput, context: IntakeContext): 
               file_error = CASE WHEN EXCLUDED.status = 'down' AND factory.door_unrouted.status = 'down'
                                 THEN factory.door_unrouted.file_error END
           WHERE factory.door_unrouted.last_event <> EXCLUDED.last_event`
+      // After the upsert, which takes the row's lock: a steward pass filing the down holds it until its heal-pending row is in. The steward may
+      // have handed the down to a project's `heal:` grace (`unrouted.ts`); the `up` cancels it as a routed one does.
+      if (!down)
+        await tx`DELETE FROM factory.intake_pending WHERE source = ${input.source} AND subject = ${input.monitor}`
       return { status: 202, ack: { outcome: 'unrouted', issue: null } }
     }
 
@@ -215,7 +217,7 @@ export async function listUnrouted(sql: SQL, limit = 1000): Promise<DoorUnrouted
     is_group: boolean
     filed_issue: number | null
   }[] = await sql`
-    SELECT u.source, u.monitor, u.count, u.last_seen, u.last_title, u.status, u.down_since, u.is_group, u.filed_issue
+    SELECT u.source, u.monitor, u.count, u.last_seen, u.last_title, u.status, u.down_since, u.is_group, ${ISSUE_OF(sql)} AS filed_issue
     FROM factory.door_unrouted u
     WHERE NOT EXISTS (SELECT 1 FROM factory.door_routes r WHERE r.source = u.source AND r.monitor = u.monitor)
     ORDER BY u.last_seen DESC, u.source, u.monitor LIMIT ${limit}`
