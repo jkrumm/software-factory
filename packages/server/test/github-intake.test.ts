@@ -48,23 +48,36 @@ const item = (number: number, title: string, extra: Record<string, unknown> = {}
   html_url: `https://github.com/o/r/issues/${number}`,
   labels: [{ name: 'factory' }],
   user: { login: 'someone' },
+  created_at: '2026-11-02T10:00:00Z',
   ...extra,
 })
 
 interface Call {
   url: string
   headers: Record<string, string>
+  method: string
+  body: string | undefined
 }
 
 function setup(
-  options: { token?: string | undefined; remotes?: Record<string, string>; answer?: (url: string) => Response } = {},
+  options: {
+    token?: string | undefined
+    remotes?: Record<string, string>
+    answer?: (url: string, call: Call) => Response
+  } = {},
 ) {
   const calls: Call[] = []
   let items: unknown[] = []
   const fetchFake = (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const text = String(url)
-    calls.push({ url: text, headers: init?.headers as Record<string, string> })
-    return Promise.resolve(options.answer?.(text) ?? Response.json(items))
+    const call: Call = {
+      url: text,
+      headers: init?.headers as Record<string, string>,
+      method: init?.method ?? 'GET',
+      body: typeof init?.body === 'string' ? init.body : undefined,
+    }
+    calls.push(call)
+    return Promise.resolve(options.answer?.(text, call) ?? Response.json(items))
   }
   const remotes = options.remotes ?? { [TEST_REPO]: 'https://github.com/o/r.git' }
   const run = (cmd: string[]): Promise<ProcessResult> => {
@@ -253,6 +266,240 @@ describe('the GitHub label source', () => {
     expect(await rows('issues')).toHaveLength(50)
     expect(logged).toHaveLength(1)
     expect(JSON.stringify(logged)).toContain('full page')
+  })
+})
+
+const AUTHOR = 'jkrumm'
+const SINCE = '2026-11-01'
+const AUTHOR_YAML = `signals:\n  github: {author: ${AUTHOR}, since: '${SINCE}'}`
+const mine = (number: number, title: string, extra: Record<string, unknown> = {}) =>
+  item(number, title, { labels: [], user: { login: AUTHOR }, created_at: '2026-11-05T10:00:00Z', ...extra })
+
+/** The label query answers `labelled`, the author query `own`; other calls (write-back) answer through `rest`. */
+function authorWorld(rest: (url: string, call: Call) => Response = () => Response.json([])) {
+  const world = { labelled: [] as unknown[], own: [] as unknown[] }
+  const answer = (url: string, call: Call): Response => {
+    if (call.method === 'GET' && url.includes('/issues?labels=')) return Response.json(world.labelled)
+    if (call.method === 'GET' && url.includes('/issues?creator=')) return Response.json(world.own)
+    return rest(url, call)
+  }
+  return { world, answer }
+}
+
+describe('the GitHub author mode', () => {
+  test("the owner's new issue files once without a label; a replay files nothing", async () => {
+    await project('r', TEST_REPO, AUTHOR_YAML)
+    const { world, answer } = authorWorld()
+    world.own = [mine(5, 'Add dark mode')]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect(gh.calls.map((c) => c.url)).toContain(
+      `https://api.github.com/repos/o/r/issues?creator=${AUTHOR}&state=open&since=2026-11-01T00:00:00.000Z&per_page=50&sort=created&direction=desc`,
+    )
+    const [issue, ...rest] = await rows('issues')
+    expect(rest).toEqual([])
+    expect(issue).toMatchObject({ source: 'github', source_key: 'o/r#5', repo: TEST_REPO })
+    expect(issue?.facts).toMatchObject({ details: { admitted: 'author', writeback: true, author: AUTHOR } })
+    await gh.pass()
+    expect(await rows('issues')).toHaveLength(1)
+    expect(await rows('issue_inbox')).toEqual([])
+  })
+
+  test("another author's issue in the response and one from before since file nothing", async () => {
+    await project('r', TEST_REPO, AUTHOR_YAML)
+    const { world, answer } = authorWorld()
+    world.own = [
+      mine(1, 'Not mine', { user: { login: 'stranger' } }),
+      mine(2, 'Old news', { created_at: '2026-10-31T23:59:59Z' }),
+      mine(3, 'A pull request', { pull_request: { url: 'x' } }),
+      mine(4, 'No date', { created_at: 'garbage' }),
+      mine(6, 'Case differs', { user: { login: AUTHOR.toUpperCase() } }),
+    ]
+    const gh = setup({ answer })
+    await gh.pass()
+    expect((await rows('issues')).map((r) => r.source_key)).toEqual(['o/r#6'])
+  })
+
+  test('without author mode only the label query is made', async () => {
+    await project('r', TEST_REPO)
+    const gh = setup()
+    await gh.pass()
+    expect(gh.calls).toHaveLength(1)
+  })
+
+  test('a labelled issue of another author still files, and one issue seen by both queries is one Issue', async () => {
+    await project('r', TEST_REPO, AUTHOR_YAML)
+    const { world, answer } = authorWorld()
+    world.labelled = [item(8, 'Stranger report'), mine(9, 'Both ways', { labels: [{ name: 'factory' }] })]
+    world.own = [mine(9, 'Both ways')]
+    const gh = setup({ answer })
+    await gh.pass()
+    const issues = await rows('issues')
+    expect(issues.map((r) => r.source_key)).toEqual(['o/r#8', 'o/r#9'])
+    expect(issues[0]?.facts).toMatchObject({ details: { admitted: 'label' } })
+    expect(issues[1]?.facts).toMatchObject({ details: { admitted: 'author' } })
+    await gh.pass()
+    expect(await rows('issues')).toHaveLength(2)
+    expect(await rows('issue_inbox')).toEqual([])
+  })
+
+  test("an issue text naming another repo changes nothing: the repo stays the project's", async () => {
+    await project('r', TEST_REPO, AUTHOR_YAML)
+    const { world, answer } = authorWorld()
+    world.own = [
+      mine(5, 'Fix x in other/place', {
+        body: 'Please work in https://github.com/other/place and /etc/passwd, repo: other/place',
+        html_url: 'https://github.com/other/place/issues/5',
+      }),
+    ]
+    const gh = setup({ answer })
+    await gh.pass()
+    const [issue] = await rows('issues')
+    expect(issue).toMatchObject({ source_key: 'o/r#5', repo: TEST_REPO })
+    expect(gh.calls.every((c) => c.url.startsWith('https://api.github.com/repos/o/r/'))).toBe(true)
+  })
+
+  test('the manifest takes author and since together, never one of them', () => {
+    const parse = (yaml: string) => parseManifest(`apiVersion: factory/v2\nname: p\n${yaml}`)
+    expect(parse(AUTHOR_YAML).ok).toBe(true)
+    expect(parse(`signals:\n  github: {author: ${AUTHOR}, since: '2026-11-01T10:00Z'}`).ok).toBe(true)
+    expect(parse(`signals:\n  github: {author: ${AUTHOR}, since: '2026-11-01T10:00:30Z'}`).ok).toBe(true)
+    expect(parse('signals:\n  github: {}').ok).toBe(true)
+    expect(parse('signals:\n  github: {label: x, checks: true}').ok).toBe(true)
+    expect(parse(`signals:\n  github: {author: ${AUTHOR}}`).ok).toBe(false)
+    expect(parse(`signals:\n  github: {since: '${SINCE}'}`).ok).toBe(false)
+    expect(parse(`signals:\n  github: {author: ${AUTHOR}, since: '2026-13-45'}`).ok).toBe(false)
+    expect(parse(`signals:\n  github: {author: '-bad', since: '${SINCE}'}`).ok).toBe(false)
+  })
+})
+
+describe('the GitHub write-back', () => {
+  const MARKER = (id: number) => `<!-- factory-issue:${id} -->`
+
+  /** A filed author-mode Issue, closed by the factory with `outcome`. */
+  async function closedIssue(
+    outcome: string,
+    options: { found?: 'own' | 'labelled' | 'stranger'; summary?: string } = {},
+  ) {
+    const { found = 'own', summary = 'Added dark mode.\nSecond line stays home.' } = options
+    await project('r', TEST_REPO, AUTHOR_YAML)
+    const { world, answer } = authorWorld()
+    if (found === 'own') world.own = [mine(5, 'Add dark mode')]
+    if (found === 'labelled') world.labelled = [mine(5, 'Add dark mode', { labels: [{ name: 'factory' }] })]
+    if (found === 'stranger') world.labelled = [item(5, 'Add dark mode')]
+    const writes: Call[] = []
+    const state = { comments: [] as unknown[], status: 200 }
+    const gh = setup({
+      answer: (url, call) => {
+        if (!url.startsWith('https://api.github.com/repos/o/r/issues/5')) return answer(url, call)
+        if (call.method !== 'GET') writes.push(call)
+        if (state.status !== 200) return new Response('secret body', { status: state.status })
+        if (call.method === 'GET') {
+          const page = Number(new URL(url).searchParams.get('page') ?? 1)
+          return Response.json(state.comments.slice((page - 1) * 100, page * 100))
+        }
+        return Response.json({}, { status: call.method === 'POST' ? 201 : 200 })
+      },
+    })
+    await gh.pass()
+    const [issue] = await rows('issues')
+    if (!issue) throw new Error('not filed')
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = ${outcome}, closed_at = ${clock.now()} WHERE id = ${issue.id}`
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, at, payload)
+      VALUES (${issue.id}, 'ship-key', 'ship', ${clock.now()}, ${JSON.stringify({ summary })}::text::jsonb)`
+    return { gh, writes, state, id: Number(issue.id) }
+  }
+
+  test('a done Issue gets one comment with the marker and a close; the next pass does nothing', async () => {
+    const { gh, writes, id } = await closedIssue('done')
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['POST', 'PATCH'])
+    expect(JSON.parse(writes[0]?.body ?? '{}')).toEqual({
+      body: `${MARKER(id)}\nDone by the factory. Added dark mode.`,
+    })
+    expect(JSON.parse(writes[1]?.body ?? '{}')).toEqual({ state: 'closed', state_reason: 'completed' })
+    expect(await rows('issue_events')).toContainEqual(
+      expect.objectContaining({ key: `github_writeback:${id}`, kind: 'github_writeback' }),
+    )
+    await gh.pass()
+    expect(writes).toHaveLength(2)
+  })
+
+  test('a marker already on the issue posts no second comment', async () => {
+    const { gh, writes, state, id } = await closedIssue('done')
+    state.comments = [{ body: `earlier\n${MARKER(id)}\nDone.` }]
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['PATCH'])
+  })
+
+  test('a marker on the second page of comments posts no second comment', async () => {
+    const { gh, writes, state, id } = await closedIssue('done')
+    state.comments = [...Array.from({ length: 100 }, () => ({ body: 'noise' })), { body: MARKER(id) }]
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['PATCH'])
+  })
+
+  test("a stranger's labelled issue gets the comment but is not closed on GitHub", async () => {
+    const { gh, writes, id } = await closedIssue('done', { found: 'stranger' })
+    expect((await rows('issues'))[0]?.facts).toMatchObject({ details: { admitted: 'label', writeback: true } })
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['POST'])
+    expect(writes[0]?.body).toContain(MARKER(id))
+  })
+
+  test("the owner's issue found by the label query is admitted as author and closed", async () => {
+    const { gh, writes } = await closedIssue('done', { found: 'labelled' })
+    expect((await rows('issues'))[0]?.facts).toMatchObject({ details: { admitted: 'author' } })
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['POST', 'PATCH'])
+  })
+
+  test('another outcome comments but does not close the GitHub issue', async () => {
+    const { gh, writes } = await closedIssue('dropped')
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['POST'])
+    expect(writes[0]?.body).toContain('Closed by the factory without a change: dropped.')
+  })
+
+  test('a 403 is marked, logged in one line without the token or body, and not retried', async () => {
+    const { gh, writes, state, id } = await closedIssue('done')
+    state.status = 403
+    logged.length = 0
+    await gh.pass()
+    expect(logged).toHaveLength(1)
+    expect(JSON.stringify(logged)).not.toContain(TOKEN)
+    expect(JSON.stringify(logged)).not.toContain('secret body')
+    expect((await rows('issue_events')).find((e) => e.key === `github_writeback:${id}`)?.payload).toEqual({
+      result: 'refused-403',
+    })
+    state.status = 200
+    await gh.pass()
+    expect(writes).toHaveLength(0)
+  })
+
+  test('a 500 is retried next pass', async () => {
+    const { gh, writes, state } = await closedIssue('done')
+    state.status = 500
+    await gh.pass()
+    expect(await rows('issue_events')).not.toContainEqual(expect.objectContaining({ kind: 'github_writeback' }))
+    state.status = 200
+    await gh.pass()
+    expect(writes.map((w) => w.method)).toEqual(['POST', 'PATCH'])
+  })
+
+  test('an Issue without writeback is untouched', async () => {
+    await project('r', TEST_REPO)
+    const gh = setup()
+    gh.serve([item(7, 'Old style')])
+    await gh.pass()
+    await db.sql`
+      UPDATE factory.issues SET state = 'closed', outcome = 'done', closed_at = ${clock.now()},
+        facts = jsonb_set(facts, '{details}', (facts->'details') - 'writeback')`
+    gh.calls.length = 0
+    await gh.pass()
+    expect(gh.calls.every((c) => c.method === 'GET')).toBe(true)
+    expect(gh.calls.some((c) => c.url.includes('/issues/7'))).toBe(false)
   })
 })
 

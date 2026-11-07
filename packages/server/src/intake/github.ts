@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { childEnv, runProcess } from '../exec.ts'
 import { vetIntakeRepo } from '../issues/create.ts'
 import { fileSignalIn, type Signal } from '../issues/signals.ts'
+import { markEvent } from '../issues/shared.ts'
 import { RepoRefused } from '../repos.ts'
 
 /** The first pass comes this long after boot, so the tick's first minute is not shared with the network. */
@@ -14,6 +15,12 @@ const HTTP_TIMEOUT_MS = 15_000
 const MAX_BODY_CHARS = 4000
 const PAGE_SIZE = 50
 const NAME = /^[A-Za-z0-9._-]+$/
+const MAX_WRITEBACKS = 20
+const MAX_SUMMARY_CHARS = 300
+const COMMENTS_PAGE_SIZE = 100
+const MAX_COMMENT_PAGES = 10
+/** GitHub says "you cannot write here" (or the issue is gone): marked, not retried every pass. */
+const CANNOT_WRITE = new Set([403, 404, 410, 422])
 
 export interface GithubIntakeDeps {
   sql: SQL
@@ -34,6 +41,7 @@ const GithubIssues = z.array(
     title: z.string(),
     body: z.string().nullish(),
     html_url: z.string(),
+    created_at: z.string(),
     labels: z.array(z.looseObject({ name: z.string() })),
     user: z.looseObject({ login: z.string() }).nullish(),
     pull_request: z.unknown().optional(),
@@ -70,7 +78,14 @@ interface Target {
   repo: string
   label: string
   checks: boolean
+  /** author mode: the login whose new issues come in without a label, from `since` on (ISO) */
+  author?: string
+  since?: string
 }
+
+type GithubIssue = z.output<typeof GithubIssues>[number]
+
+const markerOf = (issueId: number): string => `<!-- factory-issue:${issueId} -->`
 
 interface Check {
   name: string
@@ -196,12 +211,15 @@ export class GithubIntake {
         console.error('github intake', { subject: signal.subject, error: errorOf(error) })
       }
     }
+    await this.writeBack()
   }
 
   /** The projects that opted in, whose repo the intake may file in. */
   private async targets(): Promise<Target[]> {
-    const rows: { repo: string; label: string | null; checks: boolean }[] = await this.deps.sql`
+    const rows: { repo: string; label: string | null; checks: boolean; author: string | null; since: string | null }[] =
+      await this.deps.sql`
       SELECT repo, manifest->'signals'->'github'->>'label' AS label,
+        manifest->'signals'->'github'->>'author' AS author, manifest->'signals'->'github'->>'since' AS since,
         COALESCE(manifest->'signals'->'github'->>'checks' = 'true', false) AS checks FROM factory.projects
       WHERE NOT paused AND jsonb_typeof(manifest->'signals'->'github') = 'object' ORDER BY name`
     const targets: Target[] = []
@@ -212,7 +230,15 @@ export class GithubIntake {
         if (error instanceof RepoRefused) continue
         throw error
       }
-      targets.push({ repo: row.repo, label: row.label || 'factory', checks: row.checks })
+      const since = row.since ? new Date(row.since) : undefined
+      targets.push({
+        repo: row.repo,
+        label: row.label || 'factory',
+        checks: row.checks,
+        ...(row.author && since && !Number.isNaN(since.getTime())
+          ? { author: row.author, since: since.toISOString() }
+          : {}),
+      })
     }
     return targets
   }
@@ -231,13 +257,15 @@ export class GithubIntake {
     }
   }
 
-  private request(url: string): Promise<Response> {
+  private request(url: string, write?: { method: 'POST' | 'PATCH'; body: unknown }): Promise<Response> {
     return (this.deps.fetch ?? fetch)(url, {
+      ...(write ? { method: write.method, body: JSON.stringify(write.body) } : {}),
       headers: {
         Authorization: `Bearer ${this.deps.token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'software-factory',
+        ...(write ? { 'Content-Type': 'application/json' } : {}),
       },
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     })
@@ -323,12 +351,46 @@ export class GithubIntake {
     return new Set(rows.map((row) => row.subject))
   }
 
-  /** One project's labelled issues as signals; any failure is one line without the token or the body, and no signals. */
+  /**
+   * One project's admitted issues as signals; any failure is one line without the token or the body, and no signals. The label query
+   * admits any author; in author mode a second query admits the owner's own new issues. One GitHub issue is one subject whichever
+   * way it came in, and the label wins.
+   */
   private async poll(target: Target, owner: string, name: string): Promise<Signal[]> {
     const repo = `${owner}/${name}`
-    const url =
-      `https://api.github.com/repos/${owner}/${name}/issues?labels=${encodeURIComponent(target.label)}` +
-      `&state=open&per_page=${PAGE_SIZE}&sort=created&direction=asc`
+    const base = `https://api.github.com/repos/${owner}/${name}/issues`
+    const labelled = await this.listIssues(
+      `${base}?labels=${encodeURIComponent(target.label)}&state=open&per_page=${PAGE_SIZE}&sort=created&direction=asc`,
+      repo,
+      'a full page, newer labelled issues may be unseen',
+    )
+    const signals = labelled
+      .filter((issue) => issue.pull_request === undefined)
+      .map((issue) => signalOfIssue(target, owner, name, issue, 'labeled'))
+    const { author, since } = target
+    if (!author || !since) return signals
+
+    const own = await this.listIssues(
+      `${base}?creator=${encodeURIComponent(author)}&state=open&since=${since}&per_page=${PAGE_SIZE}&sort=created&direction=desc`,
+      repo,
+      'a full page, older issues of the author may be unseen',
+    )
+    const seen = new Set(signals.map((signal) => signal.subject))
+    const sinceMs = Date.parse(since)
+    for (const issue of own) {
+      const created = Date.parse(issue.created_at)
+      if (issue.pull_request !== undefined || Number.isNaN(created) || created < sinceMs) continue
+      if (issue.user?.login.toLowerCase() !== author.toLowerCase()) continue
+      const signal = signalOfIssue(target, owner, name, issue, 'opened')
+      if (seen.has(signal.subject)) continue
+      seen.add(signal.subject)
+      signals.push(signal)
+    }
+    return signals
+  }
+
+  /** One page of issues; a failure is one line without the token or the body, and an empty list. */
+  private async listIssues(url: string, repo: string, fullPage: string): Promise<GithubIssue[]> {
     let status: number | string = 'error'
     try {
       const response = await this.request(url)
@@ -336,33 +398,135 @@ export class GithubIntake {
       if (response.status !== 200) throw new Error('not 200')
       status = 'unparsable'
       const issues = GithubIssues.parse(await response.json())
-      // Nothing is written back, so filed issues that stay open keep their place: a full page may hide newer ones.
-      if (issues.length >= PAGE_SIZE)
-        console.error('github intake: a full page, newer labelled issues may be unseen', { repo })
+      if (issues.length >= PAGE_SIZE) console.error(`github intake: ${fullPage}`, { repo })
       return issues
-        .filter((issue) => issue.pull_request === undefined)
-        .map((issue) => {
-          const title = cleanText(issue.title.slice(0, MAX_TITLE_CHARS)) || `${repo}#${issue.number}`
-          return {
-            source: 'github',
-            subject: `${repo}#${issue.number}`,
-            event: 'labeled',
-            status: 'event',
-            title,
-            facts: storable({
-              url: issue.html_url,
-              number: issue.number,
-              labels: issue.labels.map((l) => l.name),
-              ...(issue.user ? { author: issue.user.login } : {}),
-              body: (issue.body ?? '').slice(0, MAX_BODY_CHARS),
-            }),
-            repo: target.repo,
-            fingerprint: fingerprintOf(owner, name, title),
-          } satisfies Signal
-        })
     } catch {
       console.error('github intake', { repo, status })
       return []
     }
+  }
+
+  /**
+   * Tells GitHub what became of an Issue the intake filed (`writeback` in its facts): one comment under a marker on every one and,
+   * when the work is done and the issue was admitted as the owner's own (`admitted: author`), the GitHub issue closed. Closing a
+   * stranger's issue is the owner's call. The comment is plain and carries no internal id, host or full summary: the repo
+   * may be public. A refusal from GitHub is marked and not retried; a network error or a 5xx is retried next pass.
+   */
+  private async writeBack(): Promise<void> {
+    const rows: { id: number; source_key: string; outcome: string | null; admitted: string | null }[] = await this.deps
+      .sql`
+      SELECT i.id, i.source_key, i.outcome, i.facts->'details'->>'admitted' AS admitted FROM factory.issues i
+      WHERE i.source = 'github' AND i.state = 'closed' AND i.facts->'details'->>'writeback' = 'true'
+        AND NOT EXISTS (
+          SELECT 1 FROM factory.issue_events e WHERE e.issue_id = i.id AND e.key = 'github_writeback:' || i.id::text)
+      ORDER BY i.closed_at, i.id LIMIT ${MAX_WRITEBACKS}`
+    for (const row of rows) {
+      const found = /^([^/#]+)\/([^/#]+)#(\d+)$/.exec(row.source_key)
+      const [, owner, name, number] = found ?? []
+      if (
+        !owner ||
+        !name ||
+        !number ||
+        !NAME.test(owner) ||
+        !NAME.test(name) ||
+        /^\.+$/.test(owner) ||
+        /^\.+$/.test(name)
+      )
+        continue
+      const repo = `${owner}/${name}`
+      let status: number | string = 'error'
+      try {
+        const result = await this.writeOne(
+          { id: row.id, outcome: row.outcome, admitted: row.admitted, repo, number },
+          (value) => {
+            status = value
+          },
+        )
+        await markEvent(this.deps.sql, row.id, `github_writeback:${row.id}`, 'github_writeback', this.deps.now(), {
+          result,
+        })
+        if (result !== 'written') console.error('github intake: write-back refused', { repo, status })
+      } catch {
+        console.error('github intake: write-back failed', { repo, status })
+      }
+    }
+  }
+
+  /** `written`, `already` (the marker was there) or `refused-<status>`; anything to retry throws. */
+  private async writeOne(
+    issue: { id: number; outcome: string | null; admitted: string | null; repo: string; number: string },
+    setStatus: (status: number) => void,
+  ): Promise<string> {
+    const url = `https://api.github.com/repos/${issue.repo}/issues/${issue.number}`
+    const answer = async (response: Response): Promise<'refused' | 'ok'> => {
+      setStatus(response.status)
+      if (CANNOT_WRITE.has(response.status)) return 'refused'
+      if (response.status < 200 || response.status >= 300) throw new Error('not ok')
+      return 'ok'
+    }
+    const marker = markerOf(issue.id)
+    let marked = false
+    for (let page = 1; page <= MAX_COMMENT_PAGES && !marked; page++) {
+      const listed = await this.request(`${url}/comments?per_page=${COMMENTS_PAGE_SIZE}&page=${page}`)
+      if ((await answer(listed)) === 'refused') return `refused-${listed.status}`
+      const comments = z.array(z.looseObject({ body: z.string().nullish() })).parse(await listed.json())
+      marked = comments.some((comment) => comment.body?.includes(marker))
+      if (comments.length < COMMENTS_PAGE_SIZE) break
+    }
+    let result = 'already'
+    if (!marked) {
+      const posted = await this.request(`${url}/comments`, {
+        method: 'POST',
+        body: { body: `${marker}\n${await this.sentenceOf(issue.id, issue.outcome)}` },
+      })
+      if ((await answer(posted)) === 'refused') return `refused-${posted.status}`
+      result = 'written'
+    }
+    if (issue.outcome === 'done' && issue.admitted === 'author') {
+      const closed = await this.request(url, { method: 'PATCH', body: { state: 'closed', state_reason: 'completed' } })
+      if ((await answer(closed)) === 'refused') return `refused-${closed.status}`
+    }
+    return result
+  }
+
+  private async sentenceOf(issueId: number, outcome: string | null): Promise<string> {
+    if (outcome !== 'done') return `Closed by the factory without a change: ${outcome ?? 'unknown'}.`
+    const [event]: { summary: string | null }[] = await this.deps.sql`
+      SELECT payload->>'summary' AS summary FROM factory.issue_events
+      WHERE issue_id = ${issueId} AND kind IN ('ship', 'close') ORDER BY at DESC, id DESC LIMIT 1`
+    const first = cleanText((event?.summary ?? '').split('\n')[0] ?? '').slice(0, MAX_SUMMARY_CHARS)
+    return first ? `Done by the factory. ${first}` : 'Done by the factory.'
+  }
+}
+
+function signalOfIssue(
+  target: Target,
+  owner: string,
+  name: string,
+  issue: GithubIssue,
+  event: 'labeled' | 'opened',
+): Signal {
+  // The owner's own issue is `author` whichever query found it; only those are closed on GitHub by the write-back.
+  const admitted =
+    target.author !== undefined && issue.user?.login.toLowerCase() === target.author.toLowerCase() ? 'author' : 'label'
+  const repo = `${owner}/${name}`
+  const title = cleanText(issue.title.slice(0, MAX_TITLE_CHARS)) || `${repo}#${issue.number}`
+  return {
+    source: 'github',
+    subject: `${repo}#${issue.number}`,
+    event,
+    status: 'event',
+    title,
+    facts: storable({
+      url: issue.html_url,
+      number: issue.number,
+      labels: issue.labels.map((l) => l.name),
+      ...(issue.user ? { author: issue.user.login } : {}),
+      body: (issue.body ?? '').slice(0, MAX_BODY_CHARS),
+      admitted,
+      writeback: true,
+    }),
+    repo: target.repo,
+    fingerprint: fingerprintOf(owner, name, title),
   }
 }
