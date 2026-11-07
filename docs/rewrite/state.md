@@ -49,3 +49,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 9a (the cutover's tools, live read-only) started in t1fh.
 - 2026-11-07: FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN created and seeded (owner at the MacBook).
 - 2026-11-07: package 9a integrated at 691e781; next: the orchestrator's own rehearsal, then window 1.
+- 2026-11-07: orchestrator's rehearsal (P1) held: 256 Issues, 213 match, 43 explained, 0 unexplained; 1760 mapped events applied, 0 refused; the old core booted on the way back.
