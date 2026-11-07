@@ -20,8 +20,11 @@ export interface LoopSpec {
 export interface LoopRunner {
   /** starts the clocks; a loop with no interval has none */
   start(): void
-  /** stops the clocks and waits for the passes in flight */
-  stop(): Promise<void>
+  /**
+   * Stops the clocks and waits for the passes in flight, at most `graceMs`. A pass inside an agw call is not killed and not
+   * waited out: its call is recorded in `loop_calls` and the next boot takes it up again under the same key.
+   */
+  stop(graceMs?: number): Promise<void>
   /**
    * One pass now, for `loop run` and the scenarios. A pass already running is not started again (single-flight): the
    * answer says so and waits for it.
@@ -123,12 +126,14 @@ export function createLoopRunner(input: {
       }
     },
 
-    async stop() {
+    async stop(graceMs = Number.POSITIVE_INFINITY) {
       for (const state of states.values()) {
         if (state.timer) clearInterval(state.timer)
         state.timer = null
       }
-      await Promise.all([...states.values()].flatMap((state) => [...state.inFlight]))
+      const passes = Promise.all([...states.values()].flatMap((state) => [...state.inFlight]))
+      if (graceMs === Number.POSITIVE_INFINITY) await passes
+      else await Promise.race([passes, Bun.sleep(graceMs)])
     },
 
     async runNow(name) {

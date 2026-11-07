@@ -18,6 +18,10 @@ export interface LoopStore {
   claimCall(
     row: Pick<CallRow, 'key' | 'loop' | 'issueId' | 'subject' | 'round' | 'claimedAt' | 'leaseUntil'>,
   ): Promise<boolean>
+  /** takes a call whose lease lapsed back for this pass; false when another pass did first */
+  retakeCall(key: string, claimedAt: Date, leaseUntil: Date): Promise<boolean>
+  /** at boot: no call of an earlier process is still running, so every open call's lease lapses now */
+  lapseOpen(now: Date): Promise<number>
   finishCall(
     key: string,
     result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },

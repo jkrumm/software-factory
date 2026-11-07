@@ -116,6 +116,9 @@ export function checkAnswer(facts: Pick<StallFacts, 'cause'>, answer: StewardAns
         ? { kind: 'none', why: 'a lead_gone stall is ended by requeue' }
         : { kind: 'wake', note, reason: answer.reason }
     case 'raise_decision':
+      // A Decision's answer puts the Issue back with its lead; a lead that is gone needs a new attempt, which only a requeue starts.
+      if (facts.cause === 'lead_gone')
+        return { kind: 'none', why: 'a lead_gone stall is ended by requeue, not by a Decision' }
       return answer.decision
         ? { kind: 'decision', form: answer.decision, reason: answer.reason }
         : { kind: 'none', why: 'raise_decision without a form' }
@@ -134,7 +137,7 @@ const PLAIN: Record<StallCause, string> = {
 }
 
 /**
- * The Decision the factory raises itself when the workflow could not say after `MAX_ROUNDS` calls: the stall is real, no
+ * (Not for `lead_gone`: its exit is a new attempt, not an answer.) The Decision the factory raises itself when the workflow could not say after `MAX_ROUNDS` calls: the stall is real, no
  * rule reads it and no answer came. Both options can be taken back, and with no answer the Issue stays stalled and the
  * owner sees it in the Console.
  */
@@ -153,7 +156,11 @@ export function fallbackDecision(facts: StallFacts): unknown {
             ? 'a new attempt starts and may fail the same way'
             : 'the lead is woken and may stall again',
       },
-      { label: 'drop', reversible: true, cost: 'the work is not done; the Issue closes and can be filed again' },
+      {
+        label: 'drop',
+        reversible: true,
+        cost: 'the lead is told to close the Issue as dropped; the work can be filed again',
+      },
     ],
     noAnswer: { consequence: 'the Issue stays stalled', default: null, waitMinutes: null },
   }

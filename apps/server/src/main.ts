@@ -96,6 +96,10 @@ async function main(): Promise<void> {
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
   const writes = { uow, clock, ids: systemIds }
+  // No call of an earlier process is running: an open call to agw is taken up again under its own key (agw hands back its run).
+  const lapsed = await uow.run(async ({ loops }) => ok(await loops.lapseOpen(new Date())))
+  if (lapsed.ok && lapsed.value > 0)
+    console.log(`loops: ${lapsed.value} agw call(s) of an earlier process will be taken up again`)
   const startedAt = new Date()
   const leadSettings = loadLeadSettings(process.env)
   const loopSettings = loadLoopSettings(process.env)
@@ -313,7 +317,8 @@ async function main(): Promise<void> {
     console.log(`${signal}: stopping`)
     draining.abort()
     await app.stop()
-    await runner.stop()
+    // A pass in an agw call is given a few seconds; its call is taken up again at the next boot under the same key.
+    await runner.stop(10_000)
     await socket.stop()
     await intake.stop()
     await lock.release()

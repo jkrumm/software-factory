@@ -183,6 +183,58 @@ test('a steward Decision reaches the owner only when policy, the Judge and the d
   expect(asked.at(0)?.input).toMatchObject({ repo: 'app', recommendation: 'try again', options: expect.any(Array) })
 })
 
+test('a later stall of the same Issue is a new Decision, and a lead that is gone is never given one', async () => {
+  const issue = await blocked(lab, 'app', 'blocked again and again', 'recurring block qwerty')
+  await script(stewardScript, [{ match: 'qwerty', answer: DECISION('Should the recurring block stop the Issue?') }])
+  await script(askScript, [
+    {
+      match: 'recurring block',
+      verdict: {
+        verdict: 'answer',
+        answer: 'try again',
+        reason: 'the plan says to retry',
+        source: 'plan: docs/plan.md',
+      },
+    },
+  ])
+  for (const round of [1, 2]) {
+    const stewarded = await runLoop(lab, 'steward')
+    expect(stewarded.summary).toContain('Decisions 1')
+    await lab.cli(['checkpoint', 'pass'])
+    expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+    if (round === 1)
+      await lab.event(
+        issue,
+        'blocked-2',
+        'stalled',
+        { attempt: 1, cause: 'blocked', detail: 'recurring block qwerty' },
+        'lead',
+      )
+  }
+  const decisions = DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions.filter(
+    (d) => d.issueId === issue,
+  )
+  expect(decisions).toHaveLength(2)
+
+  // a lead that is gone: the steward may requeue it, never raise a Decision (an answer would not start a new attempt)
+  const gone = await working(lab, 'app', 'the lead vanished')
+  await lab.event(gone, 'gone-1', 'lead_gone', { attempt: 1, detail: 'terminal gone' })
+  await lab.event(gone, 'gone-2', 'admitted', {})
+  await lab.event(gone, 'gone-3', 'lead_started', { attempt: 2, terminal: 'again' })
+  await lab.event(gone, 'gone-4', 'lead_gone', { attempt: 2, detail: 'terminal gone again' })
+  await lab.event(gone, 'gone-5', 'admitted', {})
+  await lab.event(gone, 'gone-6', 'lead_started', { attempt: 3, terminal: 'third' })
+  await lab.event(gone, 'gone-7', 'lead_gone', { attempt: 3, detail: 'terminal gone a third time' })
+  expect(await state(lab, gone)).toMatchObject({ state: 'waiting', wait: 'lead_gone' })
+  await script(stewardScript, [{ match: 'vanished', answer: DECISION('Should the vanished lead be retried?') }])
+  await runLoop(lab, 'steward')
+  expect(await state(lab, gone)).toMatchObject({ state: 'waiting', wait: 'lead_gone' })
+  const after = DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions
+  expect(after.filter((d) => d.issueId === gone)).toEqual([])
+  const rows = await lab.world.db.sql`SELECT outcome FROM factory.loop_calls WHERE issue_id = ${gone}`
+  expect(rows.map((r: { outcome: string }) => r.outcome)).toEqual(['rejected'])
+})
+
 test('a person’s signal that matches an open Issue only in part asks factory-triage and amends the Issue it names', async () => {
   const open = (await signal('app', 'The login page crashes on submit')).issue as string
   await script(triageScript, [

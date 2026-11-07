@@ -53,6 +53,19 @@ export function postgresLoopStore(tx: SQL): LoopStore {
       return inserted.length === 1
     },
 
+    async retakeCall(key, claimedAt, leaseUntil) {
+      const taken: unknown[] = await tx`
+        UPDATE factory.loop_calls SET claimed_at = ${claimedAt}, lease_until = ${leaseUntil}
+        WHERE key = ${key} AND outcome IS NULL AND lease_until <= ${claimedAt} RETURNING key`
+      return taken.length === 1
+    },
+
+    async lapseOpen(now) {
+      const lapsed: unknown[] = await tx`
+        UPDATE factory.loop_calls SET lease_until = ${now} WHERE outcome IS NULL AND lease_until > ${now} RETURNING key`
+      return lapsed.length
+    },
+
     async finishCall(key, result) {
       await tx`
         UPDATE factory.loop_calls

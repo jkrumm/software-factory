@@ -65,6 +65,8 @@ export interface StewardPass {
   problems: string[]
 }
 
+/** Stalled Issues looked at per pass: wide, because those the rules leave waiting (a closed wall, backoff) keep their place. */
+const STALL_LIMIT = 100
 const PASS_LIMIT = 20
 const HISTORY_LINES = 12
 
@@ -173,6 +175,8 @@ async function raise(deps: StewardDeps, facts: StallFacts, form: unknown): Out<b
     attempt: facts.attempt,
     form,
     by: 'steward',
+    // The wait it answers is part of the Decision's key: the same question about a later stall is a new Decision.
+    salt: `wait:${facts.since}`,
   })
   if (asked.ok) return ok(asked.value.result === 'applied')
   const detail = 'detail' in asked.error ? asked.error.detail : asked.error.kind
@@ -313,6 +317,11 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
         return
       }
       if (asking.value.kind === 'wait') return
+      if (asking.value.kind === 'fallback' && facts.cause === 'lead_gone') {
+        // Its exit is a new attempt, which no Decision starts: it stays a stall the owner sees, and the problem says so.
+        pass.problems.push(`${id}: lead_gone: ${MAX_ROUNDS} asks gave no usable answer; left stalled`)
+        return
+      }
       pass.asked++
       acted =
         asking.value.kind === 'act'
@@ -389,7 +398,7 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
     noted: 0,
     problems: [],
   }
-  const stalled = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.stalled(PASS_LIMIT)))
+  const stalled = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.stalled(STALL_LIMIT)))
   if (!stalled.ok) return stalled
   for (const id of stalled.value) await steward(deps, id, pass)
   await settleOverdue(deps, pass)

@@ -116,14 +116,15 @@ export interface Asked {
  */
 export async function askDecision(
   deps: CheckpointDeps,
-  input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward' },
+  input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward'; salt?: string },
 ): Promise<CheckpointResult<Asked>> {
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
   const form = read.value
   const blob = await deps.blobs.put(renderDecisionForm(form))
   if (!blob.ok) return blob
-  const hash = digest(form.question)
+  // The same ask again is the same Decision; a caller that asks about a new situation (the steward, a later stall) salts it.
+  const hash = digest(input.salt ? `${form.question}\n${input.salt}` : form.question)
 
   return deps.uow.run(async ({ work, checkpoints }) => {
     const askKey = key('ask', input.issueId, input.attempt, hash)

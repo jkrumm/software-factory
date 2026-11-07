@@ -195,3 +195,23 @@ test('lastOkAt moves only on an ok pass; a failure or a throw is the last error,
   expect(runner.view()[0]?.lastError).toBe('crashed: boom')
   expect(lines).toEqual(['loop leads: gone: the database is down', 'loop leads: crashed: boom'])
 })
+
+test('stop gives a pass in flight its grace and no more: an agw call is taken up again at the next boot', async () => {
+  const runner = createLoopRunner({
+    loops: [
+      spec('steward', {
+        run: async () => {
+          await Bun.sleep(2_000)
+          return ok('slow')
+        },
+      }),
+    ],
+    clock,
+    ...quiet,
+  })
+  void runner.runNow('steward')
+  await Bun.sleep(10)
+  const started = Date.now()
+  await runner.stop(100)
+  expect(Date.now() - started).toBeLessThan(1_000)
+})

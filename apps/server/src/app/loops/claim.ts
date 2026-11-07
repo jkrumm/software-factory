@@ -3,8 +3,8 @@ import type { LoopStore } from '../../domains/loops/ports.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
-/** What a loop does about one subject: the stored answer, a wait, or a call this pass now owns (`claimed`). */
-export type Claimed = Exclude<CallPlan, { kind: 'claim' }> | { kind: 'claimed'; round: number; key: Key }
+/** What a loop does about one subject: the stored answer, a wait, or a call this pass now owns (`claimed`, a retaken one included). */
+export type Claimed = Exclude<CallPlan, { kind: 'claim' | 'retake' }> | { kind: 'claimed'; round: number; key: Key }
 
 /**
  * Claim and commit: reads the rounds of the subject, plans from them alone, and when a new round is due stores its claim
@@ -22,6 +22,14 @@ export async function claimRound(
   },
 ): Promise<Claimed> {
   const plan = planCall(await stores.loops.calls(input.loop, input.issue, input.subject), input.now, input.policy)
+  if (plan.kind === 'retake') {
+    const taken = await stores.loops.retakeCall(
+      plan.row.key,
+      input.now,
+      new Date(input.now.getTime() + input.policy.leaseMs),
+    )
+    return taken ? { kind: 'claimed', round: plan.row.round, key: plan.row.key as Key } : { kind: 'in_flight' }
+  }
   if (plan.kind !== 'claim') return plan
   const key = input.keyFor(plan.round)
   const won = await stores.loops.claimCall({

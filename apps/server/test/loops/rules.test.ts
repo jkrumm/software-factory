@@ -105,6 +105,26 @@ test('an answer is held to the stall: requeue ends only lead_gone, wake every ot
   expect(checkAnswer({ cause: 'blocked' }, answer({ action: 'raise_decision' }))).toMatchObject({ kind: 'none' })
 })
 
+test('a lead that is gone gets a requeue, never a Decision: an answer cannot start a new attempt', () => {
+  const decision = {
+    question: 'q',
+    recommendation: 'a',
+    checked: 'c',
+    options: [
+      { label: 'a', reversible: true, cost: 'x' },
+      { label: 'b', reversible: true, cost: 'y' },
+    ],
+    noAnswer: { consequence: 'z', default: null, waitMinutes: null },
+  }
+  expect(checkAnswer({ cause: 'lead_gone' }, answer({ action: 'raise_decision', decision }))).toMatchObject({
+    kind: 'none',
+    why: expect.stringContaining('requeue'),
+  })
+  expect(checkAnswer({ cause: 'blocked' }, answer({ action: 'raise_decision', decision }))).toMatchObject({
+    kind: 'decision',
+  })
+})
+
 test('the Decision the factory raises itself when no answer came is a complete form', () => {
   for (const cause of ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed'] as const) {
     const form = readDecisionForm(fallbackDecision(stall({ cause })))
@@ -139,7 +159,7 @@ test('an answered round is reused, whatever came after', () => {
   expect(planCall([answered, row(2)], NOW, policy)).toEqual({ kind: 'answered', row: answered })
 })
 
-test('a round in flight is left to its call until its lease lapses, then it counts as spent', () => {
+test('a round in flight is left to its call until its lease lapses, then it is retaken', () => {
   const flying = row(1, {
     outcome: null,
     finishedAt: null,
@@ -147,8 +167,9 @@ test('a round in flight is left to its call until its lease lapses, then it coun
     leaseUntil: new Date(NOW.getTime() + 1_000),
   })
   expect(planCall([flying], NOW, policy)).toEqual({ kind: 'in_flight' })
+  // a lapsed lease is a call the server stopped under: asked again under its own key, not as a round of its own
   const lapsed = { ...flying, leaseUntil: new Date(NOW.getTime() - 20 * 60_000) }
-  expect(planCall([lapsed], NOW, policy)).toEqual({ kind: 'claim', round: 2 })
+  expect(planCall([lapsed], NOW, policy)).toEqual({ kind: 'retake', row: lapsed })
 })
 
 test('a round that came to nothing is retried after the wait, and the rounds run out', () => {

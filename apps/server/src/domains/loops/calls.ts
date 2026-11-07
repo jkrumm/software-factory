@@ -34,20 +34,25 @@ export interface CallPolicy {
 export type CallPlan =
   | { kind: 'answered'; row: CallRow }
   | { kind: 'in_flight' }
+  /** a call whose lease lapsed (the server stopped under it): asked again under its own key, which agw answers from the run it has */
+  | { kind: 'retake'; row: CallRow }
   | { kind: 'backoff'; until: Date }
   | { kind: 'exhausted'; rounds: number }
   | { kind: 'claim'; round: number }
 
 /**
  * Whether to ask, derived from the rows alone: an answered round is reused (the workflow is asked once, a replayed pass
- * acts on the stored answer), a round in flight is left to its call until its lease lapses, a failed or rejected round is
- * retried after `retryMs`, and a subject that used up its rounds is not asked again.
+ * acts on the stored answer), a round in flight is left to its call until its lease lapses and then retaken, a failed or
+ * rejected round is retried after `retryMs`, and a subject that used up its rounds is not asked again.
  */
 export function planCall(rows: readonly CallRow[], now: Date, policy: CallPolicy): CallPlan {
   const answered = rows.find((row) => row.outcome === 'answered')
   if (answered) return { kind: 'answered', row: answered }
   if (rows.some((row) => row.outcome === null && row.leaseUntil > now)) return { kind: 'in_flight' }
-  // A lapsed lease is a call that never came back: it counts as a failed round.
+  // A lapsed lease is a call that never came back (a restart): it is asked again under the same key, so agw hands back the run
+  // it started instead of starting another.
+  const lapsed = rows.find((row) => row.outcome === null)
+  if (lapsed) return { kind: 'retake', row: lapsed }
   const spent = rows.length
   if (spent >= policy.maxRounds) return { kind: 'exhausted', rounds: spent }
   const last = rows.reduce<Date | null>((at, row) => {
