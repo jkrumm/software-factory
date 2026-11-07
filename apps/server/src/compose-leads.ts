@@ -42,6 +42,10 @@ export function composeLeads(input: {
   startWatch: EffectPorts['start_watch']
 }): LeadsComposition {
   const { settings: s } = input
+  if (!s.agentToken)
+    console.error(
+      'leads: FACTORY_AGENT_TOKEN is not set; a lead starts without a token and its factory calls answer 401',
+    )
   const deps: LeadDeps = {
     uow: input.uow,
     clock: input.clock,
@@ -53,6 +57,8 @@ export function composeLeads(input: {
       ...(s.pretrustBin ? { pretrustBin: s.pretrustBin } : {}),
       accountsFile: s.accountsFile,
       home: s.home,
+      ...(s.agentToken ? { agentToken: s.agentToken } : {}),
+      ...(s.apiUrl ? { apiUrl: s.apiUrl } : {}),
     }),
     worktrees: gitWorktrees(),
     repos: rootedRepos(s.repoRoots),

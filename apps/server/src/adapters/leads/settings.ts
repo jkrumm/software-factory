@@ -18,6 +18,9 @@ const Env = z.object({
   FACTORY_START_BUDGET_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_GRACE_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_FORCE_NOTE_MS: z.coerce.number().int().min(0).optional(),
+  /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
+  FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
+  PORT: z.coerce.number().int().min(1).max(65_535).optional(),
 })
 
 /** The tracked table of this checkout or release: `config/roles.json`. */
@@ -42,6 +45,10 @@ export interface LeadSettings {
   startBudgetMs: number
   graceMs: number
   forceNoteAfterMs: number
+  /** `FACTORY_TOKEN` of a lead's terminal: the agent token, never the owner's; unset, the lead's CLI will answer 401 */
+  agentToken: string | undefined
+  /** `FACTORY_URL` of a lead's terminal: the API's loopback address; unset without a `PORT` */
+  apiUrl: string | undefined
 }
 
 /** The leads' settings from the environment; throws one message naming every bad key. */
@@ -72,5 +79,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     startBudgetMs: e.FACTORY_START_BUDGET_MS ?? 30 * 60_000,
     graceMs: e.FACTORY_GRACE_MS ?? 120_000,
     forceNoteAfterMs: e.FACTORY_FORCE_NOTE_MS ?? 5 * 60_000,
+    agentToken: e.FACTORY_AGENT_TOKEN,
+    apiUrl: e.PORT ? `http://127.0.0.1:${e.PORT}` : undefined,
   }
 }

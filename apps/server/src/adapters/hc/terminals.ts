@@ -22,6 +22,10 @@ export interface HcTerminalsOptions {
   /** `USAGE_LANE` of the terminal, how the usage record tells the sessions apart */
   usageLane?: string
   home: string
+  /** `FACTORY_TOKEN` of the terminal: the agent token, so a lead's `factory` calls the API as a lead */
+  agentToken?: string
+  /** `FACTORY_URL` of the terminal: the API's loopback address */
+  apiUrl?: string
   processTimeoutMs?: number
   startBudgetMs?: number
   deliverWaitMs?: number
@@ -374,6 +378,8 @@ export class HcTerminals implements Terminals {
       // FACTORY_SESSION switches the hooks on: they report this session's events under the key.
       FACTORY_SESSION: input.key,
       FACTORY_ROLE: 'lead',
+      ...(this.options.agentToken ? { FACTORY_TOKEN: this.options.agentToken } : {}),
+      ...(this.options.apiUrl ? { FACTORY_URL: this.options.apiUrl } : {}),
     }
   }
 

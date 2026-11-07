@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync, realpathSync } from 'node:fs'
+import { TOKENS } from '../harness.ts'
 import { type LeadsWorld, startLeadsWorld } from './support.ts'
 
 let w: LeadsWorld
@@ -34,6 +35,10 @@ test('start: admitted runs start_lead; the fake hc shows one terminal with its k
   expect(brief).toContain('attempt 1 of Issue 1')
   expect(brief).toContain('the probe on /health fails')
   expect(terminal?.env.FACTORY_SESSION).toBe('lead-1-1')
+  // The lead's factory calls the API as a lead: the agent token, never the owner's, and the loopback address.
+  expect(terminal?.env.FACTORY_TOKEN).toBe(TOKENS.agent)
+  expect(terminal?.env.FACTORY_TOKEN).not.toBe(TOKENS.owner)
+  expect(terminal?.env.FACTORY_URL).toBe(w.server.url)
   // The lead works in its own worktree of the repo, on its branch.
   expect(terminal?.cwd).toBe(`${realpathSync(w.repo)}/.claude/worktrees/factory-1-1`)
   expect(existsSync(`${terminal?.cwd}/README.md`)).toBe(true)
