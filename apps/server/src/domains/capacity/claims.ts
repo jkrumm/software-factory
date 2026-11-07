@@ -1,7 +1,7 @@
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 
-/** A lead's seat in a repo: while it holds one, it counts against the repo's `leads: N` and its account's cap. */
-export interface Seat {
+/** A lead's claim in a repo: while it holds one, it counts against the repo's `leads: N` and its account's cap. */
+export interface Claim {
   issue: IssueId
   repo: string
   /** a fix: it may use the one place beyond `leads` */
@@ -22,9 +22,9 @@ export const claimOrder = (a: Claimant, b: Claimant): number =>
 export type Room = { granted: true } | { granted: false; message: string; heldBy: IssueId[] }
 
 /**
- * Whether `candidate` takes a seat in a repo that admits `leads` leads and one more for a fix: ordinary holders are at
+ * Whether `candidate` takes a claim in a repo that admits `leads` leads and one more for a fix: ordinary holders are at
  * most `leads`, all holders at most `leads + 1`, so a fix never uses up an ordinary place. `owed` are Issues that
- * work in the repo without a seat (a wait that gave it up has ended): they were admitted before, so they are served
+ * work in the repo without a claim (a wait that gave it up has ended): they were admitted before, so they are served
  * first, in claim order, and a new lead never takes the place a resumed one is waiting for.
  */
 export function claimRoom(input: {
@@ -57,4 +57,17 @@ export function claimRoom(input: {
     }
   }
   return { granted: true }
+}
+/**
+ * A wait that needs no lead at work gives the claim back: a person's wait (a Decision, a review, an Errand), a timer and
+ * a dependency. A dependency matters most: a lead that waits for another Issue of the same repo must not hold the one
+ * place that Issue needs. A stall (a wall, an unreported stop, a block, a regression) keeps it: the lead is alive and
+ * the steward ends the stall.
+ */
+export const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set(['timer', 'dependency', 'decision', 'review', 'errand'])
+
+/** Whether an Issue in this state is a lead working in its repo, so it holds a claim. */
+export function holdsClaim(state: string, waitReason: string | null): boolean {
+  if (state === 'working' || state === 'watching') return true
+  return state === 'waiting' && waitReason !== null && !CLAIM_FREEING_WAITS.has(waitReason)
 }

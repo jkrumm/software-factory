@@ -18,9 +18,9 @@ CREATE TABLE factory.capacity_readings (
 
 CREATE INDEX capacity_readings_by_account ON factory.capacity_readings (account, id DESC);
 
--- A lead's seat in its repo, with the account it runs on. An Issue holds one while its lead works; a wait that needs a
+-- A lead's claim in its repo, with the account it runs on. An Issue holds one while its lead works; a wait that needs a
 -- person or a clock gives it back, and the lead takes one again before it is told its wait is over.
-CREATE TABLE factory.capacity_seats (
+CREATE TABLE factory.capacity_claims (
   issue_id text PRIMARY KEY REFERENCES factory.issues (id),
   repo text NOT NULL,
   urgent boolean NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE factory.capacity_seats (
   taken_at timestamptz NOT NULL
 );
 
-CREATE INDEX capacity_seats_by_repo ON factory.capacity_seats (repo);
+CREATE INDEX capacity_claims_by_repo ON factory.capacity_claims (repo);
 
 -- The account each attempt was admitted on: package 4's start_lead reads it.
 CREATE TABLE factory.capacity_assignments (

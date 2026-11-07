@@ -35,7 +35,7 @@ export interface AdmissionInputs {
   accounts: readonly AccountReading[]
   /** accounts that took a lead after their latest sample */
   loaded: ReadonlySet<string>
-  /** leads that hold a seat on each account */
+  /** leads that hold a claim on each account */
   leadsByAccount: ReadonlyMap<string, number>
   leadsPerAccount: number
 }
@@ -49,7 +49,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null): Ad
 
 /**
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
- * load, its memory, the repo's seats (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
+ * load, its memory, the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
  * Never spills: with every account closed the answer is to wait for the first opening. Pure: the readings are passed
  * in, and the caller decides again at every claim, inside one transaction.
  */
@@ -68,7 +68,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     owed: input.owed,
     candidate: input.candidate,
   })
-  if (!room.granted) return no('claim', `no seat in the repo: ${room.message}`)
+  if (!room.granted) return no('claim', `no claim free in the repo: ${room.message}`)
   const pick = pickAccount({
     readings: input.accounts,
     loaded: input.loaded,

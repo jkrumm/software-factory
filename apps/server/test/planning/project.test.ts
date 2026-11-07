@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
 import { defaultProject, parseProject } from '../../src/domains/planning/project.ts'
+import { signalsView } from '../../src/domains/planning/signals.ts'
 import { projectName, projectOf, type StoredProject, synced } from '../../src/domains/planning/sync.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..', '..')
@@ -128,5 +129,34 @@ describe('sync', () => {
     expect(projectOf(projects, '/src/a/.claude/worktrees/x')?.name).toBe('a')
     expect(projectOf(projects, '/src/a/b/c')?.name).toBe('ab')
     expect(projectOf(projects, '/src/other')).toBeUndefined()
+  })
+})
+
+describe('what intake hears', () => {
+  const stored = (raw: unknown, source: 'file' | 'defaults' = 'file'): StoredProject => {
+    const parsed = parseProject(raw, 'x')
+    if (!parsed.ok) throw new Error(parsed.message)
+    return { name: 'x', repo: '/src/x', source, project: parsed.project } as StoredProject
+  }
+
+  test('the automatic sources a project lists, its heal rules in milliseconds, and a repo without a file is a work repo', () => {
+    const view = signalsView(
+      stored({
+        apiVersion: 'factory/v2',
+        name: 'x',
+        signals: { github: { label: 'factory', checks: true, author: 'me', since: '2026-11-07' }, launchd: ['com.x'] },
+        heal: [{ when: 'kuma.down', grace: '5m', runbook: 'make restart', max: 2 }],
+      }),
+    )
+    expect(view).toEqual({
+      repo: '/src/x',
+      work: false,
+      sources: ['github', 'checks', 'launchd'],
+      github: { label: 'factory', author: 'me', since: '2026-11-07', checks: true },
+      launchd: ['com.x'],
+      heal: [{ when: 'kuma.down', graceMs: 300_000, runbook: 'make restart', max: 2 }],
+    })
+    const work = signalsView(stored({ apiVersion: 'factory/v2', name: 'x' }, 'defaults'))
+    expect(work).toMatchObject({ work: true, sources: [], github: null, launchd: [], heal: [] })
   })
 })

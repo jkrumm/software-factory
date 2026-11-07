@@ -6,7 +6,7 @@
 export const LOCKS = {
   /** transaction-level: serializes migrations */
   migration: 7_093_001,
-  /** transaction-level: serializes everything that assigns a seat or an account (capacity) */
+  /** transaction-level: serializes everything that assigns a claim or an account (capacity) */
   capacity: 7_093_002,
   /** session-level: held by the one running server */
   process: 7_093_003,

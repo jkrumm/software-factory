@@ -13,7 +13,7 @@ export interface ApiDeps {
   internalTest?: InternalTestWrites
   /** projects, plans, the chain, priorities (package 3); unbound, the routes answer 503 */
   planning?: PlanningApi
-  /** accounts, the host, seats, the queue, admission, test slots (package 3); unbound, the routes answer 503 */
+  /** accounts, the host, claims, the queue, admission, test slots (package 3); unbound, the routes answer 503 */
   capacity?: CapacityApi
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void

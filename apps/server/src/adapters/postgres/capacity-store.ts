@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
-import type { Seat } from '../../domains/capacity/claims.ts'
+import type { Claim } from '../../domains/capacity/claims.ts'
 import type { Assignment, CapacityStore } from '../../domains/capacity/ports.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
 import type { SlotRow } from '../../domains/capacity/slots.ts'
@@ -23,7 +23,7 @@ const ReadingRow = z.object({
   exhausted_until: z.date().nullable(),
 })
 
-const SeatRow = z.object({
+const ClaimRow = z.object({
   issue_id: z.string(),
   repo: z.string(),
   urgent: z.boolean(),
@@ -111,10 +111,10 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       })
     },
 
-    async seats() {
-      const rows: unknown[] = await tx`SELECT * FROM factory.capacity_seats ORDER BY taken_at, issue_id`
-      return rows.map((raw): Seat => {
-        const row = SeatRow.parse(raw)
+    async claims() {
+      const rows: unknown[] = await tx`SELECT * FROM factory.capacity_claims ORDER BY taken_at, issue_id`
+      return rows.map((raw): Claim => {
+        const row = ClaimRow.parse(raw)
         return {
           issue: idOf(row.issue_id),
           repo: row.repo,
@@ -125,17 +125,17 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       })
     },
 
-    async takeSeat(seat) {
+    async takeClaim(claim) {
       await tx`
-        INSERT INTO factory.capacity_seats (issue_id, repo, urgent, account, taken_at)
-        VALUES (${seat.issue}, ${seat.repo}, ${seat.urgent}, ${seat.account}, ${seat.takenAt})
+        INSERT INTO factory.capacity_claims (issue_id, repo, urgent, account, taken_at)
+        VALUES (${claim.issue}, ${claim.repo}, ${claim.urgent}, ${claim.account}, ${claim.takenAt})
         ON CONFLICT (issue_id) DO NOTHING`
     },
 
-    async releaseSeats(issues) {
+    async releaseClaims(issues) {
       if (issues.length === 0) return []
       const rows: unknown[] = await tx`
-        DELETE FROM factory.capacity_seats WHERE issue_id IN ${tx([...issues])} RETURNING issue_id`
+        DELETE FROM factory.capacity_claims WHERE issue_id IN ${tx([...issues])} RETURNING issue_id`
       return rows.map((raw) => idOf(z.object({ issue_id: z.string() }).parse(raw).issue_id))
     },
 

@@ -1,7 +1,7 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { AccountReading } from './accounts.ts'
-import type { Seat } from './claims.ts'
+import type { Claim } from './claims.ts'
 import type { MemoryReading } from './host.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { SlotRow } from './slots.ts'
@@ -20,17 +20,17 @@ export interface Assignment {
  * turns it into a `PortError`.
  */
 export interface CapacityStore {
-  /** serializes everything that assigns a seat or an account, to the end of the transaction */
+  /** serializes everything that assigns a claim or an account, to the end of the transaction */
   lock(): Promise<void>
 
   recordReadings(readings: readonly AccountReading[]): Promise<void>
   /** the newest reading of every account that ever had one */
   latestReadings(): Promise<AccountReading[]>
 
-  seats(): Promise<Seat[]>
-  takeSeat(seat: Seat): Promise<void>
-  /** gives these Issues' seats back; says which Issues held one */
-  releaseSeats(issues: readonly IssueId[]): Promise<IssueId[]>
+  claims(): Promise<Claim[]>
+  takeClaim(claim: Claim): Promise<void>
+  /** gives these Issues' claims back; says which Issues held one */
+  releaseClaims(issues: readonly IssueId[]): Promise<IssueId[]>
   assign(assignment: Assignment): Promise<void>
   /** the newest assignments: the leads an account's latest sample may not show yet */
   recentAssignments(): Promise<Assignment[]>

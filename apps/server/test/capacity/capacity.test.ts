@@ -9,7 +9,7 @@ import {
   overMemory,
   swapUsedBytes,
 } from '../../src/domains/capacity/host.ts'
-import { holdsSeat } from '../../src/domains/capacity/seats.ts'
+import { holdsClaim } from '../../src/domains/capacity/claims.ts'
 import {
   releaseSlot,
   SLOT_LEASE_MS,
@@ -146,8 +146,8 @@ describe('the host', () => {
   })
 })
 
-describe('seats in a repo', () => {
-  test('leads: 2 seats two ordinary leads; the third has no seat and the reason names who sits', () => {
+describe('claims in a repo', () => {
+  test('leads: 2 claims two ordinary leads; the third has no claim and the reason names who holds them', () => {
     const holders = [claimant(1), claimant(2)]
     const third = claimRoom({ leads: 2, holders, owed: [], candidate: claimant(3) })
     expect(third).toMatchObject({ granted: false, heldBy: [id(1), id(2)] })
@@ -167,7 +167,7 @@ describe('seats in a repo', () => {
     ).toBe(false)
   })
 
-  test('resumed leads without a seat are served first: a new lead never takes the place one waits for', () => {
+  test('resumed leads without a claim are served first: a new lead never takes the place one waits for', () => {
     const owed = [claimant(1)]
     expect(claimRoom({ leads: 1, holders: [], owed, candidate: claimant(2) })).toMatchObject({ granted: false })
     expect(claimRoom({ leads: 1, holders: [], owed, candidate: claimant(1) }).granted).toBe(true)
@@ -177,13 +177,14 @@ describe('seats in a repo', () => {
     )
   })
 
-  test('which waits give the seat back: a person, a timer and a dependency; a stall keeps it', () => {
+  test('which waits give the claim back: a person, a timer and a dependency; a stall keeps it', () => {
     for (const reason of ['decision', 'review', 'errand', 'timer', 'dependency'])
-      expect(holdsSeat('waiting', reason)).toBe(false)
-    for (const reason of ['wall', 'unreported', 'blocked', 'regressed']) expect(holdsSeat('waiting', reason)).toBe(true)
-    expect(holdsSeat('working', null)).toBe(true)
-    expect(holdsSeat('watching', null)).toBe(true)
-    for (const state of ['settling', 'queued', 'closed']) expect(holdsSeat(state, null)).toBe(false)
+      expect(holdsClaim('waiting', reason)).toBe(false)
+    for (const reason of ['wall', 'unreported', 'blocked', 'regressed'])
+      expect(holdsClaim('waiting', reason)).toBe(true)
+    expect(holdsClaim('working', null)).toBe(true)
+    expect(holdsClaim('watching', null)).toBe(true)
+    for (const state of ['settling', 'queued', 'closed']) expect(holdsClaim(state, null)).toBe(false)
   })
 })
 
@@ -210,7 +211,7 @@ describe('admission', () => {
     expect(checkAdmission(inputs())).toMatchObject({ admit: true, account: { account: 'a' } })
   })
 
-  test('the first rule that says no wins: drain, load, memory, seat, then the account', () => {
+  test('the first rule that says no wins: drain, load, memory, claim, then the account', () => {
     const everything = inputs({
       state: 'drain',
       load: 99,
@@ -239,7 +240,7 @@ describe('admission', () => {
     expect(checkAdmission(inputs({ memory: null, load: null })).admit).toBe(true)
   })
 
-  test('pace seats one lead whatever leads says, and spends only toward the weekly pace', () => {
+  test('pace claims one lead whatever leads says, and spends only toward the weekly pace', () => {
     expect(checkAdmission(inputs({ state: 'pace', leads: 3, holders: [claimant(9)] }))).toMatchObject({
       admit: false,
       refusal: { kind: 'claim' },

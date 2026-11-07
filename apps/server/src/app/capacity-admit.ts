@@ -1,11 +1,9 @@
 import { type AccountReading, POLL_EVERY_MS } from '../domains/capacity/accounts.ts'
 import { checkAdmission, type RefusalKind } from '../domains/capacity/admission.ts'
-import type { Claimant, Seat } from '../domains/capacity/claims.ts'
-import { claimRoom } from '../domains/capacity/claims.ts'
 import type { MemoryCeilings, MemoryReading } from '../domains/capacity/host.ts'
 import type { AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
-import { holdsSeat } from '../domains/capacity/seats.ts'
+import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import type { Edge } from '../domains/planning/chain.ts'
 import type { OpenIssueRow } from '../domains/planning/ports.ts'
 import { type ChainReason, type OpenIssue, orderQueue } from '../domains/planning/queue.ts'
@@ -65,7 +63,7 @@ export interface Snapshot {
   issues: (OpenIssueRow & { project: string | null })[]
   edges: Edge[]
   prio: Map<IssueId, number>
-  seats: Seat[]
+  claims: Claim[]
   readings: AccountReading[]
   states: QueueStates
   assignments: Assignment[]
@@ -117,20 +115,20 @@ export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Sna
     issues: rows.map((row) => ({ ...row, project: projectOf(projects, row.repo)?.name ?? null })),
     edges: await stores.planning.edges(),
     prio: await stores.planning.prios(),
-    seats: await stores.capacity.seats(),
+    claims: await stores.capacity.claims(),
     readings: await stores.capacity.latestReadings(),
     states: await stores.capacity.queueStates(),
     assignments: await stores.capacity.recentAssignments(),
   }
 }
 
-/** The seats of Issues that no longer work in their repo go back; run under the capacity lock. */
-export async function sweepSeats(stores: PlanningStores, snap: Snapshot): Promise<IssueId[]> {
-  const holding = new Set(snap.issues.filter((i) => holdsSeat(i.state, i.waitReason)).map((i) => i.id))
-  const stale = snap.seats.filter((seat) => !holding.has(seat.issue)).map((seat) => seat.issue)
+/** The claims of Issues that no longer work in their repo go back; run under the capacity lock. */
+export async function sweepClaims(stores: PlanningStores, snap: Snapshot): Promise<IssueId[]> {
+  const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
+  const stale = snap.claims.filter((claim) => !holding.has(claim.issue)).map((claim) => claim.issue)
   if (stale.length === 0) return []
-  const released = await stores.capacity.releaseSeats(stale)
-  snap.seats = snap.seats.filter((seat) => !released.includes(seat.issue))
+  const released = await stores.capacity.releaseClaims(stale)
+  snap.claims = snap.claims.filter((claim) => !released.includes(claim.issue))
   return released
 }
 
@@ -138,7 +136,7 @@ const claimantOf = (issue: IssueId, kind: string): Claimant => ({ issue, urgent:
 
 /**
  * Every queued Issue in queue order with the reason it stays queued, or nothing when it may be admitted. Each Issue is
- * decided as if the ones before it were admitted (they take a seat and an account), so the reasons of the later ones
+ * decided as if the ones before it were admitted (they take a claim and an account), so the reasons of the later ones
  * are the ones they would meet in turn. Pure: the snapshot and the host readings are passed in.
  */
 export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits): QueueEntry[] {
@@ -151,8 +149,8 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
     finalizing: i.finalizing,
   }))
   const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio })
-  const seats = [...snap.seats]
-  const taken = new Set(seats.map((s) => s.issue))
+  const claims = [...snap.claims]
+  const taken = new Set(claims.map((s) => s.issue))
   const loaded = new Set<string>()
   for (const reading of snap.readings) {
     if (!reading.sampledAt) continue
@@ -162,7 +160,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
   }
   const repoOf = new Map(snap.issues.map((i) => [i.id, i.repo]))
   const projectByName = new Map(snap.projects.map((p) => [p.name, p]))
-  const owed = snap.issues.filter((i) => holdsSeat(i.state, i.waitReason) && !taken.has(i.id) && i.project !== null)
+  const owed = snap.issues.filter((i) => holdsClaim(i.state, i.waitReason) && !taken.has(i.id) && i.project !== null)
 
   return ordered.map((row): QueueEntry => {
     const { issue } = row
@@ -177,13 +175,13 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
     const project = issue.project === null ? undefined : projectByName.get(issue.project)
     if (!project) return { ...base, reason: null, account: null }
     const leadsByAccount = new Map<string, number>()
-    for (const seat of seats)
-      if (seat.account) leadsByAccount.set(seat.account, (leadsByAccount.get(seat.account) ?? 0) + 1)
+    for (const claim of claims)
+      if (claim.account) leadsByAccount.set(claim.account, (leadsByAccount.get(claim.account) ?? 0) + 1)
     const verdict = checkAdmission({
       now: snap.now,
       state: effectiveState(snap.states, project.name),
       leads: project.project.leads,
-      holders: seats.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
+      holders: claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
       owed: owed.filter((o) => o.project === project.name).map((o) => claimantOf(o.id, o.kind)),
       candidate: claimantOf(issue.id, issue.kind),
       load: host.load,
@@ -196,7 +194,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
       leadsPerAccount: limits.leadsPerAccount,
     })
     if (!verdict.admit) return { ...base, reason: verdict.refusal, account: null }
-    seats.push({
+    claims.push({
       issue: issue.id,
       repo: project.repo,
       urgent: issue.kind === 'incident',
@@ -226,8 +224,8 @@ type Step = { admitted: Admitted | null; skipped: IssueId | null; queue: QueueEn
 
 /**
  * Admits the first Issue in queue order that nothing keeps out, deciding everything again inside one transaction:
- * under the capacity lock, the chain, the seats, the queue state, the host and the accounts are looked at as they stand,
- * and `admitted` is recorded together with the seat and the account (its `start_lead` effect is package 4's).
+ * under the capacity lock, the chain, the claims, the queue state, the host and the accounts are looked at as they stand,
+ * and `admitted` is recorded together with the claim and the account (its `start_lead` effect is package 4's).
  */
 async function admitOne(
   deps: CapacityDeps,
@@ -239,7 +237,7 @@ async function admitOne(
     const now = deps.clock.now()
     await satisfyEdges(stores, now)
     const snap = await snapshotOf(stores, now)
-    await sweepSeats(stores, snap)
+    await sweepClaims(stores, snap)
     const queue = evaluateQueue(snap, host, deps.limits)
     const next = queue.find((entry) => entry.account !== null && entry.reason === null && !skip.has(entry.issue))
     if (!next || next.account === null) return ok<Step>({ admitted: null, skipped: null, queue })
@@ -256,7 +254,7 @@ async function admitOne(
     // The machine said no (the Issue moved since the look): nothing is kept, the next look finds it as it is.
     if (recorded.value.result !== 'applied') return ok<Step>({ admitted: null, skipped: next.issue, queue })
 
-    await stores.capacity.takeSeat({
+    await stores.capacity.takeClaim({
       issue: next.issue,
       repo: snap.projects.find((p) => p.name === next.project)?.repo ?? next.repo,
       urgent: next.kind === 'incident',
@@ -324,63 +322,63 @@ export async function queueView(
   return viewed.ok ? ok({ queue: viewed.value, notes: host.notes }) : viewed
 }
 
-/** Gives an Issue's seat back (finalize calls this from every exit path). True when it held one. Idempotent. */
-export async function releaseSeat(deps: PlanningDeps, issue: IssueId): Promise<Result<boolean, PortError>> {
+/** Gives an Issue's claim back (finalize calls this from every exit path). True when it held one. Idempotent. */
+export async function releaseClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<boolean, PortError>> {
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
-    return ok((await capacity.releaseSeats([issue])).length > 0)
+    return ok((await capacity.releaseClaims([issue])).length > 0)
   })
 }
 
-export interface ResumeSeat {
-  /** `held`: the Issue had its seat; `taken`: it took one now */
+export interface ResumeClaim {
+  /** `held`: the Issue had its claim; `taken`: it took one now */
   result: 'held' | 'taken'
 }
 
 /**
  * **The claim on resume.** The machine has no claim wait, so the wait is here, at the one place that matters: a lead
- * whose wait ended (an answer, a verdict, a timer, a wake) takes its repo's seat back before anyone tells it so. The
+ * whose wait ended (an answer, a verdict, a timer, a wake) takes its repo's claim back before anyone tells it so. The
  * `note_lead` effect that ends the wait calls this first and answers `refused` while the repo is full, which the
- * outbox retries with its backoff, so no lead works in a repo without a place. Only the repo's seats are looked at: a
+ * outbox retries with its backoff, so no lead works in a repo without a place. Only the repo's claims are looked at: a
  * resume is never kept out by the load, the memory or an account's window, and it keeps the account it was admitted
  * on. Meanwhile admission counts the Issue as owed, so no new lead takes the place it waits for.
  */
-export async function resumeSeat(deps: PlanningDeps, issue: IssueId): Promise<Result<ResumeSeat, PortError>> {
+export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<ResumeClaim, PortError>> {
   return deps.uow.run(async (stores) => {
     await stores.capacity.lock()
     const snap = await snapshotOf(stores, deps.clock.now())
-    await sweepSeats(stores, snap)
+    await sweepClaims(stores, snap)
     const row = snap.issues.find((i) => i.id === issue)
     if (!row) return err(portError('gone', `Issue ${issueNumber(issue)} is closed or unknown: nothing to resume`))
-    if (snap.seats.some((s) => s.issue === issue)) return ok<ResumeSeat>({ result: 'held' })
+    if (snap.claims.some((s) => s.issue === issue)) return ok<ResumeClaim>({ result: 'held' })
     const project = snap.projects.find((p) => p.name === row.project)
-    // A repo that is no project any more has no seat to wait for.
-    if (!project) return ok<ResumeSeat>({ result: 'held' })
+    // A repo that is no project any more has no claim to wait for.
+    if (!project) return ok<ResumeClaim>({ result: 'held' })
     const owed = snap.issues
       .filter(
         (i) =>
-          i.project === project.name && holdsSeat(i.state, i.waitReason) && !snap.seats.some((s) => s.issue === i.id),
+          i.project === project.name && holdsClaim(i.state, i.waitReason) && !snap.claims.some((s) => s.issue === i.id),
       )
       .map((i) => claimantOf(i.id, i.kind))
     const room = claimRoom({
       leads: project.project.leads,
-      holders: snap.seats.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
+      holders: snap.claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
       owed,
       candidate: claimantOf(issue, row.kind),
     })
     if (!room.granted)
       return err(
-        portError('refused', `Issue ${issueNumber(issue)} waits for a seat in ${project.name}: ${room.message}`),
+        portError('refused', `Issue ${issueNumber(issue)} waits for a claim in ${project.name}: ${room.message}`),
       )
     const assignment = await stores.capacity.latestAssignment(issue)
-    await stores.capacity.takeSeat({
+    await stores.capacity.takeClaim({
       issue,
       repo: project.repo,
       urgent: row.kind === 'incident',
       account: assignment?.account ?? null,
       takenAt: deps.clock.now(),
     })
-    return ok<ResumeSeat>({ result: 'taken' })
+    return ok<ResumeClaim>({ result: 'taken' })
   })
 }
 

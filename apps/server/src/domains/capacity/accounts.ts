@@ -91,7 +91,7 @@ export interface PickInput {
   readings: readonly AccountReading[]
   /** leads started on an account after its latest sample: the sample does not show them yet */
   loaded: ReadonlySet<string>
-  /** leads that hold a seat on each account now */
+  /** leads that hold a claim on each account now */
   leads: ReadonlyMap<string, number>
   /** most leads one account carries at once */
   leadsPerAccount: number

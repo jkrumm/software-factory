@@ -77,7 +77,7 @@ const statesView = (states: QueueStates): QueueStatesView =>
 const slotView = (slot: SlotView): Slot => Slot.parse(slot)
 
 /**
- * Capacity: the accounts, the host, who sits where, the queue states, the admission pass, and the test slots. The
+ * Capacity: the accounts, the host, who holds which claim, the queue states, the admission pass, and the test slots. The
  * routes exist whether or not the use cases are bound (unbound they answer 503), so the OpenAPI document is the same
  * everywhere. The slot routes are the `factory slot run` wrapper's own, hand-written in the CLI, so they stay out of the
  * document.
@@ -103,12 +103,12 @@ export const capacityRoutes = (api?: CapacityApi) => {
               memoryCeilings: api.limits.memoryCeilings,
               notes: s.host.notes,
             },
-            seats: s.seats.map((seat) => ({
-              issue: seat.issue,
-              repo: seat.repo,
-              account: seat.account,
-              urgent: seat.urgent,
-              takenAt: seat.takenAt.toISOString(),
+            claims: s.claims.map((claim) => ({
+              issue: claim.issue,
+              repo: claim.repo,
+              account: claim.account,
+              urgent: claim.urgent,
+              takenAt: claim.takenAt.toISOString(),
             })),
             leadsPerAccount: api.limits.leadsPerAccount,
             queue: statesView(s.states),
@@ -129,7 +129,8 @@ export const capacityRoutes = (api?: CapacityApi) => {
         response: { 200: CapacityView, 503: ErrorBody },
         detail: {
           operationId: 'capacity.get',
-          summary: 'the accounts and their windows, the host, who sits where, the queue states and the test slots',
+          summary:
+            'the accounts and their windows, the host, who holds which claim, the queue states and the test slots',
         },
       },
     )

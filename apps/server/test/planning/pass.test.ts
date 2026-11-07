@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { planningPass } from '../../src/app/planning-pass.ts'
 import { addAfter, setPrio, settleIssue } from '../../src/app/planning-chain.ts'
+import { projectSignals } from '../../src/app/planning-signals.ts'
 import { projectStates } from '../../src/app/planning-views.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
 import { issueId } from '../../src/kernel/ids.ts'
@@ -150,6 +151,23 @@ describe('the plan files its rows', () => {
   })
 })
 
+describe('what intake hears', () => {
+  test('a project is found by name, path or worktree; polled lists the projects with automatic sources', async () => {
+    const listens = JSON.stringify({ signals: { github: { label: 'factory' } } })
+    world.source.add('app', { project: PROJECT('app', listens) })
+    world.source.add('quiet', { project: PROJECT('quiet') })
+    world.source.add('work')
+    await world.file({ repo: 'work' })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const port = projectSignals(world.deps)
+    expect(value(await port.find('app'))).toMatchObject({ repo: '/src/app', work: false, sources: ['github'] })
+    expect(value(await port.find('/src/app/.claude/worktrees/x'))).toMatchObject({ repo: '/src/app' })
+    expect(value(await port.find('work'))).toMatchObject({ work: true, sources: [] })
+    expect(value(await port.find('unknown'))).toBeNull()
+    expect(value(await port.polled()).map((v) => v.repo)).toEqual(['/src/app'])
+  })
+})
+
 describe('the chain', () => {
   test('settling an Issue with edges queues it; a closed blocker, an unknown one and a cycle are refused and store nothing', async () => {
     const [a, b, c] = [
@@ -160,8 +178,14 @@ describe('the chain', () => {
     if (!a || !b || !c) throw new Error('no issues')
     const settled = value(await settleIssue(world.deps, { issue: b, after: [a] }))
     expect(settled).toEqual({ result: 'settled', edges: 1, state: 'queued' })
-    // a repeat of the call settles nothing twice
+    // a repeat of the call settles nothing twice, even when the blocker has closed since
+    expect(value(await settleIssue(world.deps, { issue: b, after: [a] }))).toMatchObject({
+      result: 'replayed',
+      edges: 0,
+    })
+    await world.send(a, 'cancelled-a', 'cancelled', { reason: 'x' }, 'owner')
     expect(value(await settleIssue(world.deps, { issue: b, after: [a] }))).toMatchObject({ result: 'replayed' })
+    await world.send(a, 'reopened-a', 'reopened', { reason: 'again' }, 'owner')
 
     const cycle = await addAfter(world.deps, { issue: a, after: [b] })
     expect(cycle).toMatchObject({ ok: false, error: { kind: 'cycle', path: [a, b, a] } })
@@ -177,7 +201,7 @@ describe('the chain', () => {
     })
     const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.planning_edges`
     expect(n).toBe(1)
-    expect(await issues()).toEqual(['issue_1:settling', 'issue_2:queued', 'issue_3:closed'])
+    expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued', 'issue_3:closed'])
   })
 
   test('a working Issue takes no edge; its lead defers with its own verb', async () => {

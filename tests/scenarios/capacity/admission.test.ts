@@ -54,7 +54,7 @@ const close = async (issue: string, attempt = 1) => {
   await lab.event(issue, 'closed', 'closed', { attempt, outcome: 'done', reason: 'done' }, 'lead')
 }
 
-test('leads: 2 admits two leads in one repo, a third waits for a seat and is admitted when one closes', async () => {
+test('leads: 2 admits two leads in one repo, a third waits for a claim and is admitted when one closes', async () => {
   const [one, two, three] = [
     await lab.file('duo', 'first'),
     await lab.file('duo', 'second'),
@@ -70,7 +70,7 @@ test('leads: 2 admits two leads in one repo, a third waits for a seat and is adm
   expect(new Set(first.admitted.map((a) => a.account))).toEqual(new Set(['a', 'b']))
   expect(first.queue.find((e) => e.issue === three)?.reason).toMatchObject({
     kind: 'claim',
-    message: `no seat in the repo: the repo runs 2 of 2 leads (Issue 1, Issue 2)`,
+    message: `no claim free in the repo: the repo runs 2 of 2 leads (Issue 1, Issue 2)`,
   })
   expect([await stateOf(one), await stateOf(two), await stateOf(three)]).toEqual(['working', 'working', 'queued'])
 
@@ -85,7 +85,7 @@ test('leads: 2 admits two leads in one repo, a third waits for a seat and is adm
   expect(await stateOf(three)).toBe('working')
 
   const capacity = CapacityView.parse((await lab.cli(['capacity', 'get'])).json)
-  expect(capacity.seats.map((s) => s.issue).sort()).toEqual([two, three].sort())
+  expect(capacity.claims.map((s) => s.issue).sort()).toEqual([two, three].sort())
   expect(capacity.accounts.map((a) => [a.account, a.open])).toEqual([
     ['a', true],
     ['b', true],

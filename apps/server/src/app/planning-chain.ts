@@ -72,6 +72,17 @@ export async function settleIssue(
   return deps.uow.run(async (stores) => {
     const states = await stores.reads.statesOf([input.issue])
     if (!states.has(input.issue)) return err<PlanningError>({ kind: 'unknown_issue', issue: input.issue })
+    // A repeat of a settle is a replay: it adds no edge and judges no blocker again (one may have closed meanwhile).
+    const before = await stores.work.eventByKey(key('settled', input.issue))
+    if (before) {
+      const replayed = await recordIn(stores.work, deps, {
+        issueId: input.issue,
+        key: key('settled', input.issue),
+        event: { kind: 'settled', payload: {}, actor: 'factory' },
+      })
+      if (!replayed.ok) return err(lift(replayed.error))
+      return ok<Settled>({ result: 'replayed', edges: 0, state: replayed.value.issue.state })
+    }
     const edges = await addEdges(stores, deps, input.issue, input.after)
     if (!edges.ok) return edges
     const recorded = await recordIn(stores.work, deps, {

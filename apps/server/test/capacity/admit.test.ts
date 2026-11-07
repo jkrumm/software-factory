@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { accountOf, admissionPass, queueView, releaseSeat, resumeSeat } from '../../src/app/capacity-admit.ts'
+import { accountOf, admissionPass, queueView, releaseClaim, resumeClaim } from '../../src/app/capacity-admit.ts'
 import { setQueueState } from '../../src/app/capacity-queue.ts'
 import { setPrio } from '../../src/app/planning-chain.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
@@ -41,7 +41,7 @@ const reasons = (result: Awaited<ReturnType<typeof pass>>) =>
   Object.fromEntries(result.queue.map((e) => [e.issue, e.reason?.kind ?? null]))
 
 describe('admission', () => {
-  test('leads: 2 admits two leads in one repo, a third waits for a seat, and a close frees it', async () => {
+  test('leads: 2 admits two leads in one repo, a third waits for a claim, and a close frees it', async () => {
     world.accounts.rows = [account('a'), account('b')]
     const [one, two, three] = [
       await world.queued({ repo: 'app' }),
@@ -188,8 +188,8 @@ describe('admission', () => {
     await Promise.all([admissionPass(world.deps), admissionPass(world.deps)])
     const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.issue_events WHERE kind = 'admitted'`
     expect(n).toBe(1)
-    const [{ seats }] = await world.db.sql`SELECT count(*)::int AS seats FROM factory.capacity_seats`
-    expect(seats).toBe(1)
+    const [{ claims }] = await world.db.sql`SELECT count(*)::int AS claims FROM factory.capacity_claims`
+    expect(claims).toBe(1)
     const effects = await world.db.sql`SELECT key FROM factory.issue_effects WHERE kind = 'start_lead'`
     expect(effects.map((e: { key: string }) => e.key)).toEqual(['start_lead:issue_1:1'])
   })
@@ -206,14 +206,14 @@ describe('admission', () => {
   })
 })
 
-describe('seats and the claim on resume', () => {
+describe('claims and the claim on resume', () => {
   const asked = async () => {
     // a lead that asked the owner a question: the machine waits on a decision
     await world.send(issueId(1), 'lead_started', 'lead_started', { attempt: 1, terminal: 't' })
     await world.send(issueId(1), 'asked', 'asked', { attempt: 1, decision: { id: 'd1', summary: 'which?' } }, 'lead')
   }
 
-  test('a wait that needs a person gives the seat back at the next pass; the next Issue of a full repo runs meanwhile', async () => {
+  test('a wait that needs a person gives the claim back at the next pass; the next Issue of a full repo runs meanwhile', async () => {
     const one = await world.queued({ repo: 'solo' })
     const two = await world.queued({ repo: 'solo' })
     await pass()
@@ -226,20 +226,20 @@ describe('seats and the claim on resume', () => {
     expect(one).toBe(issueId(1))
   })
 
-  test('the answered lead takes a seat back before it is told: refused while the repo is full, then granted when it frees', async () => {
+  test('the answered lead takes a claim back before it is told: refused while the repo is full, then granted when it frees', async () => {
     const one = await world.queued({ repo: 'solo' })
     const two = await world.queued({ repo: 'solo' })
     await pass()
     await asked()
     nextSample()
-    await pass() // gives Issue 1's seat back, admits Issue 2
+    await pass() // gives Issue 1's claim back, admits Issue 2
     expect(await state(2)).toBe('working')
 
     await world.send(one, 'answered', 'answered', { decision: 'd1', answer: 'the first' }, 'owner')
     expect(await state(1)).toBe('working')
-    const refused = await resumeSeat(world.deps, one)
+    const refused = await resumeClaim(world.deps, one)
     expect(refused).toMatchObject({ ok: false, error: { kind: 'refused' } })
-    expect(!refused.ok && refused.error.detail).toContain('waits for a seat in solo')
+    expect(!refused.ok && refused.error.detail).toContain('waits for a claim in solo')
 
     // the owed lead is served before any new one: a third Issue cannot take the place it waits for
     const three = await world.queued({ repo: 'solo' })
@@ -249,20 +249,20 @@ describe('seats and the claim on resume', () => {
     const result = await pass()
     expect(result.admitted).toEqual([])
     expect(reasons(result)[three]).toBe('claim')
-    expect(value(await resumeSeat(world.deps, one))).toEqual({ result: 'taken' })
-    expect(value(await resumeSeat(world.deps, one))).toEqual({ result: 'held' })
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'held' })
   })
 
-  test('the seat of a closed Issue goes back by the sweep or by finalize, idempotently', async () => {
+  test('the claim of a closed Issue goes back by the sweep or by finalize, idempotently', async () => {
     const one = await world.queued({ repo: 'solo' })
     await pass()
-    expect(value(await releaseSeat(world.deps, one))).toBe(true)
-    expect(value(await releaseSeat(world.deps, one))).toBe(false)
-    // a working Issue without a seat is owed one: resume takes it
-    expect(value(await resumeSeat(world.deps, one))).toEqual({ result: 'taken' })
+    expect(value(await releaseClaim(world.deps, one))).toBe(true)
+    expect(value(await releaseClaim(world.deps, one))).toBe(false)
+    // a working Issue without a claim is owed one: resume takes it
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
     await world.send(one, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
     await pass()
-    const [{ seats }] = await world.db.sql`SELECT count(*)::int AS seats FROM factory.capacity_seats`
-    expect(seats).toBe(0)
+    const [{ claims }] = await world.db.sql`SELECT count(*)::int AS claims FROM factory.capacity_claims`
+    expect(claims).toBe(0)
   })
 })

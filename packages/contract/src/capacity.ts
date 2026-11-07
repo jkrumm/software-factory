@@ -102,8 +102,8 @@ export const CapacityView = z
       memoryCeilings: z.object({ swapoutMbPer300s: z.number(), swapUsedPct: z.number() }),
       notes: z.array(z.string()),
     }),
-    /** who sits in which repo, on which account */
-    seats: z.array(
+    /** who holds a claim in which repo, on which account */
+    claims: z.array(
       z.object({
         issue: IssueRef,
         repo: z.string(),

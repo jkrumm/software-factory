@@ -24,7 +24,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['capacity', 'get'],
     method: 'GET',
     path: '/capacity',
-    summary: 'the accounts and their windows, the host, who sits where, the queue states and the test slots',
+    summary: 'the accounts and their windows, the host, who holds which claim, the queue states and the test slots',
     pathParams: [],
     queryParams: [],
     body: false,

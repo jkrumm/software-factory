@@ -172,8 +172,3 @@ export function parseProject(raw: unknown, directoryName: string): ProjectParse 
   }
   return { ok: true, project: parsed.data }
 }
-
-/** The signals a project listens to, for intake. A project without a file listens to the owner only. */
-export function signalsOf(project: ProjectFile): ProjectFile['signals'] {
-  return project.signals
-}
