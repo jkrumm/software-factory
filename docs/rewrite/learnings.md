@@ -141,3 +141,13 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
 - **2026-11-07, before window 1: software-factory is never a window repo until the cutover holds.** The runbook named
   it as `<repo-a>`; its master is the old core, so a lead's ship there runs `make deploy` of master and puts the old
   core back mid-window. Window 1 runs on agent-workflows (and the scratch drill); the runbook says so now.
+- **2026-11-07, window 1, finding 1: a restart hangs.** W9's `launchctl kickstart -k` sent SIGTERM; the server logged
+  `shutdown took too long (still in: server.stop)` but never exited, kept its database connections and so the process
+  lock, and launchd's new copy gave up after 45 s on the lock (KeepAlive loop). Worked around by killing the stuck PID;
+  the fresh copy came up and every loop passed. Fix on `rewrite` before window 2: `app.stop` must close active
+  connections (an SSE stream or a kept-alive socket holds it), and the shutdown's own deadline must end the process
+  (`process.exit` that actually runs), with a scenario that SIGTERMs a server holding an open stream. Every deploy and
+  `make rollback` stops the service, so this is on the critical path.
+- **2026-11-07, window 1, runbook fixes:** W12 is `FACTORY_REF=rewrite make verify` (plain `make verify` compares
+  against origin/master and fails); W11's `fx door report` is the door's own POST, not a read (use `/health .lines`
+  and `door routes`); the admin step runs through `make -C ~/SourceRoot/vps sql-postgres` with `\connect shared`.
