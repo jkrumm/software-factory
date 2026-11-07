@@ -10,7 +10,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 
 | # | Package | After | Status | Terminal | Branch | Last commit | Evidence |
 |-|-|-|-|-|-|-|-|
-| 0 | Skeleton | | pending | | | | |
+| 0 | Skeleton | | running | t1f1 `rw-0-skeleton` (opus high, account me) | `rw/0-skeleton` | 098b086 (base) | brief `briefs/0-skeleton.md` |
 | 1 | Kernel and work | 0 | pending | | | | |
 | 2 | Intake | 1 | pending | | | | |
 | 3 | Planning and capacity | 1 | pending | | | | |
@@ -24,3 +24,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 ## Log
 
 - 2026-11-07: ledger opened.
+- 2026-11-07: package 0 started in t1f1, worktree `../rw-0-skeleton`.
