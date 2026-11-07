@@ -1,0 +1,13 @@
+{
+  "name": "@software-factory/tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./pg": "./support/pg.ts"
+  },
+  "dependencies": {
+    "@software-factory/contract": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

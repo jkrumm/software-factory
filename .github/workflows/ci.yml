@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [master]
+    branches: [master, rewrite]
   pull_request:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   check:
     # Public repo: hosted runners. The tests start their own throwaway Postgres from the PostgreSQL packages that
-    # ship on the runner image (test/support/pg.ts finds /usr/lib/postgresql/<major>/bin); shellcheck ships there too.
+    # ship on the runner image (tests/support/pg.ts finds /usr/lib/postgresql/<major>/bin); shellcheck ships there too.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

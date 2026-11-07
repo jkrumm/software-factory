@@ -1,0 +1,14 @@
+{
+  "name": "@software-factory/contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./spool": "./src/spool.ts",
+    "./spool-lock": "./src/spool-lock.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}
