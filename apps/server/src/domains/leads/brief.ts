@@ -14,7 +14,7 @@ You are the lead of one attempt of one Issue. These orders are the same in every
 3. Stop by impact, not effort. A broken caller contract or a needed redesign is \`factory issue block\`, with a draft branch pushed first; many files or red tests are not a block.
 4. Reading and writing go to subagents: Explore to search, @implementer to write. Your context is for decisions. You open no terminals and no hidden children. A background subagent is fine; a foreground tool still running is not a place to end a turn.
 5. Review your own change once per ship range, standard or deep, with /review, before you ship. The factory never runs or repeats a review and never refuses a ship for one; ships without a review are counted as friction.
-6. Ship means land and deploy. After it the Watch begins: stay open through it. The factory runs Verify (\`make verify\` and the probes); a failure comes back to you as a note. Fix forward; a revert is your call, never a reflex.
+6. Ship means land and deploy; when the project shares its deploy with other leads, wrap the deploy as \`factory deploy-lock --project <repo> -- make deploy\` (the repo's own deploy command). After it the Watch begins: stay open through it. The factory runs Verify (\`make verify\` and the probes); a failure comes back to you as a note. Fix forward; a revert is your call, never a reflex.
 7. After a restart or a compaction, re-read the Issue and check git, the pull request and production before you repeat anything that left the machine.
 8. Work that needs no commit ends with \`factory issue close\`, outcome dropped or done, and the reason.
 

@@ -359,6 +359,48 @@ env_file_ok() { # $1 release dir
   return 1
 }
 
+# The lock is a symlink whose target is the holder's pid: `ln -s` creates it atomically with the pid in place, so there is
+# no window in which the lock exists without a holder. FAIL CLOSED: a lock that cannot be read or created refuses the
+# deploy; only a lock whose holder is a dead pid is reclaimed, and one reclaimer at a time (`$LOCK.reclaim`).
+# A directory lock with a `pid` file (the previous version's) is read the same way.
+lock_holder() {
+  if [[ -L "$LOCK" ]]; then readlink "$LOCK" 2>/dev/null
+  elif [[ -d "$LOCK" ]]; then cat "$LOCK/pid" 2>/dev/null
+  fi
+  return 0
+}
+
+release_lock() {
+  [[ "$(lock_holder)" == "$$" ]] || return 0
+  rm -rf "$LOCK"
+}
+
+# Exits through `die` unless this process holds the lock when it returns.
+take_lock() {
+  local holder
+  if ln -s "$$" "$LOCK" 2>/dev/null; then
+    if [[ -L "$LOCK" && "$(readlink "$LOCK")" == "$$" ]]; then trap release_lock EXIT; return 0; fi
+    # $LOCK is a legacy directory: ln put the link inside it. Take that back and treat the lock as held.
+    [[ -d "$LOCK" && ! -L "$LOCK" ]] && rm -f "$LOCK/$$"
+  fi
+  [[ -e "$LOCK" || -L "$LOCK" ]] || die "cannot create the deploy lock $LOCK"
+  holder=$(lock_holder)
+  [[ "$holder" =~ ^[0-9]+$ ]] || die "the deploy lock $LOCK cannot be read (holder: '${holder}'); not reclaiming it. Check that no deploy runs, then remove it"
+  if kill -0 "$holder" 2>/dev/null; then die "another deploy is running (pid $holder)"; fi
+  mkdir "$LOCK.reclaim" 2>/dev/null || die "$LOCK.reclaim exists: another deploy is reclaiming the lock, or a crashed reclaim left it; remove it by hand if no deploy runs"
+  holder=$(lock_holder)
+  if [[ -e "$LOCK" || -L "$LOCK" ]]; then
+    if ! [[ "$holder" =~ ^[0-9]+$ ]]; then rmdir "$LOCK.reclaim"; die "the deploy lock $LOCK cannot be read (holder: '${holder}'); not reclaiming it"; fi
+    if kill -0 "$holder" 2>/dev/null; then rmdir "$LOCK.reclaim"; die "another deploy is running (pid $holder)"; fi
+    rm -rf "$LOCK"
+  fi
+  if ! ln -s "$$" "$LOCK" 2>/dev/null || [[ "$(readlink "$LOCK" 2>/dev/null)" != "$$" ]]; then
+    rmdir "$LOCK.reclaim"; die "cannot take the deploy lock $LOCK"
+  fi
+  rmdir "$LOCK.reclaim"
+  trap release_lock EXIT
+}
+
 # The release before the live one, back. Refuses (one line, exit 1) without a complete previous release on disk.
 rollback() {
   local live prev release unload_secs tool
@@ -401,14 +443,7 @@ rollback() {
 
   # one deploy or rollback at a time
   mkdir -p "$DATA_DIR" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
-  if ! mkdir "$LOCK" 2>/dev/null; then
-    local holder
-    holder=$(cat "$LOCK/pid" 2>/dev/null)
-    if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then die "a deploy or rollback is running (pid $holder)"; fi
-    rm -rf "$LOCK"; mkdir "$LOCK" || die "cannot take $LOCK"
-  fi
-  echo $$ > "$LOCK/pid"
-  trap 'rm -rf "$LOCK"' EXIT
+  take_lock
 
   log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
@@ -481,16 +516,11 @@ main() {
   # --- one deploy at a time
   mkdir -p "$DATA_DIR" "$RELEASES" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
   # The re-executed copy is the same process (exec keeps the pid), so it inherits the lock instead of taking it.
-  if [[ -n "${FACTORY_DEPLOY_REEXEC:-}" && "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]]; then
-    :
-  elif ! mkdir "$LOCK" 2>/dev/null; then
-    local holder
-    holder=$(cat "$LOCK/pid" 2>/dev/null)
-    if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then die "another deploy is running (pid $holder)"; fi
-    rm -rf "$LOCK"; mkdir "$LOCK" || die "cannot take $LOCK"
+  if [[ -n "${FACTORY_DEPLOY_REEXEC:-}" && "$(lock_holder)" == "$$" ]]; then
+    trap release_lock EXIT
+  else
+    take_lock
   fi
-  echo $$ > "$LOCK/pid"
-  trap 'rm -rf "$LOCK"' EXIT
 
   # --- the release: exported and installed beside the live one
   if [[ -z "${FACTORY_DEPLOY_SHA:-}" ]]; then

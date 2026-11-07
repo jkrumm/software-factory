@@ -1,6 +1,7 @@
 import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import type { RoleEntry } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
+import { deployLockVerb } from './deploy-lock.ts'
 import { doorTokenVerb } from './door.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
 import { followVerb } from './follow.ts'
@@ -40,6 +41,10 @@ const HAND_WRITTEN: readonly [string, string][] = [
   [
     'slot run [--name <label>] -- <cmd>',
     "run <cmd> in one of the host's test slots (exit 75: no slot in time; open if the server is down)",
+  ],
+  [
+    'deploy-lock --project <name> -- <cmd>',
+    'run <cmd> holding the host-local deploy lock of <name> (waits for a live holder; exit 75: no lock in time or unreadable, closed)',
   ],
   [
     'follow [--issue <id>] [--since <cursor>] [--until-closed]',
@@ -242,6 +247,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
   try {
     // `slot run` passes everything after `--` to its command, so it reads its own arguments.
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
+    if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)
     if (argv[0] === 'follow') return await followVerb(argv.slice(1), io)
     if (argv[0] === 'door' && argv[1] === 'token') return doorTokenVerb(argv.slice(2), io)
     // Stage 1 finds the command; flags it does not know are left for stage 2, which knows the command's own.
