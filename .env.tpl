@@ -5,6 +5,11 @@ FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
 FACTORY_TOKEN=op://mini/software-factory/FACTORY_TOKEN
 # The surfaces' bearer (the Hermes agent): GET /v1/* only, IuRoot's text left out. Must differ from FACTORY_TOKEN.
 FACTORY_READ_TOKEN=op://mini/software-factory/FACTORY_READ_TOKEN
+# A lead session's bearer (its terminal gets it as FACTORY_TOKEN) and the alert door's: both must differ from every other token.
+FACTORY_AGENT_TOKEN=op://mini/software-factory/FACTORY_AGENT_TOKEN
+FACTORY_DOOR_TOKEN=op://mini/software-factory/FACTORY_DOOR_TOKEN
+# Hermes' filing bearer: POST /signals only, as owner:hermes. Optional (the server starts without it); must differ from every other token.
+FACTORY_SIGNAL_TOKEN=op://mini/software-factory/FACTORY_SIGNAL_TOKEN
 FACTORY_GITHUB_TOKEN=op://mini/github/token
 NTFY_TOKEN=op://common/ntfy/TOKEN
 # The Beszel intake (a read-only hub user); FACTORY_BESZEL_URL is a non-secret setting in ~/.config/factory/env.

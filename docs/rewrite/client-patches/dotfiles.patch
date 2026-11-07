@@ -1,0 +1,98 @@
+# dotfiles: the Herdr board, rd, the wave and remote-dev skills and docs (report 8, open point 1).
+#  - jk-board: `fleet --refresh` is gone (the overview is built when it is read).
+#  - rd: `issue`, `issues` and `say` ran on the socket with no token; they run under the owner's FACTORY_TOKEN now (secrets-run, the deployed
+#    release's .env.tpl), and the test stubs secrets-run.
+#  - the skills and the doc stop teaching `issue stop|resume`, `session wait` and `status`.
+# Apply from the dotfiles repo root with `git apply <this file>`; revert with `git apply -R <this file>`.
+diff --git a/config/herdr-app/mods/jk-board/main.js b/config/herdr-app/mods/jk-board/main.js
+--- a/config/herdr-app/mods/jk-board/main.js
++++ b/config/herdr-app/mods/jk-board/main.js
+@@ -35,9 +35,9 @@
+ // hc starts a stray core (no keychain) when none runs: ask lib/core-up.sh first (socket answers AND a launchd-born core), as rd's require_core does. Bounded when the host has a timeout.
+ const HC_GUARD = `PATH="$HOME/.local/bin:/opt/homebrew/bin:$PATH"; bash "$HOME/SourceRoot/dotfiles/scripts/lib/core-up.sh" >/dev/null 2>&1 || exit 1; t=$(command -v timeout || command -v gtimeout)`;
+ const HC_LS = `${HC_GUARD}; \${t:+"$t"} \${t:+8} hc ls --json`;
+-// Hot: rebuild the server's fleet snapshot first (inside the same secrets-run), so the overview read is current.
+-const pollCmd = (hot) => `{ ${SECRETS} sh -c '${hot ? "factory --format json fleet --refresh >/dev/null 2>&1; " : ""}${READS}'; } 2>/dev/null; echo; echo '${HC_MARK}'; ( ${HC_LS} ) 2>/dev/null`;
+-const CMD = pollCmd(false);
++// The overview is built from the Issues when it is read: there is no snapshot to rebuild first.
++const pollCmd = () => `{ ${SECRETS} sh -c '${READS}'; } 2>/dev/null; echo; echo '${HC_MARK}'; ( ${HC_LS} ) 2>/dev/null`;
++const CMD = pollCmd();
+ // A child's last lines: the screen, blank lines dropped. The address is checked (ADDR) before it reaches the shell.
+ const PEEK_LINES = 8;
+ const peekCmd = (addr) => `${HC_GUARD}; out=$(\${t:+"$t"} \${t:+8} hc read ${addr} 2>&1) || { echo "(hc read failed)"; exit 1; }; printf '%s\\n' "$out" | grep -v '^[[:space:]]*$' | tail -n ${PEEK_LINES}`;
+diff --git a/scripts/remote-dev.sh b/scripts/remote-dev.sh
+--- a/scripts/remote-dev.sh
++++ b/scripts/remote-dev.sh
+@@ -424,7 +424,8 @@
+   for a in "$@"; do args+=" $(printf '%q' "$a")"; done
+   # FACTORY_STDIN_B64 (base64, one line) is fed to the call's stdin instead of /dev/null (`rd issue --facts`).
+   [[ -z ${FACTORY_STDIN_B64:-} ]] || stdin="<<<\"\$(printf %s '$FACTORY_STDIN_B64' | base64 -d)\""
+-  host_run "PATH=\"\$HOME/.local/bin:/opt/homebrew/bin:\$HOME/.bun/bin:\$PATH\"; t=''; for c in ${RD_TIMEOUT_CMDS:-timeout gtimeout}; do t=\$(command -v \$c) && break; done; [ -n \"\$t\" ] || exit 126; \$t $secs factory$args $stdin"
++  # The token API: every call but `health` needs the owner's token, which secrets-run resolves from the deployed release's .env.tpl.
++  host_run "PATH=\"\$HOME/.local/bin:/opt/homebrew/bin:\$HOME/.bun/bin:\$PATH\"; t=''; for c in ${RD_TIMEOUT_CMDS:-timeout gtimeout}; do t=\$(command -v \$c) && break; done; [ -n \"\$t\" ] || exit 126; \$t $secs secrets-run run --env-file=\"\$HOME/.software-factory/current/.env.tpl\" -- factory$args $stdin"
+ }
+ 
+ # True when the factory answers `factory health` within FACTORY_HEALTH_S. Asked once per command; RD_NO_FACTORY=1
+diff --git a/scripts/remote-dev-factory.test.sh b/scripts/remote-dev-factory.test.sh
+--- a/scripts/remote-dev-factory.test.sh
++++ b/scripts/remote-dev-factory.test.sh
+@@ -30,6 +30,8 @@
+ g clone -q "$TMP/origin.git" "$TMP/co" 2>/dev/null
+ echo a >"$TMP/co/f"; g -C "$TMP/co" add f; g -C "$TMP/co" commit -qm one; g -C "$TMP/co" push -q -u origin master 2>/dev/null
+ 
++# secrets-run resolves the factory token in production; here it only runs what follows `--`
++printf '#!/usr/bin/env bash\nwhile [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done; shift\nexec "$@"\n' >"$TMP/home/.local/bin/secrets-run"; chmod +x "$TMP/home/.local/bin/secrets-run"
+ cp "$HERE/remote-dev-fake-hc.sh" "$TMP/home/.local/bin/hc"
+ # a launchd-born core exists (lib/core-up.sh's first half) unless $STATE/no_core exists; PS_BIN keeps the real ps out
+ printf '#!/usr/bin/env bash\n[ -f "${STATE:-/nonexistent}/no_core" ] || echo "    1 /x/Herdr Core.app/Contents/MacOS/herdr-core --hc-launchd /tmp/hc-launchd-1/ready"\n' >"$TMP/bin/ps"; chmod +x "$TMP/bin/ps"; export PS_BIN="$TMP/bin/ps"
+diff --git a/skills/wave/SKILL.md b/skills/wave/SKILL.md
+--- a/skills/wave/SKILL.md
++++ b/skills/wave/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: wave
+-description: Turn a plan into factory Issues - the lead's playbook for a multi-step plan (docs/plan.yaml, the server files the rows), a one-off Issue (rd issue / factory issue new), splitting work into independent Issues, ordering with after/--after, and following them with factory issue list|show and factory status. Use for work too large for one context, staged migrations, plans saying "then in the next session", or N changes that should ship on their own.
++description: Turn a plan into factory Issues - the lead's playbook for a multi-step plan (docs/plan.yaml, the server files the rows), a one-off Issue (rd issue / factory issue new), splitting work into independent Issues, ordering with after/--after, and following them with factory issue list|show and factory read overview. Use for work too large for one context, staged migrations, plans saying "then in the next session", or N changes that should ship on their own.
+ ---
+ 
+ # Wave — turn a plan into Issues
+@@ -68,12 +68,12 @@
+ 
+ ## Follow and steer
+ 
+-- `factory issue list`, `factory issue show <id>` (facts, timeline, evidence, questions), `factory status` (asks, health).
++- `factory issue list`, `factory issue show <id>` (facts, timeline, evidence, questions), `factory read overview` (asks, health, counts).
+ - `factory issue prio <id> <n>` orders the ready ones (higher first, none is 0).
+ - `factory issue answer <id> <text>` answers an ask; `factory issue note <id> <text>` adds context.
+-- `factory issue stop|resume|reopen <id>` when a lead must stop or restart; the owner stops a row by stopping its Issue.
++- `factory issue cancel|reopen <id>` when a lead must stop or the Issue should run again; the owner stops a row by cancelling its Issue.
+ - **Done** is the Issue closing with its evidence (verify, review, ship). The plan file needs no ticking: the server derives row state from the Issues.
+ 
+ ## Waiting
+ 
+-Nothing polls. Commit the plan (and any hand-filed Issues), report the ids and end the turn; the factory's wake note and `factory status` bring the next step.
++Nothing polls. Commit the plan (and any hand-filed Issues), report the ids and end the turn; the factory's wake note and `factory read overview` bring the next step.
+diff --git a/skills/remote-dev/SKILL.md b/skills/remote-dev/SKILL.md
+--- a/skills/remote-dev/SKILL.md
++++ b/skills/remote-dev/SKILL.md
+@@ -36,7 +36,7 @@
+ 
+ ### Looking at an agent
+ 
+-The factory starts and babysits its agents; an orchestrator does not poll: `factory session wait --on workers`, end the turn, and the factory's wake note ("workers done: …") starts the next one. To look at one agent by hand: `rd read <agent>`, or `hc wait <t>` (returns when it stops working; `--children all|any`
++The factory starts and babysits its agents; an orchestrator does not poll: it ends its turn after `factory issue defer <id> --attempt <n> --after issue_<m>` (or `--until`), and the factory wakes it when the Issues it waits for have closed. To look at one agent by hand: `rd read <agent>`, or `hc wait <t>` (returns when it stops working; `--children all|any`
+ for helpers; `hc wait --help`). A wake can mean `blocked` (an approval/question UI): read it before answering.
+ 
+ ### Scripting hc directly (stack rules on top of the `herdr` skill)
+diff --git a/docs/remote-dev.md b/docs/remote-dev.md
+--- a/docs/remote-dev.md
++++ b/docs/remote-dev.md
+@@ -150,7 +150,7 @@
+   spawn that gets no answer reports `uncertain` and points at `rd agents`; it is never retried. `read` and `say`
+   see only the dev host's own terminals (a linked machine's `mini/t3` is dropped; `rd agents` lists them all).
+ 
+-Waiting on a terminal: `hc wait <t>` (`--output X` for a program), never `sleep`. An agent the factory started is waited on with `factory session wait --on workers`.
++Waiting on a terminal: `hc wait <t>` (`--output X` for a program), never `sleep`. An agent the factory started is waited on with `factory issue defer <id> --attempt <n> --after issue_<m>` (a lead's verb: it ends its turn and the factory wakes it).
+ 
+ `rd agents` prints one line per agent: `SOURCE  NAME  STATUS  CWD  ID`, the status being hc's own word (`working`,
+ `idle`, `done`, `blocked`). **That text is a contract**: tooling greps it for agent names and `blocked`

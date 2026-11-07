@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
-import { LOCK_STALE_MS, tryLock } from '../src/spool-lock.ts'
+import { LOCK_STALE_MS, tryLock } from '../src/spool.ts'
 
 const dir = mkdtempSync('/tmp/factory-lock-')
 const file = join(dir, 's.jsonl')

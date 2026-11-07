@@ -1,0 +1,56 @@
+# Iris: the answer route's new reply and the repeat's 409 (report 8, open point 1).
+# Apply from the Iris repo root with `git apply <this file>`; revert with `git apply -R <this file>`.
+# What Iris publishes (`contracts/`, `/v1/factory/answer`) does not change: the adapter keeps `FactoryAnswerAck`.
+diff --git a/server/src/adapters/factory-http.ts b/server/src/adapters/factory-http.ts
+--- a/server/src/adapters/factory-http.ts
++++ b/server/src/adapters/factory-http.ts
+@@ -63,11 +63,11 @@
+     )
+     .default([]),
+ });
++// The answer route's reply: the Decision, and the Issue as it stands after (null when it is gone).
+ const AnswerAck = z.object({
+-  issue: z.number().int(),
+-  state: z.string(),
+-  duplicate: z.boolean(),
++  issue: z.object({ id: z.string().regex(/^issue_\d+$/), state: z.string() }).nullable(),
+ });
++const IssueState = z.object({ state: z.string() });
+ 
+ /** An unknown enum value is `other`: the factory adds values within `/v1`. */
+ const known = <T extends string>(values: readonly T[], value: string | undefined): T =>
+@@ -184,8 +184,18 @@
+         headers: { "content-type": "application/json" },
+         body: JSON.stringify({ id: callId, answer: text }),
+         signal: AbortSignal.timeout(timeoutMs),
++      }).catch((err: unknown) => {
++        // 409 no_open_decision: it was answered already (a retry, or another surface): the old `duplicate: true`.
++        if (err instanceof FactoryError && err.code === "conflict") return null;
++        throw err;
+       });
+-      return json("answer", res, AnswerAck);
++      if (!res) {
++        const now = await json("answer", await get("answer", `/v1/issues/${issue}`), IssueState);
++        return { issue, state: now.state, duplicate: true };
++      }
++      const ack = await json("answer", res, AnswerAck);
++      const number = ack.issue ? Number(ack.issue.id.slice("issue_".length)) : issue;
++      return { issue: number, state: ack.issue?.state ?? "unknown", duplicate: false };
+     },
+ 
+     async *follow(since, signal) {
+diff --git a/server/src/adapters/factory-http.test.ts b/server/src/adapters/factory-http.test.ts
+--- a/server/src/adapters/factory-http.test.ts
++++ b/server/src/adapters/factory-http.test.ts
+@@ -106,7 +106,10 @@
+ 
+   it("answers outside /v1 with the call id and the text, no decision", async () => {
+     const { calls, reader } = setup(() =>
+-      Response.json({ issue: 113, key: "k", duplicate: false, state: "working" }, { status: 201 }),
++      Response.json(
++        { decision: { id: "decision_1", answer: "Keep Redis" }, issue: { id: "issue_113", state: "working" } },
++        { status: 201 },
++      ),
+     );
+     expect(await reader.answer({ issue: 113, callId: "call-1", text: "Keep Redis" })).toEqual({
+       issue: 113,

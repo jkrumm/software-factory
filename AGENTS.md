@@ -10,6 +10,9 @@ and why) → `docs/architecture.md` (the target the rewrite builds, `docs/rewrit
 factory until the cutover: §3 "As built" and §11, the behaviour) → `docs/research/` → `docs/evidence/`.
 A directory listing, `package.json`, the Makefile and `--help` say what exists; this file says what they cannot.
 
+**On the `rewrite` branch** the new core is `apps/` and `packages/`, built to `docs/architecture.md`; `legacy/` is the old
+core, kept as a read-only reference the rewrite ports from: outside the workspace and `make check`, deleted at the cutover.
+
 ## Rules
 
 - **Public repo.** No secrets, hostnames, IPs, tailnet names, internal URLs or account e-mails in any tracked

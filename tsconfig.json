@@ -15,6 +15,15 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["packages/*/src", "packages/*/test", "packages/*/bin"],
-  "exclude": ["node_modules"]
+  "include": [
+    "apps/*/src",
+    "apps/*/test",
+    "apps/*/bin",
+    "apps/*/scripts",
+    "packages/*/src",
+    "packages/*/test",
+    "tests",
+    "scripts"
+  ],
+  "exclude": ["node_modules", "legacy"]
 }

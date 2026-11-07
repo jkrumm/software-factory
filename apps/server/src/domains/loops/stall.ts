@@ -1,0 +1,167 @@
+import type { StewardAnswer, StewardStall } from '@software-factory/contract'
+import type { IssueId } from '../../kernel/ids.ts'
+
+/** Why an Issue stalled (`docs/language.md`, Stall): a wait with a machine cause, the steward's to end. */
+export type StallCause = StewardStall['cause']
+
+/** What the steward knows of one stalled Issue, read from its events and the ports around it. */
+export interface StallFacts {
+  issue: IssueId
+  repo: string
+  title: string
+  kind: StewardStall['kind']
+  cause: StallCause
+  detail: string
+  /** the version that began the wait: a wake names it, and so does everything the steward keys */
+  since: number
+  stalledAt: Date
+  attempt: number
+  restarts: number
+  regressions: number
+  /** how often the steward woke this attempt already */
+  stewardWakes: number
+  /** notes recorded while it waited that the lead has not heard */
+  notes: string[]
+  /** the Issue's latest events, one line each */
+  history: string[]
+  /** a `wall` stall: the account's window is open again; null when capacity cannot tell */
+  windowOpen: boolean | null
+}
+
+export interface StewardRules {
+  /** a stall younger than this is left to end by itself: the lead's next turn wakes `unreported` and `wall` */
+  minStallMs: number
+  /** the steward wakes an `unreported` stall this many times per attempt before it asks */
+  maxWakes: number
+}
+
+export const DEFAULT_STEWARD_RULES: StewardRules = { minStallMs: 2 * 60_000, maxWakes: 2 }
+
+/** What the rules say. `ask`: they do not, so the `factory-steward` workflow is asked. */
+export type StallAction =
+  | { kind: 'wait'; why: string }
+  | { kind: 'wake'; detail: string }
+  | { kind: 'requeue'; detail: string }
+  | { kind: 'ask' }
+
+/** The wake detail the steward's own wakes begin with: how a later pass counts them from the events alone. */
+export const STEWARD_DETAIL = 'steward: '
+
+/**
+ * Deterministic first (`docs/product.md`, principle 1): wake when the cause is gone, deliver a note that arrived, requeue a
+ * lead that is gone. Only a stall the rules cannot read reaches the workflow.
+ */
+export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): StallAction {
+  const age = now.getTime() - facts.stalledAt.getTime()
+  if (age < rules.minStallMs) return { kind: 'wait', why: 'too young: the lead may end it by itself' }
+
+  if (facts.cause === 'wall' && facts.windowOpen !== false) {
+    return { kind: 'wake', detail: `${STEWARD_DETAIL}the account's window is open again` }
+  }
+  // A note that arrived while it waited is news the lead has not heard: ending the wait delivers it (a gone lead's next
+  // attempt reads it in its brief).
+  if (facts.notes.length > 0) {
+    return facts.cause === 'lead_gone'
+      ? { kind: 'requeue', detail: `${STEWARD_DETAIL}a note arrived: a new attempt reads it` }
+      : { kind: 'wake', detail: `${STEWARD_DETAIL}delivers ${facts.notes.length} note(s) that arrived while it waited` }
+  }
+  if (facts.cause === 'wall') return { kind: 'wait', why: "the account's window is still closed" }
+  if (facts.cause === 'unreported' && facts.stewardWakes < rules.maxWakes) {
+    return { kind: 'wake', detail: `${STEWARD_DETAIL}it stopped without reporting: it is asked to report` }
+  }
+  return { kind: 'ask' }
+}
+
+/** The facts as the workflow takes them: cut to its limits, credentials scrubbed by the caller's `clean`. */
+export function stallRequest(facts: StallFacts, now: Date, clean: (text: string) => string): StewardStall {
+  const cut = (text: string, max: number) => clean(text).slice(0, max)
+  return {
+    issue: facts.issue,
+    repo: facts.repo,
+    title: cut(facts.title, 500) || facts.issue,
+    kind: facts.kind,
+    cause: facts.cause,
+    detail: cut(facts.detail, 4_000),
+    stalledMinutes: Math.max(0, Math.floor((now.getTime() - facts.stalledAt.getTime()) / 60_000)),
+    attempt: facts.attempt,
+    restarts: facts.restarts,
+    regressions: facts.regressions,
+    stewardWakes: facts.stewardWakes,
+    notes: facts.notes.slice(-20).map((note) => cut(note, 500)),
+    history: facts.history.slice(-40).map((line) => cut(line, 500)),
+  }
+}
+
+/** What an answer comes to once the factory has checked it against the stall it was given. */
+export type Checked =
+  | { kind: 'wake' | 'requeue'; note: string | null; reason: string }
+  | { kind: 'decision'; form: unknown; reason: string }
+  | { kind: 'none'; why: string }
+
+/**
+ * The factory checks the answer again, as the workflow's guard did: `requeue` ends only `lead_gone` and `wake` every other
+ * stall. A Decision's form is read by the checkpoints' own reader before anything is recorded.
+ */
+export function checkAnswer(facts: Pick<StallFacts, 'cause'>, answer: StewardAnswer): Checked {
+  const note = answer.note.trim() === '' ? null : answer.note.trim()
+  switch (answer.action) {
+    case 'none':
+      return { kind: 'none', why: answer.reason }
+    case 'requeue':
+      return facts.cause === 'lead_gone'
+        ? { kind: 'requeue', note, reason: answer.reason }
+        : { kind: 'none', why: 'requeue ends only a lead_gone stall' }
+    case 'wake':
+      return facts.cause === 'lead_gone'
+        ? { kind: 'none', why: 'a lead_gone stall is ended by requeue' }
+        : { kind: 'wake', note, reason: answer.reason }
+    case 'raise_decision':
+      // A Decision's answer puts the Issue back with its lead; a lead that is gone needs a new attempt, which only a requeue starts.
+      if (facts.cause === 'lead_gone')
+        return { kind: 'none', why: 'a lead_gone stall is ended by requeue, not by a Decision' }
+      return answer.decision
+        ? { kind: 'decision', form: answer.decision, reason: answer.reason }
+        : { kind: 'none', why: 'raise_decision without a form' }
+  }
+}
+
+/** The calls the steward makes for one stall before it gives up asking and raises the Decision below. */
+export const MAX_ROUNDS = 3
+
+const PLAIN: Record<StallCause, string> = {
+  wall: "the account's window is closed",
+  unreported: 'the lead stopped without reporting',
+  blocked: 'the lead reported it is blocked',
+  lead_gone: 'the lead is gone',
+  regressed: 'the change regressed after it shipped',
+}
+
+/**
+ * (Not for `lead_gone`: its exit is a new attempt, not an answer.) The Decision the factory raises itself when the workflow could not say after `MAX_ROUNDS` calls: the stall is real, no
+ * rule reads it and no answer came. Both options can be taken back, and with no answer the Issue stays stalled and the
+ * owner sees it in the Console.
+ */
+export function fallbackDecision(facts: StallFacts): unknown {
+  const number = facts.issue.slice('issue_'.length)
+  return {
+    question: `Issue ${number} (${facts.title.slice(0, 120)}) is stalled: ${PLAIN[facts.cause]}. Try again or drop it?`,
+    recommendation: 'try again',
+    checked: `The steward's rules do not read this ${facts.cause} stall and ${MAX_ROUNDS} asks of the workflow gave no usable answer. Detail: ${facts.detail.slice(0, 300) || 'none'}`,
+    options: [
+      {
+        label: 'try again',
+        reversible: true,
+        cost:
+          facts.cause === 'lead_gone'
+            ? 'a new attempt starts and may fail the same way'
+            : 'the lead is woken and may stall again',
+      },
+      {
+        label: 'drop',
+        reversible: true,
+        cost: 'the lead is told to close the Issue as dropped; the work can be filed again',
+      },
+    ],
+    noAnswer: { consequence: 'the Issue stays stalled', default: null, waitMinutes: null },
+  }
+}

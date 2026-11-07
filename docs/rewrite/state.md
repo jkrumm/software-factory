@@ -1,0 +1,70 @@
+# Rewrite state
+
+**The orchestrator's ledger: one row per package of `docs/rewrite.md`.** Read with `docs/rewrite.md` after every start or
+compaction, before acting. Updated on every start, integration and send-back.
+
+- Branch `rewrite`, made from master at `a3065ce` on 2026-11-07. Master's checkout and the running factory stay untouched.
+- Worker worktrees: `../rw-<n>-<slug>` beside this one (under the main checkout's `.claude/worktrees/`), branch
+  `rw/<n>-<slug>` off `rewrite`. Briefs: `docs/rewrite/briefs/<n>-<slug>.md`. Reports: `docs/rewrite/reports/<n>-<slug>.md`.
+- Watching: a background `hc wait <terminal>` per running worker (wakes on any turn end) plus a session cron at :17 and
+  :47 that reads every running worker's screen and steers. Both die with the session: re-arm them after a restart.
+- Start a worker with the account dir checked, never a bare `eval`:
+  `DIR=$(claude-account pick --lane lead | sed -n "s/^export CLAUDE_CONFIG_DIR='\(.*\)'$/\1/p"); test -d "$DIR"`, then
+  `hc run ... -- env CLAUDE_CONFIG_DIR="$DIR" claude ...`. `unset CLAUDE_CONFIG_DIR` is the picker spilling to the work
+  account (`--why` says `picked=iu reason=spill`): never start on it; re-pick, and if only spill comes back, wait.
+- Status words: `pending`, `running`, `sent back`, `integrated`.
+
+| # | Package | After | Status | Terminal | Branch | Last commit | Evidence |
+|-|-|-|-|-|-|-|-|
+| 0 | Skeleton | | integrated | t1f1 (removed) | `rw/0-skeleton` (merged, deleted) | 7e6163b (merge), d36d1d5 | `reports/0-skeleton.md`; `make check` on `rewrite` after merge: 83 unit, 6 scenarios pass; rd dry run via the new CLI (worker's evidence) |
+| 1 | Kernel and work | 0 | integrated | t1f4 (removed) | `rw/1-kernel-work` (merged, deleted) | fc5a8ac (merge), 9534b98 | `reports/1-kernel-work.md`; `make check` on `rewrite` after merge: 124 unit, 10 scenarios |
+| 2 | Intake | 1 | integrated | t1f7 (removed) | `rw/2-intake` (merged, deleted) | df0862a (merge), 8dfda67 | `reports/2-intake.md`; `make check` on `rewrite`: 559 unit, 49 scenarios |
+| 3 | Planning and capacity | 1 | integrated | t1f5 (removed) | `rw/3-planning-capacity` (merged, deleted) | 1e84834 (merge), 441c93c | `reports/3-planning-capacity.md`; `make check` on `rewrite`: 721 unit, 85 scenarios |
+| 4 | Leads | 1 | integrated | t1f8 (removed) | `rw/4-leads` (merged, deleted) | 3478091 (merge), 650be3a | `reports/4-leads.md`; `make check` on `rewrite`: 336 unit, 37 scenarios; five shared-file conflicts resolved as unions |
+| 5 | Quality | 1 | integrated | t1f9 (removed) | `rw/5-quality` (merged, deleted) | e1390ff (merge), bb10eef | `reports/5-quality.md`; `make check` on `rewrite`: 624 unit, 62 scenarios; one outbox runner, real checkout |
+| 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
+| 7 | Loops and agw | 2, 6 | integrated | t1fc (removed) | `rw/7-loops-agw` (merged, deleted) | f637cef (merge), b49162b; agent-workflows 97dac43 deployed | `reports/7-loops-agw.md`; `make check` on `rewrite`: 759 unit, 98 scenarios; six live agw calls in the report; `agw factory-{steward,triage,ask}` answer on the mini |
+| 8 | API, read models, CLI parity | 2 to 7 | integrated | t1ff (removed) | `rw/8-api-parity` (merged, deleted) | bc3f37c (merge) | `reports/8-api-parity.md` (parity table, client changes for 9); `make check` on `rewrite`: 941 unit, 195 scenarios |
+| 9 | Cutover | 8 | window 1 held and closed; fixes before window 2 | t1fh (removed) | `rw/9a-cutover-tools` (merged, deleted) | 691e781 (merge 9a) | `reports/9a-cutover-tools.md`, `cutover-runbook.md`; worker's rehearsal: 255 Issues, 212 match, 43 explained, 0 unexplained; way back boots the old core; `make check` on `rewrite`: 969 unit, 195 scenarios (8 cutover skip without the copy) |
+
+## Log
+
+- 2026-11-07: ledger opened.
+- 2026-11-07: package 0 started in t1f1, worktree `../rw-0-skeleton`.
+- 2026-11-07: package 0 integrated at 7e6163b; `make check` green on `rewrite`; worker removed.
+- 2026-11-07: package 1 started; first start (t1f3) had an empty CLAUDE_CONFIG_DIR, killed; restarted as t1f4.
+- 2026-11-07: package 1 reported (121 unit, 10 scenarios); sent back for numbered Issue ids and the .begin rule.
+- 2026-11-07: package 1 integrated at fc5a8ac; packages 2 to 6 started in parallel (t1f7, t1f5, t1f8, t1f9, t1f6).
+- 2026-11-07: package 6 integrated at 1e5b694; workers 2 to 5 told to use `--thread rw-<package>` for reviews.
+- 2026-11-07: package 4 integrated at 3478091.
+- 2026-11-07: package 5 reported; sent back for the integration with package 4.
+- 2026-11-07: package 2 integrated at df0862a; package 3 sent back for its wiring into 2, 4 and 6.
+- 2026-11-07: package 5 integrated; package 3 still wiring; package 7 briefed, starts after 3.
+- 2026-11-07: package 3 integrated at 1e84834; packages 0 to 6 done.
+- 2026-11-07: package 7 started in t1fc.
+- 2026-11-07: package 7 integrated at f637cef; agent-workflows' red master test filed as factory Issue 292 (old core).
+- 2026-11-07: package 8 started in t1ff.
+- 2026-11-07: owner: the cutover runs in watched windows, then a burn-in with reports on day 3 and day 7 (NL24).
+- 2026-11-07: package 8 integrated at bc3f37c; packages 0 to 8 done; package 9 (cutover in windows, NL24) next.
+- 2026-11-07: package 9a (the cutover's tools, live read-only) started in t1fh.
+- 2026-11-07: FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN created and seeded (owner at the MacBook).
+- 2026-11-07: package 9a integrated at 691e781; next: the orchestrator's own rehearsal, then window 1.
+- 2026-11-07: orchestrator's rehearsal (P1) held: 256 Issues, 213 match, 43 explained, 0 unexplained; 1760 mapped events applied, 0 refused; the old core booted on the way back.
+- 2026-11-07 17:4x **WINDOW 1 LIVE**: old queue drained (W1), no leads (W2), old server stopped (W3), schemas swapped as
+  admin (W4: `factory_legacy` = old, 256 Issues), new core deployed 75573dd (W5, previous-sha 089b35c = old core),
+  new queue drained (W7), import 256 Issues / 1760 events applied / 0 refused, idempotent, compare 0 unexplained (W8).
+  Way back if this session dies: runbook "The way back" B1 to B8.
+- 2026-11-07: window 1: W9 to W12 done (restart hang worked around by killing the stuck PID); W13 scratch drill running; shutdown fix worker t1fm on `rw/9b-shutdown`.
+- 2026-11-07: window 1: W13 drill done in fact (Issue 298, lead on me, pushed, closed done); real Issue 299 filed on agent-workflows as an owner signal.
+- 2026-11-07 17:50: **window 1 closed by the way back**; old core live (089b35c, queue run, software-factory drained); new core's data kept in `factory_rewrite`. Next: merge `rw/9b-shutdown`, runbook stop fallback, drill fix, Issue 297, then window 2.
+- 2026-11-07: 9b (shutdown) merged; 9c (before window 2: signal caller, drill, runbook stops, door after rollback) running in t1fq; FACTORY_SIGNAL_TOKEN dialog pending in the human queue.
+- 2026-11-07 18:50 **WINDOW 2 LIVE** (overnight): new core b2367ff (after two fix deploys), queue `run` for every own repo, software-factory and
+  the work repos drained; old core's release pinned in `data/keep-releases`. Way back: B1 to B8, and **before B6 write
+  089b35c50d5fc5160bc32072d38260b79b882b83 into `data/previous-sha`** (a redeploy moves it to the last new-core release).
+  The CLI and the import need the optional signal ref left out until the token is seeded (`/tmp/rw-fx.env.tpl`; import.sh
+  does it itself now).
+- 2026-11-07 19:00: window 2 verified live (`make verify` all checks passed); window watch cron at :07 and :37 (session-only; re-arm after a restart).
+- 2026-11-07 19:31: window 2: kill drill green (Issue 300: kill -9 between admit and lead, one lead, closed done).
+- 2026-11-07 19:33: window 2: kill-during-lead drill green (Issue 301).
+- 2026-11-07 23:15: window 2: client patches applied (dotfiles e21e19f, Iris 81dd1ad); FACTORY_SIGNAL_TOKEN made and seeded, core restarted with it; Hermes patch next.
+- 2026-11-07 23:20: **handed over to the planning session.** Done: window 2 live on b2367ff (queue `run` for own repos; software-factory and work repos drained; old core 089b35c pinned in `data/keep-releases`); kill drills green (Issues 300, 301); client patches applied and pushed (dotfiles `e21e19f`, Iris `81dd1ad`, check-server green); FACTORY_SIGNAL_TOKEN made, seeded, core restarted with it (signal caller answers 403 on a read). Half-done: Hermes patch (`docs/rewrite/client-patches/hermes-agent.patch`) not applied; no real filing through `rd issue` tried yet (the window's first check per the new rule); Issue 297 still queued in drained software-factory, undecided; the "server-only refs in their own template" design fix not built. Uncommitted: nothing (rewrite, dotfiles, Iris clean). Crons d16cb7a9 and c255ca06 deleted; no workers running; `/tmp/rw-fx.env.tpl` is a leftover CLI template copy, now unneeded (the real template resolves).

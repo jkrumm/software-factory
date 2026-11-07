@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./spool": "./src/spool.ts",
-    "./spool-lock": "./src/spool-lock.ts"
+    "./spool": "./src/spool.ts"
   },
   "dependencies": {
     "zod": "4.6.7"

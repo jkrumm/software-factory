@@ -1,0 +1,76 @@
+import type {
+  LeadStore,
+  Claims,
+  Repos,
+  Roles,
+  Seats,
+  Terminals,
+  Transcripts,
+  Windows,
+  Worktrees,
+} from '../domains/leads/ports.ts'
+import type { Issue } from '../domains/work/issue.ts'
+import { replay, type AppliedRecord } from '../domains/work/machine.ts'
+import type { WorkStore } from '../domains/work/ports.ts'
+import type { Clock } from '../kernel/clock.ts'
+import { portError, type PortError } from '../kernel/result.ts'
+import type { IssueWriteError } from './issues.ts'
+import type { IdSource, IssueId } from '../kernel/ids.ts'
+import type { UnitOfWork } from './unit-of-work.ts'
+
+/** The stores the leads' use cases write in one transaction: the Issue's events and the lead's own tables. */
+export type LeadsUow = UnitOfWork<{ work: WorkStore; leads: LeadStore }>
+
+/** Everything the leads' use cases need; `main.ts` composes it, the scenarios and tests bring fakes of the ports. */
+export interface LeadDeps {
+  uow: LeadsUow
+  clock: Clock
+  ids: IdSource
+  terminals: Terminals
+  worktrees: Worktrees
+  repos: Repos
+  roles: Roles
+  /** capacity's: the account, the claim, the window (package 3) */
+  seats: Seats
+  claims: Claims
+  windows: Windows
+  transcripts: Transcripts
+  /** a start that has not worked after this long is a lead gone */
+  startBudgetMs: number
+  /** a note that waited this long for the lead's turn to end is typed into its working turn */
+  forceNoteAfterMs: number
+  /** a terminal lost this soon after the lead started or last spoke is not yet called gone */
+  graceMs: number
+}
+
+/** The Issue and its applied events, or null when there is no such Issue. */
+export async function loadIssue(
+  work: WorkStore,
+  id: IssueId,
+): Promise<{ issue: Issue; history: AppliedRecord[] } | null> {
+  const history = await work.history(id)
+  return history ? { issue: replay(id, history), history } : null
+}
+
+/**
+ * A write that did not land, as the outbox reads it: the Issue moved under us (try again), or the database is gone;
+ * anything else is a key the caller built wrong, which is a bug that must show.
+ */
+export function toPortError(error: IssueWriteError | PortError): PortError {
+  if (!('kind' in error)) return portError('gone', 'unknown write error')
+  switch (error.kind) {
+    case 'timeout':
+    case 'gone':
+    case 'refused':
+    case 'unreadable':
+      return error
+    case 'version_conflict':
+      return portError('timeout', `Issue ${error.issueId} moved under the write; trying again`)
+    case 'unknown_issue':
+      return portError('gone', `no Issue ${error.issueId}`)
+    case 'key_taken':
+      throw new Error(`a key was built wrong: ${error.key} is ${error.detail}`)
+    case 'filing_refused':
+      throw new Error(`a filing was refused: ${error.detail}`)
+  }
+}

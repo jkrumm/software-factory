@@ -1,0 +1,182 @@
+import * as z from 'zod'
+
+/**
+ * The shapes the factory sends the agw workflows and parses back, and the routes that show the loops. The workflow
+ * side (`agent-workflows`, `packages/capabilities`) holds its own schemas of the same shapes; `fixtures/loops.json` is the
+ * one set of examples both repos parse (`apps/server/test/loops/wire.test.ts` here, the host tests there).
+ */
+
+const IssueId = z.string().regex(/^issue_[1-9][0-9]*$/, 'an Issue id is issue_<n>')
+const Line = z.string().regex(/^[^\r\n\u2028\u2029]{1,240}$/, 'one line, at most 240 characters')
+const Text = z.string().trim().min(1).max(4_000)
+
+// ---- factory-ask: the Judge (today's ask is the running factory's; this is the new core's Decision) ----------------------
+
+export const JudgeInputWire = z.object({
+  decision: z.string().min(1),
+  repo: z.string().min(1),
+  issue: z.string(),
+  question: z.string().min(1),
+  recommendation: z.string().min(1),
+  checked: z.string().min(1),
+  options: z.array(z.object({ label: z.string().min(1), reversible: z.boolean(), cost: z.string().min(1) })).min(1),
+  noAnswer: z.object({
+    consequence: z.string().min(1),
+    default: z.string().min(1).nullable(),
+    waitMinutes: z.number().int().min(1).nullable(),
+  }),
+  precedents: z.array(
+    z.object({
+      question: z.string(),
+      answer: z.string(),
+      settledBy: z.string(),
+      worthAsking: z.boolean().nullable(),
+      repo: z.string(),
+    }),
+  ),
+})
+export type JudgeInputWire = z.infer<typeof JudgeInputWire>
+
+export const JudgeVerdictWire = z.object({
+  verdict: z.enum(['answer', 'owner']),
+  answer: z.string(),
+  reason: z.string(),
+  source: z.string(),
+})
+export type JudgeVerdictWire = z.infer<typeof JudgeVerdictWire>
+
+// ---- factory-steward -----------------------------------------------------------------------------------------------------
+
+export const STALL_CAUSES = ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed'] as const
+
+export const STEWARD_ACTIONS = ['wake', 'requeue', 'raise_decision', 'none'] as const
+
+export const StewardStall = z.object({
+  issue: IssueId,
+  repo: z.string().min(1),
+  title: z.string().min(1).max(500),
+  kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
+  cause: z.enum(STALL_CAUSES),
+  detail: z.string().max(4_000),
+  stalledMinutes: z.number().int().min(0),
+  attempt: z.number().int().min(0),
+  restarts: z.number().int().min(0),
+  regressions: z.number().int().min(0),
+  stewardWakes: z.number().int().min(0),
+  notes: z.array(z.string().max(500)).max(20),
+  history: z.array(z.string().max(500)).max(40),
+})
+export type StewardStall = z.infer<typeof StewardStall>
+
+/** The Decision form as the steward writes it: the fields of a lead's `factory issue ask`, checked again by the factory. */
+export const StewardDecision = z.object({
+  question: Text,
+  recommendation: Text,
+  checked: Text,
+  options: z
+    .array(z.object({ label: Text, reversible: z.boolean(), cost: Text }))
+    .min(2)
+    .max(10),
+  noAnswer: z.object({
+    consequence: Text,
+    default: Text.nullable(),
+    waitMinutes: z.number().int().min(1).max(10_080).nullable(),
+  }),
+})
+export type StewardDecision = z.infer<typeof StewardDecision>
+
+export const StewardAnswer = z.object({
+  action: z.enum(STEWARD_ACTIONS),
+  note: z.string().max(4_000),
+  reason: Line,
+  decision: StewardDecision.nullable(),
+})
+export type StewardAnswer = z.infer<typeof StewardAnswer>
+
+// ---- factory-triage ------------------------------------------------------------------------------------------------------
+
+const Candidate = z.object({
+  id: IssueId,
+  title: z.string().min(1).max(500),
+  kind: z.string().min(1).max(40),
+  state: z.string().min(1).max(40),
+})
+export type TriageCandidate = z.infer<typeof Candidate>
+
+export const TriageRequest = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('amend'),
+    repo: z.string().min(1),
+    candidates: z.array(Candidate).max(40),
+    signal: z.object({
+      title: z.string().min(1).max(500),
+      text: z.string().max(8_000),
+      source: z.string().min(1).max(100),
+      kind: z.enum(['alert', 'request', 'feedback', 'remark']),
+      origin: z.string().min(1).max(40),
+    }),
+  }),
+  z.object({
+    mode: z.literal('settle'),
+    repo: z.string().min(1),
+    candidates: z.array(Candidate).max(40),
+    issue: z.object({
+      id: IssueId,
+      title: z.string().min(1).max(500),
+      text: z.string().max(8_000),
+      kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
+      origin: z.string().min(1).max(40),
+    }),
+  }),
+])
+export type TriageRequest = z.infer<typeof TriageRequest>
+
+export const TriageAnswer = z.object({
+  amend: IssueId.nullable(),
+  after: z.array(IssueId).max(10),
+  kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']).nullable(),
+  size: z.enum(['small', 'medium', 'large']).nullable(),
+  reason: Line,
+})
+export type TriageAnswer = z.infer<typeof TriageAnswer>
+
+// ---- the loops, as the routes show them ----------------------------------------------------------------------------------
+
+export const LOOP_NAMES = ['leads', 'planning', 'watch', 'settle', 'send', 'steward', 'triage'] as const
+export type LoopName = (typeof LOOP_NAMES)[number]
+
+export const LoopView = z
+  .object({
+    name: z.enum(LOOP_NAMES),
+    /** the interval in ms; 0 is off (the loop runs only when asked) */
+    intervalMs: z.number().int().min(0),
+    /** an event kicks it, besides the clock */
+    onChange: z.boolean(),
+    running: z.boolean(),
+    runs: z.number().int().min(0),
+    /** kicks that started a pass or marked one to run again, and kicks dropped by the loop guard */
+    kicks: z.number().int().min(0),
+    droppedKicks: z.number().int().min(0),
+    lastStartedAt: z.iso.datetime({ offset: true }).nullable(),
+    lastOkAt: z.iso.datetime({ offset: true }).nullable(),
+    /** why the last pass failed, while the newest pass is a failure */
+    lastError: z.string().nullable(),
+    /** what the last pass did, in a line */
+    lastSummary: z.string().nullable(),
+  })
+  .meta({ id: 'LoopView' })
+export type LoopView = z.infer<typeof LoopView>
+
+export const LoopList = z.object({ loops: z.array(LoopView) }).meta({ id: 'LoopList' })
+export type LoopList = z.infer<typeof LoopList>
+
+export const LoopRunReply = z
+  .object({
+    loop: LoopView,
+    /** false when the loop is in a pass already (single-flight): the pass in flight is not started again */
+    started: z.boolean(),
+    summary: z.string().nullable(),
+    error: z.string().nullable(),
+  })
+  .meta({ id: 'LoopRunReply' })
+export type LoopRunReply = z.infer<typeof LoopRunReply>

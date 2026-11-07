@@ -1,0 +1,19 @@
+{
+  "name": "@software-factory/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./eden": "./src/eden.ts"
+  },
+  "dependencies": {
+    "@elysiajs/eden": "1.4.9",
+    "@software-factory/contract": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@software-factory/server": "workspace:*",
+    "elysia": "1.4.30"
+  }
+}

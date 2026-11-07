@@ -31,6 +31,26 @@ load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 limit=()
 if command -v timeout >/dev/null 2>&1; then limit=(timeout 20); elif command -v gtimeout >/dev/null 2>&1; then limit=(gtimeout 20); fi
 
+# A ref named in OPTIONAL_KEYS (scripts/optional-refs.sh) may be unresolved (not made or seeded yet): the server starts without that token and the caller
+# it names does not exist. It is dropped from the template the rest of the launch reads, and said once on stderr. A ref that
+# resolves is kept; every other ref must resolve.
+# shellcheck source=scripts/optional-refs.sh
+source "$DIR/scripts/optional-refs.sh"
+for key in $OPTIONAL_KEYS; do
+  ref=$(grep -hE "^${key}=" "$TPL" | head -1 | cut -d= -f2-)
+  [[ -n "$ref" ]] || continue
+  if ! ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" >/dev/null 2>&1; then
+    echo "software-factory: optional $key ($ref) does not resolve; starting without it." >&2
+    TPL_EFFECTIVE="${TPL_EFFECTIVE:-$TPL}"
+    mkdir -p "$HOME/.software-factory"
+    # refs only, no secret; a fixed path because exec below leaves no moment to remove a temp file
+    grep -v "^${key}=" "$TPL_EFFECTIVE" > "$HOME/.software-factory/env.launch.tpl"
+    chmod 600 "$HOME/.software-factory/env.launch.tpl"
+    TPL_EFFECTIVE="$HOME/.software-factory/env.launch.tpl"
+  fi
+done
+TPL="${TPL_EFFECTIVE:-$TPL}"
+
 # Every ref must resolve BEFORE the hand-off: an unresolved ref would otherwise reach the process as nothing at all.
 rendered=$(${limit[@]+"${limit[@]}"} "$SECRETS_RUN" export --env-file="$TPL" 2>/dev/null | grep -c '^export ')
 want=$(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=' "$TPL" | sort -u | wc -l | tr -d ' ')
@@ -55,7 +75,8 @@ exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   case "$FACTORY_DB_PASSWORD" in
     *[!0-9a-f]*) echo "software-factory: FACTORY_DB_PASSWORD is not hex; refusing to start." >&2; exit 78 ;;
   esac
-  export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@127.0.0.1:5432/shared"
+  # FACTORY_DB_ADDR is for the cutover rehearsal (a private cluster on another port); it is not on the allow-list of the settings file.
+  export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@${FACTORY_DB_ADDR:-127.0.0.1:5432}/shared"
   unset FACTORY_DB_PASSWORD
-  exec bun packages/server/src/main.ts
+  exec bun apps/server/src/main.ts
 ' sh $keys

@@ -1,7 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc"],
-  "categories": { "correctness": "off" },
+  "categories": {
+    "correctness": "off"
+  },
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
@@ -15,7 +17,12 @@
     "typescript/no-non-null-assertion": "error",
     "typescript/no-non-null-asserted-optional-chain": "error",
     "typescript/no-extra-non-null-assertion": "error",
-    "typescript/ban-ts-comment": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-expect-error": true
+      }
+    ],
     "typescript/no-empty-object-type": "error",
     "typescript/no-wrapper-object-types": "error",
     "typescript/no-unsafe-function-type": "error",
@@ -40,7 +47,13 @@
     "prefer-exponentiation-operator": "error",
     "prefer-numeric-literals": "error",
     "prefer-regex-literals": "error",
-    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
     "no-debugger": "error",
     "no-empty": "error",
     "no-var": "error",
@@ -66,8 +79,14 @@
     "no-global-assign": "error",
     "no-restricted-globals": [
       "error",
-      { "name": "isFinite", "message": "Use Number.isFinite." },
-      { "name": "isNaN", "message": "Use Number.isNaN." }
+      {
+        "name": "isFinite",
+        "message": "Use Number.isFinite."
+      },
+      {
+        "name": "isNaN",
+        "message": "Use Number.isNaN."
+      }
     ],
     "default-case-last": "error",
     "no-fallthrough": "error",
@@ -122,5 +141,18 @@
     "oxc/no-accumulating-spread": "error",
     "oxc/no-const-enum": "error"
   },
-  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**"]
+  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**", "legacy/**"],
+  "overrides": [
+    {
+      "files": ["apps/server/test/work/table-types.test.ts"],
+      "rules": {
+        "typescript/ban-ts-comment": [
+          "error",
+          {
+            "ts-expect-error": "allow-with-description"
+          }
+        ]
+      }
+    }
+  ]
 }

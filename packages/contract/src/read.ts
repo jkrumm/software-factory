@@ -1,269 +1,315 @@
-import { z } from 'zod'
-import { QueueState, Quota, SessionState, Spawn, WaitOn } from './core.ts'
-import { FleetAsk, FleetHealth } from './fleet.ts'
-import { IssueOutcome, IssueState, WaitReason } from './issues.ts'
+import * as z from 'zod'
 
 /**
- * The read API (`/v1`, docs/design.md §11 "The read API"): a projection of what the factory holds, shaped for people. These
- * schemas are deliberately not strict: within `/v1` a field is only ever added, so an older client ignores one it does not know.
+ * The read API (`/v1`): a projection of what the factory holds, shaped for people, and the change stream. Existing clients
+ * (Hermes, Iris, the Herdr board, agw) read these shapes, so within `/v1` a field is only ever added. The schemas are
+ * deliberately not strict: an older client ignores a field it does not know.
+ *
+ * Mapping to the language (`docs/language.md`): an **ask** is what waits on the owner that is a Decision or an artifact
+ * awaiting a verdict; the **human queue** is the open Errands; a **session** is one lead attempt, its id the lead key
+ * `lead-<n>-<attempt>`; an Issue is `issue_<n>`, with the number kept as `id` and the full id as `ref`.
  */
 
-export const API_VERSION = 'v1'
+export const READ_API_VERSION = 'v1'
 
-export const Tokens = z.object({
-  input: z.number().int(),
-  output: z.number().int(),
-  cacheRead: z.number().int(),
-  cacheWrite: z.number().int(),
-})
-export type Tokens = z.infer<typeof Tokens>
+const iso = z.string()
 
-/** What a piece of work took: time from the stored events, the rest from the transcripts. `partial` when a transcript could not be read. */
-export const Insights = z.object({
-  startedAt: z.string(),
-  endedAt: z.string().nullable(),
-  elapsedMs: z.number().int(),
-  /** time a turn was open, including the time it waited on background work it started; summed over an Issue's sessions */
-  workingMs: z.number().int(),
-  turns: z.number().int(),
-  toolCalls: z.number().int(),
-  subagents: z.number().int(),
-  tokens: Tokens,
-  models: z.array(z.string()),
-  attempts: z.number().int(),
-  partial: z.boolean(),
-})
-export type Insights = z.infer<typeof Insights>
+export const READ_ISSUE_STATES = ['settling', 'queued', 'working', 'waiting', 'watching', 'closed'] as const
+/** Legacy session words; `dead` is a lead that is gone, `walled` one stopped at its account's limit. */
+export const READ_SESSION_STATES = [
+  'starting',
+  'working',
+  'idle',
+  'waiting',
+  'walled',
+  'blocked',
+  'stuck',
+  'dead',
+] as const
 
-/** Where a session runs: hc's address and name, the herdr space (keyed by the repo's real path), tab and workspace. */
-export const Terminal = z.object({
-  id: z.string().nullable(),
-  name: z.string().nullable(),
-  space: z.string().nullable(),
-  tab: z.string().nullable(),
-  workspace: z.string().nullable(),
-})
-export type Terminal = z.infer<typeof Terminal>
+export const ReadInsights = z
+  .object({
+    startedAt: iso,
+    endedAt: iso.nullable(),
+    elapsedMs: z.number().int(),
+    /** time a turn was open, summed over an Issue's attempts */
+    workingMs: z.number().int(),
+    turns: z.number().int(),
+    /** zero until the usage schema is joined (the KPI read) */
+    toolCalls: z.number().int(),
+    subagents: z.number().int(),
+    tokens: z.object({
+      input: z.number().int(),
+      output: z.number().int(),
+      cacheRead: z.number().int(),
+      cacheWrite: z.number().int(),
+    }),
+    models: z.array(z.string()),
+    attempts: z.number().int(),
+    /** true while tool calls, subagents and tokens are not yet counted */
+    partial: z.boolean(),
+  })
+  .meta({ id: 'ReadInsights' })
+export type ReadInsights = z.infer<typeof ReadInsights>
+
+export const ReadTerminal = z
+  .object({
+    id: z.string().nullable(),
+    name: z.string().nullable(),
+    space: z.string().nullable(),
+    tab: z.string().nullable(),
+    workspace: z.string().nullable(),
+  })
+  .meta({ id: 'ReadTerminal' })
+export type ReadTerminal = z.infer<typeof ReadTerminal>
 
 /** An account's reading, on every card that runs on one. */
-export const AccountQuota = Quota.pick({
-  account: true,
-  fiveHourUsed: true,
-  weeklyUsed: true,
-  fiveHourResetsAt: true,
-  weeklyResetsAt: true,
-  exhaustedUntil: true,
-  fresh: true,
-})
-export type AccountQuota = z.infer<typeof AccountQuota>
+export const ReadAccountQuota = z
+  .object({
+    account: z.string(),
+    fiveHourUsed: z.number().nullable(),
+    weeklyUsed: z.number().nullable(),
+    fiveHourResetsAt: iso.nullable(),
+    weeklyResetsAt: iso.nullable(),
+    exhaustedUntil: iso.nullable(),
+    fresh: z.boolean(),
+  })
+  .meta({ id: 'ReadAccountQuota' })
+export type ReadAccountQuota = z.infer<typeof ReadAccountQuota>
 
-export const IssueCard = z.object({
-  id: z.number().int(),
-  /** the title as it was filed */
-  filedTitle: z.string(),
-  /** short, plain words: the digest's heading of the filed title, else the filed title cut at a word */
-  title: z.string(),
-  /** one plain sentence on where it stands, no ids and no UTC times; null when nothing is known (a client hides the line) */
-  summary: z.string().nullable(),
-  /** one plain sentence on what the Issue is for: the digest's answer, else the first fitting sentence of the filed goal, else the filed title; null when none */
-  about: z.string().nullable().default(null),
-  state: IssueState,
-  reason: WaitReason.nullable(),
-  outcome: IssueOutcome.nullable(),
-  /** the lead's latest phase */
-  phase: z.string().nullable(),
-  repo: z.string(),
-  repoName: z.string(),
-  /** IuRoot's: shown read-only, nothing of it goes to a model */
-  visible: z.boolean(),
-  kind: z.string().nullable(),
-  size: z.string().nullable(),
-  /** the live lead's session id */
-  lead: z.string().nullable(),
-  account: z.string().nullable(),
-  quota: AccountQuota.nullable(),
-  insights: Insights,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  closedAt: z.string().nullable(),
-  /** the Issue holding the project claim this one waits behind (the lowest id if several), else null */
-  heldBy: z.number().int().nullable().default(null),
-  waitingOnOwner: z.boolean(),
-})
-export type IssueCard = z.infer<typeof IssueCard>
+export const ReadIssueCard = z
+  .object({
+    /** the Issue's number */
+    id: z.number().int(),
+    /** `issue_<n>` */
+    ref: z.string(),
+    /** the title as it was filed */
+    filedTitle: z.string(),
+    /** short, plain words: the filed title cut at a word, no ids */
+    title: z.string(),
+    /** one plain sentence on where it stands; null when nothing is known */
+    summary: z.string().nullable(),
+    /** one plain sentence on what the Issue is for */
+    about: z.string().nullable(),
+    state: z.enum(READ_ISSUE_STATES),
+    /** the wait's name while `waiting` (timer, dependency, decision, review ...) */
+    reason: z.string().nullable(),
+    outcome: z.string().nullable(),
+    /** a plain word for what the Issue is doing now ("building", "waiting for your answer") */
+    phase: z.string().nullable(),
+    repo: z.string(),
+    repoName: z.string(),
+    /** a work repo's: shown read-only, nothing of its text goes to the read token */
+    visible: z.boolean(),
+    kind: z.string().nullable(),
+    size: z.string().nullable(),
+    /** the live lead's key */
+    lead: z.string().nullable(),
+    account: z.string().nullable(),
+    quota: ReadAccountQuota.nullable(),
+    insights: ReadInsights,
+    createdAt: iso,
+    updatedAt: iso,
+    closedAt: iso.nullable(),
+    /** the Issue holding the repo claim this one waits behind, when it is known */
+    heldBy: z.number().int().nullable(),
+    waitingOnOwner: z.boolean(),
+  })
+  .meta({ id: 'ReadIssueCard' })
+export type ReadIssueCard = z.infer<typeof ReadIssueCard>
 
-export const SessionCard = z.object({
-  id: z.string(),
-  /** the Issue it works or belongs to (a lead's, or the lead's tree) */
-  issue: z.number().int().nullable(),
-  /** the session that started it, when one did (additive) */
-  parent: z.string().nullable().default(null),
-  role: z.string().nullable(),
-  title: z.string(),
-  summary: z.string(),
-  state: SessionState,
-  wait: WaitOn.nullable(),
-  account: z.string().nullable(),
-  quota: AccountQuota.nullable(),
-  model: z.string().nullable(),
-  turn: z.number().int(),
-  terminal: Terminal.nullable(),
-  transcriptPath: z.string().nullable(),
-  repo: z.string().nullable(),
-  visible: z.boolean(),
-  since: z.string().nullable(),
-  lastActivityAt: z.string(),
-  insights: Insights,
-})
-export type SessionCard = z.infer<typeof SessionCard>
+export const ReadSessionCard = z
+  .object({
+    /** the lead key `lead-<n>-<attempt>` */
+    id: z.string(),
+    issue: z.number().int().nullable(),
+    issueRef: z.string().nullable(),
+    parent: z.string().nullable(),
+    role: z.string().nullable(),
+    title: z.string(),
+    summary: z.string(),
+    state: z.enum(READ_SESSION_STATES),
+    /** the board's word for `state` */
+    status: z.enum(READ_SESSION_STATES),
+    wait: z.string().nullable(),
+    account: z.string().nullable(),
+    quota: ReadAccountQuota.nullable(),
+    model: z.string().nullable(),
+    turn: z.number().int(),
+    terminal: ReadTerminal.nullable(),
+    /** the terminal's address and tab, flat, as the board reads them */
+    address: z.string().nullable(),
+    tab: z.string().nullable(),
+    transcriptPath: z.string().nullable(),
+    repo: z.string().nullable(),
+    visible: z.boolean(),
+    since: iso.nullable(),
+    lastActivityAt: iso,
+    insights: ReadInsights,
+  })
+  .meta({ id: 'ReadSessionCard' })
+export type ReadSessionCard = z.infer<typeof ReadSessionCard>
 
-export const TimelineLine = z.object({
-  at: z.string(),
-  kind: z.string(),
-  /** plain words of what happened */
-  text: z.string(),
-  session: z.string().nullable(),
-})
-export type TimelineLine = z.infer<typeof TimelineLine>
+export const ReadTimelineLine = z
+  .object({
+    at: iso,
+    kind: z.string(),
+    /** plain words of what happened */
+    text: z.string(),
+    session: z.string().nullable(),
+  })
+  .meta({ id: 'ReadTimelineLine' })
+export type ReadTimelineLine = z.infer<typeof ReadTimelineLine>
 
-export const EvidenceLine = z.object({
-  kind: z.string(),
-  link: z.string().nullable(),
-  note: z.string().nullable(),
-  at: z.string(),
-})
-export type EvidenceLine = z.infer<typeof EvidenceLine>
+export const ReadEvidenceLine = z
+  .object({
+    kind: z.string(),
+    link: z.string().nullable(),
+    note: z.string().nullable(),
+    at: iso,
+  })
+  .meta({ id: 'ReadEvidenceLine' })
+export type ReadEvidenceLine = z.infer<typeof ReadEvidenceLine>
 
-export const AskLine = z.object({
-  question: z.string(),
-  options: z.array(z.string()),
-  default: z.string().nullable(),
-  answer: z.string().nullable(),
-  askedAt: z.string(),
-})
-export type AskLine = z.infer<typeof AskLine>
+export const ReadAskLine = z
+  .object({
+    question: z.string(),
+    options: z.array(z.string()),
+    default: z.string().nullable(),
+    answer: z.string().nullable(),
+    askedAt: iso,
+  })
+  .meta({ id: 'ReadAskLine' })
+export type ReadAskLine = z.infer<typeof ReadAskLine>
 
-export const IssueDetail = IssueCard.extend({
-  timeline: z.array(TimelineLine),
-  evidence: z.array(EvidenceLine),
-  asks: z.array(AskLine),
-  sessions: z.array(SessionCard),
-})
-export type IssueDetail = z.infer<typeof IssueDetail>
+export const ReadIssueDetail = ReadIssueCard.extend({
+  timeline: z.array(ReadTimelineLine),
+  evidence: z.array(ReadEvidenceLine),
+  asks: z.array(ReadAskLine),
+  sessions: z.array(ReadSessionCard),
+}).meta({ id: 'ReadIssueDetail' })
+export type ReadIssueDetail = z.infer<typeof ReadIssueDetail>
 
-export const IssueCards = z.object({ issues: z.array(IssueCard) })
-export type IssueCards = z.infer<typeof IssueCards>
+export const ReadIssueCards = z.object({ issues: z.array(ReadIssueCard) }).meta({ id: 'ReadIssueCards' })
+export type ReadIssueCards = z.infer<typeof ReadIssueCards>
 
-export const SessionCards = z.object({ sessions: z.array(SessionCard) })
-export type SessionCards = z.infer<typeof SessionCards>
+export const ReadSessionCards = z.object({ sessions: z.array(ReadSessionCard) }).meta({ id: 'ReadSessionCards' })
+export type ReadSessionCards = z.infer<typeof ReadSessionCards>
 
-export const OverviewCounts = z.object({
-  working: z.number().int(),
-  waiting: z.number().int(),
-  queued: z.number().int(),
-  /** an Issue held for its check after a ship (additive) */
-  watching: z.number().int(),
-  /** the asks the factory owns (every source but the human queue): what `factory status` attention lists */
-  asks: z.number().int(),
-  /** the human queue's asks that are not stale (additive) */
-  humanQueue: z.number().int().default(0),
-  health: z.number().int(),
-})
-export type OverviewCounts = z.infer<typeof OverviewCounts>
+export const ReadOverviewCounts = z
+  .object({
+    working: z.number().int(),
+    waiting: z.number().int(),
+    queued: z.number().int(),
+    watching: z.number().int(),
+    /** what waits on the owner: Decisions and artifacts awaiting a verdict */
+    asks: z.number().int(),
+    /** open Errands that are not stale */
+    humanQueue: z.number().int(),
+    health: z.number().int(),
+  })
+  .meta({ id: 'ReadOverviewCounts' })
+export type ReadOverviewCounts = z.infer<typeof ReadOverviewCounts>
 
-/** An ask as the read API words it: `text` is one line cut at a word, `short` and `summary` are plain words without ids. */
-export const ReadAsk = FleetAsk.extend({
-  short: z.string(),
-  summary: z.string(),
-  /** the Issue it is about: from a decision or lead session id, else the Issue of its session (additive) */
-  issue: z.number().int().nullable().default(null),
-  /** older than 24 h */
-  stale: z.boolean(),
-  /** it is about a visible (IuRoot) repo or session, or names one: a surface's read token gets it redacted (additive) */
-  visible: z.boolean().default(false),
-})
+/** An ask or an Errand as the read API words it: `text` is one line cut at a word, `short` and `summary` are plain words without ids. */
+export const ReadAsk = z
+  .object({
+    /** the Decision's, artifact's or Errand's id */
+    id: z.string(),
+    /** decision, review or errand */
+    kind: z.string(),
+    source: z.string(),
+    /** the Issue's number */
+    issue: z.number().int().nullable(),
+    issueRef: z.string().nullable(),
+    short: z.string(),
+    summary: z.string(),
+    text: z.string(),
+    at: iso,
+    /** older than 24 h */
+    stale: z.boolean(),
+    repo: z.string().nullable(),
+    session: z.string().nullable(),
+    /** a work repo's: the read token gets it redacted */
+    visible: z.boolean(),
+  })
+  .meta({ id: 'ReadAsk' })
 export type ReadAsk = z.infer<typeof ReadAsk>
 
-export const ReadHealth = FleetHealth.extend({
-  short: z.string(),
-  summary: z.string(),
-  /** as on `ReadAsk` (additive) */
-  visible: z.boolean().default(false),
-})
-export type ReadHealth = z.infer<typeof ReadHealth>
+export const ReadHealthLine = z
+  .object({
+    id: z.string(),
+    kind: z.string(),
+    short: z.string(),
+    summary: z.string(),
+    text: z.string(),
+    since: iso.nullable(),
+    repo: z.string().nullable(),
+    visible: z.boolean(),
+  })
+  .meta({ id: 'ReadHealthLine' })
+export type ReadHealthLine = z.infer<typeof ReadHealthLine>
 
-export const Overview = z.object({
-  version: z.literal(API_VERSION),
-  now: z.string(),
-  /** when the fleet snapshot behind asks, health, accounts and queue was built */
-  builtAt: z.string(),
-  counts: OverviewCounts,
-  /** the asks the factory owns */
-  asks: z.array(ReadAsk),
-  /** the dotfiles human queue's asks, oldest first, each with `stale` set (additive) */
-  humanQueue: z.array(ReadAsk).default([]),
-  health: z.array(ReadHealth),
-  accounts: z.array(AccountQuota),
-  queue: z.object({ effective: QueueState, spawns: z.array(Spawn) }),
-})
-export type Overview = z.infer<typeof Overview>
+export const ReadOverview = z
+  .object({
+    version: z.literal(READ_API_VERSION),
+    now: iso,
+    /** when the figures behind asks, health, accounts and queue were read (now: they are read per request) */
+    builtAt: iso,
+    counts: ReadOverviewCounts,
+    asks: z.array(ReadAsk),
+    humanQueue: z.array(ReadAsk),
+    health: z.array(ReadHealthLine),
+    accounts: z.array(ReadAccountQuota),
+    /** the open Issues, newest activity first */
+    issues: z.array(ReadIssueCard),
+    /** `effective` is the whole queue's state; `spawns` stays empty (a lead's start is not a queue row any more); `projects` are the per-project states */
+    queue: z.object({
+      effective: z.enum(['run', 'pace', 'drain']),
+      spawns: z.array(z.unknown()),
+      projects: z.record(z.string(), z.enum(['run', 'pace', 'drain'])),
+    }),
+  })
+  .meta({ id: 'ReadOverview' })
+export type ReadOverview = z.infer<typeof ReadOverview>
 
-export const AskList = z.object({ asks: z.array(ReadAsk), humanQueue: z.array(ReadAsk).default([]) })
-export type AskList = z.infer<typeof AskList>
+export const ReadAskList = z
+  .object({ asks: z.array(ReadAsk), humanQueue: z.array(ReadAsk) })
+  .meta({ id: 'ReadAskList' })
+export type ReadAskList = z.infer<typeof ReadAskList>
 
-export const HealthList = z.object({ health: z.array(ReadHealth) })
-export type HealthList = z.infer<typeof HealthList>
+export const ReadHealthList = z.object({ health: z.array(ReadHealthLine) }).meta({ id: 'ReadHealthList' })
+export type ReadHealthList = z.infer<typeof ReadHealthList>
 
-export const AccountList = z.object({ accounts: z.array(AccountQuota) })
-export type AccountList = z.infer<typeof AccountList>
+export const ReadAccountList = z.object({ accounts: z.array(ReadAccountQuota) }).meta({ id: 'ReadAccountList' })
+export type ReadAccountList = z.infer<typeof ReadAccountList>
 
-/** One alert message of the ntfy alerts topic: when it was sent, who sent it (its title, else its first tag) and its text as one line. */
-export const ReadAlert = z.object({
-  id: z.string(),
-  at: z.string(),
-  source: z.string().nullable(),
-  text: z.string(),
-  /** ntfy's priority, 1 (min) to 5 (max) */
-  priority: z.number().int(),
-  /** it names IuRoot or a visible repo: a surface's read token gets its text left out (additive) */
-  visible: z.boolean().default(false),
-})
-export type ReadAlert = z.infer<typeof ReadAlert>
+// --- the change stream -------------------------------------------------------------------------------------------------
 
-/** The alerts of the last `hours`, newest first; `total` counts them before `limit` cut the list. */
-export const AlertList = z.object({
-  hours: z.number().int(),
-  total: z.number().int(),
-  alerts: z.array(ReadAlert),
-})
-export type AlertList = z.infer<typeof AlertList>
+export const CHANGE_KINDS = ['issue', 'session', 'decision', 'artifact', 'errand', 'signal'] as const
+export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
-// --- the change stream: the `data:` of each frame --------------------------------------------------------------------
+/** The `data:` of one frame and one entry of `GET /v1/changes`: kinds, ids and states, never an Issue's text. */
+export const ReadChange = z
+  .object({
+    /** the cursor that resumes after this change */
+    cursor: z.string(),
+    kind: z.enum(CHANGE_KINDS),
+    issue: z.number().int().nullable(),
+    ref: z.string().nullable(),
+    subject: z.string().nullable(),
+    detail: z.record(z.string(), z.unknown()),
+    at: iso,
+  })
+  .meta({ id: 'ReadChange' })
+export type ReadChange = z.infer<typeof ReadChange>
 
-/** An `issue_events` row. */
-export const IssueFrame = z.object({
-  issue: z.number().int(),
-  kind: z.string(),
-  from: z.string().nullable(),
-  to: z.string().nullable(),
-  at: z.string(),
-  text: z.string(),
-})
-export type IssueFrame = z.infer<typeof IssueFrame>
+/** `GET /v1/changes`: the changes after a cursor and the cursor to ask with next (the one given, when there are none). */
+export const ChangeList = z.object({ changes: z.array(ReadChange), cursor: z.string() }).meta({ id: 'ChangeList' })
+export type ChangeList = z.infer<typeof ChangeList>
 
-/** An `events` row of a session; `state` is what the session derives to when the frame is written. */
-export const SessionFrame = z.object({
-  session: z.string(),
-  issue: z.number().int().nullable(),
-  kind: z.string(),
-  state: SessionState.nullable(),
-  at: z.string(),
-})
-export type SessionFrame = z.infer<typeof SessionFrame>
-
-/** The fleet snapshot moved: a hint to read the resources again. */
-export const FleetFrame = z.object({ fingerprint: z.string(), builtAt: z.string() })
-export type FleetFrame = z.infer<typeof FleetFrame>
-
-export const HelloFrame = z.object({ version: z.literal(API_VERSION), cursor: z.string() })
-export type HelloFrame = z.infer<typeof HelloFrame>
+/** The first frame of a stream: the cursor it starts from. */
+export const StreamHello = z
+  .object({ version: z.literal(READ_API_VERSION), cursor: z.string() })
+  .meta({ id: 'StreamHello' })
+export type StreamHello = z.infer<typeof StreamHello>

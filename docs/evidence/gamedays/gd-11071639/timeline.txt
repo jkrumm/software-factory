@@ -1,0 +1,8 @@
+2026-11-07T16:39:46.508Z run gd-11071639: release 75573ddce873, server pid 59902, base commit 4e8cfb8
+2026-11-07T16:39:46.743Z run gd-11071639: filed issue_298
+2026-11-07T16:39:52.012Z run gd-11071639: queued/- phase=queued lead=-
+2026-11-07T16:41:05.982Z run gd-11071639: working/- phase=building lead=-
+2026-11-07T16:41:16.690Z run gd-11071639: working/- phase=building lead=lead-298-1
+2026-11-07T16:41:27.242Z run gd-11071639: closed/done phase=closed lead=-
+2026-11-07T16:41:27.505Z run gd-11071639: ended closed/done, commit on the scratch remote: no
+2026-11-07T16:41:27.517Z run gd-11071639: NOT GREEN
