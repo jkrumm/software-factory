@@ -23,7 +23,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 | 4 | Leads | 1 | integrated | t1f8 (removed) | `rw/4-leads` (merged, deleted) | 3478091 (merge), 650be3a | `reports/4-leads.md`; `make check` on `rewrite`: 336 unit, 37 scenarios; five shared-file conflicts resolved as unions |
 | 5 | Quality | 1 | integrated | t1f9 (removed) | `rw/5-quality` (merged, deleted) | e1390ff (merge), bb10eef | `reports/5-quality.md`; `make check` on `rewrite`: 624 unit, 62 scenarios; one outbox runner, real checkout |
 | 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
-| 7 | Loops and agw | 2, 6 | running | t1fc `rw-7-loops-agw` (sonnet high, me) | `rw/7-loops-agw` | 854bb9c (base) | brief `briefs/7-loops-agw.md` |
+| 7 | Loops and agw | 2, 6 | integrated | t1fc (removed) | `rw/7-loops-agw` (merged, deleted) | f637cef (merge), b49162b; agent-workflows 97dac43 deployed | `reports/7-loops-agw.md`; `make check` on `rewrite`: 759 unit, 98 scenarios; six live agw calls in the report; `agw factory-{steward,triage,ask}` answer on the mini |
 | 8 | API, read models, CLI parity | 2 to 7 | pending | | | | |
 | 9 | Cutover | 8 | pending | | | | |
 
@@ -42,3 +42,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 5 integrated; package 3 still wiring; package 7 briefed, starts after 3.
 - 2026-11-07: package 3 integrated at 1e84834; packages 0 to 6 done.
 - 2026-11-07: package 7 started in t1fc.
+- 2026-11-07: package 7 integrated at f637cef; agent-workflows' red master test filed as factory Issue 292 (old core).

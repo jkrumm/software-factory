@@ -103,3 +103,12 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   `working` have no claim and block their repo until `resumeClaim` runs for each, and `deploy.hold` in `project.yaml`
   keeps its retired word until the files and schema change together; for package 8, a declared error body goes to
   stdout today (agw's contract wants messages on stderr), and the slot routes need the token.
+- **2026-11-07, package 7 integrated.** One loop runner schedules every pass (leads, planning, watch, settle, send,
+  steward, triage); a unit test fails on any other `setInterval`. Every agw ask is stored in `loop_calls`, so a replayed
+  pass acts on the stored answer. `factory-steward`, `factory-triage` and the backward-compatible `factory-ask` are live
+  in agent-workflows (97dac43). Calls accepted: the steward may raise a Decision from a stall (a machine cell added,
+  the one change to `domains/work` since package 1); a `lead_gone` stall never gets a Decision (an answer cannot start
+  an attempt); `factory.ask`'s route stays Haiku without thinking until something measures the change.
+  agent-workflows' `make check` was already red on master (a clock-skew test); filed as Issue 292 on the running core
+  rather than fixed inside the rewrite. Carried forward for after the cutover: a `watching -> waiting(blocked)` cell so
+  a blocked checkout can stall; intake's pollers into the runner; cross-repo triage edges (the queue loop).
