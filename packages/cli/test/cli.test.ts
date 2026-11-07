@@ -388,6 +388,7 @@ async function factory(args: string[], env: Record<string, string> = {}) {
       ...process.env,
       FACTORY_URL: String(fake.url),
       FACTORY_TOKEN: TOKEN,
+      FACTORY_READ_TOKEN: '',
       FACTORY_SOCKET: join(sockDir, 'nobody.sock'),
       ...env,
     },
@@ -946,6 +947,14 @@ describe('the token', () => {
     const r = await factory(['spawn', 'list'], { FACTORY_TOKEN: '', FACTORY_URL: 'http://127.0.0.1:1' })
     expect(r).toMatchObject({ code: EXIT.auth, stdout: '' })
     expect(JSON.parse(r.stderr)).toMatchObject({ error: { kind: 'auth', message: 'no FACTORY_TOKEN set' } })
+  })
+
+  test('FACTORY_READ_TOKEN alone does not open any other verb', async () => {
+    const env = { FACTORY_TOKEN: '', FACTORY_READ_TOKEN: 'a-read-token-0123456789', FACTORY_URL: 'http://127.0.0.1:1' }
+    for (const args of [['spawn', 'list'], ['status'], ['fleet']]) {
+      const r = await factory(args, env)
+      expect(r).toMatchObject({ code: EXIT.auth, stdout: '' })
+    }
   })
 
   test('a token the server refuses is auth (3)', async () => {

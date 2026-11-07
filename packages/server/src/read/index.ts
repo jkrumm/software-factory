@@ -21,6 +21,7 @@ import type { SQL } from 'bun'
 import { latestReadings, toQuota } from '../capacity.ts'
 import type { Clock } from '../clock.ts'
 import { type DigestView, loadGoals, readDigestCache } from '../fleet/digest.ts'
+import { namesVisible } from '../fleet/digest-model.ts'
 import { STALE_ASK_MS } from '../fleet/model.ts'
 import { namesIuRoot } from '../fleet/place.ts'
 import { readSnapshot } from '../fleet/store.ts'
@@ -30,6 +31,14 @@ import { listIssues } from '../issues/read.ts'
 import { type Loaded, loadByIds } from '../sessions.ts'
 import { cut, describeEvent, firstSentence } from './describe.ts'
 import { fallbackWords } from './plain.ts'
+import {
+  redactAsk,
+  redactHealth,
+  redactIssueCard,
+  redactIssueDetail,
+  redactOverview,
+  redactSessionCard,
+} from './surface.ts'
 import { sumInsights, type TimedEvent, TranscriptInsights, workingOf } from './insights.ts'
 
 export { describeEvent } from './describe.ts'
@@ -52,6 +61,13 @@ export interface ReadDeps {
   isVisible?: (path: string) => boolean
   /** the transcript counter, shared so its cache lives as long as the server */
   insights?: TranscriptInsights
+  /** the names of the directories under the visible roots: a text that mentions one is a visible repo's (`namesVisible`) */
+  visibleNames?: () => Promise<readonly string[]>
+}
+
+/** `surface`: the caller holds the read token, and what is IuRoot's loses its text (`surface.ts`). */
+export interface ReadOptions {
+  surface?: boolean
 }
 
 /**
@@ -211,7 +227,7 @@ export class Reader {
   }
 
   /** `GET /v1/overview`: counts from the Issues table, the rest from the stored fleet snapshot. */
-  async overview(): Promise<Overview> {
+  async overview({ surface }: ReadOptions = {}): Promise<Overview> {
     const { sql, clock } = this.deps
     const ctx = await this.context()
     if (!ctx.snapshot) throw new NotReady('the fleet model is not built yet')
@@ -219,7 +235,7 @@ export class Reader {
       SELECT state, count(*)::int AS n FROM factory.issues WHERE state <> 'closed' GROUP BY state`
     const n = (state: string): number => rows.find((r) => r.state === state)?.n ?? 0
     const { asks, humanQueue, health } = await this.words(ctx, ctx.snapshot)
-    return {
+    const body: Overview = {
       version: API_VERSION,
       now: clock.now().toISOString(),
       builtAt: ctx.snapshot.builtAt,
@@ -238,10 +254,13 @@ export class Reader {
       accounts: [...ctx.quota.values()],
       queue: ctx.snapshot.queue,
     }
+    if (!surface) return body
+    const spaces = new Set(ctx.snapshot.repos.filter((r) => r.visible).map((r) => r.space))
+    return redactOverview(body, (path) => spaces.has(path) || this.isVisible(path))
   }
 
   /** The lists of the overview, whole. */
-  async lists(): Promise<{
+  async lists({ surface }: ReadOptions = {}): Promise<{
     asks: ReadAsk[]
     humanQueue: ReadAsk[]
     health: ReadHealth[]
@@ -249,7 +268,13 @@ export class Reader {
   }> {
     const ctx = await this.context()
     if (!ctx.snapshot) throw new NotReady('the fleet model is not built yet')
-    return { ...(await this.words(ctx, ctx.snapshot)), accounts: [...ctx.quota.values()] }
+    const lists = await this.words(ctx, ctx.snapshot)
+    return {
+      asks: surface ? lists.asks.map(redactAsk) : lists.asks,
+      humanQueue: surface ? lists.humanQueue.map(redactAsk) : lists.humanQueue,
+      health: surface ? lists.health.map(redactHealth) : lists.health,
+      accounts: [...ctx.quota.values()],
+    }
   }
 
   /**
@@ -261,12 +286,17 @@ export class Reader {
     snapshot: Fleet,
   ): Promise<{ asks: ReadAsk[]; humanQueue: ReadAsk[]; health: ReadHealth[] }> {
     const visibleSpaces = new Set(snapshot.repos.filter((r) => r.visible).map((r) => r.space))
-    const model = (line: { repo: string | null; session?: string | null; text: string }) => {
-      const visible =
-        (line.repo !== null && (visibleSpaces.has(line.repo) || this.isVisible(line.repo))) ||
-        (!!line.session && !!ctx.placed.get(line.session)?.visible)
-      return visible ? null : ctx.digest.line(line.text)
-    }
+    const names = [
+      ...snapshot.repos.filter((r) => r.visible).map((r) => r.name),
+      ...((await this.deps.visibleNames?.()) ?? []),
+    ]
+    // The model's own test, plus `scopeOf`'s: a text that names IuRoot or a visible repo is a visible item.
+    const isVisibleLine = (line: { repo: string | null; session?: string | null; text: string }): boolean =>
+      (line.repo !== null && (visibleSpaces.has(line.repo) || this.isVisible(line.repo))) ||
+      (!!line.session && !!ctx.placed.get(line.session)?.visible) ||
+      namesVisible(line.text, names)
+    const model = (line: { repo: string | null; session?: string | null; text: string }) =>
+      isVisibleLine(line) ? null : ctx.digest.line(line.text)
     const kept = dropReplyDuplicates(snapshot.asks)
     const owned = await this.issuesOf(kept.flatMap((a) => (a.session && !askIssueOf(a) ? [a.session] : [])))
     const all = kept.map((ask): ReadAsk => {
@@ -279,6 +309,7 @@ export class Reader {
         summary: said?.summary ?? fallback.summary,
         issue: askIssueOf(ask) ?? (ask.session ? (owned.get(ask.session) ?? null) : null),
         stale: ctx.now.getTime() - Date.parse(ask.at) >= STALE_ASK_MS,
+        visible: isVisibleLine(ask),
       }
     })
     const health = snapshot.health.map((line): ReadHealth => {
@@ -289,6 +320,7 @@ export class Reader {
         text: cut(line.text, LINE_TEXT_MAX),
         short: said?.short ?? fallback.short,
         summary: said?.summary ?? fallback.summary,
+        visible: isVisibleLine(line),
       }
     })
     return {
@@ -303,21 +335,30 @@ export class Reader {
   }
 
   /** `GET /v1/issues`: open first by recent activity. */
-  async issues(options: { scope: 'open' | 'closed' | 'all'; limit: number }): Promise<IssueCard[]> {
+  async issues(options: { scope: 'open' | 'closed' | 'all'; limit: number } & ReadOptions): Promise<IssueCard[]> {
     const { sql } = this.deps
     const ctx = await this.context()
     const issues = await listIssues(sql, options.limit, { scope: options.scope, byActivity: true })
-    return this.cards(ctx, issues)
+    const cards = await this.cards(ctx, issues)
+    return options.surface ? cards.map(redactIssueCard) : cards
+  }
+
+  /** Which of these Issues are in a visible repo. */
+  async visibleIssues(ids: readonly number[]): Promise<Set<number>> {
+    if (ids.length === 0) return new Set()
+    const rows: { id: number; repo: string }[] = await this.deps.sql`
+      SELECT id, repo FROM factory.issues WHERE id IN ${this.deps.sql(ids)}`
+    return new Set(rows.filter((r) => this.isVisible(r.repo)).map((r) => r.id))
   }
 
   /** `GET /v1/issues/:id`. */
-  async issue(id: number): Promise<IssueDetail | undefined> {
+  async issue(id: number, { surface }: ReadOptions = {}): Promise<IssueDetail | undefined> {
     const { sql } = this.deps
     const view = await getIssueView(sql, id)
     if (!view) return undefined
     const ctx = await this.context()
     const { sessions, card } = await this.cardWithSessions(ctx, view)
-    return {
+    const detail: IssueDetail = {
       ...card,
       timeline: view.timeline
         .filter((entry) => entry.source === 'event')
@@ -342,10 +383,11 @@ export class Reader {
       })),
       sessions,
     }
+    return surface ? redactIssueDetail(detail) : detail
   }
 
   /** `GET /v1/sessions`: an Issue's tree, or the newest sessions; `live` leaves the ended ones out. */
-  async sessions(filter: { issue?: number; role?: string; live?: boolean }): Promise<SessionCard[]> {
+  async sessions(filter: { issue?: number; role?: string; live?: boolean } & ReadOptions): Promise<SessionCard[]> {
     const { sql, clock } = this.deps
     const ctx = await this.context()
     const newest: { id: string }[] =
@@ -355,16 +397,17 @@ export class Reader {
     const ids = newest.map((r) => r.id)
     const bundles = await this.bundles(ctx, await loadByIds(sql, ids, clock.now()))
     return [...bundles.values()]
-      .map((b) => b.card)
+      .map((b) => (filter.surface ? redactSessionCard(b.card) : b.card))
       .filter((c) => (filter.role === undefined || c.role === filter.role) && (!filter.live || c.state !== 'dead'))
       .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt) || a.id.localeCompare(b.id))
   }
 
-  async session(id: string): Promise<SessionCard | undefined> {
+  async session(id: string, { surface }: ReadOptions = {}): Promise<SessionCard | undefined> {
     const { sql, clock } = this.deps
     const ctx = await this.context()
     const bundles = await this.bundles(ctx, await loadByIds(sql, [id], clock.now()))
-    return bundles.get(id)?.card
+    const card = bundles.get(id)?.card
+    return card && surface ? redactSessionCard(card) : card
   }
 
   /** The Issue each of these sessions belongs to: its own, else its nearest ancestor's (the session that started it). */

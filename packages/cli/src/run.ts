@@ -210,6 +210,7 @@ commands:
 FACTORY_URL      the server (default ${DEFAULT_URL})
 FACTORY_TOKEN    the bearer token the server requires (not needed for version, health, session wait|note, slot run and role; issue note needs it;
                  spawn create|get, session get, queue get and issue new|list|show|evidence|reopen|resume|<verb> (not stop) fall back to the socket without it)
+FACTORY_READ_TOKEN  a token that reads /v1 only (${BIN} read and ${BIN} follow; FACTORY_TOKEN is used first when both are set); IuRoot's text is left out of what it reads
 FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file

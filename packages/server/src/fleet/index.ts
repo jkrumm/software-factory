@@ -356,7 +356,7 @@ async function realPath(path: string): Promise<string> {
 }
 
 /** The names of the directories directly under these roots: what a text may call a visible repo. An unreadable root has none. */
-async function directoryNames(roots: readonly string[]): Promise<string[]> {
+export async function directoryNames(roots: readonly string[]): Promise<string[]> {
   const lists = await Promise.all(roots.map((root) => readdir(root).catch((): string[] => [])))
   return lists.flat()
 }

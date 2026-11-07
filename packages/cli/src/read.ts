@@ -18,7 +18,7 @@ import {
   SessionFrame,
 } from '@software-factory/contract'
 import type { z } from 'zod'
-import { BIN, call, DEFAULT_URL, type Io } from './client.ts'
+import { BIN, call, DEFAULT_URL, type Io, noToken, readerToken } from './client.ts'
 import { FactoryError, kindForStatus, usage } from './exit.ts'
 
 export type Format = 'json' | 'plain'
@@ -128,7 +128,7 @@ const idArg = (raw: string | undefined, what: string): string => {
 export async function readVerb(words: string[], format: Format, flags: ReadFlags, io: Io): Promise<void> {
   const [, resource, target, ...extra] = words
   const get = async <S extends z.ZodType>(path: string, schema: S) =>
-    (await call(io, path, { auth: true, schema })).body
+    (await call(io, path, { auth: true, read: true, schema })).body
   const print = (json: unknown, lines: string[]) => {
     if (format === 'json') return io.out(`${JSON.stringify(json)}\n`)
     if (lines.length) io.out(`${lines.join('\n')}\n`)
@@ -299,17 +299,13 @@ const sleep = (ms: number, signal: AbortSignal) =>
 export async function follow(format: Format, flags: ReadFlags, io: Io): Promise<void> {
   if (flags['until-closed'] && flags.issue === undefined) throw usage('--until-closed needs --issue <id>')
   const issue = flags.issue === undefined ? undefined : idArg(flags.issue, '--issue')
-  const token = io.env.FACTORY_TOKEN
-  if (!token) {
-    throw new FactoryError('auth', 'no FACTORY_TOKEN set', {
-      hint: 'run it under secrets-run with the repo .env.tpl, or export FACTORY_TOKEN',
-    })
-  }
+  const token = readerToken(io.env, true)
+  if (!token) throw noToken(true)
   const base = (io.env.FACTORY_URL || DEFAULT_URL).replace(/\/+$/, '')
 
   // Already closed: nothing will ever be said about it.
   if (flags['until-closed'] && issue !== undefined) {
-    const { body } = await call(io, `/v1/issues/${issue}`, { auth: true, schema: IssueDetail })
+    const { body } = await call(io, `/v1/issues/${issue}`, { auth: true, read: true, schema: IssueDetail })
     if (body.state === 'closed') return
   }
 

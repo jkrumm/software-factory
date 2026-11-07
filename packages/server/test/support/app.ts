@@ -14,6 +14,7 @@ import { QuotaPoller } from '../../src/quota.ts'
 import { FakeQuotaSource } from './quota.ts'
 
 export const TEST_TOKEN = 'test-token-0123456789'
+export const TEST_READ_TOKEN = 'test-read-token-0123456789'
 
 /** The one allowed root of a test server, and a repo inside it (both real paths: /tmp is a link on macOS). */
 export const TEST_ROOT = realpathSync(mkdtempSync('/tmp/factory-roots-'))
@@ -57,6 +58,8 @@ export function startApp(deps: {
   review?: Review
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   read?: AppDeps['read']
+  /** the server accepts the read token (`TEST_READ_TOKEN`) */
+  readToken?: string
 }): TestApp {
   const quotaSource = new FakeQuotaSource()
   const monitor = deps.monitor ?? new TickMonitor(deps.clock, 5_000, 240_000)
