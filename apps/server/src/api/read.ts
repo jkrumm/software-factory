@@ -64,7 +64,7 @@ export const readRoutes = (read: ReadApi | undefined) =>
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
         response: { 200: ReadIssueCards, ...errorResponses(400, 503) },
-        detail: { operationId: 'read.issues', summary: 'Issue cards, newest activity first' },
+        detail: { operationId: 'issue.list', summary: 'Issue cards, newest activity first' },
       },
     )
     .get(
@@ -82,7 +82,7 @@ export const readRoutes = (read: ReadApi | undefined) =>
         params: Id,
         response: { 200: ReadIssueDetail, ...errorResponses(400, 404, 503) },
         detail: {
-          operationId: 'read.issue',
+          operationId: 'issue.show',
           summary: 'one Issue with its timeline, evidence, asks and sessions (issue_12 or 12)',
         },
       },
@@ -95,13 +95,13 @@ export const readRoutes = (read: ReadApi | undefined) =>
           ...surfaceOf(request),
           issue: query.issue,
           role: query.role,
-          live: query.live === '1' || query.live === 'true',
+          live: query.live === '1',
         })
         if (sessions === null) return failure(400, `${query.issue} is not an Issue (issue_12 or 12)`, 'invalid_request')
         return Response.json(ReadSessionCards.parse({ sessions }))
       },
       {
-        query: z.object({ issue: z.string().optional(), role: z.string().optional(), live: z.string().optional() }),
+        query: z.object({ issue: z.string().optional(), role: z.string().optional(), live: z.enum(['1']).optional() }),
         response: { 200: ReadSessionCards, ...errorResponses(400, 503) },
         detail: {
           operationId: 'read.sessions',

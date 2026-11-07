@@ -141,7 +141,7 @@ export async function ship(
 ): Promise<Answer<ShipAnswer>> {
   const raw = await factory(
     world,
-    ['quality', 'ship', id, '--body', JSON.stringify({ attempt: 1, ...body }), '--format', 'json'],
+    ['issue', 'ship', id, '--body', JSON.stringify({ attempt: 1, ...body }), '--format', 'json'],
     { FACTORY_URL: server.url },
   )
   const answer = parse<ShipAnswer>(raw)
@@ -155,15 +155,15 @@ export async function reopen(
   id: string,
   body: { call: string; reason: string },
 ): Promise<Answer<ReopenAnswer>> {
-  const raw = await factory(world, ['quality', 'reopen', id, '--body', JSON.stringify(body), '--format', 'json'], {
+  const raw = await factory(world, ['issue', 'reopen', id, '--body', JSON.stringify(body), '--format', 'json'], {
     FACTORY_URL: server.url,
   })
   return parse<ReopenAnswer>(raw)
 }
 
 export async function show(world: World, server: ServerProcess, id: string): Promise<QualityView> {
-  const raw = await factory(world, ['quality', 'show', id, '--format', 'json'], { FACTORY_URL: server.url })
-  if (raw.code !== 0) throw new Error(`quality show exited ${raw.code}: ${raw.err}`)
+  const raw = await factory(world, ['issue', 'quality', id, '--format', 'json'], { FACTORY_URL: server.url })
+  if (raw.code !== 0) throw new Error(`issue quality exited ${raw.code}: ${raw.err}`)
   return JSON.parse(raw.out) as QualityView
 }
 

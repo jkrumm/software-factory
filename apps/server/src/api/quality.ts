@@ -11,9 +11,10 @@ import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
 import type { ShipAnswer, ShipInput } from '../app/quality-ship.ts'
 import type { StoredEvidence, QualityView } from '../domains/quality/store.ts'
-import { idOf, type IssueId } from '../kernel/ids.ts'
+import type { IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
 import { errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 /** The quality use cases the routes call, bound in `main.ts`. */
 export interface QualityWrites {
@@ -88,9 +89,14 @@ export const qualityRoutes = (writes: QualityWrites) =>
     .post(
       '/:id/ship',
       async ({ params, body, status }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
-        const shipped = await writes.ship({ issueId, attempt: body.attempt, call: body.call, commits: body.commits })
+        const shipped = await writes.ship({
+          issueId,
+          attempt: body.attempt,
+          call: body.call,
+          commits: [...(body.commits ?? []), ...(body.commit ?? [])],
+        })
         if (!shipped.ok) {
           const out = failed(shipped.error)
           return out.status === 404
@@ -107,13 +113,13 @@ export const qualityRoutes = (writes: QualityWrites) =>
         params: Params,
         body: ShipBody,
         response: { 200: ShipAnswerBody, ...errorResponses(400, 404, 409, 422, 503) },
-        detail: { operationId: 'quality.ship', summary: "the lead's ship: the merged commits, checked, as evidence" },
+        detail: { operationId: 'issue.ship', summary: "the lead's ship: the merged commits, checked, as evidence" },
       },
     )
     .post(
       '/:id/reopen',
       async ({ params, body, status }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
         const reopened = await writes.reopen({ issueId, call: body.call, reason: body.reason })
         if (!reopened.ok) {
@@ -136,13 +142,13 @@ export const qualityRoutes = (writes: QualityWrites) =>
         params: Params,
         body: ReopenBody,
         response: { 200: ReopenAnswer, ...errorResponses(400, 404, 409, 422, 503) },
-        detail: { operationId: 'quality.reopen', summary: "the owner's reopen of a closed Issue, within 30 days" },
+        detail: { operationId: 'issue.reopen', summary: "the owner's reopen of a closed Issue, within 30 days" },
       },
     )
     .get(
       '/:id/quality',
       async ({ params, status }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
         const shown = await writes.show(issueId)
         if (!shown.ok) {
@@ -179,6 +185,6 @@ export const qualityRoutes = (writes: QualityWrites) =>
       {
         params: Params,
         response: { 200: QualityViewBody, ...errorResponses(404, 409, 503) },
-        detail: { operationId: 'quality.show', summary: 'what the ship gate and the watch recorded for an Issue' },
+        detail: { operationId: 'issue.quality', summary: 'what the ship gate and the watch recorded for an Issue' },
       },
     )

@@ -78,7 +78,7 @@ test('the read token reads /v1 and is refused everywhere else, exit 3', async ()
   const refused = await cli(['capacity', 'get'], { as: 'read' })
   expect(refused.code).toBe(3)
   expect(errorLine(refused.err)).toMatchObject({ code: 'forbidden', details: { status: 403 } })
-  const write = await cli(['planning', 'prio', '--issue', 'issue_1', '--value', '1'], { as: 'read' })
+  const write = await cli(['issue', 'prio', 'issue_1', '1'], { as: 'read' })
   expect(write.code).toBe(3)
 })
 
@@ -87,7 +87,7 @@ test("a lead's agent token may close its Issue but not use the owner's verbs", a
     as: 'agent',
   })
   expect(lead.code).toBe(4)
-  const owner = await cli(['planning', 'prio', '--issue', 'issue_1', '--value', '1'], { as: 'agent' })
+  const owner = await cli(['issue', 'prio', 'issue_1', '1'], { as: 'agent' })
   expect(owner.code).toBe(3)
   expect(errorLine(owner.err).code).toBe('forbidden')
 })

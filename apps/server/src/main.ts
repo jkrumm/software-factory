@@ -31,6 +31,8 @@ import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
+import { composeIssues } from './compose-issues.ts'
+import { rootedRepos } from './adapters/git/repos.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
@@ -309,6 +311,11 @@ async function main(): Promise<void> {
       },
     },
     planning: planning.planning,
+    issues: composeIssues({
+      writes,
+      filing: { ...writes, locate: (repo) => rootedRepos(leadSettings.repoRoots).locate(repo) },
+      checkpoints,
+    }),
     capacity: planning.capacity,
     quality: {
       ship: (input) => shipIssue(shipping, input),

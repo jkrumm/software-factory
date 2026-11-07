@@ -144,23 +144,13 @@ test('stop the line admits only the fix in its project; other projects go on', a
 })
 
 test('prio orders the queue before age, and never an incident behind it', async () => {
-  await lab.cli(['queue', 'set', '--body', JSON.stringify({ project: 'ordered', state: 'drain' })])
+  await lab.cli(['queue', 'set', 'drain', '--project', 'ordered'])
   const old = await lab.file('ordered', 'old')
   const urgent = await lab.file('ordered', 'urgent to the owner')
   for (const issue of [old, urgent]) await settle(issue)
-  const prio = await lab.cli([
-    'planning',
-    'prio',
-    '--body',
-    JSON.stringify({ issue: urgent, value: 100, key: 'owner-1' }),
-  ])
+  const prio = await lab.cli(['issue', 'prio', urgent, '100', '--key', 'owner-1'])
   expect(prio).toMatchObject({ code: 0, json: { issue: urgent, value: 100, recorded: true } })
-  const again = await lab.cli([
-    'planning',
-    'prio',
-    '--body',
-    JSON.stringify({ issue: urgent, value: 100, key: 'owner-1' }),
-  ])
+  const again = await lab.cli(['issue', 'prio', urgent, '100', '--key', 'owner-1'])
   expect(again.json).toMatchObject({ recorded: false })
   const queue = (await order()).filter((e) => e.project === 'ordered' && e.reason?.kind === 'drain')
   expect(queue.map((e) => [e.issue, e.prio])).toEqual([

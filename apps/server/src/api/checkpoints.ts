@@ -40,6 +40,7 @@ import {
 import { idOf } from '../kernel/ids.ts'
 import type { PortError } from '../kernel/result.ts'
 import { type ErrorStatus, errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 const iso = (at: Date): string => at.toISOString()
 
@@ -129,7 +130,7 @@ const failure = (status: number, error: string, code: string, details?: Record<s
   Response.json(ErrorBody.parse({ error, code, ...(details ? { details } : {}) }), { status })
 
 /** The error of a use case as the HTTP answer: 404 for what is not there, 409 for what the state refuses, 422 for the lead's form. */
-function failed(error: CheckpointError | PortError): Response {
+export function failed(error: CheckpointError | PortError): Response {
   switch (error.kind) {
     case 'missing_field':
       return failure(422, error.detail, 'missing_field', { fields: error.fields })
@@ -173,7 +174,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/ask',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...form } = body
         const result = await uses.ask({ issueId, attempt, form })
@@ -200,7 +201,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/decisions',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.decisions({
           ...(issueId ? { issueId } : {}),
@@ -255,7 +256,11 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         params: Id,
         body: AnswerBody,
         response: RESPONSES(DecisionReply, 400, 404, 409, 422, 503),
-        detail: { operationId: 'decision.answer', summary: "the owner's answer to a Decision" },
+        detail: {
+          operationId: 'decision.answer',
+          summary: "the owner's answer to a Decision",
+          'x-cli': { args: ['answer'] },
+        },
       },
     )
     .post(
@@ -281,7 +286,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/artifacts',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...raw } = body
         const result = await uses.submit({ issueId, attempt, raw })
@@ -310,7 +315,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/artifacts',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.artifacts({
           ...(issueId ? { issueId } : {}),
@@ -459,7 +464,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .post(
       '/issues/:id/errands',
       async ({ params, body }) => {
-        const issueId = idOf('issue', params.id)
+        const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
         const { attempt, ...raw } = body
         const result = await uses.raiseErrand({ issueId, attempt, raw })
@@ -485,7 +490,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     .get(
       '/errands',
       async ({ query }) => {
-        const issueId = query.issue ? idOf('issue', query.issue) : undefined
+        const issueId = query.issue ? issueRef(query.issue) : undefined
         if (issueId === null) return unknownId('Issue', query.issue ?? '')
         const result = await uses.errands({
           ...(issueId ? { issueId } : {}),

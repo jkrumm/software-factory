@@ -10,9 +10,10 @@ import {
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
-import { idOf, type IssueId } from '../kernel/ids.ts'
+import type { IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
 import { errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 type Written = Result<Recorded, IssueWriteError | PortError>
 
@@ -26,10 +27,7 @@ export interface LeadRoutes {
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
 
-/** `issue_12`, or the bare number the owner says ("Issue 12"). */
-function issueOf(text: string): IssueId | null {
-  return idOf('issue', /^[1-9][0-9]*$/.test(text) ? `issue_${text}` : text)
-}
+const issueOf = issueRef
 
 const answerOf = ({ issue, event }: Recorded, result: Recorded['result']): LeadVerbAnswer =>
   LeadVerbAnswer.parse({
@@ -117,7 +115,14 @@ export const leadRoutes = (wired: LeadRoutes | undefined) => {
       async ({ params, body, status }) => {
         const issue = issueOf(params.id)
         if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
-        const out = answer(await routes.defer(issue, body))
+        const after = body.after?.map(issueRef)
+        if (after?.some((id) => id === null)) return status(404, failure('an after is not an Issue', 'not_found'))
+        const out = answer(
+          await routes.defer(
+            issue,
+            after ? { ...body, after: after.filter((id): id is IssueId => id !== null) } : body,
+          ),
+        )
         switch (out.status) {
           case 200:
             return status(200, out.body)

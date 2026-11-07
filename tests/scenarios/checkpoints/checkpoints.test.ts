@@ -254,19 +254,13 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
   for (let i = 0; i < 3; i++) await pass()
   expect(decisionPages()).toHaveLength(1)
 
-  const answered = await ok(
-    (json) => DecisionReply.parse(json),
-    'decision',
-    'answer',
-    id,
-    ...body({ answer: 'winston' }),
-  )
+  const answered = await ok((json) => DecisionReply.parse(json), 'decision', 'answer', id, 'winston')
   expect(answered).toMatchObject({
     decision: { status: 'answered', settledBy: 'owner', answer: 'winston' },
     issue: { state: 'working' },
   })
   expect(answered.issue?.effects.map((e) => e.kind)).toEqual(['note_lead'])
-  const again = await cli('decision', 'answer', id, ...body({ answer: 'pino' }))
+  const again = await cli('decision', 'answer', id, 'pino')
   expect(again.code).toBe(5)
   expect(again.err).toContain('already_answered')
 

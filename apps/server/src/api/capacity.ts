@@ -36,7 +36,9 @@ export interface CapacityApi {
   refresh(): Promise<Result<AccountState[], PortError>>
   admit(): Promise<Result<PassResult, PortError>>
   queue(): Promise<Result<{ queue: QueueEntry[]; notes: string[] }, PortError>>
-  queueStates(): Promise<Result<QueueStates, PortError>>
+  /** `project` (a name or a path inside a source root) narrows the answer to that project; a path outside the roots is `refused` */
+  queueStates(project?: string): Promise<Result<QueueStates, PortError>>
+  /** `project` is a name or a path inside a source root; a path outside the roots is `refused` */
   setQueueState(input: { project: string | null; state: QueueState }): Promise<Result<QueueStates, PortError>>
   touchSlot(input: {
     id: string
@@ -49,6 +51,7 @@ export interface CapacityApi {
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
 const unavailable = (error: PortError): ErrorBody => failure(`unavailable: ${error.detail}`, 'unavailable')
+const outsideRoots = (error: PortError): ErrorBody => failure(error.detail, 'repo_outside_roots')
 const iso = (at: Date | null): string | null => at?.toISOString() ?? null
 
 const accountView = (a: AccountState): AccountView =>
@@ -200,13 +203,17 @@ export const capacityRoutes = (api?: CapacityApi) => {
     )
     .get(
       '/queue',
-      async ({ status }) => {
+      async ({ query, status }) => {
         if (!api) return status(503, unbound)
-        const states = await api.queueStates()
-        return states.ok ? status(200, statesView(states.value)) : status(503, unavailable(states.error))
+        const states = await api.queueStates(query.project)
+        if (states.ok) return status(200, statesView(states.value))
+        return states.error.kind === 'refused'
+          ? status(422, outsideRoots(states.error))
+          : status(503, unavailable(states.error))
       },
       {
-        response: { 200: QueueStatesView, ...errorResponses(503) },
+        query: z.object({ project: z.string().min(1).optional() }),
+        response: { 200: QueueStatesView, ...errorResponses(400, 422, 503) },
         detail: { operationId: 'queue.get', summary: 'the queue state per scope: run, pace or drain' },
       },
     )
@@ -215,7 +222,10 @@ export const capacityRoutes = (api?: CapacityApi) => {
       async ({ body, status }) => {
         if (!api) return status(503, unbound)
         const states = await api.setQueueState({ project: body.project, state: body.state })
-        return states.ok ? status(200, statesView(states.value)) : status(503, unavailable(states.error))
+        if (states.ok) return status(200, statesView(states.value))
+        return states.error.kind === 'refused'
+          ? status(422, outsideRoots(states.error))
+          : status(503, unavailable(states.error))
       },
       {
         body: QueueSetBody,
@@ -223,6 +233,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         detail: {
           operationId: 'queue.set',
           summary: 'set the queue state of the whole queue or one project: run, pace or drain',
+          'x-cli': { args: ['state'] },
         },
       },
     )

@@ -15,6 +15,18 @@ export const NoAnswer = z.object({
   waitMinutes: z.number().int().nullable(),
 })
 
+/** The option and no-answer forms of a request: every property optional, so a missing one is named by the use case. */
+const OptionInput = z.object({
+  label: z.string().optional(),
+  reversible: z.boolean().optional(),
+  cost: z.string().optional(),
+})
+const NoAnswerInput = z.object({
+  consequence: z.string().optional(),
+  default: z.string().nullable().optional(),
+  waitMinutes: z.number().int().nullable().optional(),
+})
+
 export const SETTLERS = ['policy', 'judge', 'default', 'owner'] as const
 export const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
@@ -66,11 +78,13 @@ export type DecisionView = z.infer<typeof DecisionView>
 export const AskBody = z
   .object({
     attempt: z.number().int().min(1),
-    question: z.unknown().optional(),
-    recommendation: z.unknown().optional(),
-    checked: z.unknown().optional(),
-    options: z.unknown().optional(),
-    noAnswer: z.unknown().optional(),
+    question: z.string().optional(),
+    recommendation: z.string().optional(),
+    checked: z.string().optional(),
+    /** a JSON array of `{label, reversible, cost}` */
+    options: z.array(OptionInput).optional(),
+    /** a JSON object `{consequence, default, waitMinutes}` */
+    noAnswer: NoAnswerInput.optional(),
   })
   .meta({ id: 'AskBody' })
 export type AskBody = z.infer<typeof AskBody>
@@ -80,7 +94,7 @@ export const AskReply = z
   .meta({ id: 'AskReply' })
 export type AskReply = z.infer<typeof AskReply>
 
-export const AnswerBody = z.object({ answer: z.unknown().optional() }).meta({ id: 'AnswerBody' })
+export const AnswerBody = z.object({ answer: z.string().optional() }).meta({ id: 'AnswerBody' })
 
 /** `issue` is null when the Decision was withdrawn: the Issue no longer waited for it. */
 export const DecisionReply = z
@@ -117,18 +131,18 @@ export const ArtifactSummary = z.object({
 export const SubmitBody = z
   .object({
     attempt: z.number().int().min(1),
-    kind: z.unknown().optional(),
-    title: z.unknown().optional(),
+    kind: z.enum(ARTIFACT_KINDS).optional(),
+    title: z.string().optional(),
     /** `markdown` (the default) or `html`; not `format`, which is the CLI's own flag */
-    contentFormat: z.unknown().optional(),
-    content: z.unknown().optional(),
+    contentFormat: z.enum(['markdown', 'html']).optional(),
+    content: z.string().optional(),
   })
   .meta({ id: 'SubmitBody' })
 
 export const ReviseBody = z
   .object({
     attempt: z.number().int().min(1).optional(),
-    content: z.unknown().optional(),
+    content: z.string().optional(),
     note: z.string().optional(),
   })
   .meta({ id: 'ReviseBody' })
@@ -137,15 +151,15 @@ export const AnnotateBody = z
   .object({
     revision: z.number().int().min(1).optional(),
     author: z.enum(['owner', 'lead']).default('owner'),
-    quote: z.unknown().optional(),
-    path: z.unknown().optional(),
-    comment: z.unknown().optional(),
+    quote: z.string().optional(),
+    path: z.string().optional(),
+    comment: z.string().optional(),
   })
   .meta({ id: 'AnnotateBody' })
 
 export const VerdictBody = z
   .object({
-    verdict: z.unknown().optional(),
+    verdict: z.enum(VERDICTS).optional(),
     note: z.string().optional(),
     revision: z.number().int().min(1).optional(),
   })
@@ -202,8 +216,8 @@ export type ArtifactList = z.infer<typeof ArtifactList>
 export const ErrandBody = z
   .object({
     attempt: z.number().int().min(1),
-    summary: z.unknown().optional(),
-    detail: z.unknown().optional(),
+    summary: z.string().optional(),
+    detail: z.string().optional(),
   })
   .meta({ id: 'ErrandBody' })
 

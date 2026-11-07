@@ -48,7 +48,9 @@ export const ShipBody = z
     attempt: z.number().int().min(1),
     call: z.string().min(1),
     /** an empty list is refused by the gate with its error named, not by the schema */
-    commits: z.array(z.string().min(1)).max(50),
+    commits: z.array(z.string().min(1)).max(50).optional(),
+    /** the flag form `--commit <sha>` (repeatable), joined with `commits` */
+    commit: z.array(z.string().min(1)).max(50).optional(),
   })
   .meta({ id: 'ShipBody' })
 export type ShipBody = z.infer<typeof ShipBody>

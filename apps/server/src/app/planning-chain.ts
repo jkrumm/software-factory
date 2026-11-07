@@ -30,7 +30,7 @@ async function chainOf({ planning, reads }: PlanningStores): Promise<Edge[]> {
  * Adds the edges `issue -> after`: each blocker must exist and be open, and none may close a cycle through the open
  * edges or the leads' dependency waits. Refuses the whole set otherwise (nothing is stored).
  */
-async function addEdges(
+export async function addEdges(
   stores: PlanningStores,
   deps: PlanningDeps,
   issue: IssueId,

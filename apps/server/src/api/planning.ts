@@ -23,6 +23,7 @@ import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
 import type { PortError, Result } from '../kernel/result.ts'
 import { errorResponses } from './errors.ts'
+import { issueRef } from './issue-ref.ts'
 
 /** The contract's row states and the domain's are one list. */
 const rowStatesMatch: [(typeof ROW_STATES)[number]] extends [RowState]
@@ -237,11 +238,11 @@ export const planningRoutes = (api?: PlanningApi) => {
       },
     )
     .post(
-      '/planning/prio',
-      async ({ body, status }) => {
+      '/issues/:id/prio',
+      async ({ params, body, status }) => {
         if (!api) return status(503, unbound)
-        const issue = issueOf(body.issue)
-        if (!issue) return status(404, failure(`no ${body.issue}`, 'not_found'))
+        const issue = issueRef(params.id)
+        if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
         const set = await api.prio({ issue, value: body.value, key: body.key })
         if (!set.ok) {
           const out = failureOf(set.error)
@@ -251,14 +252,16 @@ export const planningRoutes = (api?: PlanningApi) => {
               ? status(409, out.body)
               : status(503, out.body)
         }
-        return status(200, PrioAnswer.parse({ issue: body.issue, value: body.value, recorded: set.value.recorded }))
+        return status(200, PrioAnswer.parse({ issue, value: body.value, recorded: set.value.recorded }))
       },
       {
+        params: z.object({ id: z.string() }),
         body: PrioBody,
         response: { 200: PrioAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
-          operationId: 'planning.prio',
+          operationId: 'issue.prio',
           summary: "set an Issue's priority, the owner's: higher runs first within its class",
+          'x-cli': { args: ['value'] },
         },
       },
     )

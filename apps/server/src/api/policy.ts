@@ -16,8 +16,8 @@
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs, `ship`,
- *   `quality`, a revision, its own session read, the signal it files and the test slots it takes.
- * - owner only: everything else, and every route nobody has listed yet (reopen, answers, verdicts, projects, queue,
+ *   `quality`, a revision, its own session read, a note to a session, the signal it files and the test slots it takes.
+ * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, the door's registry, the scenarios' test routes). When in doubt, the owner alone.
  * - machine: exactly `POST /signals/alerts` and `POST /door/reports`, the door's two calls (the owner may make them too).
  *
@@ -60,6 +60,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/issues/:id/artifacts', LEAD),
   rule('POST', '/v1/issues/:id/errands', LEAD),
   rule('POST', '/v1/artifacts/:id/revisions', LEAD),
+  rule('POST', '/v1/sessions/:session/note', LEAD),
   rule('POST', '/issues/:id/ship', LEAD),
   rule('GET', '/issues/:id/quality', LEAD),
   rule('GET', '/v1/issues/:id/lead', LEAD),
@@ -74,7 +75,12 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/v1/*', READ),
 
   // -- owner only: everything else that exists today -----------------------------------------------------------------
+  rule('POST', '/issues', OWNER),
   rule('POST', '/issues/:id/reopen', OWNER),
+  rule('POST', '/issues/:id/cancel', OWNER),
+  rule('POST', '/issues/:id/note', OWNER),
+  rule('POST', '/issues/:id/answer', OWNER),
+  rule('POST', '/issues/:id/prio', OWNER),
   rule('POST', '/v1/decisions/:id/answer', OWNER),
   rule('POST', '/v1/decisions/:id/worth-asking', OWNER),
   rule('POST', '/v1/artifacts/:id/annotations', OWNER),
@@ -92,7 +98,6 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/planning/pass', OWNER),
   rule('POST', '/planning/settle', OWNER),
   rule('POST', '/planning/after', OWNER),
-  rule('POST', '/planning/prio', OWNER),
   rule('GET', '/capacity', OWNER),
   rule('POST', '/capacity/refresh', OWNER),
   rule('POST', '/capacity/admit', OWNER),

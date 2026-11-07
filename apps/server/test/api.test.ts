@@ -103,7 +103,12 @@ describe('the OpenAPI document', () => {
     for (const status of ['200', '503']) {
       const schema = operation?.responses[status]?.content?.['application/json']?.schema
       expect(schema?.$ref).toBe('#/$defs/Health')
-      expect(Object.keys(z.record(z.string(), z.unknown()).parse(schema?.$defs))).toEqual(['Health', 'Heartbeat', 'HealthLine', 'HealthLoop'])
+      expect(Object.keys(z.record(z.string(), z.unknown()).parse(schema?.$defs))).toEqual([
+        'Health',
+        'Heartbeat',
+        'HealthLine',
+        'HealthLoop',
+      ])
     }
   })
 })

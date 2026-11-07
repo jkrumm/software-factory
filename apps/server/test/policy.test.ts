@@ -81,12 +81,21 @@ describe('the policy table', () => {
       ['POST', '/v1/errands/:id/done'],
       ['GET', '/v1/errands'],
       ['POST', '/signals/:id/promote'],
-      ['POST', '/planning/prio'],
+      ['POST', '/issues'],
+      ['POST', '/issues/:id/cancel'],
+      ['POST', '/issues/:id/note'],
+      ['POST', '/issues/:id/answer'],
+      ['POST', '/issues/:id/prio'],
       ['PUT', '/queue'],
       ['POST', '/v1/loops/:name/run'],
     ] as const) {
       expect(allowed(method, route)).toEqual(['owner'])
     }
+  })
+
+  test('a lead may call a session note but no owner verb of the Issue', () => {
+    expect(allowed('POST', '/v1/sessions/:session/note')).toEqual(['owner', 'agent'])
+    expect(allowed('POST', '/issues/:id/ship')).toEqual(['owner', 'agent'])
   })
 
   test('a route without a row has no entry', () => {

@@ -12,6 +12,7 @@ import { type QualityWrites, qualityRoutes, unwiredQuality } from './quality.ts'
 import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 import { leadsTestRoutes } from './leads-test.ts'
+import { type IssueApi, issueRoutes } from './issues.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
@@ -35,6 +36,8 @@ export interface ApiDeps {
   leads?: LeadRoutes
   /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
   leadsTick?: Parameters<typeof leadsTestRoutes>[0]
+  /** the owner's Issue verbs (new, cancel, note, answer) and the session note; absent, the routes answer 503 */
+  issues?: IssueApi
   /** signals in and the door's registry; absent, the routes answer 503 (the OpenAPI document needs no database) */
   intake?: IntakeApi
   /** projects, plans, the chain, priorities (package 3); unbound, the routes answer 503 */
@@ -122,6 +125,7 @@ export function createApp(deps: ApiDeps) {
     .use(qualityRoutes(deps.quality ?? unwiredQuality))
     .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
     .use(leadRoutes(deps.leads))
+    .use(issueRoutes(deps.issues))
     .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(planningRoutes(deps.planning))
     .use(capacityRoutes(deps.capacity))

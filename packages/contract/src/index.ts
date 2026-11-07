@@ -1,6 +1,16 @@
 export { ErrorBody } from './errors.ts'
 export * from './read.ts'
 export * from './read-models.ts'
+export {
+  CancelBody,
+  IssueAnswerBody,
+  IssueRefInput,
+  NewIssueAnswer,
+  NewIssueBody,
+  NoteAnswer,
+  NoteBody,
+  SessionNoteBody,
+} from './issues.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
