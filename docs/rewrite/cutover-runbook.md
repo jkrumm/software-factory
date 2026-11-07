@@ -20,6 +20,14 @@ fx() { secrets-run run --env-file="$HOME/.software-factory/current/.env.tpl" -- 
 pg() { secrets-run run --env-file="$HOME/.software-factory/current/.env.tpl" -- sh -c 'PGPASSWORD=$FACTORY_DB_PASSWORD exec psql -X -h 127.0.0.1 -U factory -d shared -At "$@"' sh "$@"; }
 ```
 
+Every stop of the core goes through `scripts/cutover/core-stop.sh`, sourced once: `source <rw>/scripts/cutover/core-stop.sh`. It reads
+the server's PIDs from `launchctl print` **before** the stop, waits the grace, and **if a PID still lives, kills that PID** (never
+a pattern: no `pkill -f`) and says so on the line `reap: PID <n> is still alive after <s>s … kill <n>`. Window 1 saw a SIGTERM that
+did not end the server twice (W9 and B4); `rw/9b` fixed the cause (the server now ends within a 30 s deadline), and this is the
+fallback if it ever does not. `core_stop <grace>` is bootout plus the reap, `core_restart <grace>` is `kickstart -k` plus the
+reap. The grace is **40** for the new core (its deadline is 30 s) and **250** for the old one (its plist's `ExitTimeOut` is 240).
+A `reap:` line that names a kill is a finding: write it into the window's learnings entry.
+
 From W5 to B4 every `factory …` below is `fx …`; in W1 to W3 and B7 it is the old CLI, bare.
 
 The `factory` database role owns its schema but holds **no CREATE on the database**, and renaming a schema needs both
@@ -33,7 +41,7 @@ touch a schema's name.
 |-|-|-|-|-|
 | P1 | The rehearsal holds on today's data | `cd <rw> && make rehearse` | the last line says `the rehearsal held`; import `0 unexplained`; scenarios pass; the old core boots on the way back | none needed |
 | P2 | The plans | `cd <rw> && DRY_RUN=1 FACTORY_REF=rewrite make deploy && DRY_RUN=1 make rollback` | the deploy plan says `new core (apps/server)` and `the settings file is accepted`; the rollback plan says `-> … (old core (packages/server))` | none needed |
-| P3 | The tokens resolve | `for k in FACTORY_AGENT_TOKEN FACTORY_DOOR_TOKEN; do secrets-run read op://mini/software-factory/$k >/dev/null && echo "$k ok"; done` | both `ok` (created 2026-11-07, in `headless.refs`, cache seeded) | none needed |
+| P3 | The tokens resolve | `for k in FACTORY_AGENT_TOKEN FACTORY_DOOR_TOKEN; do secrets-run read op://mini/software-factory/$k >/dev/null && echo "$k ok"; done` | both `ok` (created 2026-11-07, in `headless.refs`, cache seeded). `FACTORY_SIGNAL_TOKEN` may not resolve yet: the server starts without it (`launch.sh` says `optional FACTORY_SIGNAL_TOKEN … does not resolve; starting without it`), and W14 makes it | none needed |
 | P4 | Admin access works | `docker ps --format '{{.Names}}' \| grep -x postgres` and `echo 'select 1' > /tmp/one.sql && admin_sql /tmp/one.sql` | the container is named, `select 1` answers | none needed |
 | P5 | A restore point of the live schema | `PGPASSWORD=$(secrets-run read op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD) pg_dump -h 127.0.0.1 -U factory -d shared -n factory -Fc --no-privileges -f ~/.software-factory/data/backups/pre-cutover-$(date +%Y%m%d).dump && chmod 600 ~/.software-factory/data/backups/pre-cutover-*.dump` | the file exists, `pg_restore -l <file> \| grep -c 'TABLE DATA'` prints 33 | `rm` it (it holds the private text of IuRoot Issues: delete it after the cutover has held) |
 | P6 | The settings file for a paused start | `install -m 600 /dev/null ~/.config/factory/env` only if it does not exist; then `grep -q '^FACTORY_TICK_MS=' ~/.config/factory/env \|\| echo 'FACTORY_TICK_MS=0' >> ~/.config/factory/env` | `stat -f %Lp ~/.config/factory/env` is `600`; the line is there | delete the line (step W9 does) |
@@ -51,7 +59,7 @@ checks that before it stops anything and names the key; the way back removes the
 |-|-|-|-|-|
 | W1 | Drain the whole old queue | `factory queue set drain` (the old CLI, still linked) | `factory queue get` prints `global drain drain …` | `factory queue set run` |
 | W2 | Wait for running leads to finish | `until [ "$(factory --format json read overview \| jq '.counts.working')" = 0 ]; do sleep 30; done` (the owner may `factory issue stop <n>` a lead that will not finish) | `.counts.working` is `0` and `factory read sessions --live` lists none | W1's undo |
-| W3 | Stop the old server | `launchctl bootout gui/$(id -u)/com.jkrumm.software-factory` and `while pgrep -f 'bun packages/server/src/main.ts' >/dev/null; do sleep 2; done` | no `bun packages/server/src/main.ts` process (a shutdown may take up to 240 s) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jkrumm.software-factory.plist` (the old plist is still in place) |
+| W3 | Stop the old server | `source <rw>/scripts/cutover/core-stop.sh && core_stop 250` | `core_stop` printed the PIDs it saw, then `reap: every PID (…) ended on its own` (or the kill of a named PID); `launchctl print gui/$(id -u)/com.jkrumm.software-factory` finds no job (a shutdown may take up to 240 s) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jkrumm.software-factory.plist` (the old plist is still in place) |
 
 The old door keeps running; the sources that alert while the server is down get a 503 and retry (Kuma does). The new core
 binds the old hook socket path and refuses to steal a live one: W3 comes first.
@@ -103,12 +111,12 @@ the fleet digest, notifications and the witness. Nothing is deleted from `factor
 
 | # | Step | Command | It worked when | Undo |
 |-|-|-|-|-|
-| W9 | Loops on | remove the `FACTORY_TICK_MS=0` line from `~/.config/factory/env`, then `launchctl kickstart -k gui/$(id -u)/com.jkrumm.software-factory` and `until curl -fs localhost:7793/health >/dev/null; do sleep 1; done` | `/health` shows every loop with an interval above 0 and a `lastOkAt` after the first pass (`jq '.loops'`), `.status ok`, `.tickAt` moves | put the line back and kickstart again |
+| W9 | Loops on | remove the `FACTORY_TICK_MS=0` line from `~/.config/factory/env`, then `core_restart 40` and `until curl -fs localhost:7793/health >/dev/null; do sleep 1; done` | `/health` shows every loop with an interval above 0 and a `lastOkAt` after the first pass (`jq '.loops'`), `.status ok`, `.tickAt` moves | put the line back and `core_restart 40` again |
 | W10 | Only the named repos run | `fx queue set pace` (global), then for every other repo: `for d in ~/SourceRoot/*/ ~/IuRoot/*/; do n=$(basename "$d"); case $n in <repo-a>\|<repo-b>) ;; *) fx queue set drain --project "$n" ;; esac; done` | `fx queue get` shows the global `pace` and `drain` for every other project; the named two are not listed. (A queue state is the more restrictive of the global and the project's own.) | `fx queue set run` globally and `fx queue set run --project <p>` for each drained one |
-| W11 | The door is the new door | `curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'x-factory-probe: 1' -H 'content-type: application/json' -d '{}' http://127.0.0.1:8796/alert/kuma`; `fx door report` | `401`; the sources report their tokens accepted | the way back re-installs the old door |
-| W12 | The live checks | `make verify` (from `<rw>`) | `verify: all checks passed` | none needed |
-| W13 | The scratch drill | `bash scripts/gameday/setup.sh` (adds the scratch repo; set its queue to run: `fx queue set run --project factory-gameday`), then `bash scripts/gameday/scratch.sh` | `run gd-…: GREEN`: filed, admitted, built, shipped, watched, verified, closed `done`, the commit on the scratch remote. Later windows add `--kill-server` | `bash scripts/gameday/teardown.sh` |
-| W14 | The clients | apply the patches of `docs/rewrite/client-patches/` (below) | each client's own check passes | `git apply -R` per patch |
+| W11 | The door is the new door | `curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'x-factory-probe: 1' -H 'content-type: application/json' -d '{}' http://127.0.0.1:8796/alert/kuma`; `launchctl print gui/$(id -u)/com.jkrumm.factory-door \| grep launch-door.sh`; `curl -s localhost:7793/health \| jq .lines`; `fx door routes` | `401` (**either door answers 401: it only says a door is up**); the launcher path in `launchctl print` is `…/releases/<the deployed sha>/scripts/launch-door.sh` (W5's `door OK:` line says `new door (apps/door)`); `.lines` lists the sources, `door routes` the registry. (`fx door report` is the door's own POST, not a read: do not use it here) | the way back re-installs the old door (B6) |
+| W12 | The live checks | `FACTORY_REF=rewrite make verify` (from `<rw>`; plain `make verify` compares against origin/master, the old core, and fails) | `verify: all checks passed` | none needed |
+| W13 | The scratch drill | `bash scripts/gameday/setup.sh` (adds the scratch repo; set its queue to run: `fx queue set run --project factory-gameday`), then `bash scripts/gameday/scratch.sh` | `run gd-…: GREEN: closed done by the lead's close, the commit on the scratch remote`: the scratch repo has no deploy, so its lead ends with `close` and ship, watch and verify are not asked for; an Issue that did ship must also have passed its watch (`GREEN: shipped, watched, verified, …`). Later windows add `--kill-server` | `bash scripts/gameday/teardown.sh` |
+| W14 | The clients | apply the patches of `docs/rewrite/client-patches/` (below). **Hermes needs its signal token first:** `secrets-run read op://mini/software-factory/FACTORY_SIGNAL_TOKEN >/dev/null && echo ok` (if it does not resolve: make the 32-hex value on the MacBook, never on the mini, add the ref `FACTORY_SIGNAL_TOKEN` to `dotfiles-private/headless.refs`, reseed the cache, then `core_restart 40` so the server reads it; see the learnings entry of 2026-11-07 on the two bearers for the MacBook command's traps). Put `FACTORY_SIGNAL_TOKEN` (and, as before, `FACTORY_READ_TOKEN`) into Hermes' tool environment, **never `FACTORY_TOKEN`**. Check, which files nothing: `export FACTORY_TOKEN=$(secrets-run read op://mini/software-factory/FACTORY_SIGNAL_TOKEN); factory signal file --from owner:iris --title check` answers 403 `trust_refused` (the token is known and the route is open to it, but only as `owner:hermes`), and `factory read overview` answers 403 `forbidden`; a real filing is the skill's own dry file against the scratch repo | each client's own check passes; the signal check above | `git apply -R` per patch; remove the token from Hermes' environment |
 
 ### The watch list (the whole window)
 
@@ -124,7 +132,7 @@ the fleet digest, notifications and the witness. Nothing is deleted from `factor
 | Leads | `fx read sessions --live`; the Herdr app | one lead per named repo (`pace`) | a terminal with no Issue, an Issue with no terminal |
 | Quality | `fx read friction`; `fx read kpis` | first-pass watch rate near the old core's | a ship refused for a reason the lead cannot fix |
 | Logs | `tail -f ~/Library/Logs/software-factory.err.log` and `…out.log` | quiet | any stack trace |
-| The door | `fx door report`; `/health .lines` | sources accepted | a source refused (a stale token) |
+| The door | `curl -s localhost:7793/health \| jq .lines`; `fx door routes` | sources accepted | a source refused (a stale token) |
 
 ### The window ends
 
@@ -144,9 +152,9 @@ The new core's schema is **kept**, renamed `factory_rewrite`; nothing either cor
 | B1 | Drain the new core | `fx queue set drain` | `fx queue get` is `drain` | `fx queue set pace` |
 | B2 | Wait for the running leads | `until [ "$(fx --format json read overview \| jq '.counts.working')" = 0 ]; do sleep 30; done` (or `fx issue cancel <id>` a lead that will not finish) | `.counts.working` is `0` | none needed |
 | B3 | Settings the old launcher refuses are gone | remove `FACTORY_TICK_MS`, and any other key added in this window, from `~/.config/factory/env` | `DRY_RUN=1 make rollback` (step B6) says `the settings file is accepted by …` | put them back |
-| B4 | Stop the new server | `launchctl bootout gui/$(id -u)/com.jkrumm.software-factory` and wait until `pgrep -f 'bun apps/server/src/main.ts'` finds nothing | no process | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jkrumm.software-factory.plist` |
+| B4 | Stop the new server | `source <rw>/scripts/cutover/core-stop.sh && core_stop 40` | `core_stop` printed the PIDs it saw, then `reap: every PID (…) ended on its own` (a kill of a named PID is a finding); no job in `launchctl print gui/$(id -u)/com.jkrumm.software-factory` | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jkrumm.software-factory.plist` |
 | B5 | The schemas swap back | `admin_sql <rw>/scripts/cutover/schema-back.sql` (new `factory` → `factory_rewrite`, `factory_legacy` → `factory`), then `pg -f <rw>/scripts/cutover/old-sequence.sql` (the old Issue numbers continue past every number the new core used) | `pg -c "select count(*) from factory.issues"` is the old count; `old_issue_numbers_continue_at` is at least the largest `issue_<n>` of `factory_rewrite` | `admin_sql <rw>/scripts/cutover/schema-forward.sql` |
-| B6 | The old release starts | `cd <rw> && DRY_RUN=1 make rollback` (read it: `-> … (old core (packages/server))`), then `make rollback` | `rollback OK: <sha> (old core (packages/server)) healthy; factory -> ~/.local/bin/factory`; the old door is back | `FACTORY_REF=rewrite make deploy` after `schema-forward.sql` |
+| B6 | The old release starts | `cd <rw> && DRY_RUN=1 make rollback` (read it: `-> … (old core (packages/server))`), then `make rollback` | `rollback OK: <sha> (old core (packages/server)) healthy; factory -> ~/.local/bin/factory`; the old door is back: the log says `door: old door (packages/door) … credentials: none (the tokens file only)` and `door OK: the old door (packages/door) of <sha>` (the old door holds no secret and has no `.env.door.tpl`; `make rollback` no longer warns about it) | `FACTORY_REF=rewrite make deploy` after `schema-forward.sql` |
 | B7 | The old queue is on | `factory queue set run` (the old CLI; `factory queue get --project <path>` for the project states the old core kept) | `factory queue get` is `run`; `factory read overview` answers | `factory queue set drain` |
 | B8 | The clients go back | `git apply -R` each patch of `docs/rewrite/client-patches/` that was applied | each client's check passes | re-apply |
 
@@ -174,12 +182,12 @@ docs describe the new core (package 9b, after the cutover holds).
 
 | What | State | Command or where |
 |-|-|-|
-| `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` in 1Password | **done** (2026-11-07) | `op://mini/software-factory/…`; refs are in `.env.tpl` (and the door's in `.env.door.tpl`) |
+| `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` in 1Password | **done** (2026-11-07); `FACTORY_SIGNAL_TOKEN` follows at W14 | `op://mini/software-factory/…`; refs are in `.env.tpl` (and the door's in `.env.door.tpl`) |
 | The admin path for the schema swap | needs nothing new | `~/SourceRoot/vps`, superuser `psql` in the `postgres` container (`admin_sql` above) |
 | The door's sources | unchanged | `~/.config/factory/door-tokens.json` stays; `factory door token new <source>` only for a new source |
 | The settings file | P6 | `~/.config/factory/env` (mode 0600), allow-list in `scripts/env-file.sh` |
 | Beszel polling | not on | needs `FACTORY_BESZEL_EMAIL` and `FACTORY_BESZEL_PASSWORD` refs in `.env.tpl`; the old core had none either, so the poller stays off as it was |
-| Hermes may file | **owner decision** | `docs/rewrite/client-patches/hermes-agent.patch` files with `factory signal file --from owner:hermes`, which needs the owner's `FACTORY_TOKEN` in Hermes' tool environment; the read token cannot file. Without that, Hermes cannot file Issues |
+| Hermes may file | built (9c), the token to make | `FACTORY_SIGNAL_TOKEN` (`op://mini/software-factory/FACTORY_SIGNAL_TOKEN`): a fifth caller whose only route is `POST /signals`, only as `owner:hermes`. Optional: the server starts without it (the launcher drops an unresolved ref), and Hermes cannot file until it exists. W14 makes it work; the owner's token never reaches Hermes |
 
 ### Client patches (applied in a window, after W12)
 
@@ -190,7 +198,7 @@ until the orchestrator applies them in a window.
 | Client | Patch | What | Check after |
 |-|-|-|-|
 | Iris | `iris.patch` | `AnswerAck` reads the new reply (`issue.id` is `issue_<n>`); a repeated answer (409) is the old `duplicate: true` | `cd ~/SourceRoot/iris && make check` |
-| Hermes | `hermes-agent.patch` | the fleet skill files with `factory signal file --from owner:hermes` (owner decision above) | the skill's own dry file against the scratch repo |
+| Hermes | `hermes-agent.patch` | the fleet skill files with `factory signal file --from owner:hermes` under `FACTORY_SIGNAL_TOKEN` (set as `FACTORY_TOKEN` for that one command); reads keep the read token | the skill's own dry file against the scratch repo |
 | dotfiles | `dotfiles.patch` | the Herdr board stops calling `fleet --refresh`; `rd`'s `factory_host` runs under `secrets-run` with the owner's token; the test stubs it; the `wave` and `remote-dev` skills and the doc teach `issue cancel`, `read overview`, `issue defer` | `cd ~/SourceRoot/dotfiles && bash scripts/remote-dev-factory.test.sh` |
 
 Not patched because they need nothing: Argo (no call), agw's `agents` (`read overview`, `read sessions --live` are the same),
