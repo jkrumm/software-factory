@@ -50,3 +50,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN created and seeded (owner at the MacBook).
 - 2026-11-07: package 9a integrated at 691e781; next: the orchestrator's own rehearsal, then window 1.
 - 2026-11-07: orchestrator's rehearsal (P1) held: 256 Issues, 213 match, 43 explained, 0 unexplained; 1760 mapped events applied, 0 refused; the old core booted on the way back.
+- 2026-11-07 17:4x **WINDOW 1 LIVE**: old queue drained (W1), no leads (W2), old server stopped (W3), schemas swapped as
+  admin (W4: `factory_legacy` = old, 256 Issues), new core deployed 75573dd (W5, previous-sha 089b35c = old core),
+  new queue drained (W7), import 256 Issues / 1760 events applied / 0 refused, idempotent, compare 0 unexplained (W8).
+  Way back if this session dies: runbook "The way back" B1 to B8.
