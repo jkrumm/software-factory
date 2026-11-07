@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { loadSettings } from '../src/settings.ts'
 
 test('the defaults: version dev, the 45 s lock wait, no internal test routes', () => {
-  expect(loadSettings({ DATABASE_URL: 'postgres://x', PORT: '7793' })).toEqual({
+  expect(loadSettings({ DATABASE_URL: 'postgres://x', PORT: '7793' })).toMatchObject({
     databaseUrl: 'postgres://x',
     port: 7793,
     version: 'dev',

@@ -4,11 +4,14 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
+import { type QualityWrites, qualityRoutes, unwiredQuality } from './quality.ts'
 
 export interface ApiDeps {
   health: HealthSource
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
+  /** the quality use cases (ship, reopen, what was recorded); absent, they answer unavailable */
+  quality?: QualityWrites
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -55,6 +58,7 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(qualityRoutes(deps.quality ?? unwiredQuality))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
 }
 

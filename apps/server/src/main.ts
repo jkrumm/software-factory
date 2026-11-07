@@ -3,15 +3,34 @@ import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
+import { GitCommits } from './adapters/quality/git.ts'
+import { makefileProjects } from './adapters/quality/projects.ts'
+import { MakeAndProbes } from './adapters/quality/proof.ts'
+import { AgwReview } from './adapters/quality/review.ts'
+import { postgresQualityStore } from './adapters/quality/store.ts'
+import { stubLeadCheckout } from './adapters/quality/stubs.ts'
 import { createApp } from './api/app.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
-import { systemClock } from './kernel/clock.ts'
+import { type OutboxDeps, runOutbox } from './app/outbox.ts'
+import { showQuality } from './app/quality-read.ts'
+import { reopenIssue } from './app/quality-reopen.ts'
+import { shipIssue } from './app/quality-ship.ts'
+import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watch.ts'
+import { type Clock, systemClock } from './kernel/clock.ts'
 import { systemIds } from './kernel/ids.ts'
+import { ok } from './kernel/result.ts'
 import { healthOf } from './read/health.ts'
 import { loadSettings } from './settings.ts'
 
 /** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
 const HOSTNAME = '127.0.0.1'
+
+type EffectPorts = OutboxDeps['ports']
+
+/** Stands in for the port of another package (leads, 4) until it brings the real one: it did nothing, and says so by answering ok. */
+const stubStartLead: EffectPorts['start_lead'] = async () => ok(undefined)
+const stubNoteLead: EffectPorts['note_lead'] = async () => ok(undefined)
+const stubFinalize: EffectPorts['finalize'] = async () => ok(undefined)
 
 const fail = (message: string): never => {
   console.error(message)
@@ -37,13 +56,60 @@ async function main(): Promise<void> {
   if (applied.length) console.log(`migrated: ${applied.join(', ')}`)
 
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
-  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx) }))
-  const writes = { uow, clock: systemClock, ids: systemIds }
+  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx), quality: postgresQualityStore(tx) }))
+  const clock: Clock =
+    settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
+  const writes = { uow, clock, ids: systemIds }
+  const projects = makefileProjects({ windowMs: settings.quality.windowMs })
+  const shipping = {
+    ...writes,
+    commits: new GitCommits(),
+    review: new AgwReview({ bin: settings.agwBin }),
+    checkout: stubLeadCheckout,
+  }
+
+  // The tick (the loops, package 4 or 7) brings the one that runs everything; until then this runs the outbox and the watches.
+  const draining = new AbortController()
+  const startedAt = clock.now()
+  const ports: EffectPorts = {
+    start_lead: stubStartLead,
+    note_lead: stubNoteLead,
+    finalize: stubFinalize,
+    start_watch: startWatchPort({ uow, clock, projects }),
+  }
+  let pass: Promise<void> = Promise.resolve()
+  const tick = async () => {
+    const outbox = await runOutbox({ uow, clock, ports })
+    if (!outbox.ok) return console.error(`outbox: ${outbox.error.detail}`)
+    const watched = await checkWatches({
+      uow,
+      clock,
+      ids: systemIds,
+      projects,
+      proof: new MakeAndProbes(),
+      timing: { ...DEFAULT_TIMING, retryMs: settings.quality.retryMs },
+      settledAt: new Date(startedAt.getTime() + settings.quality.settleMs),
+      signal: draining.signal,
+    })
+    if (!watched.ok) console.error(`watches: ${watched.error.detail}`)
+  }
+  const ticking =
+    settings.tickMs === null
+      ? undefined
+      : setInterval(() => {
+          // A pass that is still running (a long `make verify`) is not started twice.
+          pass = pass.then(tick).catch((error: unknown) => console.error(`tick: ${String(error)}`))
+        }, settings.tickMs)
 
   const app = createApp({
     health: {
       read: async () =>
         healthOf({ version: settings.version, databaseFailure: await ping(sql), tickAt: null, queueMovedAt: null }),
+    },
+    quality: {
+      ship: (input) => shipIssue(shipping, input),
+      reopen: (input) => reopenIssue(writes, input),
+      show: (issueId) => showQuality({ uow }, issueId),
     },
     internalTest: settings.internalTestRoutes
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
@@ -56,7 +122,10 @@ async function main(): Promise<void> {
     if (stopping) return
     stopping = true
     console.log(`${signal}: stopping`)
+    clearInterval(ticking)
+    draining.abort()
     await app.stop()
+    await pass
     await lock.release()
     await sql.close()
     process.exit(0)

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./pg": "./support/pg.ts"
+    "./pg": "./support/pg.ts",
+    "./git-repo": "./support/git-repo.ts"
   },
   "dependencies": {
     "@software-factory/contract": "workspace:*",
