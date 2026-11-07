@@ -47,3 +47,13 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   - The machine has no claim wait: package 3 decides how a resumed Issue gets its repo's claim back.
   - The new event, wait and outcome words go into `docs/language.md` when the language is reconciled in package 9;
     until then report 1's state table is the reference the parallel briefs use.
+- **2026-11-07, the empty account pick was a spill to the work account.** `claude-account pick --lane lead` prints
+  `unset CLAUDE_CONFIG_DIR` when it picks `iu` (`--why`: `reason=spill`), randomly among picks while the Max accounts
+  have headroom. Package 1's first start (about two minutes, then killed) ran on it. `rd` refuses to spill and so does
+  the rewrite: the start loop re-picks until it gets a Max dir and does not start otherwise.
+- **2026-11-07, packages 2 to 6: merges are made trivial up front.** `briefs/parallel.md` gives each package its
+  folders, a migration number range (`0200` to `0699`), additive one-line edits to the shared files, and ports with
+  honest stubs for every cross-domain need. Calls inside it: intake files, planning settles (`settled`), capacity
+  admits (`admitted`); projects belong to planning and reach intake through a port; stop the line is a queue rule
+  (package 3); cancel is package 8's owner verb; the tick that runs the outbox is package 4's or 7's, and `/health`
+  gains staleness with it.
