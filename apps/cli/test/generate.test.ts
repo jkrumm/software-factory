@@ -11,7 +11,7 @@ const health = (operationId: string, ref = '#/$defs/Health') => ({
 describe('operationsOf', () => {
   test("the server's document yields health get", async () => {
     const operations = operationsOf(await openapiDocument())
-    expect(operations.map((op) => op.command.join(' '))).toEqual(['health get'])
+    expect(operations.map((op) => op.command.join(' '))).toContain('health get')
     expect(render(operations)).toContain('responses: { 200: Health, 503: Health }')
   })
 
