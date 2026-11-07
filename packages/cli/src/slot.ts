@@ -226,7 +226,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     const limitTimer = setTimeout(() => {
       limited = true
       io.err(
-        `factory: the command ran past the test-slot run limit of ${describeLimit(limitMs)} (FACTORY_SLOT_RUN_MS); killed its process group\n`,
+        `factory: the command ran past the test-slot run limit of ${describeLimit(limitMs)} (FACTORY_SLOT_RUN_MS, or slots.run in project.yaml); killed its process group\n`,
       )
       killing = (async () => {
         signalGroup(proc, 'SIGTERM')

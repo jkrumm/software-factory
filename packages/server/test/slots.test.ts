@@ -271,7 +271,7 @@ describe('factory slot run, against the real socket', () => {
     const out = await finish(slotRun(hung(pidfile), { FACTORY_SLOT_RUN_MS: '700' }))
     expect(out.code).toBe(124)
     expect(out.stderr).toBe(
-      'factory: the command ran past the test-slot run limit of 700 ms (FACTORY_SLOT_RUN_MS); killed its process group\n',
+      'factory: the command ran past the test-slot run limit of 700 ms (FACTORY_SLOT_RUN_MS, or slots.run in project.yaml); killed its process group\n',
     )
     expect(Date.now() - t0).toBeLessThan(10_000)
     expect(await held()).toBe(0)

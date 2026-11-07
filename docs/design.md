@@ -503,7 +503,7 @@ given back, and `slot run` prints one stderr line and exits 124. The limit comes
 the longest wins, so worktrees match), `DEFAULT_SLOT_RUN_MS` (30 min). The server resolves it at the grant only (migration `040`: `granted_at`,
 `run_ms`) and returns it as `runMs`; a server that does not answer leaves the client with the env or the default. **Health:** a slot held past
 half its limit has a line `test slot N held by "<name>" for K min, limit L min` (`slotLines`, derived at read; a lapsed lease or a lease from
-before `040` has none). `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
+before `040` has none). The wrapper owns the limit: if it is SIGKILLed, the detached command lives on as an orphan with no slot and no limit (accepted). `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
 is installed, and bare otherwise (CI).
 
 #### Quota
