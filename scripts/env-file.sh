@@ -1,13 +1,35 @@
 #!/bin/bash
-# Sourced by launch.sh: the factory's own settings that are not secrets and not in the repo (FACTORY_PROBE_HOSTS, FACTORY_REAPER and FACTORY_REVIEW_* are accepted and ignored).
+# Sourced by launch.sh: the factory's own settings that are not secrets and not in the repo.
 # ~/.config/factory/env (FACTORY_ENV_FILE) when it exists: KEY=VALUE lines only (blank lines and # comments allowed), the file mode
 # 0600 and owned by the user, and only the keys below. Nothing in it is evaluated: a line is split at the first = and exported as it
 # is. The whole file is checked before anything is exported. A wrong mode or owner, a line that is not KEY=VALUE, a key that is not
 # listed (a secret, PATH, the port, a program the server would run, a typo) or a symlink refuses the start (exit 78): a setting that is silently ignored is worse than
 # a launch that says why it will not run. Secrets stay in .env.tpl. Read at launch only: an edit takes a LaunchAgent restart.
+#
+# Never listed, on purpose: the tokens and DATABASE_URL (secrets), PORT and FACTORY_VERSION (the plist's), HC_BIN (the plist's) and
+# FACTORY_TEST_MODE / FACTORY_TEST_CLOCK_OFFSET_MS (scenarios only; the server refuses them outside a test). The programs and paths the
+# server runs and reads (FACTORY_CLAUDE_BIN, FACTORY_PRETRUST_BIN, FACTORY_CLAUDE_ACCOUNT_BIN, FACTORY_SYSCTL_BIN, FACTORY_AGW_BIN, the hook
+# socket and spool, the roles and accounts files, the archive) are listed because the reports of the rewrite name them; the file is the
+# user's own, mode 0600, like the plist. A unit test (scripts/test/env-file.test.ts) fails when the server reads a setting that is on
+# neither list.
+#
+# The old core's keys stay listed though the new core no longer reads them (FACTORY_PROBE_HOSTS, FACTORY_REAPER, FACTORY_REVIEW_*,
+# FACTORY_VISIBLE_ROOTS, FACTORY_DIGEST_*, FACTORY_ALERT_*, FACTORY_ASK_JUDGE, FACTORY_NOTIFY_TARGET, FACTORY_ALERTS_TOPIC,
+# FACTORY_CHECKPOINT_PASS_MS): an existing env file that sets them must still launch, and so must a rollback onto the old core.
 
-# FACTORY_PROBE_HOSTS, FACTORY_REAPER, FACTORY_REVIEW_SESSIONS, FACTORY_REVIEW_DEEP_CAP and FACTORY_REVIEW_IDLE_MS stay listed though the server no longer reads them: an existing env file that sets them must still launch.
-EF_ALLOWED=" FACTORY_PROBE_HOSTS FACTORY_VISIBLE_ROOTS FACTORY_DIGEST_EVERY FACTORY_GITHUB_POLL FACTORY_LAUNCHD_POLL FACTORY_BESZEL_URL FACTORY_BESZEL_POLL FACTORY_INFRA_FILE FACTORY_ALERT_LEADS FACTORY_ASK_JUDGE FACTORY_NOTIFY_TARGET FACTORY_NTFY_URL FACTORY_ALERTS_TOPIC FACTORY_DIGEST_AT FACTORY_DIGEST_TZ FACTORY_ALERT_PAGE_AFTER FACTORY_REAPER FACTORY_REVIEW_SESSIONS FACTORY_REVIEW_DEEP_CAP FACTORY_REVIEW_IDLE_MS FACTORY_LEADS_PER_ACCOUNT FACTORY_LOAD_CEILING FACTORY_SWAPOUT_CEILING_MB FACTORY_SWAP_CEILING_PCT "
+EF_ALLOWED=" \
+  FACTORY_ACCOUNTS_FILE FACTORY_AGW_BIN FACTORY_ALERTS_TOPIC FACTORY_ALERT_LEADS FACTORY_ALERT_PAGE_AFTER FACTORY_ARCHIVE_DIR FACTORY_ASK_JUDGE \
+  FACTORY_BESZEL_POLL FACTORY_BESZEL_URL FACTORY_BLOCKED_CHECKS FACTORY_CHECKPOINT_PASS_MS FACTORY_CHECKPOINT_POLICY_FILE FACTORY_CLAUDE_ACCOUNT_BIN \
+  FACTORY_CLAUDE_BIN FACTORY_CONSOLE_URL FACTORY_DATA_DIR FACTORY_DIGEST_AT FACTORY_DIGEST_EVERY FACTORY_DIGEST_TZ FACTORY_FINGERPRINT_WINDOW_MIN \
+  FACTORY_FORCE_NOTE_MS FACTORY_GITHUB_API_URL FACTORY_GITHUB_POLL FACTORY_GIT_TIMEOUT_MS FACTORY_GRACE_MS FACTORY_HOME_REPO FACTORY_INCIDENT_WINDOW_MIN \
+  FACTORY_INFRA_FILE FACTORY_INTAKE_PROJECTS_FILE FACTORY_LAUNCHD_POLL FACTORY_LEADS_PER_ACCOUNT FACTORY_LOAD_CEILING FACTORY_LOCK_WAIT_MS \
+  FACTORY_LOOP_LEADS_MS FACTORY_LOOP_PLANNING_MS FACTORY_LOOP_SEND_MS FACTORY_LOOP_SETTLE_MS FACTORY_LOOP_STEWARD_MS FACTORY_LOOP_TRIAGE_MS \
+  FACTORY_LOOP_WATCH_MS FACTORY_MEMORY_SAMPLE_MS FACTORY_NOTIFY_TARGET FACTORY_NTFY_TOPIC FACTORY_NTFY_URL FACTORY_PRETRUST_BIN FACTORY_PROBE_HOSTS \
+  FACTORY_REAPER FACTORY_REPO_ROOTS FACTORY_REVIEW_DEEP_CAP FACTORY_REVIEW_IDLE_MS FACTORY_REVIEW_SESSIONS FACTORY_ROLES_FILE FACTORY_SETTLE_POLL \
+  FACTORY_SETTLE_TIMEOUT_MS FACTORY_SLOTS FACTORY_SOCKET FACTORY_SOURCE_ROOT FACTORY_SPOOL_DIR FACTORY_START_BUDGET_MS FACTORY_STEWARD_MIN_STALL_MS \
+  FACTORY_STEWARD_RETRY_MS FACTORY_STREAM_POLL_MS FACTORY_SWAPOUT_CEILING_MB FACTORY_SWAP_CEILING_PCT FACTORY_SYSCTL_BIN FACTORY_TICK_MS \
+  FACTORY_VERIFY_RETRY_MS FACTORY_VERIFY_SETTLE_MS FACTORY_VISIBLE_ROOTS FACTORY_WATCH_WINDOW_MS \
+"
 
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
 load_env_file() {

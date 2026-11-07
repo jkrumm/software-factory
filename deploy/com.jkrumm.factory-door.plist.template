@@ -6,8 +6,9 @@
   <string>com.jkrumm.factory-door</string>
 
   <!-- The factory door: POST /alert/<source> on 127.0.0.1 only. `tailscale serve` publishes the port on the mini's tailnet name
-       and the ACL gives it to tag:homelab and tag:vps. The door holds no factory token and no database credential: it posts to
-       the server's unix socket. Never a Homebrew binary directly (macOS BTM disallows it): the wrapper is the indirection. -->
+       and the ACL gives it to tag:homelab and tag:vps. The door holds one secret, FACTORY_DOOR_TOKEN (.env.door.tpl, through
+       secrets-run), and no database credential: it posts to the server's loopback API. Never a Homebrew binary directly (macOS
+       BTM disallows it): the wrapper is the indirection. -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
