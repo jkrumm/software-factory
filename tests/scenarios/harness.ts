@@ -11,11 +11,12 @@ const CLI = join(ROOT, 'apps', 'cli', 'bin', 'factory.ts')
 const FAKES = join(import.meta.dir, 'fakes')
 const BOOT_TIMEOUT_MS = 20_000
 
-/** The fixed tokens of the four callers: the server in a world knows all of them, the CLI sends one. */
+/** The fixed tokens of the five callers: the server in a world knows all of them, the CLI sends one. */
 export const TOKENS = {
   owner: 'scenario-owner-token-0001',
   agent: 'scenario-agent-token-0002',
   machine: 'scenario-door-token-0003',
+  signal: 'scenario-signal-token-005',
   read: 'scenario-read-token-00004',
 } as const
 export type Caller = keyof typeof TOKENS
@@ -132,6 +133,7 @@ export async function startServer(
       FACTORY_TOKEN: TOKENS.owner,
       FACTORY_AGENT_TOKEN: TOKENS.agent,
       FACTORY_DOOR_TOKEN: TOKENS.machine,
+      FACTORY_SIGNAL_TOKEN: TOKENS.signal,
       FACTORY_READ_TOKEN: TOKENS.read,
       ...(options.clockOffsetMs
         ? { FACTORY_TEST_MODE: '1', FACTORY_TEST_CLOCK_OFFSET_MS: String(options.clockOffsetMs) }

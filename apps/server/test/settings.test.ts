@@ -47,12 +47,14 @@ describe('the tokens', () => {
         ...base,
         FACTORY_AGENT_TOKEN: 'agent-token-0123456789',
         FACTORY_DOOR_TOKEN: 'door-token-0123456789',
+        FACTORY_SIGNAL_TOKEN: 'signal-token-0123456789',
         FACTORY_READ_TOKEN: 'read-token-0123456789',
       }).tokens,
     ).toEqual({
       owner: 'owner-token-0123456789',
       agent: 'agent-token-0123456789',
       machine: 'door-token-0123456789',
+      signal: 'signal-token-0123456789',
       read: 'read-token-0123456789',
     })
   })
@@ -62,6 +64,9 @@ describe('the tokens', () => {
       /FACTORY_TOKEN and FACTORY_READ_TOKEN/,
     )
     const same = 'shared-token-0123456789'
+    expect(() => loadSettings({ ...base, FACTORY_SIGNAL_TOKEN: base.FACTORY_TOKEN })).toThrow(
+      /FACTORY_TOKEN and FACTORY_SIGNAL_TOKEN/,
+    )
     expect(() => loadSettings({ ...base, FACTORY_AGENT_TOKEN: same, FACTORY_DOOR_TOKEN: same })).toThrow(
       /FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN/,
     )

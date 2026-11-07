@@ -23,6 +23,7 @@ export class CannotExecute extends Error {
 /** What the factory holds is not for a child, which would pass its environment on. */
 const SECRET_ENV = [
   'FACTORY_TOKEN',
+  'FACTORY_SIGNAL_TOKEN',
   'FACTORY_READ_TOKEN',
   'FACTORY_DB_PASSWORD',
   'DATABASE_URL',

@@ -26,7 +26,14 @@ export type Run = (
 ) => Promise<ProcessResult>
 
 /** The server's own secrets stay out of every child it starts. */
-const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_READ_TOKEN', 'DATABASE_URL', 'FACTORY_GITHUB_TOKEN', 'NTFY_TOKEN']
+const SECRET_ENV = [
+  'FACTORY_TOKEN',
+  'FACTORY_SIGNAL_TOKEN',
+  'FACTORY_READ_TOKEN',
+  'DATABASE_URL',
+  'FACTORY_GITHUB_TOKEN',
+  'NTFY_TOKEN',
+]
 
 export function childEnv(extra: Record<string, string> = {}): Record<string, string> {
   const env: Record<string, string | undefined> = { ...process.env, ...extra }

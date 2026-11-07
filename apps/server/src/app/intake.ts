@@ -53,8 +53,11 @@ export type IntakeRefusal = {
   detail: string
 }
 
-/** Who is calling, as the token says (`api/policy.ts`); only the owner and an agent may put a signal in. */
-export type RequestCaller = 'owner' | 'agent' | 'machine' | 'read'
+/** Who is calling, as the token says (`api/policy.ts`); only the owner, an agent and the signal token may put a signal in. */
+export type RequestCaller = 'owner' | 'agent' | 'machine' | 'signal' | 'read'
+
+/** The one source the signal token files as: Hermes, carrying the owner's words. */
+export const SIGNAL_SOURCE = 'owner:hermes'
 export type IntakeError = IssueWriteError | PortError | IntakeRefusal
 
 export interface IntakeSettings {
@@ -134,12 +137,16 @@ const TRUST_RANK = { outside: 0, agent: 1, owner: 2 } as const
 /**
  * The envelope for what a person or an agent put in. The caller's token decides the trust: the owner's is `owner`, an
  * agent's is `agent`. The claimed `from` is a source label that may lower the trust (an agent's token under
- * `feedback:<app>` is `outside`) and never raises it: `owner*` under an agent's token is refused.
+ * `feedback:<app>` is `outside`) and never raises it: `owner*` under an agent's token is refused. The signal token is
+ * the owner's voice through Hermes and nothing else: its `from` is exactly `owner:hermes` (trust `owner`), any other is refused.
  */
 export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): Result<Signal, IntakeRefusal> {
+  if (caller === 'signal' && body.from !== SIGNAL_SOURCE) {
+    return refuse('trust_refused', `the signal token may file only as ${SIGNAL_SOURCE}, not as ${body.from}`)
+  }
   const [kind, who] = body.from.split(':') as [string, string | undefined]
   const claimed = kind === 'owner' ? 'owner' : kind === 'agent' ? 'agent' : 'outside'
-  const ceiling = caller === 'owner' ? 'owner' : caller === 'agent' ? 'agent' : 'outside'
+  const ceiling = caller === 'owner' || caller === 'signal' ? 'owner' : caller === 'agent' ? 'agent' : 'outside'
   if (TRUST_RANK[claimed] > TRUST_RANK[ceiling]) {
     return refuse('trust_refused', `the ${caller} token may not file a signal as ${body.from}`)
   }

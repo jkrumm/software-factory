@@ -12,6 +12,7 @@ const Env = z.object({
   FACTORY_TOKEN: token,
   FACTORY_AGENT_TOKEN: token.optional(),
   FACTORY_DOOR_TOKEN: token.optional(),
+  FACTORY_SIGNAL_TOKEN: token.optional(),
   FACTORY_READ_TOKEN: token.optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (from secrets-run)'),
   PORT: z.coerce.number().int().min(1).max(65_535),
@@ -31,6 +32,7 @@ export interface Tokens {
   owner: string
   agent?: string
   machine?: string
+  signal?: string
   read?: string
 }
 
@@ -71,7 +73,13 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     throw new Error('FACTORY_TEST_CLOCK_OFFSET_MS is honored only together with FACTORY_TEST_MODE=1: refusing to start')
   }
   const present: [string, string][] = []
-  for (const key of ['FACTORY_TOKEN', 'FACTORY_AGENT_TOKEN', 'FACTORY_DOOR_TOKEN', 'FACTORY_READ_TOKEN'] as const) {
+  for (const key of [
+    'FACTORY_TOKEN',
+    'FACTORY_AGENT_TOKEN',
+    'FACTORY_DOOR_TOKEN',
+    'FACTORY_SIGNAL_TOKEN',
+    'FACTORY_READ_TOKEN',
+  ] as const) {
     const value = data[key]
     if (value !== undefined) present.push([key, value])
   }
@@ -84,6 +92,7 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
       owner: data.FACTORY_TOKEN,
       ...(data.FACTORY_AGENT_TOKEN ? { agent: data.FACTORY_AGENT_TOKEN } : {}),
       ...(data.FACTORY_DOOR_TOKEN ? { machine: data.FACTORY_DOOR_TOKEN } : {}),
+      ...(data.FACTORY_SIGNAL_TOKEN ? { signal: data.FACTORY_SIGNAL_TOKEN } : {}),
       ...(data.FACTORY_READ_TOKEN ? { read: data.FACTORY_READ_TOKEN } : {}),
     },
     databaseUrl: parsed.data.DATABASE_URL,
