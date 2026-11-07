@@ -58,8 +58,9 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: window 1: W13 drill done in fact (Issue 298, lead on me, pushed, closed done); real Issue 299 filed on agent-workflows as an owner signal.
 - 2026-11-07 17:50: **window 1 closed by the way back**; old core live (089b35c, queue run, software-factory drained); new core's data kept in `factory_rewrite`. Next: merge `rw/9b-shutdown`, runbook stop fallback, drill fix, Issue 297, then window 2.
 - 2026-11-07: 9b (shutdown) merged; 9c (before window 2: signal caller, drill, runbook stops, door after rollback) running in t1fq; FACTORY_SIGNAL_TOKEN dialog pending in the human queue.
-- 2026-11-07 18:50 **WINDOW 2 LIVE** (overnight): new core 17db9f1, queue `run` for every own repo, software-factory and
+- 2026-11-07 18:50 **WINDOW 2 LIVE** (overnight): new core b2367ff (after two fix deploys), queue `run` for every own repo, software-factory and
   the work repos drained; old core's release pinned in `data/keep-releases`. Way back: B1 to B8, and **before B6 write
   089b35c50d5fc5160bc32072d38260b79b882b83 into `data/previous-sha`** (a redeploy moves it to the last new-core release).
   The CLI and the import need the optional signal ref left out until the token is seeded (`/tmp/rw-fx.env.tpl`; import.sh
   does it itself now).
+- 2026-11-07 19:00: window 2 verified live (`make verify` all checks passed); window watch cron at :07 and :37 (session-only; re-arm after a restart).
