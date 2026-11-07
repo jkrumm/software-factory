@@ -38,6 +38,15 @@ const Project = z.strictObject({
   heal: z.array(Heal).default([]),
 })
 
+/** A project hears the automatic sources its `signals:` configure: configuring `github` or `launchd` is listing it. */
+function withSources(project: z.output<typeof Project>): RepoSignals {
+  const sources = new Set(project.sources)
+  if (project.github) sources.add('github')
+  if (project.github?.checks) sources.add('checks')
+  if (project.launchd.length > 0) sources.add('launchd')
+  return { ...project, sources: [...sources] }
+}
+
 const File = z.strictObject({ projects: z.array(Project) })
 
 /**
@@ -48,7 +57,7 @@ const File = z.strictObject({ projects: z.array(Project) })
 export function fileProjectSignals(path: string): ProjectSignals {
   const read = async () => {
     try {
-      return ok(File.parse(JSON.parse(await readFile(path, 'utf8'))).projects as RepoSignals[])
+      return ok(File.parse(JSON.parse(await readFile(path, 'utf8'))).projects.map(withSources))
     } catch (error) {
       return err(portError('unreadable', `${path}: ${error instanceof Error ? error.message : String(error)}`))
     }

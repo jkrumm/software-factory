@@ -1,9 +1,12 @@
 import { connect, ping } from './adapters/postgres/connection.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
+import { postgresIntakeStore } from './adapters/intake/store.ts'
+import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { createApp } from './api/app.ts'
+import { composeIntake } from './compose-intake.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { systemClock } from './kernel/clock.ts'
 import { systemIds } from './kernel/ids.ts'
@@ -37,10 +40,12 @@ async function main(): Promise<void> {
   if (applied.length) console.log(`migrated: ${applied.join(', ')}`)
 
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
-  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx) }))
+  const uow = postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx), intake: postgresIntakeStore(tx) }))
+  const intake = await composeIntake({ sql, uow, env: loadIntakeEnv(process.env), clock: systemClock, ids: systemIds })
   const writes = { uow, clock: systemClock, ids: systemIds }
 
   const app = createApp({
+    intake: intake.api,
     health: {
       read: async () =>
         healthOf({ version: settings.version, databaseFailure: await ping(sql), tickAt: null, queueMovedAt: null }),
@@ -49,6 +54,7 @@ async function main(): Promise<void> {
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
   }).listen({ hostname: HOSTNAME, port: settings.port })
+  intake.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   let stopping = false
@@ -57,6 +63,7 @@ async function main(): Promise<void> {
     stopping = true
     console.log(`${signal}: stopping`)
     await app.stop()
+    await intake.stop()
     await lock.release()
     await sql.close()
     process.exit(0)

@@ -136,7 +136,10 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
         const reachesStore = /^adapters\/(postgres\/|intake\/store)/.test(resolved)
         const otherDomain = there?.layer === 'domains' && there.domain !== 'intake'
         if (internal && (there?.layer === 'app' || there?.layer === 'read' || otherDomain || reachesStore)) {
-          flag('an intake source reaches the server only through the IntakeSink: no app, read, store or other domain', specifier)
+          flag(
+            'an intake source reaches the server only through the IntakeSink: no app, read, store or other domain',
+            specifier,
+          )
         }
         if (!internal && specifier === 'bun') flag('an intake source holds no database client', specifier)
       }

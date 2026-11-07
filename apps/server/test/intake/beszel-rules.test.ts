@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { evaluate, type Finding, type RuleName, type Sample, type SystemView } from '../../src/domains/intake/beszel-rules.ts'
+import {
+  evaluate,
+  type Finding,
+  type RuleName,
+  type Sample,
+  type SystemView,
+} from '../../src/domains/intake/beszel-rules.ts'
 import { DEFAULT_THRESHOLDS } from '../../src/domains/intake/infra.ts'
 
 const MIN = 60_000

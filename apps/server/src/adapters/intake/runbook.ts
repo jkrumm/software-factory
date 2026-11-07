@@ -19,7 +19,8 @@ export function makeRestartRunbook(options: { sourceRoot: string; run?: RunProce
       const probe = await run(['make', '-C', dir, '-n', 'restart'], PROBE_TIMEOUT_MS)
       if (probe.exit !== 0) return ok({ ran: false, reason: 'no restart target' })
       const done = await run(['sh', '-c', 'exec make -C "$1" restart 2>&1', 'sh', dir], RUNBOOK_TIMEOUT_MS)
-      if (done.exit === null) return ok({ ran: true, exit: -1, tail: `did not finish in ${RUNBOOK_TIMEOUT_MS / 1000} s` })
+      if (done.exit === null)
+        return ok({ ran: true, exit: -1, tail: `did not finish in ${RUNBOOK_TIMEOUT_MS / 1000} s` })
       return ok({ ran: true, exit: done.exit, tail: done.stdout.trim().slice(-500) })
     },
   }

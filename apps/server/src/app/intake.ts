@@ -1,4 +1,13 @@
-import type { AlertRequest, DoorReport, PromoteRequest, Signal, SignalRequest } from '@software-factory/contract'
+import {
+  type AlertRequest,
+  cleanText,
+  type DoorReport,
+  MAX_TITLE_CHARS,
+  type PromoteRequest,
+  type Signal,
+  type SignalRequest,
+  storable,
+} from '@software-factory/contract'
 import type { Alert, HealRule, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
 import type {
   IntakeSink,
@@ -27,8 +36,7 @@ import {
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
-import type { Clock } from '../kernel/clock.ts'
-import type { IdSource, IssueId } from '../kernel/ids.ts'
+import type { IssueId } from '../kernel/ids.ts'
 import { idOf } from '../kernel/ids.ts'
 import { key as keyOf, type Key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
@@ -101,7 +109,9 @@ const eventKeyOf = (received: Received): Key | null =>
 
 /** The question a lead is asked is the signal's words; an owner's are the owner's, everyone else's are data. */
 const noteText = (received: Received, lead?: string): string =>
-  received.signal.trust === 'owner' ? [lead ?? received.signal.title, received.signal.text].filter(Boolean).join('\n') : noteOf(received, lead)
+  received.signal.trust === 'owner'
+    ? [lead ?? received.signal.title, received.signal.text].filter(Boolean).join('\n')
+    : noteOf(received, lead)
 
 const actorOf = (received: Received): 'owner' | 'factory' => (received.signal.trust === 'owner' ? 'owner' : 'factory')
 
@@ -123,9 +133,9 @@ export function envelopeOfRequest(body: SignalRequest): Signal {
     origin: originOf(body.from),
     trust,
     repo: repo ?? null,
-    fingerprint: fingerprintOf(repo, body.title),
-    title: body.title,
-    text: body.text,
+    fingerprint: fingerprintOf(repo, cleanText(body.title)),
+    title: cleanText(body.title).slice(0, MAX_TITLE_CHARS) || 'untitled',
+    text: cleanText(body.text),
     link: body.link ?? null,
     madeBy: null,
   }
@@ -142,7 +152,9 @@ const GROUP_MESSAGE = /child monitors? (down|up)/i
 /** A group monitor's alert (Kuma: 'Child monitors down') names no thing of its own: the children are the alerts. */
 function isGroupAlert(input: AlertRequest): boolean {
   const facts = input.facts as { msg?: unknown; heartbeat?: { msg?: unknown } } | null
-  return [input.title, facts?.msg, facts?.heartbeat?.msg].some((text) => typeof text === 'string' && GROUP_MESSAGE.test(text))
+  return [input.title, facts?.msg, facts?.heartbeat?.msg].some(
+    (text) => typeof text === 'string' && GROUP_MESSAGE.test(text),
+  )
 }
 
 /** The suffix Kuma monitors carry for a push or door check of a service. */
@@ -172,7 +184,14 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- stateful: a monitor that goes down and comes up ----
 
-  async function amendOpen(s: Stores, r: Received, alert: Alert, issue: Issue, subjectId: number, groupKey: string | null): Out<Triaged> {
+  async function amendOpen(
+    s: Stores,
+    r: Received,
+    alert: Alert,
+    issue: Issue,
+    subjectId: number,
+    groupKey: string | null,
+  ): Out<Triaged> {
     const now = clock.now()
     const evKey = eventKeyOf(r) as Key
     let detail: Triaged['detail'] = 'repeat'
@@ -189,7 +208,13 @@ export function createIntake(deps: IntakeDeps) {
       if (recorded) detail = 'regression'
     }
     if (!recorded) {
-      const noted = await note(s, issue.id, keyOf('noted', 'signal', r.signal.source, alert.subject, alert.event), r, 'down again')
+      const noted = await note(
+        s,
+        issue.id,
+        keyOf('noted', 'signal', r.signal.source, alert.subject, alert.event),
+        r,
+        'down again',
+      )
       if (!noted.ok) return noted
     }
     await s.intake.touchSubject(subjectId, { at: now, upAt: null, repeat: true })
@@ -200,7 +225,13 @@ export function createIntake(deps: IntakeDeps) {
 
   async function join(s: Stores, r: Received, alert: Alert, issue: Issue, groupKey: string): Out<Triaged> {
     const now = clock.now()
-    const noted = await note(s, issue.id, keyOf('noted', 'signal', r.signal.source, alert.subject, alert.event), r, 'joins this incident')
+    const noted = await note(
+      s,
+      issue.id,
+      keyOf('noted', 'signal', r.signal.source, alert.subject, alert.event),
+      r,
+      'joins this incident',
+    )
     if (!noted.ok) return noted
     await s.intake.insertSubject({
       source: r.signal.source,
@@ -239,7 +270,13 @@ export function createIntake(deps: IntakeDeps) {
     if (!filed.ok) return filed
     const issue = filed.value.issue
     if (filed.value.result === 'replayed') return ok(triaged('filed', 'replayed', issue.id))
-    const stored = await store(s, r, options.stateKey === undefined ? eventKeyOf(r) : options.stateKey, 'filed', issue.id)
+    const stored = await store(
+      s,
+      r,
+      options.stateKey === undefined ? eventKeyOf(r) : options.stateKey,
+      'filed',
+      issue.id,
+    )
     if (r.alert) {
       await s.intake.insertSubject({
         source: signal.source,
@@ -304,7 +341,15 @@ export function createIntake(deps: IntakeDeps) {
           results: [],
         })
       }
-      return ok(triaged('held', 'settling', null, null, `waiting ${Math.round(rule.graceMs / 1000)} s for ${signal.source} to come back`))
+      return ok(
+        triaged(
+          'held',
+          'settling',
+          null,
+          null,
+          `waiting ${Math.round(rule.graceMs / 1000)} s for ${signal.source} to come back`,
+        ),
+      )
     }
 
     const withSettle: Received =
@@ -343,7 +388,13 @@ export function createIntake(deps: IntakeDeps) {
           return ok(triaged('amended', 'healed', issue.id, stored))
         }
       }
-      const noted = await note(s, issue.id, keyOf('noted', 'signal', signal.source, alert.subject, alert.event), r, 'up again')
+      const noted = await note(
+        s,
+        issue.id,
+        keyOf('noted', 'signal', signal.source, alert.subject, alert.event),
+        r,
+        'up again',
+      )
       if (!noted.ok) return noted
       const stored = await store(s, r, evKey, 'amended', issue.id)
       return ok(triaged('amended', 'matched', issue.id, stored))
@@ -362,7 +413,12 @@ export function createIntake(deps: IntakeDeps) {
   // ---- stateless: a GitHub issue, a person's request ----
 
   /** A signal whose fingerprint an Issue still carries: not closed, or filed in the window. */
-  async function repeatIn(s: Stores, r: Received, noteKey: Key, stateKey: Key | null): Promise<Result<Triaged, IntakeError> | null> {
+  async function repeatIn(
+    s: Stores,
+    r: Received,
+    noteKey: Key,
+    stateKey: Key | null,
+  ): Promise<Result<Triaged, IntakeError> | null> {
     const now = clock.now()
     const match = await s.intake.latestByFingerprint(r.signal.source, r.signal.fingerprint)
     if (!match) return null
@@ -383,7 +439,8 @@ export function createIntake(deps: IntakeDeps) {
     const prior = await s.intake.signalByKey(evKey)
     if (prior) return ok(replayedOf(prior))
     // One GitHub issue is one subject however often it is labelled: seen once, it is not filed again.
-    if (await s.intake.latestSubject(signal.source, alert.subject)) return ok(dropped('replayed', 'this subject was filed before'))
+    if (await s.intake.latestSubject(signal.source, alert.subject))
+      return ok(dropped('replayed', 'this subject was filed before'))
     const repeat = await repeatIn(s, r, keyOf('noted', 'signal', signal.source, alert.subject), evKey)
     if (repeat) return repeat
     const facts = alert.facts as { writeback?: unknown; admitted?: unknown } | null
@@ -395,7 +452,7 @@ export function createIntake(deps: IntakeDeps) {
     if (filed.ok && filed.value.outcome === 'filed' && filed.value.detail === 'new') {
       // A held copy of the same subject became work by another road (its label): it is promoted.
       const held = await s.intake.signalByKey(keyOf('held', signal.source, alert.subject))
-      if (held && held.state === 'held') await s.intake.setSignal(held.id, { state: 'promoted', issueId: filed.value.issue })
+      if (held?.state === 'held') await s.intake.setSignal(held.id, { state: 'promoted', issueId: filed.value.issue })
     }
     return filed
   }
@@ -439,7 +496,9 @@ export function createIntake(deps: IntakeDeps) {
   // ---- quarantine ----
 
   async function hold(s: Stores, r: Received): Out<Triaged> {
-    const heldKey = r.alert ? keyOf('held', r.signal.source, r.alert.subject) : keyOf('held', r.signal.source, r.signal.fingerprint)
+    const heldKey = r.alert
+      ? keyOf('held', r.signal.source, r.alert.subject)
+      : keyOf('held', r.signal.source, r.signal.fingerprint)
     const existing = await s.intake.signalByKey(heldKey)
     if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
     const id = await store(s, r, heldKey, 'held', null)
@@ -473,9 +532,7 @@ export function createIntake(deps: IntakeDeps) {
       const name = `subject:${signal.source}:${alert.subject}`
       return uow.run(async (s) => {
         await s.intake.lock(name)
-        return alert.status === 'down'
-          ? downIn(s, r, alert, { info, topology: topology.value })
-          : upIn(s, r, alert)
+        return alert.status === 'down' ? downIn(s, r, alert, { info, topology: topology.value }) : upIn(s, r, alert)
       })
     }
     if (alert) {
@@ -558,7 +615,15 @@ export function createIntake(deps: IntakeDeps) {
   }
 
   /** The door's alert: the route says which repo, the payload never does. */
-  async function alert(input: AlertRequest): Out<Triaged> {
+  async function alert(raw: AlertRequest): Out<Triaged> {
+    // Someone else's text, as the factory keeps it: control characters out, what Postgres cannot store replaced.
+    const input: AlertRequest = {
+      ...raw,
+      monitor: cleanText(raw.monitor) || raw.source,
+      event: cleanText(raw.event) || 'event',
+      title: cleanText(raw.title).slice(0, MAX_TITLE_CHARS) || raw.source,
+      facts: storable(raw.facts),
+    }
     const routed = await uow.run(async (s) => {
       const route = await s.intake.routeFor(input.source, input.monitor)
       if (!route) {
@@ -619,7 +684,11 @@ export function createIntake(deps: IntakeDeps) {
   const routes = () =>
     uow.run(async (s) => ok({ routes: await s.intake.routes(), unrouted: await s.intake.unrouted(200) }))
 
-  async function setRoute(input: { source: string; monitor: string; repo: string }): Out<Awaited<ReturnType<IntakeStore['setRoute']>>> {
+  async function setRoute(input: {
+    source: string
+    monitor: string
+    repo: string
+  }): Out<Awaited<ReturnType<IntakeStore['setRoute']>>> {
     const found = await deps.projects.find(input.repo)
     if (!found.ok) return found
     if (!found.value) return refuse('unknown_project', `${input.repo} is not a project the factory knows`)
@@ -650,7 +719,10 @@ export function createIntake(deps: IntakeDeps) {
       const row = await s.intake.claimPending(source, subject, now)
       if (!row) return ok(null)
       if (row.rule.runbook && row.attempts < row.rule.max) {
-        await s.intake.leasePending(source, subject, { attempts: row.attempts + 1, dueAt: new Date(now.getTime() + RUNBOOK_LEASE_MS) })
+        await s.intake.leasePending(source, subject, {
+          attempts: row.attempts + 1,
+          dueAt: new Date(now.getTime() + RUNBOOK_LEASE_MS),
+        })
         return ok({ row })
       }
       const reason = !row.rule.runbook ? 'no runbook' : 'attempts spent'
@@ -695,7 +767,9 @@ export function createIntake(deps: IntakeDeps) {
     if (base !== monitor && base) {
       const known = await uow.run(async (s) => ok(await s.intake.routes()))
       const hit = known.ok
-        ? known.value.find((route) => route.source === source && route.monitor.toLowerCase().startsWith(`${base.toLowerCase()} - `))
+        ? known.value.find(
+            (route) => route.source === source && route.monitor.toLowerCase().startsWith(`${base.toLowerCase()} - `),
+          )
         : undefined
       if (hit) return { repo: hit.repo, mapped: true }
     }
@@ -707,7 +781,9 @@ export function createIntake(deps: IntakeDeps) {
     'No door route exists for this monitor, so its alerts reach no repo. Decide which repo it belongs to and add the route with `factory door route-set`; fix the monitor if it is down for a reason of its own.'
 
   async function fileUnrouted(topology: Topology): Promise<Result<void, IntakeError>> {
-    const due = await uow.run(async (s) => ok(await s.intake.dueUnrouted(clock.now(), settings.unroutedGraceMs, UNROUTED_BATCH)))
+    const due = await uow.run(async (s) =>
+      ok(await s.intake.dueUnrouted(clock.now(), settings.unroutedGraceMs, UNROUTED_BATCH)),
+    )
     if (!due.ok) return due
     for (const row of due.value) {
       const place = await placeFor(row.source, row.monitor)
@@ -725,7 +801,12 @@ export function createIntake(deps: IntakeDeps) {
           link: null,
           madeBy: null,
         },
-        alert: { subject: row.monitor, event: row.lastEvent, status: 'down', facts: { unrouted: true, downSince: row.downSince?.toISOString() ?? null } },
+        alert: {
+          subject: row.monitor,
+          event: row.lastEvent,
+          status: 'down',
+          facts: { unrouted: true, downSince: row.downSince?.toISOString() ?? null },
+        },
       }
       const found = await deps.projects.find(place.repo)
       if (!found.ok || !found.value || found.value.work) continue
@@ -733,7 +814,8 @@ export function createIntake(deps: IntakeDeps) {
       const out = await uow.run(async (s) => {
         await s.intake.lock(`subject:${row.source}:${row.monitor}`)
         const filed = await downIn(s, received, received.alert as Alert, { info, topology })
-        if (filed.ok && filed.value.issue) await s.intake.markUnroutedFiled(row.source, row.monitor, row.lastEvent, filed.value.issue, clock.now())
+        if (filed.ok && filed.value.issue)
+          await s.intake.markUnroutedFiled(row.source, row.monitor, row.lastEvent, filed.value.issue, clock.now())
         return filed
       })
       if (!out.ok) return out

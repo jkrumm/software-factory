@@ -143,7 +143,15 @@ export interface IntakeStore {
   removeRoute(source: string, monitor: string): Promise<DoorRouteRow | null>
   countQuiet(source: string, monitor: string, event: string, now: Date): Promise<boolean>
 
-  noteUnrouted(row: { source: string; monitor: string; title: string; event: string; status: 'down' | 'up'; group: boolean; now: Date }): Promise<void>
+  noteUnrouted(row: {
+    source: string
+    monitor: string
+    title: string
+    event: string
+    status: 'down' | 'up'
+    group: boolean
+    now: Date
+  }): Promise<void>
   unrouted(limit: number): Promise<UnroutedRow[]>
   dueUnrouted(now: Date, graceMs: number, limit: number): Promise<UnroutedRow[]>
   markUnroutedFiled(source: string, monitor: string, event: string, issueId: IssueId, now: Date): Promise<void>

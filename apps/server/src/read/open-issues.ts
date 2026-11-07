@@ -18,7 +18,9 @@ export function postgresOpenIssues(sql: SQL): OpenIssues {
           JOIN factory.issue_events e ON e.issue_id = i.id AND e.kind = 'filed' AND e.version = 1
           WHERE i.repo = ${repo} AND i.state <> 'closed'
           ORDER BY i.id`
-        return ok(rows.map((row): OpenIssue => ({ id: row.id as IssueId, title: row.title, kind: row.kind, state: row.state })))
+        return ok(
+          rows.map((row): OpenIssue => ({ id: row.id as IssueId, title: row.title, kind: row.kind, state: row.state })),
+        )
       } catch (error) {
         return err(portError('gone', error instanceof Error ? error.message : String(error)))
       }

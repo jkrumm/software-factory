@@ -34,7 +34,9 @@ export function hears(info: RepoSignals, source: string): boolean {
   return DOOR_SOURCES.includes(source) || source === 'beszel' || info.sources.includes(source)
 }
 
-export type Gate = { pass: true } | { pass: false; detail: 'work_repo' | 'no_project' | 'not_listened' | 'no_repo'; reason: string }
+export type Gate =
+  | { pass: true }
+  | { pass: false; detail: 'work_repo' | 'no_project' | 'not_listened' | 'no_repo'; reason: string }
 
 /**
  * Who may put work in which repo (NL18): a work repo hears the owner only, an unknown repo hears no one, and a project
@@ -42,12 +44,17 @@ export type Gate = { pass: true } | { pass: false; detail: 'work_repo' | 'no_pro
  */
 export function gate(signal: Signal, info: RepoSignals | null): Gate {
   if (signal.repo === null) return { pass: false, detail: 'no_repo', reason: 'the signal names no repo' }
-  if (info === null) return { pass: false, detail: 'no_project', reason: `${signal.repo} is not a project the factory knows` }
+  if (info === null)
+    return { pass: false, detail: 'no_project', reason: `${signal.repo} is not a project the factory knows` }
   if (info.work && signal.trust !== 'owner') {
     return { pass: false, detail: 'work_repo', reason: `${signal.repo} is a work repo: it hears the owner only` }
   }
   if (signal.trust === 'machine' && !hears(info, signal.source)) {
-    return { pass: false, detail: 'not_listened', reason: `${signal.repo} does not list ${signal.source} under signals` }
+    return {
+      pass: false,
+      detail: 'not_listened',
+      reason: `${signal.repo} does not list ${signal.source} under signals`,
+    }
   }
   return { pass: true }
 }
@@ -77,10 +84,7 @@ export const MATCH_AT = 0.6
 /** Between this and `MATCH_AT` a person would have to look: the triage workflow does. */
 export const UNSURE_AT = 0.3
 
-export type Match =
-  | { kind: 'match'; issue: OpenIssue }
-  | { kind: 'unsure'; candidates: OpenIssue[] }
-  | { kind: 'none' }
+export type Match = { kind: 'match'; issue: OpenIssue } | { kind: 'unsure'; candidates: OpenIssue[] } | { kind: 'none' }
 
 /** Deterministic amend-or-new against the open Issues of the repo: one clear match, nothing near, or unsure. */
 export function matchOpen(title: string, open: readonly OpenIssue[]): Match {
@@ -103,7 +107,10 @@ export function fingerprintOf(repo: string | null, title: string): string {
     .replace(/[\p{N}\p{P}\p{S}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return new Bun.CryptoHasher('sha256').update(`${repo ?? ''}\n${normalized}`).digest('hex').slice(0, 16)
+  return new Bun.CryptoHasher('sha256')
+    .update(`${repo ?? ''}\n${normalized}`)
+    .digest('hex')
+    .slice(0, 16)
 }
 
 /** What the lead reads of a signal: the title, then its text. Outside text is fenced as data wherever it is shown. */

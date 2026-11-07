@@ -33,7 +33,10 @@ const RULES: { rule: string; failing: Record<string, string>; passing: Record<st
   {
     rule: 'an intake source reaches the server only through the IntakeSink: no app, read, store or other domain',
     failing: { 'adapters/intake/beszel.ts': "import { postgresIntakeStore } from './store.ts'\n" },
-    passing: { 'adapters/intake/beszel.ts': "import { runProcess } from './process.ts'\n", 'adapters/intake/process.ts': '' },
+    passing: {
+      'adapters/intake/beszel.ts': "import { runProcess } from './process.ts'\n",
+      'adapters/intake/process.ts': '',
+    },
   },
   {
     rule: 'an intake source holds no database client',

@@ -246,7 +246,8 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
     },
 
     async pendingOf(source, subject) {
-      const [row]: Row[] = await tx`SELECT * FROM factory.intake_pending WHERE source = ${source} AND subject = ${subject}`
+      const [row]: Row[] =
+        await tx`SELECT * FROM factory.intake_pending WHERE source = ${source} AND subject = ${subject}`
       return row ? pendingOf(row) : null
     },
 
@@ -382,16 +383,14 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
 
     async doorSources() {
       const rows: Row[] = await tx`SELECT * FROM factory.intake_door_sources ORDER BY source`
-      return rows.map(
-        (row): DoorSourceRow => ({
-          source: text(row.source),
-          firstSeen: date(row.first_seen),
-          lastAccepted: dateOrNull(row.last_accepted),
-          refused: int(row.refused),
-          refusedSince: dateOrNull(row.refused_since),
-          lastRefused: dateOrNull(row.last_refused),
-        }),
-      )
+      return rows.map((row): DoorSourceRow => ({
+        source: text(row.source),
+        firstSeen: date(row.first_seen),
+        lastAccepted: dateOrNull(row.last_accepted),
+        refused: int(row.refused),
+        refusedSince: dateOrNull(row.refused_since),
+        lastRefused: dateOrNull(row.last_refused),
+      }))
     },
 
     async doorStarted(sources, now) {
@@ -424,14 +423,12 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
         SELECT s.issue_id, s.source, s.subject, s.admitted FROM factory.intake_subjects s
         WHERE s.writeback AND NOT EXISTS (SELECT 1 FROM factory.intake_writebacks w WHERE w.issue_id = s.issue_id)
         ORDER BY s.id LIMIT ${limit}`
-      return rows.map(
-        (row): WritebackRow => ({
-          issueId: text(row.issue_id) as IssueId,
-          source: text(row.source),
-          subject: text(row.subject),
-          admitted: textOrNull(row.admitted),
-        }),
-      )
+      return rows.map((row): WritebackRow => ({
+        issueId: text(row.issue_id) as IssueId,
+        source: text(row.source),
+        subject: text(row.subject),
+        admitted: textOrNull(row.admitted),
+      }))
     },
 
     async recordWriteback(issueId, result, now) {

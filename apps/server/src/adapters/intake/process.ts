@@ -5,7 +5,11 @@ export interface ProcessResult {
 }
 
 /** Runs a command with a process timeout (a helper's, not an agent's) and returns its output; never throws for a failed start. */
-export type RunProcess = (command: readonly string[], timeoutMs: number, env?: Record<string, string>) => Promise<ProcessResult>
+export type RunProcess = (
+  command: readonly string[],
+  timeoutMs: number,
+  env?: Record<string, string>,
+) => Promise<ProcessResult>
 
 /** The environment a helper gets: nothing of the server's secrets, a PATH and a HOME. */
 export function helperEnv(extra: Record<string, string> = {}): Record<string, string> {

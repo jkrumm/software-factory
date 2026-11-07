@@ -1,5 +1,6 @@
 import {
   AlertRequest,
+  cleanText,
   DoorReport,
   DoorReportAck,
   DoorRoute,
@@ -20,7 +21,10 @@ import type { DoorRouteRow, SignalRow } from '../domains/intake/ports.ts'
 import { type Result } from '../kernel/result.ts'
 
 /** The use cases the routes call, bound in `main.ts`. */
-export type IntakeApi = Pick<Intake, 'file' | 'alert' | 'promote' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'>
+export type IntakeApi = Pick<
+  Intake,
+  'file' | 'alert' | 'promote' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'
+>
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
 
@@ -80,7 +84,8 @@ const RESPONSES = { 200: SignalAck, 404: ErrorBody, 409: ErrorBody, 422: ErrorBo
 
 /** Used when the app is built without intake (the OpenAPI document, tests of other routes): every call is a 503. */
 export const unwiredIntake: IntakeApi = (() => {
-  const unavailable = () => Promise.resolve({ ok: false as const, error: { kind: 'gone' as const, detail: 'intake is not wired' } })
+  const unavailable = () =>
+    Promise.resolve({ ok: false as const, error: { kind: 'gone' as const, detail: 'intake is not wired' } })
   return {
     file: unavailable,
     alert: unavailable,
@@ -117,19 +122,18 @@ export const intakeRoutes = (api: IntakeApi) =>
       {
         query: z.object({ state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']).optional() }),
         response: { 200: SignalList, 503: ErrorBody },
-        detail: { operationId: 'signal.list', summary: 'The stored signals, a state first: held ones wait for promotion' },
+        detail: {
+          operationId: 'signal.list',
+          summary: 'The stored signals, a state first: held ones wait for promotion',
+        },
       },
     )
-    .post(
-      '/signals/:id/promote',
-      async ({ params, body }) => answer(await api.promote(params.id, body), ackOf),
-      {
-        params: z.object({ id: z.string() }),
-        body: PromoteRequest,
-        response: RESPONSES,
-        detail: { operationId: 'signal.promote', summary: 'Let a held signal become work' },
-      },
-    )
+    .post('/signals/:id/promote', async ({ params, body }) => answer(await api.promote(params.id, body), ackOf), {
+      params: z.object({ id: z.string() }),
+      body: PromoteRequest,
+      response: RESPONSES,
+      detail: { operationId: 'signal.promote', summary: 'Let a held signal become work' },
+    })
     .get(
       '/door/routes',
       async () =>
@@ -156,28 +160,27 @@ export const intakeRoutes = (api: IntakeApi) =>
     )
     .post(
       '/door/routes',
-      async ({ body }) => answer(await api.setRoute(body), routeOf),
+      async ({ body }) => answer(await api.setRoute({ ...body, monitor: cleanText(body.monitor) }), routeOf),
       {
         body: DoorRouteInput,
         response: { 200: DoorRoute, 404: ErrorBody, 422: ErrorBody, 503: ErrorBody },
         detail: { operationId: 'door.route-set', summary: 'Route a monitor to a repo' },
       },
     )
-    .post(
-      '/door/routes/remove',
-      async ({ body }) => answer(await api.removeRoute(body), routeOf),
-      {
-        body: z.strictObject({ source: z.string().min(1), monitor: z.string().min(1) }).meta({ id: 'DoorRouteKey' }),
-        response: { 200: DoorRoute, 404: ErrorBody, 503: ErrorBody },
-        detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
-      },
-    )
+    .post('/door/routes/remove', async ({ body }) => answer(await api.removeRoute(body), routeOf), {
+      body: z.strictObject({ source: z.string().min(1), monitor: z.string().min(1) }).meta({ id: 'DoorRouteKey' }),
+      response: { 200: DoorRoute, 404: ErrorBody, 503: ErrorBody },
+      detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
+    })
     .post(
       '/door/reports',
       async ({ body }) => answer(await api.doorReport(body), () => DoorReportAck.parse({ ok: true })),
       {
         body: DoorReport,
         response: { 200: DoorReportAck, 503: ErrorBody },
-        detail: { operationId: 'door.report', summary: "What the door says about its sources (start, refused, accepted)" },
+        detail: {
+          operationId: 'door.report',
+          summary: 'What the door says about its sources (start, refused, accepted)',
+        },
       },
     )

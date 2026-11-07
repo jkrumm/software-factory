@@ -40,12 +40,9 @@ const fitsFacts = (facts: unknown): boolean => {
   }
 }
 
-const Title = z.string().transform(cleanText).pipe(z.string().min(1).max(MAX_TITLE_CHARS))
-const Facts = z
-  .unknown()
-  .default({})
-  .transform((facts) => storable(facts))
-  .refine(fitsFacts, `facts are larger than ${MAX_FACTS_BYTES} bytes`)
+// No transforms in a request schema (they have no JSON Schema, so no OpenAPI): the use case cleans with `cleanText` and `storable`.
+const Title = z.string().min(1).max(MAX_TITLE_CHARS)
+const Facts = z.unknown().default({}).refine(fitsFacts, `facts are larger than ${MAX_FACTS_BYTES} bytes`)
 
 /** The name of an automatic source: the path segment of the door's token and the key of its routes. */
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
@@ -124,14 +121,12 @@ export type SignalAck = z.infer<typeof SignalAck>
  */
 export const SignalRequest = z
   .strictObject({
-    from: z.string().regex(/^(owner|agent|feedback)(:[A-Za-z0-9._-]{1,64})?$/, 'owner[:who], agent:<repo> or feedback:<app>'),
+    from: z
+      .string()
+      .regex(/^(owner|agent|feedback)(:[A-Za-z0-9._-]{1,64})?$/, 'owner[:who], agent:<repo> or feedback:<app>'),
     kind: z.enum(['request', 'feedback', 'remark']).default('request'),
     title: Title,
-    text: z
-      .string()
-      .transform(cleanText)
-      .pipe(z.string().max(MAX_TEXT_CHARS))
-      .default(''),
+    text: z.string().max(MAX_TEXT_CHARS).default(''),
     repo: z.string().min(1).max(256).nullish(),
     link: z.string().max(1024).nullish(),
   })
@@ -157,8 +152,8 @@ export type SignalRequest = z.infer<typeof SignalRequest>
 export const AlertRequest = z
   .strictObject({
     source: DoorSource,
-    monitor: z.string().transform(cleanText).pipe(z.string().min(1).max(256)),
-    event: z.string().transform(cleanText).pipe(z.string().min(1).max(256)),
+    monitor: z.string().min(1).max(256),
+    event: z.string().min(1).max(256),
     status: z.enum(['down', 'up']),
     title: Title,
     facts: Facts,
@@ -213,7 +208,7 @@ export type DoorRoute = z.infer<typeof DoorRoute>
 export const DoorRouteInput = z
   .strictObject({
     source: DoorSource,
-    monitor: z.string().transform(cleanText).pipe(z.string().min(1).max(256)),
+    monitor: z.string().min(1).max(256),
     repo: z.string().min(1).max(256),
   })
   .meta({ id: 'DoorRouteInput' })

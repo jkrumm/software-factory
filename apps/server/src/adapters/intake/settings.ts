@@ -16,7 +16,8 @@ const Every = (fallback: string) =>
     .default(fallback)
     .transform((text, ctx) => {
       const ms = everyMs(text)
-      if (ms === undefined) ctx.addIssue({ code: 'custom', message: `${text} is not a duration like 30s, 5m, 2h or off` })
+      if (ms === undefined)
+        ctx.addIssue({ code: 'custom', message: `${text} is not a duration like 30s, 5m, 2h or off` })
       return ms ?? null
     })
 

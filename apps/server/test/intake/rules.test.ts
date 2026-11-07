@@ -41,7 +41,10 @@ describe('gate: who may put work in which repo', () => {
   test('a work repo hears the owner only', () => {
     const work = project({ repo: 'chat', work: true })
     expect(gate(signal({ repo: 'chat' }), work)).toMatchObject({ pass: false, detail: 'work_repo' })
-    expect(gate(signal({ repo: 'chat', trust: 'agent', source: 'agent:chat' }), work)).toMatchObject({ pass: false, detail: 'work_repo' })
+    expect(gate(signal({ repo: 'chat', trust: 'agent', source: 'agent:chat' }), work)).toMatchObject({
+      pass: false,
+      detail: 'work_repo',
+    })
     expect(gate(signal({ repo: 'chat', trust: 'owner', source: 'owner' }), work)).toEqual({ pass: true })
   })
 
@@ -65,8 +68,13 @@ describe('gate: who may put work in which repo', () => {
   })
 })
 
-describe('matching a person\'s signal against open Issues', () => {
-  const open = (id: number, title: string): OpenIssue => ({ id: `issue_${id}` as IssueId, title, kind: 'bug', state: 'queued' })
+describe("matching a person's signal against open Issues", () => {
+  const open = (id: number, title: string): OpenIssue => ({
+    id: `issue_${id}` as IssueId,
+    title,
+    kind: 'bug',
+    state: 'queued',
+  })
 
   test('overlap counts the words two titles share', () => {
     expect(overlap('the login page crashes on submit', 'login page crashes on submit')).toBeGreaterThan(0.8)
@@ -75,7 +83,10 @@ describe('matching a person\'s signal against open Issues', () => {
 
   test('one clear match, nothing near, or unsure', () => {
     const issues = [open(1, 'login page crashes on submit'), open(2, 'rotate the backup keys')]
-    expect(matchOpen('login page crashes on submit again', issues)).toMatchObject({ kind: 'match', issue: { id: 'issue_1' } })
+    expect(matchOpen('login page crashes on submit again', issues)).toMatchObject({
+      kind: 'match',
+      issue: { id: 'issue_1' },
+    })
     expect(matchOpen('add dark mode to settings', issues)).toEqual({ kind: 'none' })
     expect(matchOpen('login crashes', issues)).toMatchObject({ kind: 'unsure' })
   })
@@ -93,7 +104,7 @@ describe('correlation, origin and kind', () => {
     alert: { subject, event: 'e', status: 'down', facts: {} },
   })
 
-  test('Beszel names its host in the subject, Kuma and HyperDX sit on their repo\'s host', () => {
+  test("Beszel names its host in the subject, Kuma and HyperDX sit on their repo's host", () => {
     expect(groupOf(topology, received({ source: 'beszel' }, 'vps:memory'), 'vps')).toBe('host:vps')
     expect(groupOf(topology, received({ source: 'beszel' }, 'unknown:memory'), 'vps')).toBeNull()
     expect(groupOf(topology, received({ source: 'kuma' }), 'vps')).toBe('host:vps')
