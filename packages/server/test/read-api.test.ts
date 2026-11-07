@@ -458,6 +458,23 @@ describe('read API round 3', () => {
     expect(found.find((c) => c.id === object.id)?.about).toBe('Keep the title')
   })
 
+  test('a working Issue with nothing to say has a null summary, a phase reads as a sentence, a model about of a message falls back', async () => {
+    const issue = await file(TEST_REPO, 'Fix the sidebar', { goal: 'Show the asks in the sidebar.' }, 'n1')
+    await db.sql`UPDATE factory.issues SET state = 'working' WHERE id = ${issue.id}`
+    expect((await cards()).find((c) => c.id === issue.id)?.summary).toBeNull()
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, at, payload)
+      VALUES (${issue.id}, ${`phase:${issue.id}:1`}, 'phase', ${NOW}, ${{ phase: 'build', attempt: issue.attempt }})`
+    expect((await cards()).find((c) => c.id === issue.id)?.summary).toBe('The lead is building the change.')
+    await db.sql`
+      INSERT INTO factory.issue_events (issue_id, key, kind, at, payload)
+      VALUES (${issue.id}, ${`phase:${issue.id}:2`}, 'phase', ${NOW}, ${{ phase: 'build', attempt: issue.attempt, note: 'Waiting until 23:12Z on Issue 239; restart check pending' }})`
+    const summary = (await cards()).find((c) => c.id === issue.id)?.summary
+    expect(summary).toMatch(/^Waiting until \d\d:\d\d on an Issue; restart check pending$/)
+    expect(summary).not.toMatch(/Z\b|\b239\b/)
+    expect((await cards()).find((c) => c.id === issue.id)?.about).toBe('Show the asks in the sidebar.')
+  })
+
   test('a queued Issue names its real hold; with no spawn or hold the fixed sentence stays', async () => {
     const issue = await file(TEST_REPO, 'Queued work', {}, 'q1')
     const spawn = (extra: Record<string, unknown>) => ({
@@ -500,7 +517,7 @@ describe('read API round 3', () => {
     expect(await summary([spawn({ hold: 'pace' })])).toMatch(/paced/)
     expect(await summary([spawn({ hold: 'load' })])).toMatch(/machine is too busy/)
     expect(await summary([spawn({ status: 'waiting', resumeAt: '2026-11-06T15:30:00.000Z' })])).toBe(
-      'Queued: every account is at its usage limit, the next try is at 2026-11-06 15:30 UTC.',
+      'Queued: every account is at its usage limit, the next try is at 16:30.',
     )
     // another Issue's spawn (lead-1<id>-…) is not this Issue's
     expect(await summary([spawn({ key: `lead-${issue.id}9-1`, hold: 'claim' })])).toBe(

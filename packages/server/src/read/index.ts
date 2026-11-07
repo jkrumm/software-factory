@@ -30,7 +30,7 @@ import { isLeadSession, leadKey } from '../issues/names.ts'
 import { listIssues } from '../issues/read.ts'
 import { type Loaded, loadByIds } from '../sessions.ts'
 import { cut, describeEvent, firstSentence } from './describe.ts'
-import { fallbackWords } from './plain.ts'
+import { DEFAULT_TIME_ZONE, describesMessage, fallbackWords, type Locale, localTime, plainText } from './plain.ts'
 import {
   redactAsk,
   redactHealth,
@@ -63,6 +63,8 @@ export interface ReadDeps {
   insights?: TranscriptInsights
   /** the names of the directories under the visible roots: a text that mentions one is a visible repo's (`namesVisible`) */
   visibleNames?: () => Promise<readonly string[]>
+  /** the owner's time zone: the clock times in a card's words (`FACTORY_DIGEST_TZ`) */
+  timeZone?: string
 }
 
 /** `surface`: the caller holds the read token, and what is IuRoot's loses its text (`surface.ts`). */
@@ -87,6 +89,8 @@ export class NotReady extends Error {}
 
 interface Context {
   now: Date
+  /** a UTC time in a text becomes this reader's local one */
+  locale: Locale
   snapshot: Fleet | undefined
   digest: DigestView
   quota: ReadonlyMap<string, AccountQuota>
@@ -141,7 +145,7 @@ const WAITING_ISSUE: Record<string, string> = {
 }
 
 /** The hold of a queued spawn in plain words, no ids: why the Issue's lead has not started. `null` when the spawn names none. */
-function holdSentence(spawn: Spawn | undefined): string | null {
+function holdSentence(spawn: Spawn | undefined, locale: Locale): string | null {
   if (!spawn) return null
   switch (spawn.hold) {
     case 'drain':
@@ -161,7 +165,7 @@ function holdSentence(spawn: Spawn | undefined): string | null {
     const at = Date.parse(spawn.resumeAt)
     return Number.isNaN(at)
       ? null
-      : `Queued: every account is at its usage limit, the next try is at ${new Date(at).toISOString().slice(0, 16).replace('T', ' ')} UTC.`
+      : `Queued: every account is at its usage limit, the next try is at ${localTime(new Date(at), locale)}.`
   }
   return null
 }
@@ -173,21 +177,42 @@ function leadSpawn(spawns: readonly Spawn[], issue: IssueSummary): Spawn | undef
   return mine.find((s) => s.key === leadKey(issue.id, issue.attempt)) ?? mine.at(-1)
 }
 
-/** The fixed sentence for an Issue that has said nothing of its own yet; a queued one names its spawn's hold when it has one. */
-function stateSentence(issue: IssueSummary, spawn?: Spawn, heldBy: number | null = null): string {
+/** What the lead's latest phase means, for an Issue that has said nothing more. */
+const PHASE_SENTENCE: Record<string, string> = {
+  investigate: 'The lead is investigating the cause.',
+  plan: 'The lead is planning the change.',
+  build: 'The lead is building the change.',
+  check: 'The lead is running the checks.',
+  verify: 'The lead is verifying the change.',
+  ship: 'The change is being shipped.',
+  production: 'The lead is checking the change in production.',
+}
+
+/**
+ * The fixed sentence for an Issue that has said nothing of its own yet; a queued one names its spawn's hold when it has one. `null` when
+ * nothing specific is known (a working Issue whose lead has named no phase): a placeholder would tell the reader nothing.
+ */
+function stateSentence(
+  issue: IssueSummary,
+  locale: Locale,
+  { spawn, heldBy = null, phase = null }: { spawn?: Spawn; heldBy?: number | null; phase?: string | null } = {},
+): string | null {
   const behind = `Queued behind another Issue that holds ${basename(issue.repo)}.`
   switch (issue.state) {
     case 'queued':
-      return holdSentence(spawn) ?? (heldBy === null ? 'Queued, waiting for a free account.' : behind)
+      return holdSentence(spawn, locale) ?? (heldBy === null ? 'Queued, waiting for a free account.' : behind)
     case 'settling':
       return 'Being settled.'
     case 'working':
-      return 'A lead is working on it.'
+      return (phase && PHASE_SENTENCE[phase]) || null
     case 'watching':
       return 'Shipped, held for its check.'
-    case 'waiting':
+    case 'waiting': {
       if (issue.reason === 'claim' && heldBy !== null) return behind
-      return (issue.reason && WAITING_ISSUE[issue.reason]) || 'Waiting.'
+      const at = issue.reason === 'wait' && issue.wakeAt ? new Date(issue.wakeAt) : null
+      if (at && !Number.isNaN(at.getTime())) return `Waiting until ${localTime(at, locale)}.`
+      return (issue.reason && issue.reason !== 'wait' && WAITING_ISSUE[issue.reason]) || null
+    }
     case 'closed':
       return issue.outcome === 'dropped'
         ? 'Dropped.'
@@ -197,12 +222,20 @@ function stateSentence(issue: IssueSummary, spawn?: Spawn, heldBy: number | null
   }
 }
 
+/** A sentence of a goal that says where the request came from, not what it wants. */
+const PROVENANCE =
+  /^(filed (from|by|via)|seen |reported |raised |context\b|background\b|follow[- ]?ups? (of|to|from)\b)/i
+
 /**
- * What an Issue is for, from its filed facts alone: the first sentence of the goal, else the filed title. The only words a visible repo's
- * Issue has, and the ones an ordinary repo's Issue has until the digest answers.
+ * What an Issue is for, from its filed facts alone: the first sentence of the goal that says what is wanted (not where it was filed
+ * from), else the filed title, in plain words. `null` when there is neither. The only words a visible repo's Issue has, and the ones an
+ * ordinary repo's Issue has until the digest answers.
  */
-export function aboutFallback(title: string, goal: string | null): string {
-  return goal ? firstSentence(goal) : cut(title, 160)
+export function aboutFallback(title: string, goal: string | null, locale?: Locale): string | null {
+  const sentences = goal?.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? []
+  const wanted = sentences.map((x) => x.trim()).find((x) => x !== '' && !PROVENANCE.test(x))
+  const words = wanted ? firstSentence(plainText(wanted, locale)) : cut(plainText(title, locale), 160)
+  return words || null
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -475,7 +508,7 @@ export class Reader {
     for (const repo of snapshot?.repos ?? []) {
       for (const session of repo.sessions) placed.set(session.id, { session, space: repo.space, visible: repo.visible })
     }
-    return { now, snapshot, digest, quota, placed }
+    return { now, locale: { now, timeZone: this.deps.timeZone ?? DEFAULT_TIME_ZONE }, snapshot, digest, quota, placed }
   }
 
   /** The cards of these Issues, in order. */
@@ -562,16 +595,20 @@ export class Reader {
     const closingWords = isRecord(closing) ? (text(closing.summary) ?? text(closing.reason)) : null
     const heldBy = extras.heldBy.get(issue.id) ?? null
     const headline = lead && !visible ? ctx.digest.headline(lead) : null
+    const sentence = (words: string): string | null => firstSentence(plainText(words, ctx.locale)) || null
+    const state = stateSentence(issue, ctx.locale, {
+      spawn: leadSpawn(ctx.snapshot?.queue.spawns ?? [], issue),
+      heldBy,
+      phase,
+    })
     const summary = open
-      ? (headline ??
-        (phaseNote ? firstSentence(phaseNote) : null) ??
-        stateSentence(issue, leadSpawn(ctx.snapshot?.queue.spawns ?? [], issue), heldBy))
-      : closingWords
-        ? firstSentence(closingWords)
-        : stateSentence(issue)
+      ? ((headline ? sentence(headline) : null) ?? (phaseNote ? sentence(phaseNote) : null) ?? state)
+      : ((closingWords ? sentence(closingWords) : null) ?? state)
     const heading = visible ? null : ctx.digest.heading(issue.title)
     const goal = extras.goals.get(issue.id) ?? null
-    const about = (visible ? null : ctx.digest.about(issue.id, issue.title, goal)) ?? aboutFallback(issue.title, goal)
+    const said = visible ? null : ctx.digest.about(issue.id, issue.title, goal)
+    const about =
+      (said && !describesMessage(said) ? sentence(said) : null) ?? aboutFallback(issue.title, goal, ctx.locale)
     const account = current?.card.account ?? null
     const startedAt = issue.createdAt
     const endedAt = issue.closedAt

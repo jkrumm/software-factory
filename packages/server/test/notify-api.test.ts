@@ -80,6 +80,36 @@ const viaSocket = (path: string, payload: unknown) =>
   })
 
 describe('POST /issues/:id/answer', () => {
+  test('the fleet snapshot is rebuilt once the question is answered, and a failed build does not fail the answer', async () => {
+    const id = await asked()
+    let builds = 0
+    let seen: unknown
+    const counting = startApp({
+      sql: db.sql,
+      clock,
+      fleet: {
+        refreshNow: async () => {
+          builds++
+          ;[seen] = await db.sql`SELECT answered_at FROM factory.decisions WHERE issue_id = ${id}`
+          if (builds > 1) throw new Error('boom')
+          return {} as never
+        },
+      },
+    })
+    try {
+      const res = await counting.send('POST', `/issues/${id}/answer`, { answer: 'the first', id: 'r1' })
+      expect(res.status).toBe(201)
+      expect(builds).toBe(1)
+      // the build ran after the question was marked answered, so the snapshot no longer holds the ask
+      expect((seen as { answered_at: Date | null }).answered_at).not.toBeNull()
+      const stop = await counting.send('POST', `/issues/${id}/stop`, { id: 's1', reason: 'done' })
+      expect(stop.status).toBe(200)
+      expect(builds).toBe(2)
+    } finally {
+      await counting.stop()
+    }
+  })
+
   test('the owner answers: the Issue works again, the question is answered, the lead is to be told', async () => {
     const id = await asked()
     const res = await app.send('POST', `/issues/${id}/answer`, { answer: 'the first', id: 'a1' })

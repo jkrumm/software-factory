@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { lineKey, lineText } from '../src/fleet/digest.ts'
-import { fallbackWords, plainText } from '../src/read/plain.ts'
+import { aboutFallback } from '../src/read/index.ts'
+import { describesMessage, fallbackWords, localTime, plainText } from '../src/read/plain.ts'
 
 const IDS = /lead-\d|\bIssue \d|[0-9a-f]{8}-[0-9a-f]{4}|\b[0-9a-f]{7,}\b|\bt\d+\b|\/Users/
 
@@ -70,5 +71,53 @@ describe('lineText', () => {
     expect(lineKey(a)).toBe(lineKey(b))
     expect(lineKey(a)).not.toBe(lineKey(c))
     expect(a).not.toMatch(/\d/)
+  })
+})
+
+describe('local times', () => {
+  const locale = { now: new Date('2026-11-06T22:30:00Z'), timeZone: 'Europe/Berlin' }
+
+  test('a UTC clock time is the owner’s local one, an ISO time too', () => {
+    expect(plainText('Waiting until 23:12Z on Issue 239; fseventsd restart check pending', locale)).toBe(
+      'Waiting until 00:12 on an Issue; fseventsd restart check pending',
+    )
+    expect(plainText('retry at 2026-11-06 15:30 UTC', locale)).toBe('Retry at 16:30')
+    expect(plainText('until 2026-11-07T00:05:00Z', locale)).toBe('Until 01:05')
+  })
+
+  test('an impossible date is left as written, not a crash', () => {
+    expect(plainText('at 2026-13-01 10:00Z', locale)).toBe('At 2026-13-01 10:00Z')
+    expect(plainText('at 2026-11-31 25:99 UTC', locale)).toBe('At 2026-11-31 25:99 UTC')
+  })
+
+  test('without a locale the text is left alone (a fingerprinted text must not change with the clock)', () => {
+    expect(plainText('until 23:12Z')).toBe('Until 23:12Z')
+  })
+
+  test('localTime', () => {
+    expect(localTime(new Date('2026-11-06T22:40:00Z'), locale)).toBe('23:40')
+    expect(localTime(new Date('2026-11-09T10:00:00Z'), locale)).toBe('9 Nov 11:00')
+  })
+})
+
+describe('about', () => {
+  test('a sentence about a message is not an Issue purpose', () => {
+    expect(describesMessage('Last message lists sidebar requests: project glance, readable text.')).toBe(true)
+    expect(describesMessage('The message asks for a full-screen board.')).toBe(true)
+    expect(describesMessage('Message queue backs up under load.')).toBe(false)
+    expect(describesMessage('Text input wraps badly in the sidebar.')).toBe(false)
+    expect(describesMessage('Show a project glance and a full-screen board in the sidebar.')).toBe(false)
+  })
+
+  test('the fallback skips where a request came from, and is plain words', () => {
+    expect(
+      aboutFallback(
+        'Sidebar board',
+        'Filed from dotfiles Issue 218 (feedback). Show the open asks of Issue 12 in the sidebar. Later more.',
+      ),
+    ).toBe('Show the open asks of an Issue in the sidebar.')
+    expect(aboutFallback('Sidebar board for Issue 12', null)).toBe('Sidebar board for an Issue')
+    expect(aboutFallback('', null)).toBeNull()
+    expect(aboutFallback('x', 'Filed from the report.')).toBe('X')
   })
 })

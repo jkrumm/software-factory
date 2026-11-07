@@ -66,7 +66,9 @@ export function insightsLine(i: Insights): string {
 }
 
 const issueRow = (c: IssueCard) =>
-  [c.id, c.state, c.repoName, oneLine(c.title), oneLine(c.summary), insightsLine(c.insights)].map(cell).join('\t')
+  [c.id, c.state, c.repoName, oneLine(c.title), c.summary && oneLine(c.summary), insightsLine(c.insights)]
+    .map(cell)
+    .join('\t')
 
 const sessionRow = (c: SessionCard) =>
   [c.id, c.state, cell(c.role), oneLine(c.title), oneLine(c.summary), insightsLine(c.insights)].join('\t')
@@ -74,7 +76,7 @@ const sessionRow = (c: SessionCard) =>
 function issueScreen(d: IssueDetail): string {
   return [
     [d.id, d.state, d.repoName, oneLine(d.title)].join('\t'),
-    oneLine(d.summary),
+    ...(d.summary ? [oneLine(d.summary)] : []),
     ...(d.about ? [`about\t${oneLine(d.about)}`] : []),
     insightsLine(d.insights),
     ...(d.timeline.length ? ['', 'timeline', ...d.timeline.map((t) => `${t.at}\t${t.kind}\t${oneLine(t.text)}`)] : []),

@@ -142,7 +142,11 @@ const server = serve({
   notifyTarget: config.notifyTarget,
   review,
   fleet,
-  read: { isVisible: await visible(), visibleNames: () => directoryNames(config.visibleRoots) },
+  read: {
+    isVisible: await visible(),
+    visibleNames: () => directoryNames(config.visibleRoots),
+    timeZone: config.digestTz,
+  },
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a
