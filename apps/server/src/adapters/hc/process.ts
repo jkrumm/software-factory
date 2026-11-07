@@ -1,3 +1,5 @@
+import { withoutSecrets } from '../secret-env.ts'
+
 export interface ProcessResult {
   exitCode: number
   stdout: string
@@ -20,21 +22,9 @@ export class CannotExecute extends Error {
   }
 }
 
-/** What the factory holds is not for a child, which would pass its environment on. */
-const SECRET_ENV = [
-  'FACTORY_TOKEN',
-  'FACTORY_SIGNAL_TOKEN',
-  'FACTORY_READ_TOKEN',
-  'FACTORY_DB_PASSWORD',
-  'DATABASE_URL',
-  'FACTORY_GITHUB_TOKEN',
-  'NTFY_TOKEN',
-]
-
+/** The server's environment for a child, without its secrets (`adapters/secret-env.ts`); `extra` is named by the caller. */
 export function childEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
-  const env = { ...process.env, ...extra }
-  for (const name of SECRET_ENV) delete env[name]
-  return env
+  return withoutSecrets(extra)
 }
 
 /**
