@@ -174,3 +174,5 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL19 Modular monolith:** domains without I/O behind ports, Elysia with OpenAPI and Eden, a generated CLI, `apps/` and `packages/`, unit, scenario and Playwright tests on Bun with oxlint and oxfmt.
 - **NL20 Usage and cost come from the `usage` schema by join;** Argo's collectors are not rebuilt. ntfy carries checkpoints only.
 - **NL21 Argo's Slack proxy is deleted** (Issue 177).
+- **NL22 Work-repo text may go to agw.** The rule that a work repo's text never leaves the machine's token API ends with the rewrite; work repos still hear only the owner's signals (NL18).
+- **NL23 The factory trusts the lead's review.** Ship is no longer refused for missing review coverage; a review is recorded as evidence when it exists, the brief requires one per ship range, and the friction loop counts ships without one.
