@@ -91,3 +91,8 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   `factory door token new` is a verb to add; for package 4's brief (package 8 parity), an Issue's alert facts are read
   from `intake_signals`, the `filed` event carries only repo, title, kind and origin; for package 9, `launch-door.sh`
   and the deploy script name `apps/door`.
+- **2026-11-07, package 5 integrated after its wiring pass.** One outbox runner (the leads' tick) now runs every effect
+  with quality's `start_watch`; the ship gate's cut is the attempt's `base_sha`, and a commit older than the attempt is
+  refused in production. Carried forward: `reportRegression`'s reopen half has no caller, because intake files a new
+  Issue for a `down` after a close (the old core's rule, kept); package 8 or the first hygiene pass removes it.
+  `FACTORY_CLOCK_OFFSET_MS` is a scenario-only setting like the internal test routes: package 8 removes or fences both.

@@ -21,7 +21,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 | 2 | Intake | 1 | integrated | t1f7 (removed) | `rw/2-intake` (merged, deleted) | df0862a (merge), 8dfda67 | `reports/2-intake.md`; `make check` on `rewrite`: 559 unit, 49 scenarios |
 | 3 | Planning and capacity | 1 | sent back | t1f5 `rw-3-planning-capacity` (sonnet high, me2) | `rw/3-planning-capacity` | (report committed) | `reports/3-planning-capacity.md`; sent back to merge `rewrite` and replace the stubs of 2, 4, 6 |
 | 4 | Leads | 1 | integrated | t1f8 (removed) | `rw/4-leads` (merged, deleted) | 3478091 (merge), 650be3a | `reports/4-leads.md`; `make check` on `rewrite`: 336 unit, 37 scenarios; five shared-file conflicts resolved as unions |
-| 5 | Quality | 1 | sent back | t1f9 `rw-5-quality` (sonnet high, me) | `rw/5-quality` | b9260c9 (report) | `reports/5-quality.md`; sent back to merge `rewrite` and wire to package 4 (one outbox runner, real checkout) |
+| 5 | Quality | 1 | integrated | t1f9 (removed) | `rw/5-quality` (merged, deleted) | e1390ff (merge), bb10eef | `reports/5-quality.md`; `make check` on `rewrite`: 624 unit, 62 scenarios; one outbox runner, real checkout |
 | 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
 | 7 | Loops and agw | 2, 6 | pending | | | | |
 | 8 | API, read models, CLI parity | 2 to 7 | pending | | | | |
@@ -39,3 +39,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 4 integrated at 3478091.
 - 2026-11-07: package 5 reported; sent back for the integration with package 4.
 - 2026-11-07: package 2 integrated at df0862a; package 3 sent back for its wiring into 2, 4 and 6.
+- 2026-11-07: package 5 integrated; package 3 still wiring; package 7 briefed, starts after 3.

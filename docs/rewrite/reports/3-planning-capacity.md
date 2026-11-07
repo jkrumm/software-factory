@@ -22,9 +22,13 @@
 - **Passes scheduled**: `compose-planning.ts` runs the planning pass and then the admission pass on `FACTORY_TICK_MS` (the leads' setting, 0 is off), one pass at a time, asking the remote for new commits every 10 minutes (the other passes read the default branch as last fetched). A problem that stands is logged once. `/health`'s `queueMovedAt` is the newest applied `filed|settled|admitted|lead_gone|closed|cancelled|reopened` event (`read/queue.ts`). `main.ts` shrank: the planning and capacity wiring moved to `compose-planning.ts`.
 - **Repo identity**: an Issue's `repo` is the project's **directory name under the source root** (`repoTextOf`), as intake files it. Plan rows target another repo by that name too, and `projectSignals.find` accepts a name, a path or a worktree path. The one exception: a second directory of a name already taken gets the project name `<name>~<hash>`, no directory carries it, so its Issues name the absolute path. `FACTORY_REPO_ROOTS` is one setting: unset, planning takes the leads' default roots. The leads' `locate` resolves the name under those roots, so the three agree.
 - **Tests**: `tests/scenarios/capacity/tick.test.ts` (a plan row is filed, settled and admitted by the tick alone; `/health` carries `queueMovedAt`; intake files an Issue named `app` for an owner's signal and drops one for a repo that is no project); unit tests for the three ports and `queueMovedAt`.
+- **Package 5's merge**: `composeLeads` also takes `startWatch`; `main.ts` passes both it and `planning.leads`. Planning's use cases take the offset clock (`writes`) like quality's, so the scenarios that move time move planning too.
+- **A flake seen, not mine**: `tests/scenarios/intake/pollers.test.ts` (launchd heal) failed twice in a full `make check` under load (`observe` returned no Issue) and passed in 9 further runs, alone and in the full scenario run; not reproduced with a probe on the response. Intake's to look at.
 - **Behaviour beyond replacing stubs**: the tick and `queueMovedAt` are new behaviour, covered by the scenario above; no `/review` round run on it.
 
 ## `make check`
+
+On the tree with `rewrite` merged at `e1390ff` (packages 2, 4, 5 and 6).
 
 ```
 ==> install (bun install --frozen-lockfile)
@@ -42,15 +46,15 @@ no retired words
 ==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)
 ==> generated CLI is current (apps/cli/scripts/generate.ts --check)
 ==> unit tests (bun test apps packages scripts)
- 217 pass
+ 721 pass
  0 fail
- 726 expect() calls
-Ran 217 tests across 22 files. [8.79s]
+ 4918 expect() calls
+Ran 721 tests across 50 files. [37.25s]
 ==> scenarios (bun test tests)
- 29 pass
+ 85 pass
  0 fail
- 168 expect() calls
-Ran 29 tests across 5 files. [19.78s]
+ 478 expect() calls
+Ran 85 tests across 20 files. [90.45s]
 ==> check passed
 ```
 

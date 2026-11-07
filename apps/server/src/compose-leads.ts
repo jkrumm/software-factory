@@ -17,17 +17,10 @@ import { blockIssue, closeIssue, deferIssue } from './app/leads-verbs.ts'
 import type { EffectPorts } from './domains/work/ports.ts'
 import type { Clock } from './kernel/clock.ts'
 import type { IdSource } from './kernel/ids.ts'
-import { err, portError, type PortError, type Result } from './kernel/result.ts'
+import type { PortError, Result } from './kernel/result.ts'
 
 /** Passes of the tick that may run at once: a worktree made or removed takes minutes and must not hold the others back. */
 const MAX_PASSES = 4
-
-/**
- * Honest stub for what quality (package 5) brings: the Watch after a ship. It answers with an error, so the effect stays
- * pending and visible instead of being marked done for work nobody did.
- */
-const stubStartWatch: EffectPorts['start_watch'] = async () =>
-  err(portError('refused', 'the Watch is not built yet: start_watch is package 5'))
 
 export interface LeadsComposition {
   routes: LeadRoutes
@@ -52,6 +45,8 @@ export function composeLeads(input: {
   ids: IdSource
   settings: LeadSettings
   capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
+  /** quality's port: opens the Watch after a ship. The one outbox runs it with the leads' ports. */
+  startWatch: EffectPorts['start_watch']
 }): LeadsComposition {
   const { settings: s } = input
   const deps: LeadDeps = {
@@ -80,7 +75,7 @@ export function composeLeads(input: {
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
   }
-  const ports: EffectPorts = { ...leadPorts(deps), start_watch: stubStartWatch }
+  const ports: EffectPorts = { ...leadPorts(deps), start_watch: input.startWatch }
   const replayer = new SpoolReplayer({
     dir: s.spoolDir,
     now: () => input.clock.now(),

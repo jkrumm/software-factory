@@ -6,6 +6,7 @@ import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import { type CapacityApi, capacityRoutes } from './capacity.ts'
 import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
+import { type QualityWrites, qualityRoutes, unwiredQuality } from './quality.ts'
 import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 import { leadsTestRoutes } from './leads-test.ts'
@@ -18,6 +19,8 @@ export interface ApiDeps {
   checkpoints?: CheckpointUses
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
+  /** the quality use cases (ship, reopen, what was recorded); absent, they answer unavailable */
+  quality?: QualityWrites
   /** the lead's verbs and its session read (package 4); absent, the routes answer 503 */
   leads?: LeadRoutes
   /** one pass of the lead tick, for the scenarios (`FACTORY_INTERNAL_TEST_ROUTES=1`) */
@@ -74,6 +77,7 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(qualityRoutes(deps.quality ?? unwiredQuality))
     .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
     .use(leadRoutes(deps.leads))
     .use(intakeRoutes(deps.intake ?? unwiredIntake))
