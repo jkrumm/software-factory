@@ -55,6 +55,26 @@ describe('plain words', () => {
       'Waiting for the owner to decide.',
     )
     expect(phaseOf({ state: 'waiting', reason: 'decision' })).toBe('waiting for your answer')
+  })
+
+  test('a queued Issue names the reason the queue order gives', () => {
+    const queued = { state: 'queued', reason: null, outcome: null }
+    expect(stateSentence(queued)).toBe('Queued, waiting for a free account.')
+    expect(
+      stateSentence({ ...queued, queue: { kind: 'drain', message: 'the queue is draining: nothing new starts' } }),
+    ).toBe('Queued: the queue is draining, so no new work starts.')
+    expect(
+      stateSentence({
+        ...queued,
+        queue: { kind: 'claim', message: 'no claim free in the repo', repoName: 'argo', heldBy: 7 },
+      }),
+    ).toBe('Queued behind another Issue that holds argo.')
+    expect(
+      stateSentence({ ...queued, queue: { kind: 'claim', message: 'no claim free in the repo', repoName: 'argo' } }),
+    ).toBe('Queued: the claims on argo are full, so it starts when one frees.')
+    expect(stateSentence({ ...queued, queue: { kind: 'chain', message: 'waits for Issue 3 to close' } })).toBe(
+      'Queued: waits for an Issue to close.',
+    )
     expect(phaseOf({ state: 'working', reason: null })).toBe('building')
   })
 })

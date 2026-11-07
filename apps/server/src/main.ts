@@ -286,6 +286,10 @@ async function main(): Promise<void> {
   const runner: LoopRunner = createLoopRunner({ loops: specs, clock: systemClock })
   const leadsTick = loopSettings.intervalMs.leads
 
+  const queueReasons = async () => {
+    const view = await planning.capacity.queue()
+    return view.ok ? queueReasonMap(view.value.queue) : null
+  }
   const app = createApp({
     tokens: settings.tokens,
     intake: intake.api,
@@ -334,14 +338,9 @@ async function main(): Promise<void> {
       doorLines: () => intake.doorLines(DOOR_LINES_RECENT_MS),
       loops: () => runner.view(),
       blockedStreak: loopSettings.blockedChecks,
+      queueReasons,
     }),
-    readModels: {
-      sql,
-      queueReasons: async () => {
-        const view = await planning.capacity.queue()
-        return view.ok ? queueReasonMap(view.value.queue) : null
-      },
-    },
+    readModels: { sql, queueReasons },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   intake.start()
   runner.start()

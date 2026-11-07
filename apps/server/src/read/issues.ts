@@ -11,6 +11,7 @@ import type {
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
 import { describeEvent, phaseOf, stateSentence } from './describe.ts'
+import type { QueueReasons } from './flow.ts'
 import { aboutOf, cut, firstSentence, plainText } from './plain.ts'
 import {
   deriveLeads,
@@ -78,6 +79,9 @@ async function rowOf(sql: SQL, id: string): Promise<IssueRow | undefined> {
   return rows[0]
 }
 
+/** Reads why each queued Issue stays queued; null when it cannot. */
+export type QueueOf = () => Promise<QueueReasons | null>
+
 /** What the cards need besides the Issues' own rows, per Issue id. */
 interface Extras {
   goals: Map<string, string>
@@ -123,6 +127,7 @@ function cardOf(input: {
   leads: readonly LeadSession[]
   extras: Extras
   quota: ReadonlyMap<string, ReadAccountQuota>
+  queue: QueueReasons | null
   now: Date
 }): ReadIssueCard {
   const { row, leads, extras, now } = input
@@ -133,7 +138,15 @@ function cardOf(input: {
   const account = latest?.card.account ?? null
   const closing = extras.closings.get(row.id)
   const closingSentence = !open && closing ? firstSentence(plainText(closing)) : ''
-  const summary = closingSentence || stateSentence({ state: row.state, reason: row.wait_reason, outcome: row.outcome })
+  const queued = row.state === 'queued' ? input.queue?.get(row.id) : undefined
+  const summary =
+    closingSentence ||
+    stateSentence({
+      state: row.state,
+      reason: row.wait_reason,
+      outcome: row.outcome,
+      queue: queued && { ...queued, repoName: basename(row.repo), heldBy: extras.heldBy.get(row.id) ?? null },
+    })
   const startedAt = row.created_at
   const insights: ReadInsights = {
     ...emptyInsights({ startedAt, endedAt: row.closed_at, now }),
@@ -181,8 +194,11 @@ async function build(
   deps: SessionDeps,
   rows: readonly IssueRow[],
   quota: ReadonlyMap<string, ReadAccountQuota>,
+  queueOf: QueueOf | undefined,
 ): Promise<Cards> {
   const ids = rows.map((row) => row.id)
+  // the queue order reads the host, so it is asked only when a queued card is in the page
+  const queue = queueOf && rows.some((row) => row.state === 'queued') ? await queueOf() : null
   const [attempts, briefs, extras] = await Promise.all([
     loadAttempts(deps.sql, ids, 0),
     loadBriefs(deps.sql, ids),
@@ -196,16 +212,21 @@ async function build(
     leads.set(lead.card.issueRef ?? '', list)
   }
   const now = deps.clock.now()
-  return { cards: rows.map((row) => cardOf({ row, leads: leads.get(row.id) ?? [], extras, quota, now })), leads }
+  return { cards: rows.map((row) => cardOf({ row, leads: leads.get(row.id) ?? [], extras, quota, queue, now })), leads }
 }
 
 /** `GET /v1/issues`: the newest activity first. */
 export async function listCards(
   deps: SessionDeps,
-  input: { scope: IssueScope; limit: number; quota: ReadonlyMap<string, ReadAccountQuota> },
+  input: {
+    scope: IssueScope
+    limit: number
+    quota: ReadonlyMap<string, ReadAccountQuota>
+    queue?: QueueOf
+  },
 ): Promise<ReadIssueCard[]> {
   const rows = await listRows(deps.sql, input)
-  return (await build(deps, rows, input.quota)).cards
+  return (await build(deps, rows, input.quota, input.queue)).cards
 }
 
 interface DecisionRow {
@@ -219,12 +240,12 @@ interface DecisionRow {
 /** `GET /v1/issues/:id`: the card with its timeline, evidence, asks and sessions; undefined for no such Issue. */
 export async function issueDetail(
   deps: SessionDeps,
-  input: { id: string; quota: ReadonlyMap<string, ReadAccountQuota> },
+  input: { id: string; quota: ReadonlyMap<string, ReadAccountQuota>; queue?: QueueOf },
 ): Promise<ReadIssueDetail | undefined> {
   const { sql } = deps
   const row = await rowOf(sql, input.id)
   if (!row) return undefined
-  const { cards, leads } = await build(deps, [row], input.quota)
+  const { cards, leads } = await build(deps, [row], input.quota, input.queue)
   const card = cards[0]
   if (!card) return undefined
   const events: { at: Date; kind: string; payload: unknown }[] = await sql`

@@ -12,6 +12,7 @@ import {
 import { readAccounts } from './accounts.ts'
 import { readAsks } from './asks.ts'
 import { DEFAULT_LIMIT, issueDetail, type IssueScope, listCards, MAX_LIMIT } from './issues.ts'
+import type { QueueReasons } from './flow.ts'
 import { type LineSources, readHealthLines } from './lines.ts'
 import {
   redactAsk,
@@ -30,6 +31,8 @@ export { DEFAULT_LIMIT, MAX_LIMIT }
 export interface ReadDeps extends SessionDeps, LineSources {
   /** how often the change stream looks for news */
   streamPollMs: number
+  /** why each queued Issue stays queued (the capacity use case reads the host); absent or failing, a queued card says the general sentence */
+  queueReasons?: () => Promise<QueueReasons | null>
 }
 
 /** `redact`: the caller holds the read token, and a work repo loses its text (`surface.ts`). */
@@ -65,6 +68,8 @@ export function createReader(deps: ReadDeps): ReadApi {
   const quotaOf = async (): Promise<Map<string, ReadAccountQuota>> =>
     new Map((await readAccounts(sql, clock.now())).map((account) => [account.account, account]))
 
+  const queueOf = async (): Promise<QueueReasons | null> => (await deps.queueReasons?.().catch(() => null)) ?? null
+
   async function overview({ redact }: Surface): Promise<ReadOverview> {
     const now = clock.now()
     const openProjects = redact ? await loadOpenProjects(sql) : []
@@ -76,7 +81,7 @@ export function createReader(deps: ReadDeps): ReadApi {
     const [{ asks, humanQueue }, health, issues, states] = await Promise.all([
       readAsks(sql, now),
       readHealthLines(sql, { now, accounts, sources: deps }),
-      listCards(deps, { scope: 'open', limit: MAX_LIMIT, quota }),
+      listCards(deps, { scope: 'open', limit: MAX_LIMIT, quota, queue: queueOf }),
       sql`SELECT project, state FROM factory.capacity_queue_states` as Promise<
         { project: string; state: 'run' | 'pace' | 'drain' }[]
       >,
@@ -132,14 +137,19 @@ export function createReader(deps: ReadDeps): ReadApi {
     sessions,
 
     async issues({ redact, scope, limit }) {
-      const cards = await listCards(deps, { scope, limit: clampLimit(limit), quota: await quotaOf() })
+      const cards = await listCards(deps, {
+        scope,
+        limit: clampLimit(limit),
+        quota: await quotaOf(),
+        queue: queueOf,
+      })
       return redact ? cards.map(redactIssueCard) : cards
     },
 
     async issue({ redact, id }) {
       const ref = issueRefOf(id)
       if (!ref) return null
-      const detail = await issueDetail(deps, { id: ref, quota: await quotaOf() })
+      const detail = await issueDetail(deps, { id: ref, quota: await quotaOf(), queue: queueOf })
       if (!detail) return null
       return redact ? redactIssueDetail(detail) : detail
     },

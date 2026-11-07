@@ -75,12 +75,18 @@ export function describeEvent(kind: string, payload: unknown): string {
 }
 
 /** The sentence for an Issue in a state, from its state and wait alone: no ids and no times. */
-export function stateSentence(input: { state: string; reason: string | null; outcome: string | null }): string {
+export function stateSentence(input: {
+  state: string
+  reason: string | null
+  outcome: string | null
+  /** why a queued Issue stays queued, from the queue order; `repoName` and `heldBy` (set when another Issue holds the repo's claim; the number itself stays in its own field) sharpen a claim */
+  queue?: { kind: string; message: string; repoName?: string; heldBy?: number | null } | null
+}): string {
   switch (input.state) {
     case 'settling':
       return 'Being settled.'
     case 'queued':
-      return 'Queued, waiting for a free account.'
+      return queueSentence(input.queue ?? null)
     case 'working':
       return 'The lead is working on it.'
     case 'watching':
@@ -95,6 +101,29 @@ export function stateSentence(input: { state: string; reason: string | null; out
           : input.outcome === 'cancelled'
             ? 'Cancelled.'
             : 'Closed as done.'
+  }
+}
+
+/** One sentence for a queued Issue: the real reason when the queue order gives one, else the account it waits for. */
+function queueSentence(
+  queue: { kind: string; message: string; repoName?: string; heldBy?: number | null } | null,
+): string {
+  if (!queue) return 'Queued, waiting for a free account.'
+  switch (queue.kind) {
+    case 'drain':
+      return 'Queued: the queue is draining, so no new work starts.'
+    case 'claim': {
+      const repo = queue.repoName ? ` ${queue.repoName}` : ' its repo'
+      return queue.heldBy
+        ? `Queued behind another Issue that holds${repo}.`
+        : `Queued: the claims on${repo} are full, so it starts when one frees.`
+    }
+    default: {
+      const message = cut(plainText(queue.message))
+      return message
+        ? `Queued: ${message.charAt(0).toLowerCase()}${message.slice(1)}.`
+        : 'Queued, waiting for a free account.'
+    }
   }
 }
 
