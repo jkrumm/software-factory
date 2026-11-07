@@ -600,6 +600,11 @@ describe('hc adapter: type', () => {
       expect(await count('terminal.send')).toBe(0)
     })
 
+    test('a question in the conversation above the box is no dialog', async () => {
+      await showing(['  Do you want to proceed with the merge?', '', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
+      expect(await ask()).toBe('typed')
+    })
+
     test('is busy while a turn runs, and when text already sits in the box', async () => {
       await showing(['✻ Thinking… (esc to interrupt)', RULE, '❯ ', RULE, '  ? for shortcuts'].join('\n'))
       expect(await ask()).toBe('busy')

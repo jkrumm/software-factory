@@ -5,8 +5,10 @@
 
 const RULE = /^\s*─{3,}/
 const PROMPT_LINE = /^\s*❯(?!\s*\d+[.)])/
-/** Lines a running turn or a dialog shows below or beside the box; none of them is a prompt that takes text. */
-const NOT_AT_PROMPT = /esc to interrupt|Esc to cancel|Enter to confirm|Do you want to|\(esc to/i
+/** The spinner line of a running turn, drawn just above the box. */
+const RUNNING = /esc to interrupt/i
+/** What a dialog shows in or below its box. Never looked for above the box: that is the conversation, and it may say anything. */
+const DIALOG = /Esc to cancel|Enter to confirm|Do you want to/i
 
 function box(screen: string): { lines: string[]; after: string[] } | undefined {
   const lines = screen.split('\n')
@@ -36,6 +38,7 @@ export function atPrompt(screen: string, options: { pressOnly?: boolean } = {}):
   if (!found) return false
   const [first = ''] = found.lines
   if (!PROMPT_LINE.test(first)) return false
-  if (NOT_AT_PROMPT.test(screen.split('\n').slice(-12).join('\n'))) return false
+  if (RUNNING.test(screen.split('\n').slice(-12).join('\n'))) return false
+  if (DIALOG.test([...found.lines, ...found.after].join('\n'))) return false
   return options.pressOnly === true || inputBoxText(screen) === ''
 }

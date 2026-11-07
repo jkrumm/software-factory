@@ -503,7 +503,7 @@ export async function deliverPrompts(deps: DeliverDeps): Promise<DeliverResult> 
     }
     await sql`
       UPDATE factory.prompts
-      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0,
+      SET status = 'sent', sent_at = ${clock.now()}, sent_count = sent_count + 1, failures = 0, error = NULL,
           typed_at = COALESCE(typed_at, ${clock.now()})
       WHERE id = ${prompt.id} AND status = 'typing'`
     result.sent.push(prompt.id)
