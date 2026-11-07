@@ -178,7 +178,9 @@ commands:
                   renews the lease while the command runs, gives it back when it ends. The exit code, stdout and stderr are
                   the command's own. Fails open only on an outage: no server runs the command anyway with one line on stderr.
                   Contention keeps waiting; no slot within FACTORY_SLOT_WAIT_MS (default 45 min) exits 75 without running
-                  the command, unless FACTORY_SLOT_OPEN=1. Goes by the socket, needs no token
+                  the command, unless FACTORY_SLOT_OPEN=1. A command past its run limit (FACTORY_SLOT_RUN_MS, else the
+                  project's slots.run in project.yaml, else 30 min) has its process group killed (SIGTERM, SIGKILL after
+                  FACTORY_SLOT_KILL_GRACE_MS, default 5000) and exits 124. Goes by the socket, needs no token
   quota get       the newest reading of every account (percent of the 5-hour window and the week, resets, fresh or not)
   quota refresh   read the account picker now and store the readings
   role list       the role table: role, tier, effort (reads the tracked file, no server and no token)
@@ -215,6 +217,8 @@ FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout 
 FACTORY_SOCKET   the server's unix socket for what a pane may do without a token (default ~/.local/share/factory/hook.sock)
 FACTORY_DOOR_TOKENS_FILE  door token new: the door's tokens file
 FACTORY_SLOT_WAIT_MS  slot run: longest wait for a slot before exiting 75 without running (default 2700000, 45 min)
+FACTORY_SLOT_RUN_MS  slot run: run limit of the command in ms (default: the project's slots.run, else 1800000, 30 min); past it: killed, exit 124
+FACTORY_SLOT_KILL_GRACE_MS  slot run: how long a command that ran past its limit has between SIGTERM and SIGKILL (default 5000)
 FACTORY_SLOT_OPEN  slot run: 1 runs the command anyway when the wait runs out
 
 Data goes to stdout, messages to stderr as one JSON line; the exit codes are agw's. ${BIN} never prompts.

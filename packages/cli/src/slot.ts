@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs'
 import { constants } from 'node:os'
-import { Slot, SlotRelease } from '@software-factory/contract'
+import { DEFAULT_SLOT_RUN_MS, Slot, SlotRelease } from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { call, type Io } from './client.ts'
 
@@ -7,6 +8,14 @@ import { call, type Io } from './client.ts'
 const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
 /** The exit code of a wait that ran out: sysexits `EX_TEMPFAIL`, "try again later". The command did not run. */
 const EX_TEMPFAIL = 75
+/** The exit code of a command killed for running past its limit: as `timeout(1)` reports it. */
+const EX_RUN_LIMIT = 124
+/** After SIGTERM a command's process group has this long to end before it gets SIGKILL (`FACTORY_SLOT_KILL_GRACE_MS`). */
+const DEFAULT_KILL_GRACE_MS = 5_000
+/** The longest run limit the server takes. */
+const MAX_RUN_LIMIT_MS = 24 * 3_600_000
+/** How often the grace wait looks whether the group has ended. */
+const GRACE_POLL_MS = 50
 /** How often a waiter asks again (`FACTORY_SLOT_POLL_MS`). */
 const DEFAULT_SLOT_POLL_MS = 1_000
 /** The lease is renewed this often while the command runs; the server lets it lapse after 30 s. */
@@ -15,6 +24,41 @@ const RENEW_MS = 10_000
 const number = (value: string | undefined, fallback: number): number => {
   const n = Number(value)
   return value !== undefined && value !== '' && Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+/** `FACTORY_SLOT_RUN_MS`: a positive number of ms (at most 24 h), else nothing. */
+const limitOf = (value: string | undefined): number | undefined => {
+  const n = Math.floor(Number(value))
+  return value !== undefined && value !== '' && Number.isFinite(n) && n >= 1 ? Math.min(n, MAX_RUN_LIMIT_MS) : undefined
+}
+
+/** `30 min` for whole minutes, else `45 s`, else `500 ms`. */
+function describeLimit(ms: number): string {
+  if (ms % 60_000 === 0) return `${ms / 60_000} min`
+  if (ms % 1000 === 0) return `${ms / 1000} s`
+  return `${ms} ms`
+}
+
+/** The command leads its own process group (`detached`): a signal goes to all of it, or to the command alone if that fails. */
+function signalGroup(proc: { pid: number; kill: (signal: NodeJS.Signals) => void }, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-proc.pid, signal)
+  } catch {
+    try {
+      proc.kill(signal)
+    } catch {
+      // already gone
+    }
+  }
+}
+
+const groupAlive = (pid: number): boolean => {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -65,7 +109,9 @@ async function acquire(input: {
  * ends or this process is told to stop. The exit code is the command's. Open only on an outage: a server that does not
  * answer runs the command anyway with one line on stderr (a dead factory must not block the work that repairs it). On
  * contention it keeps waiting; no slot within `FACTORY_SLOT_WAIT_MS` (45 min) is one stderr line and exit 75 without running
- * the command, unless `FACTORY_SLOT_OPEN=1` says to run it anyway.
+ * the command, unless `FACTORY_SLOT_OPEN=1` says to run it anyway. A command that runs past its run limit (`FACTORY_SLOT_RUN_MS`, else
+ * the project's `slots.run`, else 30 min; the server resolves it) has its whole process group sent SIGTERM, then SIGKILL after
+ * `FACTORY_SLOT_KILL_GRACE_MS` (5 s), and the exit code is 124.
  */
 export async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
   const [program, ...args] = input.command
@@ -77,7 +123,28 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const open = io.env.FACTORY_SLOT_OPEN === '1'
   const pollMs = number(io.env.FACTORY_SLOT_POLL_MS, DEFAULT_SLOT_POLL_MS)
   const path = `/slots/${encodeURIComponent(id)}`
-  const ask = () => call(io, path, { method: 'PUT', auth: false, socket: true, schema: Slot, body: { name } })
+  const envLimit = limitOf(io.env.FACTORY_SLOT_RUN_MS)
+  const graceMs = number(io.env.FACTORY_SLOT_KILL_GRACE_MS, DEFAULT_KILL_GRACE_MS)
+  const cwd = (() => {
+    try {
+      return realpathSync(process.cwd())
+    } catch {
+      return undefined
+    }
+  })()
+  // The limit the server resolved for the grant; a server that does not say leaves it to the env or the default.
+  let grantedRunMs: number | undefined
+  const ask = async () => {
+    const answer = await call(io, path, {
+      method: 'PUT',
+      auth: false,
+      socket: true,
+      schema: Slot,
+      body: { name, cwd, limitMs: envLimit },
+    })
+    if (answer.body.granted && grantedRunMs === undefined) grantedRunMs = answer.body.runMs
+    return answer
+  }
 
   let engaged = false
   let child: ReturnType<typeof Bun.spawn> | undefined
@@ -91,7 +158,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   // reaches the command as well, and a command that is told twice still ends), and the slot goes back when it has ended.
   const onSignal = (signal: NodeJS.Signals) => {
     stopped = signal
-    child?.kill(signal)
+    if (child) signalGroup(child, signal)
   }
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
   for (const signal of signals) process.on(signal, onSignal)
@@ -120,7 +187,13 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
 
     try {
-      child = Bun.spawn([program, ...args], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit', env: io.env })
+      child = Bun.spawn([program, ...args], {
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+        env: io.env,
+        detached: true,
+      })
     } catch (error) {
       io.err(`factory: cannot run ${program}: ${error instanceof Error ? error.message : String(error)}\n`)
       return 127
@@ -145,15 +218,34 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
           })
         }, RENEW_MS)
       : undefined
+    // Past its run limit the whole process group gets SIGTERM, and SIGKILL if any of it is left after the grace.
+    const proc = child
+    const limitMs = grantedRunMs ?? envLimit ?? DEFAULT_SLOT_RUN_MS
+    let limited = false
+    let killing: Promise<void> = Promise.resolve()
+    const limitTimer = setTimeout(() => {
+      limited = true
+      io.err(
+        `factory: the command ran past the test-slot run limit of ${describeLimit(limitMs)} (FACTORY_SLOT_RUN_MS); killed its process group\n`,
+      )
+      killing = (async () => {
+        signalGroup(proc, 'SIGTERM')
+        const until = Date.now() + graceMs
+        while (groupAlive(proc.pid) && Date.now() < until) await sleep(GRACE_POLL_MS)
+        if (groupAlive(proc.pid)) signalGroup(proc, 'SIGKILL')
+      })()
+    }, limitMs)
     try {
       await child.exited
+      await killing
     } finally {
+      clearTimeout(limitTimer)
       ended = true
       clearInterval(renew)
       // An answer still on its way would put the holder back after the slot is given up.
       await renewing
     }
-    return exitCodeOf(child)
+    return limited ? EX_RUN_LIMIT : exitCodeOf(child)
   } finally {
     for (const signal of signals) process.off(signal, onSignal)
     await release()

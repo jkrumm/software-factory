@@ -54,7 +54,7 @@ intervention KPIs, moved from dotfiles; `README.md` there says what still re-run
   contract. The `factory` role has no CREATE on the database; `DATABASE_URL` comes from `secrets-run`, never a tracked file.
 - **The API is authenticated.** Every route but `GET /health` needs `Authorization: Bearer <FACTORY_TOKEN>`; JSON only (415), at
   most 64 KiB (413), loopback Host (421). The CLI reads `FACTORY_TOKEN` (`factory read|follow` also take `FACTORY_READ_TOKEN`, which the server accepts on `GET /v1/*` only); run it under `secrets-run run --env-file=.env.tpl --`.
-- **Tests:** `make test` runs through `factory slot run` when `factory` is installed (a lease; open only when the server is down, a wait past 45 min exits 75 without running). Update this file in
+- **Tests:** `make test` runs through `factory slot run` when `factory` is installed (a lease; open only when the server is down, a wait past 45 min exits 75 without running; a command past its run limit (30 min default) is killed with exit 124). Update this file in
   the same commit as the code it describes; behaviour goes to `docs/design.md` §3 "As built", not here.
 - Direct-to-master, conventional commits, no AI attribution.
 

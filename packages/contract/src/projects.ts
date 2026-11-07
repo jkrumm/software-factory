@@ -13,6 +13,8 @@ const DURATION = /^(\d+)(s|m|h|d)$/
 const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
 const MAX_HOLD_MS = 7 * UNIT_MS.d
 const MAX_GRACE_MS = UNIT_MS.d
+const MIN_SLOT_RUN_MS = UNIT_MS.m
+const MAX_SLOT_RUN_MS = 6 * UNIT_MS.h
 
 /** `30m`, `2h`, `1d`: milliseconds, or `undefined` for anything else. */
 export function durationMs(text: string): number | undefined {
@@ -57,6 +59,17 @@ const Deploy = z.strictObject({
   /** paths whose change needs a migration to be run */
   migrations: z.array(z.string().min(1)).default([]),
   probes: z.array(Probe).default([]),
+})
+
+/** `slots:`: the test-slot run limit of the project (design FL7); `run` unset means `DEFAULT_SLOT_RUN_MS`. */
+const Slots = z.strictObject({
+  run: z
+    .string()
+    .refine((run) => {
+      const ms = durationMs(run)
+      return ms !== undefined && ms >= MIN_SLOT_RUN_MS && ms <= MAX_SLOT_RUN_MS
+    }, 'a duration like 45m or 2h, at least 1m and at most 6h')
+    .optional(),
 })
 
 /** First match wins. */
@@ -118,6 +131,7 @@ export const ProjectManifest = z
       .min(1)
       .default([{ paths: ['**'], via: 'push' }]),
     leads: z.number().int().min(1).max(8).default(1),
+    slots: Slots.default({}),
     signals: Signals.default({}),
     heal: z.array(HealRule).max(32).default([]),
     jobs: z.unknown().optional(),

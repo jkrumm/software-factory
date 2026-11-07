@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { Project, ProjectList, ProjectSyncResult, type Project as ProjectView } from '@software-factory/contract'
+import {
+  Project,
+  ProjectList,
+  ProjectManifest,
+  ProjectSyncResult,
+  type Project as ProjectView,
+} from '@software-factory/contract'
 import { claimDue } from '../src/tick.ts'
 import { EXIT_TIMEOUT, runProcess } from '../src/exec.ts'
 import { createIssue } from '../src/issues/create.ts'
@@ -134,6 +140,7 @@ describe('a valid manifest', () => {
         { paths: ['**'], via: 'pr' },
       ],
       leads: 2,
+      slots: {},
       signals: { kuma: ['alpha'] },
       heal: [{ when: 'kuma.down', grace: '5m', runbook: 'make restart', max: 2 }],
     })
@@ -422,6 +429,7 @@ describe('no manifest', () => {
       deploy: { mode: 'none', targets: [], hold: '0m', migrations: [], probes: [] },
       ship: [{ paths: ['**'], via: 'push' }],
       leads: 1,
+      slots: {},
       signals: {},
       heal: [],
     })
@@ -536,6 +544,23 @@ describe('the manifests that are committed', () => {
       manifest: { name: 'software-factory', deploy: { mode: 'make' }, leads: 1 },
     })
     expect(text).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/)
+  })
+})
+
+describe('the slots key of a manifest', () => {
+  const parse = (slots: unknown) => ProjectManifest.safeParse({ apiVersion: 'factory/v2', name: 'x', slots })
+  test('a run limit between 1m and 6h parses, none leaves it unset', () => {
+    expect(parse({ run: '45m' }).data?.slots).toEqual({ run: '45m' })
+    expect(parse({ run: '6h' }).success).toBe(true)
+    expect(parse({}).data?.slots).toEqual({})
+    expect(parse(undefined).data?.slots).toEqual({})
+  })
+  test('a limit under 1m, over 6h, a bad duration or an unknown key is rejected', () => {
+    expect(parse({ run: '0m' }).success).toBe(false)
+    expect(parse({ run: '30s' }).success).toBe(false)
+    expect(parse({ run: '7h' }).success).toBe(false)
+    expect(parse({ run: 'soon' }).success).toBe(false)
+    expect(parse({ runn: '30m' }).success).toBe(false)
   })
 })
 

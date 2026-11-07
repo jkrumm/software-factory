@@ -758,8 +758,8 @@ const queueGetHandler = (sql: SQL, repoRoots: readonly string[]) => async (req: 
 const slotHandlers = (sql: SQL, clock: Clock, slots: number) => ({
   PUT: async (req: Bun.BunRequest<'/slots/:id'>) => {
     const id = parseParam(SlotId, req.params.id)
-    const { name } = await parseBody(req, SlotInput)
-    return respond(Slot, await touchSlot(sql, { id, name, slots }, clock.now()))
+    const { name, cwd, limitMs } = await parseBody(req, SlotInput)
+    return respond(Slot, await touchSlot(sql, { id, name, slots, cwd, limitMs }, clock.now()))
   },
   DELETE: async (req: Bun.BunRequest<'/slots/:id'>) =>
     respond(SlotRelease, { released: await releaseSlot(sql, parseParam(SlotId, req.params.id)) }),

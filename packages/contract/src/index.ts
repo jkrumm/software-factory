@@ -143,6 +143,9 @@ export const Status = z.object({
 })
 export type Status = z.infer<typeof Status>
 
+/** The longest a command may run in a test slot before `slot run` kills it (`FACTORY_SLOT_RUN_MS`, manifest `slots.run`). */
+export const DEFAULT_SLOT_RUN_MS = 30 * 60_000
+
 /**
  * `PUT /slots/:id` on the socket: a request for a test slot and the renewal of the one held, in one call (FL7). `granted`
  * false means the caller waits (`ahead` callers are in front of it) and asks again; granted, `slot` is its number and the
@@ -155,6 +158,8 @@ export const Slot = z.object({
   slot: z.number().int().nullable(),
   leaseMs: z.number().int(),
   ahead: z.number().int(),
+  /** the run limit of the command in ms; absent from an older server, whose client then goes by its env or the default */
+  runMs: z.number().int().optional(),
 })
 export type Slot = z.infer<typeof Slot>
 
