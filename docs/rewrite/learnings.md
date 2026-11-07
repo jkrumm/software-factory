@@ -162,3 +162,21 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   from software-factory's `docs/plan.yaml`: the old core held it for 7 stable days (RS14), the new core has no stable
   gate (NL6 retired `stable_days`). software-factory is drained, so it stays queued; decide after the window whether the
   row should run now (it is post-cutover work) or the plan row gets an `after`.
+- **2026-11-07, window 1 held and closed (16:31 to 16:50 UTC).** Real Issue 299 (agent-workflows, an owner signal):
+  filed 16:42:18, settled 16:42:21, admitted 16:42:25, lead 16:42:35, shipped 16:43:38 with commit evidence (docs only,
+  so no deploy needed; review recorded as not required), watch passed 16:44:04, closed `done`; agw's live release is
+  its commit. The new core ran four Issues (297 to 299 new, 256 imported) with every loop passing. **The way back worked
+  live:** drain, stop, admin swap back, the old numbers moved past 299, `make rollback`, the old queue on `run`; the old
+  core answers healthy with nothing lost (the new core's schema is kept as `factory_rewrite`, 260 Issues).
+  **What window 2 needs first:**
+  1. The restart hang (finding 1) happened twice: at W9 and again at B4, where `launchctl bootout` left the server
+     orphaned with its database connections until it was killed by PID. Worker `rw/9b-shutdown` fixes it; window 2 does
+     not start before it is merged and proved by a scenario.
+  2. The runbook's stop steps (W3, B4) gain a fallback: after the grace, kill the server's PID (read from `launchctl
+     print` before the bootout), never a pattern.
+  3. The drill's green check (finding: expects ship from a no-deploy repo; misses its commit).
+  4. Issue 297 (plan row filed at once): decide before it can run.
+  5. Triage filed a docs fix as kind `feature`: the deterministic kind rules see an owner request as a feature; the
+     triage workflow should refine kind for requests (package 7's triage asks only when unsure).
+  6. `rollback` warned that the old release has no `.env.door.tpl`; the door still answered 401. Check which door runs
+     after a rollback.

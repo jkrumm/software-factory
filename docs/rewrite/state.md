@@ -25,7 +25,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 | 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
 | 7 | Loops and agw | 2, 6 | integrated | t1fc (removed) | `rw/7-loops-agw` (merged, deleted) | f637cef (merge), b49162b; agent-workflows 97dac43 deployed | `reports/7-loops-agw.md`; `make check` on `rewrite`: 759 unit, 98 scenarios; six live agw calls in the report; `agw factory-{steward,triage,ask}` answer on the mini |
 | 8 | API, read models, CLI parity | 2 to 7 | integrated | t1ff (removed) | `rw/8-api-parity` (merged, deleted) | bc3f37c (merge) | `reports/8-api-parity.md` (parity table, client changes for 9); `make check` on `rewrite`: 941 unit, 195 scenarios |
-| 9 | Cutover | 8 | 9a integrated; rehearsal and windows next | t1fh (removed) | `rw/9a-cutover-tools` (merged, deleted) | 691e781 (merge 9a) | `reports/9a-cutover-tools.md`, `cutover-runbook.md`; worker's rehearsal: 255 Issues, 212 match, 43 explained, 0 unexplained; way back boots the old core; `make check` on `rewrite`: 969 unit, 195 scenarios (8 cutover skip without the copy) |
+| 9 | Cutover | 8 | window 1 held and closed; fixes before window 2 | t1fh (removed) | `rw/9a-cutover-tools` (merged, deleted) | 691e781 (merge 9a) | `reports/9a-cutover-tools.md`, `cutover-runbook.md`; worker's rehearsal: 255 Issues, 212 match, 43 explained, 0 unexplained; way back boots the old core; `make check` on `rewrite`: 969 unit, 195 scenarios (8 cutover skip without the copy) |
 
 ## Log
 
@@ -56,3 +56,4 @@ compaction, before acting. Updated on every start, integration and send-back.
   Way back if this session dies: runbook "The way back" B1 to B8.
 - 2026-11-07: window 1: W9 to W12 done (restart hang worked around by killing the stuck PID); W13 scratch drill running; shutdown fix worker t1fm on `rw/9b-shutdown`.
 - 2026-11-07: window 1: W13 drill done in fact (Issue 298, lead on me, pushed, closed done); real Issue 299 filed on agent-workflows as an owner signal.
+- 2026-11-07 17:50: **window 1 closed by the way back**; old core live (089b35c, queue run, software-factory drained); new core's data kept in `factory_rewrite`. Next: merge `rw/9b-shutdown`, runbook stop fallback, drill fix, Issue 297, then window 2.
