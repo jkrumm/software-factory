@@ -217,6 +217,27 @@ export type HealthList = z.infer<typeof HealthList>
 export const AccountList = z.object({ accounts: z.array(AccountQuota) })
 export type AccountList = z.infer<typeof AccountList>
 
+/** One alert message of the ntfy alerts topic: when it was sent, who sent it (its title, else its first tag) and its text as one line. */
+export const ReadAlert = z.object({
+  id: z.string(),
+  at: z.string(),
+  source: z.string().nullable(),
+  text: z.string(),
+  /** ntfy's priority, 1 (min) to 5 (max) */
+  priority: z.number().int(),
+  /** it names IuRoot or a visible repo: a surface's read token gets its text left out (additive) */
+  visible: z.boolean().default(false),
+})
+export type ReadAlert = z.infer<typeof ReadAlert>
+
+/** The alerts of the last `hours`, newest first; `total` counts them before `limit` cut the list. */
+export const AlertList = z.object({
+  hours: z.number().int(),
+  total: z.number().int(),
+  alerts: z.array(ReadAlert),
+})
+export type AlertList = z.infer<typeof AlertList>
+
 // --- the change stream: the `data:` of each frame --------------------------------------------------------------------
 
 /** An `issue_events` row. */

@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import {
   AccountList,
+  AlertList,
   AskList,
   DoorReport,
   DoorRoute,
@@ -84,6 +85,15 @@ import { getProject, listable, listProjects } from './projects/store.ts'
 import type { ProjectSync } from './projects/sync.ts'
 import { QuotaError, type QuotaPoller } from './quota.ts'
 import { MAX_LIMIT, DEFAULT_LIMIT, NotReady, Reader, type ReadDeps } from './read/index.ts'
+import {
+  type AlertSource,
+  Alerts,
+  AlertsUnavailable,
+  DEFAULT_ALERT_HOURS,
+  DEFAULT_ALERT_LIMIT,
+  MAX_ALERT_HOURS,
+  MAX_ALERT_LIMIT,
+} from './read/alerts.ts'
 import { streamHandler, type StreamDeps } from './read/stream.ts'
 import { getQueue, setQueue } from './queue.ts'
 import { recordPrompt } from './prompts.ts'
@@ -143,6 +153,8 @@ export interface AppDeps {
   /** the read API (`/v1`): whether a place is IuRoot's (`Places.isVisible`), the transcript counter, and the stream's timing for a test */
   read?: Pick<ReadDeps, 'isVisible' | 'insights' | 'visibleNames' | 'timeZone'> &
     Pick<StreamDeps, 'pollMs' | 'keepaliveMs' | 'sleep'>
+  /** where `GET /v1/alerts` reads the alert messages (the ntfy alerts topic); without it that route is 503 `not_configured` */
+  alerts?: AlertSource
 }
 
 /** Largest request body the server reads. */
@@ -736,8 +748,16 @@ function limitParam(raw: string | null): number {
   return limit
 }
 
+/** `?<name>=` of the alerts read: a whole number from 1 to `max`, else `fallback` when absent. */
+function boundedParam(raw: string | null, name: string, fallback: number, max: number): number {
+  if (raw === null) return fallback
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1 || n > max) throw new BadRequest(`${name} must be a whole number from 1 to ${max}`)
+  return n
+}
+
 /** The read API's handlers, `GET /v1/...` (docs/design.md §11 "The read API"): the token API only, never on the socket. */
-const readHandlers = (reader: Reader) => {
+const readHandlers = (reader: Reader, alerts: Alerts | undefined) => {
   const notReady = (error: unknown): Response => {
     if (error instanceof NotReady) return json({ error: error.message, code: 'not_ready' }, 503)
     throw error
@@ -779,6 +799,18 @@ const readHandlers = (reader: Reader) => {
     health: async (_req: Request, caller: Caller) =>
       reader.lists({ surface: caller === 'read' }).then((l) => respond(HealthList, { health: l.health }), notReady),
     accounts: async () => respond(AccountList, { accounts: await reader.accounts() }),
+    alerts: async (req: Request, caller: Caller) => {
+      const params = new URL(req.url).searchParams
+      const hours = boundedParam(params.get('hours'), 'hours', DEFAULT_ALERT_HOURS, MAX_ALERT_HOURS)
+      const limit = boundedParam(params.get('limit'), 'limit', DEFAULT_ALERT_LIMIT, MAX_ALERT_LIMIT)
+      if (!alerts) return json({ error: 'the alerts source is not set up', code: 'not_configured' }, 503)
+      try {
+        return respond(AlertList, await alerts.list({ hours, limit, surface: caller === 'read' }))
+      } catch (error) {
+        if (error instanceof AlertsUnavailable) return json({ error: error.message, code: error.code }, 503)
+        throw error
+      }
+    },
   }
 }
 
@@ -820,6 +852,7 @@ export function routes(
     review,
     fleet,
     read: readOptions,
+    alerts: alertSource,
   }: AppDeps,
   /** what only a running server can do: take a connection out of its idle timer (the stream) */
   runtime: { noTimeout?: (req: Request) => void } = {},
@@ -831,7 +864,10 @@ export function routes(
     guarded(token, handler, { readToken, reads: true })
   const door = doorHandlers(sql, clock, repoRoots)
   const reader = new Reader({ sql, clock, ...readOptions })
-  const read = readHandlers(reader)
+  const read = readHandlers(
+    reader,
+    alertSource && new Alerts({ source: alertSource, clock, visibleNames: readOptions?.visibleNames }),
+  )
   const stream = streamHandler({ sql, clock, reader, ...readOptions }, runtime.noTimeout ?? (() => {}))
   return {
     '/health': {
@@ -880,6 +916,7 @@ export function routes(
     '/v1/asks': { GET: reads(read.asks) },
     '/v1/health': { GET: reads(read.health) },
     '/v1/accounts': { GET: reads(read.accounts) },
+    '/v1/alerts': { GET: reads(read.alerts) },
     '/v1/stream': { GET: reads(stream) },
     '/spawns': {
       GET: route(async () => respond(SpawnList, { spawns: await listSpawns(sql, clock.now()) })),

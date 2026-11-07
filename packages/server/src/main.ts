@@ -27,6 +27,7 @@ import { WorktreeMaker } from './issues/leadtree.ts'
 import { OffTick } from './issues/offtick.ts'
 import { GitWorktrees } from './issues/worktree.ts'
 import { makeNotifier } from './notify/index.ts'
+import { NtfyAlertSource } from './read/alerts.ts'
 import { ProjectSync } from './projects/sync.ts'
 import { ClaudeAccountSource, QuotaPoller } from './quota.ts'
 import { HcClient } from './hc.ts'
@@ -147,6 +148,11 @@ const server = serve({
     visibleNames: () => directoryNames(config.visibleRoots),
     timeZone: config.digestTz,
   },
+  alerts: new NtfyAlertSource({
+    url: config.ntfyUrl.replace(/\/+$/, ''),
+    topic: config.alertsTopic,
+    token: config.ntfyToken,
+  }),
 })
 
 // The hooks' socket: the owner's directory (mode 0700) and the socket (0600) are the credential. A stale file from a

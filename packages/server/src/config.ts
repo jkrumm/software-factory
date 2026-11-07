@@ -47,8 +47,10 @@ export interface Config {
   notifyTarget: string
   /** `FACTORY_NTFY_URL`: the ntfy server's base URL (http or https); empty until set, and a send then answers that it is not set */
   ntfyUrl: string
-  /** `NTFY_TOKEN` (from `secrets-run`): the bearer token for the publish */
+  /** `NTFY_TOKEN` (from `secrets-run`): the bearer token for the publish, and for the alerts read */
   ntfyToken: string
+  /** `FACTORY_ALERTS_TOPIC`: the ntfy topic `GET /v1/alerts` reads (default `alerts`) */
+  alertsTopic: string
   /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
   digestAt: string | null
   digestTz: string
@@ -127,6 +129,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     notifyTarget: notifyTarget(env.FACTORY_NOTIFY_TARGET),
     ntfyUrl: ntfyUrl(env.FACTORY_NTFY_URL),
     ntfyToken: env.NTFY_TOKEN || '',
+    alertsTopic: alertsTopic(env.FACTORY_ALERTS_TOPIC),
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
@@ -166,6 +169,13 @@ function notifyTarget(value: string | undefined): string {
   if (!isNotifyTarget(target))
     throw new Error(`FACTORY_NOTIFY_TARGET must be off or ntfy:<topic> (letters, digits, - and _), got: ${target}`)
   return target
+}
+
+function alertsTopic(value: string | undefined): string {
+  const topic = value || 'alerts'
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(topic))
+    throw new Error(`FACTORY_ALERTS_TOPIC must be a topic name (letters, digits, - and _), got: ${topic}`)
+  return topic
 }
 
 function ntfyUrl(value: string | undefined): string {

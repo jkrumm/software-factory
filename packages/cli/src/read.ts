@@ -1,5 +1,6 @@
 import {
   AccountList,
+  AlertList,
   AskList,
   ErrorBody,
   FleetFrame,
@@ -11,6 +12,7 @@ import {
   IssueDetail,
   IssueFrame,
   Overview,
+  type ReadAlert,
   type ReadAsk,
   type ReadHealth,
   SessionCard,
@@ -30,6 +32,7 @@ export interface ReadFlags {
   issue?: string
   role?: string
   live?: boolean
+  hours?: string
   since?: string
   'until-closed'?: boolean
 }
@@ -101,6 +104,8 @@ const accountRow = (a: Overview['accounts'][number]) =>
     a.fresh ? 'fresh' : 'stale',
   ].join('\t')
 
+const alertRow = (a: ReadAlert) => [a.at, cell(a.source), oneLine(a.text)].join('\t')
+
 const askRow = (a: ReadAsk) =>
   [oneLine(a.short), oneLine(a.summary), a.at, a.kind, cell(a.repo), a.stale ? 'stale' : ''].join('\t')
 
@@ -119,7 +124,7 @@ function overviewScreen(o: Overview): string {
 }
 
 const USAGE =
-  'usage: read overview|issues [--state open|closed|all] [--limit n]|issue <id>|sessions [--issue n] [--role r] [--live]|session <id>|asks|health|accounts'
+  'usage: read overview|issues [--state open|closed|all] [--limit n]|issue <id>|sessions [--issue n] [--role r] [--live]|session <id>|asks|health|accounts|alerts [--hours 1-24] [--limit n]'
 
 const idArg = (raw: string | undefined, what: string): string => {
   if (raw === undefined || !/^[1-9]\d{0,14}$/.test(raw)) throw usage(`${what} must be a positive integer, got: ${raw}`)
@@ -182,6 +187,14 @@ export async function readVerb(words: string[], format: Format, flags: ReadFlags
     case 'accounts': {
       const body = await get('/v1/accounts', AccountList)
       return print(body, body.accounts.map(accountRow))
+    }
+    case 'alerts': {
+      const query = new URLSearchParams()
+      if (flags.hours !== undefined) query.set('hours', idArg(flags.hours, '--hours'))
+      if (flags.limit !== undefined) query.set('limit', idArg(flags.limit, '--limit'))
+      const qs = query.size ? `?${query.toString()}` : ''
+      const body = await get(`/v1/alerts${qs}`, AlertList)
+      return print(body, body.alerts.map(alertRow))
     }
     default:
       throw usage(USAGE)
