@@ -109,7 +109,8 @@ export function agwPort(options: AgwOptions): AgwPort {
   return {
     async run<T>(call: AgwCall<T>): Promise<Result<T, PortError>> {
       const deadline = Date.now() + guard
-      const purpose = `software-factory:${call.workflow}`
+      // agw takes 1 to 64 of [A-Za-z0-9_.-] as a purpose (a colon is refused with a 400)
+      const purpose = `software-factory.${call.workflow}`
       try {
         let finished = await exec(
           options.bin,

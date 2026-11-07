@@ -27,12 +27,17 @@ const envelope = (output: unknown, status = 'done') =>
 
 test('a finished run: the envelope’s output, checked against the schema, with the key and the input as sent', async () => {
   const seen = join(dir, 'seen')
-  const bin = await agw('done', `echo "$@" > ${seen}; cat >> ${seen}; echo '${envelope({ answer: 'yes' })}'`)
+  const bin = await agw(
+    'done',
+    `echo "$@" > ${seen}; echo "purpose=$AGW_PURPOSE" >> ${seen}; cat >> ${seen}; echo '${envelope({ answer: 'yes' })}'`,
+  )
   const result = await agwPort({ bin }).run(call)
   expect(result).toEqual({ ok: true, value: { answer: 'yes' } })
   const sent = await readFile(seen, 'utf8')
   expect(sent).toContain('factory-ask --format json --idempotency-key test:one')
   expect(sent).toContain('{"question":"q"}')
+  // agw refuses a purpose outside 1-64 of [A-Za-z0-9_.-] with a 400: found by the first live call
+  expect(sent).toMatch(/purpose=[A-Za-z0-9_.-]{1,64}\n/)
 })
 
 test('exit 10 is pending: the run id in the envelope is waited for with `agw run wait` until it ends', async () => {
