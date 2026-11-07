@@ -1,0 +1,18 @@
+{
+  "name": "@software-factory/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app": "./src/api/app.ts"
+  },
+  "dependencies": {
+    "@elysiajs/openapi": "1.4.17",
+    "@software-factory/contract": "workspace:*",
+    "elysia": "1.4.30",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@software-factory/tests": "workspace:*"
+  }
+}
