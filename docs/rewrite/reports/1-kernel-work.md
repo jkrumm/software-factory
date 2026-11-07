@@ -1,15 +1,16 @@
 # Package 1: Kernel and work, report
 
 **Done: the kernel, the Issue as a total state machine with its model test and generated diagram, and the one write
-path that stores an event, the new state and its effects in one transaction.** Branch `rw/1-kernel-work`, eight commits
-on `97c564f` (the brief's base; `rewrite` has moved on since), this report the ninth. `make check` is green.
+path that stores an event, the new state and its effects in one transaction.** Branch `rw/1-kernel-work`, on `97c564f`
+(the brief's base; `rewrite` has moved on since): eight commits, the report, and two more after the orchestrator's
+send-back (numbered Issue ids, the narrower transaction rule; §After the send-back). `make check` is green.
 
 ## What changed
 
 - **`apps/server/src/kernel/`** (imports nothing else of the server): `result.ts` (`Result<T, E = PortError>`, `ok`,
   `err`, `portError`; `ok` is `Result<T, never>` so a callback's error type infers), `ids.ts` (`Id<K>` branded per kind,
-  `IssueId`, `EventId`, the `IdSource` port, `systemIds` as `<kind>_<uuidv7>`, `sequentialIds` for tests, `idOf` to
-  read one back), `clock.ts` (`Clock`, `systemClock`, `fixedClock`), `keys.ts` (`key(...parts)`: parts joined by `:`,
+  `IssueId` as `issue_<n>` with `issueId(n)` and `issueNumber(id)`, `EventId`, the `IdSource` port for every other id,
+  `systemIds` as `<kind>_<uuidv7>`, `sequentialIds` for tests, `idOf` to read one back), `clock.ts` (`Clock`, `systemClock`, `fixedClock`), `keys.ts` (`key(...parts)`: parts joined by `:`,
   with `%` and `:` escaped so two part lists never make one key; `Key` is branded), `events.ts` (`ACTORS`, the
   `EventEnvelope`: id, Issue id, key, kind, payload, actor, at, the version it produced or null, causation), `index.ts`.
 - **`apps/server/src/domains/work/`**, pure:
@@ -26,12 +27,12 @@ on `97c564f` (the brief's base; `rewrite` has moved on since), this report the n
   - `explore.ts`: the event space (`candidates`) and the reachable `edges()`, shared by the model test and the diagram.
     `diagram.ts`: the generated block.
 - **`apps/server/src/app/`**: `unit-of-work.ts` (the port: `run` commits on ok, rolls back on an error result, maps a
-  dead database to `PortError`; `inTransaction`), `issues.ts` (`recordIn`, `fileIn` inside a caller's transaction;
+  dead database to `PortError`; `inTransaction`), `issues.ts` (`recordIn`, `fileIn` inside a caller's transaction, `fileIn` taking the Issue's number from the store;
   `recordIssueEvent`, `fileIssue` in their own), `outbox.ts` (`runOutbox`: claim and commit, call each port with no
   transaction open, a programming error if one is, record in a new transaction).
 - **`apps/server/src/adapters/postgres/`**: `unit-of-work.ts` (the only `.begin` besides `migrate.ts`; an
   `AsyncLocalStorage` marks the transaction's call chain), `work-store.ts` (the SQL; rows parsed with zod).
-- **`apps/server/migrations/0002_work.sql`**: `issues` (`id`, `repo`, `state`, `wait_reason`, `outcome`, `version`, with
+- **`apps/server/migrations/0002_work.sql`**: the sequence `issue_numbers` (an Issue's id is `issue_<n>`), `issues` (`id`, `repo`, `state`, `wait_reason`, `outcome`, `version`, with
   CHECKs tying `waiting` to a reason and `closed` to an outcome), `issue_events` (every event a fact, refused and ignored
   too; `key` unique across all Issues; `version` unique per Issue and set only when applied; the transition), the
   outbox `issue_effects` (`key` primary, `version` and `position` order an Issue's effects, `not_before`,
@@ -43,8 +44,9 @@ on `97c564f` (the brief's base; `rewrite` has moved on since), this report the n
   deletes the two files and the setting. `main.ts` composes the unit of work and the work store.
 - **`apps/server/scripts/issue-diagram.ts`** (`--check`), a `make check` step, and the marker block at the end of
   `docs/language.md` under "The Issue, as the code has it" (the only edit there).
-- **`scripts/boundaries.ts`**: two rules, each with a failing and a passing fixture (three fixture pairs). Package 0's
-  rules hold.
+- **`scripts/boundaries.ts`**: two rules, each with a failing and a passing fixture (four fixture pairs): only
+  `adapters/postgres/unit-of-work.ts` and `adapters/postgres/migrate.ts` call `.begin(`, `.beginDistributed(` or
+  `.transaction(` (`app/` included: it gets the unit of work as a port); `app/` imports no adapter. Package 0's rules hold.
 - **`.oxlintrc.json`**: `ban-ts-comment` now refuses `@ts-expect-error` everywhere but
   `apps/server/test/work/table-types.test.ts`, where it needs a description.
 - **Tests**: `test/kernel.test.ts`; `test/work/{model,machine,table-types,diagram}.test.ts`; `test/work-write.test.ts`
@@ -86,12 +88,14 @@ on `97c564f` (the brief's base; `rewrite` has moved on since), this report the n
 
 ## `make check`
 
+After the send-back, on the last commit:
+
 ```
 ==> install (bun install --frozen-lockfile)
-Checked 44 installs across 100 packages (no changes) [6.00ms]
+Checked 44 installs across 100 packages (no changes) [7.00ms]
 ==> format (oxfmt --check)
 All matched files use the correct format.
-Finished in 8ms on 84 files using 12 threads.
+Finished in 11ms on 84 files using 12 threads.
 ==> lint (oxlint --type-aware)
 ==> shellcheck
 ==> typecheck (tsc --noEmit)
@@ -102,15 +106,15 @@ no retired words
 ==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)
 ==> generated CLI is current (apps/cli/scripts/generate.ts --check)
 ==> unit tests (bun test apps packages scripts)
- 121 pass
+ 124 pass
  0 fail
- 403 expect() calls
-Ran 121 tests across 14 files. [3.90s]
+ 414 expect() calls
+Ran 124 tests across 14 files. [3.90s]
 ==> scenarios (bun test tests)
  10 pass
  0 fail
  35 expect() calls
-Ran 10 tests across 2 files. [3.63s]
+Ran 10 tests across 2 files. [3.66s]
 ==> check passed
 ```
 
@@ -148,7 +152,7 @@ Ran 10 tests across 2 files. [3.63s]
 
 1. Add its store to the composition in `main.ts`: `postgresUnitOfWork(sql, (tx) => ({ work: postgresWorkStore(tx), intake: postgresIntakeStore(tx) }))`.
 2. Its use case takes `UnitOfWork<{ work: WorkStore; intake: IntakeStore }>` (`app/unit-of-work.ts`) plus `{ clock, ids }`, and inside `uow.run(async ({ work, intake }) => …)` writes its rows and calls `recordIn(work, deps, { issueId, key, event })` or `fileIn(work, deps, { key, event })` (`app/issues.ts`), returning their `Result`.
-3. An event is typed `IssueEvent<K>` or parsed with `parseIssueEvent`; its key is `key(...parts)` (`kernel/keys.ts`), deterministic from the cause; the time is `Clock`, ids `IdSource`.
+3. An event is typed `IssueEvent<K>` or parsed with `parseIssueEvent`; its key is `key(...parts)` (`kernel/keys.ts`), deterministic from the cause; the time is `Clock`, ids `IdSource` (an Issue's number comes from `fileIn`; `issueNumber(id)` reads it back).
 4. A `version_conflict` comes back as an error result to retry; `replayed` means the key was stored already.
 5. Its effects run through `EffectPorts` (`domains/work/ports.ts`) and `runOutbox` (`app/outbox.ts`); the port finds its own work by the effect's key.
 
@@ -185,9 +189,7 @@ the fix is broken by hand.
    to `version`). A note to a `settling` or `queued` Issue, or one left over when a wait ends in `queued`, is for the
    next attempt's brief to read from `issue_events` (package 4). `noted` never wakes: the owner's "note and wake" is
    two events, `noted` then `woken`.
-5. **Issue ids are `issue_<uuidv7>`:** long in pane names (`lead-<issue>-<attempt>`) and on the CLI. The cutover can
-   import the old integer ids as `issue_<n>`, because `idOf` accepts any alphanumeric part. Reversible: a different
-   `IdSource` is one line in `main.ts`.
+5. **Issue ids are `issue_<n>`** (send-back): see §After the send-back.
 6. **`issues.repo`** is on the row beside state and version: an immutable fact from `filed`, there for capacity's "open
    Issues of repo X". Title, kind and origin stay in the `filed` payload, and the snapshot derives them.
 7. **Stores throw, the unit of work returns a `Result`.** `WorkStore` methods throw on a database failure, and
@@ -199,8 +201,8 @@ the fix is broken by hand.
 9. **Nothing runs the outbox yet.** `runOutbox` has no caller in `main.ts`; the tick (package 4 or 7) schedules it and
    brings the real ports. The runner sets no process timeout of its own: each port owns its timeout, as `AGENTS.md`
    says. The claim lease is 15 min.
-10. **The boundary rule allows `.begin(` in `app/`**, as the brief says, though `app/` never needs it: it gets the unit
-    of work. Tightening it to "only the two adapter files" is a one-line change once nobody objects.
+10. **Only the two adapter files open a transaction** (send-back), `app/` included. `docs/architecture.md` still says
+    "Only `app/` opens a transaction": true in effect (`app/` holds the unit of work), not in the letter.
 11. **`FACTORY_INTERNAL_TEST_ROUTES`** is not on `scripts/env-file.sh`'s allow-list, on purpose: only the scenarios set
     it, and package 8 deletes it. The routes have no token, because no auth exists yet; they bind loopback and are off
     by default.
@@ -213,3 +215,20 @@ the fix is broken by hand.
     `shell-snapshots/` and `session-env/` untracked at the root. They were gone a few minutes later, and I never touched
     them. It looks like a session launched with its config dir set to this worktree. Worth a look in how `hc run` starts
     worker sessions.
+
+## After the send-back
+
+The orchestrator accepted the open points as written (the third regression as a stall: steward first, then a Decision)
+and asked for two changes, made in two commits. No second review, as asked.
+
+- **Issue ids are numbers.** `0002_work.sql` gains `factory.issue_numbers` (an integer sequence) and a CHECK that an
+  Issue id is `issue_<n>`. The migration's comment says how the cutover moves the sequence past the imported maximum
+  (`setval('factory.issue_numbers', <imported max>)`). `WorkStore.nextIssueId()` takes `nextval` inside the filing's
+  transaction; `fileIn` uses it instead of `IdSource`, which now makes every other id (events: uuidv7 in production,
+  counted in tests). A filing that rolls back leaves a gap in the numbers and never a repeat. `kernel/ids.ts` has
+  `issueId(n)` and `issueNumber(id)`. I edited `0002_work.sql` in place rather than adding `0003`: it is unmerged and
+  was only ever applied to test clusters. A new test files `issue_1`, then a refused filing, then `issue_3`; after
+  `setval(…, 286)` the next is `issue_287`, and a non-numbered id fails the CHECK.
+- **The transaction rule is narrower:** `.begin(`, `.beginDistributed(` and `.transaction(` are allowed only in
+  `adapters/postgres/unit-of-work.ts` and `adapters/postgres/migrate.ts`. A new fixture pair fails `app/` calling
+  `sql.begin` and passes `app/` calling `uow.run`.
