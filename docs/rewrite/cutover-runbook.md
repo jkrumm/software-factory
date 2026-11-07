@@ -83,6 +83,23 @@ binds the old hook socket path and refuses to steal a live one: W3 comes first.
 An Issue that is `diverged` or in `conflict` is listed with the reason and left as it is; stop the window and read it
 (in window 1 there are none: the new schema was empty).
 
+### What the import carries
+
+| Carried | Into | How |
+|-|-|-|
+| Issues, with their numbers | `issues`, `issue_events` | each old Issue's events replayed through the new machine at the time they happened; the repo is its directory name; the request text and facts become the first note; a stop closes as `cancelled`; `issue_numbers` is set past the larger of both cores |
+| Every old event kind | `import_events` | `mapped`, `folded` into another table, or `dropped` with the reason; `import.sh` prints the count per kind and what the machine said to each mapped event |
+| Decisions and their answers | `decisions`, `artifacts`, `artifact_revisions`, `decision_steps` | the form's fields the old core never had say `not recorded: imported from the old core`; the form is revision 1 under `FACTORY_DATA_DIR/blobs`; an open Decision stays open |
+| Ships, reviews, watches, checks, refused ships | `quality_ships`, `quality_evidence`, `quality_watches`, `quality_checks` | from the ship, verified, verify-red and regression events; a `watching` Issue gets an open watch, so verify runs at once |
+| Priorities, the chain, plan rows filed | `planning_prios`, `planning_edges`, `planning_filed_rows` | a plan row already filed is not filed twice |
+| Claims of `working` Issues | `capacity_claims` | otherwise they block their repo |
+| The door's registry | `intake_door_routes`, `_sources`, `_unrouted`, `intake_subjects`, `intake_seen` | the repo as its directory name |
+| GitHub write-backs, finalized attempts | `intake_writebacks`, `lead_finalizations` | |
+
+Left in `factory_legacy`, not carried: the queue states (the window sets them: W7, W10), the projects (read again from each
+`project.yaml`), sessions, prompts, session events, effects, spawns, the issue inbox and effects, test slots, quota readings,
+the fleet digest, notifications and the witness. Nothing is deleted from `factory_legacy`, and nothing is written to it.
+
 ### Unpause, narrow, check
 
 | # | Step | Command | It worked when | Undo |

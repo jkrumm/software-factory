@@ -336,6 +336,7 @@ async function importOne(
 async function importAround(
   opts: ImportOptions,
   sources: Awaited<ReturnType<typeof readLegacy>>,
+  touched: ReadonlySet<number>,
 ): Promise<Omit<ImportReport, 'issues' | 'kinds' | 'notes' | 'machine'>> {
   const { sql } = opts
   const L = schema(opts.legacySchema)
@@ -374,13 +375,15 @@ async function importAround(
     planRows += rows.length
   }
 
-  // A working Issue holds its repo's claim, or it blocks the repo (report 3, open point 3).
+  // An Issue that works holds its repo's claim, or it blocks the repo (report 3, open point 3). Only an Issue this run brought over
+  // or extended, and only while the new core has it `working`: a claim the new core released since is its own to take again.
   let claims = 0
   for (const s of sources) {
-    if (s.issue.state !== 'working' || !imported.has(s.issue.id)) continue
+    if (s.issue.state !== 'working' || !touched.has(s.issue.id)) continue
     const rows = await sql`
       INSERT INTO factory.capacity_claims (issue_id, repo, urgent, account, taken_at)
-      VALUES (${issueId(s.issue.id)}, ${repoName(s.issue.repo)}, false, NULL, ${opts.now})
+      SELECT i.id, ${repoName(s.issue.repo)}, false, NULL, ${opts.now} FROM factory.issues i
+      WHERE i.id = ${issueId(s.issue.id)} AND i.state = 'working'
       ON CONFLICT (issue_id) DO NOTHING
       RETURNING issue_id`
     claims += rows.length
@@ -427,7 +430,10 @@ export async function importLegacy(opts: ImportOptions): Promise<ImportReport> {
   const sources = await readLegacy(opts.sql, opts.legacySchema)
   const issues: IssueResult[] = []
   for (const source of sources) issues.push(await importOne(opts, source))
-  const around = await importAround(opts, sources)
+  const touched = new Set(
+    issues.filter((i) => i.result === 'imported' || i.result === 'appended').map((i) => i.legacyId),
+  )
+  const around = await importAround(opts, sources, touched)
   const kinds = (await opts.sql`
     SELECT kind, disposition, count(*)::int AS count FROM factory.import_events GROUP BY 1, 2 ORDER BY 1, 2`) as ImportReport['kinds']
   const plans = sources.map((s) => planIssue(s.issue, s.events, s.decisions))

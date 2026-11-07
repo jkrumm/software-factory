@@ -159,6 +159,14 @@ describe('importLegacy', () => {
     expect(await count('issue_effects')).toBe(0)
   })
 
+  test('a claim the new core released is not taken again by a later run', async () => {
+    await importLegacy(options())
+    await db.sql.unsafe("DELETE FROM factory.capacity_claims WHERE issue_id = 'issue_2'")
+    const again = await importLegacy(options())
+    expect(again.claims).toBe(0)
+    expect(await count('capacity_claims')).toBe(0)
+  })
+
   test('a second run changes nothing', async () => {
     await importLegacy(options())
     const tables = [

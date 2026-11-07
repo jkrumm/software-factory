@@ -274,7 +274,9 @@ deploy_door() { # $1 release dir, $2 sha
   local template tmp i=0
   template=$(door_template_of "$1")
   if [[ ! -f "$template" ]]; then log "WARNING: $template missing: the door is left as it is"; return 0; fi
-  if [[ -f "$1/.env.door.tpl" ]]; then
+  if [[ ! -f "$1/.env.door.tpl" ]]; then
+    log "WARNING: $1/.env.door.tpl is missing: the door cannot start"
+  else
     local key ref
     while IFS='=' read -r key ref; do
       secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: the door's $key ($ref) does not resolve through secrets-run: the door will not start"
