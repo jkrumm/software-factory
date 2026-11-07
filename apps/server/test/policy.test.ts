@@ -84,7 +84,6 @@ describe('the policy table', () => {
       ['POST', '/planning/prio'],
       ['PUT', '/queue'],
       ['POST', '/v1/loops/:name/run'],
-      ['GET', '/signals'],
     ] as const) {
       expect(allowed(method, route)).toEqual(['owner'])
     }

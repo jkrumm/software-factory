@@ -28,6 +28,7 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
+import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIntake } from './compose-intake.ts'
@@ -46,6 +47,7 @@ import { systemIds } from './kernel/ids.ts'
 import { healthOf, tickProblem } from './read/health.ts'
 import { planningSettings } from './app/planning-settings.ts'
 import { queueMovedAt } from './read/queue.ts'
+import { queueReasonMap } from './api/read-models.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
@@ -55,6 +57,9 @@ const HOSTNAME = '127.0.0.1'
 
 /** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
 const IDLE_TIMEOUT_S = 255
+
+/** A door source refused within this long is a health line; an older refusal has passed. */
+const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
 const fail = (message: string): never => {
   console.error(message)
@@ -302,6 +307,21 @@ async function main(): Promise<void> {
     checkpoints,
     leads: leads.routes,
     loops: runner,
+    read: composeRead({
+      sql,
+      clock,
+      env: process.env,
+      doorLines: () => intake.doorLines(DOOR_LINES_RECENT_MS),
+      loops: () => runner.view(),
+      blockedStreak: loopSettings.blockedChecks,
+    }),
+    readModels: {
+      sql,
+      queueReasons: async () => {
+        const view = await planning.capacity.queue()
+        return view.ok ? queueReasonMap(view.value.queue) : null
+      },
+    },
     leadsTick: settings.internalTestRoutes ? () => leads.tick() : undefined,
     internalTest: settings.internalTestRoutes
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }

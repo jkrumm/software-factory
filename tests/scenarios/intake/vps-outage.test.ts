@@ -73,7 +73,7 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
   // Beszel first: the hub reports the VPS choking on memory.
   hub.setMemory(96)
   const first = await until('the Beszel alert to file an Issue', async () => {
-    const signals = (await get(server, '/signals')).body.signals as {
+    const signals = (await get(server, '/v1/signals')).body.signals as {
       source: string
       issue: string | null
       state: string
@@ -89,7 +89,7 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
   expect(h).toMatchObject({ status: 200, body: { outcome: 'incident', detail: 'joined', issue } })
   expect(k).toMatchObject({ status: 200, body: { outcome: 'incident', detail: 'joined', issue } })
 
-  const signals = (await get(server, '/signals')).body.signals as {
+  const signals = (await get(server, '/v1/signals')).body.signals as {
     source: string
     issue: string | null
     state: string
@@ -114,7 +114,7 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
   expect(await observe(server, issue)).toMatchObject({ state: 'closed', outcome: 'healed' })
 
   // Never a second Issue: every stored signal points at the one.
-  const after = (await get(server, '/signals')).body.signals as { issue: string | null }[]
+  const after = (await get(server, '/v1/signals')).body.signals as { issue: string | null }[]
   expect(new Set(after.map((s) => s.issue))).toEqual(new Set([issue]))
   expect(await world.calls()).toEqual([])
 }, 40000)

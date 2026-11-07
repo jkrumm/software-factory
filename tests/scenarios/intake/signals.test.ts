@@ -54,7 +54,7 @@ test('an owner signal that matches an open Issue amends it: one noted event, no 
   expect(second).toMatchObject({ outcome: 'amended', detail: 'matched', issue })
   expect(await observe(server, issue)).toMatchObject({ state: 'settling', version: 2 })
 
-  const stored = (await get(server, '/signals')).body.signals as { issue: string }[]
+  const stored = (await get(server, '/v1/signals')).body.signals as { issue: string }[]
   expect(stored.map((s) => s.issue)).toEqual([issue, issue])
 }, 20000)
 
@@ -62,7 +62,7 @@ test('an agent files in its own repo with the same envelope', async () => {
   const filed = await signalFile({ from: 'agent:vps', title: 'The deploy script has no rollback target' })
   expect(filed).toMatchObject({ outcome: 'filed' })
   expect(
-    (await get(server, '/signals')).body.signals.find((s: { id: string }) => s.id === (filed.signal ?? '')),
+    (await get(server, '/v1/signals')).body.signals.find((s: { id: string }) => s.id === (filed.signal ?? '')),
   ).toMatchObject({
     source: 'agent:vps',
     trust: 'agent',
@@ -155,7 +155,9 @@ test("the repo comes from the door's routes, never from a payload", async () => 
     heartbeat: { status: 0, time: '2026-11-07 09:20:00.000', msg: 'timeout', ping: null, retries: 1 },
   })
   expect(sneaky).toMatchObject({ status: 200, body: { outcome: 'filed' } })
-  const stored = (await get(server, '/signals')).body.signals.find((s: { id: string }) => s.id === sneaky.body.signal)
+  const stored = (await get(server, '/v1/signals')).body.signals.find(
+    (s: { id: string }) => s.id === sneaky.body.signal,
+  )
   expect(stored).toMatchObject({ repo: 'vps' })
 }, 20000)
 

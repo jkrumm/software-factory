@@ -7,7 +7,6 @@ scripts/gameday/f2/seeded-bug.sh park  # the old core's game day, kept as it ran
 scripts/gameday/f2/silent-lead.sh *  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 scripts/gameday/f2/templates/silent/AGENTS.md park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tracker's lane name for factory sessions, an external value
-apps/server/src/api/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/asks.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/surface.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients

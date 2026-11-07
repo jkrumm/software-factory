@@ -57,7 +57,7 @@ type Stored = {
   title: string
   repo: string | null
 }
-const stored = async () => (await get(server, '/signals')).body.signals as Stored[]
+const stored = async () => (await get(server, '/v1/signals')).body.signals as Stored[]
 
 test("a labelled GitHub issue files once; a stranger's unlabelled one is held; the write-back answers the close", async () => {
   github.issues = [

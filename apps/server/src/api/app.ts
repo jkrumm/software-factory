@@ -15,6 +15,9 @@ import { leadsTestRoutes } from './leads-test.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
+import { readRoutes } from './read.ts'
+import { type ReadModelDeps, readModelRoutes } from './read-models.ts'
+import type { ReadApi } from '../read/reader.ts'
 
 export interface ApiDeps {
   /** who may call: absent, no caller exists and every route but `GET /health` answers 401 */
@@ -40,6 +43,10 @@ export interface ApiDeps {
   capacity?: CapacityApi
   /** the loop runner: every loop shown, one pass of one on demand; unbound, the routes answer 503 */
   loops?: LoopsApi
+  /** the legacy-compatible read API and the change stream; unbound, the routes answer 503 */
+  read?: ReadApi
+  /** the computed screens (needs, flow, chain, kpis, friction); unbound, the routes answer 503 */
+  readModels?: ReadModelDeps
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -119,6 +126,8 @@ export function createApp(deps: ApiDeps) {
     .use(planningRoutes(deps.planning))
     .use(capacityRoutes(deps.capacity))
     .use(loopRoutes(deps.loops))
+    .use(readRoutes(deps.read))
+    .use(readModelRoutes(deps.readModels))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
     .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }

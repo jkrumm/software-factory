@@ -177,6 +177,8 @@ export const StoredSignal = z
     /** held until promoted, or what it became */
     state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']),
     issue: z.string().nullable(),
+    /** the text was hidden: the read token does not see outside text */
+    redacted: z.boolean(),
   })
   .meta({ id: 'StoredSignal' })
 export type StoredSignal = z.infer<typeof StoredSignal>

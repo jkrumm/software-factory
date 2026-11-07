@@ -130,7 +130,7 @@ export const readRoutes = (read: ReadApi | undefined) =>
         response: { 200: ReadAskList, ...errorResponses(503) },
         detail: {
           operationId: 'read.asks',
-          summary: 'what waits on the owner (asks) and the open Errands (humanQueue)',
+          summary: 'what waits on the owner, and the open Errands',
         },
       },
     )

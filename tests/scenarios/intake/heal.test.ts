@@ -58,7 +58,7 @@ test('a heal runbook that fixes the symptom files nothing', async () => {
   const up = await door.post('kuma', kuma('web', 1, '2026-11-07 09:00:30.000'))
   expect(up).toMatchObject({ status: 200, body: { outcome: 'dropped', detail: 'healed' } })
   await Bun.sleep(3500)
-  expect((await get(server, '/signals')).body.signals).toEqual([])
+  expect((await get(server, '/v1/signals')).body.signals).toEqual([])
   // a late retry of the down that healed opens no second row
   expect((await door.post('kuma', kuma('web', 0, '2026-11-07 09:00:00.000'))).body).toMatchObject({
     outcome: 'dropped',
@@ -73,7 +73,7 @@ test('a rule that cannot run files the down once its grace is over', async () =>
     detail: 'settling',
   })
   const filed = await until('the down to be filed', async () => {
-    const signals = (await get(server, '/signals')).body.signals as { source: string; issue: string | null }[]
+    const signals = (await get(server, '/v1/signals')).body.signals as { source: string; issue: string | null }[]
     return signals.find((s) => s.source === 'kuma' && s.issue)
   })
   expect(filed).toMatchObject({ state: 'filed' })

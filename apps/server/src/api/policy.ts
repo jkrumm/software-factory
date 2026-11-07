@@ -17,7 +17,7 @@
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs, `ship`,
  *   `quality`, a revision, its own session read, the signal it files and the test slots it takes.
- * - owner only: everything else, and every route nobody has classified yet (reopen, answers, verdicts, projects, queue,
+ * - owner only: everything else, and every route nobody has listed yet (reopen, answers, verdicts, projects, queue,
  *   capacity, loops, the door's registry, the scenarios' test routes). When in doubt, the owner alone.
  * - machine: exactly `POST /signals/alerts` and `POST /door/reports`, the door's two calls (the owner may make them too).
  *
@@ -82,7 +82,6 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/errands/:id/done', OWNER),
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),
-  rule('GET', '/signals', OWNER),
   rule('POST', '/signals/:id/promote', OWNER),
   rule('GET', '/door/routes', OWNER),
   rule('POST', '/door/routes', OWNER),
