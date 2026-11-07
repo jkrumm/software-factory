@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const keyOf = (args: string[]): string => {
@@ -41,6 +41,8 @@ export function done(workflow: string, args: string[], output: unknown): number 
 
 /** `agw run wait <runId>`: the run a pending call left behind, now done. */
 export function runWait(args: string[]): number {
+  if (process.env.FACTORY_FAKE_LOG)
+    appendFileSync(process.env.FACTORY_FAKE_LOG, `${JSON.stringify({ tool: 'agw', args })}\n`)
   const runId = args[2] ?? ''
   const file = join(pendingDir(), `${runId}.json`)
   if (!existsSync(file)) {

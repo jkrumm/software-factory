@@ -6,9 +6,8 @@ import { fileProjectSignals } from './adapters/intake/projects.ts'
 import { makeRestartRunbook } from './adapters/intake/runbook.ts'
 import { selfPaced } from './adapters/intake/schedule.ts'
 import type { IntakeEnv } from './adapters/intake/settings.ts'
-import { stubTriageWorkflow } from './adapters/intake/triage.ts'
 import { infraTopology, loadInfra } from './adapters/intake/topology.ts'
-import type { ProjectSignals } from './domains/intake/ports.ts'
+import type { ProjectSignals, TriageWorkflow } from './domains/intake/ports.ts'
 import type { IntakeApi } from './api/intake.ts'
 import { createIntake, type IntakeWrites } from './app/intake.ts'
 import type { Clock } from './kernel/clock.ts'
@@ -27,7 +26,7 @@ export interface ComposedIntake {
 /**
  * Intake's composition (the ports it needs and the adapters behind them), kept out of `main.ts` so that file gains
  * three lines. The projects come from planning's `project.yaml` reader (a JSON file overrides them when
- * `FACTORY_INTAKE_PROJECTS_FILE` is set), and `stubTriageWorkflow` is package 7's `factory-triage`.
+ * `FACTORY_INTAKE_PROJECTS_FILE` is set), and the triage workflow is `factory-triage` through the agw port.
  */
 export async function composeIntake(input: {
   sql: SQL
@@ -37,6 +36,8 @@ export async function composeIntake(input: {
   ids: IdSource
   /** the projects and what each hears: planning's `project.yaml` reader */
   projects: ProjectSignals
+  /** `factory-triage` in amend mode (the agw port's), asked when the deterministic match is unsure */
+  triage: TriageWorkflow
 }): Promise<ComposedIntake> {
   const { env } = input
   const infra = await loadInfra(env.infraFile)
@@ -49,7 +50,7 @@ export async function composeIntake(input: {
     projects,
     topology: infraTopology(infra),
     openIssues: postgresOpenIssues(input.sql),
-    triage: stubTriageWorkflow,
+    triage: input.triage,
     runbook: makeRestartRunbook({ sourceRoot: env.sourceRoot }),
     settings: {
       incidentWindowMs: env.incidentWindowMs,

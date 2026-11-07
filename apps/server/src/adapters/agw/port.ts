@@ -16,6 +16,26 @@ interface Finished {
   hung: boolean
 }
 
+/** After the kill, the pipes get this long to drain before the call lets them go. */
+const PIPE_GRACE_MS = 500
+
+/** Kills the program and everything it started: it leads its own process group (`detached`). */
+function killGroup(proc: { pid: number; kill: (signal: NodeJS.Signals) => void }): void {
+  try {
+    process.kill(-proc.pid, 'SIGKILL')
+  } catch {
+    try {
+      proc.kill('SIGKILL')
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/**
+ * Runs `agw` to the end or to the hang guard. The program leads its own process group, so the guard kills what it started
+ * too, and a grandchild that still holds the pipes does not keep the call waiting: after the kill they get a short grace.
+ */
 async function exec(
   bin: string,
   args: string[],
@@ -28,18 +48,34 @@ async function exec(
     stdout: 'pipe',
     stderr: 'pipe',
     env: { ...process.env, AGW_PURPOSE: purpose },
+    detached: true,
   })
   let hung = false
   const timer = setTimeout(
     () => {
       hung = true
-      proc.kill('SIGKILL')
+      killGroup(proc)
     },
     Math.max(1, killAt - Date.now()),
   )
+  const stdout = proc.stdout as ReadableStream<Uint8Array>
+  const stderr = proc.stderr as ReadableStream<Uint8Array>
+  const finished = Promise.all([new Response(stdout).text(), new Response(stderr).text(), proc.exited])
   try {
-    const [out, errText, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
-    return { code, out, err: errText, hung }
+    const gaveUp = new Promise<null>((resolve) => {
+      const watch = setInterval(() => {
+        if (!hung) return
+        clearInterval(watch)
+        setTimeout(() => resolve(null), PIPE_GRACE_MS)
+      }, 20)
+      void finished.finally(() => clearInterval(watch))
+    })
+    const done = await Promise.race([finished, gaveUp])
+    if (done === null) {
+      await Promise.allSettled([stdout.cancel(), stderr.cancel()])
+      return { code: 137, out: '', err: '', hung: true }
+    }
+    return { code: done[2], out: done[0], err: done[1], hung }
   } finally {
     clearTimeout(timer)
   }
