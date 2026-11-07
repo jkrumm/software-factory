@@ -1,6 +1,6 @@
 # Package 5: Quality, report
 
-**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, commits on `fc5a8ac` (the brief's base): four for the package, three review fixes, the report, and the integration step (two merges of `rewrite` and the wiring). `make check` is green.
+**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, commits on `fc5a8ac` (the brief's base): four for the package, three review fixes, the report, and the integration step (two merges of `rewrite` and the wiring). `make check` is green after the second merge of `rewrite`.
 
 ## What changed
 
@@ -52,15 +52,15 @@ no retired words
 ==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)
 ==> generated CLI is current (apps/cli/scripts/generate.ts --check)
 ==> unit tests (bun test apps packages scripts)
- 187 pass
+ 624 pass
  0 fail
- 581 expect() calls
-Ran 187 tests across 19 files. [11.76s]
+ 4595 expect() calls
+Ran 624 tests across 42 files. [29.56s]
 ==> scenarios (bun test tests)
- 22 pass
+ 62 pass
  0 fail
- 101 expect() calls
-Ran 22 tests across 4 files. [25.96s]
+ 336 expect() calls
+Ran 62 tests across 16 files. [72.42s]
 ==> check passed
 ```
 
