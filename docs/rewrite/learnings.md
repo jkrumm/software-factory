@@ -80,3 +80,14 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
     (6) must be added; `factory issue show` must accept `issue_<n>` and the bare number (the compaction line names it).
   - For package 9: its settings list (report 4, open point 4) joins `scripts/env-file.sh`; the new core binds the old
     hook socket path and refuses to steal a live one, so the old server must be stopped first.
+- **2026-11-07, packages 2, 3, 5: parallel packages finish with stubs, so integration is a second pass by the worker.**
+  Package 5 brought its own outbox loop and lead stubs while package 4 had the real ones; package 3 owns the capacity,
+  project and policy ports that 2, 4 and 6 stub. Merging those myself would mean editing code I did not write; the
+  worker merges `rewrite` into its branch and replaces the stubs, then I merge. Calls: one outbox runner (package 4's
+  tick) with quality's `start_watch` injected; one `FACTORY_TICK_MS`; the attempt's `base_sha` is the ship gate's cut;
+  `Issue.repo` is the repo's directory name under the source root (intake's convention).
+- **2026-11-07, package 2 integrated; carried forward:** for package 8, signal trust is still taken from the caller's
+  claimed `from` until the token decides it (security), the door's health lines need a place on `/health`, and
+  `factory door token new` is a verb to add; for package 4's brief (package 8 parity), an Issue's alert facts are read
+  from `intake_signals`, the `filed` event carries only repo, title, kind and origin; for package 9, `launch-door.sh`
+  and the deploy script name `apps/door`.
