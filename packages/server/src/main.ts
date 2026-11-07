@@ -223,7 +223,7 @@ const github =
         token: config.githubToken,
         everyMs: config.githubPollMs,
       })
-const infra = await loadInfra().catch((error: unknown) => {
+const infra = await loadInfra(config.infraFile).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exit(1)
 })

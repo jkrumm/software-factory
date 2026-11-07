@@ -105,6 +105,7 @@ describe('config (finding 5)', () => {
       beszelUrl: undefined,
       beszelEmail: undefined,
       beszelPassword: undefined,
+      infraFile: undefined,
       admission: { leadsPerAccount: 2, loadCeiling: 60 },
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -186,6 +187,12 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_BESZEL_POLL: 'off' }).beszelPollMs).toBeNull()
     expect(() => loadConfig({ ...env, FACTORY_BESZEL_POLL: '1s' })).toThrow('FACTORY_BESZEL_POLL')
     expect(loadConfig({ ...env, FACTORY_BESZEL_EMAIL: 'hub-user' }).beszelEmail).toBe('hub-user')
+  })
+
+  test('FACTORY_INFRA_FILE: a path, or unset (empty too) for the shipped infra table', () => {
+    expect(loadConfig(env).infraFile).toBeUndefined()
+    expect(loadConfig({ ...env, FACTORY_INFRA_FILE: '' }).infraFile).toBeUndefined()
+    expect(loadConfig({ ...env, FACTORY_INFRA_FILE: '/etc/infra.json' }).infraFile).toBe('/etc/infra.json')
   })
 
   test('FACTORY_DIGEST_EVERY: five minutes, a duration of 30 s to 24 h, or off; a mistake is refused', () => {
