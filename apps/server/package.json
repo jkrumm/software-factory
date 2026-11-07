@@ -10,6 +10,7 @@
     "@elysiajs/openapi": "1.4.17",
     "@software-factory/contract": "workspace:*",
     "elysia": "1.4.30",
+    "yaml": "2.9.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
