@@ -1,0 +1,294 @@
+import { describe, expect, test } from 'bun:test'
+import {
+  anchorOf,
+  readableText,
+  readAnnotation,
+  readSubmission,
+  renderDecisionForm,
+} from '../../src/domains/checkpoints/artifact.ts'
+import {
+  defaultAt,
+  defaultDue,
+  type DecisionForm,
+  guardVerdict,
+  judgeInputOf,
+  matchPolicy,
+  precedentTerms,
+  readDecisionForm,
+  scrub,
+} from '../../src/domains/checkpoints/decision.ts'
+import { readErrand } from '../../src/domains/checkpoints/errand.ts'
+import {
+  decisionPageKey,
+  deepLink,
+  errandPage,
+  issueHead,
+  pageBackoffMs,
+  quote,
+  redact,
+  reviewPageKey,
+} from '../../src/domains/checkpoints/page.ts'
+import type { DecisionId } from '../../src/domains/checkpoints/decision.ts'
+
+const RAW = {
+  question: 'Which logging library should the server use?',
+  recommendation: 'pino',
+  checked: 'Read the package sizes and the Bun support notes.',
+  options: [
+    { label: 'pino', reversible: true, cost: 'one dependency, fast' },
+    { label: 'winston', reversible: true, cost: 'heavier, more transports' },
+    { label: 'drop the table', reversible: false, cost: 'the rows are gone' },
+  ],
+  noAnswer: { consequence: 'The lead logs with console until someone answers.', default: 'pino', waitMinutes: 30 },
+}
+
+const form = (): DecisionForm => {
+  const read = readDecisionForm(RAW)
+  if (!read.ok) throw new Error(read.error.detail)
+  return read.value
+}
+
+describe('readDecisionForm', () => {
+  test('a complete form reads', () => {
+    expect(form()).toMatchObject({ recommendation: 'pino', noAnswer: { default: 'pino', waitMinutes: 30 } })
+  })
+
+  test('a missing field is refused with the field named', () => {
+    const { recommendation: _gone, ...without } = RAW
+    const read = readDecisionForm(without)
+    expect(read).toMatchObject({ ok: false, error: { kind: 'missing_field' } })
+    expect(!read.ok && read.error.fields).toContain('recommendation')
+  })
+
+  test('every missing field is named at once, nested ones by their path', () => {
+    const read = readDecisionForm({
+      question: 'q',
+      options: [
+        { label: 'a', reversible: true },
+        { label: 'b', cost: 'x' },
+      ],
+    })
+    expect(!read.ok && read.error.fields).toEqual(
+      expect.arrayContaining([
+        'recommendation',
+        'checked',
+        'options[0].cost',
+        'options[1].reversible',
+        'noAnswer.consequence',
+      ]),
+    )
+  })
+
+  test('a non-object is refused, not thrown on', () => {
+    expect(readDecisionForm(null).ok).toBe(false)
+    expect(readDecisionForm('a question').ok).toBe(false)
+  })
+
+  test('the recommendation and the default must be options; a default must be reversible and carry its wait', () => {
+    const fields = (patch: Record<string, unknown>) => {
+      const read = readDecisionForm({ ...RAW, ...patch })
+      return read.ok ? [] : read.error.fields
+    }
+    expect(fields({ recommendation: 'bunyan' })[0]).toContain('recommendation')
+    expect(fields({ noAnswer: { consequence: 'c', default: 'bunyan', waitMinutes: 5 } })[0]).toContain(
+      'noAnswer.default',
+    )
+    expect(fields({ noAnswer: { consequence: 'c', default: 'drop the table', waitMinutes: 5 } })[0]).toContain(
+      'not reversible',
+    )
+    expect(fields({ noAnswer: { consequence: 'c', default: 'pino' } })[0]).toContain('noAnswer.waitMinutes')
+    expect(fields({ noAnswer: { consequence: 'c', waitMinutes: 5 } })[0]).toContain('noAnswer.default')
+  })
+
+  test('a Decision without a default needs only its consequence', () => {
+    const read = readDecisionForm({ ...RAW, noAnswer: { consequence: 'It waits.' } })
+    expect(read).toMatchObject({ ok: true, value: { noAnswer: { default: null, waitMinutes: null } } })
+  })
+
+  test('one option is no decision; labels are unique', () => {
+    expect(readDecisionForm({ ...RAW, options: [RAW.options[0]] }).ok).toBe(false)
+    const twice = readDecisionForm({ ...RAW, options: [RAW.options[0], { ...RAW.options[0], label: 'PINO' }] })
+    expect(!twice.ok && twice.error.fields.join()).toContain('same label')
+  })
+})
+
+describe('standing policy and the default', () => {
+  test('the first matching rule whose answer is an option settles it', () => {
+    const rules = [
+      { when: 'database', answer: 'postgres', reason: 'one store' },
+      { when: 'LOGGING library', answer: 'unknown', reason: 'not an option' },
+      { when: 'logging library', answer: 'WINSTON', reason: 'owner prefers it' },
+    ]
+    expect(matchPolicy(rules, form())).toMatchObject({ answer: 'winston', rule: { when: 'logging library' } })
+    expect(matchPolicy([{ when: 'cache', answer: 'pino', reason: 'x' }], form())).toBeNull()
+    expect(matchPolicy([{ when: '  ', answer: 'pino', reason: 'x' }], form())).toBeNull()
+  })
+
+  test('the default is due once the wait has run out, and not before', () => {
+    const asked = new Date('2026-03-01T12:00:00Z')
+    expect(defaultDue(form(), asked, new Date('2026-03-01T12:29:59Z'))).toBeNull()
+    expect(defaultDue(form(), asked, new Date('2026-03-01T12:30:00Z'))).toBe('pino')
+    expect(defaultAt(form(), asked)?.toISOString()).toBe('2026-03-01T12:30:00.000Z')
+    const noDefault = readDecisionForm({ ...RAW, noAnswer: { consequence: 'It waits.' } })
+    expect(noDefault.ok && defaultDue(noDefault.value, asked, new Date('2027-01-01T00:00:00Z'))).toBeNull()
+  })
+})
+
+describe('guardVerdict', () => {
+  const verdict = (patch: Partial<{ answer: string; source: string }> = {}) => ({
+    verdict: 'answer' as const,
+    answer: 'pino',
+    reason: 'the plan says so',
+    source: 'plan: docs/decisions.md',
+    ...patch,
+  })
+
+  test('an answer that is an option with a source stands', () => {
+    expect(guardVerdict(form(), verdict({ answer: ' PINO ' }))).toEqual({
+      ok: true,
+      answer: 'pino',
+      source: 'plan: docs/decisions.md',
+    })
+  })
+
+  test("no source, an answer that is no option, or an irreversible option is the owner's", () => {
+    expect(guardVerdict(form(), verdict({ source: ' ' }))).toMatchObject({
+      ok: false,
+      why: 'the answer names no source',
+    })
+    expect(guardVerdict(form(), verdict({ answer: 'bunyan' }))).toMatchObject({ ok: false })
+    expect(guardVerdict(form(), verdict({ answer: 'drop the table' }))).toMatchObject({
+      ok: false,
+      why: expect.stringContaining('cannot be taken back'),
+    })
+  })
+})
+
+describe('what goes to the Judge', () => {
+  test("precedent terms are the question's words as an OR query, safe for to_tsquery", () => {
+    expect(precedentTerms("Which retention for the audit log's rows?")).toBe('retention | audit | log | rows')
+    expect(precedentTerms("'; DROP TABLE x; --")).toBe('drop | table')
+    expect(precedentTerms('a of to')).toBeNull()
+  })
+
+  test('secrets are scrubbed from what leaves for the model', () => {
+    expect(scrub('use token=abcd1234efgh and Bearer abcdefghijkl1234 at https://u:p@host/x')).not.toMatch(
+      /abcd1234efgh|abcdefghijkl1234|u:p@/,
+    )
+    const input = judgeInputOf({
+      decision: 'decision_1' as DecisionId,
+      repo: 'example',
+      issue: 'password: hunter2hunter2',
+      form: { ...form(), checked: 'sk-abcdefghijklmnop was checked' },
+      precedents: [],
+    })
+    expect(JSON.stringify(input)).not.toMatch(/hunter2hunter2|sk-abcdefghijklmnop/)
+  })
+
+  test("the Judge is told the repo's name, never the path it lives at", () => {
+    const input = judgeInputOf({
+      decision: 'decision_1' as DecisionId,
+      repo: '/Users/someone/SourceRoot/software-factory',
+      issue: 'the probe fails',
+      form: form(),
+      precedents: [
+        {
+          question: 'q',
+          answer: 'a',
+          settledBy: 'owner',
+          worthAsking: true,
+          repo: '/Users/someone/SourceRoot/dotfiles',
+        },
+      ],
+    })
+    expect(input.repo).toBe('software-factory')
+    expect(input.precedents[0]?.repo).toBe('dotfiles')
+    expect(JSON.stringify(input)).not.toContain('/Users')
+  })
+})
+
+describe('artifacts', () => {
+  test('a submission names what is missing', () => {
+    const read = readSubmission({ kind: 'memo', title: '', content: 'x' })
+    expect(!read.ok && read.error.fields.join()).toMatch(/title.*kind/)
+    expect(readSubmission({ kind: 'spec', title: 'T', content: '# T' })).toMatchObject({
+      ok: true,
+      value: { format: 'markdown' },
+    })
+    expect(readSubmission({ kind: 'decision', title: 'T', content: 'x' }).ok).toBe(false)
+  })
+
+  test('an annotation needs its quote and its comment', () => {
+    const read = readAnnotation({ path: '' })
+    expect(!read.ok && read.error.fields).toEqual(expect.arrayContaining(['quote', 'comment']))
+    expect(readAnnotation({ quote: 'a', comment: 'b' })).toMatchObject({ ok: true, value: { path: null } })
+  })
+
+  test('a Markdown quote is found through the marks that do not show', () => {
+    const md = '# Plan\n\nWe **keep** the _queue_ in [Postgres](https://example.com/pg).\n\n- first\n- second'
+    expect(readableText(md, 'markdown')).toBe('Plan We keep the queue in Postgres. first second')
+    expect(anchorOf(md, 'markdown', 'keep the queue in Postgres')).toBe('anchored')
+    expect(anchorOf(md, 'markdown', 'keep the queue in Redis')).toBe('unanchored')
+  })
+
+  test('an HTML quote is found in its text, not its tags or scripts', () => {
+    const html =
+      '<h1>Plan</h1><p>We keep the <b>queue</b> in Postgres &amp; Redis.</p><script>const secret = "hidden"</script>'
+    expect(anchorOf(html, 'html', 'keep the queue in Postgres & Redis')).toBe('anchored')
+    expect(anchorOf(html, 'html', 'hidden')).toBe('unanchored')
+    expect(anchorOf(html, 'html', '<b>')).toBe('unanchored')
+  })
+
+  test('an empty quote anchors nowhere', () => {
+    expect(anchorOf('text', 'markdown', '  ')).toBe('unanchored')
+  })
+
+  test('a Decision renders as its form', () => {
+    const text = renderDecisionForm(form())
+    expect(text).toContain('# Which logging library should the server use?')
+    expect(text).toContain('**drop the table** (not reversible)')
+    expect(text).toContain('After 30 minutes the default is taken: **pino**')
+  })
+})
+
+describe('errands', () => {
+  test('an Errand needs its summary', () => {
+    expect(readErrand({ detail: 'x' }).ok).toBe(false)
+    expect(readErrand({ summary: ' Approve the portal ' })).toMatchObject({
+      ok: true,
+      value: { summary: 'Approve the portal' },
+    })
+  })
+})
+
+describe("the owner's line", () => {
+  test("a lead's words are quoted, redacted and cut", () => {
+    const text = quote('Use op://vault/item/field and 10.0.0.12 at /Users/someone/secret/path/file.txt "now"')
+    expect(text).toBe("“Use [secret] and [host] at …/file.txt 'now'”")
+    expect(quote('word '.repeat(80))).toHaveLength(202)
+    expect(redact('https://example.com/a?token=abc#frag')).toBe('https://example.com/a')
+  })
+
+  test('the head names the number and the repo, never a path', () => {
+    expect(issueHead({ id: 'issue_12', repo: '/Users/someone/SourceRoot/software-factory' })).toBe(
+      'Issue 12 (software-factory)',
+    )
+  })
+
+  test("a page key is the checkpoint's: a replay finds the page it planned", () => {
+    expect(decisionPageKey('decision_1')).toBe(decisionPageKey('decision_1'))
+    expect(reviewPageKey('artifact_1', 1)).not.toBe(reviewPageKey('artifact_1', 2))
+    const page = errandPage({
+      issue: { id: 'issue_3', repo: 'example' },
+      link: deepLink('https://console.example.test/', 'errand_1'),
+      errand: 'errand_1',
+      summary: 'Approve the App Store build',
+    })
+    expect(page).toMatchObject({ kind: 'errand', link: 'https://console.example.test/checkpoints/errand_1' })
+    expect(page.body).toBe('Issue 3 (example) needs your hands: “Approve the App Store build”')
+  })
+
+  test('the backoff doubles from 30 s to 5 min', () => {
+    expect([1, 2, 3, 4, 5, 6].map(pageBackoffMs)).toEqual([30_000, 60_000, 120_000, 240_000, 300_000, 300_000])
+  })
+})

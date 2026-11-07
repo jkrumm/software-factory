@@ -2,11 +2,15 @@ import { openapi } from '@elysiajs/openapi'
 import { ErrorBody } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import type { CheckpointUses } from '../app/checkpoints-uses.ts'
+import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 
 export interface ApiDeps {
   health: HealthSource
+  /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
+  checkpoints?: CheckpointUses
   /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
   internalTest?: InternalTestWrites
   /** where an unexpected error is reported; the answer itself never carries its detail */
@@ -55,6 +59,7 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
 }
 
