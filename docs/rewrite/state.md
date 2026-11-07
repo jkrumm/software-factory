@@ -12,7 +12,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 
 | # | Package | After | Status | Terminal | Branch | Last commit | Evidence |
 |-|-|-|-|-|-|-|-|
-| 0 | Skeleton | | running | t1f1 `rw-0-skeleton` (opus high, account me) | `rw/0-skeleton` | 098b086 (base) | brief `briefs/0-skeleton.md` |
+| 0 | Skeleton | | integrated | t1f1 (removed) | `rw/0-skeleton` (merged, deleted) | 7e6163b (merge), d36d1d5 | `reports/0-skeleton.md`; `make check` on `rewrite` after merge: 83 unit, 6 scenarios pass; rd dry run via the new CLI (worker's evidence) |
 | 1 | Kernel and work | 0 | pending | | | | |
 | 2 | Intake | 1 | pending | | | | |
 | 3 | Planning and capacity | 1 | pending | | | | |
@@ -27,3 +27,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 
 - 2026-11-07: ledger opened.
 - 2026-11-07: package 0 started in t1f1, worktree `../rw-0-skeleton`.
+- 2026-11-07: package 0 integrated at 7e6163b; `make check` green on `rewrite`; worker removed.
