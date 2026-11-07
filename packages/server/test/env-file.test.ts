@@ -64,6 +64,7 @@ describe('scripts/env-file.sh', () => {
       'FACTORY_NTFY_URL',
       'FACTORY_DIGEST_AT',
       'FACTORY_DIGEST_TZ',
+      'FACTORY_ALERT_PAGE_AFTER',
       'FACTORY_LEADS_PER_ACCOUNT',
       'FACTORY_LOAD_CEILING',
     ])
