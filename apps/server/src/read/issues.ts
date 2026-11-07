@@ -50,7 +50,7 @@ const text = (value: unknown): string | null => (typeof value === 'string' && va
 const ISSUE_COLUMNS = (sql: SQL) => sql`
   i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed, f.at AS created_at, u.updated_at,
   CASE WHEN i.state = 'closed' THEN u.closed_at END AS closed_at,
-  EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.name = i.repo AND p.source = 'defaults') AS work`
+  EXISTS (SELECT 1 FROM factory.planning_projects p WHERE (p.name = i.repo OR p.repo = i.repo) AND p.source = 'defaults') AS work`
 
 const ISSUE_JOINS = (sql: SQL) => sql`
   FROM factory.issues i
