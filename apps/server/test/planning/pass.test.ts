@@ -134,7 +134,8 @@ describe('the plan files its rows', () => {
     world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('a')]) })
     value(await syncProjects(world.deps, { fetch: false }))
     await Promise.all([planningPass(world.deps), planningPass(world.deps)])
-    expect(await issues()).toEqual(['issue_1:queued'])
+    // one Issue; which of the two passes drew the id first is not the test's to say
+    expect(await issues()).toEqual([expect.stringMatching(/^issue_\d+:queued$/)])
   })
 
   test('a plan that does not parse files nothing, keeps the last valid plan and says so', async () => {
