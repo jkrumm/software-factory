@@ -19,7 +19,7 @@ const card = (state: string, outcome: string | null, kinds: string[]) => ({
   timeline: kinds.map((kind) => ({ kind })),
 })
 
-async function run(script: string): Promise<{ code: number; out: string }> {
+async function run(script: string): Promise<{ code: number; out: string; err: string }> {
   const proc = Bun.spawn(['bash', '-c', `set -euo pipefail; source ${VERDICT}; ${script}`], {
     stdout: 'pipe',
     stderr: 'pipe',
