@@ -542,7 +542,7 @@ and the rest wait for the next sample.
 **Queue state `run|pace|drain`** (`queue.ts`, table `queue_states`): per scope, global (`project` null) or a project (the
 repo path, resolved like a spawn's); `initiative` is a nullable column for F4, not read yet. No row is `run`. The most
 restrictive scope that applies wins. `drain` starts nothing and never interrupts; `pace` as above. A spawn held by a rule
-stays `queued` with `hold` set (`drain|pace|claim|load|cap`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
+stays `queued` with `hold` set (`drain|pace|claim|load|memory|cap`) and no account, looked at again every 30 s (`HOLD_RECHECK_MS`), and
 `queue set` makes held and waiting spawns due at once. `factory queue get|set [--project <path>]`, `GET|PUT /queue`.
 
 **The lead cap** (v3 §7): a spawn with role `lead` **and an Issue** is not started on an account that already has `FACTORY_LEADS_PER_ACCOUNT` (default 2, a whole number 1 to 16, listed in `scripts/env-file.sh`)
