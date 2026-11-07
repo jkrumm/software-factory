@@ -31,10 +31,11 @@ load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 limit=()
 if command -v timeout >/dev/null 2>&1; then limit=(timeout 20); elif command -v gtimeout >/dev/null 2>&1; then limit=(gtimeout 20); fi
 
-# A ref named in OPTIONAL_KEYS may be unresolved (not made or seeded yet): the server starts without that token and the caller
+# A ref named in OPTIONAL_KEYS (scripts/optional-refs.sh) may be unresolved (not made or seeded yet): the server starts without that token and the caller
 # it names does not exist. It is dropped from the template the rest of the launch reads, and said once on stderr. A ref that
 # resolves is kept; every other ref must resolve.
-OPTIONAL_KEYS="FACTORY_SIGNAL_TOKEN"
+# shellcheck source=scripts/optional-refs.sh
+source "$DIR/scripts/optional-refs.sh"
 for key in $OPTIONAL_KEYS; do
   ref=$(grep -hE "^${key}=" "$TPL" | head -1 | cut -d= -f2-)
   [[ -n "$ref" ]] || continue

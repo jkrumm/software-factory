@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The live drill of a cutover window: one scratch Issue from filing to close on the running core, read only through the
-# read API and the CLI. The Issue is admitted, built by a lead in the scratch repo, shipped, watched and verified; the
+# read API and the CLI. The Issue is admitted and built by a lead in the scratch repo; the
 # run is green when the Issue closes `done` and its commit is on the scratch remote (verdict.sh: an Issue that shipped must
 # also have passed its watch; one closed by the lead's `close`, the scratch repo's normal shape, is not asked to). With --kill-server the server is
 # killed once the lead works, to show that the Issue goes on after the LaunchAgent brings the server back.

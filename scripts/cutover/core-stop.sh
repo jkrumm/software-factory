@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Sourced by the cutover runbook (and its test): stop or restart the core's LaunchAgent without ever leaving it half dead.
+# Run by the cutover runbook through bash (`bash core-stop.sh core_stop 40`; sourced only by its test and by bash: the PID lists are
+# word-split, which zsh, the mini's login shell, does not do): stop or restart the core's LaunchAgent without ever leaving it half dead.
 #
 # A stop sends SIGTERM and waits; the server ends itself within its shutdown deadline, but window 1 saw it twice not end
 # (an orphan holding the database lock). So the PIDs are read from launchd BEFORE the stop, and after the grace a PID that
@@ -64,3 +65,11 @@ core_restart() {
   # shellcheck disable=SC2086
   reap "$1" $pids
 }
+
+# `bash core-stop.sh <function> <args>` runs one of the functions above; sourced, it only defines them.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  case ${1:-} in
+    core_pids | reap | core_stop | core_restart) "$@" ;;
+    *) echo "usage: bash core-stop.sh core_pids | core_stop <grace-s> | core_restart <grace-s> | reap <grace-s> <pid>..." >&2; exit 2 ;;
+  esac
+fi

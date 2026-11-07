@@ -92,6 +92,23 @@ test('core_stop boots the job out, then kills by PID only a process that survive
   expect(log).toContain('bootout gui/')
 })
 
+test('run as a script under bash, the functions work and a stranger name is refused', async () => {
+  const parent = Bun.spawn(['bash', '-c', 'trap "" TERM; while :; do sleep 1; done'], {
+    stdout: 'ignore',
+    stderr: 'ignore',
+  })
+  await Bun.sleep(300)
+  await fakeLaunchctl(parent.pid)
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` }
+  const stop = Bun.spawn(['bash', LIB, 'core_stop', '1'], { env, stdout: 'pipe', stderr: 'pipe' })
+  const out = await new Response(stop.stdout).text()
+  expect(out).toContain(`PIDs before the stop: ${parent.pid}`)
+  expect(out).toContain(`PID ${parent.pid} is still alive after 1s`)
+  await parent.exited
+  const stranger = Bun.spawn(['bash', LIB, 'rm', '-rf'], { env, stdout: 'pipe', stderr: 'pipe' })
+  expect(await stranger.exited).toBe(2)
+}, 20_000)
+
 test('core_restart kickstarts and then reaps the old PIDs', async () => {
   const parent = Bun.spawn(['bash', '-c', 'trap "" TERM; while :; do sleep 1; done'], {
     stdout: 'ignore',

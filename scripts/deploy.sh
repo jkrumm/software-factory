@@ -334,8 +334,15 @@ deploy_door() { # $1 release dir, $2 sha
 # Every ref of .env.tpl must resolve before anything is stopped: a missing secret refuses the deploy, never a rollback.
 check_refs() { # $1 release dir
   local key ref missing=""
+  local OPTIONAL_KEYS=""
+  # shellcheck source=scripts/optional-refs.sh
+  [[ -f "$1/scripts/optional-refs.sh" ]] && source "$1/scripts/optional-refs.sh"
   while IFS='=' read -r key ref; do
-    secrets-run read "$ref" >/dev/null 2>&1 || missing="$missing $key($ref)"
+    secrets-run read "$ref" >/dev/null 2>&1 && continue
+    case " $OPTIONAL_KEYS " in
+      *" $key "*) log "WARNING: optional $key ($ref) does not resolve: the server starts without it" ;;
+      *) missing="$missing $key($ref)" ;;
+    esac
   done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.tpl")
   [[ -z "$missing" ]] || die "cannot read${missing} through secrets-run (seed them: make secrets-seed on the MacBook); nothing was changed"
 }

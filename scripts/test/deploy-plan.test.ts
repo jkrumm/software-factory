@@ -174,3 +174,46 @@ esac
     expect(run.out).not.toContain('.env.door.tpl')
   })
 })
+
+/** `check_refs` refuses a deploy for an unresolved ref, except the optional ones, which the server starts without. */
+describe.skipIf(!canRun)('the refs a deploy checks', () => {
+  async function check(unresolved: string): Promise<{ code: number; out: string }> {
+    const home = await mkdtemp('/tmp/factory-refs-')
+    const bin = join(home, 'bin')
+    const release = join(home, 'release')
+    await mkdir(bin, { recursive: true })
+    await mkdir(join(release, 'scripts'), { recursive: true })
+    await cp(join(ROOT, '.env.tpl'), join(release, '.env.tpl'))
+    await cp(join(ROOT, 'scripts', 'optional-refs.sh'), join(release, 'scripts', 'optional-refs.sh'))
+    await writeFile(
+      join(bin, 'secrets-run'),
+      `#!/bin/bash\n[[ "$1" == read && "$2" == */${unresolved} ]] && exit 1\nexit 0\n`,
+      { mode: 0o755 },
+    )
+    const proc = Bun.spawn(['bash', '-c', `source ${DEPLOY} && check_refs ${release}`], {
+      env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH ?? ''}` },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    await rm(home, { recursive: true, force: true })
+    return { code, out: `${out}\n${err}` }
+  }
+
+  test('an unresolved signal token is a warning, not a refused deploy', async () => {
+    const run = await check('FACTORY_SIGNAL_TOKEN')
+    expect(run.code).toBe(0)
+    expect(run.out).toContain('optional FACTORY_SIGNAL_TOKEN')
+  })
+
+  test('any other unresolved ref still refuses the deploy before anything is stopped', async () => {
+    const run = await check('FACTORY_AGENT_TOKEN')
+    expect(run.code).toBe(1)
+    expect(run.out).toContain('FACTORY_AGENT_TOKEN')
+    expect(run.out).toContain('nothing was changed')
+  })
+})
