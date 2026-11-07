@@ -75,7 +75,7 @@ export interface Config {
   infraFile: string | undefined
   /** where a closed attempt's transcripts are kept (`FACTORY_ARCHIVE_DIR`) */
   archiveDir: string
-  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) and the load ceiling (`FACTORY_LOAD_CEILING`) */
+  /** what admission is bounded by: the Issue-lead cap per account (`FACTORY_LEADS_PER_ACCOUNT`) the load ceiling (`FACTORY_LOAD_CEILING`) and the memory ceilings (`FACTORY_SWAPOUT_CEILING_MB`, `FACTORY_SWAP_CEILING_PCT`) */
   admission: AdmissionLimits
 }
 
