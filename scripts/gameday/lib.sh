@@ -12,11 +12,15 @@ REPO_NAME=${GAMEDAY_REPO:-factory-gameday}
 LABEL=com.jkrumm.software-factory
 
 # The factory CLI with the token resolved at run time (never in a tracked file).
-fx() { secrets-run run --env-file="$ROOT/.env.tpl" -- factory "$@"; }
+# shellcheck source=scripts/optional-refs.sh
+source "$ROOT/scripts/optional-refs.sh"
+# the template without an optional ref that does not resolve yet (refs only, no secret)
+GD_TPL=$(effective_template "$ROOT/.env.tpl" "$HOME/.software-factory/env.gameday.tpl")
+fx() { secrets-run run --env-file="$GD_TPL" -- factory "$@"; }
 
 # A read-only query against the factory schema, rows as `|`-separated text. The password never leaves the child.
 # shellcheck disable=SC2016 # the child script is single-quoted on purpose
-db() { secrets-run run --env-file="$ROOT/.env.tpl" -- sh -c 'PGPASSWORD=$FACTORY_DB_PASSWORD exec psql -h 127.0.0.1 -U factory -d shared -At -F "|" -c "$1"' sh "$1"; }
+db() { secrets-run run --env-file="$GD_TPL" -- sh -c 'PGPASSWORD=$FACTORY_DB_PASSWORD exec psql -h 127.0.0.1 -U factory -d shared -At -F "|" -c "$1"' sh "$1"; }
 
 now_utc() { perl -MTime::HiRes=time -MPOSIX=strftime -e '$t = time; printf "%s.%03dZ\n", strftime("%Y-%m-%dT%H:%M:%S", gmtime($t)), ($t - int($t)) * 1000'; }
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time*1000'; }
