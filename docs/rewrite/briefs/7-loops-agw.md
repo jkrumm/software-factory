@@ -40,21 +40,27 @@ factory.ts`, `packages/cli/README.md` (the CLI contract, exit 10 and `agw run wa
 5. **Triage:** intake's triage port asks `factory-triage` when deterministic matching is unsure (package 2's `unsure`
    band) or a request needs its kind, size and likely `after` edges; the answer is checked like the Judge's (a match
    must be an open Issue it was shown).
-6. **Loop guard:** a change a loop made never fires that loop again (package 2's `madeBy` on the envelope; the loops
+6. **Nothing stays `settling`** (report 3, open point 4): today an Issue intake files is settled only by `planning
+   settle`. The triage loop settles every `settling` Issue: deterministically when it needs no edges (an incident, a
+   bug from a check or job, an Issue of a plan row whose edges are known), else after `factory-triage` proposes its
+   `after` edges (checked: only open Issues it was shown, no cycle, through planning's use case); the steward settles one
+   with no edges once a setting's timeout passes without an answer. Scenario: an owner signal filed as a new Issue is
+   admitted without anyone calling `planning settle`.
+7. **Loop guard:** a change a loop made never fires that loop again (package 2's `madeBy` on the envelope; the loops
    set it on what they file or note).
 
 ## Build, in agent-workflows
 
-7. **`factory-steward`** and **`factory-triage`**: new workflow modules shaped like `factory-ask` (schema, index,
+8. **`factory-steward`** and **`factory-triage`**: new workflow modules shaped like `factory-ask` (schema, index,
    module, README with its route), on the factory route group. No eval set (RS13). Input and output are zod schemas
    that match exactly what this repo sends and parses; put the same shape in this repo's contract or adapter and test
    both sides against one fixture.
-8. **`factory-ask`**: extend it, **backward compatible**, to take package 6's `JudgeInput` (question, recommendation,
+9. **`factory-ask`**: extend it, **backward compatible**, to take package 6's `JudgeInput` (question, recommendation,
    checked, options with cost and reversibility, the no-answer consequence and default, precedents with worth-asking).
    The running factory on master still calls it with today's shape for other repos until the cutover: both shapes must
    work, and its existing tests stay green. The architecture names Haiku high for it: change its route only if the
    route table makes that a one-line, measured change, and say so.
-9. Ship it: `make check` there, commit to its master (rebase first; other sessions may push), `make deploy`,
+10. Ship it: `make check` there, commit to its master (rebase first; other sessions may push), `make deploy`,
    `make verify`.
 
 ## Acceptance

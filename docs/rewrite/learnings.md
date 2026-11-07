@@ -96,3 +96,10 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   refused in production. Carried forward: `reportRegression`'s reopen half has no caller, because intake files a new
   Issue for a `down` after a close (the old core's rule, kept); package 8 or the first hygiene pass removes it.
   `FACTORY_CLOCK_OFFSET_MS` is a scenario-only setting like the internal test routes: package 8 removes or fences both.
+- **2026-11-07, package 3 integrated; packages 0 to 6 are in (721 unit, 85 scenarios).** Found at its report: an
+  Issue intake files stays `settling` until `planning settle` is called, and nothing called it. Package 7's brief now
+  makes the triage loop settle every `settling` Issue (deterministic first, `factory-triage` for edges, the steward
+  after a timeout), with a scenario from owner signal to admission. Carried forward: for package 9, Issues imported as
+  `working` have no claim and block their repo until `resumeClaim` runs for each, and `deploy.hold` in `project.yaml`
+  keeps its retired word until the files and schema change together; for package 8, a declared error body goes to
+  stdout today (agw's contract wants messages on stderr), and the slot routes need the token.
