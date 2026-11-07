@@ -47,6 +47,8 @@ CURRENT="$ROOT/current"
 DATA_DIR="$ROOT/data"
 SHA_FILE="$DATA_DIR/deployed-sha"
 PREV_FILE="$DATA_DIR/previous-sha"
+# Releases never pruned, one sha per line: the cutover pins the old core's release here, so the way back always has it.
+KEEP_FILE="$DATA_DIR/keep-releases"
 KEEP_RELEASES=3
 BIN_DIR="$HOME/.local/bin"
 CLI_LINK="$BIN_DIR/factory"
@@ -541,7 +543,9 @@ main() {
   ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
   deploy_door "$release" "$sha"
-  prune_releases "$sha" "$(read_sha "$PREV_FILE")"
+  local pinned=() k
+  [[ -f "$KEEP_FILE" ]] && while IFS= read -r k; do is_sha "$k" && pinned+=("$k"); done <"$KEEP_FILE"
+  prune_releases "$sha" "$(read_sha "$PREV_FILE")" ${pinned[@]+"${pinned[@]}"}
   log "deploy OK: ${sha:0:12} ($(core_of "$release")) healthy; factory -> $CLI_LINK"
 }
 

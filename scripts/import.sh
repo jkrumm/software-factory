@@ -19,8 +19,23 @@ command -v bun >/dev/null 2>&1 || { echo "import: bun not on PATH" >&2; exit 78;
 source "$DIR/scripts/env-file.sh"
 load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 
+# The import needs only the database: an optional ref that does not resolve yet (scripts/optional-refs.sh) is left out of
+# the template it reads, as the launcher does, so an unmade token never blocks an import.
+TPL="$DIR/.env.tpl"
+# shellcheck source=scripts/optional-refs.sh
+source "$DIR/scripts/optional-refs.sh"
+for key in $OPTIONAL_KEYS; do
+  ref=$(grep -hE "^${key}=" "$TPL" | head -1 | cut -d= -f2-)
+  [[ -n "$ref" ]] || continue
+  if ! "$SECRETS_RUN" read "$ref" >/dev/null 2>&1; then
+    mkdir -p "$HOME/.software-factory"
+    grep -v "^${key}=" "$TPL" > "$HOME/.software-factory/env.import.tpl"
+    TPL="$HOME/.software-factory/env.import.tpl"
+  fi
+done
+
 # shellcheck disable=SC2016 # the child script is single-quoted on purpose
-exec "$SECRETS_RUN" run --env-file="$DIR/.env.tpl" -- /bin/sh -c '
+exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   case "${FACTORY_DB_PASSWORD:-}" in
     "" | *[!0-9a-f]*) echo "import: FACTORY_DB_PASSWORD is empty or not hex; refusing to run." >&2; exit 78 ;;
   esac
