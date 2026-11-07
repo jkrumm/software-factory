@@ -8,6 +8,7 @@ import type {
   ReadSessionCard,
   ReadTimelineLine,
 } from '@software-factory/contract'
+import { basename } from 'node:path'
 import type { SQL } from 'bun'
 import { describeEvent, phaseOf, stateSentence } from './describe.ts'
 import { aboutOf, cut, firstSentence, plainText } from './plain.ts'
@@ -152,7 +153,8 @@ function cardOf(input: {
     outcome: row.outcome,
     phase: phaseOf({ state: row.state, reason: row.wait_reason }),
     repo: row.repo,
-    repoName: row.repo,
+    // an Issue filed by path stores the path; a card names the directory
+    repoName: basename(row.repo),
     visible: row.work,
     kind: text(row.filed?.kind),
     size: null,
