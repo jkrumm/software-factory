@@ -164,26 +164,33 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
 /** The server's API on loopback: the door's only way to the factory. */
 export const DEFAULT_FACTORY_URL = 'http://127.0.0.1:7793'
 
-const post = (base: string, path: string, body: unknown) =>
+/** The door's own bearer token for the factory (`FACTORY_DOOR_TOKEN`); the door does not start without it. */
+export function doorTokenFrom(env: Record<string, string | undefined>): string {
+  const token = env.FACTORY_DOOR_TOKEN
+  if (!token) throw new Error('FACTORY_DOOR_TOKEN is required: the factory answers the door with 401 without it')
+  return token
+}
+
+const post = (base: string, token: string, path: string, body: unknown) =>
   fetch(new URL(path, base), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   })
 
 /** Reports to the server's API (`POST /door/reports`). */
-export function reportViaHttp(base: string): NonNullable<DoorOptions['report']> {
+export function reportViaHttp(base: string, token: string): NonNullable<DoorOptions['report']> {
   return async (report) => {
-    const response = await post(base, '/door/reports', report)
+    const response = await post(base, token, '/door/reports', report)
     if (!response.ok) throw new Error(`report answered ${response.status}`)
   }
 }
 
 /** Files an alert with the server's API (`POST /signals/alerts`). */
-export function fileViaHttp(base: string): DoorOptions['file'] {
+export function fileViaHttp(base: string, token: string): DoorOptions['file'] {
   return async (input) => {
-    const response = await post(base, '/signals/alerts', input)
+    const response = await post(base, token, '/signals/alerts', input)
     const body: unknown = await response.json().catch(() => null)
     return { status: response.status, body }
   }

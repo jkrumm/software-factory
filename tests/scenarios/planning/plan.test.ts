@@ -129,10 +129,13 @@ test('an edge that closes a cycle is refused (409, nothing stored); a closed blo
 
   const cycle = await lab.cli(['planning', 'after', '--body', JSON.stringify({ issue: a, after: [b] })])
   expect(cycle.code).toBe(5)
-  // the generated CLI prints a declared answer on stdout, then exits with the kind of its status
-  expect(cycle.json).toEqual({
-    error: `that closes a cycle: Issue ${a.slice(6)} waits for Issue ${b.slice(6)} waits for Issue ${a.slice(6)}`,
+  // a failure is one JSON line on stderr, stdout stays empty, and the cycle's Issues are in details.path
+  expect(cycle.out).toBe('')
+  expect(cycle.failure).toMatchObject({
+    kind: 'conflict',
+    message: `that closes a cycle: Issue ${a.slice(6)} waits for Issue ${b.slice(6)} waits for Issue ${a.slice(6)}`,
     code: 'cycle',
+    details: { status: 409, path: [a, b, a] },
   })
 
   const unknown = await lab.cli(['planning', 'after', '--body', JSON.stringify({ issue: a, after: ['issue_999'] })])
@@ -140,7 +143,7 @@ test('an edge that closes a cycle is refused (409, nothing stored); a closed blo
   await lab.event(c, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
   const closed = await lab.cli(['planning', 'settle', '--body', JSON.stringify({ issue: a, after: [c] })])
   expect(closed.code).toBe(5)
-  expect(closed.json).toMatchObject({ code: 'issue_closed' })
+  expect(closed.failure).toMatchObject({ code: 'issue_closed' })
   const edges = await lab.world.db.sql`SELECT issue_id, after_issue FROM factory.planning_edges`
   expect(edges.map((e: { issue_id: string; after_issue: string }) => [e.issue_id, e.after_issue])).toEqual([[b, a]])
 })

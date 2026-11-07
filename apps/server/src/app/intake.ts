@@ -48,7 +48,13 @@ export type Stores = { work: WorkStore; intake: IntakeStore }
 export type IntakeWrites = UnitOfWork<Stores>
 
 /** What a use case of intake refuses besides a failed write. */
-export type IntakeRefusal = { kind: 'not_found' | 'not_held' | 'no_repo' | 'unknown_project'; detail: string }
+export type IntakeRefusal = {
+  kind: 'not_found' | 'not_held' | 'no_repo' | 'unknown_project' | 'trust_refused'
+  detail: string
+}
+
+/** Who is calling, as the token says (`api/policy.ts`); only the owner and an agent may put a signal in. */
+export type RequestCaller = 'owner' | 'agent' | 'machine' | 'read'
 export type IntakeError = IssueWriteError | PortError | IntakeRefusal
 
 export interface IntakeSettings {
@@ -123,12 +129,23 @@ async function loadIssue(work: WorkStore, id: IssueId): Promise<Issue | null> {
 
 const isOpen = (issue: Issue | null): issue is Issue => issue !== null && issue.state !== 'closed'
 
-/** The envelope for what a person or an agent put in. The caller picks the trust; nothing in the payload does. */
-export function envelopeOfRequest(body: SignalRequest): Signal {
+const TRUST_RANK = { outside: 0, agent: 1, owner: 2 } as const
+
+/**
+ * The envelope for what a person or an agent put in. The caller's token decides the trust: the owner's is `owner`, an
+ * agent's is `agent`. The claimed `from` is a source label that may lower the trust (an agent's token under
+ * `feedback:<app>` is `outside`) and never raises it: `owner*` under an agent's token is refused.
+ */
+export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): Result<Signal, IntakeRefusal> {
   const [kind, who] = body.from.split(':') as [string, string | undefined]
-  const trust = kind === 'owner' ? 'owner' : kind === 'agent' ? 'agent' : 'outside'
+  const claimed = kind === 'owner' ? 'owner' : kind === 'agent' ? 'agent' : 'outside'
+  const ceiling = caller === 'owner' ? 'owner' : caller === 'agent' ? 'agent' : 'outside'
+  if (TRUST_RANK[claimed] > TRUST_RANK[ceiling]) {
+    return refuse('trust_refused', `the ${caller} token may not file a signal as ${body.from}`)
+  }
+  const trust = claimed
   const repo = trust === 'agent' ? (body.repo ?? who ?? null) : trust === 'owner' ? (body.repo ?? null) : null
-  return {
+  return ok({
     source: body.from,
     kind: body.kind,
     origin: originOf(body.from),
@@ -139,7 +156,7 @@ export function envelopeOfRequest(body: SignalRequest): Signal {
     text: cleanText(body.text),
     link: body.link ?? null,
     madeBy: null,
-  }
+  })
 }
 
 /** The facts of an alert as the text a lead reads: compact JSON, clipped. */
@@ -577,7 +594,11 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- the owner's and agents' entry, and the door's ----
 
-  const file = (body: SignalRequest): Out<Triaged> => receive({ signal: envelopeOfRequest(body), alert: null })
+  async function file(body: SignalRequest, caller: RequestCaller): Out<Triaged> {
+    const signal = envelopeOfRequest(body, caller)
+    if (!signal.ok) return signal
+    return receive({ signal: signal.value, alert: null })
+  }
 
   async function promote(id: string, body: PromoteRequest, by: 'owner' | 'judge' = 'owner'): Out<Triaged> {
     const probe = await uow.run(async (s) => ok(await s.intake.signal(id)))

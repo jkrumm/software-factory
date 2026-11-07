@@ -1,4 +1,4 @@
-import { Health } from '@software-factory/contract'
+import { ErrorBody, Health } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 
 export interface HealthSource {
@@ -14,7 +14,7 @@ export const healthRoutes = (source: HealthSource) =>
       return health.status === 'ok' ? status(200, health) : status(503, health)
     },
     {
-      response: { 200: Health, 503: Health },
+      response: { 200: Health, 503: Health, 500: ErrorBody },
       detail: {
         operationId: 'health.get',
         summary: 'the server health and the heartbeat the Uptime Kuma pusher reads',

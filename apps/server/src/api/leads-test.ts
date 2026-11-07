@@ -1,6 +1,7 @@
 import { ErrorBody, TickAnswer } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import type { PortError, Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
 
 /**
  * `POST /internal/test/tick` runs one pass of the lead tick (spool, lost leads, outbox) and answers what it did: the
@@ -16,5 +17,5 @@ export const leadsTestRoutes = (tick: () => Promise<Result<TickAnswer, PortError
         ? status(200, TickAnswer.parse(ran.value))
         : status(503, ErrorBody.parse({ error: ran.error.detail, code: 'unavailable' }))
     },
-    { response: { 200: TickAnswer, 503: ErrorBody }, detail: { operationId: 'internal-test.tick' } },
+    { response: { 200: TickAnswer, ...errorResponses(503) }, detail: { operationId: 'internal-test.tick' } },
   )

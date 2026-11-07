@@ -12,7 +12,7 @@ const down = healthOf({
   queueMovedAt: null,
 })
 
-const appWith = (health: Health) => createApp({ health: { read: async () => health }, log: () => {} })
+const appWith = (health: Health) => createApp({ health: { read: async () => health }, docs: true, log: () => {} })
 
 // Elysia's router finds the path at a fixed offset: a URL as short as `http://x/…` answers 404 for every route.
 const get = (app: { handle(request: Request): Promise<Response> }, path: string) =>
@@ -67,14 +67,27 @@ describe('errors', () => {
     expect(ErrorBody.parse(await response.json()).code).toBe('not_found')
   })
 
-  // Elysia 1.4 answers a response that fails its zod schema with 422; an upgrade that changes it must be seen here.
-  test('an answer the contract refuses is a 422 with code invalid_response', async () => {
-    const app = appWith(ok).get('/broken', () => ({ status: 'sideways' }) as unknown as Health, {
-      response: { 200: Health },
-    })
-    const response = await get(app, '/broken')
-    expect(response.status).toBe(422)
+  // Elysia 1.4 answers a response that fails its zod schema with 422; the server maps it to its own bug, a 500.
+  test('an answer the contract refuses is a 500 with code invalid_response', async () => {
+    const response = await get(appWith({ status: 'sideways' } as unknown as Health), '/health')
+    expect(response.status).toBe(500)
     expect(ErrorBody.parse(await response.json()).code).toBe('invalid_response')
+  })
+
+  test('a request the contract refuses is a 422 that names the fields', async () => {
+    const owner = 'o'.repeat(16)
+    const app = createApp({ tokens: { owner }, health: { read: async () => ok }, log: () => {} })
+    const response = await app.handle(
+      new Request('http://localhost/v1/issues/issue_1/close', {
+        method: 'POST',
+        body: '{"attempt":1}',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${owner}` },
+      }),
+    )
+    expect(response.status).toBe(422)
+    const body = ErrorBody.parse(await response.json())
+    expect(body.code).toBe('invalid_request')
+    expect(body.details?.fields).toEqual(['outcome', 'reason'])
   })
 })
 
@@ -93,14 +106,22 @@ describe('the OpenAPI document', () => {
   })
 })
 
+describe('the OpenAPI document', () => {
+  test('is not served unless docs is on', async () => {
+    const app = createApp({ health: { read: async () => ok }, log: () => {} })
+    expect((await get(app, OPENAPI_PATH)).status).toBe(404)
+  })
+})
+
 describe('the internal test routes', () => {
   test('do not exist unless mounted, and are never in the OpenAPI document', async () => {
-    const app = appWith(ok)
+    const owner = 'o'.repeat(16)
+    const app = createApp({ tokens: { owner }, health: { read: async () => ok }, docs: true, log: () => {} })
     const response = await app.handle(
       new Request('http://localhost/internal/test/issues', {
         method: 'POST',
         body: '{}',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${owner}` },
       }),
     )
     expect(response.status).toBe(404)

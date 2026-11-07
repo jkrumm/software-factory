@@ -3,6 +3,8 @@ import { ErrorBody } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
+import type { Tokens } from '../settings.ts'
+import { auth, Refusal } from './auth.ts'
 import { type CapacityApi, capacityRoutes } from './capacity.ts'
 import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
@@ -15,6 +17,10 @@ import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
 
 export interface ApiDeps {
+  /** who may call: absent, no caller exists and every route but `GET /health` answers 401 */
+  tokens?: Tokens
+  /** serves the OpenAPI document and its page, public; off by default and in production (the CLI generator turns it on and reads it in-process) */
+  docs?: boolean
   health: HealthSource
   /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
   checkpoints?: CheckpointUses
@@ -41,7 +47,19 @@ export interface ApiDeps {
 /** Where the OpenAPI document is served; the CLI generator reads it in-process through `app.handle`. */
 export const OPENAPI_PATH = '/openapi/json'
 
-const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
+const failure = (error: string, code: string, details?: Record<string, unknown>): ErrorBody =>
+  ErrorBody.parse({ error, code, ...(details ? { details } : {}) })
+
+/** The names of the fields a validation refused, from the paths Elysia's standard-schema issues carry. */
+const fieldsOf = (all: readonly unknown[]): string[] => [
+  ...new Set(
+    all.flatMap((issue) =>
+      typeof issue === 'object' && issue && 'path' in issue && typeof issue.path === 'string' && issue.path
+        ? [issue.path.replace(/^\//, '')]
+        : [],
+    ),
+  ),
+]
 
 /**
  * The Elysia app: the OpenAPI document from the contract's zod schemas, every failure as an `ErrorBody`, and the route
@@ -51,12 +69,19 @@ export function createApp(deps: ApiDeps) {
   const log = deps.log ?? ((message: string) => console.error(message))
   return new Elysia()
     .use(
-      openapi({
-        mapJsonSchema: { zod: z.toJSONSchema },
-        documentation: { info: { title: 'software-factory', version: '0.0.0' } },
-      }),
+      deps.docs
+        ? openapi({
+            mapJsonSchema: { zod: z.toJSONSchema },
+            documentation: { info: { title: 'software-factory', version: '0.0.0' } },
+          })
+        : new Elysia(),
     )
+    .use(auth(deps.tokens))
     .onError(({ code, error, set }) => {
+      if (error instanceof Refusal) {
+        set.status = error.status
+        return error.body
+      }
       switch (code) {
         case 'NOT_FOUND':
           set.status = 404
@@ -65,13 +90,20 @@ export function createApp(deps: ApiDeps) {
           set.status = 400
           return failure('the body is not valid JSON', 'unparseable')
         case 'VALIDATION': {
-          // Elysia 1.4 answers a response that fails its schema with 422 too; the code tells the two apart.
-          set.status = error.status
           const first = error.all[0]
           const detail = first && 'summary' in first && first.summary ? first.summary : error.type
-          return error.type === 'response'
-            ? failure(`the server built an answer its contract refuses: ${detail}`, 'invalid_response')
-            : failure(`the ${error.type} does not match the contract: ${detail}`, 'invalid_request')
+          // Elysia 1.4 answers a response that fails its schema with 422 too: that is the server's bug, a 500.
+          if (error.type === 'response') {
+            set.status = 500
+            return failure(`the server built an answer its contract refuses: ${detail}`, 'invalid_response')
+          }
+          set.status = error.status
+          const fields = fieldsOf(error.all)
+          return failure(
+            `the ${error.type} does not match the contract: ${detail}`,
+            'invalid_request',
+            fields.length ? { fields } : undefined,
+          )
         }
         default:
           log(`unexpected error (${String(code)}): ${error instanceof Error ? error.message : String(error)}`)

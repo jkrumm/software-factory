@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { Health } from '@software-factory/contract'
 import * as z from 'zod'
 import { FactoryError } from '../src/exit.ts'
-import { type Operation, runOperation } from '../src/operation.ts'
+import { type BodyField, type Operation, runOperation } from '../src/operation.ts'
 import { run } from '../src/run.ts'
 
 const healthy: Health = {
@@ -17,7 +17,7 @@ const healthy: Health = {
 let server: ReturnType<typeof Bun.serve>
 let dir: string
 let answer: { status: number; body: unknown } = { status: 200, body: healthy }
-let seen: { url: string; method: string; body: string } | undefined
+let seen: { url: string; method: string; body: string; authorization: string | null } | undefined
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-cli-')
@@ -25,7 +25,12 @@ beforeAll(async () => {
     hostname: '127.0.0.1',
     port: 0,
     fetch: async (request) => {
-      seen = { url: request.url, method: request.method, body: await request.text() }
+      seen = {
+        url: request.url,
+        method: request.method,
+        body: await request.text(),
+        authorization: request.headers.get('authorization'),
+      }
       return Response.json(answer.body, { status: answer.status })
     },
   })
@@ -116,19 +121,63 @@ describe('a generated command', () => {
     expect(errorOf(result.err).kind).toBe('contract_mismatch')
   })
 
-  test('a declared 503 prints its body and exits 1', async () => {
+  // The one failure with data on stdout: the Uptime pusher and verify.sh read the Health body of a 503.
+  test('a 503 health prints its Health body on stdout, the error line on stderr, and exits 1', async () => {
     const down = { ...healthy, status: 'unhealthy', reason: 'db', heartbeat: { ...healthy.heartbeat, ok: false } }
     answer = { status: 503, body: down }
     const result = await cli(['health', 'get'])
     expect(result.code).toBe(1)
     expect(JSON.parse(result.out)).toEqual(down)
+    expect(errorOf(result.err).kind).toBe('general')
+  })
+
+  test('a declared ErrorBody is stderr only: code, message and details {status, ...details}', async () => {
+    answer = {
+      status: 422,
+      body: {
+        error: 'a Decision needs: recommendation',
+        code: 'missing_field',
+        details: { fields: ['recommendation'] },
+      },
+    }
+    const result = await cli(['issue', 'ask', 'issue_1', '--attempt', '1'])
+    expect(result.code).toBe(2)
+    expect(result.out).toBe('')
+    expect(JSON.parse(result.err)).toEqual({
+      error: {
+        kind: 'usage',
+        code: 'missing_field',
+        message: 'a Decision needs: recommendation',
+        hint: '',
+        details: { status: 422, fields: ['recommendation'] },
+      },
+    })
   })
 
   test("an undeclared status is its kind with the server's ErrorBody message", async () => {
     answer = { status: 404, body: { error: 'no such route', code: 'not_found' } }
     const result = await cli(['health', 'get'])
     expect(result.code).toBe(4)
+    expect(result.out).toBe('')
     expect(errorOf(result.err).message).toBe('no such route')
+  })
+
+  test('a 401 is exit 3 with a hint to set the token', async () => {
+    answer = { status: 401, body: { error: 'a bearer token is required', code: 'unauthorized' } }
+    const result = await cli(['health', 'get'])
+    expect(result.code).toBe(3)
+    expect(JSON.parse(result.err).error).toMatchObject({ kind: 'auth', code: 'unauthorized', details: { status: 401 } })
+    expect(JSON.parse(result.err).error.hint).toContain('FACTORY_TOKEN')
+  })
+
+  test('the bearer is FACTORY_TOKEN, else FACTORY_READ_TOKEN, else nothing', async () => {
+    answer = { status: 200, body: healthy }
+    await cli(['health', 'get'], { FACTORY_TOKEN: 'owner-t', FACTORY_READ_TOKEN: 'read-t' })
+    expect(seen?.authorization).toBe('Bearer owner-t')
+    await cli(['health', 'get'], { FACTORY_READ_TOKEN: 'read-t' })
+    expect(seen?.authorization).toBe('Bearer read-t')
+    await cli(['health', 'get'])
+    expect(seen?.authorization).toBeNull()
   })
 
   test('an unreachable server is exit 7', async () => {
@@ -148,6 +197,7 @@ describe('runOperation', () => {
     pathParams: ['id'],
     queryParams: ['wake'],
     body: true,
+    bodyFields: [],
     responses: { 200: Echo },
   }
   const io = (out: string[]) => ({
@@ -165,13 +215,13 @@ describe('runOperation', () => {
       url: `${server.url.href}issues/a%20b/notes?wake=yes`,
       method: 'POST',
       body: '{"text":"hi"}',
+      authorization: null,
     })
   })
 
   test('a missing positional or body, or a body that is not JSON, is a usage error before any call', async () => {
     for (const invocation of [
       { args: [], flags: { body: '{}' } },
-      { args: ['1'], flags: {} },
       { args: ['1'], flags: { body: '{' } },
     ]) {
       const kind = await runOperation(op, { ...invocation, format: 'json' }, io([])).then(
@@ -180,5 +230,177 @@ describe('runOperation', () => {
       )
       expect(kind).toBe('usage')
     }
+  })
+})
+
+describe('body flags', () => {
+  const Echo = z.object({ ok: z.boolean() })
+  const field = (name: string, kind: BodyField['kind'], over: Partial<BodyField> = {}): BodyField => ({
+    name,
+    flag: name,
+    kind,
+    repeatable: false,
+    required: false,
+    untyped: false,
+    ...over,
+  })
+  const op: Operation = {
+    operationId: 'thing.make',
+    command: ['thing', 'make'],
+    method: 'POST',
+    path: '/things/{id}',
+    summary: '',
+    pathParams: ['id'],
+    queryParams: [],
+    body: true,
+    bodyFields: [
+      field('text', 'string'),
+      field('count', 'number'),
+      field('attempt', 'integer'),
+      field('urgent', 'boolean'),
+      field('commit', 'string', { repeatable: true }),
+      field('sizes', 'number', { repeatable: true }),
+      field('options', 'json'),
+      field('question', 'json', { untyped: true }),
+    ],
+    responses: { 200: Echo },
+  }
+  const io = { env: { FACTORY_URL: '' }, out: () => {}, err: () => {} }
+  const call = async (flags: Record<string, string | boolean | string[]>) => {
+    answer = { status: 200, body: { ok: true } }
+    await runOperation(op, { args: ['t1'], flags, format: 'json' }, { ...io, env: { FACTORY_URL: server.url.href } })
+    return JSON.parse(seen?.body ?? 'null')
+  }
+  const refused = (flags: Record<string, string | boolean | string[]>) =>
+    call(flags).then(
+      () => 'resolved',
+      (error: unknown) => (error instanceof FactoryError ? error.kind : 'other'),
+    )
+
+  test('each kind maps to its JSON type', async () => {
+    expect(
+      await call({
+        text: 'hi',
+        count: '1.5',
+        attempt: '3',
+        urgent: 'true',
+        commit: ['a', 'b'],
+        sizes: ['1', '2'],
+        options: '[{"label":"x"}]',
+      }),
+    ).toEqual({
+      text: 'hi',
+      count: 1.5,
+      attempt: 3,
+      urgent: true,
+      commit: ['a', 'b'],
+      sizes: [1, 2],
+      options: [{ label: 'x' }],
+    })
+  })
+
+  test('a repeatable flag given once is a list of one', async () => {
+    expect(await call({ commit: 'a' })).toEqual({ commit: ['a'] })
+  })
+
+  test('an untyped property is JSON only when it is an object or an array, else the text', async () => {
+    expect(await call({ question: 'Which db?' })).toEqual({ question: 'Which db?' })
+    expect(await call({ question: '123' })).toEqual({ question: '123' })
+    expect(await call({ question: 'true' })).toEqual({ question: 'true' })
+    expect(await call({ question: '{"a":1}' })).toEqual({ question: { a: 1 } })
+    expect(await call({ question: '["x"]' })).toEqual({ question: ['x'] })
+    expect(await call({ question: '{broken' })).toEqual({ question: '{broken' })
+  })
+
+  test('an object or array property must be JSON, a number must be a number', async () => {
+    expect(await refused({ options: 'not json' })).toBe('usage')
+    expect(await refused({ count: 'many' })).toBe('usage')
+    expect(await refused({ attempt: '1.5' })).toBe('usage')
+    expect(await refused({ urgent: 'maybe' })).toBe('usage')
+    expect(await refused({ sizes: ['1', 'x'] })).toBe('usage')
+  })
+
+  test('flags override the keys of --body and the rest of --body is kept', async () => {
+    expect(await call({ body: '{"text":"from body","extra":1}', text: 'from flag' })).toEqual({
+      text: 'from flag',
+      extra: 1,
+    })
+  })
+
+  test("no flag and no --body sends an empty object: a missing required field is the server's to refuse", async () => {
+    expect(await call({})).toEqual({})
+  })
+
+  test('flags with a --body that is not an object are a usage error', async () => {
+    expect(await refused({ body: '[1]', text: 'x' })).toBe('usage')
+  })
+})
+
+describe('the command line of a generated command', () => {
+  const sent = () => JSON.parse(seen?.body ?? 'null')
+
+  test('flags after the positionals build the body', async () => {
+    answer = { status: 200, body: { ok: true } }
+    await cli(['issue', 'close', 'issue_7', '--attempt', '2', '--outcome', 'done', '--reason', 'it works'])
+    expect(seen?.url).toBe(`${server.url.href}v1/issues/issue_7/close`)
+    expect(sent()).toEqual({ attempt: 2, outcome: 'done', reason: 'it works' })
+  })
+
+  test('a repeatable flag collects every value', async () => {
+    answer = { status: 200, body: { ok: true } }
+    await cli(['planning', 'settle', '--issue', 'issue_1', '--after', 'issue_2', '--after', 'issue_3'])
+    expect(sent()).toEqual({ issue: 'issue_1', after: ['issue_2', 'issue_3'] })
+  })
+
+  test('a boolean flag alone is true, and takes true or false', async () => {
+    answer = { status: 200, body: { ok: true } }
+    await cli(['decision', 'worth-asking', 'decision_1', '--worth'])
+    expect(sent()).toEqual({ worth: true })
+    await cli(['decision', 'worth-asking', 'decision_1', '--worth', 'false'])
+    expect(sent()).toEqual({ worth: false })
+    expect(seen?.url).toBe(`${server.url.href}v1/decisions/decision_1/worth-asking`)
+  })
+
+  test('--format may come before the command', async () => {
+    answer = { status: 200, body: healthy }
+    const result = await cli(['--format', 'plain', 'health', 'get'])
+    expect(result.out.startsWith('status\tok')).toBe(true)
+  })
+
+  test('an unknown flag for the command is exit 2 naming the command, and sends nothing', async () => {
+    seen = undefined
+    const result = await cli(['issue', 'close', 'issue_7', '--bogus', 'x'])
+    expect(result.code).toBe(2)
+    expect(errorOf(result.err).message).toContain('issue close')
+    expect(seen).toBeUndefined()
+  })
+
+  test("another command does not know this command's flags", async () => {
+    const result = await cli(['health', 'get', '--attempt', '1'])
+    expect(result.code).toBe(2)
+  })
+
+  test('a flag that is not a number is exit 2', async () => {
+    const result = await cli(['issue', 'close', 'issue_7', '--attempt', 'two'])
+    expect(result.code).toBe(2)
+    expect(errorOf(result.err).message).toContain('--attempt')
+  })
+
+  test('<command> --help prints the usage with the flags and their marks, on stdout', async () => {
+    const result = await cli(['issue', 'close', '--help'])
+    expect(result.code).toBe(0)
+    expect(result.err).toBe('')
+    expect(result.out).toContain('usage: factory issue close <id> [flags]')
+    expect(result.out).toContain('--attempt <integer>  required')
+    expect(result.out).toContain('--call <text>\n')
+    expect(result.out).toContain('--body <json>')
+    const defer = await cli(['issue', 'defer', '-h'])
+    expect(defer.out).toContain('--after <text>  repeatable')
+  })
+
+  test('the top-level help lists commands, not their flags', async () => {
+    const out = (await cli(['--help'])).out
+    expect(out).toContain('issue close <id>')
+    expect(out).not.toContain('--attempt')
   })
 })

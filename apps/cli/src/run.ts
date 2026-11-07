@@ -3,7 +3,7 @@ import type { RoleEntry } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
 import { EXIT, FactoryError, usage } from './exit.ts'
 import { OPERATIONS } from './generated/operations.ts'
-import { type Io, type Operation, runOperation } from './operation.ts'
+import { type BodyField, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
 import { type Format, render } from './output.ts'
 import { DEFAULT_ROLES_FILE, loadRoleTable } from './roles.ts'
 import { slotVerb } from './slot.ts'
@@ -27,14 +27,23 @@ const help = (): string =>
     `  ${'slot run [--name <label>] -- <cmd>'.padEnd(commandWidth)}run <cmd> in one of the host's test slots (exit 75: no slot in time; open if the server is down)`,
     ...OPERATIONS.map((op) => `  ${usageOf(op).padEnd(commandWidth)}${op.summary}`),
     '',
+    `${BIN} <group> <verb> --help lists a command's flags; a request body is one flag per property, or --body '<json>'.`,
+    '',
     'environment:',
     '  FACTORY_URL         the server (default http://127.0.0.1:7793)',
+    '  FACTORY_TOKEN       the bearer token (FACTORY_READ_TOKEN when only that is set; reads only)',
     '  FACTORY_ROLES_FILE  the role table (default: config/roles.json of this checkout or release)',
     '',
     "Data goes to stdout, every failure to stderr as one JSON line; exit codes are agw's (0 ok, 1 general, 2 usage,",
     '3 auth, 4 not found, 5 conflict, 7 network, 8 rate limited, 9 contract mismatch).',
     '',
   ].join('\n')
+
+function formatOf(value: string | undefined): Format {
+  const format = value ?? 'json'
+  if (format !== 'json' && format !== 'plain') throw usage(`--format must be json or plain, got: ${format}`)
+  return format
+}
 
 const roleLine = (r: RoleEntry) => [r.role, r.tier, r.effort].join('\t')
 
@@ -58,22 +67,119 @@ async function roleVerb(words: string[], format: Format, io: Io): Promise<void> 
   throw usage('usage: role list | role get <role>')
 }
 
-/** Every query parameter of a generated command is a string flag; `--body` carries a JSON body. */
-const OPTIONS = {
+/** The words that name a command: stage 1 only has to find them, so every flag but `--format` is left alone. */
+const FIRST_STAGE = {
   format: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
-  body: { type: 'string' },
-  ...Object.fromEntries(OPERATIONS.flatMap((op) => op.queryParams.map((name) => [name, { type: 'string' }]))),
 } as const satisfies ParseArgsOptionsConfig
+
+const KIND_HINT = {
+  string: '<text>',
+  number: '<number>',
+  integer: '<integer>',
+  boolean: '[true|false]',
+  json: '<json>',
+} as const
+
+const flagHelp = (field: BodyField): string =>
+  [
+    `--${field.flag} ${field.untyped ? '<text|json>' : KIND_HINT[field.kind]}`,
+    field.required ? 'required' : '',
+    field.repeatable ? 'repeatable' : '',
+  ]
+    .filter(Boolean)
+    .join('  ')
+
+/** `factory issue close --help`: the usage line, the summary and every flag with its marks. */
+function commandHelp(op: Operation): string {
+  const flags = [
+    ...op.queryParams.map((name) => `--${name} <text>`),
+    ...op.bodyFields.map(flagHelp),
+    ...(op.body ? ['--body <json>  the whole body as JSON; a flag overrides its key'] : []),
+    '--format json|plain',
+  ]
+  return [`usage: ${BIN} ${usageOf(op)} [flags]`, '', op.summary, '', 'flags:', ...flags.map((f) => `  ${f}`), ''].join(
+    '\n',
+  )
+}
+
+/** What parseArgs knows about one operation: its query flags, its body fields, and the flags every command has. */
+function optionsOf(op: Operation): ParseArgsOptionsConfig {
+  return {
+    format: { type: 'string' },
+    help: { type: 'boolean', short: 'h' },
+    body: { type: 'string' },
+    ...Object.fromEntries(op.queryParams.map((name) => [name, { type: 'string' }])),
+    // A boolean takes `--flag`, `--flag true` and `--flag false`, which parseArgs' boolean type cannot: see `booleansIn`.
+    ...Object.fromEntries(
+      op.bodyFields.map((field) => [field.flag, { type: 'string', ...(field.repeatable ? { multiple: true } : {}) }]),
+    ),
+  }
+}
+
+/** Rewrites `--flag`, `--flag true` and `--flag false` of the boolean body fields into `--flag=true|false`. */
+function booleansIn(op: Operation, argv: readonly string[]): string[] {
+  const booleans = new Set(op.bodyFields.filter((field) => field.kind === 'boolean').map((field) => `--${field.flag}`))
+  const out: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const word = argv[i] ?? ''
+    if (word === '--') {
+      out.push(...argv.slice(i))
+      break
+    }
+    if (!booleans.has(word)) {
+      out.push(word)
+      continue
+    }
+    const next = argv[i + 1]
+    if (next === 'true' || next === 'false') {
+      out.push(`${word}=${next}`)
+      i++
+    } else {
+      out.push(`${word}=true`)
+    }
+  }
+  return out
+}
+
+/** Stage 2: this operation's own flags, strictly. An unknown flag is a usage error naming the command. */
+function parseOperation(op: Operation, argv: readonly string[]) {
+  try {
+    return parseArgs({ args: booleansIn(op, argv), options: optionsOf(op), allowPositionals: true, strict: true })
+  } catch (error) {
+    throw usage(
+      `${op.command.join(' ')}: ${error instanceof Error ? error.message : String(error)}`,
+      `${BIN} ${op.command.join(' ')} --help lists its flags`,
+    )
+  }
+}
 
 /** Runs one invocation and returns its exit code. Nothing asks anything. */
 export async function run(argv: string[], io: Io): Promise<number> {
   try {
     // `slot run` passes everything after `--` to its command, so it reads its own arguments.
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
-    let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>
+    // Stage 1 finds the command; flags it does not know are left for stage 2, which knows the command's own.
+    const found = parseArgs({ args: argv, options: FIRST_STAGE, allowPositionals: true, strict: false }).positionals
+    const op = OPERATIONS.find((o) => o.command[0] === found[0] && o.command[1] === found[1])
+    if (op) {
+      const parsed = parseOperation(op, argv)
+      if (parsed.values.help) {
+        io.out(commandHelp(op))
+        return EXIT.ok
+      }
+      const given = parsed.values.format
+      const format = formatOf(typeof given === 'string' ? given : undefined)
+      await runOperation(
+        op,
+        { args: parsed.positionals.slice(2), flags: parsed.values as Record<string, FlagValue>, format },
+        io,
+      )
+      return EXIT.ok
+    }
+    let parsed: ReturnType<typeof parseArgs<{ options: typeof FIRST_STAGE; allowPositionals: true }>>
     try {
-      parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true, strict: true })
+      parsed = parseArgs({ args: argv, options: FIRST_STAGE, allowPositionals: true, strict: true })
     } catch (error) {
       throw usage(error instanceof Error ? error.message : String(error), `${BIN} --help lists the flags`)
     }
@@ -82,8 +188,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       io.out(help())
       return EXIT.ok
     }
-    const format = parsed.values.format ?? 'json'
-    if (format !== 'json' && format !== 'plain') throw usage(`--format must be json or plain, got: ${format}`)
+    const format = formatOf(parsed.values.format)
 
     if (words.length === 1 && words[0] === 'version') {
       io.out(render(format, { version: pkg.version }, pkg.version))
@@ -93,12 +198,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       await roleVerb(words, format, io)
       return EXIT.ok
     }
-    const op = OPERATIONS.find((o) => o.command[0] === words[0] && o.command[1] === words[1])
-    if (!op) {
-      throw usage(`unknown command: ${words.join(' ')}`, `${BIN} --help lists the commands`)
-    }
-    await runOperation(op, { args: words.slice(2), flags: parsed.values, format }, io)
-    return EXIT.ok
+    throw usage(`unknown command: ${words.join(' ')}`, `${BIN} --help lists the commands`)
   } catch (error) {
     const failure =
       error instanceof FactoryError

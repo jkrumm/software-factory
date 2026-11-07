@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { AlertRequest, type DoorReport, MAX_FACTS_BYTES, type SignalAck } from '@software-factory/contract'
-import { createDoor, fileViaHttp, type Filed, MAX_BODY_BYTES, reportViaHttp } from '../src/door.ts'
+import { createDoor, doorTokenFrom, fileViaHttp, type Filed, MAX_BODY_BYTES, reportViaHttp } from '../src/door.ts'
 
 const KUMA_TOKEN = 'kuma-token-0123456789-abcdef'
 const HYPERDX_TOKEN = 'hyperdx-token-0123456789-abcdef'
@@ -278,13 +278,17 @@ describe('the server', () => {
     expect(JSON.stringify(posted)).not.toContain('evil')
   })
 
-  test('over HTTP the door posts to /signals/alerts and /door/reports of the factory URL', async () => {
-    const seen: { path: string; body: unknown }[] = []
+  test('over HTTP the door posts to /signals/alerts and /door/reports of the factory URL with its bearer token', async () => {
+    const seen: { path: string; body: unknown; authorization: string | null }[] = []
     const factory = Bun.serve({
       hostname: '127.0.0.1',
       port: 0,
       fetch: async (req) => {
-        seen.push({ path: new URL(req.url).pathname, body: await req.json() })
+        seen.push({
+          path: new URL(req.url).pathname,
+          body: await req.json(),
+          authorization: req.headers.get('authorization'),
+        })
         return Response.json(seen.length === 1 ? ack('filed', 'new') : { ok: true })
       },
     })
@@ -298,10 +302,14 @@ describe('the server', () => {
         title: 't',
         facts: {},
       })
-      expect(await fileViaHttp(base)(input)).toEqual({ status: 200, body: ack('filed', 'new') })
-      await reportViaHttp(base)({ kind: 'accepted', source: 'kuma' })
+      expect(await fileViaHttp(base, 'door-token-0123456789')(input)).toEqual({
+        status: 200,
+        body: ack('filed', 'new'),
+      })
+      await reportViaHttp(base, 'door-token-0123456789')({ kind: 'accepted', source: 'kuma' })
       expect(seen.map((call) => call.path)).toEqual(['/signals/alerts', '/door/reports'])
       expect(seen[0]?.body).toEqual(input)
+      expect(seen.map((call) => call.authorization)).toEqual(Array(2).fill('Bearer door-token-0123456789'))
     } finally {
       await factory.stop(true)
     }
@@ -375,5 +383,13 @@ describe('refusals, probes and reports', () => {
       body: JSON.stringify(await fixture('kuma-test.json')),
     })
     expect((await hanging(testMessage)).status).toBe(200)
+  })
+})
+
+describe('the factory token', () => {
+  test('the door refuses to start without FACTORY_DOOR_TOKEN, naming the variable', () => {
+    expect(() => doorTokenFrom({})).toThrow('FACTORY_DOOR_TOKEN')
+    expect(() => doorTokenFrom({ FACTORY_DOOR_TOKEN: '' })).toThrow('FACTORY_DOOR_TOKEN')
+    expect(doorTokenFrom({ FACTORY_DOOR_TOKEN: 'door-token-0123456789' })).toBe('door-token-0123456789')
   })
 })

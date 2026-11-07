@@ -14,7 +14,7 @@ import {
   PageList,
   PassReply,
 } from '@software-factory/contract'
-import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
+import { bearer, factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
 
 /**
  * Where the factory stops for a person, against the real server process and Postgres with the fake agw (the Judge) and a
@@ -93,7 +93,7 @@ afterAll(async () => {
 async function post(path: string, body: unknown): Promise<InternalTestEventAnswer> {
   const response = await fetch(`${server.url}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify(body),
   })
   const text = await response.text()

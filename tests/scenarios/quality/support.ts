@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { type QualityView, type ReopenAnswer, ShipAnswer } from '@software-factory/contract'
-import { factory, type ServerProcess, type World } from '../harness.ts'
+import { bearer, factory, type ServerProcess, type World } from '../harness.ts'
 import { type LeadsWorld, startLeadsWorld } from '../leads/support.ts'
 
 /** The server's environment for a quality scenario: a quick tick, no settle, a short retry, the entry into the write path. */
@@ -27,7 +27,7 @@ export interface Answer<T = unknown> {
 async function post(server: ServerProcess, path: string, body: unknown): Promise<unknown> {
   const response = await fetch(`${server.url}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify(body),
   })
   const text = await response.text()
@@ -127,7 +127,9 @@ export async function until<T>(what: string, look: () => Promise<T | undefined |
 
 function parse<T>(raw: { code: number; out: string; err: string }): Answer<T> {
   const json = (raw.out ? JSON.parse(raw.out) : null) as T
-  const refusal = raw.code === 0 ? '' : String((json as { error?: unknown } | null)?.error ?? '')
+  // A failure is one JSON line on stderr: `{ error: { kind, code, message, hint, details } }`.
+  const refusal =
+    raw.code === 0 ? '' : String((JSON.parse(raw.err) as { error?: { message?: unknown } }).error?.message ?? '')
   return { code: raw.code, json, refusal, err: raw.err }
 }
 

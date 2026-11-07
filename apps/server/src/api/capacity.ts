@@ -19,6 +19,7 @@ import type { AccountState, CapacityState } from '../app/capacity-view.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
 import type { SlotView } from '../domains/capacity/slots.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
 
 /** The contract's list of reasons and the server's are one list: a reason added on one side fails `tsc` until it is on the other. */
 const queueReasonsMatch: [(typeof QUEUE_REASONS)[number]] extends [QueueReasonKind]
@@ -135,7 +136,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         )
       },
       {
-        response: { 200: CapacityView, 503: ErrorBody },
+        response: { 200: CapacityView, ...errorResponses(503) },
         detail: {
           operationId: 'capacity.get',
           summary:
@@ -153,7 +154,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
           : status(503, unavailable(polled.error))
       },
       {
-        response: { 200: RefreshAnswer, 503: ErrorBody },
+        response: { 200: RefreshAnswer, ...errorResponses(503) },
         detail: { operationId: 'capacity.refresh', summary: 'poll the account picker now and store the readings' },
       },
     )
@@ -173,7 +174,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         )
       },
       {
-        response: { 200: AdmitAnswer, 503: ErrorBody },
+        response: { 200: AdmitAnswer, ...errorResponses(503) },
         detail: {
           operationId: 'capacity.admit',
           summary: 'admit every queued Issue that nothing keeps out, one at a time, and say why the others stay queued',
@@ -190,7 +191,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
           : status(503, unavailable(view.error))
       },
       {
-        response: { 200: QueueOrder, 503: ErrorBody },
+        response: { 200: QueueOrder, ...errorResponses(503) },
         detail: {
           operationId: 'queue.order',
           summary: 'the queued Issues in the order they are looked at, each with the reason it stays queued',
@@ -205,7 +206,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         return states.ok ? status(200, statesView(states.value)) : status(503, unavailable(states.error))
       },
       {
-        response: { 200: QueueStatesView, 503: ErrorBody },
+        response: { 200: QueueStatesView, ...errorResponses(503) },
         detail: { operationId: 'queue.get', summary: 'the queue state per scope: run, pace or drain' },
       },
     )
@@ -218,7 +219,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
       },
       {
         body: QueueSetBody,
-        response: { 200: QueueStatesView, 503: ErrorBody },
+        response: { 200: QueueStatesView, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'queue.set',
           summary: 'set the queue state of the whole queue or one project: run, pace or drain',
@@ -235,7 +236,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
       {
         params: z.object({ id: z.string().min(1).max(200) }),
         body: SlotBody,
-        response: { 200: Slot, 503: ErrorBody },
+        response: { 200: Slot, ...errorResponses(400, 422, 503) },
         detail: { hide: true, operationId: 'slots.touch' },
       },
     )
@@ -250,7 +251,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
       },
       {
         params: z.object({ id: z.string().min(1).max(200) }),
-        response: { 200: SlotRelease, 503: ErrorBody },
+        response: { 200: SlotRelease, ...errorResponses(503) },
         detail: { hide: true, operationId: 'slots.release' },
       },
     )

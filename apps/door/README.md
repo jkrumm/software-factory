@@ -9,7 +9,7 @@ alert and `POST /door/reports` for what it says about its sources. The body is a
 Kuma / HyperDX ──TLS──▶ tailscale serve ──▶ 127.0.0.1:8796 (the door) ──loopback HTTP──▶ the server (POST /signals/alerts)
 ```
 
-The server is `FACTORY_URL` (default `http://127.0.0.1:7793`, as the CLI's).
+The server is `FACTORY_URL` (default `http://127.0.0.1:7793`, as the CLI's). The door calls it with `FACTORY_DOOR_TOKEN` as its bearer token (the server's `FACTORY_DOOR_TOKEN`; it may file alerts and post reports, nothing else) and does not start without it.
 
 ## Ingress
 
@@ -114,5 +114,5 @@ Checked against the build deployed on the vps (its `generic.js` and `template.js
 
 ## Run
 
-`bun apps/door/src/main.ts`, normally under the host's service manager, with `FACTORY_DOOR_PORT`, `FACTORY_URL` and
+`bun apps/door/src/main.ts`, normally under the host's service manager, with `FACTORY_DOOR_PORT`, `FACTORY_URL`, `FACTORY_DOOR_TOKEN` and
 `FACTORY_DOOR_TOKENS_FILE` in its environment. Tests: `bun test apps/door` (parsers, tokens, the door in front of a scripted fake server).

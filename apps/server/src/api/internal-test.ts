@@ -6,6 +6,7 @@ import { type IssueEvent, parseIssueEvent } from '../domains/work/events.ts'
 import { idOf } from '../kernel/ids.ts'
 import { type Key, keyOf } from '../kernel/keys.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
 
 type Written = Result<Recorded, IssueWriteError | PortError>
 
@@ -54,11 +55,11 @@ function answer(written: Written): Answer {
   }
 }
 
-const RESPONSES = { 200: InternalTestEventAnswer, 400: ErrorBody, 404: ErrorBody, 409: ErrorBody, 503: ErrorBody }
+const RESPONSES = { 200: InternalTestEventAnswer, ...errorResponses(400, 404, 409, 422, 503) }
 
 /**
  * `POST /internal/test/issues` files an Issue, `POST /internal/test/issues/:id/events` records an event on one: the
- * scenarios' entry into the write path until package 8, which deletes this group. Mounted only when
+ * scenarios' entry into the write path (the owner's token, like every route). Mounted only when
  * `FACTORY_INTERNAL_TEST_ROUTES=1`, so the OpenAPI document and the generated CLI never have it.
  */
 export const internalTestRoutes = (writes: InternalTestWrites) =>

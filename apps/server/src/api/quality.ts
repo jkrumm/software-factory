@@ -13,6 +13,7 @@ import type { ShipAnswer, ShipInput } from '../app/quality-ship.ts'
 import type { StoredEvidence, QualityView } from '../domains/quality/store.ts'
 import { idOf, type IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
 
 /** The quality use cases the routes call, bound in `main.ts`. */
 export interface QualityWrites {
@@ -105,7 +106,7 @@ export const qualityRoutes = (writes: QualityWrites) =>
       {
         params: Params,
         body: ShipBody,
-        response: { 200: ShipAnswerBody, 404: ErrorBody, 409: ErrorBody, 503: ErrorBody },
+        response: { 200: ShipAnswerBody, ...errorResponses(400, 404, 409, 422, 503) },
         detail: { operationId: 'quality.ship', summary: "the lead's ship: the merged commits, checked, as evidence" },
       },
     )
@@ -134,7 +135,7 @@ export const qualityRoutes = (writes: QualityWrites) =>
       {
         params: Params,
         body: ReopenBody,
-        response: { 200: ReopenAnswer, 404: ErrorBody, 409: ErrorBody, 503: ErrorBody },
+        response: { 200: ReopenAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: { operationId: 'quality.reopen', summary: "the owner's reopen of a closed Issue, within 30 days" },
       },
     )
@@ -177,7 +178,7 @@ export const qualityRoutes = (writes: QualityWrites) =>
       },
       {
         params: Params,
-        response: { 200: QualityViewBody, 404: ErrorBody, 409: ErrorBody, 503: ErrorBody },
+        response: { 200: QualityViewBody, ...errorResponses(404, 409, 503) },
         detail: { operationId: 'quality.show', summary: 'what the ship gate and the watch recorded for an Issue' },
       },
     )

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { InternalTestEventAnswer, type InternalTestEventBody } from '@software-factory/contract'
-import { type ServerProcess, startServer, startWorld, type World } from './harness.ts'
+import { bearer, type ServerProcess, startServer, startWorld, type World } from './harness.ts'
 
 /**
  * An Issue from filed to closed through the write path, against the real server process and Postgres: the event log,
@@ -22,7 +22,7 @@ afterAll(async () => {
 async function post(path: string, body: InternalTestEventBody): Promise<InternalTestEventAnswer> {
   const response = await fetch(`${server.url}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify(body),
   })
   const text = await response.text()

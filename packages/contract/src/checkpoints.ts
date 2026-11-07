@@ -119,7 +119,8 @@ export const SubmitBody = z
     attempt: z.number().int().min(1),
     kind: z.unknown().optional(),
     title: z.unknown().optional(),
-    format: z.unknown().optional(),
+    /** `markdown` (the default) or `html`; not `format`, which is the CLI's own flag */
+    contentFormat: z.unknown().optional(),
     content: z.unknown().optional(),
   })
   .meta({ id: 'SubmitBody' })

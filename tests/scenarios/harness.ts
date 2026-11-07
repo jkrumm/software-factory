@@ -10,6 +10,20 @@ const CLI = join(ROOT, 'apps', 'cli', 'bin', 'factory.ts')
 const FAKES = join(import.meta.dir, 'fakes')
 const BOOT_TIMEOUT_MS = 20_000
 
+/** The fixed tokens of the four callers: the server in a world knows all of them, the CLI sends one. */
+export const TOKENS = {
+  owner: 'scenario-owner-token-0001',
+  agent: 'scenario-agent-token-0002',
+  machine: 'scenario-door-token-0003',
+  read: 'scenario-read-token-00004',
+} as const
+export type Caller = keyof typeof TOKENS
+
+/** The `Authorization` header of a caller (the owner by default), for a scenario that calls the server directly. */
+export const bearer = (caller: Caller = 'owner'): { authorization: string } => ({
+  authorization: `Bearer ${TOKENS[caller]}`,
+})
+
 const FakeCall = z.object({ tool: z.string(), args: z.array(z.string()) })
 
 /** A private database and a bin directory whose `hc` and `agw` are the fakes. */
@@ -105,6 +119,10 @@ export async function startServer(
       DATABASE_URL: world.db.url,
       PORT: String(port),
       FACTORY_VERSION: 'scenario',
+      FACTORY_TOKEN: TOKENS.owner,
+      FACTORY_AGENT_TOKEN: TOKENS.agent,
+      FACTORY_DOOR_TOKEN: TOKENS.machine,
+      FACTORY_READ_TOKEN: TOKENS.read,
       ...options.env,
     }),
     stdout: 'pipe',
@@ -147,15 +165,22 @@ export async function startServer(
   throw new Error(`the server did not answer /health within ${BOOT_TIMEOUT_MS} ms:\n${output}`)
 }
 
-/** Runs the generated CLI against a server, as a separate process. */
+/**
+ * Runs the generated CLI against a server, as a separate process. It is the owner unless `as` names another caller: an
+ * agent or machine token goes in `FACTORY_TOKEN`, the read token in `FACTORY_READ_TOKEN`, and `as: 'none'` sends no token.
+ */
 export async function factory(
   world: World,
   args: string[],
   env: Record<string, string> = {},
+  options: { as?: Caller | 'none' } = {},
 ): Promise<{ code: number; out: string; err: string }> {
+  const as = options.as ?? 'owner'
+  const token: Record<string, string> =
+    as === 'none' ? {} : as === 'read' ? { FACTORY_READ_TOKEN: TOKENS.read } : { FACTORY_TOKEN: TOKENS[as] }
   const proc = Bun.spawn([process.execPath, CLI, ...args], {
     cwd: ROOT,
-    env: worldEnv(world, env),
+    env: worldEnv(world, { ...token, ...env }),
     stdout: 'pipe',
     stderr: 'pipe',
   })

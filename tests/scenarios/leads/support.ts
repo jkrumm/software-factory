@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InternalTestEventAnswer, InternalTestEventBody, TickAnswer } from '@software-factory/contract'
 import { readState, statePathOf, type FakeHcState, type FakeTerminal } from '../fakes/hc-state.ts'
-import { factory, startServer, startWorld, type ServerProcess, type World } from '../harness.ts'
+import { bearer, factory, startServer, startWorld, type ServerProcess, type World } from '../harness.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const CLI = join(ROOT, 'apps', 'cli', 'bin', 'factory.ts')
@@ -79,7 +79,7 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
   async function post(path: string, body: InternalTestEventBody): Promise<InternalTestEventAnswer> {
     const response = await fetch(`${server.url}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...bearer() },
       body: JSON.stringify(body),
     })
     const text = await response.text()
@@ -116,7 +116,7 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
       return issue
     },
     tick: async () => {
-      const response = await fetch(`${server.url}/internal/test/tick`, { method: 'POST' })
+      const response = await fetch(`${server.url}/internal/test/tick`, { method: 'POST', headers: bearer() })
       const text = await response.text()
       if (response.status !== 200) throw new Error(`tick answered ${response.status}: ${text}`)
       return JSON.parse(text) as TickAnswer

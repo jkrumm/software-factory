@@ -1,6 +1,6 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { startServer, type ServerProcess, type World } from '../harness.ts'
+import { bearer, startServer, TOKENS, type ServerProcess, type World } from '../harness.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const DOOR_MAIN = join(ROOT, 'apps', 'door', 'src', 'main.ts')
@@ -135,6 +135,7 @@ export async function startDoor(estate: Estate, server: ServerProcess, sources: 
       FACTORY_DOOR_PORT: String(port),
       FACTORY_DOOR_TOKENS_FILE: tokensFile,
       FACTORY_URL: server.url,
+      FACTORY_DOOR_TOKEN: TOKENS.machine,
     },
     stdout: 'ignore',
     stderr: 'pipe',
@@ -295,7 +296,7 @@ let probes = 0
 export async function observe(server: ServerProcess, issue: string): Promise<Observed> {
   const response = await fetch(`${server.url}/internal/test/issues/${issue}/events`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify({ key: `probe:${issue}:${++probes}`, kind: 'settled', payload: {}, actor: 'lead' }),
   })
   const body = (await response.json()) as { issue: { state: string; outcome: string | null; version: number } }
@@ -314,7 +315,7 @@ export async function post(
 ): Promise<{ status: number; body: Body }> {
   const response = await fetch(`${server.url}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...bearer() },
     body: JSON.stringify(body),
   })
   const text = await response.text()
@@ -322,6 +323,6 @@ export async function post(
 }
 
 export const get = async (server: ServerProcess, path: string): Promise<{ status: number; body: Body }> => {
-  const response = await fetch(`${server.url}${path}`)
+  const response = await fetch(`${server.url}${path}`, { headers: bearer() })
   return { status: response.status, body: await response.json() }
 }

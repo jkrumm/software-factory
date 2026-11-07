@@ -19,6 +19,9 @@ import type { Intake, IntakeError } from '../app/intake.ts'
 import type { Triaged } from '../domains/intake/model.ts'
 import type { DoorRouteRow, SignalRow } from '../domains/intake/ports.ts'
 import { type Result } from '../kernel/result.ts'
+import { redactSignals } from '../read/signals.ts'
+import { callerOf } from './auth.ts'
+import { errorResponses } from './errors.ts'
 
 /** The use cases the routes call, bound in `main.ts`. */
 export type IntakeApi = Pick<
@@ -41,6 +44,8 @@ function problem(error: IntakeError): Response {
     case 'key_taken':
     case 'version_conflict':
       return json(409, failure('detail' in error ? error.detail : `${error.kind}; try again`, error.kind))
+    case 'trust_refused':
+      return json(403, failure(error.detail, 'trust_refused'))
     case 'no_repo':
     case 'unknown_project':
     case 'filing_refused':
@@ -69,6 +74,7 @@ const storedOf = (row: SignalRow): StoredSignal =>
     receivedAt: row.receivedAt.toISOString(),
     state: row.state,
     issue: row.issueId,
+    redacted: false,
   })
 
 const routeOf = (row: DoorRouteRow): DoorRoute =>
@@ -80,7 +86,7 @@ const routeOf = (row: DoorRouteRow): DoorRoute =>
     lastQuietAt: row.lastQuietAt?.toISOString() ?? null,
   })
 
-const RESPONSES = { 200: SignalAck, 404: ErrorBody, 409: ErrorBody, 422: ErrorBody, 503: ErrorBody }
+const RESPONSES = { 200: SignalAck, ...errorResponses(400, 404, 409, 422, 503) }
 
 /** Used when the app is built without intake (the OpenAPI document, tests of other routes): every call is a 503. */
 export const unwiredIntake: IntakeApi = (() => {
@@ -99,13 +105,14 @@ export const unwiredIntake: IntakeApi = (() => {
 })()
 
 /**
- * Signals in, and the door's registry. `POST /signals` is `factory signal`'s entry (the owner, Hermes, agents, an app);
+ * Signals in, and the door's registry. `POST /signals` is `factory signal`'s entry (the owner, Hermes, agents, an app): the
+ * token decides the trust and the claimed `from` can only lower it;
  * `POST /signals/alerts` is the door's, and its body is strict: a repo in it is a 400, because the door's routes pick
  * the repo and nothing in a payload does.
  */
 export const intakeRoutes = (api: IntakeApi) =>
   new Elysia()
-    .post('/signals', async ({ body }) => answer(await api.file(body), ackOf), {
+    .post('/signals', async ({ body, request }) => answer(await api.file(body, callerOf(request)), ackOf), {
       body: SignalRequest,
       response: RESPONSES,
       detail: { operationId: 'signal.file', summary: 'Put work in: an owner, agent or feedback signal' },
@@ -116,12 +123,15 @@ export const intakeRoutes = (api: IntakeApi) =>
       detail: { operationId: 'signal.alert', summary: "The door's entry: one alert of a monitoring source" },
     })
     .get(
-      '/signals',
-      async ({ query }) =>
-        answer(await api.list(query.state ?? null), (rows) => SignalList.parse({ signals: rows.map(storedOf) })),
+      '/v1/signals',
+      async ({ query, request }) =>
+        answer(await api.list(query.state ?? null), (rows) => {
+          const signals = rows.map(storedOf)
+          return SignalList.parse({ signals: callerOf(request) === 'read' ? redactSignals(signals) : signals })
+        }),
       {
         query: z.object({ state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']).optional() }),
-        response: { 200: SignalList, 503: ErrorBody },
+        response: { 200: SignalList, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'signal.list',
           summary: 'The stored signals, a state first: held ones wait for promotion',
@@ -154,7 +164,7 @@ export const intakeRoutes = (api: IntakeApi) =>
           }),
         ),
       {
-        response: { 200: DoorRouteList, 503: ErrorBody },
+        response: { 200: DoorRouteList, ...errorResponses(503) },
         detail: { operationId: 'door.routes', summary: "The door's routes, and the monitors that alerted with none" },
       },
     )
@@ -163,13 +173,13 @@ export const intakeRoutes = (api: IntakeApi) =>
       async ({ body }) => answer(await api.setRoute({ ...body, monitor: cleanText(body.monitor) }), routeOf),
       {
         body: DoorRouteInput,
-        response: { 200: DoorRoute, 404: ErrorBody, 422: ErrorBody, 503: ErrorBody },
+        response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
         detail: { operationId: 'door.route-set', summary: 'Route a monitor to a repo' },
       },
     )
     .post('/door/routes/remove', async ({ body }) => answer(await api.removeRoute(body), routeOf), {
       body: z.strictObject({ source: z.string().min(1), monitor: z.string().min(1) }).meta({ id: 'DoorRouteKey' }),
-      response: { 200: DoorRoute, 404: ErrorBody, 503: ErrorBody },
+      response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
       detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
     })
     .post(
@@ -177,7 +187,7 @@ export const intakeRoutes = (api: IntakeApi) =>
       async ({ body }) => answer(await api.doorReport(body), () => DoorReportAck.parse({ ok: true })),
       {
         body: DoorReport,
-        response: { 200: DoorReportAck, 503: ErrorBody },
+        response: { 200: DoorReportAck, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'door.report',
           summary: 'What the door says about its sources (start, refused, accepted)',

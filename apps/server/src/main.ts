@@ -278,6 +278,7 @@ async function main(): Promise<void> {
   const leadsTick = loopSettings.intervalMs.leads
 
   const app = createApp({
+    tokens: settings.tokens,
     intake: intake.api,
     health: {
       read: async () => {

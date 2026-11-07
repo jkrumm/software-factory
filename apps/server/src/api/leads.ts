@@ -12,6 +12,7 @@ import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
 import { idOf, type IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
+import { errorResponses } from './errors.ts'
 
 type Written = Result<Recorded, IssueWriteError | PortError>
 
@@ -44,12 +45,7 @@ const answerOf = ({ issue, event }: Recorded, result: Recorded['result']): LeadV
     event: { id: event.id, key: event.key, version: event.version },
   })
 
-const VERB_RESPONSES = {
-  200: LeadVerbAnswer,
-  404: ErrorBody,
-  409: ErrorBody,
-  503: ErrorBody,
-}
+const VERB_RESPONSES = { 200: LeadVerbAnswer, ...errorResponses(400, 404, 409, 422, 503) }
 
 type Answer = { status: 200; body: LeadVerbAnswer } | { status: 404 | 409 | 503; body: ErrorBody }
 
@@ -87,8 +83,7 @@ const unwired: LeadRoutes = {
 }
 
 /**
- * The lead's verbs (`factory issue close|defer|block`) and the read of its session (`factory lead get`). No auth yet
- * (package 8 brings it): the routes bind loopback as the app does.
+ * The lead's verbs (`factory issue close|defer|block`) and the read of its session (`factory lead get`).
  */
 export const leadRoutes = (wired: LeadRoutes | undefined) => {
   const routes = wired ?? unwired
@@ -177,7 +172,7 @@ export const leadRoutes = (wired: LeadRoutes | undefined) => {
       },
       {
         params: z.object({ id: z.string() }),
-        response: { 200: LeadSession, 404: ErrorBody, 503: ErrorBody },
+        response: { 200: LeadSession, ...errorResponses(404, 503) },
         detail: { operationId: 'lead.get', summary: "the current attempt's lead and its session state" },
       },
     )

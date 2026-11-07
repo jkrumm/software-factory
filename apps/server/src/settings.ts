@@ -4,7 +4,14 @@ import { DEFAULT_RETRY_MS } from './domains/quality/watch.ts'
 
 const DEFAULT_SETTLE_MS = 2 * 60_000
 
+const MIN_TOKEN_CHARS = 16
+const token = z.string().min(MIN_TOKEN_CHARS, `must be at least ${MIN_TOKEN_CHARS} characters`)
+
 const Env = z.object({
+  FACTORY_TOKEN: token,
+  FACTORY_AGENT_TOKEN: token.optional(),
+  FACTORY_DOOR_TOKEN: token.optional(),
+  FACTORY_READ_TOKEN: token.optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (from secrets-run)'),
   PORT: z.coerce.number().int().min(1).max(65_535),
   FACTORY_VERSION: z.string().min(1).optional(),
@@ -17,7 +24,16 @@ const Env = z.object({
   FACTORY_VERIFY_SETTLE_MS: z.coerce.number().int().min(0).optional(),
 })
 
+/** The bearer tokens by caller; a caller whose token is absent does not exist (`api/auth.ts`). */
+export interface Tokens {
+  owner: string
+  agent?: string
+  machine?: string
+  read?: string
+}
+
 export interface Settings {
+  tokens: Tokens
   databaseUrl: string
   /** the loopback API port */
   port: number
@@ -48,7 +64,23 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
+  const data = parsed.data
+  const present: [string, string][] = []
+  for (const key of ['FACTORY_TOKEN', 'FACTORY_AGENT_TOKEN', 'FACTORY_DOOR_TOKEN', 'FACTORY_READ_TOKEN'] as const) {
+    const value = data[key]
+    if (value !== undefined) present.push([key, value])
+  }
+  for (const [i, [keyA, valueA]] of present.entries()) {
+    const twin = present.slice(i + 1).find(([, valueB]) => valueA === valueB)
+    if (twin) throw new Error(`${keyA} and ${twin[0]} are the same token: every caller needs its own`)
+  }
   return {
+    tokens: {
+      owner: data.FACTORY_TOKEN,
+      ...(data.FACTORY_AGENT_TOKEN ? { agent: data.FACTORY_AGENT_TOKEN } : {}),
+      ...(data.FACTORY_DOOR_TOKEN ? { machine: data.FACTORY_DOOR_TOKEN } : {}),
+      ...(data.FACTORY_READ_TOKEN ? { read: data.FACTORY_READ_TOKEN } : {}),
+    },
     databaseUrl: parsed.data.DATABASE_URL,
     port: parsed.data.PORT,
     version: parsed.data.FACTORY_VERSION ?? 'dev',

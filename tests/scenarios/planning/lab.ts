@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { InternalTestEventAnswer, type InternalTestEventBody } from '@software-factory/contract'
-import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
+import { bearer, factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
 
 /** What a repo of the lab has on its default branch. */
 export interface RepoFiles {
@@ -28,12 +28,23 @@ const git = async (cwd: string, ...args: string[]) => {
   if (code !== 0) throw new Error(`git ${args.join(' ')}: ${err}`)
 }
 
+/** `{ error: … }` of a failed command, as the CLI prints it on stderr. */
+export interface CliFailure {
+  kind: string
+  code: string | null
+  message: string
+  hint: string
+  details: Record<string, unknown>
+}
+
 export interface CliResult {
   code: number
   out: string
   err: string
   /** stdout as JSON, when it is */
   json: unknown
+  /** the error line on stderr of a failed command */
+  failure: CliFailure | null
 }
 
 /**
@@ -149,7 +160,7 @@ export async function startLab(options: {
   const post = async (path: string, body: InternalTestEventBody) => {
     const response = await fetch(`${server.url}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...bearer() },
       body: JSON.stringify(body),
     })
     const text = await response.text()
@@ -170,7 +181,13 @@ export async function startLab(options: {
       } catch {
         // plain output
       }
-      return { ...result, json }
+      let failure: CliFailure | null = null
+      try {
+        failure = result.err.trim() ? (JSON.parse(result.err) as { error: CliFailure }).error : null
+      } catch {
+        // not an error line
+      }
+      return { ...result, json, failure }
     },
     file: async (repo, title, kind = 'feature') => {
       counter++
