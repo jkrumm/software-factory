@@ -239,6 +239,26 @@ describe('correlation: one incident per host', () => {
     ])
   })
 
+  test('alerts on one host that arrive at once open one incident, not one each', async () => {
+    const outs = await Promise.all([
+      intake.receive(down('beszel', 'vps:silent', 'down@1')),
+      intake.receive(down('kuma', 'vps - Push', 'k1')),
+      intake.receive(down('hyperdx', 'api latency', 'h1')),
+      intake.receive(down('kuma', 'vps - Door', 'k2')),
+    ])
+    const issuesOf = outs.map((out) => done(out).issue)
+    expect(new Set(issuesOf).size).toBe(1)
+    expect(outs.map((out) => done(out).outcome).toSorted()).toEqual(['filed', 'incident', 'incident', 'incident'])
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('their ups at once still close the Issue as healed', async () => {
+    const downs = [down('kuma', 'a', 'k1'), down('kuma', 'b', 'k2')]
+    for (const r of downs) done(await intake.receive(r))
+    await Promise.all([intake.receive(up('kuma', 'a', 'u1')), intake.receive(up('kuma', 'b', 'u2'))])
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'vps', state: 'closed', outcome: 'healed' }])
+  })
+
   test('an alert after the window opens its own incident', async () => {
     done(await intake.receive(down('beszel', 'vps:silent', 'down@1')))
     clock.advance(DEFAULT_INTAKE_SETTINGS.incidentWindowMs + 60_000)
@@ -393,6 +413,24 @@ describe("a person's or an agent's signal", () => {
     })
     expect(await issues()).toHaveLength(1)
     expect((await events('issue_1')).map((e: { kind: string }) => e.kind)).toEqual(['filed', 'noted'])
+  })
+
+  test('a repeated request after its first Issue closed notes the new Issue, not the old one', async () => {
+    done(await intake.receive(owner('Fix login redirect')))
+    expect(done(await intake.receive(owner('Fix login redirect')))).toMatchObject({
+      outcome: 'amended',
+      issue: 'issue_1',
+    })
+    await send('issue_1' as IssueId, 'cancel', { kind: 'cancelled', payload: { reason: 'x' }, actor: 'owner' })
+    clock.advance(DEFAULT_INTAKE_SETTINGS.fingerprintWindowMs + 1_000)
+    expect(done(await intake.receive(owner('Fix login redirect')))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+    expect(done(await intake.receive(owner('Fix login redirect')))).toMatchObject({
+      outcome: 'amended',
+      issue: 'issue_2',
+    })
   })
 
   test('the same title with new text is a new note the lead must hear; the same words again are not', async () => {

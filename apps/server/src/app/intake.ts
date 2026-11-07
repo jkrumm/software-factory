@@ -320,6 +320,8 @@ export function createIntake(deps: IntakeDeps) {
 
     const groupKey = groupOf(ctx.topology, r, signal.repo as string)
     if (groupKey) {
+      // Alerts on one host are serialized: two at once must see each other's incident, never open two.
+      await s.intake.lock(`group:${groupKey}`)
       const incident = await s.intake.latestIncident(groupKey)
       if (incident && now.getTime() - incident.lastAlertAt.getTime() <= settings.incidentWindowMs) {
         const issue = await loadIssue(s.work, incident.issueId)
@@ -369,6 +371,8 @@ export function createIntake(deps: IntakeDeps) {
     const latest = await s.intake.latestSubject(signal.source, alert.subject)
     const issue = latest ? await loadIssue(s.work, latest.issueId) : null
     if (latest && isOpen(issue)) {
+      // The same lock as a join: an up that checks "every alert is up" must not miss an alert joining at that moment.
+      if (latest.groupKey) await s.intake.lock(`group:${latest.groupKey}`)
       await s.intake.touchSubject(latest.id, { at: now, upAt: now })
       const all = await s.intake.subjectsOfIssue(issue.id)
       const everyUp = all.every((subject) => subject.id === latest.id || subject.upAt !== null)
@@ -417,7 +421,7 @@ export function createIntake(deps: IntakeDeps) {
   async function repeatIn(
     s: Stores,
     r: Received,
-    noteKey: Key,
+    noteKey: (issue: IssueId) => Key,
     stateKey: Key | null,
   ): Promise<Result<Triaged, IntakeError> | null> {
     const now = clock.now()
@@ -428,7 +432,7 @@ export function createIntake(deps: IntakeDeps) {
     if (!issue || (!isOpen(issue) && !recent)) return null
     await s.intake.touchSubject(match.id, { at: now, upAt: match.upAt, repeat: true })
     if (!isOpen(issue)) return ok(dropped('repeat', `it repeats ${match.issueId}, closed within the window`))
-    const noted = await note(s, issue.id, noteKey, r, 'repeated')
+    const noted = await note(s, issue.id, noteKey(issue.id), r, 'repeated')
     if (!noted.ok) return noted
     const stored = await store(s, r, stateKey, 'amended', issue.id)
     return ok(triaged('amended', 'repeat', issue.id, stored))
@@ -442,7 +446,7 @@ export function createIntake(deps: IntakeDeps) {
     // One GitHub issue is one subject however often it is labelled: seen once, it is not filed again.
     if (await s.intake.latestSubject(signal.source, alert.subject))
       return ok(dropped('replayed', 'this subject was filed before'))
-    const repeat = await repeatIn(s, r, keyOf('noted', 'signal', signal.source, alert.subject), evKey)
+    const repeat = await repeatIn(s, r, (issue) => keyOf('noted', 'signal', signal.source, alert.subject, issue), evKey)
     if (repeat) return repeat
     const facts = alert.facts as { writeback?: unknown; admitted?: unknown } | null
     const filed = await fileNew(s, r, keyOf('filed', 'signal', signal.source, alert.subject), {
@@ -462,7 +466,12 @@ export function createIntake(deps: IntakeDeps) {
     const { signal } = r
     // The same words twice are one note (a replay); the same title with other text is a new one the lead must hear.
     const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
-    const repeat = await repeatIn(s, r, keyOf('noted', 'signal', signal.source, signal.fingerprint, said), null)
+    const repeat = await repeatIn(
+      s,
+      r,
+      (issue) => keyOf('noted', 'signal', signal.source, signal.fingerprint, issue, said),
+      null,
+    )
     if (repeat) return repeat
     if (decision.amend) {
       const issue = await loadIssue(s.work, decision.amend)
