@@ -231,6 +231,26 @@ describe('Hermes', () => {
   })
 })
 
+describe('Hermes, filing with the signal token', () => {
+  test('the patched skill files `owner:hermes` under FACTORY_SIGNAL_TOKEN: a stored owner signal; the same token reads nothing', async () => {
+    const filed = await call(
+      v,
+      ['signal', 'file', '--from', 'owner:hermes', '--repo', 'example', '--title', 'Hermes files with its own token'],
+      'signal',
+    )
+    expect(filed.code).toBe(0)
+    const signals = (await (await http('/v1/signals')).json()) as {
+      signals: { id: string; trust: string; source: string }[]
+    }
+    expect(signals.signals.find((s) => s.id === (filed.json as { signal: string }).signal)).toMatchObject({
+      source: 'owner:hermes',
+      trust: 'owner',
+    })
+    const read = await call(v, ['read', 'overview'], 'signal')
+    expect({ code: read.code, kind: read.error?.code }).toEqual({ code: 3, kind: 'forbidden' })
+  })
+})
+
 describe('Iris', () => {
   test('GET /v1/issues/{n}: the open question is the last ask without an answer, with its options', async () => {
     const detail = (await (await http(`/v1/issues/${number(deciding)}`)).json()) as {

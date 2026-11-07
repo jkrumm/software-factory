@@ -7,6 +7,7 @@ const TOKENS = {
   owner: 'owner-token-0123456789',
   agent: 'agent-token-0123456789',
   machine: 'door-token-0123456789',
+  signal: 'signal-token-0123456789',
   read: 'read-token-0123456789',
 }
 const app = createApp({
@@ -79,6 +80,16 @@ describe('the policy table', () => {
     expect(machine.sort()).toEqual(['POST /door/reports', 'POST /signals/alerts'])
   })
 
+  test('the signal token is allowed on exactly POST /signals', async () => {
+    const signal = (await routes())
+      .filter(({ method, route }) => {
+        const callers = allowed(method, route)
+        return callers !== 'public' && callers.includes('signal')
+      })
+      .map(({ method, route }) => `${method} ${route}`)
+    expect(signal).toEqual(['POST /signals'])
+  })
+
   test('an agent is not allowed on an owner verb', () => {
     for (const [method, route] of [
       ['POST', '/issues/:id/reopen'],
@@ -148,6 +159,14 @@ describe('the auth plugin over HTTP', () => {
     expect((await call('GET', '/capacity', TOKENS.read)).status).toBe(403)
     expect((await call('POST', '/signals/alerts', TOKENS.read)).status).toBe(403)
     expect((await call('POST', '/issues/issue_1/reopen', TOKENS.machine)).status).toBe(403)
+    for (const [method, path] of [
+      ['GET', '/v1/loops'],
+      ['POST', '/issues'],
+      ['POST', '/signals/alerts'],
+      ['POST', '/v1/issues/issue_1/close'],
+    ] as const) {
+      expect((await call(method, path, TOKENS.signal)).status).toBe(403)
+    }
   })
 
   test('a listed caller passes the plugin (the unwired route answers 503)', async () => {
@@ -155,6 +174,7 @@ describe('the auth plugin over HTTP', () => {
       expect((await call('GET', '/v1/loops', TOKENS[caller])).status).toBe(503)
     }
     expect((await call('POST', '/v1/loops/steward/run', TOKENS.owner)).status).toBe(503)
+    expect((await call('POST', '/signals', TOKENS.signal)).status).not.toBe(403)
   })
 
   test('GET /health needs no token', async () => {

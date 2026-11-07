@@ -2,8 +2,8 @@
  * Who may call which route: the one table `auth.ts` checks every request against.
  *
  * **Tokens.** A caller is resolved from `Authorization: Bearer <token>` and nothing else. `FACTORY_TOKEN` is the owner's
- * and is required; `FACTORY_AGENT_TOKEN` (a lead's session), `FACTORY_DOOR_TOKEN` (the alert door) and
- * `FACTORY_READ_TOKEN` are optional, and a caller whose token is not set does not exist. Every token is at least 16
+ * and is required; `FACTORY_AGENT_TOKEN` (a lead's session), `FACTORY_DOOR_TOKEN` (the alert door),
+ * `FACTORY_SIGNAL_TOKEN` (Hermes' filing) and `FACTORY_READ_TOKEN` are optional, and a caller whose token is not set does not exist. Every token is at least 16
  * characters and all are different (`settings.ts`). A token is compared in constant time. The hook socket is not here:
  * its mode (0600) is its credential.
  *
@@ -20,11 +20,13 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, the door's registry). When in doubt, the owner alone.
  * - machine: exactly `POST /signals/alerts` and `POST /door/reports`, the door's two calls (the owner may make them too).
+ * - signal: exactly `POST /signals`, and only as `owner:hermes` (`app/intake.ts`): the narrow caller that files the owner's
+ *   words, so no surface holds the owner's token.
  *
  * Adding a route: add its row here, in the class it belongs to. `test/policy.test.ts` walks the OpenAPI document and
  * fails on a route without a row.
  */
-export const CALLERS = ['owner', 'agent', 'machine', 'read'] as const
+export const CALLERS = ['owner', 'agent', 'machine', 'signal', 'read'] as const
 export type Caller = (typeof CALLERS)[number]
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -41,6 +43,7 @@ const OWNER: readonly Caller[] = ['owner']
 const LEAD: readonly Caller[] = ['owner', 'agent']
 const READ: readonly Caller[] = ['owner', 'agent', 'read']
 const DOOR: readonly Caller[] = ['owner', 'machine']
+const FILE: readonly Caller[] = ['owner', 'agent', 'signal']
 
 const rule = (method: Method, route: string, callers: Rule['callers']): Rule => ({ method, route, callers })
 
@@ -64,7 +67,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/issues/:id/ship', LEAD),
   rule('GET', '/issues/:id/quality', LEAD),
   rule('GET', '/v1/issues/:id/lead', LEAD),
-  rule('POST', '/signals', LEAD),
+  rule('POST', '/signals', FILE),
   rule('PUT', '/slots/:id', LEAD),
   rule('DELETE', '/slots/:id', LEAD),
 

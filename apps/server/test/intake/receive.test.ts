@@ -681,6 +681,15 @@ describe('the token decides the trust, the claimed from only lowers it', () => {
     })
   })
 
+  test('the signal token: owner:hermes is owner, any other from is refused', () => {
+    const filed = envelopeOfRequest(request('owner:hermes'), 'signal')
+    expect(trustOf(filed)).toBe('owner')
+    expect(filed.ok && filed.value.source).toBe('owner:hermes')
+    for (const from of ['owner', 'owner:iris', 'agent:vps', 'feedback:argo', 'owner:hermes:x']) {
+      expect(envelopeOfRequest(request(from), 'signal')).toMatchObject({ ok: false, error: { kind: 'trust_refused' } })
+    }
+  })
+
   test('filing as owner under the agent token stores nothing', async () => {
     const refused = await intake.file(request('owner:hermes', { repo: 'chat' }), 'agent')
     expect(refused).toMatchObject({ ok: false, error: { kind: 'trust_refused' } })

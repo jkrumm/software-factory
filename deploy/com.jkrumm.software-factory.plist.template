@@ -37,7 +37,11 @@
   <!-- A fail-closed launch (exit 78) retries at this pace, not in a tight loop. -->
   <key>ThrottleInterval</key>
   <integer>30</integer>
-  <!-- SIGTERM shutdown waits for the start in flight (its 180 s budget) and has its own 210 s backstop. -->
+  <!-- launchd sends SIGTERM, then SIGKILL after ExitTimeOut. The new core ends itself within its own 30 s shutdown deadline
+       (apps/server/src/shutdown.ts, FACTORY_SHUTDOWN_DEADLINE_MS): draining aborts a lead start in flight instead of waiting for
+       it, the steps run in order, and the deadline exits 1 wherever the stop is stuck. The old core's 180 s start budget and 210 s
+       backstop do not apply to it. 240 s stays as the outer bound, for a process that outlives its own deadline (a bug): the
+       runbook then reads the PID before the stop and kills that PID, never a pattern. A rollback onto the old core still needs it. -->
   <key>ExitTimeOut</key>
   <integer>240</integer>
 

@@ -1,3 +1,5 @@
+import { withoutSecrets } from '../secret-env.ts'
+
 /** Stands in for an exit code when the process had to be killed for taking too long. */
 export const EXIT_TIMEOUT = -1
 /** Stands in for an exit code when the caller's signal stopped the process. */
@@ -25,13 +27,11 @@ export type Run = (
   options?: { env?: Record<string, string>; group?: boolean; signal?: AbortSignal },
 ) => Promise<ProcessResult>
 
-/** The server's own secrets stay out of every child it starts. */
-const SECRET_ENV = ['FACTORY_TOKEN', 'FACTORY_READ_TOKEN', 'DATABASE_URL', 'FACTORY_GITHUB_TOKEN', 'NTFY_TOKEN']
-
+/** The server's own secrets stay out of every child it starts (`adapters/secret-env.ts`). */
 export function childEnv(extra: Record<string, string> = {}): Record<string, string> {
-  const env: Record<string, string | undefined> = { ...process.env, ...extra }
-  for (const name of SECRET_ENV) delete env[name]
-  return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined))
+  return Object.fromEntries(
+    Object.entries(withoutSecrets(extra)).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  )
 }
 
 /** The process groups running now: every way out of this process takes them along. */
