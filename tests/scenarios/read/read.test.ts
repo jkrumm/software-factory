@@ -87,7 +87,8 @@ test('an Issue filed through the real route shows on the cards, the detail and t
 
   const list = ReadIssueCards.parse(await (await get('/v1/issues')).json())
   const card = list.issues.find((c) => c.ref === ack.issue)
-  expect(card).toMatchObject({ id: number, title: 'The login page crashes on submit', repo: 'argo', visible: false })
+  // the world has no project.yaml for the repo, so it is a work repo to the read token (the rule fails closed); the owner still reads it
+  expect(card).toMatchObject({ id: number, title: 'The login page crashes on submit', repo: 'argo', visible: true })
   expect(card?.state).toMatch(/^(settling|queued|working)$/)
 
   const byRef = ReadIssueDetail.parse(await (await get(`/v1/issues/${ack.issue}`)).json())
