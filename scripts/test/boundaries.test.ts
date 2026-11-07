@@ -85,7 +85,7 @@ const RULES: { rule: string; failing: Record<string, string>; passing: Record<st
     passing: { 'read/flow.ts': 'export const q = `SELECT state FROM factory.issues -- updated_at`\n' },
   },
   {
-    rule: 'only app/ and the Postgres unit of work and migration runner open a transaction',
+    rule: 'only the Postgres unit of work and the migration runner open a transaction',
     failing: { 'adapters/postgres/work-store.ts': 'export const f = (sql) => sql.begin(async (tx) => tx`SELECT 1`)\n' },
     passing: {
       'adapters/postgres/unit-of-work.ts': 'export const run = (sql) => sql.begin(async (tx) => tx`SELECT 1`)\n',
@@ -94,9 +94,14 @@ const RULES: { rule: string; failing: Record<string, string>; passing: Record<st
     },
   },
   {
-    rule: 'only app/ and the Postgres unit of work and migration runner open a transaction',
+    rule: 'only the Postgres unit of work and the migration runner open a transaction',
     failing: { 'main.ts': 'await sql.transaction(async () => {})\n', 'api/issues.ts': 'await db.begin(() => 1)\n' },
-    passing: { 'app/issues.ts': 'await uow.begin(() => 1)\n', 'main.ts': 'export const beginning = 1\n' },
+    passing: { 'main.ts': 'export const beginning = 1\n' },
+  },
+  {
+    rule: 'only the Postgres unit of work and the migration runner open a transaction',
+    failing: { 'app/issues.ts': 'await sql.begin(async (tx) => tx`SELECT 1`)\n' },
+    passing: { 'app/issues.ts': 'await uow.run(async ({ work }) => work.history(id))\n' },
   },
   {
     rule: 'app/ imports no adapter: it gets ports, main.ts composes them',

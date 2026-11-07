@@ -37,7 +37,7 @@ const WRITING_SQL =
 /** Opens a transaction on Bun's SQL client. */
 const OPENS_TRANSACTION = /\.(begin|beginDistributed|transaction)\s*\(/
 
-/** The two files of `adapters/postgres/` that may open one: the unit of work, and the migration runner. */
+/** The only two files that may open one: the unit of work (which `app/` gets as a port) and the migration runner. */
 const TRANSACTION_ADAPTERS = new Set(['adapters/postgres/unit-of-work.ts', 'adapters/postgres/migrate.ts'])
 
 interface Import {
@@ -142,8 +142,8 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
       if (/\bfetch\s*\(/.test(code)) flag('a domain does no I/O: no fetch', 'fetch(')
     }
     const opens = OPENS_TRANSACTION.exec(stripComments(source))
-    if (opens && here.layer !== 'app' && !TRANSACTION_ADAPTERS.has(name.split(sep).join('/'))) {
-      flag('only app/ and the Postgres unit of work and migration runner open a transaction', opens[0])
+    if (opens && !TRANSACTION_ADAPTERS.has(name.split(sep).join('/'))) {
+      flag('only the Postgres unit of work and the migration runner open a transaction', opens[0])
     }
     if (here.layer === 'read') {
       const write = WRITING_SQL.exec(stripComments(source))
