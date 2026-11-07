@@ -27,6 +27,8 @@ export interface ServerProcess {
   proc: ReturnType<typeof Bun.spawn>
   /** what the process wrote so far, for a failure message */
   output(): string
+  /** the exit code, once the process has ended and everything it wrote is in `output()` */
+  exited(): Promise<number>
   stop(): Promise<number>
 }
 
@@ -106,17 +108,21 @@ export async function startServer(
   const append = (text: string) => {
     output += text
   }
-  void drain(proc.stdout, append)
-  void drain(proc.stderr, append)
+  const drained = Promise.all([drain(proc.stdout, append), drain(proc.stderr, append)])
   const url = `http://127.0.0.1:${port}`
   const server: ServerProcess = {
     url,
     port,
     proc,
     output: () => output,
+    exited: async () => {
+      const code = await proc.exited
+      await drained
+      return code
+    },
     stop: async () => {
       if (proc.exitCode === null) proc.kill('SIGTERM')
-      return proc.exited
+      return server.exited()
     },
   }
   if (options.ready === false) return server

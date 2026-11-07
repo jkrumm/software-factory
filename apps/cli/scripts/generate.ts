@@ -15,6 +15,9 @@ export const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operation
 /** Words the hand-written verbs own; a generated group may not take one. */
 export const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot']
 
+/** Flags the CLI itself owns (`run.ts`); a query parameter may not take one. */
+export const RESERVED_FLAGS = ['format', 'help', 'body']
+
 const OPERATION_ID = /^([a-z][a-z0-9-]*)\.([a-z][a-z0-9-]*)$/
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
 const SCHEMA_REF = /^#\/\$defs\/([A-Za-z][A-Za-z0-9]*)$/
@@ -82,6 +85,10 @@ export function operationsOf(document: unknown): Generated[] {
         }
         responses.push([Number(status), name])
       }
+      const queryParams = (op.parameters ?? []).filter((p) => p.in === 'query').map((p) => p.name)
+      for (const name of queryParams.filter((q) => RESERVED_FLAGS.includes(q))) {
+        problems.push(`${where}: query parameter "${name}" is a flag the CLI owns`)
+      }
       out.push({
         operationId: id,
         command: [match[1], match[2]],
@@ -89,7 +96,7 @@ export function operationsOf(document: unknown): Generated[] {
         path,
         summary: op.summary ?? '',
         pathParams: [...path.matchAll(/\{([^}]+)\}/g)].flatMap((m) => (m[1] ? [m[1]] : [])),
-        queryParams: (op.parameters ?? []).filter((p) => p.in === 'query').map((p) => p.name),
+        queryParams,
         body: op.requestBody !== undefined,
         responses,
       })

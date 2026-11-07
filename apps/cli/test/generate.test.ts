@@ -32,6 +32,13 @@ describe('operationsOf', () => {
     expect(() => operationsOf({ paths: { '/v': health('role.get') } })).toThrow('hand-written verb')
   })
 
+  test('a query parameter named like a flag the CLI owns fails', () => {
+    const op = health('x.get').get
+    expect(() =>
+      operationsOf({ paths: { '/x': { get: { ...op, parameters: [{ name: 'format', in: 'query' }] } } } }),
+    ).toThrow('a flag the CLI owns')
+  })
+
   test('two operations with one command fail', () => {
     expect(() => operationsOf({ paths: { '/a': health('health.get'), '/b': health('health.get') } })).toThrow(
       'two operations',

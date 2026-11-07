@@ -48,7 +48,7 @@ test('factory version and factory role get lead keep their contract', async () =
 test('a second server on the same database waits for the process lock, then exits 1', async () => {
   const started = Date.now()
   const second = await startServer(world, { env: { FACTORY_LOCK_WAIT_MS: '1500' }, ready: false })
-  expect(await second.proc.exited).toBe(1)
+  expect(await second.exited()).toBe(1)
   expect(Date.now() - started).toBeGreaterThanOrEqual(1500)
   expect(second.output()).toContain('another server holds the process lock')
   expect((await fetch(`${server.url}/health`)).status).toBe(200)
