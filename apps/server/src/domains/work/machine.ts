@@ -75,10 +75,16 @@ export function file(id: IssueId, event: IssueEvent<'filed'>): Decided {
 }
 
 /** The transition a cell asked for, made whole: a kept wait, a new wait's `since`. */
-function transitionOf(issue: Issue, cell: Exclude<Cell, { refuse: string } | { ignore: string }>): Transition {
+function transitionOf(
+  issue: Issue,
+  event: { actor: Actor },
+  cell: Exclude<Cell, { refuse: string } | { ignore: string }>,
+): Transition {
   const version = issue.version + 1
   if (cell.to === 'waiting') {
-    const wait = cell.wait ? { ...cell.wait, since: version } : issue.wait
+    // The lead heard its own verb; a wait the factory began (a wall, the third regression) is news to it.
+    const told = issue.wait?.told ?? (event.actor === 'lead' ? version : issue.version)
+    const wait = cell.wait ? { ...cell.wait, since: version, told } : issue.wait
     if (!wait) throw new Error(`a cell kept the wait of a ${issue.state} Issue, which has none`)
     return { from: issue.state, to: 'waiting', wait, outcome: null }
   }
@@ -98,7 +104,7 @@ export function apply(issue: Issue, event: AnyIssueEvent, ctx: { now: Date }): D
   const cell = run({ issue, event, now: ctx.now })
   if ('refuse' in cell) return { result: 'refused', detail: cell.refuse }
   if ('ignore' in cell) return { result: 'ignored', detail: cell.ignore }
-  const transition = transitionOf(issue, cell)
+  const transition = transitionOf(issue, event, cell)
   return {
     result: 'applied',
     issue: evolve(issue, event.kind, ctx.now, issue.version + 1, transition),

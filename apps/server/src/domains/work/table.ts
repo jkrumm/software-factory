@@ -42,8 +42,14 @@ const refused = (why: string) => (): Cell => ({ refuse: why })
 const next = (issue: Issue): number => issue.version + 1
 /** A close finalizes the attempt there is; an Issue never admitted has none. */
 const closing = (issue: Issue): Effect[] => (issue.attempt > 0 ? [finalize(issue.id, issue.attempt)] : [])
-/** Back to work: the lead hears what ended its wait. */
-const resume = (issue: Issue): Cell => ({ to: 'working', effects: [noteLead(issue.id, issue.attempt, next(issue))] })
+/**
+ * Back to work: the lead hears what ended its wait, and every note recorded while it waited (a note to a waiting lead
+ * plans nothing, since a wait may have no lead to type to, and an effect that cannot run holds back the Issue's next).
+ */
+const resume = (issue: Issue): Cell => ({
+  to: 'working',
+  effects: [noteLead(issue.id, issue.attempt, (issue.wait?.told ?? issue.version) + 1, next(issue))],
+})
 
 type LeadCtx = { issue: Issue; event: { kind: EventKind; payload: { attempt: number | null } } }
 
@@ -93,11 +99,11 @@ const leadGone = (ctx: Ctx<'lead_gone'>): Cell => {
 
 const noteWorking = (ctx: Ctx<'noted'>): Cell => ({
   to: 'working',
-  effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue))],
+  effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue), next(ctx.issue))],
 })
 const noteWatching = (ctx: Ctx<'noted'>): Cell => ({
   to: 'watching',
-  effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue))],
+  effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue), next(ctx.issue))],
 })
 
 const ask = byLead((ctx: Ctx<'asked'>): Cell => ({
@@ -285,6 +291,7 @@ export const TABLE: Table = {
     admitted: said('it is admitted already'),
     lead_started: said('waiting: a lead starts only from queued'),
     lead_gone: said('waiting: the wait ends first, and its note finds the lead gone'),
+    // Recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief reads it otherwise.
     noted: () => ({ to: 'waiting', effects: [] }),
     asked: fromTimer(ask),
     answered: (ctx) => endsCheckpoint(ctx, 'decision', ctx.event.payload.decision),

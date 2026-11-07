@@ -55,8 +55,12 @@ export type WaitSpec =
   | { reason: StallCause; detail: string }
   | { reason: PersonReason; holds: Checkpoint }
 
-/** A wait as the Issue has it: `since` is the version that began it, which a wake must name. */
-export type Wait = WaitSpec & { since: number }
+/**
+ * A wait as the Issue has it. `since` is the version that began it, which a wake must name. `told` is the last version
+ * the lead heard: its own verb that began the wait, the version before it when the factory began it, or, when a lead
+ * verb from a timed wait began this one, what the timed wait had. What ends the wait tells the lead everything after.
+ */
+export type Wait = WaitSpec & { since: number; told: number }
 
 /** The Issue as its events made it. Counts live here, derived on load; none is a column. */
 export interface Issue {

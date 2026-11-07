@@ -61,6 +61,8 @@ function play(seed: number, seen: Seen, extra?: (issue: Issue) => string | null)
     },
   ]
   const effectPayloads = new Map<string, string>()
+  /** notes recorded while the Issue waits: the move back to work must tell the lead every one */
+  let waitingNotes: number[] = []
   const steps = 1 + Math.floor(random() * MAX_STEPS)
 
   for (let step = 1; step <= steps; step++) {
@@ -100,6 +102,14 @@ function play(seed: number, seen: Seen, extra?: (issue: Issue) => string | null)
       if (before !== undefined && before !== payload) fail(step, `key ${effect.key} names two different effects`)
       effectPayloads.set(effect.key, payload)
     }
+    if (issue.state === 'waiting' && next.state === 'waiting' && event.kind === 'noted') waitingNotes.push(next.version)
+    if (issue.state === 'waiting' && next.state === 'working') {
+      const told = decided.effects.find((effect) => effect.kind === 'note_lead')
+      const covered = (v: number) => told?.kind === 'note_lead' && told.payload.from <= v && v <= told.payload.version
+      if (!waitingNotes.every(covered))
+        fail(step, `notes ${waitingNotes.join(', ')} recorded while waiting never reach the lead`)
+    }
+    if (next.state !== 'waiting') waitingNotes = []
     records.push({
       kind: event.kind,
       payload: event.payload,

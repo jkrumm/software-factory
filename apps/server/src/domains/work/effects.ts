@@ -9,8 +9,11 @@ import { type Key, key } from '../../kernel/keys.ts'
 export interface EffectPayloads {
   /** start the attempt's lead */
   start_lead: { attempt: number }
-  /** tell the lead what the event of this version says: a note, an answer, a verdict, a wake, a regression */
-  note_lead: { attempt: number; version: number }
+  /**
+   * tell the lead what the Issue's events from version `from` to `version` say: a note while it works, or, when a wait
+   * ends, every note recorded during the wait and the answer, verdict, wake or regression that ended it
+   */
+  note_lead: { attempt: number; from: number; version: number }
   /** begin the watch after a ship: its window, then verify */
   start_watch: { attempt: number; watch: number }
   /** end the attempt: its terminals, transcripts, worktree and claim */
@@ -32,10 +35,10 @@ export const startLead = (issue: IssueId, attempt: number): Effect => ({
   payload: { attempt },
 })
 
-export const noteLead = (issue: IssueId, attempt: number, version: number): Effect => ({
+export const noteLead = (issue: IssueId, attempt: number, from: number, version: number): Effect => ({
   kind: 'note_lead',
   key: key('note_lead', issue, version),
-  payload: { attempt, version },
+  payload: { attempt, from, version },
 })
 
 export const startWatch = (issue: IssueId, attempt: number, watch: number): Effect => ({
