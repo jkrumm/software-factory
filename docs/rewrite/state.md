@@ -22,7 +22,7 @@ compaction, before acting. Updated on every start, integration and send-back.
 | 3 | Planning and capacity | 1 | running | t1f5 `rw-3-planning-capacity` (sonnet high, me2) | `rw/3-planning-capacity` | fc5a8ac (base) | brief `briefs/3-planning-capacity.md` |
 | 4 | Leads | 1 | running | t1f8 `rw-4-leads` (sonnet high, me) | `rw/4-leads` | fc5a8ac (base) | brief `briefs/4-leads.md` |
 | 5 | Quality | 1 | running | t1f9 `rw-5-quality` (sonnet high, me) | `rw/5-quality` | fc5a8ac (base) | brief `briefs/5-quality.md` |
-| 6 | Checkpoints | 1 | running | t1f6 `rw-6-checkpoints` (sonnet high, me) | `rw/6-checkpoints` | fc5a8ac (base) | brief `briefs/6-checkpoints.md` |
+| 6 | Checkpoints | 1 | integrated | t1f6 (removed) | `rw/6-checkpoints` (merged, deleted) | 1e5b694 (merge), 4ab823f | `reports/6-checkpoints.md`; `make check` on `rewrite`: 183 unit, 20 scenarios |
 | 7 | Loops and agw | 2, 6 | pending | | | | |
 | 8 | API, read models, CLI parity | 2 to 7 | pending | | | | |
 | 9 | Cutover | 8 | pending | | | | |
@@ -35,3 +35,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: package 1 started; first start (t1f3) had an empty CLAUDE_CONFIG_DIR, killed; restarted as t1f4.
 - 2026-11-07: package 1 reported (121 unit, 10 scenarios); sent back for numbered Issue ids and the .begin rule.
 - 2026-11-07: package 1 integrated at fc5a8ac; packages 2 to 6 started in parallel (t1f7, t1f5, t1f8, t1f9, t1f6).
+- 2026-11-07: package 6 integrated at 1e5b694; workers 2 to 5 told to use `--thread rw-<package>` for reviews.

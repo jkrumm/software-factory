@@ -57,3 +57,17 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   admits (`admitted`); projects belong to planning and reach intake through a port; stop the line is a queue rule
   (package 3); cancel is package 8's owner verb; the tick that runs the outbox is package 4's or 7's, and `/health`
   gains staleness with it.
+- **2026-11-07, package 6: parallel reviews collide.** `agw review prepare` keys its thread on the base commit, so the
+  five workers off `fc5a8ac` abandoned each other's prepared jobs and one submit was refused against another worker's
+  job. Fixed by `--thread rw-<package>` (sent to workers 2 to 5, now in `briefs/parallel.md`). Any future parallel
+  fan-out off one commit needs its own thread per worker.
+- **2026-11-07, package 6 integrated; carried forward:**
+  - Decision and page passes run on two timers in `main.ts` (`FACTORY_CHECKPOINT_PASS_MS`) until package 7's tick
+    takes them over.
+  - Its settings (`FACTORY_DATA_DIR`, `FACTORY_CHECKPOINT_PASS_MS`, `FACTORY_CHECKPOINT_POLICY_FILE`,
+    `FACTORY_NTFY_TOPIC`, `FACTORY_CONSOLE_URL`, `FACTORY_AGW_BIN`) join `scripts/env-file.sh` in package 9.
+  - Accepted calls: the Judge never takes an irreversible option; a default must be reversible (refused at ask); a
+    Decision with a default does not page (the factory settles it); a Decision is an artifact of kind `decision`.
+  - For package 8: declare error bodies in the routes' OpenAPI responses so the CLI prints a refused form's fields on
+    stderr; the brief text (package 4) must tell a lead that verdicts and answers arrive as notes and how to read an
+    artifact (`factory artifact show`, `revise`).
