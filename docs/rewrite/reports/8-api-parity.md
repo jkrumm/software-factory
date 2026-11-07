@@ -79,7 +79,22 @@ Legacy = the running core's CLI and API. "Works" means the client's call, flags 
 
 ## `make check` output
 
-MAKE_CHECK_TAIL
+```
+==> install (bun install --frozen-lockfile)        Checked 46 installs across 102 packages (no changes)
+==> format (oxfmt --check)                         All matched files use the correct format.
+==> lint (oxlint --type-aware)
+==> shellcheck
+==> typecheck (tsc --noEmit)
+==> boundaries (scripts/boundaries.ts)            boundaries hold
+==> retired words (scripts/retired-words.ts)      no retired words
+==> Issue diagram is current (issue-diagram.ts --check)
+==> generated CLI is current (generate.ts --check)
+==> unit tests (bun test apps packages scripts)    941 pass, 0 fail, 5867 expect() calls, 68 files [46 s]
+==> scenarios (bun test tests)                     195 pass, 0 fail, 1077 expect() calls, 31 files [166 s]
+==> check passed
+```
+
+(Lint, shellcheck, typecheck print nothing when they pass. Package 7 ended at 759 unit and 98 scenarios.)
 
 ## Ports declared
 
@@ -91,7 +106,14 @@ No new kind. `issue new`: `filed` (owner) and a `noted` with the request text an
 
 ## Review
 
-REVIEW_OUTCOME
+`/review deep --thread rw-8-api-parity` over `a586828..HEAD`, three rounds, no `important` left (the round-3 reply is clean).
+
+- **Round 1** (the first reply left out over a hundred of the 160 files and `agw` refused it; the second, with the list requirement spelled out, was accepted): 2 important, 3 nits.
+  - *Fixed*: `/v1/flow`, `/v1/chain` and `/v1/signals` gave a work repo's words to the read token. They now take the caller; one fail-closed rule (`read/work.ts`: a repo no `project.yaml` describes is a work repo) serves the cards, sessions, asks, needs, flow and chain, where cards and sessions had decided it the other way (fail open); the signal list gives the read token no title, text, link or repo.
+  - *Fixed*: `slot run` against a refused token says so; the brief names the `-` / `@file` / `@@` forms.
+  - *Declined, with reason*: `issue note` and `issue cancel` take a fresh call id when none is given, so a retried invocation records twice. A call id the CLI generates cannot make a retry of a new invocation idempotent, and a key derived from the text would block repeating a deliberate note; the old CLI had the same default, and `--call` is the caller's tool.
+- **Round 2**: 2 important, 1 nit, all fixed: a hidden plan row's id carried the project name and key (now opaque); a work project's queue scope was listed in `flow` and the overview (now left out); the SQL form of the rule used `LIKE`, whose `_` and `%` are wildcards (now a literal prefix, and `work-rule.test.ts` holds the SQL and TypeScript forms equal over a list of odd repos).
+- **Round 3**: 0 important, 1 nit, fixed: the opaque id is keyed with a per-process secret, so a guess cannot be confirmed (ids are stable while the server runs).
 
 ## Open points
 
