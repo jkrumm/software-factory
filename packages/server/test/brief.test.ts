@@ -127,7 +127,7 @@ describe('the brief', () => {
     expect(a).toContain('"/work/alpha"')
     expect(a).toContain('never from your worktree')
     const steps = [
-      'default branch and clean',
+      'default branch and has no tracked change',
       'git pull --ff-only',
       'make deploy',
       'make verify',
@@ -137,6 +137,9 @@ describe('the brief', () => {
     const at = steps.map((step) => a.indexOf(step))
     expect(at.every((i) => i > 0)).toBe(true)
     expect(at).toEqual([...at].sort((x, y) => x - y))
+    expect(a).toContain('git pull --rebase')
+    expect(a).toContain('git push')
+    expect(a).toContain('git rebase --abort')
     expect(a).toContain('a probe')
     expect(a).toContain('you never add or edit it')
     expect(a).toContain('`factory issue block` with that reason')

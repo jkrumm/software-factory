@@ -930,7 +930,7 @@ kinds and how the check runs: §4, "The evidence gate".
 | Nothing deployed | the commit or the document, via `factory issue close` |
 
 Under mode `make` the brief orders the deploy in the project section (identical in every brief of that mode but for the path): in the repo's
-**main checkout**, check it is on the default branch and clean, `git pull --ff-only`, `make deploy`, `make verify`, `make version`, then `ship`;
+**main checkout**, check it is on the default branch with no tracked change, `git pull --ff-only` (refused because the checkout holds unpushed commits of its own: `git pull --rebase` and `git push`, so they ship rebased on `origin`; on a conflict `git rebase --abort` and an ask), `make deploy`, `make verify`, `make version`, then `ship`;
 never from the lead's worktree, because a repo whose `make setup` links its own `pwd` would point the install at a directory that goes away. The
 deployed version is read, not claimed: no evidence item stands for it, and the factory does not move the checkout to make the code present.
 
