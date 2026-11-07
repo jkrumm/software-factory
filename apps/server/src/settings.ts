@@ -6,6 +6,7 @@ const Env = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535),
   FACTORY_VERSION: z.string().min(1).optional(),
   FACTORY_LOCK_WAIT_MS: z.coerce.number().int().min(0).optional(),
+  FACTORY_INTERNAL_TEST_ROUTES: z.enum(['0', '1']).optional(),
 })
 
 export interface Settings {
@@ -16,6 +17,8 @@ export interface Settings {
   version: string
   /** how long a second copy waits for the process lock before it exits 1; the scenarios shorten it */
   lockWaitMs: number
+  /** mounts `/internal/test/...`, the scenarios' entry into the write path until package 8 deletes it */
+  internalTestRoutes: boolean
 }
 
 /** The server's settings from its environment; throws one message naming every bad key. */
@@ -29,5 +32,6 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     port: parsed.data.PORT,
     version: parsed.data.FACTORY_VERSION ?? 'dev',
     lockWaitMs: parsed.data.FACTORY_LOCK_WAIT_MS ?? PROCESS_LOCK_WAIT_MS,
+    internalTestRoutes: parsed.data.FACTORY_INTERNAL_TEST_ROUTES === '1',
   }
 }

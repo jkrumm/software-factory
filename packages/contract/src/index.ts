@@ -12,3 +12,4 @@ export {
   TIERS,
   Tier,
 } from './roles.ts'
+export { InternalTestEventAnswer, InternalTestEventBody } from './internal-test.ts'

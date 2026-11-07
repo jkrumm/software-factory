@@ -3,9 +3,12 @@ import { ErrorBody } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import { type HealthSource, healthRoutes } from './health.ts'
+import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 
 export interface ApiDeps {
   health: HealthSource
+  /** the scenarios' entry into the write path (`FACTORY_INTERNAL_TEST_ROUTES=1`); absent, the routes do not exist */
+  internalTest?: InternalTestWrites
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -52,6 +55,7 @@ export function createApp(deps: ApiDeps) {
       }
     })
     .use(healthRoutes(deps.health))
+    .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
 }
 
 export type App = ReturnType<typeof createApp>
