@@ -18,7 +18,7 @@ import type { PlanningDeps, PlanningStores } from './planning-deps.ts'
 import { type SyncDeps, type SyncResult, syncProjects } from './planning-sync.ts'
 
 /** The kinds a plan row may name are the Issue's own: this fails `tsc` when the two lists drift. */
-const planKindsAreIssueKinds: PlanKind extends Kind ? true : never = true
+const planKindsAreIssueKinds: PlanKind extends Kind ? (Kind extends PlanKind ? true : never) : never = true
 void planKindsAreIssueKinds
 
 export interface PlanView {

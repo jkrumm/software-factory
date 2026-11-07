@@ -4,6 +4,7 @@ import {
   CapacityView,
   ErrorBody,
   QueueOrder,
+  type QUEUE_REASONS,
   QueueSetBody,
   QueueStatesView,
   RefreshAnswer,
@@ -13,11 +14,19 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
-import type { CapacityLimits, PassResult, QueueEntry } from '../app/capacity-admit.ts'
+import type { CapacityLimits, PassResult, QueueEntry, QueueReasonKind } from '../app/capacity-admit.ts'
 import type { AccountState, CapacityState } from '../app/capacity-view.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
 import type { SlotView } from '../domains/capacity/slots.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+
+/** The contract's list of reasons and the server's are one list: a reason added on one side fails `tsc` until it is on the other. */
+const queueReasonsMatch: [(typeof QUEUE_REASONS)[number]] extends [QueueReasonKind]
+  ? [QueueReasonKind] extends [(typeof QUEUE_REASONS)[number]]
+    ? true
+    : never
+  : never = true
+void queueReasonsMatch
 
 /** The use cases the routes call, bound in `main.ts`. */
 export interface CapacityApi {

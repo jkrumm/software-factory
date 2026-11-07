@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { CapacityView } from '@software-factory/contract'
+import { CapacityView, Slot } from '@software-factory/contract'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /** `factory slot run`: a lease on the host's test slots from the real server, with the contract's exits. */
@@ -90,26 +90,20 @@ test("a command past its run limit is killed and the exit is 124; the limit is t
   expect(Date.now() - started).toBeLessThan(10_000)
   expect(await slotRows()).toEqual([])
 
-  // from a directory of a project, the server resolves slots.run (1m here) at the grant
-  const proc = Bun.spawn(
-    [
-      process.execPath,
-      join(import.meta.dir, '..', '..', '..', 'apps', 'cli', 'bin', 'factory.ts'),
-      'slot',
-      'run',
-      '--',
-      'sh',
-      '-c',
-      'sleep 0.4',
-    ],
-    {
-      cwd: join(lab.root, 'app'),
-      env: { ...process.env, FACTORY_URL: lab.server.url, FACTORY_SLOT_POLL_MS: '50' },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  )
-  expect(await proc.exited).toBe(0)
+  // from a directory of a project, the server resolves its slots.run (1m here) at the grant
+  const put = async (cwd: string | undefined) => {
+    const response = await fetch(`${lab.server.url}/slots/resolve-${cwd ? 'project' : 'none'}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'probe', ...(cwd ? { cwd } : {}) }),
+    })
+    const slot = Slot.parse(await response.json())
+    await fetch(`${lab.server.url}/slots/resolve-${cwd ? 'project' : 'none'}`, { method: 'DELETE' })
+    return slot
+  }
+  expect((await put(join(lab.root, 'app'))).runMs).toBe(60_000)
+  expect((await put(join(lab.root, 'app', '.claude', 'worktrees', 'x'))).runMs).toBe(60_000)
+  expect((await put(undefined)).runMs).toBe(30 * 60_000)
 })
 
 test('with the server down the command runs anyway, with one line on stderr', async () => {

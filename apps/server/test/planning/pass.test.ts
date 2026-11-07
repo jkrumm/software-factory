@@ -191,17 +191,40 @@ describe('the chain', () => {
     expect(cycle).toMatchObject({ ok: false, error: { kind: 'cycle', path: [a, b, a] } })
 
     await world.send(c, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
-    expect(await settleIssue(world.deps, { issue: a, after: [c] })).toMatchObject({
+    const d = await world.file({ repo: 'x' })
+    expect(await settleIssue(world.deps, { issue: d, after: [c] })).toMatchObject({
       ok: false,
       error: { kind: 'issue_closed', issue: c },
     })
-    expect(await settleIssue(world.deps, { issue: a, after: [issueId(99)] })).toMatchObject({
+    expect(await settleIssue(world.deps, { issue: d, after: [issueId(99)] })).toMatchObject({
       ok: false,
       error: { kind: 'unknown_issue' },
     })
     const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.planning_edges`
     expect(n).toBe(1)
-    expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued', 'issue_3:closed'])
+    expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued', 'issue_3:closed', 'issue_4:settling'])
+  })
+
+  test('two settles at once that would close a cycle: one is refused, never both stored', async () => {
+    const [a, b] = [await world.file({ repo: 'x' }), await world.file({ repo: 'x' })]
+    if (!a || !b) throw new Error('no issues')
+    const results = await Promise.all([
+      settleIssue(world.deps, { issue: a, after: [b] }),
+      settleIssue(world.deps, { issue: b, after: [a] }),
+    ])
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    expect(results.find((r) => !r.ok)).toMatchObject({ ok: false, error: { kind: 'cycle' } })
+    const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.planning_edges`
+    expect(n).toBe(1)
+  })
+
+  test('a settle on an Issue that is not settling chains nothing: the event is ignored and no edge is kept', async () => {
+    const a = await world.queued({ repo: 'x' })
+    const b = await world.file({ repo: 'x' })
+    const result = value(await settleIssue(world.deps, { issue: a, after: [b] }))
+    expect(result).toMatchObject({ result: 'ignored', edges: 0, state: 'queued' })
+    const [{ n }] = await world.db.sql`SELECT count(*)::int AS n FROM factory.planning_edges`
+    expect(n).toBe(0)
   })
 
   test('a working Issue takes no edge; its lead defers with its own verb', async () => {

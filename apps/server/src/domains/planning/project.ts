@@ -1,4 +1,7 @@
+import { DEFAULT_SLOT_RUN_MS } from '@software-factory/contract'
 import * as z from 'zod'
+
+export { DEFAULT_SLOT_RUN_MS }
 
 /** The project file's `apiVersion`. A file of another version is a broken one. */
 export const PROJECT_API_VERSION = 'factory/v2'
@@ -19,9 +22,6 @@ export function durationMs(text: string): number | undefined {
   if (!match) return undefined
   return Number(match[1]) * UNIT_MS[match[2] as keyof typeof UNIT_MS]
 }
-
-/** A test slot runs this long when neither the caller nor the project says otherwise. */
-export const DEFAULT_SLOT_RUN_MS = 30 * UNIT_MS.m
 
 const Slug = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, 'letters, digits, dot, dash and underscore')
 

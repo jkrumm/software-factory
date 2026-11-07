@@ -9,17 +9,27 @@ import {
   ProjectList,
   ProjectSyncAnswer,
   ProjectView,
+  type ROW_STATES,
   SettleAnswer,
   SettleBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import type { RowState } from '../domains/planning/plan.ts'
 import type { PlanningError } from '../app/planning-deps.ts'
 import type { PassResult } from '../app/planning-pass.ts'
 import type { SyncResult } from '../app/planning-sync.ts'
 import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+
+/** The contract's row states and the domain's are one list. */
+const rowStatesMatch: [(typeof ROW_STATES)[number]] extends [RowState]
+  ? [RowState] extends [(typeof ROW_STATES)[number]]
+    ? true
+    : never
+  : never = true
+void rowStatesMatch
 
 /** The use cases the routes call, bound in `main.ts`. */
 export interface PlanningApi {

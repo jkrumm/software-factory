@@ -70,6 +70,8 @@ export async function settleIssue(
   input: { issue: IssueId; after: readonly IssueId[] },
 ): Promise<Result<Settled, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
+    // The cycle check reads the open edges and then writes one: two verbs at once must not both pass it.
+    await stores.capacity.lock()
     const states = await stores.reads.statesOf([input.issue])
     if (!states.has(input.issue)) return err<PlanningError>({ kind: 'unknown_issue', issue: input.issue })
     // A repeat of a settle is a replay: it adds no edge and judges no blocker again (one may have closed meanwhile).
@@ -83,7 +85,10 @@ export async function settleIssue(
       if (!replayed.ok) return err(lift(replayed.error))
       return ok<Settled>({ result: 'replayed', edges: 0, state: replayed.value.issue.state })
     }
-    const edges = await addEdges(stores, deps, input.issue, input.after)
+    // Edges belong to an Issue still settling: on any other one the event is ignored and nothing is chained
+    // (`addAfter` is the verb for a queued Issue).
+    const open = (await stores.reads.open()).find((row) => row.id === input.issue)
+    const edges = open?.state === 'settling' ? await addEdges(stores, deps, input.issue, input.after) : ok(0)
     if (!edges.ok) return edges
     const recorded = await recordIn(stores.work, deps, {
       issueId: input.issue,
@@ -103,6 +108,7 @@ export async function addAfter(
   input: { issue: IssueId; after: readonly IssueId[] },
 ): Promise<Result<{ edges: number }, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
+    await stores.capacity.lock()
     const open = (await stores.reads.open()).find((row) => row.id === input.issue)
     if (!open) {
       const states = await stores.reads.statesOf([input.issue])

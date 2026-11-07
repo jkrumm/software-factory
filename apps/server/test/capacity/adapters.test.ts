@@ -68,7 +68,10 @@ esac`,
     const silent = hostReader({ sysctlBin: await script('silent', 'exit 1'), minSampleMs: 0 })
     expect(await silent.memory()).toMatchObject({ ok: false, error: { kind: 'unreadable' } })
     const slow = hostReader({ sysctlBin: await script('slow', 'sleep 5'), minSampleMs: 0, timeoutMs: 100 })
+    const started = Date.now()
     expect(await slow.memory()).toMatchObject({ ok: false, error: { kind: 'timeout' } })
+    // the timeout kills the program's whole group: the call returns at the timeout, not when the sleep ends
+    expect(Date.now() - started).toBeLessThan(2_000)
   })
 
   test('the load average is the 1-minute one', async () => {
@@ -126,12 +129,22 @@ describe('the account picker', () => {
       ok: false,
       error: { kind: 'gone', detail: expect.stringContaining('exited 3') },
     })
+    const started = Date.now()
     expect(await claudeAccountSource({ bin: await script('hangs', 'sleep 5'), timeoutMs: 100 }).read(at)).toMatchObject(
       {
         ok: false,
         error: { kind: 'timeout' },
       },
     )
+    expect(Date.now() - started).toBeLessThan(2_000)
+    // a grandchild that leaves the group and holds the pipes does not keep the call waiting
+    const escaped = await script('escaped', 'python3 -c "import os,time; os.setsid(); time.sleep(5)" &\nsleep 5')
+    const again = Date.now()
+    expect(await claudeAccountSource({ bin: escaped, timeoutMs: 100 }).read(at)).toMatchObject({
+      ok: false,
+      error: { kind: 'timeout' },
+    })
+    expect(Date.now() - again).toBeLessThan(2_000)
     expect(await claudeAccountSource({ bin: await script('junk', 'echo nope') }).read(at)).toMatchObject({
       ok: false,
       error: { kind: 'unreadable' },
