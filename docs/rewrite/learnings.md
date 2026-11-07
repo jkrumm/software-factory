@@ -34,3 +34,16 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   and wrote `settings.json`, `projects/`, `sessions/` and more into the worktree. Caught within two minutes from the
   screen; killed, the junk removed, restarted. The start command now parses the dir and checks `test -d` before
   `hc run` (`docs/rewrite/state.md`). Always read the screen once right after a start.
+- **2026-11-07, package 1 review: the reviewer drops files on its first pass.** Both packages so far had their first
+  `/review` refused by agw because the reviewer's file list skipped core files (package 0: the renames and the lock;
+  package 1: `table.ts`, `issue.ts`, the tests). The second attempt covered everything. The protocol works; expect one
+  refusal per large range and do not treat it as a stall.
+- **2026-11-07, package 1 calls:**
+  - The third regression is a stall the steward ends (wake the lead, or raise a Decision), not a wait on the owner as
+    in the old core: deterministic first, then a workflow, then the owner (product principle 1).
+  - Issue ids are `issue_<n>` from a Postgres sequence, not UUIDv7: the owner and every surface speak of "Issue 286",
+    and the cutover imports the old numbers. Sent back to the worker before the merge.
+  - Only the unit of work and the migration runner call `.begin(`; `app/` gets the unit of work.
+  - The machine has no claim wait: package 3 decides how a resumed Issue gets its repo's claim back.
+  - The new event, wait and outcome words go into `docs/language.md` when the language is reconciled in package 9;
+    until then report 1's state table is the reference the parallel briefs use.
