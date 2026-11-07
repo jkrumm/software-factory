@@ -6,6 +6,8 @@ compaction, before acting. Updated on every start, integration and send-back.
 - Branch `rewrite`, made from master at `a3065ce` on 2026-11-07. Master's checkout and the running factory stay untouched.
 - Worker worktrees: `../rw-<n>-<slug>` beside this one (under the main checkout's `.claude/worktrees/`), branch
   `rw/<n>-<slug>` off `rewrite`. Briefs: `docs/rewrite/briefs/<n>-<slug>.md`. Reports: `docs/rewrite/reports/<n>-<slug>.md`.
+- Watching: a background `hc wait <terminal>` per running worker (wakes on any turn end) plus a session cron at :17 and
+  :47 that reads every running worker's screen and steers. Both die with the session: re-arm them after a restart.
 - Status words: `pending`, `running`, `sent back`, `integrated`.
 
 | # | Package | After | Status | Terminal | Branch | Last commit | Evidence |
