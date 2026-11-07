@@ -1,5 +1,5 @@
 import { lstatSync, mkdirSync, readlinkSync, rmdirSync, rmSync, symlinkSync } from 'node:fs'
-import { constants } from 'node:os'
+import { constants, homedir } from 'node:os'
 import { join } from 'node:path'
 import { usage } from './exit.ts'
 import type { Io } from './operation.ts'
@@ -111,7 +111,7 @@ export async function deployLock(input: { project: string; command: string[] }, 
   const [program, ...args] = input.command
   if (!program || !NAME.test(input.project)) throw usage(USAGE)
 
-  const dir = io.env.FACTORY_DEPLOY_LOCK_DIR || join(io.env.HOME ?? '', '.local/state/factory/deploy-locks')
+  const dir = io.env.FACTORY_DEPLOY_LOCK_DIR || join(io.env.HOME || homedir(), '.local/state/factory/deploy-locks')
   const waitMs = number(io.env.FACTORY_DEPLOY_LOCK_WAIT_MS, DEFAULT_WAIT_MS)
   const pollMs = number(io.env.FACTORY_DEPLOY_LOCK_POLL_MS, DEFAULT_POLL_MS)
   const lock = join(dir, `${input.project}.lock`)
