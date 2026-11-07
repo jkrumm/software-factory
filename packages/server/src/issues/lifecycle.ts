@@ -6,6 +6,7 @@ import {
   type WaitReason,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import { failNotesOfClosed } from '../closed-notes.ts'
 import { notifyMove } from '../notify/rules.ts'
 import { addDependency, releaseDependents } from './deps.ts'
 import { answerDecision, recordDecision } from './decisions.ts'
@@ -377,6 +378,7 @@ export async function applyEvent(tx: SQL, issue: IssueRow, row: InboxRow, now: D
     await tx`
       UPDATE factory.decisions SET answered_by = 'closed', answered_at = ${now}
       WHERE issue_id = ${issue.id} AND answered_at IS NULL`
+    await failNotesOfClosed(tx, now, issue.id)
   }
   return { issue: moved, result: 'applied', detail: null }
 }

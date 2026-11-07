@@ -5,6 +5,7 @@ import type { Clock } from './clock.ts'
 import { CannotExecute, DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './exec.ts'
 import { appSpaces, nameSpace, nameTab, seedSpace, type Rpc } from './app-doc.ts'
 import { HcClient, HcError } from './hc.ts'
+import { atPrompt } from './screen.ts'
 import {
   accountEnv,
   agentName,
@@ -220,7 +221,10 @@ export class HcRunner implements Runner {
     }
     // Only an agent at its prompt takes text: a working one queues it (typed anyway when forced), a blocked one reads it as the answer to its dialog.
     const forced = input.force === true && status === 'working'
-    if (status !== 'idle' && status !== 'done' && !forced) return 'busy'
+    // A terminal that never reported a status (hc shows it as `agent=claude`, no status) says nothing about a dialog: the screen must
+    // show the input box, else it is busy. The core cannot guard that send, so the screen read is the only guard.
+    const unreported = status === undefined && (await this.showsPrompt(input, budget))
+    if (status !== 'idle' && status !== 'done' && !forced && !unreported) return 'busy'
 
     try {
       // `if` can name idle or working only: for `done` the core's own refusal of a blocked program is the guard.
@@ -238,6 +242,17 @@ export class HcRunner implements Runner {
       // the answer `busy`; anything else is an error. No refusal (a timeout, a dead process) says nothing about the text.
       if (error.refusal?.kind === 'blocked' || error.refusal?.kind === 'status_mismatch') return 'busy'
       throw error.refusal ? new RunnerError(error.message, false) : new UncertainTyping(error.message)
+    }
+  }
+
+  /** Whether the screen of a terminal without a reported status shows the input box. A screen that cannot be read is no prompt. */
+  private async showsPrompt(input: { pane: string; enterOnly?: boolean }, budget: Budget): Promise<boolean> {
+    try {
+      const text = (await this.rpc('terminal.read', { terminal: input.pane }, Screen, budget)).text
+      return atPrompt(text, { pressOnly: input.enterOnly === true })
+    } catch (error) {
+      if (error instanceof HcError) return false
+      throw asRunnerError(error)
     }
   }
 

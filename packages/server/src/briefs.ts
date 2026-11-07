@@ -1,6 +1,9 @@
 import type { SQL } from 'bun'
 import type { Clock } from './clock.ts'
 import { DEFAULT_START_BUDGET_MS, type Runner } from './runner.ts'
+import { inputBoxText } from './screen.ts'
+
+export { inputBoxText }
 
 /**
  * A spawn's brief is the last argv of `claude`, so it is no row in `factory.prompts` and the prompt retry never sees it. When
@@ -28,24 +31,6 @@ export const hasTurned = (sql: SQL) =>
 
 /** What the pass did for one spawn: how often it pressed Enter and when it last did. In memory; a restart starts the backoff over. */
 export type BriefWatch = Map<string, { presses: number; lastAt: number }>
-
-const RULE = /^\s*─{3,}/
-
-/**
- * The text in Claude Code's input box: what sits between the last two horizontal rule lines, without the `❯` prompt. Empty when
- * the box is empty or the screen shows no box (a dialog, a start in progress).
- */
-export function inputBoxText(screen: string): string {
-  const lines = screen.split('\n')
-  const rules = lines.flatMap((line, i) => (RULE.test(line) ? [i] : []))
-  const [top, bottom] = rules.slice(-2)
-  if (top === undefined || bottom === undefined) return ''
-  return lines
-    .slice(top + 1, bottom)
-    .join('\n')
-    .replace(/^\s*❯/, '')
-    .trim()
-}
 
 const due = (watch: BriefWatch, key: string, now: number): boolean => {
   const seen = watch.get(key)

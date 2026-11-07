@@ -8,6 +8,8 @@ import { REOPEN_WINDOW_MS, TABLE } from '../src/issues/lifecycle.ts'
 import { fireTimers } from '../src/issues/timers.ts'
 import { getIssue } from '../src/issues/read.ts'
 import { issuePass, processInbox } from '../src/issues/worker.ts'
+import { CLOSED_NOTE_ERROR } from '../src/closed-notes.ts'
+import { recordPrompt } from '../src/prompts.ts'
 import { openSession, recordEvent } from '../src/sessions.ts'
 import { TEST_REPO, TEST_ROOT } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
@@ -228,6 +230,41 @@ describe('golden paths: transitions and effects', () => {
     expect(await state(id)).toMatchObject({ state: 'closed', outcome: 'done' })
     expect(await trail(id)).toEqual(['created -→queued', 'admitted queued→working', 'close working→closed'])
     expect(await effects(id)).toEqual(['start_lead', 'finalize'])
+  })
+
+  test('a close fails the notes still pending for its lead, and only those', async () => {
+    const id = await working()
+    const other = await working()
+    for (const [issue, session] of [
+      [id, `lead-${id}-1`],
+      [other, `lead-${other}-1`],
+    ] as const) {
+      await openSession(db.sql, {
+        id: session,
+        spawnKey: session,
+        pane: `w1:${session}`,
+        issueId: issue,
+        at: clock.now(),
+      })
+      await recordPrompt(db.sql, { id: `note-${issue}`, session, source: 'note', text: 'carry on' }, clock.now())
+    }
+    await recordPrompt(
+      db.sql,
+      { id: `sent-${id}`, session: `lead-${id}-1`, source: 'note', text: 'sent already' },
+      clock.now(),
+    )
+    await db.sql`UPDATE factory.prompts SET status = 'sent' WHERE id = ${`sent-${id}`}`
+
+    await step(id, 'close', { reason: 'a document' })
+
+    const rows: { id: string; status: string; error: string | null }[] = await db.sql`
+      SELECT id, status, error FROM factory.prompts ORDER BY id`
+    expect(rows.map((r) => [r.id, r.status])).toEqual([
+      [`note-${id}`, 'failed'],
+      [`note-${other}`, 'pending'],
+      [`sent-${id}`, 'sent'],
+    ])
+    expect(rows.find((r) => r.id === `note-${id}`)?.error).toBe(CLOSED_NOTE_ERROR)
   })
 
   test('drop: closed as dropped', async () => {

@@ -7,6 +7,7 @@ import {
   listOpenPrompts,
   STATUS_PROMPTS,
   MAX_FAILURES,
+  NOT_AT_PROMPT_ERROR,
   PENDING_TTL_MS,
   recordPrompt,
   TYPING_LEASE_MS,
@@ -601,10 +602,68 @@ describe('the hc adapter types into the agent', () => {
       expect(await r.type({ pane, text: 'second' })).toBe('busy')
     }
     await hc.setStatus(pane, null)
+    await hc.mutate((state) => {
+      const t = state.terminals[0]
+      if (t) t.screen_text = ['Do you want to proceed?', '❯ 1. Yes', '  2. No', 'Esc to cancel'].join('\n')
+    })
     expect(await r.type({ pane, text: 'second' })).toBe('busy')
     await hc.setStatus(pane, 'done')
     expect(await r.type({ pane, text: 'second' })).toBe('typed')
     expect(await sent()).toEqual(['second'])
+  })
+
+  describe('a lead whose terminal reports no status (Issue 254)', () => {
+    /** The session is idle by its hooks; the terminal is live and silent to the core. */
+    const silentLead = async () => {
+      await hc.reset()
+      await hc.plan('terminal.run:silent')
+      const real = new HcRunner({
+        bin: hc.bin,
+        clock,
+        pretrustBin: hc.pretrustBin,
+        accountsFile: hc.accountsFile,
+        home: '/home/me',
+        deliverWaitMs: 3_000,
+      })
+      const { session: pane } = await real.start({
+        key: 'lead-9-1',
+        repo: '/work/repo',
+        role: 'lead',
+        prompt: 'first',
+        account: 'a',
+        tier: 'sonnet',
+        effort: 'high',
+      })
+      await w.spawned('lead-9-1', { role: 'lead' })
+      await db.sql`UPDATE factory.sessions SET pane = ${pane} WHERE id = 'lead-9-1'`
+      await w.emit('lead-9-1', 'turn_started', w.at(10))
+      await w.emit('lead-9-1', 'turn_ended', w.at(9))
+      await recordPrompt(
+        db.sql,
+        { id: 'steward-1', session: 'lead-9-1', source: 'note', text: 'close it' },
+        clock.now(),
+      )
+      return real
+    }
+
+    test('an idle session whose terminal shows its input box gets the note', async () => {
+      const real = await silentLead()
+      const result = await deliverPrompts({ sql: db.sql, runner: real, clock })
+      expect(result.sent).toEqual(['steward-1'])
+      expect(await sent()).toEqual(['close it'])
+    })
+
+    test('a terminal that shows a dialog is not typed into; the note waits and says why', async () => {
+      const real = await silentLead()
+      await hc.mutate((state) => {
+        const t = state.terminals[0]
+        if (t) t.screen_text = ['  Do you want to proceed?', '  ❯ 1. Yes', '    2. No', '  Esc to cancel'].join('\n')
+      })
+      const result = await deliverPrompts({ sql: db.sql, runner: real, clock })
+      expect(result.sent).toEqual([])
+      expect(await sent()).toEqual([])
+      expect(await row('steward-1')).toMatchObject({ status: 'pending', error: NOT_AT_PROMPT_ERROR })
+    })
   })
 
   test('a send that dies without an answer is uncertain; an error body from the core is a refusal', async () => {
