@@ -54,6 +54,8 @@ export interface Config {
   /** `FACTORY_DIGEST_AT` (`HH:MM` local time, or `off`) in `FACTORY_DIGEST_TZ` */
   digestAt: string | null
   digestTz: string
+  /** `FACTORY_ALERT_PAGE_AFTER` (`30m`, 30s to 24h, or `off`): an alert Issue still unsolved this long after it was filed reaches the owner once */
+  alertPageAfterMs: number | null
   /** `FACTORY_DIGEST_EVERY` (`5m`, `90s`, `1h`, or `off`): how often the fleet digest asks `agw digest` about what changed; null is off (not the owner's morning line above) */
   fleetDigestEveryMs: number | null
   /** `FACTORY_GITHUB_POLL` (`5m`, `off`): how often the GitHub label source polls; null is off */
@@ -133,6 +135,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     digestAt: digestAt(env.FACTORY_DIGEST_AT),
     digestTz: digestTz(env.FACTORY_DIGEST_TZ),
     fleetDigestEveryMs: fleetDigestEvery(env.FACTORY_DIGEST_EVERY),
+    alertPageAfterMs: fleetDigestEvery(env.FACTORY_ALERT_PAGE_AFTER, 'FACTORY_ALERT_PAGE_AFTER', 30 * 60_000),
     ...githubSource(env),
     launchdPollMs: fleetDigestEvery(env.FACTORY_LAUNCHD_POLL, 'FACTORY_LAUNCHD_POLL'),
     ...beszelSource(env),

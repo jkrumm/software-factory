@@ -16,12 +16,14 @@ export const LEASE_MS = 120_000
 
 /**
  * The away rule: why a message is folded instead of sent, or `null` when it goes out. The owner is always treated as away: a decision
- * (`notify:ask:*`), the steward's spent retries (`notify:steward:*`), a finished plan (`notify:plan:*`: what next is the owner's), the morning reading
+ * (`notify:ask:*`), the steward's spent retries (`notify:steward:*`), a finished plan (`notify:plan:*`: what next is the owner's), an alert nobody
+ * solved in time (`notify:alert:*`: the net under factory-first paging), the morning reading
  * and a test go out; every other message is folded.
  */
 export function foldReason(key: string): string | null {
   if (key.startsWith('notify:digest:') || key.startsWith('notify:test:')) return null
   if (key.startsWith('notify:ask:') || key.startsWith('notify:steward:') || key.startsWith('notify:plan:')) return null
+  if (key.startsWith('notify:alert:')) return null
   return 'the owner is away and this is not a decision: its facts are in the morning reading and on the fleet view'
 }
 

@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { sendDue } from './outbox.ts'
 import { NOTIFY_OFF, type Notifier } from './port.ts'
-import { notifyDigest, notifyFailures } from './rules.ts'
+import { notifyDigest, notifyFailures, notifyUnsolvedAlerts } from './rules.ts'
 
 export interface NotifyDeps {
   notifier: Notifier
@@ -9,6 +9,8 @@ export interface NotifyDeps {
   target: string
   digestAt: string | null
   digestTz: string
+  /** `FACTORY_ALERT_PAGE_AFTER`: how long an alert Issue may stay unsolved before the owner is told; `null` or unset: never */
+  alertPageAfterMs?: number | null
   /** whether a place is IuRoot's or a visible root's: its items are only counted in the morning reading (not injected: everything is counted only) */
   visible?: () => Promise<(path: string) => boolean>
 }
@@ -27,6 +29,7 @@ export async function notifyPass(sql: SQL, deps: NotifyDeps, now: () => Date): P
     }
   }
   await guarded('failures', () => notifyFailures(sql, now()))
+  await guarded('alerts', () => notifyUnsolvedAlerts(sql, now(), deps.alertPageAfterMs ?? null))
   // The visibility check is passed as the function that makes it: only a morning reading that is due awaits it.
   await guarded('digest', () =>
     notifyDigest(sql, { now: now(), at: deps.digestAt, timeZone: deps.digestTz, visible: deps.visible }),

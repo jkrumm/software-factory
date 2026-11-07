@@ -100,6 +100,7 @@ describe('config (finding 5)', () => {
       digestAt: '07:30',
       digestTz: 'Europe/Berlin',
       fleetDigestEveryMs: 300_000,
+      alertPageAfterMs: 1_800_000,
       githubPollMs: 300_000,
       githubToken: undefined,
       launchdPollMs: 300_000,
@@ -211,6 +212,14 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_DIGEST_EVERY: 'off' }).fleetDigestEveryMs).toBeNull()
     for (const bad of ['5', '10s', '25h', 'often', '5 m'])
       expect(() => loadConfig({ ...env, FACTORY_DIGEST_EVERY: bad })).toThrow('FACTORY_DIGEST_EVERY')
+  })
+
+  test('FACTORY_ALERT_PAGE_AFTER: thirty minutes, a duration of 30 s to 24 h, or off; a mistake is refused', () => {
+    expect(loadConfig(env).alertPageAfterMs).toBe(1_800_000)
+    expect(loadConfig({ ...env, FACTORY_ALERT_PAGE_AFTER: '10m' }).alertPageAfterMs).toBe(600_000)
+    expect(loadConfig({ ...env, FACTORY_ALERT_PAGE_AFTER: 'off' }).alertPageAfterMs).toBeNull()
+    for (const bad of ['30', '10s', '25h', 'soon'])
+      expect(() => loadConfig({ ...env, FACTORY_ALERT_PAGE_AFTER: bad })).toThrow('FACTORY_ALERT_PAGE_AFTER')
   })
 
   test('FACTORY_REPO_ROOTS replaces the default roots', () => {
