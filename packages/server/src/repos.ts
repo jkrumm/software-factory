@@ -13,14 +13,32 @@ const withSeparator = (path: string): string => (path.endsWith(sep) ? path : `${
  * repo: the path must be strictly inside it, and `/root-evil` is not inside `/root`.
  */
 export async function resolveRepo(repo: string, roots: readonly string[]): Promise<string> {
-  let real: string
+  return insideRoots(repo, await realDirectory(repo), roots)
+}
+
+/**
+ * The real path of a directory for a plan tab only: a root itself is accepted, anything else is `resolveRepo`'s call.
+ * A root is never a repo for a spawn or an Issue.
+ */
+export async function resolveSpaceDir(path: string, roots: readonly string[]): Promise<string> {
+  const real = await realDirectory(path)
+  for (const root of roots) {
+    if ((await realpath(root).catch(() => undefined)) === real) return real
+  }
+  return insideRoots(path, real, roots)
+}
+
+async function realDirectory(repo: string): Promise<string> {
   try {
-    real = await realpath(repo)
+    const real = await realpath(repo)
     if (!(await stat(real)).isDirectory()) throw new Error('not a directory')
+    return real
   } catch {
     throw new RepoRefused(`repo ${repo} does not exist or is not a directory`)
   }
+}
 
+async function insideRoots(repo: string, real: string, roots: readonly string[]): Promise<string> {
   for (const root of roots) {
     const realRoot = await realpath(root).catch(() => undefined)
     if (realRoot && real.startsWith(withSeparator(realRoot)) && real !== realRoot) return real

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
-import { RepoRefused, resolveRepo } from './repos.ts'
+import { RepoRefused, resolveSpaceDir } from './repos.ts'
 
 /** How often the fixed spaces are looked at again (the first look is the first tick). */
 export const SPACES_INTERVAL_MS = 10 * 60_000
@@ -44,7 +44,8 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
  * The fixed spaces: every repo in the owner's list has a space and a `plan:<name>` tab, a login shell the owner starts the planner in.
  * The reconcile only adds: a space the app lacks is seeded, a plan terminal that is not live is started (`HcRunner.ensurePlan`,
  * through the runner's own lock); it never reorders the app's document, never moves a tab, and never closes a plan tab
- * (`HcRunner.close` refuses a `plan:` key). The order of the sidebar is the app's (dotfiles' `groups.json`).
+ * (`HcRunner.close` refuses a `plan:` key). A listed root (IuRoot) gets a plan tab too; it is no project: no project.yaml, no git, no
+ * spawn. A space the app left unnamed gets the entry's name. The order of the sidebar is the app's (dotfiles' `groups.json`).
  *
  * It runs behind the tick's back (`kick`), never in a transaction, once at start and then every ten minutes; every effect has a
  * deterministic key, so a second pass with nothing changed starts nothing and writes nothing.
@@ -90,7 +91,7 @@ export class Spaces {
       seen.add(entry.name)
       let repo: string
       try {
-        repo = await resolveRepo(entry.path, this.deps.roots)
+        repo = await resolveSpaceDir(entry.path, this.deps.roots)
       } catch (error) {
         if (!(error instanceof RepoRefused)) throw error
         result.skipped.push({ name: entry.name, reason: error.message })
