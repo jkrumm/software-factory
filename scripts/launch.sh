@@ -31,25 +31,24 @@ load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 limit=()
 if command -v timeout >/dev/null 2>&1; then limit=(timeout 20); elif command -v gtimeout >/dev/null 2>&1; then limit=(gtimeout 20); fi
 
-# A ref named in OPTIONAL_KEYS (scripts/optional-refs.sh) may be unresolved (not made or seeded yet): the server starts without that token and the caller
-# it names does not exist. It is dropped from the template the rest of the launch reads, and said once on stderr. A ref that
-# resolves is kept; every other ref must resolve.
-# shellcheck source=scripts/optional-refs.sh
-source "$DIR/scripts/optional-refs.sh"
-for key in $OPTIONAL_KEYS; do
-  ref=$(grep -hE "^${key}=" "$TPL" | head -1 | cut -d= -f2-)
-  [[ -n "$ref" ]] || continue
-  if ! ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" >/dev/null 2>&1; then
-    echo "software-factory: optional $key ($ref) does not resolve; starting without it." >&2
-    TPL_EFFECTIVE="${TPL_EFFECTIVE:-$TPL}"
-    mkdir -p "$HOME/.software-factory"
-    # refs only, no secret; a fixed path because exec below leaves no moment to remove a temp file
-    grep -v "^${key}=" "$TPL_EFFECTIVE" > "$HOME/.software-factory/env.launch.tpl"
-    chmod 600 "$HOME/.software-factory/env.launch.tpl"
-    TPL_EFFECTIVE="$HOME/.software-factory/env.launch.tpl"
-  fi
-done
-TPL="${TPL_EFFECTIVE:-$TPL}"
+# .env.server.tpl holds the refs only the server reads; each is optional. One that resolves joins the template the rest of the
+# launch reads, one that does not is said once on stderr and the server starts without it. The effective template is refs only
+# (no secret), at a fixed path because exec below leaves no moment to remove a temp file.
+SERVER_TPL="$DIR/.env.server.tpl"
+if [[ -f "$SERVER_TPL" ]]; then
+  EFFECTIVE="$HOME/.software-factory/env.launch.tpl"
+  mkdir -p "$HOME/.software-factory"
+  cp "$TPL" "$EFFECTIVE"
+  chmod 600 "$EFFECTIVE"
+  while IFS='=' read -r key ref; do
+    if ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" </dev/null >/dev/null 2>&1; then
+      echo "$key=$ref" >> "$EFFECTIVE"
+    else
+      echo "software-factory: optional $key ($ref) does not resolve; starting without it." >&2
+    fi
+  done < <(grep -hE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$SERVER_TPL")
+  TPL="$EFFECTIVE"
+fi
 
 # Every ref must resolve BEFORE the hand-off: an unresolved ref would otherwise reach the process as nothing at all.
 rendered=$(${limit[@]+"${limit[@]}"} "$SECRETS_RUN" export --env-file="$TPL" 2>/dev/null | grep -c '^export ')

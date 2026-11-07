@@ -182,7 +182,7 @@ describe.skipIf(!canRun)('the refs a deploy checks', () => {
     await mkdir(bin, { recursive: true })
     await mkdir(join(release, 'scripts'), { recursive: true })
     await cp(join(ROOT, '.env.tpl'), join(release, '.env.tpl'))
-    await cp(join(ROOT, 'scripts', 'optional-refs.sh'), join(release, 'scripts', 'optional-refs.sh'))
+    await cp(join(ROOT, '.env.server.tpl'), join(release, '.env.server.tpl'))
     await writeFile(
       join(bin, 'secrets-run'),
       `#!/bin/bash\n[[ "$1" == read && "$2" == */${unresolved} ]] && exit 1\nexit 0\n`,

@@ -57,7 +57,7 @@ A directory listing, `package.json`, the Makefile and `--help` say what exists; 
   contract, and are never edited once applied. `DATABASE_URL` comes from `secrets-run`, never a tracked file.
 - **The API is authenticated.** Every route but `GET /health` needs a bearer token; the read token passes on `GET /v1/*` only.
   `/fleet`, `/v1` and the model text are token API only, the socket answers 404. The CLI runs under `secrets-run run --env-file=.env.tpl --`.
-- **Settings:** secrets in `.env.tpl`; non-secret settings in `~/.config/factory/env`, which `scripts/env-file.sh` allow-lists
+- **Settings:** secrets in `.env.tpl` (server-only optional refs in `.env.server.tpl`, read by the launcher and the deploy's ref check only, never by a client); non-secret settings in `~/.config/factory/env`, which `scripts/env-file.sh` allow-lists
   (a key not on its list refuses the start; its retired keys stay listed so an old file still launches). Read at launch: an edit takes a restart.
 - **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo: do not rename them.
 

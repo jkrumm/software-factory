@@ -182,12 +182,12 @@ docs describe the new core (package 9b, after the cutover holds).
 
 | What | State | Command or where |
 |-|-|-|
-| `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` in 1Password | **done** (2026-11-07); `FACTORY_SIGNAL_TOKEN` follows at W14 | `op://mini/software-factory/…`; refs are in `.env.tpl` (and the door's in `.env.door.tpl`) |
+| `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` in 1Password | **done** (2026-11-07); `FACTORY_SIGNAL_TOKEN` follows at W14 | `op://mini/software-factory/…`; refs are in `.env.tpl` (the door's in `.env.door.tpl`, the signal token's in `.env.server.tpl`) |
 | The admin path for the schema swap | needs nothing new | `~/SourceRoot/vps`, superuser `psql` in the `postgres` container (`admin_sql` above) |
 | The door's sources | unchanged | `~/.config/factory/door-tokens.json` stays; `factory door token new <source>` only for a new source |
 | The settings file | P6 | `~/.config/factory/env` (mode 0600), allow-list in `scripts/env-file.sh` |
 | Beszel polling | not on | needs `FACTORY_BESZEL_EMAIL` and `FACTORY_BESZEL_PASSWORD` refs in `.env.tpl`; the old core had none either, so the poller stays off as it was |
-| Hermes may file | built (9c), the token to make | `FACTORY_SIGNAL_TOKEN` (`op://mini/software-factory/FACTORY_SIGNAL_TOKEN`): a fifth caller whose only route is `POST /signals`, only as `owner:hermes`. Optional: the server starts without it (the launcher drops an unresolved ref), and Hermes cannot file until it exists. W14 makes it work; the owner's token never reaches Hermes |
+| Hermes may file | built (9c), the token to make | `FACTORY_SIGNAL_TOKEN` (`op://mini/software-factory/FACTORY_SIGNAL_TOKEN`): a fifth caller whose only route is `POST /signals`, only as `owner:hermes`. Optional: the server starts without it (the launcher drops an unresolved ref of `.env.server.tpl`), and Hermes cannot file until it exists. W14 makes it work; the owner's token never reaches Hermes |
 
 ### Client patches (applied in a window, after W12)
 

@@ -19,11 +19,7 @@ command -v bun >/dev/null 2>&1 || { echo "import: bun not on PATH" >&2; exit 78;
 source "$DIR/scripts/env-file.sh"
 load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 
-# The import needs only the database: an optional ref that does not resolve yet (scripts/optional-refs.sh) is left out of
-# the template it reads, as the launcher does, so an unmade token never blocks an import.
-# shellcheck source=scripts/optional-refs.sh
-source "$DIR/scripts/optional-refs.sh"
-TPL=$(effective_template "$DIR/.env.tpl" "$HOME/.software-factory/env.import.tpl")
+TPL="$DIR/.env.tpl"
 
 # shellcheck disable=SC2016 # the child script is single-quoted on purpose
 exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '

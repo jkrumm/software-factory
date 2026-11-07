@@ -3,7 +3,7 @@
 none:        [docs/waves/**, docs/spikes/**, docs/evidence/**, docs/research/**, bun.lock]
 sensitive:   [apps/server/migrations/**, apps/server/src/adapters/postgres/**, apps/server/src/main.ts,
               apps/cli/src/hook.ts, apps/door/src/**, config/roles.json,
-              scripts/deploy.sh, scripts/launch*.sh, scripts/env-file.sh, .env.tpl, deploy/*.plist.template,
+              scripts/deploy.sh, scripts/launch*.sh, scripts/env-file.sh, .env.tpl, .env.server.tpl, deploy/*.plist.template,
               .github/**]
 nits: 3
 ---

@@ -1,6 +1,7 @@
 node_modules/
 .env*
 !.env.tpl
+!.env.server.tpl
 !.env.door.tpl
 dist/
 *.log

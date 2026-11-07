@@ -224,3 +224,6 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   `launch.sh` reads.
 - **2026-11-07, window 2:** Iris' `make check` asks the factory for a test slot and gets 401 when run by hand (no
   token); a lead's terminal carries the agent token, which the slot routes allow. By design, not a finding.
+- **2026-11-08, server-only refs:** the design note above is built. `FACTORY_SIGNAL_TOKEN` moved to `.env.server.tpl`, read
+  only by `launch.sh` (an unresolved ref is said once, the server starts without it) and `deploy.sh`'s `check_refs`
+  (a warning). `.env.tpl` is whole for every client again; `optional-refs.sh` and `effective_template` are gone.

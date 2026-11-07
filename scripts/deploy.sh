@@ -335,18 +335,17 @@ deploy_door() { # $1 release dir, $2 sha
 }
 
 # Every ref of .env.tpl must resolve before anything is stopped: a missing secret refuses the deploy, never a rollback.
+# The refs of .env.server.tpl are optional: an unresolved one is a warning.
 check_refs() { # $1 release dir
   local key ref missing=""
-  local OPTIONAL_KEYS=""
-  # shellcheck source=scripts/optional-refs.sh
-  [[ -f "$1/scripts/optional-refs.sh" ]] && source "$1/scripts/optional-refs.sh"
   while IFS='=' read -r key ref; do
-    secrets-run read "$ref" >/dev/null 2>&1 && continue
-    case " $OPTIONAL_KEYS " in
-      *" $key "*) log "WARNING: optional $key ($ref) does not resolve: the server starts without it" ;;
-      *) missing="$missing $key($ref)" ;;
-    esac
+    secrets-run read "$ref" >/dev/null 2>&1 || missing="$missing $key($ref)"
   done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.tpl")
+  if [[ -f "$1/.env.server.tpl" ]]; then
+    while IFS='=' read -r key ref; do
+      secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: optional $key ($ref) does not resolve: the server starts without it"
+    done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.server.tpl")
+  fi
   [[ -z "$missing" ]] || die "cannot read${missing} through secrets-run (seed them: make secrets-seed on the MacBook); nothing was changed"
 }
 
@@ -459,7 +458,7 @@ main() {
     log "would deploy ${sha:0:12} ($(core_of "$SELF_DIR/..")) (live: ${old:-none}$( [[ -n "$old" && -d "$RELEASES/$old" ]] && echo ", $(core_of "$RELEASES/$old")")) from ${repo_url:-<no origin url>}"
     act git -C "$REPO_DIR" fetch --prune origin "$REF"
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
-    act "check every ref of .env.tpl through secrets-run"
+    act "check every ref of .env.tpl through secrets-run (those of .env.server.tpl only warn)"
     if env_file_ok "$SELF_DIR/.."; then log "the settings file is accepted by the launcher of this tree"; else log "WARNING: the settings file is refused by the launcher of this tree (a real deploy stops before it changes anything)"; fi
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"

@@ -21,6 +21,12 @@ test('every .env template a script or a plist names is tracked in git', async ()
   expect([...named].filter((name) => !listed.includes(name))).toEqual([])
 })
 
+/** A server-only ref never sits in the template the clients share, so an unseeded one can never block them. */
+test('.env.tpl holds no server-only ref; .env.server.tpl holds the signal token', async () => {
+  expect(await readFile(join(ROOT, '.env.tpl'), 'utf8')).not.toContain('FACTORY_SIGNAL_TOKEN')
+  expect(await readFile(join(ROOT, '.env.server.tpl'), 'utf8')).toContain('FACTORY_SIGNAL_TOKEN=')
+})
+
 /** The launcher against a fake `secrets-run` (resolves every ref except the ones named in UNRESOLVED) and a fake `bun`. */
 async function launch(unresolved: string[]): Promise<{ code: number; err: string; out: string }> {
   const home = await mkdtemp(join(tmpdir(), 'launch-'))

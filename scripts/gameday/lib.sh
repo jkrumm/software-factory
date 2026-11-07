@@ -12,10 +12,7 @@ REPO_NAME=${GAMEDAY_REPO:-factory-gameday}
 LABEL=com.jkrumm.software-factory
 
 # The factory CLI with the token resolved at run time (never in a tracked file).
-# shellcheck source=scripts/optional-refs.sh
-source "$ROOT/scripts/optional-refs.sh"
-# the template without an optional ref that does not resolve yet (refs only, no secret)
-GD_TPL=$(effective_template "$ROOT/.env.tpl" "$HOME/.software-factory/env.gameday.tpl")
+GD_TPL="$ROOT/.env.tpl"
 fx() { secrets-run run --env-file="$GD_TPL" -- factory "$@"; }
 
 # A read-only query against the factory schema, rows as `|`-separated text. The password never leaves the child.
