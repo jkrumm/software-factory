@@ -213,6 +213,30 @@ describe('importLegacy', () => {
     expect(notes[0]?.n).toBe(2)
   })
 
+  test('a Decision answered in the old core between two imports is answered in the new one', async () => {
+    await importLegacy(options())
+    const open = (await db.sql.unsafe("SELECT answered_at FROM factory.decisions WHERE id = 'decision_legacy-9'")) as {
+      answered_at: Date | null
+    }[]
+    expect(open[0]?.answered_at).toBeNull()
+    await db.sql.unsafe(
+      `UPDATE factory_legacy.decisions SET answer = 'keep', answered_by = 'owner', answered_at = $1 WHERE id = 9`,
+      [at(300)],
+    )
+    await db.sql.unsafe(
+      `INSERT INTO factory_legacy.issue_events (id, issue_id, kind, from_state, to_state, at, payload) VALUES (201, 3, 'answer', 'waiting', 'working', $1, '{"who":"owner","decision":9,"answer":"keep"}')`,
+      [at(300)],
+    )
+    const report = await importLegacy(options())
+    expect(report.issues.find((i) => i.legacyId === 3)?.result).toBe('appended')
+    const row = (await db.sql.unsafe(
+      "SELECT answer, settled_by, answered_at, withdrawn_at FROM factory.decisions WHERE id = 'decision_legacy-9'",
+    )) as { answer: string | null; settled_by: string | null; answered_at: Date | null; withdrawn_at: Date | null }[]
+    expect(row[0]?.answer).toBe('keep')
+    expect(row[0]?.answered_at).not.toBeNull()
+    expect(row[0]?.withdrawn_at).toBeNull()
+  })
+
   test('a number the new core took is a conflict, not an overwrite', async () => {
     await db.sql.unsafe(
       "INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_4', 'other', 'queued', 1)",

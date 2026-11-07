@@ -183,7 +183,10 @@ async function writeSide(
       VALUES (${d.id}, ${d.key}, ${id}, ${repo}, ${d.attempt}, ${d.question}, ${d.recommendation}, ${d.checked},
               ${d.options}, ${d.noAnswer}, ${d.askedAt}, ${d.answer},
               ${d.settledBy}, ${d.source}, ${d.answeredAt}, ${d.withdrawnAt}, ${d.withdrawnReason})
-      ON CONFLICT (id) DO NOTHING`
+      ON CONFLICT (id) DO UPDATE SET
+        answer = EXCLUDED.answer, settled_by = EXCLUDED.settled_by, source = EXCLUDED.source,
+        answered_at = EXCLUDED.answered_at, withdrawn_at = EXCLUDED.withdrawn_at, withdrawn_reason = EXCLUDED.withdrawn_reason
+      WHERE factory.decisions.answered_at IS NULL AND factory.decisions.withdrawn_at IS NULL`
     const artifact = artifactOfDecision(d.id as DecisionId)
     const blob = blobs.get(d.id)
     if (!blob) throw new Error(`decision ${d.id} has no blob`)
