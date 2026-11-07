@@ -151,3 +151,14 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
 - **2026-11-07, window 1, runbook fixes:** W12 is `FACTORY_REF=rewrite make verify` (plain `make verify` compares
   against origin/master and fails); W11's `fx door report` is the door's own POST, not a read (use `/health .lines`
   and `door routes`); the admin step runs through `make -C ~/SourceRoot/vps sql-postgres` with `\connect shared`.
+- **2026-11-07, window 1, W13: the new core's first lead.** Scratch Issue 298: filed 16:39:46, settled by triage
+  16:39:51, admitted 16:41:05 (one wait: "the open accounts took a lead since their last sample", cleared with the next
+  usage sample), lead on the Max `me` account 16:41:13, wrote, committed and pushed `8ea8d58`, closed `done` 16:41:26.
+  The drill printed NOT GREEN wrongly: it expects ship, watch and verify from a repo with no deploy whose AGENTS.md says
+  commit, push, end the turn (the lead's `close` was right), and its commit lookup missed a commit that is on the
+  remote. Fix the drill before window 2. The `iu` account shows as open in capacity; the lead went to `me`; watch which
+  account later leads take.
+- **2026-11-07, window 1, finding 3: the new core filed a plan row at once.** Issue 297 "Parallel leads in one repo"
+  from software-factory's `docs/plan.yaml`: the old core held it for 7 stable days (RS14), the new core has no stable
+  gate (NL6 retired `stable_days`). software-factory is drained, so it stays queued; decide after the window whether the
+  row should run now (it is post-cutover work) or the plan row gets an `after`.

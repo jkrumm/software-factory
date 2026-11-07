@@ -55,3 +55,4 @@ compaction, before acting. Updated on every start, integration and send-back.
   new queue drained (W7), import 256 Issues / 1760 events applied / 0 refused, idempotent, compare 0 unexplained (W8).
   Way back if this session dies: runbook "The way back" B1 to B8.
 - 2026-11-07: window 1: W9 to W12 done (restart hang worked around by killing the stuck PID); W13 scratch drill running; shutdown fix worker t1fm on `rw/9b-shutdown`.
+- 2026-11-07: window 1: W13 drill done in fact (Issue 298, lead on me, pushed, closed done); real Issue 299 filed on agent-workflows as an owner signal.
