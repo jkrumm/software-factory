@@ -3,12 +3,13 @@ import { loadSettings } from '../src/settings.ts'
 
 const base = { FACTORY_TOKEN: 'owner-token-0123456789', DATABASE_URL: 'x', PORT: '1' }
 
-test('the defaults: version dev, the 45 s lock wait, no clock offset', () => {
+test('the defaults: version dev, the 45 s lock wait, the 30 s shutdown deadline, no clock offset', () => {
   expect(loadSettings({ ...base, DATABASE_URL: 'postgres://x', PORT: '7793' })).toMatchObject({
     databaseUrl: 'postgres://x',
     port: 7793,
     version: 'dev',
     lockWaitMs: 45_000,
+    shutdownDeadlineMs: 30_000,
     clockOffsetMs: 0,
   })
 })

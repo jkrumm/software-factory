@@ -52,6 +52,7 @@ import { queueReasonMap } from './api/read-models.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
+import { createShutdown } from './shutdown.ts'
 
 /** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
 const HOSTNAME = '127.0.0.1'
@@ -346,26 +347,23 @@ async function main(): Promise<void> {
   runner.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
-  let stopping = false
-  const stop = async (signal: string) => {
-    if (stopping) return
-    stopping = true
-    console.log(`${signal}: stopping`)
-    draining.abort()
-    await app.stop()
-    // A pass in an agw call is given a few seconds; its call is taken up again at the next boot under the same key.
-    await runner.stop(10_000)
-    await socket.stop()
-    await intake.stop()
-    await lock.release()
-    await sql.close()
-    process.exit(0)
-  }
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.on(signal, () => {
-      stop(signal).catch((error: unknown) => fail(`stop failed: ${String(error)}`))
-    })
-  }
+  // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
+  // waits for it, so the stop would never return and the process would keep the lock. The deadline ends the process
+  // whatever step is stuck; the lock is let go before the pool closes, so a copy waiting for it boots as soon as the work is done.
+  const stop = createShutdown({
+    deadlineMs: settings.shutdownDeadlineMs,
+    steps: [
+      { name: 'draining', run: async () => draining.abort() },
+      { name: 'server.stop', run: () => app.stop(true) },
+      // A pass in an agw call is given a few seconds; its call is taken up again at the next boot under the same key.
+      { name: 'loops.stop', run: () => runner.stop(10_000) },
+      { name: 'hook socket.stop', run: () => socket.stop() },
+      { name: 'intake.stop', run: () => intake.stop() },
+      { name: 'lock.release', run: () => lock.release() },
+      { name: 'database.close', run: () => sql.close() },
+    ],
+  })
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => void stop(signal))
 }
 
 main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))
