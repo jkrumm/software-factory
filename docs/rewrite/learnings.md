@@ -120,3 +120,7 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   tokens are a later change. For package 9: Iris, Hermes, the Herdr board, `rd` and `ask-human.sh` need the changes in
   report 8; `FACTORY_AGENT_TOKEN` and `FACTORY_DOOR_TOKEN` must exist in 1Password; `verify.sh` and the gameday scripts
   call retired verbs; `AGENTS.md` contradicts the code until package 9 rewrites it.
+- **2026-11-07, package 9a: the `factory` role cannot create schemas** (no CREATE on the shared database), so it can
+  neither rename its schema nor create a new one; package 0's note was right. Call: no standing CREATE grant for an app
+  role on a shared database; the rename and `CREATE SCHEMA factory AUTHORIZATION factory` are a one-time admin step on
+  the vps side, written into the runbook with its undo. Least privilege beats a one-word grant that outlives its use.
