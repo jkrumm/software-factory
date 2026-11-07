@@ -1,15 +1,9 @@
-import { cleanText } from '@software-factory/contract'
+import { type AlertRequest, cleanText } from '@software-factory/contract'
 import { z } from 'zod'
 import { redactUrls, withoutUserinfo } from './redact.ts'
 
-/** What every source's payload comes down to. The payload is data: nothing in it picks a repo, a role, a path or a command. */
-export interface Alert {
-  /** the stable name the registry routes by */
-  monitor: string
-  /** unique per occurrence: a retry of the same event has the same one */
-  event: string
-  status: 'down' | 'up'
-  title: string
+/** What every source's payload comes down to: an alert request minus its source. The payload is data: nothing in it picks a repo, a role, a path or a command. */
+export type Alert = Omit<AlertRequest, 'source' | 'facts'> & {
   /** what a lead is told, picked field by field from the payload */
   facts: Record<string, unknown>
 }

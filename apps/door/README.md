@@ -1,13 +1,15 @@
 # factory door
 
 The one way an alert from the tailnet becomes a factory Issue. A Bun server of its own, one route: `POST /alert/<source>`.
-It holds no factory token and no database credential: it posts one line to the server's unix socket (`POST /intake`). That
-socket is the hook's, a same-user boundary (SF11), so a compromised door has what any pane has: it can call the socket's other
-routes too (`POST /issues`, `POST /spawns`), but it has no token, no database access and no write to the queue. Design and rules: `docs/design.md` §11.
+It holds no factory token and no database credential: it posts to the server's API over loopback HTTP, `POST /signals/alerts` for an
+alert and `POST /door/reports` for what it says about its sources. The body is an `AlertRequest` (`source`, `monitor`, `event`,
+`status`, `title`, `facts`), strict: it has no `repo`. The repo comes from the server's route registry, never from the door or the payload.
 
 ```
-Kuma / HyperDX ──TLS──▶ tailscale serve ──▶ 127.0.0.1:8796 (the door) ──unix socket──▶ the server (POST /intake)
+Kuma / HyperDX ──TLS──▶ tailscale serve ──▶ 127.0.0.1:8796 (the door) ──loopback HTTP──▶ the server (POST /signals/alerts)
 ```
+
+The server is `FACTORY_URL` (default `http://127.0.0.1:7793`, as the CLI's).
 
 ## Ingress
 
@@ -23,21 +25,22 @@ JSON of the source's shape (400). Then the source's parser, then the server. The
 
 | Server | Door answers |
 |-|-|
-| 201 an Issue was created, 200 attached to an open one or replayed, 202 counted, or `settling` / `healed` (a `down` held by the project's `heal:` grace, an `up` that cancelled it) | the same status, `{ "outcome": ... }` |
-| 422 refused (a route into IuRoot, outside the roots) | 422, no reason |
+| 200 with a `SignalAck` (`filed`, `amended`, `incident`, `held`, `dropped`, with a `detail`) | 200, the same ack |
+| 200 with another shape | 502 |
+| 422 refused | 422 `{ "error": "the alert was refused" }`, no reason |
 | unreachable, or 5xx | 503 (Kuma retries; nothing is spooled) |
 | any other answer | 502 |
 
 A Kuma test message and a beat that is neither down nor up (pending, maintenance) answer 200 and file nothing. There is no
-health route: the 401 to an unauthenticated `POST /alert/kuma` is the health check (`make verify` does exactly that).
+health route: the 401 to an unauthenticated `POST /alert/kuma` is the health check (the deploy's verify step does exactly that).
 
 ## Log lines, refusals and health
 
 One line per request on stderr: `<ISO time> POST kuma 202 13ms`. A 401 names the source the path claimed, never a token or body:
-`<ISO time> POST refused kuma 401 0ms`. The factory's own health probes (`make deploy`, `make verify`) send
+`<ISO time> POST refused kuma 401 0ms`. The factory's own health probes (deploy and verify) send
 `x-factory-probe: 1` and log `POST probe kuma 401 0ms`; they are not refusals. The header is a label, not a control: anyone who can reach the door can set it and keep their own refusals out of the health line.
 
-The door reports to the server's socket, best effort (`POST /intake/report`, errors swallowed, never delaying the response):
+The door reports to the server's API, best effort (`POST /door/reports`, errors swallowed, never delaying the response):
 `start` at boot (six tries, 5 s apart, in the background), `refused` for a 401 on a source it holds a token for (not a probe, and an
 unknown source is only logged), `accepted` for a Kuma test message that passed auth. A filed alert also counts as accepted. Two health
 lines follow: `door source <s>: <n> POSTs refused since …` (at least 3 refusals, the last within 72 h, none accepted since) and
@@ -52,30 +55,19 @@ lines follow: `door source <s>: <n> POSTs refused since …` (at least 3 refusal
 ```
 
 A file with a looser mode, one that does not parse, a missing file and one with no source all make the door refuse to start,
-with the reason on stderr (`~/Library/Logs/factory-door.err.log`). `factory door token new <source>` writes a fresh token
+with the reason on stderr (the service's error log). `factory door token new <source>` writes a fresh token
 (32 random bytes, base64url) into the file and prints it once; an existing source needs `--rotate`. The door reads the file at
-start, so restart it after a rotation: `launchctl kickstart -k gui/$(id -u)/com.jkrumm.factory-door`. The owner seeds the
-tokens into 1Password. `make deploy` creates none.
+start, so restart it after a rotation. The owner seeds the
+tokens into 1Password. A deploy creates none.
 
 ## Routes
 
-The registry is in the database (`factory.door_routes`), never in git: monitor names and repos are the owner's estate.
-
-```
-factory door route set <source> <monitor> <repo>   # the repo must be inside FACTORY_REPO_ROOTS and never IuRoot
-factory door route list | rm <source> <monitor>
-factory door unrouted                              # monitors that alerted with no route: count, last seen, last title, status, Issue
-```
-
-An alert with no route files nothing at once and is counted once per event (every alert the homelab has arrives here, Kuma attaches
-every provider to every monitor). A down that outlasts 10 minutes is a health line and is filed once by the factory: in the repo a
-`<name> - Push` or `<name> - Door` monitor maps to, else as an Issue in the dotfiles repo to pick its home and add the route; an up clears
-it, and a group monitor ('Child monitors down') never files. Routed: an open Issue of that monitor gets a `signal` (a regression while the monitor is
-down); with none open, a down creates an Issue (`source: alert`) in the route's repo and an up only counts on the route.
+The registry lives in the server's database, never in git: monitor names and repos are the owner's estate. The door knows none of
+it; what the server does with an alert (file, amend, hold, drop) follows from the route and is in its `SignalAck`.
 
 ## Sources
 
-Each parser is a pure function from the payload to `{ monitor, event, status, title, facts }`, in `src/parsers.ts`, tested
+Each parser is a pure function from the payload to an `AlertRequest` minus its `source` (`{ monitor, event, status, title, facts }`), in `src/parsers.ts`, tested
 against `test/fixtures/` (shaped after Uptime Kuma's `webhook.js` and HyperDX's `generic.js`; synthetic, with a credentials-bearing
 monitor URL to prove it never reaches the facts). The payload is data: nothing in it picks a repo, a role, a path or a command.
 
@@ -84,7 +76,7 @@ monitor URL to prove it never reaches the facts). The payload is data: nothing i
 Uptime Kuma, notification type Webhook, content type JSON (its default body is `{ heartbeat, monitor, msg }`), URL
 `https://<mini tailnet name>:8796/alert/kuma`, additional header `{"Authorization": "Bearer <see-1password>"}`.
 `monitor` = the monitor's name (ids change between syncs), `event` = `heartbeat.time`, status from `heartbeat.status`
-(0 down, 1 up). The monitor's `url` is never read.
+(0 down, 1 up). The monitor's `url` is never read. Facts stay within `MAX_FACTS_BYTES`; a larger set is replaced by `{ "truncated": true }`.
 
 ### hyperdx
 
@@ -113,7 +105,7 @@ Checked against the build deployed on the vps (its `generic.js` and `template.js
 - `{{state}}` is `ALERT` while the alert fires and `OK` when it recovers; any other value files nothing.
 - `{{title}}` carries a prefix (🚨 firing, ✅ resolved) and its shape is `Alert for "<name>" - <value> ...`. The value changes with
   every firing, so `monitor` is the quoted `<name>`; a title of another shape loses its prefix and its trailing numbers.
-  Route by that name: `factory door unrouted` shows what arrived.
+  Route by that name: the server's list of unrouted monitors shows what arrived.
 - `{{eventId}}` is the same for a firing and its recovery, so `event` = `eventId@startTime/endTime:status`: the window it was evaluated
   over and the status tell one notification from the next, and a retry of one is the same event.
 - Delivery is at least once, with an `Idempotency-Key` header the door ignores: a repeat is the same event key, so one effect.
@@ -122,7 +114,5 @@ Checked against the build deployed on the vps (its `generic.js` and `template.js
 
 ## Run
 
-`make deploy` installs and restarts the door's LaunchAgent (`com.jkrumm.factory-door`, `deploy/` and `scripts/launch-door.sh`) from
-the same release directory as the server; `make verify` ends with the 401 check, and says why when the door is down (most often
-the missing tokens file). Tests: `bun test packages/door` (parsers, tokens, the door in front of a fake server) and
-`packages/server/test/door.test.ts` (intake rules, registry, CLI, the door in front of the real server).
+`bun apps/door/src/main.ts`, normally under the host's service manager, with `FACTORY_DOOR_PORT`, `FACTORY_URL` and
+`FACTORY_DOOR_TOKENS_FILE` in its environment. Tests: `bun test apps/door` (parsers, tokens, the door in front of a scripted fake server).
