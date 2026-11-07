@@ -1,6 +1,6 @@
 # Package 5: Quality, report
 
-**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, four commits on `fc5a8ac` (the brief's base), this report the last. `make check` is green.
+**Done: a ship is checked against git and recorded as evidence, the watch runs verify off the tick and records `watch_passed` or `regressed`, a regression goes back to the lead twice and the third is a stall, and the owner reopens within 30 days.** Branch `rw/5-quality`, seven commits on `fc5a8ac` (the brief's base): four for the package, three review fixes, and this report. `make check` is green.
 
 ## What changed
 
@@ -11,7 +11,7 @@
   - `ports.ts`: `Commits`, `Review`, `Proof`, `Projects`, `LeadCheckout`. `store.ts`: `QualityStore`.
 - **`apps/server/src/app/`**: `quality-ship.ts` (`shipIssue`), `quality-watch.ts` (`startWatchPort`, `checkWatches`), `quality-reopen.ts` (`reopenIssue`, `reportRegression`), `quality-read.ts` (`showQuality`).
 - **`apps/server/src/adapters/quality/`**: `git.ts` (`GitCommits`, `syncCheckout`, `deployedHolds`, ported from the old `commits.ts` and `origin.ts`), `proof.ts` (`MakeAndProbes`: `make version`, `make verify`, probes), `review.ts` (`AgwReview`: `agw review route|covered`), `projects.ts` (`makefileProjects`), `process.ts` (process runner with timeout, process group and abort), `store.ts` (Postgres), `stubs.ts` (`stubLeadCheckout`).
-- **`apps/server/migrations/0500_quality.sql`**: `quality_ships` (every ship the gate looked at, refused ones too), `quality_evidence` (`commits`, `review`, `verify`), `quality_watches` (one per ship; `answer` is `passed`, `regressed` or `ended`), `quality_checks` (every run of verify).
+- **`apps/server/migrations/0500_quality.sql`**: `quality_ships` (every ship the gate looked at, refused ones too), `quality_evidence` (`commits`, `review`), `quality_watches` (one per ship; `answer` is `passed`, `regressed` or `ended`), `quality_checks` (every run of verify).
 - **`apps/server/src/api/quality.ts`**, **`packages/contract/src/quality.ts`**: `POST /issues/:id/ship` (`quality.ship`), `POST /issues/:id/reopen` (`quality.reopen`), `GET /issues/:id/quality` (`quality.show`). A refusal is a 409 with the error named, exit 5 in the CLI; the CLI prints the refusal body on stdout. `apps/cli/src/generated/operations.ts` is regenerated.
 - **Shared files** (additive): `main.ts` (the quality store, the use cases, a tick), `api/app.ts` (one `.use()` and an optional `quality` dep), `settings.ts` (below), `packages/contract/src/index.ts`, `tests/scenarios/fakes/agw.ts` (a three-line dispatch to the new `fakes/review.ts`), `tests/package.json` (the `git-repo` export for `tests/support/git-repo.ts`).
 - **Edits to other packages' tests**, each one line: `settings.test.ts` (`toEqual` to `toMatchObject`, since every package adds a setting), `boot.test.ts` (`arrayContaining`, since every package adds a migration), `apps/cli/test/generate.test.ts` (`toContain('health get')`, since every package adds a command).
@@ -20,7 +20,7 @@
 
 1. `ship` (the lead's verb, outside any transaction): the Issue and whether this call was accepted already are read in one transaction. A repeat of an accepted call gets the first answer without asking git. Otherwise `LeadCheckout`, `Commits` and `Review` are called with no transaction open, `judgeShip` decides, and one transaction records the ship, then `shipped` through `recordIn` (which plans `start_watch`), then the evidence. The machine's own refusal (a closed Issue, another attempt) is stored as a refused ship with the machine's detail.
 2. The outbox runs `start_watch`: `startWatchPort` reads the project's window and opens the watch. It keeps nothing in memory.
-3. `checkWatches` (each tick): the open watches whose window is over, or whose retry or recheck is due, are claimed (a lease column, committed), verify runs with no transaction open, and one transaction records the check, the verify evidence and the Issue's event: `watch_passed` on green, `regressed` after the last retry. Keys are `watch_passed:<issue>:<watch>` and `regressed:<issue>:<watch>`, so a crash anywhere replays to one answer.
+3. `checkWatches` (each tick): the open watches whose window is over, or whose retry or recheck is due, are claimed (a lease column, committed), verify runs with no transaction open, and one transaction records the check and the Issue's event: `watch_passed` on green, `regressed` after the last retry. Keys are `watch_passed:<issue>:<watch>` and `regressed:<issue>:<watch>`, so a crash anywhere replays to one answer.
 4. `reportRegression` (intake calls it with its own signal key): a watched Issue records `regressed` (watch `null`); a closed one is reopened by the factory (`reopened`), because the machine ignores `regressed` there. The same signal again finds its first answer, whatever became of the Issue since.
 5. `reopenIssue`: the owner's verb. The machine enforces the 30 days.
 
@@ -42,13 +42,13 @@ no retired words
 ==> unit tests (bun test apps packages scripts)
  187 pass
  0 fail
- 580 expect() calls
-Ran 187 tests across 19 files. [12.32s]
+ 581 expect() calls
+Ran 187 tests across 19 files. [11.76s]
 ==> scenarios (bun test tests)
  22 pass
  0 fail
  101 expect() calls
-Ran 22 tests across 4 files. [26.83s]
+Ran 22 tests across 4 files. [25.96s]
 ==> check passed
 ```
 
@@ -88,7 +88,20 @@ Beside them: `test/quality/{watch,gate,git,adapters}.test.ts` (pure rules, real 
 
 ## Review outcome
 
-REVIEW PENDING
+`/review` deep (a sensitive path, the migration), scope `fc5a8ac..HEAD`, thread `rw-5-quality`. The first jobs were abandoned by other workers' prepares on the shared base thread (two earlier attempts, the first with one important finding), so the outcome below is the run on its own thread, job `rv_jg7efeqa5ioyb3voyek4`, on `6feba80`: **clean, 3 nits**, all disposed `fixed` in the commit after it.
+
+The abandoned first round had one important finding, fixed in `843112f` before the final round: the tick chained `pass.then(tick)` with no guard and ran `make verify` on the outbox's chain. The outbox and the watches are now two loops, each skipping a fire while its last pass still runs.
+
+| Finding | Disposition |
+|-|-|
+| A check that lost a version conflict kept its claim for the 15-minute lease (earlier round) | Fixed: it releases the watch |
+| The server had Bun's 10 s idle limit, a ship call waits for git and agw | Fixed: `idleTimeout` 255 s, Bun's maximum |
+| Every review range started two agw processes at once | Fixed: four ranges at a time |
+| `verify` rows in `quality_evidence` duplicated `quality_checks` and nothing read them | Fixed: no such rows; the kind is gone from the table, contract and domain. Verify's result is `quality_checks` and `GET /issues/:id/quality` |
+| `stubLeadCheckout` gives no cut, so the "older than this attempt" check does not run in production (earlier round, nit) | Declined: package 4 brings the cut, and the test with an explicit cut covers the check. Until then a lead can name any commit already on the default branch. Open point 9 |
+| A blocked checkout has no ceiling (earlier round, nit) | Declined: the machine has no path from `watching` to a stall except a regression, and a blocked check is not one. The steward (package 7) reads blocked checks. Open point 10 |
+
+The reviewer's file list was refused by agw twice before it matched `stat.txt`, as `learnings.md` expects.
 
 ## Open points
 
@@ -100,3 +113,6 @@ REVIEW PENDING
 6. **`docs/design.md` §4 describes the old hold.** The new watch keeps its scars: the retries (1, 2, 4 delays) before a regression, the settle time after a restart, the fast-forward-only checkout sync with a blocked state, the deployed-version check against the landed commit. It drops the per-kind evidence (point 2), the review refusal (NL23) and the `close` verb's gate (not in this brief).
 7. **A refused ship from the machine is stored as final for its event key** (package 1's rule), so a lead that was refused by the machine ships again with a new `call`. A gate refusal stores no event, so the same `call` can try again.
 8. **The CLI prints a refusal's body on stdout**, not stderr (package 0's `runOperation` does so for a declared non-2xx body); the scenarios read it there.
+9. **A ship is judged by the commits it names alone until package 4 brings the cut.** `stubLeadCheckout` knows no worktree, so the gate cannot refuse a commit older than the attempt, nor count work on the lead's branch that the lead did not name. A lead can name a commit already on the default branch. The real check is in `GitCommits` and tested with an explicit cut.
+10. **A watch whose checkout stays blocked checks again every five minutes, without end.** Each run is a row in `quality_checks`. The steward should read it and act; no signal is sent today.
+11. **The listener's idle timeout is 255 s** (`main.ts`), since a ship call waits for git and agw inside one request.
