@@ -11,6 +11,7 @@ import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
 import { type InternalTestWrites, internalTestRoutes } from './internal-test.ts'
 import { leadsTestRoutes } from './leads-test.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
+import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
 
 export interface ApiDeps {
@@ -31,6 +32,8 @@ export interface ApiDeps {
   planning?: PlanningApi
   /** accounts, the host, claims, the queue, admission, test slots (package 3); unbound, the routes answer 503 */
   capacity?: CapacityApi
+  /** the loop runner: every loop shown, one pass of one on demand; unbound, the routes answer 503 */
+  loops?: LoopsApi
   /** where an unexpected error is reported; the answer itself never carries its detail */
   log?: (message: string) => void
 }
@@ -83,6 +86,7 @@ export function createApp(deps: ApiDeps) {
     .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(planningRoutes(deps.planning))
     .use(capacityRoutes(deps.capacity))
+    .use(loopRoutes(deps.loops))
     .use(deps.internalTest ? internalTestRoutes(deps.internalTest) : new Elysia())
     .use(deps.leadsTick ? leadsTestRoutes(deps.leadsTick) : new Elysia())
 }

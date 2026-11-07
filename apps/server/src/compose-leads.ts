@@ -19,19 +19,12 @@ import type { Clock } from './kernel/clock.ts'
 import type { IdSource } from './kernel/ids.ts'
 import type { PortError, Result } from './kernel/result.ts'
 
-/** Passes of the tick that may run at once: a worktree made or removed takes minutes and must not hold the others back. */
-const MAX_PASSES = 4
-
 export interface LeadsComposition {
   routes: LeadRoutes
   /** one pass of the lead tick: spool, lost leads, outbox */
   tick(): Promise<Result<TickAnswer, PortError>>
   /** the hook socket, bound; stopping it removes the file */
   listen(): Promise<SocketListener>
-  /** starts the interval; returns the stop. Off when the interval is 0. */
-  startLoop(): () => void
-  /** the last time a pass finished ok, for `/health` */
-  lastTickAt(): Date | null
 }
 
 /**
@@ -85,7 +78,6 @@ export function composeLeads(input: {
   })
   const tick = () => leadTick({ leads: deps, ports, replaySpool: async () => (await replayer.replay()).lines })
 
-  let tickAt: Date | null = null
   return {
     routes: {
       close: (issue, body) => closeIssue(deps, issue, body),
@@ -99,26 +91,5 @@ export function composeLeads(input: {
         event: (body) => recordHook(deps, body),
         stopCheck: (session, body) => stopCheck(deps, session, body),
       }),
-    startLoop() {
-      if (s.tickMs === 0) return () => {}
-      let running = 0
-      const timer = setInterval(() => {
-        if (running >= MAX_PASSES) return
-        running++
-        tick()
-          .then((result) => {
-            if (result.ok) tickAt = input.clock.now()
-            else console.error(`lead tick failed: ${result.error.detail}`)
-          })
-          .catch((error: unknown) =>
-            console.error(`lead tick crashed: ${error instanceof Error ? error.message : String(error)}`),
-          )
-          .finally(() => {
-            running--
-          })
-      }, s.tickMs)
-      return () => clearInterval(timer)
-    },
-    lastTickAt: () => tickAt,
   }
 }

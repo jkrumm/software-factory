@@ -30,8 +30,8 @@ export interface PlanningComposition {
   signals: ReturnType<typeof projectSignals>
   /** the checkpoints' `StandingPolicies`, read from each project's `project.yaml` */
   policies: ReturnType<typeof standingPolicies>
-  /** starts the pass loop on `tickMs` (the leads' `FACTORY_TICK_MS`; 0 is off); returns the stop */
-  startLoop(tickMs: number): () => void
+  /** One pass of the planning loop: the planning pass, then admission. The loop runner schedules it. Answers what stands in the way. */
+  pass(): Promise<string[]>
 }
 
 /**
@@ -55,7 +55,7 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
   const slots = { ...writes, slots: settings.slots }
 
   let fetchedAt = Number.NEGATIVE_INFINITY
-  /** One pass of the tick: the planning pass, then admission, which decides again at every claim. */
+  /** One pass: the planning pass, then admission, which decides again at every claim. */
   async function pass(): Promise<string[]> {
     const problems: string[] = []
     const fetch = writes.clock.now().getTime() - fetchedAt >= FETCH_EVERY_MS
@@ -99,28 +99,6 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
     leads: capacityForLeads(writes),
     signals: projectSignals(writes),
     policies: standingPolicies(writes),
-    startLoop(tickMs) {
-      if (tickMs === 0) return () => {}
-      let running = false
-      let last = ''
-      const timer = setInterval(() => {
-        if (running) return
-        running = true
-        pass()
-          .then((problems) => {
-            // A problem that stands is said once, not every tick.
-            const said = problems.join('\n')
-            if (said !== last && said) console.error(`planning tick: ${said}`)
-            last = said
-          })
-          .catch((error: unknown) =>
-            console.error(`planning tick crashed: ${error instanceof Error ? error.message : String(error)}`),
-          )
-          .finally(() => {
-            running = false
-          })
-      }, tickMs)
-      return () => clearInterval(timer)
-    },
+    pass,
   }
 }
