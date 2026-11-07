@@ -67,6 +67,8 @@ describe('scripts/env-file.sh', () => {
       'FACTORY_ALERT_PAGE_AFTER',
       'FACTORY_LEADS_PER_ACCOUNT',
       'FACTORY_LOAD_CEILING',
+      'FACTORY_SWAPOUT_CEILING_MB',
+      'FACTORY_SWAP_CEILING_PCT',
     ])
       expect(tokens).toContain(key)
   })

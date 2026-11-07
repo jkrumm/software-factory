@@ -526,6 +526,73 @@ describe('classify, then admission', () => {
     })
   })
 
+  describe('the memory hold', () => {
+    const lines = async () => (await statusOf()).health.filter((line) => /held by memory|memory reading/.test(line))
+    const held = async () => (await spawns()).map((s: { status: string; hold: string | null }) => [s.status, s.hold])
+    const ceilings = { swapoutMbPer300s: 2048, swapUsedPct: 75 }
+
+    test('a high swapout rate holds a new lead with a named reason and a status line, a normal reading admits it', async () => {
+      let reading = { swapoutMbPer300s: 19_000, swapUsedPct: 10 }
+      const admission = { memory: ceilings, memoryReading: () => reading }
+      const id = await file(newRepo())
+      for (let i = 0; i < 4; i++) await pass({ admission })
+      expect(await held()).toEqual([['queued', 'memory']])
+      expect((await issue(id)).state).toBe('working')
+      expect(await lines()).toEqual([
+        expect.stringContaining(`Issue ${id} waits for the host's memory (swapouts 19000 MiB/300s`),
+      ])
+
+      reading = { swapoutMbPer300s: 100, swapUsedPct: 10 }
+      clock.advance(HOLD_RECHECK_MS)
+      for (let i = 0; i < 3; i++) await pass({ admission })
+      expect(await held()).toEqual([['started', null]])
+      expect(await lines()).toEqual([])
+    })
+
+    test('swap in use above its ceiling holds too', async () => {
+      const admission = { memory: ceilings, memoryReading: () => ({ swapoutMbPer300s: 0, swapUsedPct: 206 }) }
+      await file(newRepo())
+      for (let i = 0; i < 4; i++) await pass({ admission })
+      expect(await held()).toEqual([['queued', 'memory']])
+    })
+
+    test('touches no running lead and no spawn without an Issue', async () => {
+      const running = await lead()
+      const admission = { memory: ceilings, memoryReading: () => ({ swapoutMbPer300s: 19_000, swapUsedPct: 200 }) }
+      await pass({ admission })
+      expect((await spawns()).find((s: { key: string }) => s.key === running.key)).toMatchObject({ status: 'started' })
+      const res = await app.send('POST', '/spawns', {
+        key: 'program-lead-m',
+        repo: newRepo(),
+        prompt: 'p',
+        role: 'lead',
+      })
+      expect(await res.json()).toMatchObject({ status: 'queued', hold: null })
+    })
+
+    test('a failed reading admits the lead and leaves a health line until a reading works', async () => {
+      let broken = true
+      const admission = {
+        memory: ceilings,
+        memoryReading: () => {
+          if (broken) throw new Error('sysctl vm.swapusage gave no answer')
+          return { swapoutMbPer300s: 0, swapUsedPct: 1 }
+        },
+      }
+      await file(newRepo())
+      for (let i = 0; i < 4; i++) await pass({ admission })
+      expect(await held()).toEqual([['started', null]])
+      expect(await lines()).toEqual([
+        expect.stringContaining('memory reading failed (sysctl vm.swapusage gave no answer)'),
+      ])
+
+      broken = false
+      await file(newRepo())
+      for (let i = 0; i < 4; i++) await pass({ admission })
+      expect(await lines()).toEqual([])
+    })
+  })
+
   test('a note with no lead to go to parks the Issue as lead_gone, with a line for the owner', async () => {
     for (const how of ['failed', 'ended'] as const) {
       const { id, key } = await lead()

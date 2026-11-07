@@ -66,7 +66,7 @@ Read the section before you change the branch it describes:
 
 - Tick, spaces, runner, hooks and socket, prompts, rules that act, spool, derived state, witness, test slots, quota, roles:
   `docs/design.md` §3 "As built".
-- Admission, the lead cap, the load ceiling, holds: §3 "Admission" and §4. Issue states, who writes `issues.state`
+- Admission, the lead cap, the load ceiling, the memory hold, holds: §3 "Admission" and §4. Issue states, who writes `issues.state`
   (only `issues/lifecycle.ts`; a create is `create.ts`), parks and how every park ends (RS3), the hold and its checkout sync,
   evidence and review coverage (agw's, fails closed), dependencies and `prio`, `issue_facts`: §4.
 - The steward, the ask judge, the plan file (`docs/plan.yaml`): §4 "The steward", "The ask judge", "The plan files its next Issue".

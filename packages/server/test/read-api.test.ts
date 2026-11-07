@@ -516,6 +516,7 @@ describe('read API round 3', () => {
     expect(await summary([spawn({ hold: 'drain' })])).toBe('Queued: the queue is draining, so no new work starts.')
     expect(await summary([spawn({ hold: 'pace' })])).toMatch(/paced/)
     expect(await summary([spawn({ hold: 'load' })])).toMatch(/machine is too busy/)
+    expect(await summary([spawn({ hold: 'memory' })])).toMatch(/short of memory/)
     expect(await summary([spawn({ status: 'waiting', resumeAt: '2026-11-06T15:30:00.000Z' })])).toBe(
       'Queued: every account is at its usage limit, the next try is at 16:30.',
     )
