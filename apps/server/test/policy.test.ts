@@ -62,6 +62,13 @@ describe('the policy table', () => {
     }
   })
 
+  test('the read token cannot read the whole text of a Decision, an artifact or a page', () => {
+    for (const route of ['/v1/decisions', '/v1/decisions/:id', '/v1/artifacts', '/v1/artifacts/:id', '/v1/pages']) {
+      expect(allowed('GET', route)).not.toContain('read')
+      expect(allowed('GET', route)).toContain('agent')
+    }
+  })
+
   test('the machine is allowed on exactly POST /signals/alerts and POST /door/reports', async () => {
     const machine = (await routes())
       .filter(({ method, route }) => {

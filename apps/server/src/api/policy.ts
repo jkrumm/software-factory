@@ -68,8 +68,15 @@ export const POLICY: readonly Rule[] = [
   rule('PUT', '/slots/:id', LEAD),
   rule('DELETE', '/slots/:id', LEAD),
 
-  // -- owner only, inside /v1 where a wider row would let a reader in ------------------------------------------------
+  // -- inside /v1 where a wider row would let a reader in -----------------------------------------------------------
+  // Whole texts and contents (a Decision's form, an artifact's revisions, the owner's pages, the Errands): the read token
+  // sees them only through the read models, which hide a work repo's words.
   rule('GET', '/v1/errands', OWNER),
+  rule('GET', '/v1/decisions', LEAD),
+  rule('GET', '/v1/decisions/:id', LEAD),
+  rule('GET', '/v1/artifacts', LEAD),
+  rule('GET', '/v1/artifacts/:id', LEAD),
+  rule('GET', '/v1/pages', LEAD),
 
   // -- read ----------------------------------------------------------------------------------------------------------
   rule('GET', '/v1/*', READ),
