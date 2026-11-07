@@ -71,3 +71,12 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   - For package 8: declare error bodies in the routes' OpenAPI responses so the CLI prints a refused form's fields on
     stderr; the brief text (package 4) must tell a lead that verdicts and answers arrive as notes and how to read an
     artifact (`factory artifact show`, `revise`).
+- **2026-11-07, package 4 integrated; merge shape as planned.** Five shared files conflicted (`main.ts`, `api/app.ts`,
+  the contract index, `boot.test.ts`, the generated CLI); every hunk was a union of two additive edits, and the CLI was
+  regenerated. Carried forward:
+  - The leads' tick (`FACTORY_TICK_MS`) runs spool replay, lost-lead follow and the outbox, and sets `/health`'s
+    `tickAt` with staleness; package 7 folds it into the loops' tick or keeps it. `queueMovedAt` is package 3's.
+  - For package 8: the brief's standing orders list only `close`, `defer`, `block`; `ship` (5) and `ask`, `artifact`
+    (6) must be added; `factory issue show` must accept `issue_<n>` and the bare number (the compaction line names it).
+  - For package 9: its settings list (report 4, open point 4) joins `scripts/env-file.sh`; the new core binds the old
+    hook socket path and refuses to steal a live one, so the old server must be stopped first.
