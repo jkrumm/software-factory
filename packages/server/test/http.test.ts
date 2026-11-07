@@ -101,6 +101,10 @@ describe('config (finding 5)', () => {
       fleetDigestEveryMs: 300_000,
       githubPollMs: 300_000,
       githubToken: undefined,
+      beszelPollMs: 60_000,
+      beszelUrl: undefined,
+      beszelEmail: undefined,
+      beszelPassword: undefined,
       admission: { leadsPerAccount: 2, loadCeiling: 60 },
     })
     expect(loadConfig(env).version).toBe('dev')
@@ -174,6 +178,14 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_GITHUB_POLL: 'off' }).githubPollMs).toBeNull()
     expect(() => loadConfig({ ...env, FACTORY_GITHUB_POLL: '1s' })).toThrow('FACTORY_GITHUB_POLL')
     expect(loadConfig({ ...env, FACTORY_GITHUB_TOKEN: 'x' }).githubToken).toBe('x')
+  })
+
+  test('FACTORY_BESZEL_POLL: one minute, a duration of 30 s to 24 h, or off; URL and credentials are optional', () => {
+    expect(loadConfig(env).beszelPollMs).toBe(60_000)
+    expect(loadConfig({ ...env, FACTORY_BESZEL_POLL: '5m' }).beszelPollMs).toBe(300_000)
+    expect(loadConfig({ ...env, FACTORY_BESZEL_POLL: 'off' }).beszelPollMs).toBeNull()
+    expect(() => loadConfig({ ...env, FACTORY_BESZEL_POLL: '1s' })).toThrow('FACTORY_BESZEL_POLL')
+    expect(loadConfig({ ...env, FACTORY_BESZEL_EMAIL: 'hub-user' }).beszelEmail).toBe('hub-user')
   })
 
   test('FACTORY_DIGEST_EVERY: five minutes, a duration of 30 s to 24 h, or off; a mistake is refused', () => {

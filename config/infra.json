@@ -1,0 +1,25 @@
+{
+  "refileAfterMin": 360,
+  "defaults": {
+    "memory": { "pct": 92, "sustainMin": 15, "clearMin": 10 },
+    "swap": { "usedGb": 8, "sustainMin": 10, "clearMin": 10 },
+    "swap_growth": { "windowMin": 120, "medianN": 10, "growthGb": 2, "minGb": 1, "clearMin": 10 },
+    "disk": {
+      "pct": 90,
+      "sustainMin": 10,
+      "clearMin": 10,
+      "windowMin": 120,
+      "medianN": 10,
+      "fillHours": 24,
+      "growthGbPerHour": 0.5,
+      "minPct": 50
+    },
+    "load": { "perThread": 3, "fallbackAbsolute": 20, "sustainMin": 15, "clearMin": 10 },
+    "silent": { "staleMin": 10, "clearMin": 10 }
+  },
+  "hosts": {
+    "macmini": { "repo": "dotfiles", "local": true },
+    "homelab": { "repo": "homelab" },
+    "vps": { "repo": "vps" }
+  }
+}
