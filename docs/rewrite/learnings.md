@@ -180,3 +180,13 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
      triage workflow should refine kind for requests (package 7's triage asks only when unsure).
   6. `rollback` warned that the old release has no `.env.door.tpl`; the door still answered 401. Check which door runs
      after a rollback.
+- **2026-11-07, after window 1: the shutdown fix is in (9b).** Cause was two faults: `app.stop()` without `true`
+  waits for the SSE stream forever, and the new `main.ts` had no shutdown deadline at all (the "shutdown took too long"
+  lines in window 1's log were the old core's, interleaved). Now `app.stop(true)`, ordered steps that each may fail
+  without blocking the lock's release, and a 30 s deadline that exits; a scenario holds a stream and a kept-alive
+  socket, sends SIGTERM and boots a second server on the lock. Calls on the rest of window 1's list: Issue 297 stays
+  (post-cutover work in a drained repo, admitted only once software-factory runs on the new core); the orphan guard
+  (exit when the parent is gone) is not built, since the orphan came from launchd's SIGKILL of the wrapper after the
+  hang; kind refinement of owner requests waits for the post-cutover triage work; Hermes gets a signal-only caller and
+  token (9c) so no surface holds the owner token. The token's dialog could not reach the MacBook (ssh 255): it waits in
+  the human queue as `rewrite-signal-bearer`.

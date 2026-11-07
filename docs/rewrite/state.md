@@ -57,3 +57,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-07: window 1: W9 to W12 done (restart hang worked around by killing the stuck PID); W13 scratch drill running; shutdown fix worker t1fm on `rw/9b-shutdown`.
 - 2026-11-07: window 1: W13 drill done in fact (Issue 298, lead on me, pushed, closed done); real Issue 299 filed on agent-workflows as an owner signal.
 - 2026-11-07 17:50: **window 1 closed by the way back**; old core live (089b35c, queue run, software-factory drained); new core's data kept in `factory_rewrite`. Next: merge `rw/9b-shutdown`, runbook stop fallback, drill fix, Issue 297, then window 2.
+- 2026-11-07: 9b (shutdown) merged; 9c (before window 2: signal caller, drill, runbook stops, door after rollback) running in t1fq; FACTORY_SIGNAL_TOKEN dialog pending in the human queue.
