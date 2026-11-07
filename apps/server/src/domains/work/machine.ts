@@ -30,9 +30,18 @@ const senderRefusal = (event: { kind: EventKind; actor: Actor }): string | null 
   SENDERS[event.kind].includes(event.actor) ? null : `${event.kind} is not the ${event.actor}'s to send`
 
 /** The counts and times an event changes besides the state. */
-function evolve(issue: Issue, kind: EventKind, at: Date, version: number, transition: Transition): Issue {
+function evolve(
+  issue: Issue,
+  kind: EventKind,
+  at: Date,
+  version: number,
+  transition: Transition,
+  payload: unknown,
+): Issue {
+  const refined = kind === 'settled' ? PAYLOADS.settled.parse(payload).kind : undefined
   return {
     ...issue,
+    kind: refined ?? issue.kind,
     version,
     state: transition.to,
     wait: transition.wait,
@@ -107,7 +116,7 @@ export function apply(issue: Issue, event: AnyIssueEvent, ctx: { now: Date }): D
   const transition = transitionOf(issue, event, cell)
   return {
     result: 'applied',
-    issue: evolve(issue, event.kind, ctx.now, issue.version + 1, transition),
+    issue: evolve(issue, event.kind, ctx.now, issue.version + 1, transition, event.payload),
     transition,
     effects: cell.effects,
   }
@@ -122,7 +131,7 @@ export function replay(id: IssueId, records: readonly AppliedRecord[]): Issue {
     if (record.version !== issue.version + 1) {
       throw new Error(`issue ${id}: version ${record.version} follows ${issue.version}`)
     }
-    issue = evolve(issue, record.kind, record.at, record.version, record.transition)
+    issue = evolve(issue, record.kind, record.at, record.version, record.transition, record.payload)
   }
   return issue
 }

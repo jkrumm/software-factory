@@ -20,7 +20,7 @@ check, `docs/architecture.md`).
 | **State** | Where an Issue is: `settling` (triage is not done), `queued`, `working` (a lead runs), `waiting` (a named wait), `watching` (the watch is on), `closed`. The only field a person reads to know what an Issue is doing | Phase, as a field |
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
 | **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way (the table below) | |
-| **Kind** | What an Issue is: feature, bug, chore, docs, incident | |
+| **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue | |
 | **Origin** | Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory | Tool names on screen (never "HyperDX", "Beszel") |
 | **Project** | A repo the factory knows, described by its `project.yaml`. `signals:` says which automatic sources it listens to; a work repo listens to the owner only | Manifest |
 | **Plan** | A project's `docs/plan.yaml`: rows not yet filed. A row may target another repo | Wave, track, initiative |
@@ -96,7 +96,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | Event | Means | Sent by |
 |-|-|-|
 | `filed` | Triage made it an Issue; it begins `settling` | factory, owner |
-| `settled` | Triage and the chain are done; it may be queued | factory |
+| `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request | factory |
 | `admitted` | Capacity lets a lead start: the next attempt | factory |
 | `lead_started` | The attempt's lead runs in its terminal | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |

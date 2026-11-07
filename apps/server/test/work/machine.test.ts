@@ -4,7 +4,7 @@ import type { IssueId } from '../../src/kernel/ids.ts'
 import { type AnyIssueEvent, type EventKind, type IssueEvent, parseIssueEvent } from '../../src/domains/work/events.ts'
 import { filedIssue } from '../../src/domains/work/explore.ts'
 import type { Issue } from '../../src/domains/work/issue.ts'
-import { apply, type Decided, file } from '../../src/domains/work/machine.ts'
+import { type AppliedRecord, apply, type Decided, file, replay } from '../../src/domains/work/machine.ts'
 
 const ID = 'issue_7' as IssueId
 const NOW = new Date('2026-03-01T12:00:00Z')
@@ -188,5 +188,34 @@ test('parseIssueEvent checks the kind and the payload', () => {
     kind: 'shipped',
     payload: { attempt: 1 },
     actor: 'lead',
+  })
+})
+
+describe('settled refines the kind', () => {
+  const records = (settledPayload: unknown): AppliedRecord[] => {
+    const filed = filedIssue(ID)
+    const settled = apply(filed, ev('settled', {}, 'factory'), { now: NOW })
+    if (settled.result !== 'applied') throw new Error('settled did not apply')
+    return [
+      {
+        kind: 'filed',
+        payload: { repo: filed.repo, title: filed.title, kind: 'feature', origin: filed.origin },
+        at: NOW,
+        version: 1,
+        transition: { from: null, to: 'settling', wait: null, outcome: null },
+      },
+      { kind: 'settled', payload: settledPayload, at: NOW, version: 2, transition: settled.transition },
+    ] as AppliedRecord[]
+  }
+
+  test('apply sets the kind the event carries and keeps it when it carries none', () => {
+    const start = { ...filedIssue(ID), kind: 'feature' as const }
+    expect(drive([ev('settled', { kind: 'docs' }, 'factory')], start).issue.kind).toBe('docs')
+    expect(drive([ev('settled', {}, 'factory')], start).issue.kind).toBe('feature')
+  })
+
+  test('a log with settled{kind} replays to the new kind; settled{} still replays', () => {
+    expect(replay(ID, records({ kind: 'bug' })).kind).toBe('bug')
+    expect(replay(ID, records({})).kind).toBe('feature')
   })
 })

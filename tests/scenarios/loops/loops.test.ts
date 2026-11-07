@@ -297,15 +297,68 @@ test('nothing stays settling: an owner signal filed as a new Issue is admitted w
   expect(await state(lab, id)).toMatchObject({ state: 'working' })
 })
 
-test('an Issue with nothing open beside it in its repo is settled by the rules, without agw', async () => {
-  const id = (await signal('solo', 'Add a health page')).issue as string
-  expect(await state(lab, id)).toMatchObject({ state: 'settling' })
+const settledPayload = async (issue: string): Promise<Record<string, unknown> | undefined> => {
+  const [row] = await lab.world.db
+    .sql`SELECT payload FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'settled' AND result = 'applied'`
+  return row?.payload as Record<string, unknown> | undefined
+}
+
+const kindShown = async (issue: string): Promise<unknown> => {
+  const shown = await lab.cli(['issue', 'show', issue])
+  expect(shown.code).toBe(0)
+  return (shown.json as { kind: unknown }).kind
+}
+
+test('an owner request with nothing open beside it still asks factory-triage, which refines its kind', async () => {
+  const docs = (await signal('solo', 'Fix the typo in the install guide')).issue as string
+  await script(triageScript, [
+    {
+      match: 'install guide',
+      answer: { amend: null, after: [], kind: 'docs', size: 'small', reason: 'a documentation fix' },
+    },
+  ])
+  const ran = await runLoop(lab, 'triage')
+  expect(ran.summary).toContain('refined 1')
+  expect(await state(lab, docs)).toMatchObject({ state: 'queued' })
+  expect(
+    (await callsOf(lab, 'factory-triage')).filter((c) => (c.input.issue as { id?: string })?.id === docs),
+  ).toHaveLength(1)
+  expect(await settledPayload(docs)).toEqual({ kind: 'docs' })
+  expect(await kindShown(docs)).toBe('docs')
+  const open = await lab.world.db.sql`SELECT kind FROM factory.issue_events WHERE issue_id = ${docs} AND kind = 'filed'`
+  expect(open).toHaveLength(1)
+
+  // a bug report, answered bug
+  const bug = (await signal('solo', 'The export crashes on empty input')).issue as string
+  await script(triageScript, [
+    { match: 'crashes', answer: { amend: null, after: [], kind: 'bug', size: null, reason: 'a crash' } },
+  ])
   await runLoop(lab, 'triage')
-  expect(await state(lab, id)).toMatchObject({ state: 'queued' })
-  const mine = (await callsOf(lab, 'factory-triage')).filter(
-    (call) => (call.input.issue as { id?: string } | undefined)?.id === id,
-  )
-  expect(mine).toEqual([])
+  expect(await settledPayload(bug)).toEqual({ kind: 'bug' })
+  expect(await kindShown(bug)).toBe('bug')
+})
+
+test('a null, an incident or an unchanged kind answer leaves the kind as filed', async () => {
+  const issues: string[] = []
+  for (const [repo, title] of [
+    ['solo', 'Add a status badge'],
+    ['solo', 'Add a footer link'],
+    ['solo', 'Add a sitemap'],
+  ] as const) {
+    issues.push((await signal(repo, title)).issue as string)
+  }
+  const answer = (kind: string | null) => ({ amend: null, after: [], kind, size: null, reason: 'x' })
+  await script(triageScript, [
+    { match: 'badge', answer: answer(null) },
+    { match: 'footer', answer: answer('incident') },
+    { match: 'sitemap', answer: answer('feature') },
+  ])
+  await runLoop(lab, 'triage')
+  for (const issue of issues) {
+    expect(await state(lab, issue)).toMatchObject({ state: 'queued' })
+    expect(await settledPayload(issue)).toEqual({})
+    expect(await kindShown(issue)).toBe('feature')
+  }
 })
 
 test('triage names edges: the Issue waits for the Issue it was shown, and a refused answer leaves it settling until the steward settles it', async () => {
@@ -344,4 +397,5 @@ test('triage names edges: the Issue waits for the Issue it was shown, and a refu
   const steward = await runLoop(lab, 'steward')
   expect(steward.summary).toContain('settled')
   expect(await state(lab, stuck)).toMatchObject({ state: 'queued' })
+  expect(await settledPayload(stuck)).toEqual({})
 }, 40_000)

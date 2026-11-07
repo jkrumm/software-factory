@@ -41,6 +41,7 @@ interface IssueRow {
   created_at: Date
   updated_at: Date
   closed_at: Date | null
+  settled_kind: string | null
   work: boolean
 }
 
@@ -50,7 +51,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
 
 const ISSUE_COLUMNS = (sql: SQL) => sql`
-  i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed, f.at AS created_at, u.updated_at,
+  i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed,
+  (SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS settled_kind,
+  f.at AS created_at, u.updated_at,
   CASE WHEN i.state = 'closed' THEN u.closed_at END AS closed_at,
   NOT EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.source = 'file' AND (p.name = i.repo OR p.repo = i.repo OR left(i.repo, length(p.repo) + 1) = p.repo || '/')) AS work`
 
@@ -169,7 +172,7 @@ function cardOf(input: {
     // an Issue filed by path stores the path; a card names the directory
     repoName: basename(row.repo),
     visible: row.work,
-    kind: text(row.filed?.kind),
+    kind: text(row.settled_kind) ?? text(row.filed?.kind),
     size: null,
     lead: live?.card.id ?? null,
     account,

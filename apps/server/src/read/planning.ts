@@ -29,7 +29,7 @@ export function readIssues(tx: SQL): IssueReads {
     async open() {
       const rows: unknown[] = await tx`
         SELECT i.id, i.repo, i.state, i.wait_reason,
-          (SELECT e.payload->>'kind' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'filed' LIMIT 1) AS kind,
+          COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), (SELECT e.payload->>'kind' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'filed' LIMIT 1)) AS kind,
           EXISTS (
             SELECT 1 FROM factory.issue_effects f
             WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL) AS finalizing

@@ -1,3 +1,4 @@
+import type { Kind } from '../domains/work/issue.ts'
 import { cycleThrough, type Edge } from '../domains/planning/chain.ts'
 import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { type Key, key } from '../kernel/keys.ts'
@@ -67,8 +68,9 @@ export interface Settled {
  */
 export async function settleIssue(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[] },
+  input: { issue: IssueId; after: readonly IssueId[]; kind?: Kind },
 ): Promise<Result<Settled, PlanningError | PortError>> {
+  const settledPayload = input.kind ? { kind: input.kind } : {}
   return deps.uow.run(async (stores) => {
     // The cycle check reads the open edges and then writes one: two verbs at once must not both pass it.
     await stores.capacity.lock()
@@ -80,7 +82,7 @@ export async function settleIssue(
       const replayed = await recordIn(stores.work, deps, {
         issueId: input.issue,
         key: key('settled', input.issue),
-        event: { kind: 'settled', payload: {}, actor: 'factory' },
+        event: { kind: 'settled', payload: settledPayload, actor: 'factory' },
       })
       if (!replayed.ok) return err(lift(replayed.error))
       return ok<Settled>({ result: 'replayed', edges: 0, state: replayed.value.issue.state })
@@ -93,7 +95,7 @@ export async function settleIssue(
     const recorded = await recordIn(stores.work, deps, {
       issueId: input.issue,
       key: key('settled', input.issue),
-      event: { kind: 'settled', payload: {}, actor: 'factory' },
+      event: { kind: 'settled', payload: settledPayload, actor: 'factory' },
     })
     if (!recorded.ok) return err(lift(recorded.error))
     const result =

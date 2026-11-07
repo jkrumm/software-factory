@@ -203,8 +203,12 @@ const shown = [
 test('settle by rule when no edges are needed: an incident, an alert’s Issue, nothing else open', () => {
   expect(settleRule(settling({ kind: 'incident' }), shown)).toBe('now')
   expect(settleRule(settling({ fromAlert: true, kind: 'bug' }), shown)).toBe('now')
-  expect(settleRule(settling(), [])).toBe('now')
+  expect(settleRule(settling({ origin: 'github' }), [])).toBe('now')
+  expect(settleRule(settling({ origin: 'github' }), shown)).toBe('ask')
   expect(settleRule(settling(), shown)).toBe('ask')
+  // an owner's or an agent's request is asked even with nothing open beside it: its kind may be refined
+  expect(settleRule(settling(), [])).toBe('ask')
+  expect(settleRule(settling({ origin: 'factory' }), [])).toBe('ask')
 })
 
 const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({
@@ -217,16 +221,32 @@ const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({
 })
 
 test('edges are held to what the answer was shown: no unseen Issue, not itself, none twice, no amend', () => {
-  expect(checkSettle(shown, id(20), triaged({ after: ['issue_12'] }))).toEqual({
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12'] }))).toEqual({
     ok: true,
     after: [id(12)],
     reason: 'builds on it',
+    kind: undefined,
   })
-  expect(checkSettle(shown, id(20), triaged({ after: [] }))).toMatchObject({ ok: true, after: [] })
-  expect(checkSettle(shown, id(20), triaged({ after: ['issue_99'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, id(20), triaged({ after: ['issue_20'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, id(20), triaged({ after: ['issue_12', 'issue_12'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, id(20), triaged({ amend: 'issue_12' }))).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: [] }))).toMatchObject({ ok: true, after: [] })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_99'] }))).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_20'] }))).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12', 'issue_12'] }))).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ amend: 'issue_12' }))).toMatchObject({ ok: false })
+})
+
+test('a kind is refined only for an owner or agent request, and only to a different feature, bug, chore or docs', () => {
+  const kindOf = (facts: Partial<SettlingFacts>, kind: TriageAnswer['kind']) => {
+    const checked = checkSettle(shown, settling(facts), triaged({ kind }))
+    return checked.ok ? checked.kind : 'refused'
+  }
+  expect(kindOf({}, 'docs')).toBe('docs')
+  expect(kindOf({ origin: 'factory' }, 'bug')).toBe('bug')
+  expect(kindOf({}, 'feature')).toBeUndefined()
+  expect(kindOf({}, null)).toBeUndefined()
+  expect(kindOf({}, 'incident')).toBeUndefined()
+  expect(kindOf({ origin: 'github' }, 'docs')).toBeUndefined()
+  expect(kindOf({ fromAlert: true, kind: 'bug' }, 'docs')).toBeUndefined()
+  expect(kindOf({ kind: 'incident' }, 'docs')).toBeUndefined()
 })
 
 test('the settle request shows at most 40 open Issues, cleaned, and the Issue’s own words', () => {

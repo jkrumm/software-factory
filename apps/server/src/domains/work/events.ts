@@ -20,8 +20,8 @@ export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_appli
 export const PAYLOADS = {
   /** triage made it an Issue: it begins `settling` */
   filed: z.object({ repo: text, title: text, kind: z.enum(KINDS), origin: z.enum(ORIGINS) }),
-  /** triage and the chain are done: it may be queued */
-  settled: z.object({}),
+  /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind (old events carry none) */
+  settled: z.object({ kind: z.enum(KINDS).optional() }),
   /** capacity lets a lead start: the next attempt */
   admitted: z.object({}),
   /** the attempt's lead runs in its terminal */
