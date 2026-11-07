@@ -1138,7 +1138,7 @@ every threshold (`defaults`, partly overridden per host; the file's absent numbe
   (`local`), a `down` of memory, swap or swap_growth adds `processes` (top 5 by resident memory, `ps` with a 5 s timeout), a `load` down `processesByCpu`; a failing `ps` is no key.
 
 **Split.** Issue 149 builds the engine, the door on it, settle + heal, order, and the GitHub label source. Red checks (Issue 164) and failed launchd jobs (Issue 165)
-are two follow-up Issues on the same engine (`--after 149`). Done when, live: a labelled GitHub issue in a scratch repo becomes one Issue; a
+were two follow-up Issues on the same engine (`--after 149`), both built (§8 "Red checks", "Failed launchd jobs"). Done when, live: a labelled GitHub issue in a scratch repo becomes one Issue; a
 repeat of the same alert files no second; a `heal` runbook that fixes the symptom starts no lead.
 
 ## 9. Projects
