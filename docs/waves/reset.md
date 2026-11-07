@@ -6,7 +6,7 @@ alone is a load flake: record the rerun); `/review` over the wave's range at its
 `agw review covered` true; merged on master; `make deploy` and `make verify` green; the wave's own live proof; one entry in
 `docs/strategy/2026-11-reset/learnings.md`.
 
-Decisions: `docs/decisions.md` RS1–RS11. **From Wave 8b on (RS11) every row is a factory Issue chained with `--after`**, filed from
+Decisions: `docs/decisions.md` RS1–RS15. This file is the one place for the reset's row state (`docs/program.md` points here); the Issue is the truth, `factory issue show <n>`. **From Wave 8b on (RS11) every row is a factory Issue chained with `--after`**, filed from
 the owner's session and built, reviewed, shipped and verified by its lead; there are no program-lead rotations. Waves 1–8: each code wave was one worker (`worker`, Sonnet) in a worktree, briefed with
 its row of §13 plus the design section it implements; the program lead reviews the diff, lands it itself, deploys
 and proves it. One wave at a time: the mini is the bottleneck (load reached 385 on 12 cores on 2026-11-04 from parallel checks
@@ -88,36 +88,36 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 **Repos:** dotfiles
 **Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.athena-repo-sync`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
 
-## Wave 8b — the contract of row 7, as Issues            <!-- status: active -->
+## Wave 8b — the contract of row 7, as Issues            <!-- status: done -->
 - [x] The stale active waves (2026-11-05): basalt-expr-trial and -v1 archived (local-only repos, pages built 10-18); modelpick Wave 5 →
   Issue 73, ntfy-mac Wave 6 → Issue 74 (closed `done`); basalt-ui Wave 55 back to `pending` (PR #570, `6f1007a8`), paused by the owner (RS11).
-- [ ] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off the dotfiles wave and close commands. agent-workflows: `agw review request` (the
+- [x] software-factory: `scripts/gate-run` and `scripts/gameday` teardown off the dotfiles wave and close commands. agent-workflows: `agw review request` (the
   hidden-session path) and its callers gone. dotfiles `--after` both, and after iris's running wave closes: delete the dotfiles wave, worker, merge and close commands
   for factory work and the hc fallback, `wave-gate.py`, `fan-*`/`merge-train` scripts and tests, hc-reap's agent rules; keep
   `rd work|agents|read|say|issue`. Filed: Issue 80 (software-factory), 81 (agent-workflows), 82 (dotfiles, `--after 80 81`).
 - [x] Issue 80 closed `done` (62fc594 verified); 81 closed `done` (the hidden review sessions gone from agw, a6b9271).
-- [ ] Issue 82: merged and deployed (dotfiles 96ed564, the wave command gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
+- [x] Issue 82 (closed `done`): merged and deployed (dotfiles 96ed564, the wave command gone, `rd --help` lists work|issue|agents|read|say), the owner fixed the two
   unrelated verify rows forward (0622894), but it sits `waiting blocked`: no transition leaves `blocked` but a drop. Issue 97 (Issue 98 was
   dropped into it) is the exit: `factory issue note <id> --wake` takes a blocked, parked or timed-wait Issue back to working; then wake 82,
-  its lead ships it, 83 to 85 move.
+  its lead ships it, 83 to 85 moved.
 
-## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: active -->
-- [ ] Issues for: one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
+## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: done -->
+- [x] Issues for (70, 71, 72, 86 and 152, all closed `done`): one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
   IuRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
 - [x] Filed and closed `done`: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
   (agent-workflows: `agw check` inside the slot, capped test workers; `--after 71`). iris (`xcodebuild` in the slot, a simulator shut down
-  after its verify) is Issue 86, queued behind iris's claim (Issue 77, waiting for the deep-cap day to turn).
+  after its verify) is Issue 86 (closed `done`, after iris's Issue 77).
 - [x] Live proof (2026-11-06, dotfiles Issue 152): the dotfiles `hooks/test-slot.ts` PreToolUse hook puts test runners outside the factory (`make check`, vitest, pytest, `bun test`, …) through `factory slot run` with workers capped at half the cores. Three checks started at once ran one after the other (starts 10:34:43, :49, :55 and a direct `factory slot run` triplet, each waiting for the last); load peaked at 15 through a full dotfiles `make check` (limit 40).
 
 ## Wave 10 — Deletions (rows 8, 9), as Issues            <!-- status: done -->
-- [ ] Row 8 as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the hidden review sessions (after Issue 67's fix is
+- [x] Row 8 (Issue 83, closed `done`) as Issues `--after` row 7 contract (8b): the fleet triage/presence/away/digest/reaper, the hidden review sessions (after Issue 67's fix is
   no longer needed: no caller of `agw review request` left), placement modes, holds, the wave-era roles; a health line about something
   finished ends after 72 h.
-- [ ] Row 9 `--after` row 8: the contract migration dropping the tables and columns.
-- [ ] Filed: Issue 83 (row 8, `--after 80 81 82`), 84 (row 9, `--after 83`).
+- [x] Row 9 (Issue 84, closed `done`) `--after` row 8: the contract migration dropping the tables and columns.
+- [x] Filed: Issue 83 (row 8, `--after 80 81 82`), 84 (row 9, `--after 83`).
 
 ## Wave 11 — One read API (new row 9b, RS11), as an Issue            <!-- status: done -->
-- [ ] `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
+- [x] Issue 85 (closed `done`), `--after` row 9. One read contract for every surface (Argo, Iris, Hermes, the Herdr sidebar): Issues, leads, the Claude Code sessions
   behind them (state, turn, account, transcript), the herdr terminal each lives in, asks and the health line, plus one change stream.
   The lead writes a short spec (`docs/design.md`) and builds a proof of concept, no sign-off (RS13). Surfaces (row 15)
   build on it, nothing earlier. Filed: Issue 85 (`--after 84`).
@@ -127,10 +127,11 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 - [x] Issue 101: agent-workflows, a cheap-route workflow judging whether an ask is the owner's or answerable from the plan, failing closed.
 - [x] Issue 102 (`--after 100 101`): asks and spent escalations pass that judgment first. Ahead of row 8 by `issue prio`; row 9b's spec sign-off stays the owner's.
 
-## Wave 12 — What is left of the build order, as Issues            <!-- status: active -->
-- [ ] Issue 148: a wait on the owner frees the repo's claim (learnings, the first unattended night).
-- [ ] Issue 149: row 14, intake; Issue 150: row 15, surfaces and the owner's line on ntfy (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
-  Row 15 as Issues (RS11, RS13): the factory's own line is ntfy (Issue 150: `NtfyNotifier`, topic `factory`); `/v1` from the MacBook is an SSH local forward (design §11 "Reaching `/v1`"). One Issue per repo, each moves its senders to ntfy and drops Slack for them, and states in its ask what stops: 171 iris (reads `/v1`, decision cards, APNs), 172 dotfiles (job alerts, the human-queue line), 173 homelab (Kuma, watchdog, Watchtower), 174 vps (HyperDX, RollHook), 175 agent-workflows (podcast notice, `agw agents` on `/v1`), 176 hermes-agent (`--after 171 172`: chat in Iris, Slack gateway off), 177 argo (`--after 172 173 174 175 176`: the Slack proxy goes), 178 dotfiles-private (`--after 177`: the Slack refs leave the mini's cache). Topics on the owner's ntfy account: `factory` (asks and notices), `alerts` (machines), `updates` (deploys). `GET /fleet` stays until 175 has moved `agw agents` to `/v1`.
-- [ ] Issue 151: row 10, Apple verify on the mini (`--after 148`, so iris's wait on the App Store Connect record does not hold it). Issue 152: the machine budget for sessions outside the factory.
-- Rows not filed yet (13 the repo contract audit, 16 the docs sweep, 17 parallel leads after a stable week) now live in `docs/plan.yaml`; the server files each when its dependencies are closed (design §4 "The plan files its next Issue").
+## Wave 12 — What is left of the build order, as Issues            <!-- status: active: Issues 177, 178, 179 and the plan's `parallel-leads` row -->
+- [x] Issue 148 (closed `done`): a wait on the owner frees the repo's claim (learnings, the first unattended night).
+- [x] Issue 149 (closed `done`): row 14, intake; Issue 150 (closed `done`): row 15, surfaces and the owner's line on ntfy (the Herdr sidebar is built from the owner's MacBook session on `/v1`).
+  Row 15 as Issues (RS11, RS13), the Slack refs it removes are what 177 and 178 finish: the factory's own line is ntfy (Issue 150: `NtfyNotifier`, topic `factory`); `/v1` from the MacBook is an SSH local forward (design §11 "Reaching `/v1`"). One Issue per repo, each moves its senders to ntfy and drops Slack for them, and states in its ask what stops: 171 iris (closed `done`; reads `/v1`, decision cards, APNs), 172 dotfiles (closed `done`; job alerts, the human-queue line), 173 homelab (closed `done`; Kuma, watchdog, Watchtower), 174 vps (closed `done`; HyperDX, RollHook), 175 agent-workflows (closed `done`; podcast notice, `agw agents` on `/v1`), 176 hermes-agent (closed `done`; `--after 171 172`: chat in Iris, Slack gateway off), 177 argo (waiting; `--after 172 173 174 175 176`: the Slack proxy goes), 178 dotfiles-private (queued; `--after 177`: the Slack refs leave the mini's cache). Topics on the owner's ntfy account: `factory` (asks and notices), `alerts` (machines), `updates` (deploys). `GET /fleet` (the fleet view) is live; 175 moved `agw agents` to `/v1`.
+- [x] Issue 151 (closed `done`): row 10, Apple verify on the mini (`--after 148`, so iris's wait on the App Store Connect record does not hold it). Issue 152 (closed `done`): the machine budget for sessions outside the factory.
+- [x] Row 13, the repo contract audit: Issue 95, closed `done` (`docs/evidence/repo-contract-audit.md`).
+- [ ] Row 16, the docs sweep: Issue 179 (working). Row 17, parallel leads after a stable week: not filed. Both live in `docs/plan.yaml`; the server files each when its dependencies are closed (design §4 "The plan files its next Issue").
 

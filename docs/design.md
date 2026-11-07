@@ -1,6 +1,6 @@
 # Design
 
-**TLDR.** One Bun server on the mini owns long-lived state in Postgres: sessions, the queue, capacity, later
+**TLDR.** One Bun server on the mini owns long-lived state in Postgres: sessions, the queue, capacity and
 Issues. Interactive Claude Code in herdr-core terminals does all the thinking; `agw` workflows do every model call the
 factory needs; plain code does the rest. Hooks report what sessions do as facts, the server derives state from
 those facts when read, and every effect carries a deterministic key, so a replay never spawns, types or posts
@@ -89,8 +89,7 @@ flowchart TB
 
 ## 3. The fleet layer (F1)
 
-Deterministic babysitting of the sessions `rd` and the factory start. It replaced `wave-watch.sh`,
-`fleet-keepalive.sh` and the Hermes babysitter cron (FL8). Issues do not exist yet at this layer, and the layer
+Deterministic babysitting of the sessions `rd` and the factory start (FL8; it replaced the old shell watchers and a cron babysitter, long gone). Issues do not exist yet at this layer, and the layer
 does not need them: `issue_id` on a session is nullable.
 
 ### Sessions and events
@@ -871,7 +870,7 @@ rows:
 - **Filing** (`projects/plan.ts`, from `projectPass` after the sync, every tick, so a closing Issue files the next row in the same pass). Each `filable` row goes through `createIssue` (source `plan`; facts are the row's plus `{plan: {project, key}}`; the repo is the row's project resolved to its path; `after` is not passed, the dependencies are closed already). The key makes a replayed tick or sync file nothing twice and a closed row is never filed again. A refused row (its repo is gone or outside the roots) is an error of the pass; the other rows still go.
 - **Stable** (`stable_days: N`): the factory had no owner touch on any Issue in the last N days and at least one Issue closed in that time. An owner touch is an `issue_events` row of kind `note`, `retier`, `reopen` or `stop`, or an `answer` whose `who` is not `default`, `closed` or `steward` (a `note` of the steward is not one either; `prio` is steering, not a rescue). Unmet, the reason says what and when it can first be true: `stable for 7 days: owner touch on Issue 153 2026-11-06 09:00 UTC, first true 2026-11-13 09:00 UTC`.
 - **Health line.** A project whose plan has rows left, no filable row and no row with an open Issue gets `plan of <project>: waits for <key> (<reason>), …` naming up to three rows that wait for something other than another row, then `and N more`. A plan with an open row Issue is making progress and has no line. A stored `plan_error` is `plan.yaml of <project> does not parse: <message>`, there while it is true.
-- **Owner line.** A plan whose rows are all done, in a project with no open Issue of any source, sends one outbox message per plan content: `notify:plan:<project>:<plan_sha>`, "The plan of <project> is finished: what next?" (kind `plan`, no Issue). It is a decision for the owner, so the away rule lets it out.
+- **Owner line.** A plan whose rows are all done, in a project with no open Issue of any source, sends one outbox message per plan content: `notify:plan:<project>:<plan_sha>`, "The plan of <project> is finished: what next?" (kind `plan`, no Issue). It is a decision for the owner, so the fold rule lets it out.
 - **Surface.** `factory project show <name>` lists each row with its state, Issue and reason, and the plan error (`GET /projects/:name`, `plan` and `planError`).
 - **Why a file.** A plan in prose is read by whoever remembers it; a file the server reads cannot be forgotten, and the same pass that files a row can say when nothing is left to file. The dependency, date and stable conditions are the only ones, so there is nothing to judge.
 
@@ -890,7 +889,7 @@ rows:
 | Learn | factory | `agw` workflows, from the lead's report (F3) | known fix, labels, runbook candidates, changelog |
 
 **Three ways in.** Signals from sources and jobs go through dedup (until F3, an alert reaches the loop through the door, §11, as one Issue). Requests go straight to Classify. Built:
-`factory issue new` and `POST /issues` (so a pane, Argo or Hermes can file one). Designed, not built (F3): a TickTick item tagged `#factory`, a GitHub issue labelled `factory`, a `/factory` comment by
+`factory issue new` and `POST /issues` (so a pane, Argo or Hermes can file one), and a GitHub issue labelled `factory` (§8 "Intake: work comes in by itself"). Designed, not built: a TickTick item tagged `#factory` and a `/factory` comment by
 the owner. A label starts work rather than authorship, because every agent on the mini acts as the owner's GitHub
 user; an issue labelled `alert` is a signal. The factory never triggers on its own comments, and text it cannot parse
 triggers nothing. Initiatives are requests too big for one lead; the orchestrator plans them into child Issues.
@@ -1339,7 +1338,7 @@ The factory publishes to ntfy over HTTP, a topic the owner's iPhone and Mac subs
   | `notify:digest:<date>` | 07:30 local | the morning reading, below |
   | `notify:test:...` | `factory notify test` | |
 
-- **The away rule** is decided at send time, in the claim's transaction (`foldReason`, the key only): **the owner is always treated as away.** `notify:ask:*` (a decision), `notify:steward:*` (the steward gave up on an Issue), `notify:plan:*` (a finished plan: what next is the owner's), `notify:digest:*` and `notify:test:*` go out;
+- **The fold rule** (`foldReason`; the code's comments call it the away rule) is decided at send time, in the claim's transaction, from the key only: **the owner is always treated as away.** `notify:ask:*` (a decision), `notify:steward:*` (the steward gave up on an Issue), `notify:plan:*` (a finished plan: what next is the owner's), `notify:digest:*` and `notify:test:*` go out;
   every other message (`parked`, `failed`, `regression`) is **`folded`** (`folded_at`, `folded_reason`; `status: folded` in `factory notify list`): it is never sent later, its
   facts are on `factory status` and the fleet view, and its `next_at` is `infinity`, so a release that does not know the column never finds it due. A delivery wins over a fold made while the send was in flight (a lease that ran out): the delivery clears the fold, as a delivery is always recorded.
   The rule reads nothing but the key.
@@ -1549,8 +1548,8 @@ the Claude session id, which gives cost per Issue without the factory writing us
 the homelab.
 
 **`agw` workflows the factory will need,** each with an eval set, built in agent-workflows when its station is
-built: classify, dedup judge, brief wording, learnings, changelog, briefing. `agw llm classify` and `agw triage` exist
-and are the starting points, not the answer.
+built: classify, dedup judge, brief wording, learnings, changelog, briefing. `agw llm classify` exists
+and is the starting point, not the answer.
 
 ## 12. Data model
 

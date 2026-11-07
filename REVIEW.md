@@ -1,5 +1,5 @@
 ---
-# Read by the router (route.py) and by the reviewer. Globs are repo-relative.
+# Read by `agw review route` (the tier of a range) and by the reviewer. Globs are repo-relative.
 none:        [docs/waves/**, docs/spikes/**, docs/evidence/**, docs/research/**, bun.lock]
 sensitive:   [packages/server/migrations/**, packages/server/src/admission.ts, packages/server/src/capacity.ts,
               packages/server/src/locks.ts, packages/server/src/tick.ts, packages/server/src/hc-runner.ts,
