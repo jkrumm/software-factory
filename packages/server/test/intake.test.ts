@@ -296,11 +296,16 @@ describe('manifest: heal and signals', () => {
       { when: 'launchd.down', grace: '1d', runbook: 'make restart', max: 5 },
     ])
     expect(parsed.manifest.signals).toEqual({
-      github: { label: 'factory' },
+      github: { label: 'factory', checks: false },
       launchd: ['com.example.job'],
       kuma: 'whatever',
     })
     expect(parsed.manifest).not.toHaveProperty('jobs')
+  })
+
+  test('signals.github.checks opts in to red checks', () => {
+    const parsed = parse('signals:\n  github: {checks: true}')
+    expect(parsed.ok && parsed.manifest.signals).toEqual({ github: { label: 'factory', checks: true } })
   })
 
   test('no heal and no signals are an empty list and an empty object', () => {
@@ -318,6 +323,7 @@ describe('manifest: heal and signals', () => {
     ['signals that is not an object', 'signals: yes'],
     ['signals that is a list', 'signals: [github]'],
     ['a bad github label', 'signals:\n  github: {label: "a/b"}'],
+    ['github checks that is not a boolean', 'signals:\n  github: {checks: yes please}'],
     ['launchd labels that are not strings', 'signals:\n  launchd: [1]'],
   ])('%s is a manifest error', (_name, body) => {
     expect(parse(body).ok).toBe(false)

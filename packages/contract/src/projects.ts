@@ -110,6 +110,8 @@ const Signals = z.looseObject({
         .max(50)
         .regex(/^[A-Za-z0-9 ._-]+$/, 'letters, digits, space, dot, dash and underscore')
         .default('factory'),
+      /** opt in to the default branch's red checks and commit statuses as `checks` signals */
+      checks: z.boolean().default(false),
     })
     .optional(),
   launchd: z.array(z.string().min(1).max(200)).max(64).optional(),

@@ -40,9 +40,46 @@ const GithubIssues = z.array(
   }),
 )
 
+const GithubRepo = z.looseObject({ default_branch: z.string().min(1) })
+
+const CheckRuns = z.looseObject({
+  check_runs: z.array(
+    z.looseObject({
+      name: z.string(),
+      head_sha: z.string(),
+      status: z.string(),
+      conclusion: z.string().nullish(),
+      html_url: z.string().nullish(),
+    }),
+  ),
+})
+
+const CommitStatus = z.looseObject({
+  sha: z.string(),
+  statuses: z.array(z.looseObject({ context: z.string(), state: z.string(), target_url: z.string().nullish() })),
+})
+
+/** The most one request reads; a head with more checks than this logs one line and the rest is unseen. */
+const CHECKS_PAGE_SIZE = 100
+const MAX_CHECK_NAME_CHARS = 200
+/** A check run that ended in one of these is red. `cancelled` is not: nothing says it was a failure. */
+const RED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure'])
+const RED_STATES = new Set(['failure', 'error'])
+
 interface Target {
   repo: string
   label: string
+  checks: boolean
+}
+
+interface Check {
+  name: string
+  sha: string
+  state: 'down' | 'up'
+  kind: 'check_run' | 'status'
+  /** the run's conclusion or the status's state */
+  result: string
+  url: string | null
 }
 
 /** `owner/name` of an `origin` that is github.com over https or ssh; anything else is not ours to poll. */
@@ -64,6 +101,42 @@ const fingerprintOf = (owner: string, name: string, title: string): string => {
     .replace(/\s+/g, ' ')
     .trim()
   return createHash('sha256').update(`${owner}/${name}\n${normalized}`).digest('hex').slice(0, 16)
+}
+
+const stateOfConclusion = (conclusion: string | null | undefined): 'down' | 'up' | undefined => {
+  if (conclusion === 'success') return 'up'
+  return conclusion && RED_CONCLUSIONS.has(conclusion) ? 'down' : undefined
+}
+
+/** A check's name is a third party's text: cleaned and clipped, and the same everywhere it is used as a key. */
+const subjectOf = (repo: string, name: string): string =>
+  `${repo}:${cleanText(name.slice(0, MAX_CHECK_NAME_CHARS)) || 'unnamed'}`
+
+function signalOfCheck(target: Target, repo: string, branch: string, check: Check): Signal {
+  const subject = subjectOf(repo, check.name)
+  const name = subject.slice(repo.length + 1)
+  const title = cleanText(
+    `${check.state === 'down' ? 'Failing' : 'Passing'} check "${name}" on ${repo} (${branch})`.slice(
+      0,
+      MAX_TITLE_CHARS,
+    ),
+  )
+  return {
+    source: 'checks',
+    subject,
+    event: `${check.state}@${check.sha}:${name}`,
+    status: check.state,
+    title,
+    facts: storable({
+      check: name,
+      kind: check.kind,
+      result: check.result,
+      sha: check.sha,
+      branch,
+      ...(check.url ? { url: check.url } : {}),
+    }),
+    repo: target.repo,
+  }
 }
 
 const errorOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
@@ -111,6 +184,7 @@ export class GithubIntake {
         continue
       }
       signals.push(...(await this.poll(target, remote.owner, remote.name)))
+      if (target.checks) signals.push(...(await this.pollChecks(target, remote.owner, remote.name)))
     }
     if (skippedHost) console.error('github intake: a project has no github.com origin and is skipped')
     for (const signal of signals) {
@@ -126,8 +200,9 @@ export class GithubIntake {
 
   /** The projects that opted in, whose repo the intake may file in. */
   private async targets(): Promise<Target[]> {
-    const rows: { repo: string; label: string | null }[] = await this.deps.sql`
-      SELECT repo, manifest->'signals'->'github'->>'label' AS label FROM factory.projects
+    const rows: { repo: string; label: string | null; checks: boolean }[] = await this.deps.sql`
+      SELECT repo, manifest->'signals'->'github'->>'label' AS label,
+        COALESCE(manifest->'signals'->'github'->>'checks' = 'true', false) AS checks FROM factory.projects
       WHERE NOT paused AND jsonb_typeof(manifest->'signals'->'github') = 'object' ORDER BY name`
     const targets: Target[] = []
     for (const row of rows) {
@@ -137,7 +212,7 @@ export class GithubIntake {
         if (error instanceof RepoRefused) continue
         throw error
       }
-      targets.push({ repo: row.repo, label: row.label || 'factory' })
+      targets.push({ repo: row.repo, label: row.label || 'factory', checks: row.checks })
     }
     return targets
   }
@@ -156,6 +231,98 @@ export class GithubIntake {
     }
   }
 
+  private request(url: string): Promise<Response> {
+    return (this.deps.fetch ?? fetch)(url, {
+      headers: {
+        Authorization: `Bearer ${this.deps.token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'software-factory',
+      },
+      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    })
+  }
+
+  /** One 200 JSON answer; anything else throws, and the caller's line names the step and the status, never the body. */
+  private async getJson(url: string, step: { at: string; status: number | string }): Promise<unknown> {
+    const response = await this.request(url)
+    step.status = response.status
+    if (response.status !== 200) throw new Error('not 200')
+    step.status = 'unparsable'
+    return response.json()
+  }
+
+  /**
+   * The default branch head's checks as signals (design §4 "Intake", red checks). A check run or commit status is a stateful subject
+   * `<owner>/<repo>:<name>`: red is `down`, green is `up`, running, neutral, skipped and cancelled say nothing. The event is the state
+   * at the head sha, so a re-run on a new commit is a new event of the same episode and a pass on the same commit repeats nothing.
+   * A green check is sent only while its episode is open or waiting to settle, so a healthy repo costs no transaction. Nothing is
+   * written back; a failure is one line without the token or the body, and no signals.
+   */
+  private async pollChecks(target: Target, owner: string, name: string): Promise<Signal[]> {
+    const repo = `${owner}/${name}`
+    const step = { at: 'repo', status: 'error' as number | string }
+    try {
+      const info = GithubRepo.parse(await this.getJson(`https://api.github.com/repos/${owner}/${name}`, step))
+      const branch = info.default_branch
+      const ref = `https://api.github.com/repos/${owner}/${name}/commits/${encodeURIComponent(branch)}`
+      step.at = 'check-runs'
+      const runs = CheckRuns.parse(
+        await this.getJson(`${ref}/check-runs?filter=latest&per_page=${CHECKS_PAGE_SIZE}`, step),
+      )
+      step.at = 'status'
+      const combined = CommitStatus.parse(await this.getJson(`${ref}/status?per_page=${CHECKS_PAGE_SIZE}`, step))
+      if (runs.check_runs.length >= CHECKS_PAGE_SIZE || combined.statuses.length >= CHECKS_PAGE_SIZE)
+        console.error('github intake: a full page of checks, more may be unseen', { repo })
+
+      const checks = new Map<string, Check>()
+      for (const run of runs.check_runs) {
+        const state = run.status === 'completed' ? stateOfConclusion(run.conclusion) : undefined
+        if (state)
+          checks.set(run.name, {
+            name: run.name,
+            sha: run.head_sha,
+            state,
+            kind: 'check_run',
+            result: run.conclusion ?? '',
+            url: run.html_url ?? null,
+          })
+      }
+      for (const status of combined.statuses) {
+        const state = RED_STATES.has(status.state) ? 'down' : status.state === 'success' ? 'up' : undefined
+        if (state && !checks.has(status.context))
+          checks.set(status.context, {
+            name: status.context,
+            sha: combined.sha,
+            state,
+            kind: 'status',
+            result: status.state,
+            url: status.target_url ?? null,
+          })
+      }
+
+      step.at = 'episodes'
+      const open = await this.openChecks(repo)
+      return [...checks.values()]
+        .filter((check) => check.state === 'down' || open.has(subjectOf(repo, check.name)))
+        .map((check) => signalOfCheck(target, repo, branch, check))
+    } catch {
+      console.error('github intake', { repo, step: step.at, status: step.status })
+      return []
+    }
+  }
+
+  /** The `checks` subjects of one repo with an Issue that is not closed or a `down` waiting to settle. */
+  private async openChecks(repo: string): Promise<Set<string>> {
+    const prefix = `${repo}:`
+    const rows: { subject: string }[] = await this.deps.sql`
+      SELECT d.monitor AS subject FROM factory.door_issues d JOIN factory.issues i ON i.id = d.issue_id
+      WHERE d.source = 'checks' AND starts_with(d.monitor, ${prefix}) AND i.state <> 'closed'
+      UNION
+      SELECT subject FROM factory.intake_pending WHERE source = 'checks' AND starts_with(subject, ${prefix})`
+    return new Set(rows.map((row) => row.subject))
+  }
+
   /** One project's labelled issues as signals; any failure is one line without the token or the body, and no signals. */
   private async poll(target: Target, owner: string, name: string): Promise<Signal[]> {
     const repo = `${owner}/${name}`
@@ -164,15 +331,7 @@ export class GithubIntake {
       `&state=open&per_page=${PAGE_SIZE}&sort=created&direction=asc`
     let status: number | string = 'error'
     try {
-      const response = await (this.deps.fetch ?? fetch)(url, {
-        headers: {
-          Authorization: `Bearer ${this.deps.token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'software-factory',
-        },
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-      })
+      const response = await this.request(url)
       status = response.status
       if (response.status !== 200) throw new Error('not 200')
       status = 'unparsable'
