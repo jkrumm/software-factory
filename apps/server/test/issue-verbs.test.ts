@@ -8,7 +8,9 @@ import { ok } from '../src/kernel/result.ts'
 
 const open = (id: string) => ({ id }) as unknown as DecisionRecord
 
-function uses(ids: string[]) {
+type Uses = Parameters<typeof answerIssue>[0]
+
+function uses(ids: string[]): Uses & { answered: string[] } {
   const answered: string[] = []
   return {
     answered,
@@ -35,26 +37,26 @@ describe('issue answer', () => {
 
   test('one open Decision is the one answered', async () => {
     const u = uses(['decision_a'])
-    expect((await answerIssue(u as never, { issueId: issue, answer: 'yes' })).ok).toBe(true)
+    expect((await answerIssue(u, { issueId: issue, answer: 'yes' })).ok).toBe(true)
     expect(u.answered).toEqual(['decision_a=yes'])
   })
 
   test('several open and none named is ambiguous, with their ids; naming one answers it', async () => {
     const u = uses(['decision_a', 'decision_b'])
-    const refused = await answerIssue(u as never, { issueId: issue, answer: 'yes' })
+    const refused = await answerIssue(u, { issueId: issue, answer: 'yes' })
     expect(refused).toMatchObject({ ok: false, error: { kind: 'ambiguous', decisions: ['decision_a', 'decision_b'] } })
     expect(u.answered).toEqual([])
-    expect((await answerIssue(u as never, { issueId: issue, answer: 'no', decision: 'decision_b' })).ok).toBe(true)
+    expect((await answerIssue(u, { issueId: issue, answer: 'no', decision: 'decision_b' })).ok).toBe(true)
     expect(u.answered).toEqual(['decision_b=no'])
   })
 
   test('none open, and a named one that is not open, are refused', async () => {
-    expect(await answerIssue(uses([]) as never, { issueId: issue, answer: 'x' })).toMatchObject({
+    expect(await answerIssue(uses([]), { issueId: issue, answer: 'x' })).toMatchObject({
       ok: false,
       error: { kind: 'no_open_decision' },
     })
     expect(
-      await answerIssue(uses(['decision_a']) as never, { issueId: issue, answer: 'x', decision: 'decision_z' }),
+      await answerIssue(uses(['decision_a']), { issueId: issue, answer: 'x', decision: 'decision_z' }),
     ).toMatchObject({
       ok: false,
       error: { kind: 'not_found' },
