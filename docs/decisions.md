@@ -145,3 +145,18 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   dotfiles' `groups.json` get spaces and plan tabs like every other repo, and the `IuRoot` root gets one too, for cross-repo planning. A root is a plan tab only, never a lead's repo.
 
 - **RS16 The role table states what runs (owner, 2026-11-06).** `config/roles.json` now has Explore Haiku/high and verifier Haiku/high, matching `dotfiles/agents/{Explore,verifier}.md`, which is what a lead's subagents run. Measured: the Explore probe spent 5.2k tokens on Haiku against 11.6k on Opus; the verifier used 28M fresh tokens in 30 days, so a Sonnet seat there costs far more for a read-and-report job. Implementer stays Sonnet/high (the table governs `spawn create` and `rd --role`; a lead's `@implementer` runs Sonnet/medium from its agent file). The table governs terminals the factory spawns; in-session subagents take model and effort from the global agent files, the reviewer's seat from `agw review prepare`.
+
+## The next level (owner, 2026-11-07)
+
+Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-11-next/definition.html`. These replace the Surfaces table above where they disagree.
+
+- **NL1 One web Console, in this repo.** A PWA, served by the factory's own Bun server, React and Vite, reached over the tailnet. Herdr shrinks to a glance that links to it. Replaces "software-factory: a UI: Argo and iris are its faces".
+- **NL2 Iris is a Hermes interface, nothing else.** Simple and public at some point. It may later render UI components, so an artifact view can appear inside it, and may take notifications back. It holds no factory state.
+- **NL3 Argo keeps personal dashboards and deep data:** personal API and software usage, health, finance. The factory's own pages and KPIs leave for the Console.
+- **NL4 The Console uses shadcn-style components on Base UI and Tailwind 4, with Basalt's colours, fonts, spacing and general feel.** Basalt learns from it afterwards, as its first real consumer on that stack.
+- **NL5 Factory first.** Routed alerts go to the door and page nobody directly; the factory's own watchers keep their direct page; an unsolved alert reaches the owner after 30 minutes. Issues 286, 287, 288.
+- **NL6 Memory is the limit on parallel leads, not a stable week.** Issues 289 (Iris's automatic builds) and 290 (admission reads memory) come first. The row's `stable_days` goes when the definition is signed.
+- **NL7 MIT, public after Console v0.** The README starts now and improves continuously.
+- **NL8 A person reviews a concept rarely.** Holistic UX, product or architecture concepts only, three or four times in a project's life. A new screen, interaction or public text is not a reason. Never a merge.
+- **NL9 Fix forward.** No undo records, no restore machinery, no apply guards. A bad change gets a new change.
+- **NL10 This is a reference implementation, not a product.** Factory engineers build their own; the repo shares the language, the pain points and the loops that worked.
