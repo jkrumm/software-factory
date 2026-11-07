@@ -17,6 +17,9 @@ import { AgwReview } from './adapters/quality/review.ts'
 import { postgresQualityStore } from './adapters/quality/store.ts'
 import { createApp } from './api/app.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
+import { postgresIntakeStore } from './adapters/intake/store.ts'
+import { loadIntakeEnv } from './adapters/intake/settings.ts'
+import { composeIntake } from './compose-intake.ts'
 import { fileIssue, recordIssueEvent } from './app/issues.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
@@ -84,7 +87,9 @@ async function main(): Promise<void> {
     checkpoints: postgresCheckpointStore(tx),
     leads: postgresLeadStore(tx),
     quality: postgresQualityStore(tx),
+    intake: postgresIntakeStore(tx),
   }))
+  const intake = await composeIntake({ sql, uow, env: loadIntakeEnv(process.env), clock: systemClock, ids: systemIds })
   // The scenarios move this clock to reach a date a real one would take 30 days to; the leads' own keep the system's.
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
@@ -166,6 +171,7 @@ async function main(): Promise<void> {
       : []
 
   const app = createApp({
+    intake: intake.api,
     health: {
       read: async () => {
         const tickAt = leads.lastTickAt()
@@ -190,6 +196,7 @@ async function main(): Promise<void> {
       ? { file: (input) => fileIssue(writes, input), record: (input) => recordIssueEvent(writes, input) }
       : undefined,
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
+  intake.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   let stopping = false
@@ -203,6 +210,7 @@ async function main(): Promise<void> {
     await app.stop()
     await watchLoop?.stop()
     await socket.stop()
+    await intake.stop()
     await lock.release()
     await sql.close()
     process.exit(0)

@@ -1,19 +1,19 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { type DoorReport, IntakeAck, type IntakeInput, MAX_INTAKE_FACTS_BYTES } from '@software-factory/contract'
+import { type AlertRequest, type DoorReport, MAX_FACTS_BYTES, SignalAck } from '@software-factory/contract'
 import { type Parser, PARSERS, PayloadError } from './parsers.ts'
 import type { Tokens } from './tokens.ts'
 
 /** Largest body the door reads; the cap is enforced on the bytes as they arrive, not on what the sender claims. */
 export const MAX_BODY_BYTES = 64 * 1024
 
-/** What the server answered: its status and, for a success, which of the outcomes it was. */
+/** What the server answered: its status and its body, unparsed. */
 export type Filed = { status: number; body: unknown }
 
 export interface DoorOptions {
   /** one token per source */
   tokens: Tokens
-  /** files one alert with the server (the unix socket); throws when it cannot be reached */
-  file: (input: IntakeInput) => Promise<Filed>
+  /** files one alert with the server's API; throws when it cannot be reached */
+  file: (input: AlertRequest) => Promise<Filed>
   parsers?: Readonly<Record<string, Parser>>
   /** one line per request: the time, the status and the source, never a body or a token */
   log?: (line: string) => void
@@ -33,7 +33,7 @@ const NO_TOKEN = digest('no such source')
 
 /** The facts the server takes, or a marker that there were more: an alert is never lost to the size of its detail. */
 const fitFacts = (facts: Record<string, unknown>): Record<string, unknown> =>
-  Buffer.byteLength(JSON.stringify(facts)) <= MAX_INTAKE_FACTS_BYTES ? facts : { truncated: true }
+  Buffer.byteLength(JSON.stringify(facts)) <= MAX_FACTS_BYTES ? facts : { truncated: true }
 
 const own = <T>(table: Readonly<Record<string, T>>, key: string): T | undefined =>
   Object.hasOwn(table, key) ? table[key] : undefined
@@ -67,7 +67,7 @@ async function readBody(req: Request): Promise<string> {
 /**
  * The door: `POST /alert/<source>` and nothing else. A request passes, in this order: the route and method, the bearer token of
  * that source (401 with no body, an unknown source the same), `application/json`, the size, the source's parser. A real alert
- * is filed with the server and the server's status passed on (200, 201, 202); a server that cannot be reached is 503.
+ * is filed with the server and its ack passed on (200); a server that cannot be reached, or answers 5xx, is 503.
  */
 export function createDoor(options: DoorOptions): (req: Request) => Promise<Response> {
   const parsers = options.parsers ?? PARSERS
@@ -122,9 +122,9 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
     } catch {
       return reply(503, { error: 'the factory is not reachable' })
     }
-    if (filed.status >= 200 && filed.status < 300) {
-      const ack = IntakeAck.safeParse(filed.body)
-      return ack.success ? reply(filed.status, ack.data) : reply(502, { error: 'the factory answered another shape' })
+    if (filed.status === 200) {
+      const ack = SignalAck.safeParse(filed.body)
+      return ack.success ? reply(200, ack.data) : reply(502, { error: 'the factory answered another shape' })
     }
     // Its reason can name a path: the door says only that the alert was refused.
     if (filed.status === 422) return reply(422, { error: 'the alert was refused' })
@@ -161,30 +161,29 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
   }
 }
 
-/** Reports to the server over its unix socket. */
-export function reportViaSocket(socket: string): NonNullable<DoorOptions['report']> {
+/** The server's API on loopback: the door's only way to the factory. */
+export const DEFAULT_FACTORY_URL = 'http://127.0.0.1:7793'
+
+const post = (base: string, path: string, body: unknown) =>
+  fetch(new URL(path, base), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  })
+
+/** Reports to the server's API (`POST /door/reports`). */
+export function reportViaHttp(base: string): NonNullable<DoorOptions['report']> {
   return async (report) => {
-    const response = await fetch('http://localhost/intake/report', {
-      unix: socket,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(report),
-      signal: AbortSignal.timeout(10_000),
-    })
+    const response = await post(base, '/door/reports', report)
     if (!response.ok) throw new Error(`report answered ${response.status}`)
   }
 }
 
-/** Files an alert over the server's unix socket: the door's only way to the factory. */
-export function fileViaSocket(socket: string): DoorOptions['file'] {
+/** Files an alert with the server's API (`POST /signals/alerts`). */
+export function fileViaHttp(base: string): DoorOptions['file'] {
   return async (input) => {
-    const response = await fetch('http://localhost/intake', {
-      unix: socket,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
-      signal: AbortSignal.timeout(10_000),
-    })
+    const response = await post(base, '/signals/alerts', input)
     const body: unknown = await response.json().catch(() => null)
     return { status: response.status, body }
   }

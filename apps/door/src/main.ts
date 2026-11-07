@@ -1,5 +1,4 @@
-import { defaultHookSocket } from '@software-factory/contract/spool'
-import { createDoor, fileViaSocket, MAX_BODY_BYTES, reportViaSocket } from './door.ts'
+import { createDoor, DEFAULT_FACTORY_URL, fileViaHttp, MAX_BODY_BYTES, reportViaHttp } from './door.ts'
 import { loadTokens, tokensFileFrom } from './tokens.ts'
 
 /** The loopback port `tailscale serve` publishes on the mini's tailnet name. */
@@ -15,10 +14,9 @@ const port = env.FACTORY_DOOR_PORT ? Number(env.FACTORY_DOOR_PORT) : DEFAULT_POR
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   fail(`FACTORY_DOOR_PORT must be an integer from 1 to 65535, got: ${env.FACTORY_DOOR_PORT}`)
 }
-const socket = env.FACTORY_SOCKET || (env.HOME ? defaultHookSocket(env.HOME) : '')
-if (!socket) fail('no socket: set FACTORY_SOCKET or HOME')
+const factoryUrl = env.FACTORY_URL || DEFAULT_FACTORY_URL
 
-const report = reportViaSocket(socket)
+const report = reportViaHttp(factoryUrl)
 
 let tokens: ReturnType<typeof loadTokens>
 try {
@@ -46,7 +44,7 @@ const server = Bun.serve({
   hostname: '127.0.0.1',
   port,
   maxRequestBodySize: MAX_BODY_BYTES * 4,
-  fetch: createDoor({ tokens, file: fileViaSocket(socket), report }),
+  fetch: createDoor({ tokens, file: fileViaHttp(factoryUrl), report }),
 })
 console.error(`factory-door listening on 127.0.0.1:${server.port} (sources: ${Object.keys(tokens).join(', ')})`)
 

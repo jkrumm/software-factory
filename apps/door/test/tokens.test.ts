@@ -59,7 +59,7 @@ describe('loadTokens', () => {
   })
 
   test('a missing file and an empty one are refused with what to do', () => {
-    expect(() => loadTokens(join(dir, 'missing.json'))).toThrow('factory door token new')
+    expect(() => loadTokens(join(dir, 'missing.json'))).toThrow('does not exist; create it')
     expect(() => loadTokens(file('{}'))).toThrow('holds no token')
   })
 })

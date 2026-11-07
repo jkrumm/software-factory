@@ -53,13 +53,14 @@ describe('ship: the gate', () => {
     const id = await workingIssue(it.lw, 'replay')
     const sha = await commit(it.lw, 'src/b.ts', 'export const b = 1\n', 'feat: b')
     await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
-    const asked = (await it.lw.world.calls()).length
+    const agwCalls = async () => (await it.lw.world.calls()).filter((call) => call.tool === 'agw').length
+    const asked = await agwCalls()
 
     const again = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
     expect(again.code).toBe(0)
     expect(again.json.result).toBe('replayed')
     expect(again.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
-    expect((await it.lw.world.calls()).length).toBe(asked)
+    expect(await agwCalls()).toBe(asked)
     expect((await show(it.lw.world, it.lw.server, id)).ships).toHaveLength(1)
   })
 

@@ -61,9 +61,12 @@ function read(path: string): Tokens | undefined {
 /** The door's tokens at start. A missing file, a loose mode, a file that does not parse and one with no source all refuse. */
 export function loadTokens(path: string): Tokens {
   const tokens = read(path)
-  if (!tokens) throw new TokensError(`${path} does not exist; create a token with: factory door token new <source>`)
+  if (!tokens)
+    throw new TokensError(
+      `${path} does not exist; create it (mode 0600) as {"<source>": "<token of 16 or more characters>"}`,
+    )
   if (Object.keys(tokens).length === 0)
-    throw new TokensError(`${path} holds no token; create one with: factory door token new <source>`)
+    throw new TokensError(`${path} holds no token; add a token per source as {"<source>": "<token>"}`)
   return tokens
 }
 

@@ -27,6 +27,14 @@
         "@software-factory/server": "workspace:*",
       },
     },
+    "apps/door": {
+      "name": "@software-factory/door",
+      "version": "0.0.0",
+      "dependencies": {
+        "@software-factory/contract": "workspace:*",
+        "zod": "4.6.7",
+      },
+    },
     "apps/server": {
       "name": "@software-factory/server",
       "version": "0.0.0",
@@ -171,6 +179,8 @@
     "@software-factory/client": ["@software-factory/client@workspace:packages/client"],
 
     "@software-factory/contract": ["@software-factory/contract@workspace:packages/contract"],
+
+    "@software-factory/door": ["@software-factory/door@workspace:apps/door"],
 
     "@software-factory/server": ["@software-factory/server@workspace:apps/server"],
 
