@@ -130,3 +130,11 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   MacBook has no SSH agent, so `git pull` of dotfiles-private needs `SSH_AUTH_SOCK` set to the 1Password agent socket
   (as `opbackup-seed-auto.sh` does); and `op` there defaults to another account, so every `op` call names
   `--account tkrumm`. A MacBook command for the owner carries both from the start.
+- **2026-11-07, package 9a integrated: the cutover is rehearsed.** On today's dump: 255 Issues, 1755 events all taken
+  by the machine, 212 states match, 43 differ for one stated reason (an old stop became `cancelled`), 0 unexplained;
+  a second import changes nothing; the old core boots on its restored schema. Live had no open Issue, so `working`,
+  `waiting` and `queued` are proved only by synthetic tests until window 1. Calls on its open points: the import runs
+  on a paused new core (loops off), accepted; the way back is stop, admin swap, then `make rollback`, accepted;
+  **Hermes keeps the read token** (it is not given the owner's): during window 1 its filing fails and the old core
+  takes it again after the window; before window 2 a narrow caller is built whose only write is `POST /signals` as the
+  owner, with its own token, so no surface holds the owner token; Beszel polling stays off as before.
