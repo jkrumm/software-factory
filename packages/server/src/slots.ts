@@ -1,4 +1,4 @@
-import type { Slot } from '@software-factory/contract'
+import { DEFAULT_SLOT_RUN_MS, durationMs, type Slot } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { LOCKS } from './locks.ts'
 
@@ -12,6 +12,7 @@ interface SlotRow {
   name: string
   requested_at: Date
   slot: number | null
+  run_ms: number | null
 }
 
 /**
@@ -22,7 +23,7 @@ interface SlotRow {
  */
 export async function touchSlot(
   sql: SQL,
-  input: { id: string; name: string; slots: number },
+  input: { id: string; name: string; slots: number; cwd?: string; limitMs?: number },
   now: Date,
 ): Promise<Slot> {
   return sql.begin(async (tx) => {
@@ -36,7 +37,7 @@ export async function touchSlot(
       VALUES (${input.id}, ${input.name}, ${now}, ${now})
       ON CONFLICT (id) DO UPDATE
         SET seen_at = ${now}, leased_until = CASE WHEN factory.slots.slot IS NULL THEN NULL ELSE ${leaseEnd}::timestamptz END`
-    const rows: SlotRow[] = await tx`SELECT id, name, requested_at, slot FROM factory.slots`
+    const rows: SlotRow[] = await tx`SELECT id, name, requested_at, slot, run_ms FROM factory.slots`
     const mine = rows.find((r) => r.id === input.id)
     if (!mine) throw new Error(`slot ${input.id} was not stored`)
     if (mine.slot !== null) return view(mine, 0)
@@ -49,9 +50,27 @@ export async function touchSlot(
     const ahead = line.findIndex((r) => r.id === input.id)
     const slot = free[ahead]
     if (slot === undefined) return view(mine, ahead)
-    await tx`UPDATE factory.slots SET slot = ${slot}, leased_until = ${leaseEnd} WHERE id = ${input.id}`
-    return view({ ...mine, slot }, 0)
+    const runMs = await runLimitMs(tx, input)
+    await tx`
+      UPDATE factory.slots SET slot = ${slot}, leased_until = ${leaseEnd}, granted_at = ${now}, run_ms = ${runMs}
+      WHERE id = ${input.id}`
+    return view({ ...mine, slot, run_ms: runMs }, 0)
   })
+}
+
+/**
+ * The run limit of a grant: the caller's own `limitMs`, else the `slots.run` of the project whose repo is the caller's working directory
+ * or a parent of it (the longest repo wins, so a worktree under the repo matches), else the default.
+ */
+async function runLimitMs(tx: SQL, input: { cwd?: string; limitMs?: number }): Promise<number> {
+  if (input.limitMs !== undefined) return input.limitMs
+  if (input.cwd === undefined) return DEFAULT_SLOT_RUN_MS
+  const rows: { run: string | null }[] = await tx`
+    SELECT manifest->'slots'->>'run' AS run FROM factory.projects
+    WHERE ${input.cwd} = repo OR starts_with(${input.cwd}, repo || '/')
+    ORDER BY length(repo) DESC LIMIT 1`
+  const run = rows[0]?.run
+  return (run ? durationMs(run) : undefined) ?? DEFAULT_SLOT_RUN_MS
 }
 
 const view = (row: SlotRow, ahead: number): Slot => ({
@@ -61,6 +80,7 @@ const view = (row: SlotRow, ahead: number): Slot => ({
   slot: row.slot,
   leaseMs: SLOT_LEASE_MS,
   ahead,
+  runMs: row.run_ms ?? DEFAULT_SLOT_RUN_MS,
 })
 
 /** Gives the slot back (or leaves the line). True if the caller had a row. */
@@ -72,4 +92,21 @@ export async function releaseSlot(sql: SQL, id: string): Promise<boolean> {
 /** Who holds a slot and who waits, for the status screen and tests. */
 export async function listSlots(sql: SQL): Promise<{ id: string; name: string; slot: number | null }[]> {
   return sql`SELECT id, name, slot FROM factory.slots ORDER BY slot NULLS LAST, requested_at, id`
+}
+
+/**
+ * `test slot 1 held by "<name>" for 20 min, limit 30 min`: a held slot (lease not expired) past half its run limit. Derived at read;
+ * a lease that predates the columns has no grant time and is skipped.
+ */
+export async function slotLines(sql: SQL, now: Date): Promise<string[]> {
+  const rows: { slot: number; name: string; granted_at: Date; run_ms: number }[] = await sql`
+    SELECT slot, name, granted_at, run_ms FROM factory.slots
+    WHERE slot IS NOT NULL AND leased_until >= ${now} AND granted_at IS NOT NULL AND run_ms IS NOT NULL
+    ORDER BY slot`
+  return rows
+    .filter((row) => now.getTime() - row.granted_at.getTime() > row.run_ms / 2)
+    .map(
+      (row) =>
+        `test slot ${row.slot} held by "${row.name}" for ${Math.floor((now.getTime() - row.granted_at.getTime()) / 60_000)} min, limit ${Math.round(row.run_ms / 60_000)} min`,
+    )
 }

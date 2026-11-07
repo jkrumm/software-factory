@@ -496,7 +496,14 @@ loses it at the next call of anyone), and gives it back with `DELETE` on exit or
 one advisory lock. The exit code, stdout and stderr are the command's own (killed by a signal: 128 plus it; can't start: 127).
 **Open only on an outage:** no answer from the server runs the command anyway with one stderr line. **Closed on contention:** no
 slot within `FACTORY_SLOT_WAIT_MS` (client side, default 2700000, 45 min) is one stderr line and exit 75 (`EX_TEMPFAIL`) without
-running the command; `FACTORY_SLOT_OPEN=1` runs it anyway instead. `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
+running the command; `FACTORY_SLOT_OPEN=1` runs it anyway instead. **Run limit:** a command that runs past its limit is killed (its whole
+process group, the command is spawned `detached`; SIGTERM, then SIGKILL after `FACTORY_SLOT_KILL_GRACE_MS`, default 5 s), the slot is
+given back, and `slot run` prints one stderr line and exits 124. The limit comes from, highest first: `FACTORY_SLOT_RUN_MS` (sent as
+`limitMs`), the project's `slots.run` in `project.yaml` (1m to 6h; the project is the one whose repo is the caller's `cwd` or a parent of it,
+the longest wins, so worktrees match), `DEFAULT_SLOT_RUN_MS` (30 min). The server resolves it at the grant only (migration `040`: `granted_at`,
+`run_ms`) and returns it as `runMs`; a server that does not answer leaves the client with the env or the default. **Health:** a slot held past
+half its limit has a line `test slot N held by "<name>" for K min, limit L min` (`slotLines`, derived at read; a lapsed lease or a lease from
+before `040` has none). The wrapper owns the limit: if it is SIGKILLed, the detached command lives on as an orphan with no slot and no limit (accepted). `make test` (so `make check`) runs `bun test` through this checkout's CLI when `factory`
 is installed, and bare otherwise (CI).
 
 #### Quota
@@ -1128,10 +1135,11 @@ heal:
   - { when: kuma.down, grace: 5m, runbook: make restart, max: 2 }
 jobs: [deps, docs, code-health]
 leads: 1
+slots: { run: 45m }          # the test-slot run limit (1m to 6h, default 30m): a command past it is killed, exit 124
 ticktick: { list: WeatherOrb }
 ```
 
-- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Row 14:** `signals` and `heal` are read (§8 "Intake"). **Later:** jobs, ticktick: accepted and dropped, so a later manifest does not break this one.
+- **v0 (F2):** name, `deploy`, `ship`, `leads`, hold, probes. **Row 14:** `signals` and `heal` are read (§8 "Intake"). `slots.run` is read by the test slots ("Test slots (FL7)"). **Later:** jobs, ticktick: accepted and dropped, so a later manifest does not break this one.
 - **A broken manifest** becomes an upkeep Issue; the factory keeps running on the last valid version.
 - **Make contract:** `check`, `test`, `deploy`, `verify`, `version`, `restart`, `quality`, `logs`, `status`. `version` prints the deployed commit sha, one line, and only reads. `check`, `test` and
   `quality` take `BASE=<ref>`. Every target ends in a one-line verdict. A repo is onboarded when it first has signals

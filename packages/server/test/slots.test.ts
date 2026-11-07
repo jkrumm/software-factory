@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { systemClock } from '../src/clock.ts'
+import { DEFAULT_SLOT_RUN_MS } from '@software-factory/contract'
 import { serveHooks } from '../src/http.ts'
-import { listSlots, releaseSlot, SLOT_LEASE_MS, touchSlot, WAITER_TTL_MS } from '../src/slots.ts'
+import { listSlots, releaseSlot, SLOT_LEASE_MS, slotLines, touchSlot, WAITER_TTL_MS } from '../src/slots.ts'
 import { TEST_ROLES, TEST_ROOT, TEST_TOKEN } from './support/app.ts'
 import { FakeClock } from './support/clock.ts'
 import { startTestDb, type TestDb } from './support/pg.ts'
@@ -87,6 +88,76 @@ describe('the slot semaphore (FL7)', () => {
     const answers = await Promise.all(Array.from({ length: 8 }, (_, i) => ask(`c${i}`, 3)))
     expect(answers.filter((a) => a.granted)).toHaveLength(3)
     expect(new Set(answers.filter((a) => a.granted).map((a) => a.slot)).size).toBe(3)
+  })
+})
+
+describe('the run limit of a slot', () => {
+  const project = (name: string, repo: string, run?: string) =>
+    db.sql`
+      INSERT INTO factory.projects (name, repo, manifest, make_targets, synced_at, created_at)
+      VALUES (${name}, ${repo}, ${run ? { slots: { run } } : null}, NULL, ${clock.now()}, ${clock.now()})`
+  const grant = (id: string, extra: { cwd?: string; limitMs?: number } = {}) =>
+    touchSlot(db.sql, { id, name: id, slots: 4, ...extra }, clock.now())
+
+  test('the default when nothing says otherwise', async () => {
+    expect((await grant('a')).runMs).toBe(DEFAULT_SLOT_RUN_MS)
+    expect((await grant('b', { cwd: '/nowhere/at/all' })).runMs).toBe(DEFAULT_SLOT_RUN_MS)
+  })
+
+  test("the caller's limitMs beats the manifest", async () => {
+    await project('p', '/work/p', '45m')
+    expect((await grant('a', { cwd: '/work/p', limitMs: 5_000 })).runMs).toBe(5_000)
+  })
+
+  test('the manifest of the project whose repo is the cwd or a parent of it, a worktree included', async () => {
+    await project('p', '/work/p', '45m')
+    await project('other', '/work/p-other', '10m')
+    expect((await grant('a', { cwd: '/work/p' })).runMs).toBe(45 * 60_000)
+    expect((await grant('b', { cwd: '/work/p/.claude/worktrees/x' })).runMs).toBe(45 * 60_000)
+    // A sibling whose name only starts the same is not inside the repo.
+    expect((await grant('c', { cwd: '/work/p-other/src' })).runMs).toBe(10 * 60_000)
+    expect((await grant('d', { cwd: '/work/pp' })).runMs).toBe(DEFAULT_SLOT_RUN_MS)
+  })
+
+  test('the longest repo wins, and a project without the key gives the default', async () => {
+    await project('outer', '/work', '1h')
+    await project('inner', '/work/inner', '2h')
+    await project('plain', '/work/plain')
+    expect((await grant('a', { cwd: '/work/inner/x' })).runMs).toBe(2 * 3_600_000)
+    expect((await grant('b', { cwd: '/work/else' })).runMs).toBe(3_600_000)
+    expect((await grant('c', { cwd: '/work/plain' })).runMs).toBe(DEFAULT_SLOT_RUN_MS)
+  })
+
+  test('a renewal keeps the stored value', async () => {
+    await project('p', '/work/p', '45m')
+    expect((await grant('a', { cwd: '/work/p' })).runMs).toBe(45 * 60_000)
+    await db.sql`UPDATE factory.projects SET manifest = ${{ slots: { run: '5m' } }}`
+    expect((await grant('a', { cwd: '/work/p' })).runMs).toBe(45 * 60_000)
+    expect((await grant('a', { limitMs: 1_000 })).runMs).toBe(45 * 60_000)
+  })
+
+  test('a line once a held slot is past half its limit, naming holder and limit, none for a lapsed lease', async () => {
+    await grant('first', { limitMs: 30 * 60_000 })
+    expect(await slotLines(db.sql, clock.now())).toEqual([])
+    const hold = async (ms: number) => {
+      for (let t = 0; t < ms; t += 10_000) {
+        clock.advance(10_000)
+        await grant('first') // renews
+      }
+    }
+    await hold(14 * 60_000)
+    expect(await slotLines(db.sql, clock.now())).toEqual([])
+    await hold(6 * 60_000)
+    expect(await slotLines(db.sql, clock.now())).toEqual(['test slot 1 held by "first" for 20 min, limit 30 min'])
+    clock.advance(SLOT_LEASE_MS + 1)
+    expect(await slotLines(db.sql, clock.now())).toEqual([])
+  })
+
+  test('a lease from before the columns has no line', async () => {
+    await grant('old', { limitMs: 60_000 })
+    await db.sql`UPDATE factory.slots SET granted_at = NULL, run_ms = NULL`
+    clock.advance(10_000)
+    expect(await slotLines(db.sql, clock.now())).toEqual([])
   })
 })
 
@@ -182,6 +253,47 @@ describe('factory slot run, against the real socket', () => {
     expect(out.code).toBe(130)
     await until(async () => (await listSlots(db.sql)).length === 0)
   })
+
+  /** A command that leaves a background `sleep` behind and writes its pid to `file`. */
+  const hung = (file: string, trap = '') => ['--', 'sh', '-c', `${trap}sleep 300 & echo $! > ${file}; wait`]
+  const dead = (pid: number) => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch {
+      return true
+    }
+  }
+
+  test('a command past the run limit is killed with its children, exit 124, the slot is free', async () => {
+    const pidfile = join(dir, 'hung.pid')
+    const t0 = Date.now()
+    const out = await finish(slotRun(hung(pidfile), { FACTORY_SLOT_RUN_MS: '700' }))
+    expect(out.code).toBe(124)
+    expect(out.stderr).toBe(
+      'factory: the command ran past the test-slot run limit of 700 ms (FACTORY_SLOT_RUN_MS, or slots.run in project.yaml); killed its process group\n',
+    )
+    expect(Date.now() - t0).toBeLessThan(10_000)
+    expect(await held()).toBe(0)
+    expect(await listSlots(db.sql)).toEqual([])
+    const pid = Number(readFileSync(pidfile, 'utf8').trim())
+    await until(async () => dead(pid), 3_000)
+  }, 30_000)
+
+  test('a command within the limit is unaffected', async () => {
+    const out = await finish(slotRun(['--', 'sh', '-c', 'echo out; exit 3'], { FACTORY_SLOT_RUN_MS: '20000' }))
+    expect(out).toEqual({ stdout: 'out\n', stderr: '', code: 3 })
+  })
+
+  test('a command that ignores SIGTERM is killed after the grace', async () => {
+    const pidfile = join(dir, 'stubborn.pid')
+    const out = await finish(
+      slotRun(hung(pidfile, "trap '' TERM; "), { FACTORY_SLOT_RUN_MS: '600', FACTORY_SLOT_KILL_GRACE_MS: '300' }),
+    )
+    expect(out.code).toBe(124)
+    expect(await held()).toBe(0)
+    await until(async () => dead(Number(readFileSync(pidfile, 'utf8').trim())), 3_000)
+  }, 30_000)
 
   test('fail open: with no server it runs the command with one line on stderr', async () => {
     const out = await finish(slotRun(['--', 'echo', 'ran'], { FACTORY_SOCKET: join(dir, 'nobody.sock') }))

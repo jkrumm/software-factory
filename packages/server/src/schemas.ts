@@ -121,7 +121,13 @@ export const NoteInput = z.object({
 export type NoteInput = z.infer<typeof NoteInput>
 
 /** `PUT /slots/:id`: the id is the caller's own (a fresh one per run); the name says what for. */
-export const SlotInput = z.object({ name: z.string().min(1).max(128).default('run') })
+export const SlotInput = z.object({
+  name: z.string().min(1).max(128).default('run'),
+  /** the caller's working directory: the project whose manifest sets the run limit */
+  cwd: z.string().max(4096).optional(),
+  /** the caller's own run limit (`FACTORY_SLOT_RUN_MS`), which beats the manifest */
+  limitMs: z.number().int().min(1).max(86_400_000).optional(),
+})
 
 /** The id of a slot request: a token the caller makes up. */
 export const SlotId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/, 'not a valid slot id')
