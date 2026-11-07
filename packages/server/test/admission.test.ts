@@ -242,7 +242,7 @@ describe('the role', () => {
     expect(await (await spawn('look', { role: 'Explore' })).json()).toMatchObject({
       role: 'Explore',
       tier: 'haiku',
-      effort: 'low',
+      effort: 'high',
     })
   })
 
@@ -251,7 +251,7 @@ describe('the role', () => {
     await spawn('plain')
     await runTick()
     const argvs = (await hc.state()).terminals.map((t) => t.argv.slice(0, 6).join(' '))
-    expect(argvs).toContain('claude --dangerously-skip-permissions --model haiku --effort low')
+    expect(argvs).toContain('claude --dangerously-skip-permissions --model haiku --effort high')
     expect(argvs).toContain('claude --dangerously-skip-permissions --model sonnet --effort high')
   })
 

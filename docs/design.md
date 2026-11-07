@@ -905,7 +905,7 @@ Every repo under `~/SourceRoot` takes requests, with or without a manifest.
 | Build | implements and writes the tests | `@implementer` |
 | Check | `make check`, `make test`, a review | `/check`, `/review` |
 | Verify locally | sees it work | `@verifier` |
-| Ship | merges by the manifest's `ship` rules, deploys by its `deploy.mode` | `make deploy`, `/ship` |
+| Ship | merges by the manifest's `ship` rules, deploys by its `deploy.mode` | `make deploy`, `factory issue ship` |
 | Check production | the same evidence against the running system | `make verify`, `/otel`, screenshots |
 | Report | `factory issue evidence`, then `factory issue ship` with a three-line summary and the merged commits | `factory` |
 
