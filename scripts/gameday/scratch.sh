@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # The live drill of a cutover window: one scratch Issue from filing to close on the running core, read only through the
 # read API and the CLI. The Issue is admitted, built by a lead in the scratch repo, shipped, watched and verified; the
-# run is green when the Issue closes `done` and its commit is on the scratch remote. With --kill-server the server is
+# run is green when the Issue closes `done` and its commit is on the scratch remote (verdict.sh: an Issue that shipped must
+# also have passed its watch; one closed by the lead's `close`, the scratch repo's normal shape, is not asked to). With --kill-server the server is
 # killed once the lead works, to show that the Issue goes on after the LaunchAgent brings the server back.
 # Usage: scratch.sh [--kill-server] [run-id]      (setup.sh first; teardown.sh after the evidence is written)
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC1091
+source "$GAMEDAY_DIR/verdict.sh"
 
 kill_server=0
 if [[ ${1:-} == --kill-server ]]; then kill_server=1; shift; fi
@@ -50,13 +53,12 @@ for _ in $(seq 1 360); do
 done
 
 fx read issue "$number" --format json | jq 'del(.about, .summary)' | scrub >"$out/issue.json" || true
+landed=$(commit_on_remote "$remote" "gameday $key")
 outcome=$(jq -r '.outcome // "-"' "$out/issue.json" 2>/dev/null || echo "-")
-landed=no
-git --git-dir="$remote" log --oneline master 2>/dev/null | grep -q "gameday $key" && landed=yes
 log "run $key: ended $state/$outcome, commit on the scratch remote: $landed"
-if [[ $state == closed && $outcome == "done" && $landed == yes ]]; then
-  log "run $key: GREEN"
+if result=$(verdict "$out/issue.json" "$landed"); then
+  log "run $key: $result"
   exit 0
 fi
-log "run $key: NOT GREEN"
+log "run $key: $result"
 exit 1
