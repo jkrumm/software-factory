@@ -14,9 +14,7 @@ import type {
   WritebackRow,
 } from '../../domains/intake/ports.ts'
 import type { IssueId } from '../../kernel/ids.ts'
-
-/** Advisory-lock namespace of intake's per-name locks (the first of the key pair); distinct from `locks.ts`'s keys. */
-const INTAKE_LOCK_NAMESPACE = 7_093_200
+import { LOCKS } from '../postgres/locks.ts'
 
 /** Seen event keys are kept this long. */
 const SEEN_KEEP_MS = 7 * 24 * 60 * 60_000
@@ -128,7 +126,7 @@ const unroutedOf = (row: Row): UnroutedRow => ({
 export function postgresIntakeStore(tx: SQL): IntakeStore {
   return {
     async lock(name) {
-      await tx`SELECT pg_advisory_xact_lock(${INTAKE_LOCK_NAMESPACE}, hashtext(${name}))`
+      await tx`SELECT pg_advisory_xact_lock(${LOCKS.intake}, hashtext(${name}))`
     },
 
     async seen(key) {

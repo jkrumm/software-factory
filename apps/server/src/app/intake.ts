@@ -460,12 +460,19 @@ export function createIntake(deps: IntakeDeps) {
 
   async function humanIn(s: Stores, r: Received, decision: { amend: IssueId | null }): Out<Triaged> {
     const { signal } = r
-    const repeat = await repeatIn(s, r, keyOf('noted', 'signal', signal.source, signal.fingerprint), null)
+    // The same words twice are one note (a replay); the same title with other text is a new one the lead must hear.
+    const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
+    const repeat = await repeatIn(s, r, keyOf('noted', 'signal', signal.source, signal.fingerprint, said), null)
     if (repeat) return repeat
     if (decision.amend) {
       const issue = await loadIssue(s.work, decision.amend)
       if (isOpen(issue)) {
-        const noted = await note(s, issue.id, keyOf('noted', 'signal', signal.source, signal.fingerprint, issue.id), r)
+        const noted = await note(
+          s,
+          issue.id,
+          keyOf('noted', 'signal', signal.source, signal.fingerprint, issue.id, said),
+          r,
+        )
         if (!noted.ok) return noted
         const stored = await store(s, r, null, 'amended', issue.id)
         return ok(triaged('amended', 'matched', issue.id, stored))
@@ -728,6 +735,8 @@ export function createIntake(deps: IntakeDeps) {
     // (a) Claim the run, or file: one short transaction, no port.
     const claimed = await uow.run(async (s): Out<{ row: PendingRow } | null> => {
       const now = clock.now()
+      // The subject's lock comes first, as in `receive`: the other order is a deadlock with an `up` deleting this row.
+      await s.intake.lock(`subject:${source}:${subject}`)
       const row = await s.intake.claimPending(source, subject, now)
       if (!row) return ok(null)
       if (row.rule.runbook && row.attempts < row.rule.max) {
@@ -742,7 +751,6 @@ export function createIntake(deps: IntakeDeps) {
       await s.intake.deletePending(source, subject)
       // The repo stopped being a project meanwhile: nothing files, and the row is gone rather than retried for ever.
       if (!info || info.work) return ok(null)
-      await s.intake.lock(`subject:${source}:${subject}`)
       const filed = await downIn(s, row.received, row.received.alert as Alert & { status: 'down' }, {
         info,
         topology,

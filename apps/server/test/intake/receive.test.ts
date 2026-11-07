@@ -395,6 +395,18 @@ describe("a person's or an agent's signal", () => {
     expect((await events('issue_1')).map((e: { kind: string }) => e.kind)).toEqual(['filed', 'noted'])
   })
 
+  test('the same title with new text is a new note the lead must hear; the same words again are not', async () => {
+    done(await intake.receive(owner('Login page crashes on submit', 'first')))
+    for (const text of ['second', 'second', 'third']) {
+      expect(done(await intake.receive(owner('Login page crashes on submit', text)))).toMatchObject({
+        outcome: 'amended',
+      })
+    }
+    const notes =
+      await db.sql`SELECT payload->>'text' AS text FROM factory.issue_events WHERE kind = 'noted' ORDER BY at, version`
+    expect(notes.map((n: { text: string }) => n.text.split('\n').at(-1))).toEqual(['second', 'third'])
+  })
+
   test('an owner signal that matches an open Issue amends it: one noted event, no new Issue', async () => {
     done(await intake.receive(owner('Login page crashes on submit')))
     const out = done(

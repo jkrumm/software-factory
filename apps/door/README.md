@@ -43,7 +43,7 @@ One line per request on stderr: `<ISO time> POST kuma 202 13ms`. A 401 names the
 The door reports to the server's API, best effort (`POST /door/reports`, errors swallowed, never delaying the response):
 `start` at boot (six tries, 5 s apart, in the background), `refused` for a 401 on a source it holds a token for (not a probe, and an
 unknown source is only logged), `accepted` for a Kuma test message that passed auth. A filed alert also counts as accepted. Two health
-lines follow: `door source <s>: <n> POSTs refused since …` (at least 3 refusals, the last within 72 h, none accepted since) and
+lines follow (derived on the server by `healthLines` in `app/intake.ts`; serving them in `/health` is a later package): `door source <s>: <n> POSTs refused since …` (at least 3 refusals, the last within 72 h, none accepted since) and
 `door source <s>: nothing accepted for <n> days` (14 days).
 
 ## Tokens
@@ -55,10 +55,10 @@ lines follow: `door source <s>: <n> POSTs refused since …` (at least 3 refusal
 ```
 
 A file with a looser mode, one that does not parse, a missing file and one with no source all make the door refuse to start,
-with the reason on stderr (the service's error log). `factory door token new <source>` writes a fresh token
-(32 random bytes, base64url) into the file and prints it once; an existing source needs `--rotate`. The door reads the file at
-start, so restart it after a rotation. The owner seeds the
-tokens into 1Password. A deploy creates none.
+with the reason on stderr (the service's error log). `newToken` in `src/tokens.ts` writes a fresh token (32 random bytes,
+base64url) into the file; the CLI verb that calls it comes with the CLI package, and until then the file is written by
+hand. The door reads the file at start, so restart it after a rotation. The owner seeds the tokens into 1Password. A
+deploy creates none.
 
 ## Routes
 
