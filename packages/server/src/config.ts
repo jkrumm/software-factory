@@ -1,5 +1,6 @@
 import { DEFAULT_ROLES_FILE } from '@software-factory/contract'
 import { type AdmissionLimits, DEFAULT_LEADS_PER_ACCOUNT, DEFAULT_LOAD_CEILING } from './admission.ts'
+import { DEFAULT_SWAP_CEILING_PCT, DEFAULT_SWAPOUT_CEILING_MB } from './memory.ts'
 import { defaultHookSocket, defaultSpoolDir } from '@software-factory/contract/spool'
 import { isNotifyTarget } from './notify/port.ts'
 
@@ -148,6 +149,22 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
         16,
       ),
       loadCeiling: wholeNumber('FACTORY_LOAD_CEILING', env.FACTORY_LOAD_CEILING, DEFAULT_LOAD_CEILING, 1, 100_000),
+      memory: {
+        swapoutMbPer300s: wholeNumber(
+          'FACTORY_SWAPOUT_CEILING_MB',
+          env.FACTORY_SWAPOUT_CEILING_MB,
+          DEFAULT_SWAPOUT_CEILING_MB,
+          1,
+          10_000_000,
+        ),
+        swapUsedPct: wholeNumber(
+          'FACTORY_SWAP_CEILING_PCT',
+          env.FACTORY_SWAP_CEILING_PCT,
+          DEFAULT_SWAP_CEILING_PCT,
+          1,
+          1000,
+        ),
+      },
     },
   }
 }

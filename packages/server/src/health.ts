@@ -5,6 +5,7 @@ import { hasTurned } from './briefs.ts'
 import { issueLeadHolders } from './capacity.ts'
 import { leadsOnBackgroundWork } from './issues/lead-activity.ts'
 import { MAX_REGRESSIONS } from './issues/lifecycle.ts'
+import { memoryFailureLines, memoryHeldDetail } from './memory.ts'
 import { doorSourceLines } from './issues/door-sources.ts'
 import { unroutedLines } from './issues/unrouted.ts'
 import { planLines } from './projects/plan-status.ts'
@@ -181,6 +182,7 @@ export async function healthLines(sql: SQL, now: Date): Promise<string[]> {
   lines.push(...(await unsentBriefLines(sql, now)))
   lines.push(...(await checkoutLines(sql)))
   lines.push(...(await loadHoldLines(sql)))
+  lines.push(...(await memoryHoldLines(sql)))
   lines.push(...(await capHoldLines(sql, now)))
   lines.push(...(await slotLines(sql, now)))
   lines.push(...(await planLines(sql, now)))
@@ -232,6 +234,26 @@ async function loadHoldLines(sql: SQL): Promise<string[]> {
   return [
     `held by load: Issue ${first}${more} waits for the machine, new leads start when its load is under the ceiling`,
   ]
+}
+
+/**
+ * `held by memory: Issue N (and K more) waits for the host's memory (<what the last reading said>)`: Issue leads admission holds for the swapout rate or
+ * the swap in use, and `memory reading failed (…)` while the reading cannot be taken (new leads are admitted without it). Looked at again every `HOLD_RECHECK_MS`.
+ */
+async function memoryHoldLines(sql: SQL): Promise<string[]> {
+  const rows: { issue_id: number }[] = await sql`
+    SELECT issue_id FROM factory.spawns
+    WHERE status = 'queued' AND hold = 'memory' AND issue_id IS NOT NULL ORDER BY issue_id`
+  const [first, ...rest] = rows.map((row) => row.issue_id)
+  const held: string[] = []
+  if (first !== undefined) {
+    const more = rest.length > 0 ? ` (and ${rest.length} more)` : ''
+    const detail = memoryHeldDetail()
+    held.push(
+      `held by memory: Issue ${first}${more} waits for the host's memory${detail ? ` (${detail})` : ''}, new leads start when it stops swapping`,
+    )
+  }
+  return [...held, ...memoryFailureLines()]
 }
 
 /** How long an Issue lead may be held by the per-account lead cap before the line names what holds it. */

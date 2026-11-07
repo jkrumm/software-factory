@@ -2,6 +2,7 @@ import { loadavg } from 'node:os'
 import type { HoldReason } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { currentLoads, issueLeadsByAccount, latestReadings, nextOpening, pickEligible } from './capacity.ts'
+import { type MemoryCeilings, type MemoryReading, memoryHeld } from './memory.ts'
 import { tryClaim } from './projects/claims.ts'
 import { effectiveState, loadQueueStates } from './queue.ts'
 import { type LiveSession, liveSessions } from './sessions.ts'
@@ -21,6 +22,10 @@ export interface AdmissionLimits {
   loadCeiling?: number
   /** the machine's 1-minute load average; the default reads `os.loadavg()` */
   loadAverage?: () => number
+  /** the memory ceilings (none without: nothing is held for memory) */
+  memory?: MemoryCeilings
+  /** the host's memory reading; the default reads the swapout counter and `vm.swapusage` */
+  memoryReading?: () => MemoryReading
 }
 
 /** The rule: a new Issue lead waits while the load is above the ceiling. The reading is passed in; running leads are never touched. */
@@ -67,7 +72,7 @@ async function readLive(tx: SQL, now: Date, live?: { sessions?: LiveSession[] })
 }
 
 /**
- * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), the machine's load (a lead with an Issue is held, hold `load`, while the 1-minute load average is above `limits.loadCeiling`, `FACTORY_LOAD_CEILING`), `pace` (one live session per project), the Issue's claim on its project (`claim`; a spawn with an Issue only),
+ * Whether a spawn may start, in the order of the rules: the queue state (`drain` starts nothing), the machine's load (a lead with an Issue is held, hold `load`, while the 1-minute load average is above `limits.loadCeiling`, `FACTORY_LOAD_CEILING`), its memory (the same, hold `memory`, while the swapout rate or the swap in use is above `limits.memory`, `memory.ts`), `pace` (one live session per project), the Issue's claim on its project (`claim`; a spawn with an Issue only),
  * and then an account with room, which under `pace` is also one whose weekly use is at or below the elapsed share of its week.
  * Never spills: with every account closed the answer is to wait for the first opening. Works inside the caller's transaction and
  * calls nothing outside the database; the one write is the claim, taken or queued (no account is reserved by a hold).
@@ -95,6 +100,14 @@ export async function admit(
     heldByLoad((limits.loadAverage ?? machineLoad)(), limits.loadCeiling)
   )
     return { kind: 'hold', reason: 'load' }
+  // The same for the host's memory: a swapout rate or swap in use above its ceiling. A reading that fails admits (health line), never stops the queue.
+  if (
+    candidate.role === LEAD_ROLE &&
+    candidate.issueId != null &&
+    limits.memory !== undefined &&
+    memoryHeld(limits.memory, limits.memoryReading)
+  )
+    return { kind: 'hold', reason: 'memory' }
 
   const sessions = state === 'pace' ? await readLive(tx, now, live) : []
   const others = sessions.filter((s) => s.id !== candidate.key && inRepo(s.repo, candidate.repo))

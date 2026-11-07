@@ -109,7 +109,7 @@ describe('config (finding 5)', () => {
       beszelEmail: undefined,
       beszelPassword: undefined,
       infraFile: undefined,
-      admission: { leadsPerAccount: 2, loadCeiling: 60 },
+      admission: { leadsPerAccount: 2, loadCeiling: 60, memory: { swapoutMbPer300s: 2048, swapUsedPct: 75 } },
     })
     expect(loadConfig(env).version).toBe('dev')
     expect(loadConfig({ ...env, FACTORY_RETRY_BUDGET_MS: '90000' }).retryBudgetMs).toBe(90_000)
@@ -141,6 +141,17 @@ describe('config (finding 5)', () => {
     expect(loadConfig({ ...env, FACTORY_LOAD_CEILING: '' }).admission.loadCeiling).toBe(60)
     for (const bad of ['0', '-1', '1.5', 'many'])
       expect(() => loadConfig({ ...env, FACTORY_LOAD_CEILING: bad })).toThrow('FACTORY_LOAD_CEILING')
+  })
+
+  test('FACTORY_SWAPOUT_CEILING_MB and FACTORY_SWAP_CEILING_PCT are the memory ceilings, and a mistake is refused', () => {
+    const { memory } = loadConfig({
+      ...env,
+      FACTORY_SWAPOUT_CEILING_MB: '4096',
+      FACTORY_SWAP_CEILING_PCT: '50',
+    }).admission
+    expect(memory).toEqual({ swapoutMbPer300s: 4096, swapUsedPct: 50 })
+    for (const name of ['FACTORY_SWAPOUT_CEILING_MB', 'FACTORY_SWAP_CEILING_PCT'])
+      for (const bad of ['0', '-1', '1.5', 'many']) expect(() => loadConfig({ ...env, [name]: bad })).toThrow(name)
   })
 
   test('FACTORY_ASK_JUDGE is on unless it says off, and a mistake is refused', () => {
