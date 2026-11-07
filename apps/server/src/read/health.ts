@@ -8,14 +8,31 @@ export interface HealthFacts {
   tickAt: string | null
   /** the last change of the queue; null until there is one */
   queueMovedAt: string | null
+  /** why the tick is stale (`tickProblem`), or null; left out, there is no tick to judge */
+  tickFailure?: string | null
 }
 
 /**
- * `/health` from what the server knows. Until a tick exists, a server whose database answers is ok; the package that
- * brings the tick adds its staleness to both the status and the heartbeat.
+ * Why a tick that should run every `tickMs` is stale, or null. A server that has not had time for its first pass is not
+ * stale yet; a tick of 0 is off (the scenarios drive it) and is never judged. Three missed intervals, and at least a
+ * minute, make a stale tick.
+ */
+export function tickProblem(input: { tickMs: number; now: Date; startedAt: Date; tickAt: Date | null }): string | null {
+  if (input.tickMs === 0) return null
+  const limit = Math.max(3 * input.tickMs, 60_000)
+  if (input.tickAt === null) {
+    return input.now.getTime() - input.startedAt.getTime() > limit ? 'no tick has succeeded yet' : null
+  }
+  const age = input.now.getTime() - input.tickAt.getTime()
+  return age > limit ? `the last successful tick was ${Math.round(age / 1000)} s ago` : null
+}
+
+/**
+ * `/health` from what the server knows: the database answers and the tick is not stale. Either problem is the status
+ * and the heartbeat's reason.
  */
 export function healthOf(facts: HealthFacts): Health {
-  const reason = facts.databaseFailure
+  const reason = facts.databaseFailure ?? facts.tickFailure ?? null
   return {
     status: reason === null ? 'ok' : 'unhealthy',
     version: facts.version,

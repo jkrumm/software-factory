@@ -46,7 +46,18 @@ export interface Projects {
   checksOf(repo: string): Promise<Result<ProjectChecks>>
 }
 
-/** Where a lead's branch was cut: the lead's package (4) knows; null when nothing is known of the attempt. */
+/**
+ * What the lead's package (4) knows of an attempt: the repo's checkout it worked from, the branch it worked on and the
+ * commit the worktree was cut from. Null when no lead ever started the attempt.
+ */
 export interface LeadCheckout {
-  of(issue: IssueId, attempt: number): Promise<Result<{ branch: string; cut: string } | null>>
+  of(issue: IssueId, attempt: number): Promise<Result<AttemptCheckout | null>>
+}
+
+export interface AttemptCheckout {
+  /** the repo's directory as the lead's package located it; null before its worktree was made */
+  repo: string | null
+  branch: string
+  /** the commit the worktree was cut from; null before it was made */
+  cut: string | null
 }

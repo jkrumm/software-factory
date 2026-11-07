@@ -63,7 +63,8 @@ person or lead would use. A scenario never reaches into another domain's tables.
 1. Conventional commits on your branch, no AI attribution. Never merge into `rewrite`; do not rebase it either unless
    your report says why.
 2. `make check` green.
-3. `/review` your range once, standard or deep as your brief says. Fix what is real; note what you declined and why.
+3. `/review` your range once, standard or deep as your brief says, always with `--thread rw-<n>-<slug>`: parallel
+   workers on one base commit otherwise share a thread and abandon each other's jobs. Fix what is real; note what you declined and why.
 4. Write `docs/rewrite/reports/<n>-<slug>.md` and commit it: **what changed** (by folder), **`make check` output**
    (the tail that shows every step), **the ports you declared** and the stub `main.ts` uses, **the events you record
    on Issues** and from which use case, **review outcome**, **open points** (new words, shared-file changes you need,

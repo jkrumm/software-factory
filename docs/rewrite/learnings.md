@@ -47,3 +47,36 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   - The machine has no claim wait: package 3 decides how a resumed Issue gets its repo's claim back.
   - The new event, wait and outcome words go into `docs/language.md` when the language is reconciled in package 9;
     until then report 1's state table is the reference the parallel briefs use.
+- **2026-11-07, the empty account pick was a spill to the work account.** `claude-account pick --lane lead` prints
+  `unset CLAUDE_CONFIG_DIR` when it picks `iu` (`--why`: `reason=spill`), randomly among picks while the Max accounts
+  have headroom. Package 1's first start (about two minutes, then killed) ran on it. `rd` refuses to spill and so does
+  the rewrite: the start loop re-picks until it gets a Max dir and does not start otherwise.
+- **2026-11-07, packages 2 to 6: merges are made trivial up front.** `briefs/parallel.md` gives each package its
+  folders, a migration number range (`0200` to `0699`), additive one-line edits to the shared files, and ports with
+  honest stubs for every cross-domain need. Calls inside it: intake files, planning settles (`settled`), capacity
+  admits (`admitted`); projects belong to planning and reach intake through a port; stop the line is a queue rule
+  (package 3); cancel is package 8's owner verb; the tick that runs the outbox is package 4's or 7's, and `/health`
+  gains staleness with it.
+- **2026-11-07, package 6: parallel reviews collide.** `agw review prepare` keys its thread on the base commit, so the
+  five workers off `fc5a8ac` abandoned each other's prepared jobs and one submit was refused against another worker's
+  job. Fixed by `--thread rw-<package>` (sent to workers 2 to 5, now in `briefs/parallel.md`). Any future parallel
+  fan-out off one commit needs its own thread per worker.
+- **2026-11-07, package 6 integrated; carried forward:**
+  - Decision and page passes run on two timers in `main.ts` (`FACTORY_CHECKPOINT_PASS_MS`) until package 7's tick
+    takes them over.
+  - Its settings (`FACTORY_DATA_DIR`, `FACTORY_CHECKPOINT_PASS_MS`, `FACTORY_CHECKPOINT_POLICY_FILE`,
+    `FACTORY_NTFY_TOPIC`, `FACTORY_CONSOLE_URL`, `FACTORY_AGW_BIN`) join `scripts/env-file.sh` in package 9.
+  - Accepted calls: the Judge never takes an irreversible option; a default must be reversible (refused at ask); a
+    Decision with a default does not page (the factory settles it); a Decision is an artifact of kind `decision`.
+  - For package 8: declare error bodies in the routes' OpenAPI responses so the CLI prints a refused form's fields on
+    stderr; the brief text (package 4) must tell a lead that verdicts and answers arrive as notes and how to read an
+    artifact (`factory artifact show`, `revise`).
+- **2026-11-07, package 4 integrated; merge shape as planned.** Five shared files conflicted (`main.ts`, `api/app.ts`,
+  the contract index, `boot.test.ts`, the generated CLI); every hunk was a union of two additive edits, and the CLI was
+  regenerated. Carried forward:
+  - The leads' tick (`FACTORY_TICK_MS`) runs spool replay, lost-lead follow and the outbox, and sets `/health`'s
+    `tickAt` with staleness; package 7 folds it into the loops' tick or keeps it. `queueMovedAt` is package 3's.
+  - For package 8: the brief's standing orders list only `close`, `defer`, `block`; `ship` (5) and `ask`, `artifact`
+    (6) must be added; `factory issue show` must accept `issue_<n>` and the bare number (the compaction line names it).
+  - For package 9: its settings list (report 4, open point 4) joins `scripts/env-file.sh`; the new core binds the old
+    hook socket path and refuses to steal a live one, so the old server must be stopped first.

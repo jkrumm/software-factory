@@ -1,4 +1,4 @@
-import type { Proof, ProofInput, Projects } from '../domains/quality/ports.ts'
+import type { LeadCheckout, Proof, ProofInput, Projects } from '../domains/quality/ports.ts'
 import {
   type Check,
   DEFAULT_RECHECK_MS,
@@ -17,12 +17,13 @@ import type { IdSource } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { recordIn } from './issues.ts'
-import type { QualityUnit } from './quality-ship.ts'
+import { checkoutOf, type QualityUnit } from './quality-ship.ts'
 
 export interface OpenDeps {
   uow: QualityUnit
   clock: Clock
   projects: Projects
+  checkout: LeadCheckout
 }
 
 /**
@@ -34,11 +35,14 @@ export function startWatchPort(deps: OpenDeps): EffectPorts['start_watch'] {
   return async (effect) => {
     const loaded = await deps.uow.run(async ({ work }) => {
       const history = await work.history(effect.issueId)
-      return ok(history ? replay(effect.issueId, history).repo : null)
+      return ok(history ? replay(effect.issueId, history) : null)
     })
     if (!loaded.ok) return loaded
     if (loaded.value === null) return err(portError('gone', `no Issue ${effect.issueId}`))
-    const project = await deps.projects.checksOf(loaded.value)
+    // The project is the directory the lead worked in: an Issue names its repo, and the lead's package located it.
+    const where = await checkoutOf(deps.checkout, loaded.value, effect.payload.attempt)
+    if (!where.ok) return where
+    const project = await deps.projects.checksOf(where.value.repo)
     if (!project.ok) return project
     const opened = await deps.uow.run(async ({ quality }) => {
       await quality.openWatch({
@@ -119,11 +123,14 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
       await quality.answerWatch(watch.key, 'ended', now)
       return ok(null)
     }
-    return ok({ repo: issue.repo, ship: await quality.lastShip(watch.issueId, watch.attempt) })
+    return ok({ issue, ship: await quality.lastShip(watch.issueId, watch.attempt) })
   })
   if (!claimed.ok) return claimed
   if (!claimed.value) return ok(undefined)
-  const { repo, ship } = claimed.value
+  const { issue: watched, ship } = claimed.value
+  const where = await checkoutOf(deps.checkout, watched, watch.attempt)
+  if (!where.ok) return releaseThen(release, where)
+  const { repo } = where.value
 
   const project = await deps.projects.checksOf(repo)
   if (!project.ok) return releaseThen(release, project)

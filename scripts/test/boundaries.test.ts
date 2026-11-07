@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { checkBoundaries, importsOf, SERVER_SRC } from '../boundaries.ts'
+import { checkBoundaries, checkHook, HOOK_FILE, importsOf, SERVER_SRC } from '../boundaries.ts'
 
 let root: string | undefined
 
@@ -149,4 +149,22 @@ test('importsOf reads static, type-only, re-exported and dynamic imports, not co
     { specifier: './side.ts', typeOnly: false },
     { specifier: './e.ts', typeOnly: false },
   ])
+})
+
+describe('the hook imports only node:fs and the contract spool module', () => {
+  test('a hook that loads the CLI or zod fails', () => {
+    expect(
+      checkHook("import { run } from './run.ts'\nimport { join } from 'node:path'\n").map((v) => v.detail),
+    ).toEqual(['./run.ts', 'node:path'])
+  })
+
+  test('a hook with only its two modules passes', () => {
+    const source =
+      "import { appendFileSync } from 'node:fs'\nimport { nextKey } from '@software-factory/contract/spool'\n"
+    expect(checkHook(source)).toEqual([])
+  })
+
+  test('the real hook holds', async () => {
+    expect(checkHook(await Bun.file(HOOK_FILE).text())).toEqual([])
+  })
 })

@@ -11,7 +11,14 @@ import { reopenIssue, reportRegression } from '../../src/app/quality-reopen.ts'
 import { type QualityUnit, type ShipDeps, shipIssue } from '../../src/app/quality-ship.ts'
 import { checkWatches, startWatchPort, type WatchDeps } from '../../src/app/quality-watch.ts'
 import type { CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
-import type { Commits, LeadCheckout, Projects, Proof, Review } from '../../src/domains/quality/ports.ts'
+import type {
+  AttemptCheckout,
+  Commits,
+  LeadCheckout,
+  Projects,
+  Proof,
+  Review,
+} from '../../src/domains/quality/ports.ts'
 import type { Check, ProjectChecks } from '../../src/domains/quality/watch.ts'
 import type { AnyIssueEvent, EventKind, IssueEvent } from '../../src/domains/work/events.ts'
 import type { EffectPorts } from '../../src/domains/work/ports.ts'
@@ -39,7 +46,9 @@ let inside: string[]
 let commitReads: number
 let commitAnswer: Result<CommitRead>
 let reviewAnswer: Result<ReviewRead>
-let checkoutAnswer: Result<{ branch: string; cut: string } | null>
+let checkoutAnswer: Result<AttemptCheckout | null>
+let projectsSeen: string[]
+let commitRepos: string[]
 let proofAnswer: () => Result<Check[]>
 let proofRuns: number
 let duringProof: () => Promise<void>
@@ -55,15 +64,17 @@ const landed = (extra: Partial<CommitRead> = {}): CommitRead => ({
 })
 
 const watch = (): Pick<Projects, 'checksOf'> => ({
-  checksOf: async () => {
+  checksOf: async (repo) => {
+    projectsSeen.push(repo)
     if (uow.inTransaction()) inside.push('projects')
     return ok(project)
   },
 })
 
 const commits: Commits = {
-  read: async () => {
+  read: async (input) => {
     commitReads++
+    commitRepos.push(input.repo)
     if (uow.inTransaction()) inside.push('commits')
     return commitAnswer
   },
@@ -95,6 +106,7 @@ const watchDeps = (extra: Partial<WatchDeps> = {}): WatchDeps => ({
   clock,
   ids,
   projects: watch(),
+  checkout,
   proof,
   timing: { retryMs: 60_000, recheckMs: 300_000 },
   settledAt: new Date(0),
@@ -113,6 +125,8 @@ beforeEach(async () => {
   commitAnswer = ok(landed())
   reviewAnswer = ok({ tier: 'standard', covered: true, uncovered: [] })
   checkoutAnswer = ok(null)
+  projectsSeen = []
+  commitRepos = []
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
   proofRuns = 0
   duringProof = async () => {}
@@ -159,7 +173,7 @@ async function runEffects(): Promise<void> {
     start_lead: nothing,
     note_lead: nothing,
     finalize: nothing,
-    start_watch: startWatchPort({ uow, clock, projects: watch() }),
+    start_watch: startWatchPort({ uow, clock, projects: watch(), checkout }),
   }
   // One effect per Issue per pass, in order: run until nothing is left.
   for (let pass = 0; pass < 10; pass++) {
@@ -273,6 +287,35 @@ describe('the ship gate', () => {
   test('an unknown Issue is an error, not a refusal', async () => {
     const result = await ship(issueIdOf(99))
     expect(result).toEqual({ ok: false, error: { kind: 'unknown_issue', issueId: issueIdOf(99) } })
+  })
+
+  test('the lead’s checkout says where the work is: the directory, not the Issue’s repo name; the cut and branch go to git', async () => {
+    const issueId = await working()
+    checkoutAnswer = ok({ repo: '/roots/example', branch: 'factory/issue_1-1', cut: 'c'.repeat(40) })
+    const seen: unknown[] = []
+    const spy: Commits = {
+      read: async (input) => {
+        seen.push(input)
+        return commitAnswer
+      },
+    }
+    value(await shipIssue({ ...deps(), commits: spy }, { issueId, attempt: 1, call: 'call-1', commits: [SHA] }))
+    expect(seen).toEqual([
+      { repo: '/roots/example', branch: 'factory/issue_1-1', cut: 'c'.repeat(40), reported: [SHA] },
+    ])
+    // The watch runs in that directory too.
+    await runEffects()
+    clock.advance(30 * 60_000)
+    const proofSeen: string[] = []
+    const spyProof: Proof = {
+      run: async (input) => {
+        proofSeen.push(input.repo)
+        return ok([])
+      },
+    }
+    value(await checkWatches(watchDeps({ proof: spyProof })))
+    expect(proofSeen).toEqual(['/roots/example'])
+    expect(new Set(projectsSeen)).toEqual(new Set(['/roots/example']))
   })
 
   test('git, agw and the lead’s checkout are never called inside a transaction', async () => {

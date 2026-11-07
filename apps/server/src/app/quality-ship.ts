@@ -51,22 +51,42 @@ function resultOf(recorded: Recorded): ShipAnswer['result'] {
   return 'refused'
 }
 
+/**
+ * Where an attempt's work is, for git and for make: the directory the lead's package located (an Issue names its repo,
+ * which is a name inside the allowed roots), the lead's branch and its cut. With no lead on record the Issue's own repo
+ * is the directory, and nothing is known of a branch.
+ */
+export async function checkoutOf(
+  checkout: LeadCheckout,
+  issue: { id: IssueId; repo: string },
+  attempt: number,
+): Promise<Result<{ repo: string; branch: string | null; cut: string | null }>> {
+  const found = await checkout.of(issue.id, attempt)
+  if (!found.ok) return found
+  return ok({
+    repo: found.value?.repo ?? issue.repo,
+    branch: found.value?.branch ?? null,
+    cut: found.value?.cut ?? null,
+  })
+}
+
 /** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
 async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<ShipVerdict> {
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.commits.length === 0) return refuse('ship names no merged commit')
-  const checkout = await deps.checkout.of(issue.id, input.attempt)
+  const checkout = await checkoutOf(deps.checkout, issue, input.attempt)
   if (!checkout.ok) return refuse(`the lead's checkout could not be read: ${checkout.error.detail}`)
+  const { repo } = checkout.value
   const commits = await deps.commits.read({
-    repo: issue.repo,
-    branch: checkout.value?.branch ?? null,
-    cut: checkout.value?.cut ?? null,
+    repo,
+    branch: checkout.value.branch,
+    cut: checkout.value.cut,
     reported: input.commits,
   })
   // agw is asked only for what git found on the default branch; any failure of it is a recorded absence, never a refusal (NL23).
   let review: ReviewOutcome = { read: null, problem: null }
   if (commits.ok && commits.value.reviewRanges.length > 0) {
-    const read = await deps.review.read({ repo: issue.repo, ranges: commits.value.reviewRanges })
+    const read = await deps.review.read({ repo, ranges: commits.value.reviewRanges })
     review = read.ok
       ? { read: read.value, problem: null }
       : { read: null, problem: `review could not be read: ${read.error.detail}` }

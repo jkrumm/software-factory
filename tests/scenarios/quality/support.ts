@@ -1,7 +1,8 @@
-import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { type QualityView, type ReopenAnswer, ShipAnswer } from '@software-factory/contract'
 import { factory, type ServerProcess, type World } from '../harness.ts'
+import { type LeadsWorld, startLeadsWorld } from '../leads/support.ts'
 
 /** The server's environment for a quality scenario: a quick tick, no settle, a short retry, the entry into the write path. */
 export const QUALITY_ENV = {
@@ -41,38 +42,77 @@ const event = (server: ServerProcess, id: string, body: object) =>
     issue: { id: string; state: string; waitReason: string | null; outcome: string | null; version: number }
   }>
 
-/** An Issue in `repo` whose attempt 1 has a lead working, filed the way intake and the lead's package will. */
-export async function workingIssue(server: ServerProcess, repo: string, tag: string): Promise<string> {
-  const filed = (await post(server, '/internal/test/issues', {
-    key: `filed:scenario:${tag}`,
-    kind: 'filed',
-    payload: { repo, title: `the change ${tag}`, kind: 'bug', origin: 'you' },
-    actor: 'factory',
-  })) as { issue: { id: string } }
-  const id = filed.issue.id
-  await event(server, id, { key: `${id}:settled`, kind: 'settled', payload: {}, actor: 'factory' })
-  await event(server, id, { key: `${id}:admitted:1`, kind: 'admitted', payload: {}, actor: 'factory' })
-  await event(server, id, {
-    key: `${id}:lead_started:1`,
-    kind: 'lead_started',
-    payload: { attempt: 1, terminal: `lead-${id}-1` },
-    actor: 'factory',
-  })
+/**
+ * An Issue whose attempt 1 has a lead working: admitted, and started by the leads' own tick against the fake `hc`, so
+ * the attempt row (the repo's directory, the branch, the commit its worktree was cut from) is the one quality reads.
+ */
+export async function workingIssue(lw: LeadsWorld, title: string): Promise<string> {
+  const id = await lw.admitted(title)
+  // The terminal carries the lead's name (`lead-<n>-<attempt>`) as its key, whether it still lives or finished.
+  const name = `lead-${id.slice('issue_'.length)}-1`
+  await until('the lead to start', async () => lw.terminals().some((t) => t.labels['factory.key'] === name))
+  await until('the Issue to work', async () => (await stateOf(lw.server, id)) === 'working')
   return id
+}
+
+/** A git repo like the leads' scenarios make, with a Makefile committed and pushed before any worktree is cut. */
+export async function startQualityWorld(env: Record<string, string> = {}): Promise<LeadsWorld> {
+  const lw = await startLeadsWorld({ ...QUALITY_ENV, ...env })
+  await commit(lw, 'Makefile', MAKEFILE, 'chore: make contract')
+  return lw
+}
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const proc = Bun.spawn(['git', ...args], {
+    cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 't',
+      GIT_AUTHOR_EMAIL: 't@example.com',
+      GIT_COMMITTER_NAME: 't',
+      GIT_COMMITTER_EMAIL: 't@example.com',
+    },
+  })
+  const [out, err, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
+  if (code !== 0) throw new Error(`git ${args.join(' ')} exited ${code}: ${err}`)
+  return out.trim()
+}
+
+export const gitIn = (lw: LeadsWorld, ...args: string[]) => git(lw.repo, ...args)
+
+/** Writes a file in the repo's main checkout, commits it and pushes `master`; returns the commit. */
+export async function commit(lw: LeadsWorld, file: string, text: string, message = `change ${file}`): Promise<string> {
+  await mkdir(dirname(join(lw.repo, file)), { recursive: true })
+  await writeFile(join(lw.repo, file), text)
+  await git(lw.repo, 'add', '-A')
+  await git(lw.repo, 'commit', '-q', '-m', message)
+  await git(lw.repo, 'push', '-q', 'origin', 'master')
+  return git(lw.repo, 'rev-parse', 'HEAD')
 }
 
 let notes = 0
 
-/** Where the Issue stands, read the one way there is until package 8: a note from the owner answers with the Issue. */
+/**
+ * Where the Issue stands, read the one way there is until package 8: a note from the owner answers with the Issue. The
+ * lead's tick writes to the same Issue, so a version conflict is asked again.
+ */
 export async function stateOf(server: ServerProcess, id: string): Promise<string> {
-  const answer = await event(server, id, {
-    key: `${id}:look:${++notes}`,
-    kind: 'noted',
-    payload: { text: 'where does it stand' },
-    actor: 'owner',
-  })
-  const { state, waitReason, outcome } = answer.issue
-  return [state, waitReason, outcome].filter(Boolean).join(':')
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const answer = await event(server, id, {
+        key: `${id}:look:${++notes}`,
+        kind: 'noted',
+        payload: { text: 'where does it stand' },
+        actor: 'owner',
+      })
+      const { state, waitReason, outcome } = answer.issue
+      return [state, waitReason, outcome].filter(Boolean).join(':')
+    } catch (error) {
+      if (attempt >= 10 || !String(error).includes('version_conflict')) throw error
+    }
+  }
 }
 
 export async function until<T>(what: string, look: () => Promise<T | undefined | false>, ms = 20_000): Promise<T> {
