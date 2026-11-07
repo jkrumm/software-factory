@@ -567,6 +567,18 @@ describe('the door', () => {
     expect(String(filed?.title)).toContain('pick its repo')
   })
 
+  test('the health lines name a refused source and a monitor that stays down with no route', async () => {
+    await intake.doorReport({ kind: 'start', sources: ['kuma'] })
+    for (let i = 0; i < 3; i++) await intake.doorReport({ kind: 'refused', source: 'kuma' })
+    done(await intake.alert(alert({ monitor: 'mystery' })))
+    clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedGraceMs + 1_000)
+    const lines = await intake.healthLines(72 * 3_600_000)
+    expect(lines.ok && lines.value).toEqual([
+      expect.stringContaining('door source kuma: 3 POSTs refused'),
+      expect.stringContaining('monitor kuma/mystery down 10 min with no route, to be filed'),
+    ])
+  })
+
   test('a source the door holds a token for and refuses is reported; accepted resets', async () => {
     expect((await intake.doorReport({ kind: 'start', sources: ['kuma', 'hyperdx'] })).ok).toBe(true)
     for (let i = 0; i < 3; i++) await intake.doorReport({ kind: 'refused', source: 'kuma' })

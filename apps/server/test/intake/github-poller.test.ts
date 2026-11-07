@@ -319,12 +319,12 @@ describe('the held outside issues', () => {
     ])
   })
 
-  test('the owner issue from before since is held, not admitted', async () => {
+  test('the owner issue from before since is neither filed nor held: the backlog is never read in', async () => {
     const gh = setup({ projects: [withGithub({ author: AUTHOR, since: SINCE })] })
     gh.world.own = [mine(2, 'Old news', { created_at: '2026-10-31T23:59:59Z' })]
     gh.world.everyone = [mine(2, 'Old news', { created_at: '2026-10-31T23:59:59Z' })]
     await gh.poller.pass()
-    expect(gh.received.map((r) => [r.alert?.subject, r.signal.trust])).toEqual([['o/r#2', 'outside']])
+    expect(gh.received).toEqual([])
   })
 })
 

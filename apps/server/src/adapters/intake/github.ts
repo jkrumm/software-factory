@@ -325,6 +325,8 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
       if (issue.pull_request !== undefined || seen.has(issue.number)) continue
       // A labelled issue the label query did not return (its page was full, or it failed) is not a stranger's.
       if (issue.labels.some((l) => l.name.toLowerCase() === label)) continue
+      // The owner's own issues come in through the author query only: the ones before its cut-over are neither filed nor held.
+      if (author !== undefined && issue.user?.login.toLowerCase() === author) continue
       add(issue, 'seen', null)
     }
     return found

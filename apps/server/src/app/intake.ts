@@ -8,6 +8,7 @@ import {
   type SignalRequest,
   storable,
 } from '@software-factory/contract'
+import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
 import type { Alert, HealRule, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
 import type {
   IntakeSink,
@@ -703,6 +704,17 @@ export function createIntake(deps: IntakeDeps) {
       return gone ? ok(gone) : refuse('not_found', `no route for ${input.source} ${input.monitor}`)
     })
 
+  /** The door's health lines (a refused source, a silent one, an unrouted monitor that stays down), derived at read. */
+  const healthLines = (finishedMs: number): Out<string[]> =>
+    uow.run(async (s) => {
+      const now = clock.now()
+      const lines = [
+        ...doorSourceLines(await s.intake.doorSources(), now, finishedMs),
+        ...unroutedLines(await s.intake.unrouted(200), now, settings.unroutedGraceMs),
+      ]
+      return ok(lines)
+    })
+
   // ---- settle and heal, before any lead ----
 
   async function settleOne(source: string, subject: string, topology: Topology): Promise<Result<void, IntakeError>> {
@@ -895,7 +907,7 @@ export function createIntake(deps: IntakeDeps) {
     },
   }
 
-  return { receive, file, alert, promote, list, doorReport, routes, setRoute, removeRoute, settle, sink }
+  return { receive, file, alert, promote, list, doorReport, routes, setRoute, removeRoute, settle, healthLines, sink }
 }
 
 export type Intake = ReturnType<typeof createIntake>
