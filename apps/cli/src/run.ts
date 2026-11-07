@@ -6,6 +6,7 @@ import { OPERATIONS } from './generated/operations.ts'
 import { type Io, type Operation, runOperation } from './operation.ts'
 import { type Format, render } from './output.ts'
 import { DEFAULT_ROLES_FILE, loadRoleTable } from './roles.ts'
+import { slotVerb } from './slot.ts'
 
 const BIN = 'factory'
 
@@ -23,6 +24,7 @@ const help = (): string =>
     `  ${'version'.padEnd(commandWidth)}the CLI's version`,
     `  ${'role list'.padEnd(commandWidth)}the role table: role, tier, effort (the tracked file, no server)`,
     `  ${'role get <role>'.padEnd(commandWidth)}one role: {"role", "tier", "effort"}; unknown is exit 4`,
+    `  ${'slot run [--name <label>] -- <cmd>'.padEnd(commandWidth)}run <cmd> in one of the host's test slots (exit 75: no slot in time; open if the server is down)`,
     ...OPERATIONS.map((op) => `  ${usageOf(op).padEnd(commandWidth)}${op.summary}`),
     '',
     'environment:',
@@ -67,6 +69,8 @@ const OPTIONS = {
 /** Runs one invocation and returns its exit code. Nothing asks anything. */
 export async function run(argv: string[], io: Io): Promise<number> {
   try {
+    // `slot run` passes everything after `--` to its command, so it reads its own arguments.
+    if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>
     try {
       parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true, strict: true })
