@@ -62,11 +62,10 @@ test('identifiers are split into words, case-insensitive', () => {
 })
 
 describe('the scan', () => {
-  test('scans apps, packages, tests and scripts; not docs or legacy', async () => {
+  test('scans apps, packages, tests and scripts; not docs', async () => {
     const problems = await check({
       'apps/server/src/a.ts': 'const wave = 1\n',
       'docs/b.md': 'wave\n',
-      'legacy/c.ts': 'wave\n',
     })
     expect(problems).toEqual([
       'apps/server/src/a.ts:1: "wave" is retired (docs/language.md); say plan (rows of docs/plan.yaml)',

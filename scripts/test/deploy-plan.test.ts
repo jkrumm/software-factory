@@ -11,13 +11,13 @@ const OLD_SHA = 'b'.repeat(40)
 const canRun = Bun.which('launchctl') !== null && Bun.which('plutil') !== null && Bun.which('secrets-run') !== null
 
 const NEW_DOOR_LAUNCHER = await Bun.file(join(ROOT, 'scripts', 'launch-door.sh')).text()
-/** The old core's launcher as `master` ships it: no template, no secret, `packages/door`. */
+/** The old core's launcher as `master` ships it: no template, no secret, no `.env.door.tpl`. */
 const OLD_DOOR_LAUNCHER = `#!/bin/bash
 # factory door launcher (old core): holds no secret; the tokens file is the door's own.
 set -u
 DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR" || exit 78
-exec bun packages/door/src/main.ts
+exec bun src/main.ts
 `
 
 let work = ''
@@ -29,7 +29,7 @@ beforeAll(async () => {
   const old = join(work, 'releases', OLD_SHA)
   for (const [dir, files] of [
     [live, ['apps/server/src/main.ts', 'apps/cli/bin/factory.ts', 'apps/door/src/main.ts']],
-    [old, ['packages/server/src/main.ts', 'packages/cli/bin/factory.ts', 'packages/door/src/main.ts']],
+    [old, ['src/main.ts']],
   ] as const) {
     for (const file of files) {
       await mkdir(join(dir, file, '..'), { recursive: true })
@@ -78,7 +78,7 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(out).toMatch(
       /door: new door \(apps\/door\) from [0-9a-f<>a-z]+, launcher .*launch-door\.sh, credentials: FACTORY_DOOR_TOKEN from its \.env\.door\.tpl/,
     )
-    expect(out).not.toContain('old door (packages/door)')
+    expect(out).not.toContain('old door')
     expect(out).toContain('the settings file is accepted')
     expect(out).not.toContain('packages/cli')
   })
@@ -86,13 +86,11 @@ describe.skipIf(!canRun)('the plans', () => {
   test('DRY_RUN=1 make rollback: returns from the new core to the old one, its CLI and its door', async () => {
     const { code, out } = await dry(['rollback'])
     expect(code).toBe(0)
-    expect(out).toContain(
-      `would roll back ${NEW_SHA} (new core (apps/server)) -> ${OLD_SHA.slice(0, 12)} (old core (packages/server))`,
-    )
+    expect(out).toContain(`would roll back ${NEW_SHA} (new core (apps/server)) -> ${OLD_SHA.slice(0, 12)} (old core)`)
     expect(out).toContain('packages/cli/bin/factory.ts')
-    expect(out).toContain('the door of the old core (packages/server)')
+    expect(out).toContain('the door of the old core')
     expect(out).toContain(
-      `door: old door (packages/door) from ${OLD_SHA.slice(0, 12)}, launcher ${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh, credentials: none (the tokens file only)`,
+      `door: old door from ${OLD_SHA.slice(0, 12)}, launcher ${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh, credentials: none (the tokens file only)`,
     )
     expect(out).toContain(`${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh`)
     expect(out).not.toContain('new door (apps/door)')
@@ -168,8 +166,8 @@ esac
     const run = await startDoor(OLD_SHA)
     expect(run.plist).toContain(`${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh`)
     expect(run.plist).not.toContain(NEW_SHA)
-    expect(run.out).toContain('door: old door (packages/door)')
-    expect(run.out).toContain(`door OK: the old door (packages/door) of ${OLD_SHA.slice(0, 12)}`)
+    expect(run.out).toContain('door: old door')
+    expect(run.out).toContain(`door OK: the old door of ${OLD_SHA.slice(0, 12)}`)
     expect(run.out).not.toContain('WARNING')
     expect(run.out).not.toContain('.env.door.tpl')
   })

@@ -10,9 +10,6 @@ and why) → `docs/architecture.md` (the target the rewrite builds, `docs/rewrit
 factory until the cutover: §3 "As built" and §11, the behaviour) → `docs/research/` → `docs/evidence/`.
 A directory listing, `package.json`, the Makefile and `--help` say what exists; this file says what they cannot.
 
-**On the `rewrite` branch** the new core is `apps/` and `packages/`, built to `docs/architecture.md`; `legacy/` is the old
-core, kept as a read-only reference the rewrite ports from: outside the workspace and `make check`, deleted at the cutover.
-
 ## Rules
 
 - **Public repo.** No secrets, hostnames, IPs, tailnet names, internal URLs or account e-mails in any tracked
@@ -45,7 +42,7 @@ core, kept as a read-only reference the rewrite ports from: outside the workspac
 - **Visible (IuRoot) text never leaves the machine's token API.** `scopeOf` is the one place that decides what is `visible`;
   nothing of a visible repo or session goes to `agw`, the socket or the read token, and the morning message counts it only. Changing the fleet
   view, the digest or the read API: `docs/design.md` §11 "The fleet view", "The read API", "The read token".
-- **The door** (`packages/door`) holds no factory token and no database credential, binds loopback, posts to the socket's
+- **The door** (`apps/door`) holds no factory token and no database credential, binds loopback, posts to the socket's
   `POST /intake`, and takes the repo from `factory.door_routes`, never the payload. Changing alert intake: `docs/design.md` §11 "The factory door".
 - **Hooks: spool first, then post.** `factory hook <event>` does nothing without `FACTORY_SESSION`, appends to the spool,
   posts to the unix socket and exits 0 whatever happens (one exception: the Stop send-back, exit 2). `src/hook.ts` imports only

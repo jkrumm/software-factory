@@ -2,7 +2,7 @@
 /**
  * The words `docs/language.md` retires, found in `apps/`, `packages/`, `tests/` and `scripts/`: whole words,
  * case-insensitive, in identifiers (camelCase, snake_case and kebab-case are split into words), strings and comments.
- * `docs/` and `legacy/` are not scanned. An exception is a line in `retired-words.allow` with its reason. Run by
+ * `docs/` is not scanned. An exception is a line in `retired-words.allow` with its reason. Run by
  * `make check`; exits 1 on a finding, a reasonless exception or an exception that no longer matches anything.
  */
 import { readdir, readFile } from 'node:fs/promises'

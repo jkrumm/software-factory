@@ -28,9 +28,9 @@ make check   # format, lint, shellcheck, types, tests
 
 | Path | What |
 |-|-|
-| `packages/server` | the server: HTTP API, tick, `Runner` port, Issue lifecycle, read API, migrations (schema `factory`) |
-| `packages/contract` | the zod schemas shared by the server and the CLI |
-| `packages/cli` | the `factory` CLI: `status`, `issue`, `spawn`, `session`, `read`, `follow`, `fleet`, `hook` and more |
-| `packages/door` | the door: tailnet alerts become Issues |
+| `apps/server` | the server: HTTP API, tick, `Runner` port, Issue lifecycle, read API, migrations (schema `factory`) |
+| `apps/cli` | the `factory` CLI: `issue`, `session`, `read`, `follow`, `hook` and more |
+| `apps/door` | the door: tailnet alerts become Issues |
+| `packages/contract`, `packages/client` | the zod schemas and the typed client shared by the server, the CLI and the door |
 | `scripts/`, `deploy/` | release-directory deploy, verify, LaunchAgent templates |
 | `docs/` | decisions, program, design, research, evidence, strategy, spikes |

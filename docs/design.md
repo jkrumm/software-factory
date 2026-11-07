@@ -1186,7 +1186,7 @@ ticktick: { list: WeatherOrb }
 
 ### As built (F2 Wave 2)
 
-`packages/contract/src/projects.ts` is the schema, `packages/server/src/projects/` the code (`manifest.ts`, `sync.ts`, `make.ts`,
+`packages/contract/src/projects.ts` is the schema, the old core's `projects/` code (`manifest.ts`, `sync.ts`, `make.ts`,
 `claims.ts`, `store.ts`, `pass.ts`), migration `015_projects.sql`.
 
 - **The schema.** `apiVersion: factory/v2`, `name`, `deploy {mode auto|make|agentic|none, targets[{name, host, verify}], hold,
@@ -1273,7 +1273,7 @@ tuning at 50 closed Issues, security audits per repo at about 2,000 changed line
 Alerts reach the factory through the door, and machine alerts also go to ntfy by their own senders. The door makes a real alert one Issue, from the tailnet, before F3's dedup, settle and
 runbooks exist (decision 3).
 
-- **A process of its own,** `packages/door`: one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
+- **A process of its own,** `door` (now `apps/door`): one route, `POST /alert/<source>`, loopback only (`FACTORY_DOOR_PORT`, default 8796);
   `tailscale serve` terminates TLS on the mini's tailnet name and the ACL gives that port, and nothing else, to `tag:homelab` and
   `tag:vps`. A bearer token per source (`~/.config/factory/door-tokens.json`, mode 0600, `factory door token new <source>`) is
   checked in constant time, the body is capped at 64 KiB as it is read, JSON only. Nothing is logged but a status line (ISO time, method, `refused <source>` for a 401, `probe <source>` when the request carries `x-factory-probe: 1`, as the deploy and verify probes do).
@@ -1463,7 +1463,7 @@ call, like Classify's `agw factory-classify`, off the tick and outside any trans
 
 One read contract for every surface (the Herdr sidebar, Iris, Argo, Hermes). It adds **no new truth**: it is a projection of what the
 factory already holds, shaped for people. The owner's call (RS13): no signed spec, a working proof of concept first, then better from real
-use. Code: `packages/contract/src/read.ts` (the schemas), `packages/server/src/read/` (the projection, `insights.ts`, `stream.ts`),
+use. Code: `packages/contract/src/read.ts` (the schemas), `apps/server/src/read/` (the projection, `insights.ts`, `stream.ts`),
 `factory read …` and `factory follow` (CLI on the same schemas).
 
 **Resources.** `GET` only, under `/v1`, on the token API (never the socket; same bearer, loopback Host, and 503 `not_ready` only where it

@@ -141,7 +141,7 @@
     "oxc/no-accumulating-spread": "error",
     "oxc/no-const-enum": "error"
   },
-  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**", "legacy/**"],
+  "ignorePatterns": ["docs/**", "node_modules/**", ".claude/**"],
   "overrides": [
     {
       "files": ["apps/server/test/work/table-types.test.ts"],

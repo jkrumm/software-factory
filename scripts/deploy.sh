@@ -19,8 +19,9 @@
 # the plist, the service, /health at the old sha, then `current`, the CLI link, deployed-sha, the door. The two shas trade places, so a
 # second rollback swaps forward again. Nothing is fetched or built: the previous release is on disk or the rollback is refused.
 #
-# A release is either core: the new one (apps/server, apps/door, apps/cli) or the old one (packages/server, packages/door,
-# packages/cli). Every step asks the release which it is, so one script deploys the new core and `make rollback` returns to the old.
+# A release is either core: the new one (apps/server, apps/door, apps/cli) or the old one, whose source is gone from master: its
+# built release stays pinned in data/keep-releases until the day-7 burn-in report, so `make rollback` still returns to it. Every step asks
+# the release which core it is, so one script deploys the new core and rolls back onto the old.
 #
 # DRY_RUN=1 prints the plan and the rendered plist and touches nothing (no fetch, no launchd, no ~/.local/bin).
 #
@@ -97,14 +98,14 @@ template_of() { echo "$1/deploy/$LABEL.plist.template"; } # $1 release dir
 door_template_of() { echo "$1/deploy/$DOOR_LABEL.plist.template"; } # $1 release dir
 
 # Which core a release holds, and where its CLI is (the new core's is apps/cli, the old one's packages/cli).
-core_of() { if [[ -f "$1/apps/server/src/main.ts" ]]; then echo "new core (apps/server)"; else echo "old core (packages/server)"; fi; } # $1 release dir
+core_of() { if [[ -f "$1/apps/server/src/main.ts" ]]; then echo "new core (apps/server)"; else echo "old core"; fi; } # $1 release dir
 cli_of() { if [[ -f "$1/apps/cli/bin/factory.ts" ]]; then echo "apps/cli/bin/factory.ts"; else echo "packages/cli/bin/factory.ts"; fi; } # $1 release dir
 
 # Which door a release holds, and what its launcher needs. A door is the release's own: the new core's (apps/door) posts to the
-# server's HTTP API with FACTORY_DOOR_TOKEN, resolved from the release's .env.door.tpl; the old core's (packages/door) posts to the
+# server's HTTP API with FACTORY_DOOR_TOKEN, resolved from the release's .env.door.tpl; the old core's posts to the
 # server's hook socket and holds no secret. Both read the tokens file of their sources. The 401 of an unauthenticated POST is the
 # same from either, so it proves a door is up, never which one: `door_runs_from` reads that from launchd.
-door_of() { if [[ -f "$1/apps/door/src/main.ts" ]]; then echo "new door (apps/door)"; else echo "old door (packages/door)"; fi; } # $1 release dir
+door_of() { if [[ -f "$1/apps/door/src/main.ts" ]]; then echo "new door (apps/door)"; else echo "old door"; fi; } # $1 release dir
 door_needs_secret() { grep -qs '\.env\.door\.tpl' "$1/scripts/launch-door.sh"; } # $1 release dir: does its launcher resolve a template
 door_credentials() { # $1 release dir
   if door_needs_secret "$1"; then echo "FACTORY_DOOR_TOKEN from its .env.door.tpl, and the tokens file"; else echo "none (the tokens file only)"; fi

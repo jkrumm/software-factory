@@ -12,7 +12,6 @@ help:
 	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF; behind it only by docs/tests is fine), and the factory CLI against it"
 
 # Tests start a private Postgres cluster (initdb) in a temp dir: PG_BIN_DIR points at the binaries when they are not on PATH.
-# `legacy/` is the old core, kept as a read-only reference until the cutover: no step reads it.
 check:
 	@echo "==> install (bun install --frozen-lockfile)"
 	@bun install --frozen-lockfile
