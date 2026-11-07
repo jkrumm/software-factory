@@ -54,7 +54,7 @@ const errorOf = (error: unknown): string => (error instanceof Error ? error.mess
 /**
  * The failed launchd job source (design §4 "Intake"): a project whose manifest has `signals.launchd: [labels]` has exactly those
  * labels read, in the server's own `gui/<uid>` domain, and nothing else on the machine. A job that exited non-zero is `down`, one that is
- * running or last exited 0 is `up`; a job that never exited, or is not loaded, says nothing. Self-paced like `GithubIntake`: the tick
+ * running or last exited 0 is `up`; a job that is not running and never exited, or is not loaded, says nothing. Self-paced like `GithubIntake`: the tick
  * calls `kick`, a pass starts only `everyMs` after the last, one at a time. Everything is read first (the process runner, outside any
  * transaction), then each signal is filed in a transaction of its own through `fileSignalIn`, whose heal rules, dedup and IuRoot refusal
  * apply. The output of `launchctl` is data: only its numbers are kept.
