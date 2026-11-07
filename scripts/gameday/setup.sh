@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Make the scratch repo and its local bare remote the kill runs spawn into. Refuses to touch what exists.
+# Make the scratch repo and its local bare remote the drill files its Issues into. Refuses to touch what exists.
 # Usage: setup.sh
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

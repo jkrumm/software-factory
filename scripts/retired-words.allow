@@ -2,10 +2,6 @@
 scripts/retired-words.ts *  # the list of retired words itself
 scripts/test/retired-words.test.ts *  # the fixtures that prove each word is caught
 scripts/env-file.sh ask judge  # the old core's settings allow-list (FACTORY_ASK_JUDGE); package 9 rewrites it with the deploy scripts
-scripts/gameday/f2/lib.sh manifest  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
-scripts/gameday/f2/seeded-bug.sh park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
-scripts/gameday/f2/silent-lead.sh *  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
-scripts/gameday/f2/templates/silent/AGENTS.md park  # the old core's game day, kept as it ran; package 9 rewrites or deletes it
 apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tracker's lane name for factory sessions, an external value
 apps/server/src/read/asks.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
@@ -18,3 +14,5 @@ apps/server/scripts/import/plan.ts classify  # the old core's event kinds (class
 apps/server/scripts/import/plan.ts park  # the old core's park event and reason, mapped to a stall
 apps/server/scripts/import/run.ts park  # the old core's wait reason `parked`, compared with the new stall
 scripts/rehearse.ts ask judge  # FACTORY_ASK_JUDGE: the old core's setting, switched off when its release is booted on the copy
+apps/server/test/import/plan.test.ts classify  # old event kinds the planner is tested on
+apps/server/test/import/plan.test.ts park  # the old core wait reason `parked`, tested against the new stall

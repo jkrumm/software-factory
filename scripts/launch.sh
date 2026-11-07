@@ -57,5 +57,5 @@ exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   esac
   export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@127.0.0.1:5432/shared"
   unset FACTORY_DB_PASSWORD
-  exec bun packages/server/src/main.ts
+  exec bun apps/server/src/main.ts
 ' sh $keys
