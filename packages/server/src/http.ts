@@ -141,7 +141,7 @@ export interface AppDeps {
   /** builds the fleet model on demand (`POST /fleet/refresh`); without it that route is 503 */
   fleet?: Pick<FleetBuilder, 'refreshNow'>
   /** the read API (`/v1`): whether a place is IuRoot's (`Places.isVisible`), the transcript counter, and the stream's timing for a test */
-  read?: Pick<ReadDeps, 'isVisible' | 'insights' | 'visibleNames'> &
+  read?: Pick<ReadDeps, 'isVisible' | 'insights' | 'visibleNames' | 'timeZone'> &
     Pick<StreamDeps, 'pollMs' | 'keepaliveMs' | 'sleep'>
 }
 
@@ -483,12 +483,24 @@ const issuePrioHandler =
   }
 
 /**
+ * Rebuilds the fleet snapshot after a change that removes an ask (an answer, a close), so `/v1/overview` drops it at once instead of at
+ * the next tick. The build reads the database, hc and the cached digest and calls no model. A failure only leaves the tick's build to it.
+ */
+async function refreshFleet(fleet: AppDeps['fleet']): Promise<void> {
+  try {
+    await fleet?.refreshNow()
+  } catch (error) {
+    console.error('fleet refresh after a change failed', error)
+  }
+}
+
+/**
  * `POST /issues/:id/answer`, on the token API only: the owner's answer to an open question. One inbox row keyed
  * `<issue>:answer:<call id>`; the same call again is 200 `duplicate`, the first 201. It is not on the socket, because a pane
  * (a lead among them) has no token and must not be able to answer its own question.
  */
 const issueAnswerHandler =
-  (sql: SQL, clock: Clock) =>
+  (sql: SQL, clock: Clock, fleet?: AppDeps['fleet']) =>
   async (req: Bun.BunRequest<'/issues/:id/answer'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     const body = await parseBody(req, IssueAnswerBody)
@@ -498,6 +510,9 @@ const issueAnswerHandler =
         ? json({ error: 'unknown issue' }, 404)
         : json({ error: 'this Issue has no open question' }, 409)
     }
+    // Applied now, so the question is answered when the call returns and the fleet snapshot drops the ask at once.
+    await answerNow(sql, { issueId, key: filed.key, now: () => clock.now() })
+    await refreshFleet(fleet)
     const ack = { issue: issueId, key: filed.key, duplicate: filed.duplicate, state: filed.state }
     return respond(IssueAnswerAck, ack, filed.duplicate ? 200 : 201)
   }
@@ -533,7 +548,14 @@ const notificationTestHandler = (sql: SQL, clock: Clock, notifier: Notifier, tar
  * `<issue>:<verb>:<call id>`; the same call again is 200 `duplicate`, the first 201. A `session` must work this Issue (409).
  */
 const issueVerbHandler =
-  (sql: SQL, clock: Clock, commits: Commits, review: Review | undefined, options: { requireSession: boolean }) =>
+  (
+    sql: SQL,
+    clock: Clock,
+    commits: Commits,
+    review: Review | undefined,
+    options: { requireSession: boolean },
+    fleet?: AppDeps['fleet'],
+  ) =>
   async (req: Bun.BunRequest<'/issues/:id/:verb'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     // The owner's `answer` is no verb of a lead: the token API serves it on its own route, and here it is no route at all.
@@ -551,6 +573,7 @@ const issueVerbHandler =
       ? await answerNow(sql, { issueId, key: filed.key, now: () => clock.now() })
       : undefined
     if (answer?.result === 'refused') return json({ error: answer.detail, code: 'refused' }, 409)
+    if (answer?.result === 'applied') await refreshFleet(fleet)
     const ack = {
       issue: issueId,
       verb,
@@ -592,7 +615,7 @@ const issueEvidenceHandler =
  * the event does not apply to, a window that has passed) is the caller's answer, and the same `--id` again gets the same one.
  */
 const issueOwnerHandler =
-  (sql: SQL, clock: Clock, kind: 'reopen' | 'stop') =>
+  (sql: SQL, clock: Clock, kind: 'reopen' | 'stop', fleet?: AppDeps['fleet']) =>
   async (req: Bun.BunRequest<'/issues/:id/reopen' | '/issues/:id/stop'>): Promise<Response> => {
     const issueId = parseParam(IssueId, req.params.id)
     const { id, reason } = await parseBody(req, IssueOwnerInput)
@@ -608,6 +631,7 @@ const issueOwnerHandler =
     }
     const answer = await answerNow(sql, { issueId, key, now: () => clock.now() })
     if (answer?.result === 'refused') return json({ error: answer.detail, code: 'refused' }, 409)
+    if (answer?.result === 'applied') await refreshFleet(fleet)
     // Not answered yet: the row is filed and the tick has it. 202, and the Issue as it stands.
     return respond(Issue, (await getIssue(sql, issueId)) ?? issue, answer ? 200 : 202)
   }
@@ -882,12 +906,14 @@ export function routes(
     '/issues/:id/timeline': { GET: route(issueTimelineHandler(sql)) },
     '/issues/:id/note': { POST: route(issueNoteHandler(sql, clock)) },
     '/issues/:id/prio': { POST: route(issuePrioHandler(sql, clock)) },
-    '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock)) },
+    '/issues/:id/answer': { POST: route(issueAnswerHandler(sql, clock, fleet)) },
     '/issues/:id/evidence': { POST: route(issueEvidenceHandler(sql, clock, { requireSession: false })) },
-    '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen')) },
-    '/issues/:id/stop': { POST: route(issueOwnerHandler(sql, clock, 'stop')) },
+    '/issues/:id/reopen': { POST: route(issueOwnerHandler(sql, clock, 'reopen', fleet)) },
+    '/issues/:id/stop': { POST: route(issueOwnerHandler(sql, clock, 'stop', fleet)) },
     '/issues/:id/resume': { POST: route(issueResumeHandler(sql, clock, roles, repoRoots)) },
-    '/issues/:id/:verb': { POST: route(issueVerbHandler(sql, clock, commits, review, { requireSession: false })) },
+    '/issues/:id/:verb': {
+      POST: route(issueVerbHandler(sql, clock, commits, review, { requireSession: false }, fleet)),
+    },
     '/notifications': { GET: route(notificationListHandler(sql)) },
     '/notifications/test': { POST: route(notificationTestHandler(sql, clock, notifier, notifyTarget)) },
     '/projects': { GET: route(projectListHandler(sql, clock)) },

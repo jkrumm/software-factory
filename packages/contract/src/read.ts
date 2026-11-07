@@ -63,10 +63,10 @@ export const IssueCard = z.object({
   filedTitle: z.string(),
   /** short, plain words: the digest's heading of the filed title, else the filed title cut at a word */
   title: z.string(),
-  /** one sentence on where it stands */
-  summary: z.string(),
-  /** one sentence on what the Issue is for: the digest's answer, else the first sentence of the filed goal, else the filed title (additive) */
-  about: z.string().default(''),
+  /** one plain sentence on where it stands, no ids and no UTC times; null when nothing is known (a client hides the line) */
+  summary: z.string().nullable(),
+  /** one plain sentence on what the Issue is for: the digest's answer, else the first fitting sentence of the filed goal, else the filed title; null when none */
+  about: z.string().nullable().default(null),
   state: IssueState,
   reason: WaitReason.nullable(),
   outcome: IssueOutcome.nullable(),
