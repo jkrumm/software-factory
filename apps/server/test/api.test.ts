@@ -49,6 +49,8 @@ describe('GET /health', () => {
       version: 'abc123',
       reason: null,
       heartbeat: { ok: true, reason: null, tickAt: null, queueMovedAt: null },
+      lines: [],
+      loops: [],
     })
   })
 
@@ -101,7 +103,7 @@ describe('the OpenAPI document', () => {
     for (const status of ['200', '503']) {
       const schema = operation?.responses[status]?.content?.['application/json']?.schema
       expect(schema?.$ref).toBe('#/$defs/Health')
-      expect(Object.keys(z.record(z.string(), z.unknown()).parse(schema?.$defs))).toEqual(['Health', 'Heartbeat'])
+      expect(Object.keys(z.record(z.string(), z.unknown()).parse(schema?.$defs))).toEqual(['Health', 'Heartbeat', 'HealthLine', 'HealthLoop'])
     }
   })
 })

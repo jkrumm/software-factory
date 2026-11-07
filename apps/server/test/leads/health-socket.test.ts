@@ -43,11 +43,28 @@ describe('tick staleness on /health', () => {
         tickAt: ago(120_000).toISOString(),
         queueMovedAt: null,
       },
+      lines: [],
+      loops: [],
     })
     expect(
       healthOf({ version: 'v', databaseFailure: 'down', tickAt: null, queueMovedAt: null, tickFailure: 'x' }).reason,
     ).toBe('down')
     expect(healthOf({ version: 'v', databaseFailure: null, tickAt: null, queueMovedAt: null }).status).toBe('ok')
+  })
+
+  test('door lines and loops inform: the status stays ok and the heartbeat names are the same', () => {
+    const health = healthOf({
+      version: 'v',
+      databaseFailure: null,
+      tickAt: null,
+      queueMovedAt: null,
+      lines: [{ source: 'door', text: 'a monitor is unrouted', since: null }],
+      loops: [{ name: 'leads', ok: false, lastOkAt: null, lastError: 'boom', intervalMs: 10_000 }],
+    })
+    expect(health.status).toBe('ok')
+    expect(Object.keys(health.heartbeat).sort()).toEqual(['ok', 'queueMovedAt', 'reason', 'tickAt'])
+    expect(health.lines).toHaveLength(1)
+    expect(health.loops?.[0]?.lastError).toBe('boom')
   })
 })
 

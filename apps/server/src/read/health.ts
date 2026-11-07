@@ -1,4 +1,4 @@
-import type { Health } from '@software-factory/contract'
+import type { Health, HealthLine, HealthLoop } from '@software-factory/contract'
 
 export interface HealthFacts {
   version: string
@@ -10,6 +10,9 @@ export interface HealthFacts {
   queueMovedAt: string | null
   /** why the tick is stale (`tickProblem`), or null; left out, there is no tick to judge */
   tickFailure?: string | null
+  /** the door's health lines; they inform and never change the status */
+  lines?: readonly HealthLine[]
+  loops?: readonly HealthLoop[]
 }
 
 /**
@@ -38,5 +41,7 @@ export function healthOf(facts: HealthFacts): Health {
     version: facts.version,
     reason,
     heartbeat: { ok: reason === null, reason, tickAt: facts.tickAt, queueMovedAt: facts.queueMovedAt },
+    lines: [...(facts.lines ?? [])],
+    loops: [...(facts.loops ?? [])],
   }
 }

@@ -288,7 +288,18 @@ async function main(): Promise<void> {
     health: {
       read: async () => {
         const tickAt = runner.lastOkAt('leads')
+        const door = await intake
+          .doorLines(DOOR_LINES_RECENT_MS)
+          .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
         return healthOf({
+          lines: door.map((text) => ({ source: 'door', text, since: null })),
+          loops: runner.view().map((loop) => ({
+            name: loop.name,
+            ok: loop.lastError === null,
+            lastOkAt: loop.lastOkAt,
+            lastError: loop.lastError,
+            intervalMs: loop.intervalMs,
+          })),
           version: settings.version,
           databaseFailure: await ping(sql),
           tickAt: tickAt?.toISOString() ?? null,

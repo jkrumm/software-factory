@@ -1,7 +1,7 @@
 export { ErrorBody } from './errors.ts'
 export * from './read.ts'
 export * from './read-models.ts'
-export { Health, Heartbeat } from './health.ts'
+export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
   Effort,
