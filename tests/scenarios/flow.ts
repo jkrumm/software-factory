@@ -34,9 +34,17 @@ export async function run(flow: Flow, args: string[], as: Caller = 'owner'): Pro
   return { ...raw, json }
 }
 
-/** Like `run`, but a failure throws with the command and what it printed. */
+/**
+ * Like `run`, but a failure throws with the command and what it printed. A `version_conflict` ("try again") is retried: a
+ * loop of the server may move the Issue between a verb's read and its write, the refusal wrote nothing, and a client is
+ * told to repeat the call. A scenario that asserts the refusal itself uses `run`.
+ */
 export async function must(flow: Flow, args: string[], as: Caller = 'owner'): Promise<Run> {
-  const result = await run(flow, args, as)
+  let result = await run(flow, args, as)
+  for (let retry = 0; retry < 5 && result.code !== 0 && result.err.includes('version_conflict'); retry++) {
+    await Bun.sleep(100)
+    result = await run(flow, args, as)
+  }
   if (result.code !== 0) throw new Error(`factory ${args.join(' ')} exited ${result.code}: ${result.err}${result.out}`)
   return result
 }
