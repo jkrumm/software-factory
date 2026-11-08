@@ -90,9 +90,13 @@ const checker = (options: { make?: string; bun?: string } = {}) =>
     ...options,
   })
 
-async function sweep(name: string, options: { make?: string; bun?: string } = {}): Promise<SweepReport> {
-  const c = checker(options)
-  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout))
+async function sweep(
+  name: string,
+  options: { make?: string; bun?: string; skipCheck?: string } = {},
+): Promise<SweepReport> {
+  const { skipCheck, ...tools } = options
+  const c = checker(tools)
+  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck }))
   if (!result.ok) throw new Error(result.error.detail)
   return result.value
 }
@@ -186,6 +190,20 @@ describe('withCheckout', () => {
 })
 
 describe('check probe', () => {
+  test('a project that says its check needs a lab gets no check run and no finding, and the sweep names why', async () => {
+    const marker = join(base, `ran-${++counter}`)
+    const makefile = `check:\n\t@touch ${marker}; exit 1\n`
+    const skipped = await sweep(makeRepo({ Makefile: makefile }).name, { skipCheck: 'needs the owner photo library' })
+    expect(run(skipped, 'check')?.outcome).toBe('skipped')
+    expect(run(skipped, 'check')?.detail).toContain('needs the owner photo library')
+    expect(findings(skipped, 'check')).toEqual([])
+    expect(existsSync(marker)).toBe(false)
+    // the default stays on: the same red Makefile is a finding without the setting
+    const on = await sweep(makeRepo({ Makefile: makefile }).name)
+    expect(run(on, 'check')?.outcome).toBe('found')
+    expect(findings(on, 'check')).toHaveLength(1)
+  })
+
   test('clean, found with the tail of the output, skipped, failed', async () => {
     const green = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 0\n' }).name)
     expect(run(green, 'check')?.outcome).toBe('clean')

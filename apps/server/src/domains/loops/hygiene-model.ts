@@ -59,6 +59,12 @@ export interface Checkout {
   source: string
 }
 
+/** What the project's project.yaml lets a sweep run. */
+export interface SweepOptions {
+  /** the project's own words for why `make check` is not run here (its check needs a lab this host lacks); absent runs it */
+  skipCheck?: string
+}
+
 /**
  * The I/O of a pass. `withCheckout` fetches, makes a detached worktree under the factory's data directory (at origin's default
  * branch when `ref` is null, at `ref` otherwise), calls `use`, and removes the worktree on every path. `sweep` runs every
@@ -70,5 +76,5 @@ export interface HygieneChecker {
     ref: string | null,
     use: (checkout: Checkout) => Promise<T>,
   ): Promise<Result<T, PortError>>
-  sweep(checkout: Checkout): Promise<SweepReport>
+  sweep(checkout: Checkout, options?: SweepOptions): Promise<SweepReport>
 }

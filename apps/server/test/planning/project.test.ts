@@ -24,6 +24,18 @@ describe('project.yaml', () => {
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
   })
 
+  test('hygiene.check defaults on; false needs a reason, and an unknown key is an error', () => {
+    const parse = (hygiene: string) =>
+      parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: ${hygiene}`), 'lab')
+    expect(defaultProject('lab').hygiene).toEqual({ check: true })
+    const off = parse('{ check: false, reason: needs the owner library }')
+    expect(off.ok && off.project.hygiene).toEqual({ check: false, reason: 'needs the owner library' })
+    const bare = parse('{ check: false }')
+    expect(bare.ok).toBe(false)
+    expect(!bare.ok && bare.message).toContain('hygiene.reason')
+    expect(parse('{ chek: false }').ok).toBe(false)
+  })
+
   test('leads, slots.run and signals are read; jobs and ticktick are accepted and dropped', () => {
     const parsed = parseProject(
       yaml(
