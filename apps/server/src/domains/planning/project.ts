@@ -69,6 +69,21 @@ const Slots = z.strictObject({
     .optional(),
 })
 
+/**
+ * `hygiene:`: what the hygiene loop may run on the project. `check: false` says the project's `make check` needs a lab
+ * the factory host does not have (inputs only a person may supply); the loop skips that probe and names `reason` in its
+ * pass. The reason is required: a probe is never switched off without one.
+ */
+const Hygiene = z
+  .strictObject({
+    check: z.boolean().default(true),
+    reason: z.string().trim().min(1).max(300).optional(),
+  })
+  .refine((hygiene) => hygiene.check || hygiene.reason !== undefined, {
+    message: '`reason` is required when `check` is false',
+    path: ['reason'],
+  })
+
 /** First match wins. */
 const ShipRule = z.strictObject({
   paths: z.array(z.string().min(1)).min(1),
@@ -148,6 +163,7 @@ export const ProjectFile = z
     /** how many leads may work in the repo at once (one more for a fix while the line is stopped) */
     leads: z.number().int().min(1).max(8).default(1),
     slots: Slots.default({}),
+    hygiene: Hygiene.default(() => Hygiene.parse({})),
     signals: Signals.default({}),
     heal: z.array(HealRule).max(32).default([]),
     /** standing policy: the first rule whose phrase the question contains and whose answer is one of its options settles it */

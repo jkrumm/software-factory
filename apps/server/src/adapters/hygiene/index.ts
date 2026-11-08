@@ -4,6 +4,7 @@ import {
   PROBES,
   type Probe,
   type ProbeRun,
+  type SweepOptions,
   type SweepReport,
 } from '../../domains/loops/hygiene-model.ts'
 import { type RepoLocator, withCheckout } from './checkout.ts'
@@ -13,7 +14,7 @@ import { candidates } from './history.ts'
 import { checkProbe } from './probes/check.ts'
 import { cochangeProbe } from './probes/cochange.ts'
 import { depsProbe } from './probes/deps.ts'
-import { type Outcome, failed } from './probes/finding.ts'
+import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
 import { retiredProbe } from './probes/retired.ts'
 
@@ -42,7 +43,7 @@ async function guarded(run: () => Promise<Outcome>): Promise<Outcome> {
 export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChecker {
   const tools: Tools = { git: options.git ?? 'git', make: options.make ?? 'make', bun: options.bun ?? 'bun' }
 
-  async function sweep(checkout: Checkout): Promise<SweepReport> {
+  async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
     const markdown = trackedMarkdown(tools, path)
     markdown.catch(() => {})
@@ -71,9 +72,11 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     const deps = outcomes.get('deps')
     outcomes.set(
       'check',
-      deps?.outcome === 'failed' && deps.detail.startsWith('bun install')
-        ? failed(`not run: ${deps.detail}`)
-        : await guarded(() => checkProbe(tools, checkout)),
+      options.skipCheck !== undefined
+        ? skipped(`make check not run, the project says its check needs a lab this host lacks: ${options.skipCheck}`)
+        : deps?.outcome === 'failed' && deps.detail.startsWith('bun install')
+          ? failed(`not run: ${deps.detail}`)
+          : await guarded(() => checkProbe(tools, checkout)),
     )
 
     const runs: ProbeRun[] = []

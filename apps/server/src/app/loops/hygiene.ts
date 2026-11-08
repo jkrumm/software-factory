@@ -87,6 +87,8 @@ interface Target {
   repoText: string
   name: string
   passId: string
+  /** the project's reason for not running `make check` here (`hygiene.check: false`); absent runs it */
+  skipCheck?: string
 }
 
 /**
@@ -152,7 +154,7 @@ async function judge(
 async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<Result<HygienePass, PortError>> {
   const added = nothingAdded()
   const swept = await deps.checker.withCheckout(target.repoText, null, async (checkout) => {
-    const report = await deps.checker.sweep(checkout)
+    const report = await deps.checker.sweep(checkout, { skipCheck: target.skipCheck })
     const { file, overBudget } = probeBudget(rankProbeFindings(report.findings))
     for (const finding of file) {
       await fileOne(
@@ -283,7 +285,9 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
   if (work.kind === 'retry') {
     return retryPass(deps, { repoText: work.repo, name: project.name, passId: work.row.id }, work.row)
   }
-  return fullPass(deps, { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene') }, now)
+  const { hygiene } = project.project
+  const skipCheck = hygiene.check ? undefined : hygiene.reason
+  return fullPass(deps, { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene'), skipCheck }, now)
 }
 
 export const hygieneSummary = (pass: HygienePass): string => {

@@ -161,12 +161,14 @@ test('a failed judgment is retried after the gap while attempts remain; a full p
 
 // ---- a checkout that cannot be made ---------------------------------------------------------------------------------------
 
-const project = (name: string) => ({ name, repo: `/src/${name}`, source: 'file' }) as unknown as StoredProject
+const project = (name: string, hygiene: { check: boolean; reason?: string } = { check: true }) =>
+  ({ name, repo: `/src/${name}`, source: 'file', project: { hygiene } }) as unknown as StoredProject
 
-function world(names: string[], broken: Set<string>) {
+function world(names: string[], broken: Set<string>, projects: StoredProject[] = names.map((n) => project(n))) {
   const rows: HygienePassRecord[] = []
   let at = now
   const sweeps: string[] = []
+  const skips: (string | undefined)[] = []
   const loops = {
     hygienePasses: async () => {
       const newest = new Map<string, HygienePassRecord>()
@@ -180,14 +182,15 @@ function world(names: string[], broken: Set<string>) {
       broken.has(repo)
         ? err(portError('gone', 'fetch failed'))
         : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef', source: '/tmp/src' })),
-    sweep: async (co) => {
+    sweep: async (co, options) => {
       sweeps.push(co.ref)
+      skips.push(options?.skipCheck)
       return { ref: co.ref, runs: [], findings: [], stale: [], slop: [] }
     },
   }
   const deps: HygieneDeps = {
     uow: {
-      run: async (work) => work({ loops, planning: { projects: async () => names.map(project) } as never }),
+      run: async (work) => work({ loops, planning: { projects: async () => projects } as never }),
       inTransaction: () => false,
     },
     clock: { now: () => at },
@@ -199,7 +202,7 @@ function world(names: string[], broken: Set<string>) {
     retryMs: 6 * HOUR,
     repos: null,
   }
-  return { deps, rows, sweeps, advance: (ms: number) => (at = new Date(at.getTime() + ms)) }
+  return { deps, rows, sweeps, skips, advance: (ms: number) => (at = new Date(at.getTime() + ms)) }
 }
 
 test('a checkout that fails records a pass, is not due before the retry gap, and the next project is swept meanwhile', async () => {
@@ -219,6 +222,14 @@ test('a checkout that fails records a pass, is not due before the retry gap, and
   w.advance(6 * HOUR)
   expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'a' } } })
   expect(w.rows.filter((r) => r.repo === 'a')).toHaveLength(2)
+})
+
+test('a project with hygiene.check false is swept with its reason; the default asks for the check', async () => {
+  const reason = 'needs the owner photo library'
+  const w = world([], new Set(), [project('lab', { check: false, reason }), project('plain')])
+  expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'lab' } } })
+  expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'plain' } } })
+  expect(w.skips).toEqual([reason, undefined])
 })
 
 test('planHygiene treats a no-checkout row as due after the retry gap, not after the week', () => {
