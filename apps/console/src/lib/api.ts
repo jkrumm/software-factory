@@ -8,7 +8,9 @@ import {
   ErrandReply,
   ErrorBody,
   FlowModel,
+  MachineModel,
   NeedsModel,
+  ReadAccountList,
   SignalAck,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
@@ -39,6 +41,8 @@ export async function getJson<T>(path: string, schema: Schema<T>, signal?: Abort
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
+export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', ReadAccountList, signal)
+export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
 export const fetchChanges = (since?: string, signal?: AbortSignal) =>
   getJson(since ? `/v1/changes?since=${encodeURIComponent(since)}` : '/v1/changes', ChangeList, signal)
 

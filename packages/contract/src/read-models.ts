@@ -256,3 +256,19 @@ export const FrictionModel = z
   })
   .meta({ id: 'FrictionModel' })
 export type FrictionModel = z.infer<typeof FrictionModel>
+
+// -- machine -------------------------------------------------------------------------------------------------------------
+
+/** The host's reading and the ceilings admission holds it to; a reading that failed is null. */
+export const MachineModel = z
+  .strictObject({
+    at,
+    /** the 1-minute load average */
+    load: z.number().nullable(),
+    loadCeiling: z.number(),
+    /** swapped-out data in the last 300 s (MiB) and swap in use as a share of RAM (percent) */
+    memory: z.strictObject({ swapoutMbPer300s: z.number(), swapUsedPct: z.number() }).nullable(),
+    memoryCeilings: z.strictObject({ swapoutMbPer300s: z.number(), swapUsedPct: z.number() }),
+  })
+  .meta({ id: 'MachineModel' })
+export type MachineModel = z.infer<typeof MachineModel>

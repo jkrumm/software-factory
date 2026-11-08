@@ -2,7 +2,9 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-navigation, connection chip, command palette, and the Needs you screen; the other screens come in later steps.
+navigation, connection chip, command palette, the status strip under the title (working / waiting / queued from
+`/v1/flow`, each account's weekly quota from `/v1/accounts`, the mini's load and swap from `/v1/machine`; the meters open
+the weekly reset and the 5-hour window), and the Needs you screen; the other screens come in later steps.
 
 ## Build
 
