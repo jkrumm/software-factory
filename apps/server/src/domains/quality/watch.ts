@@ -22,6 +22,8 @@ export interface ProjectChecks {
   /** `make` deploys with `make deploy`; the others are deployed by a push, by the lead, or not at all */
   deployMode: 'auto' | 'make' | 'agentic' | 'none'
   makeVerify: boolean
+  /** other `make <target>` the project's targets verify by, each run and judged like `make verify` */
+  makeTargets?: string[]
   probes: Probe[]
 }
 

@@ -17,15 +17,20 @@ const MAKE_VERIFY = 'make verify'
 
 /**
  * What a synced `project.yaml` says of the watch: the deploy mode, the hold as the window, `make verify` when a target
- * names it, and an HTTP probe for every target that verifies by URL and for every probe of the file. `makeVerify` is
+ * names it (any other `make <target>` runs as well, never dropped), and an HTTP probe for every target that verifies by URL and for every probe of the file. `makeVerify` is
  * `undefined` where the file names no target, so the caller can fall back to what the Makefile offers.
  */
 export function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVerify'> & { makeVerify?: boolean } {
   const { targets, hold, mode, probes } = project.deploy
+  const makeTargets = targets.flatMap((target) => {
+    const named = /^make (\S+)$/.exec(target.verify)?.[1]
+    return named && named !== 'verify' ? [named] : []
+  })
   return {
     windowMs: durationMs(hold) ?? 0,
     deployMode: mode,
     ...(targets.length > 0 ? { makeVerify: targets.some((target) => target.verify === MAKE_VERIFY) } : {}),
+    ...(makeTargets.length > 0 ? { makeTargets: [...new Set(makeTargets)] } : {}),
     probes: [
       ...targets
         .filter((target) => /^https?:\/\//.test(target.verify))

@@ -95,3 +95,21 @@ test('no project.yaml, or no project at all: the Makefile, as before', async () 
   expect(await projectsOf(stored('defaults')).checksOf('/roots/app')).toEqual(expected)
   expect(await projectsOf().checksOf('/roots/app')).toEqual(expected)
 })
+
+test('a target that verifies by another make target is carried, not dropped', async () => {
+  const projects = projectsOf(
+    stored('file', {
+      deploy: {
+        mode: 'auto',
+        targets: [
+          { name: 'a', host: 'mini', verify: 'make verify-apple' },
+          { name: 'b', host: 'mini', verify: 'make verify-apple' },
+        ],
+      },
+    }),
+  )
+  expect(await projects.checksOf('/roots/app')).toMatchObject({
+    ok: true,
+    value: { makeVerify: false, makeTargets: ['verify-apple'] },
+  })
+})
