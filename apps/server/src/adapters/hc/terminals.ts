@@ -3,7 +3,7 @@ import { basename, join } from 'node:path'
 import * as z from 'zod'
 import type { StartTerminal, TerminalInfo, Terminals } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { appSpaces, nameTab, real, seedSpace, type Rpc } from './app-doc.ts'
+import { appSpaces, nameTab as nameTabInDoc, real, seedSpace, type Rpc } from './app-doc.ts'
 import { CannotExecute, HcClient, HcError } from './client.ts'
 import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './process.ts'
 import { atPrompt } from './screen.ts'
@@ -118,6 +118,7 @@ const infoOf = (terminal: Terminal): TerminalInfo => ({
   turn: terminal.turn,
   exitCode: terminal.exit_code,
   tab: terminal.labels['herdr.tab'] ?? null,
+  tabName: terminal.labels['factory.tab_name'] ?? null,
   space: terminal.labels['herdr.space'] ?? null,
 })
 
@@ -134,6 +135,8 @@ const infoOf = (terminal: Terminal): TerminalInfo => ({
  */
 export class HcTerminals implements Terminals {
   private readonly hc: HcClient
+  /** Tabs the app's document has named (by us or the owner): they are not looked at again. */
+  private readonly settled = new Set<string>()
   /** Looking, placing and running go one at a time: two starts must not both see an empty space and both take its id. */
   private creating: Promise<unknown> = Promise.resolve()
 
@@ -220,6 +223,15 @@ export class HcTerminals implements Terminals {
     }
   }
 
+  async nameTab({ tab, name }: { tab: string; name: string }): Promise<void> {
+    if (this.settled.has(tab)) return
+    try {
+      if (await nameTabInDoc(this.docRpc(this.budget()), tab, name)) this.settled.add(tab)
+    } catch {
+      // the name is a courtesy
+    }
+  }
+
   // --- steps -----------------------------------------------------------------------------------------------------
 
   private async findOrRun(
@@ -251,7 +263,12 @@ export class HcTerminals implements Terminals {
         argv: this.argv(input),
         cwd: input.cwd,
         env,
-        labels: { 'factory.key': input.key, 'herdr.space': space.id, 'herdr.tab': tab, 'factory.tab_name': input.key },
+        labels: {
+          'factory.key': input.key,
+          'herdr.space': space.id,
+          'herdr.tab': tab,
+          'factory.tab_name': input.tabName,
+        },
         keep: true,
         no_parent: true,
         name: terminalName(input.key),
@@ -259,7 +276,6 @@ export class HcTerminals implements Terminals {
       Terminal,
       budget,
     )
-    await nameTab(this.docRpc(budget), tab, input.key)
     return { terminal: created, proven: false }
   }
 

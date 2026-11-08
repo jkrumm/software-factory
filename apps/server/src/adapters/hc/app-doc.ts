@@ -61,27 +61,30 @@ function findTab(value: unknown, id: string): Record<string, unknown> | undefine
 }
 
 /**
- * Name the tab once the app has an entry for it. Best effort, never throwing: the app adopts a tab only after it has seen
- * the terminal, so there is often no entry yet and the label `factory.tab_name` carries the name for whoever names it
- * later (the witness does, on a label or document event). Written against the version just read; a conflict reads again.
+ * Name the tab once the app has an entry for it. True when the entry exists and is settled: we named it, or it already
+ * had a name (whatever it is, a name is never overwritten). False when there is no entry yet (the app adopts a tab only
+ * after it has seen the terminal; the naming pass of the leads tick comes again), the document is unreadable, or the
+ * retries on a conflict ran out. Best effort, never throwing. Written against the version just read; a conflict reads again.
  */
-export async function nameTab(rpc: Rpc, tab: string, name: string): Promise<void> {
+export async function nameTab(rpc: Rpc, tab: string, name: string): Promise<boolean> {
   try {
     for (let attempt = 0; attempt < DOC_RETRIES; attempt++) {
       const doc = await rpc('doc.get', { name: APP_DOC }, DocGet)
       const entry = findTab(doc.value, tab)
-      if (!entry || entry.name === name) return
+      if (!entry) return false
+      if (typeof entry.name === 'string' && entry.name !== '') return true
       entry.name = name
       try {
         await rpc('doc.set', { name: APP_DOC, version: doc.version, value: doc.value }, DocSet)
-        return
+        return true
       } catch (error) {
-        if (!(error instanceof HcError && error.refusal?.kind === 'conflict')) return
+        if (!(error instanceof HcError && error.refusal?.kind === 'conflict')) return false
       }
     }
   } catch {
     // the name is a courtesy
   }
+  return false
 }
 
 /**

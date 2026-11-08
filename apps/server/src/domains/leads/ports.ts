@@ -16,6 +16,8 @@ export interface TerminalInfo {
   turn: number
   exitCode: number | null
   tab: string | null
+  /** the name the factory wants on the tab (label `factory.tab_name`); null for a terminal that carries none */
+  tabName: string | null
   space: string | null
 }
 
@@ -30,6 +32,8 @@ export interface StartTerminal {
   tier: Tier
   effort: Effort
   account: string
+  /** the name the lead's tab gets in the app, once the app has adopted the tab */
+  tabName: string
 }
 
 /** herdr-core. Every call has a process timeout; `start` looks before it acts, so a replay never starts a second terminal. */
@@ -42,6 +46,11 @@ export interface Terminals {
   type(input: { terminal: string; text: string; force: boolean }): Promise<Result<'typed' | 'busy'>>
   /** ends the key's terminals and takes them away; none left is what was asked for */
   close(key: string): Promise<Result<void>>
+  /**
+   * Best effort, never throws: names the tab only if the app's entry for it exists and has no name yet. A tab already
+   * named (by the factory or the owner) is never overwritten.
+   */
+  nameTab(input: { tab: string; name: string }): Promise<void>
 }
 
 export interface Worktree {
