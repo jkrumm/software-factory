@@ -3,8 +3,9 @@ import type { TCPSocketListener } from 'bun'
 import { type SseEvent, StreamError, streamEvents } from '../src/sse.ts'
 
 let server: ReturnType<typeof Bun.serve>
-// answers with a length it does not deliver and closes: a stream that breaks
+// answers with a length it does not deliver, then closes once the test says so: a stream that breaks
 let breaking: TCPSocketListener
+let held: { end(): unknown } | undefined
 let seen: { url: string; authorization: string | null; lastEventId: string | null } | undefined
 
 const sse = (text: string) => new Response(text, { headers: { 'content-type': 'text/event-stream' } })
@@ -18,7 +19,8 @@ beforeAll(() => {
         socket.write(
           'HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: 500\r\n\r\nid: 1\ndata: first\n\n',
         )
-        socket.end()
+        // closing in the same tick can beat the first event to the reader; the test breaks the stream after receiving it
+        held = socket
       },
     },
   })
@@ -97,8 +99,10 @@ test('a server that cannot be reached throws unreachable', async () => {
 test('a break after the first event throws dropped', async () => {
   const seenEvents: SseEvent[] = []
   const error = await (async () => {
-    for await (const event of streamEvents({ base: `http://127.0.0.1:${breaking.port}`, path: '/break' }))
+    for await (const event of streamEvents({ base: `http://127.0.0.1:${breaking.port}`, path: '/break' })) {
       seenEvents.push(event)
+      held?.end()
+    }
   })().catch((e: unknown) => e)
   expect(seenEvents).toEqual([{ id: '1', event: 'message', data: 'first' }])
   expect(error).toMatchObject({ reason: 'dropped' })
