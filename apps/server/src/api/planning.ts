@@ -233,7 +233,7 @@ export const planningRoutes = (api?: PlanningApi) => {
         response: { 200: AfterAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
           operationId: 'planning.after',
-          summary: 'make a queued Issue wait for others to close (refuses a cycle)',
+          summary: 'make a queued, working or watching Issue wait for others to close (refuses a cycle)',
         },
       },
     )

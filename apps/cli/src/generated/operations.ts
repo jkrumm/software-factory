@@ -432,7 +432,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['planning', 'after'],
     method: 'POST',
     path: '/planning/after',
-    summary: 'make a queued Issue wait for others to close (refuses a cycle)',
+    summary: 'make a queued, working or watching Issue wait for others to close (refuses a cycle)',
     pathParams: [],
     queryParams: [],
     body: true,
