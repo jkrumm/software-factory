@@ -121,7 +121,67 @@ test('a squash merge of the branch is on the base: the branch’s content landed
   const squashed = await repo.git('rev-parse', 'HEAD')
   const got = value(await read(repo, [squashed], { branch: 'factory/issue_1-1', cut }))
   expect(got.paths).toContain('s.ts')
-  expect(got.reviewRanges).toHaveLength(1)
+  // A review is bound to the commits it judged: the squash commit's tree is none of the reviewed heads'.
+  expect(got.reviewRanges).toEqual([{ base: cut, head: await repo.git('rev-parse', 'factory/issue_1-1') }])
+})
+
+test('a squash that changed other paths than the branch stays its own range to review', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', 'factory/issue_1-1')
+  await Bun.write(`${repo.path}/s.ts`, 's\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'wip')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--squash', 'factory/issue_1-1')
+  await Bun.write(`${repo.path}/extra.ts`, 'x\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'feat: s and more')
+  await repo.git('push', '-q', 'origin', 'master')
+  const squashed = await repo.git('rev-parse', 'HEAD')
+  const got = value(await read(repo, [squashed], { branch: 'factory/issue_1-1', cut }))
+  expect(got.reviewRanges).toEqual([{ base: await repo.git('rev-parse', `${squashed}^`), head: squashed }])
+})
+
+test('a squash of a branch with a later fix commit is reviewed as the branch’s commits, both of them', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', 'factory/issue_1-1')
+  await Bun.write(`${repo.path}/s.ts`, 's\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'wip')
+  await Bun.write(`${repo.path}/s.ts`, 's2\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'fix: review round')
+  const tip = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--squash', 'factory/issue_1-1')
+  await repo.git('commit', '-q', '-m', 'feat: s')
+  await repo.git('push', '-q', 'origin', 'master')
+  const squashed = await repo.git('rev-parse', 'HEAD')
+  const got = value(await read(repo, [squashed], { branch: 'factory/issue_1-1', cut }))
+  expect(got.reviewRanges).toEqual([{ base: cut, head: tip }])
+})
+
+test('a later commit on the base with the squash’s paths keeps its own range: one squash stands for the branch', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', 'factory/issue_1-1')
+  await Bun.write(`${repo.path}/s.ts`, 's\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'wip')
+  const tip = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--squash', 'factory/issue_1-1')
+  await repo.git('commit', '-q', '-m', 'feat: s')
+  await repo.git('push', '-q', 'origin', 'master')
+  const squashed = await repo.git('rev-parse', 'HEAD')
+  const followUp = await repo.commit('s.ts', 's3\n', 'fix: s again')
+  const got = value(await read(repo, [squashed, followUp], { branch: 'factory/issue_1-1', cut }))
+  expect(got.reviewRanges).toEqual([
+    { base: squashed, head: followUp },
+    { base: cut, head: tip },
+  ])
 })
 
 test('without a cut, the range starts at the parent of the oldest commit named', async () => {
