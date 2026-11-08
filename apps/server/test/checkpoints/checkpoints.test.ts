@@ -21,6 +21,7 @@ import {
   submitArtifact,
 } from '../../src/app/checkpoints.ts'
 import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
+import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
@@ -31,7 +32,9 @@ import {
   type JudgeVerdict,
   type PolicyRule,
 } from '../../src/domains/checkpoints/decision.ts'
-import type { Notifier, JudgePort, StandingPolicies } from '../../src/domains/checkpoints/ports.ts'
+import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
+import type { ErrandScreenAnswer } from '@software-factory/contract'
+import type { ErrandScreenPort, Notifier, JudgePort, StandingPolicies } from '../../src/domains/checkpoints/ports.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
@@ -56,6 +59,8 @@ let deps: SettleDeps & PageDeps
 let rules: PolicyRule[]
 let judgeCalls: { question: string; precedents: number; key: string }[]
 let judgeAnswer: () => Result<JudgeVerdict>
+let screenCalls: { errand: string; key: string }[]
+let screenAnswer: () => Result<ErrandScreenAnswer>
 let sent: string[]
 let sendResult: () => Result<void>
 /** what happens while a Judge call is out: the world moves on under it */
@@ -67,6 +72,14 @@ const judge: JudgePort = {
     judgeCalls.push({ question: input.question, precedents: input.precedents.length, key })
     await duringJudge?.()
     return judgeAnswer()
+  },
+}
+const errandScreen: ErrandScreenPort = {
+  screen: (request, key) => {
+    // The port is never called inside a transaction.
+    expect(deps.uow.inTransaction()).toBe(false)
+    screenCalls.push({ errand: request.errand.id, key })
+    return Promise.resolve(screenAnswer())
   },
 }
 const notifier: Notifier = {
@@ -86,6 +99,8 @@ beforeEach(async () => {
   rules = []
   judgeCalls = []
   judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
+  screenCalls = []
+  screenAnswer = () => ok({ verdict: 'pass', reason: 'a person must approve it' })
   sent = []
   sendResult = () => ok(undefined)
   duringJudge = null
@@ -101,6 +116,7 @@ beforeEach(async () => {
     consoleUrl: 'https://console.example.test',
     policies,
     judge,
+    errandScreen,
     notifier,
   }
 })
@@ -819,27 +835,132 @@ describe('artifacts', () => {
 })
 
 describe('errands', () => {
-  test('raised by the lead and done by the owner: the Issue waits, pages once, and wakes with one note_lead', async () => {
+  const APPROVE = { summary: 'Approve the App Store build' }
+  const raise = async (issueId: IssueId, raw: Record<string, unknown> = APPROVE) =>
+    value(await raiseErrand(deps, { issueId, attempt: 1, raw }))
+  const pageCount = async () => rows('checkpoint_pages')
+
+  test('raised by the lead: the Issue waits, nobody is paged and the owner does not see it', async () => {
     const issueId = await workingIssue()
-    const raised = value(
-      await raiseErrand(deps, { issueId, attempt: 1, raw: { summary: 'Approve the App Store build' } }),
-    )
+    const raised = await raise(issueId)
     expect(raised).toMatchObject({ result: 'applied', issue: { state: 'waiting', waitReason: 'errand' } })
-    expect(
-      value(await raiseErrand(deps, { issueId, attempt: 1, raw: { summary: 'Approve the App Store build' } })),
-    ).toMatchObject({
-      result: 'replayed',
-    })
+    expect(await raise(issueId)).toMatchObject({ result: 'replayed' })
     expect(await rows('errands')).toBe(1)
+    expect(await pageCount()).toBe(0)
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    expect(raised.errand.reachedOwnerAt).toBeNull()
+  })
+
+  test('a pass reaches the owner: visible, paged once, replay safe, and the owner finishes it', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    expect(value(await screenErrands(deps))).toEqual([])
+    expect(screenCalls).toEqual([{ errand: raised.errand.id, key: key('factory-errand', raised.errand.id, 1) }])
+    expect(await pageCount()).toBe(1)
+    expect((await readNeeds(db.sql, clock.now())).items).toMatchObject([
+      { kind: 'errand', judge: 'a person must approve it' },
+    ])
     expect(value(await sendDuePages(deps)).sent).toEqual([key('page', 'errand', raised.errand.id)])
 
     const done = value(await finishErrand(deps, { errandId: raised.errand.id, note: 'approved' }))
-    expect(done).toMatchObject({ result: 'applied', errand: { doneNote: 'approved' }, issue: { state: 'working' } })
+    expect(done).toMatchObject({
+      result: 'applied',
+      errand: { doneNote: 'approved', screenBy: 'judge' },
+      issue: { state: 'working' },
+    })
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
     expect(value(await finishErrand(deps, { errandId: raised.errand.id, note: null }))).toMatchObject({
       result: 'replayed',
     })
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+  })
+
+  test('turned away by the screen: the wait ends, the lead hears why, nothing is paged', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    screenAnswer = () => ok({ verdict: 'turn_away', reason: 'a token can do this' })
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
+    const errand = value(await raiseErrandRead(raised.errand.id))
+    expect(errand).toMatchObject({ doneNote: 'a token can do this', screenBy: 'judge' })
+    expect(errand.turnedAwayAt).not.toBeNull()
+    expect(await eventsOf(issueId)).toContain('errand_done')
+    const [event] = await db.sql`
+      SELECT actor, payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
+    expect(event).toMatchObject({
+      actor: 'judge',
+      payload: { errand: raised.errand.id, turnedAway: 'a token can do this' },
+    })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+    expect(await pageCount()).toBe(0)
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    expect(value(await screenErrands(deps))).toEqual([])
+  })
+
+  test('a rule turns away a command a token can run without calling the screen', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, { summary: 'Run the migration', detail: 'Run `make deploy` on the host' })
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
+    expect(screenCalls).toEqual([])
+    const [event] =
+      await db.sql`SELECT actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
+    expect(event).toMatchObject({ actor: 'factory' })
+    expect(await pageCount()).toBe(0)
+  })
+
+  test('a screen that fails three times is held with a backoff, then the owner gets it unscreened', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    screenAnswer = () => err(portError('gone', 'agw is down'))
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'held' }])
+    expect(value(await screenErrands(deps))).toEqual([])
+    for (const outcome of ['held', 'reached_owner'] as const) {
+      clock.set(new Date(clock.now().getTime() + ERRAND_SCREEN_BACKOFF_MS + 1))
+      expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome }])
+    }
+    expect(screenCalls.map((call) => call.key)).toEqual(
+      [1, 2, 3].map((n) => key('factory-errand', raised.errand.id, n)),
+    )
+    expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({ screenBy: 'failed', screenTries: 3 })
+    expect(await pageCount()).toBe(1)
+    const needs = await readNeeds(db.sql, clock.now())
+    expect(needs.items).toMatchObject([{ kind: 'errand' }])
+  })
+
+  test('an Issue that stopped waiting finishes the Errand with no event and no page', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    await record(issueId, 'cancel', { kind: 'cancelled', payload: { reason: 'no longer needed' }, actor: 'owner' })
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'dropped' }])
+    expect(screenCalls).toEqual([])
+    expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({
+      doneNote: 'the Issue no longer waits for it',
+    })
+    expect(await eventsOf(issueId)).not.toContain('errand_done')
+    expect(await pageCount()).toBe(0)
+  })
+
+  test('a result that arrives after the owner acted is dropped', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    screenAnswer = () => ok({ verdict: 'turn_away', reason: 'late' })
+    // The owner finishes it while the call is out.
+    const screen = errandScreen.screen.bind(errandScreen)
+    errandScreen.screen = async (request, callKey) => {
+      value(await finishErrand(deps, { errandId: raised.errand.id, note: 'done by hand' }))
+      return screen(request, callKey)
+    }
+    try {
+      expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'dropped' }])
+    } finally {
+      errandScreen.screen = screen
+    }
+    expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({
+      doneNote: 'done by hand',
+      turnedAwayAt: null,
+    })
+    expect(await pageCount()).toBe(0)
+    expect((await eventsOf(issueId)).filter((kind) => kind === 'errand_done')).toHaveLength(1)
   })
 
   test('an Errand with no summary is refused with the field named', async () => {
@@ -850,6 +971,12 @@ describe('errands', () => {
     })
   })
 })
+
+const raiseErrandRead = (id: ErrandId) =>
+  deps.uow.run(async ({ checkpoints }) => {
+    const errand = await checkpoints.errand(id)
+    return errand ? ok(errand) : err({ kind: 'not_found', what: 'Errand', id } as const)
+  })
 
 describe("the owner's line", () => {
   test('a failed send backs off and is tried again for as long as the checkpoint is open; a delivery is recorded once', async () => {

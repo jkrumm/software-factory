@@ -192,7 +192,13 @@ him with the failure in the Judge step's detail; `passed` and `rejected` stay fi
 its open Decision amends that Decision: the form is replaced, the new rendering is the artifact's next revision (note
 `amended`), the steps and unsent pages are cleared so it is settled afresh, and a verdict of a call that was out during
 the amend is dropped (the form digest taken at claim no longer matches). The same form again is a replay; an answered or
-withdrawn Decision is never amended. A Concept or Spec is a
+withdrawn Decision is never amended. An Errand passes a screen before it reaches the owner, in order: deterministic rules
+(`screenByRule`: a command a token can run and no hands word), then `factory-errand`, then the owner. The Issue waits from
+the raise, but the owner is not paged and the Errand is not in Needs or the human queue until `errands.reached_owner_at`
+is set. A turn-away ends the Issue's errand wait with `errand_done` (actor `factory` for a rule, `judge` for the workflow,
+payload `turnedAway`: the reason), sets the Errand done with the reason as its note, and the lead hears it as its next turn.
+A failed or refused call is tried again after the Judge's 5-minute backoff, three tries in all (`errands.screen_tries`);
+after the third the Errand reaches the owner unscreened (`screen_by` `failed`). A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
 
@@ -219,7 +225,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
 | `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
 | `watch` | verify and probes | none |
-| `settle`, `send` | Decision steps, pages | `factory-ask` (the Judge) |
+| `settle`, `send` | Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, break a claim deadlock | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new, likely `after` edges |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |

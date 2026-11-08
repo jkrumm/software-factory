@@ -78,6 +78,9 @@ beforeAll(async () => {
     lead(errand),
   )
   if (raised.code !== 0) throw new Error(`errand: ${raised.err}`)
+  // the screen lets it through to the owner (the fake agw passes by default)
+  const screened = await call(v, ['checkpoint', 'pass'])
+  if (screened.code !== 0) throw new Error(`checkpoint pass: ${screened.err}`)
   const done = await call(
     v,
     ['issue', 'close', closed, '--attempt', '1', '--outcome', 'done', '--reason', 'nothing to deploy'],

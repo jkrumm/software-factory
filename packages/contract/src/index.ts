@@ -48,6 +48,8 @@ export {
   ErrandDoneBody,
   ErrandList,
   ErrandReply,
+  ErrandScreenAnswer,
+  ErrandScreenRequest,
   PageList,
   PassReply,
   ReviseBody,

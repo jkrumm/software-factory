@@ -57,8 +57,8 @@ beforeAll(async () => {
     VALUES ('decision_1', 'dk', 'issue_2', 'chat', 1, 'Drop the SECRET table?', 'yes', 'x',
       '[{"label":"yes","reversible":false,"cost":"c"},{"label":"no","reversible":true,"cost":"c"}]', '{"default":"no"}', ${NOW})`
   await sql`
-    INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at)
-    VALUES ('errand_1', 'ek', 'issue_1', 1, 'Approve the portal step', ${NOW})`
+    INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at)
+    VALUES ('errand_1', 'ek', 'issue_1', 1, 'Approve the portal step', ${NOW}, ${NOW})`
   await sql`
     INSERT INTO factory.capacity_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used, exhausted_until)
     VALUES ('max1', ${NOW}, true, true, 40, 50, '2026-11-07T13:00:00.000Z')`
@@ -322,7 +322,7 @@ describe('changes', () => {
     }
     await readUntil('event: hello')
     expect(text).toMatch(/^id: \d+\.\d+\nevent: hello\ndata: \{"version":"v1","cursor":"\d+\.\d+"\}\n\n/)
-    await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at) VALUES ('errand_2', 'ek2', 'issue_1', 1, 'x', ${NOW})`
+    await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at) VALUES ('errand_2', 'ek2', 'issue_1', 1, 'x', ${NOW}, ${NOW})`
     await readUntil('event: errand')
     expect(text).toMatch(
       /event: errand\ndata: \{"kind":"errand","issue":1,"ref":"issue_1","subject":"raised","detail":\{"errand":"errand_2"\}/,

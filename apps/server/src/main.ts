@@ -1,5 +1,6 @@
 import { connect, ping } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
+import { agwErrandScreen } from './adapters/agw/errand.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
@@ -181,6 +182,7 @@ async function main(): Promise<void> {
     // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
     judge: agwJudge(agw),
+    errandScreen: agwErrandScreen(agw),
     policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
   })
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval

@@ -17,7 +17,7 @@ import {
   readDecisionForm,
   scrub,
 } from '../../src/domains/checkpoints/decision.ts'
-import { readErrand } from '../../src/domains/checkpoints/errand.ts'
+import { checkErrandScreen, readErrand, screenByRule } from '../../src/domains/checkpoints/errand.ts'
 import {
   decisionPageKey,
   deepLink,
@@ -284,6 +284,36 @@ describe('errands', () => {
       ok: true,
       value: { summary: 'Approve the portal' },
     })
+  })
+})
+
+describe('the Errand screen', () => {
+  test('a command a token can run is turned away by rule', () => {
+    expect(screenByRule({ summary: 'Run the deploy', detail: null })).toMatchObject({ verdict: 'turn_away' })
+    expect(screenByRule({ summary: 'Deploy it', detail: 'Use `gh pr merge 12` for this' })).toMatchObject({
+      verdict: 'turn_away',
+    })
+    expect(screenByRule({ summary: 'Deploy it', detail: '```\nmake deploy\n```' })).toMatchObject({
+      verdict: 'turn_away',
+    })
+    expect(screenByRule({ summary: 'Deploy it', detail: '$ git push' })?.reason.length).toBeLessThanOrEqual(300)
+  })
+
+  test('a hands word, or no command, keeps the Errand', () => {
+    expect(
+      screenByRule({ summary: 'Run the deploy', detail: 'Tap the button in the portal after `make deploy`' }),
+    ).toBeNull()
+    expect(screenByRule({ summary: 'Approve the App Store build', detail: null })).toBeNull()
+    expect(screenByRule({ summary: 'Plug in the phone', detail: 'It is on the desk' })).toBeNull()
+  })
+
+  test('an answer is held to its shape', () => {
+    expect(checkErrandScreen({ verdict: 'pass', reason: ' a person ' })).toEqual({ action: 'pass', note: 'a person' })
+    expect(checkErrandScreen({ verdict: 'turn_away', reason: ` ${'x'.repeat(400)} ` })).toEqual({
+      action: 'turn_away',
+      reason: 'x'.repeat(300),
+    })
+    expect(checkErrandScreen({ verdict: 'turn_away', reason: '   ' }).action).toBe('refused')
   })
 })
 

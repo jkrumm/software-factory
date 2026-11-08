@@ -22,8 +22,8 @@ beforeAll(async () => {
   db = await startTestCluster()
   await migrate(db.sql, await loadMigrations())
   await db.sql`INSERT INTO factory.issues (id, repo, state, wait_reason, version) VALUES ('issue_1', 'work-app', 'waiting', 'errand', 2)`
-  await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at)
-    VALUES ('errand_1', 'k1', 'issue_1', 1, 'Rotate the key in the portal', now())`
+  await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at)
+    VALUES ('errand_1', 'k1', 'issue_1', 1, 'Rotate the key in the portal', now(), now())`
   // issue_1 is in a repo no project.yaml describes (a work repo, even though the factory knows no project of that name);
   // issue_2 is in a project with a project.yaml of its own.
   await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_2', 'open-app', 'queued', 1)`

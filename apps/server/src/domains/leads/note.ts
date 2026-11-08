@@ -24,8 +24,12 @@ function item(record: HistoryRecord): string | null {
         ? `${verdict}; read the annotations with \`factory artifact show ${String(artifact)}\`, then \`factory artifact revise ${String(artifact)} --content @file\``
         : verdict
     }
-    case 'errand_done':
+    case 'errand_done': {
+      const turnedAway = field(record, 'turnedAway')
+      if (typeof turnedAway === 'string')
+        return `the Errand ${oneLine(field(record, 'errand'))} was turned away before it reached the owner: ${oneLine(turnedAway)}. Do it yourself, or raise it again if it needs a person's hands`
       return `the Errand ${oneLine(field(record, 'errand'))} is done`
+    }
     case 'woken':
       return `your wait is over: ${oneLine(field(record, 'detail'))}`
     case 'regressed':

@@ -115,6 +115,9 @@ const errandView = (e: ErrandRecord) => ({
   raisedAt: iso(e.raisedAt),
   doneAt: e.doneAt ? iso(e.doneAt) : null,
   doneNote: e.doneNote,
+  reachedOwner: e.reachedOwnerAt !== null,
+  turnedAway: e.turnedAwayAt !== null,
+  screenNote: e.screenNote,
 })
 
 const pageView = (p: PageRecord) => ({

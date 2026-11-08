@@ -235,8 +235,8 @@ describe('triggers', () => {
     await sql`
       INSERT INTO factory.verdicts (artifact_id, revision, key, verdict, at) VALUES ('artifact_1', 1, 'vk', 'changes', now())`
     await sql`
-      INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at)
-      VALUES ('errand_1', 'ek', 'issue_1', 1, 's', now())`
+      INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at)
+      VALUES ('errand_1', 'ek', 'issue_1', 1, 's', now(), now())`
     await sql`UPDATE factory.errands SET done_at = now() WHERE id = 'errand_1'`
     await sql`
       INSERT INTO factory.intake_signals (id, source, kind, origin, trust, fingerprint, title, text, received_at, state)
