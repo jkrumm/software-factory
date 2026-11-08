@@ -334,3 +334,20 @@ describe('changes', () => {
     expect((await call('/v1/stream?since=0.0', READER)).status).toBe(200)
   })
 })
+
+describe('the live sessions list', () => {
+  test('200 newer dead attempts do not hide an older live one', async () => {
+    const { sql } = db
+    await sql`
+      INSERT INTO factory.lead_attempts (issue_id, attempt, branch, first_try_at, started_at, gone_at)
+      SELECT 'issue_1', n, 'factory/1-' || n, '2026-11-08T12:00:00.000Z'::timestamptz + n * interval '1 second',
+        '2026-11-08T12:00:00.000Z', '2026-11-08T13:00:00.000Z'
+      FROM generate_series(2, 202) AS n`
+    try {
+      const live = await json('/v1/sessions?live=1')
+      expect(live.body.sessions.map((s: { id: string }) => s.id).sort()).toEqual(['lead-1-1', 'lead-2-1'])
+    } finally {
+      await sql`DELETE FROM factory.lead_attempts WHERE issue_id = 'issue_1' AND attempt > 1`
+    }
+  })
+})

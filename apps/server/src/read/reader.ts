@@ -121,7 +121,7 @@ export function createReader(deps: ReadDeps): ReadApi {
   async function sessions(input: Surface & { issue?: string; role?: string; live?: boolean }) {
     const ref = input.issue === undefined ? undefined : issueRefOf(input.issue)
     if (ref === null) return null
-    const attempts = await loadAttempts(sql, ref ? [ref] : null, SESSION_LIMIT)
+    const attempts = await loadAttempts(sql, ref ? [ref] : null, SESSION_LIMIT, input.live === true)
     const briefs = await loadBriefs(sql, [...new Set(attempts.map((a) => a.issue_id))])
     const derived = await deriveLeads(deps, { attempts, briefs, quota: await quotaOf() })
     return derived
