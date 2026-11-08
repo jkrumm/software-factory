@@ -138,7 +138,16 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 A Decision is a form with every field required (recommendation, what was checked, cost per option, what happens with no
 answer). It is settled in order: standing policy (`FACTORY_CHECKPOINT_POLICY_FILE`), the Judge (`factory-ask`),
 which reads the plan, the docs and the precedents of the ledger), the default after its wait when the option is reversible, then
-the owner. A step is a claimed call with a 35-minute lease past the Judge's 30-minute hang guard. A Concept or Spec is a
+the owner. A step is a claimed call with a 35-minute lease past the Judge's 30-minute hang guard. A form with a missing
+field is refused (422 `missing_field`, the fields named, nothing stored). The Judge sees every Decision before the owner
+does: a failed Judge call is tried again after a 5-minute backoff, three tries in all (`decision_steps.tries`), and while
+tries are left the Decision is not the owner's (no owner step, no page, not in Needs). After the third failure it reaches
+him with the failure in the Judge step's detail; `passed` and `rejected` stay final. The Judge's step is on the
+`DecisionView` (`judge`) and its reason on the Needs item. A second ask from the same asker while the Issue still waits on
+its open Decision amends that Decision: the form is replaced, the new rendering is the artifact's next revision (note
+`amended`), the steps and unsent pages are cleared so it is settled afresh, and a verdict of a call that was out during
+the amend is dropped (the form digest taken at claim no longer matches). The same form again is a replay; an answered or
+withdrawn Decision is never amended. A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
 

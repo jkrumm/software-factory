@@ -28,6 +28,7 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
       ...item,
       title: hide ? REDACTED_TITLE : item.title,
       summary: hide ? REDACTED_SUMMARY : item.summary,
+      judge: hide ? null : item.judge,
       redacted: hide,
     }
   })
@@ -52,6 +53,7 @@ const DecisionRow = z.object({
   recommendation: z.string(),
   asked_at: z.date(),
   no_answer: z.object({ default: z.string().nullable().optional(), waitMinutes: z.number().nullable().optional() }),
+  judge: z.string().nullable(),
 })
 
 const ReviewRow = z.object({
@@ -90,7 +92,8 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
 
   const decisions: unknown[] = await sql`
-    SELECT d.id, d.issue_id, d.repo, d.question, d.recommendation, d.asked_at, d.no_answer
+    SELECT d.id, d.issue_id, d.repo, d.question, d.recommendation, d.asked_at, d.no_answer,
+      (SELECT j.detail FROM factory.decision_steps j WHERE j.decision_id = d.id AND j.step = 'judge') AS judge
     FROM factory.decisions d
     WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL
       AND EXISTS (SELECT 1 FROM factory.decision_steps s WHERE s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open')
@@ -135,6 +138,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.question, 120),
         summary: plain(row.recommendation, 200),
         defaultAt: typeof wait === 'number' ? new Date(row.asked_at.getTime() + wait * 60_000).toISOString() : null,
+        judge: row.judge === null ? null : plain(row.judge, 200),
         link: { type: 'decision', id: row.id },
         work: isWorkRepo(row.repo, open),
       }
@@ -151,6 +155,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.title ?? row.summary ?? `${noun} waits for your verdict`, 120),
         summary: plain(row.summary ?? `${noun} waits for your verdict.`, 200),
         defaultAt: null,
+        judge: null,
         link: { type: 'artifact', id: row.artifact_id },
         work: isWorkRepo(row.repo, open),
       }
@@ -166,6 +171,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.summary, 120),
         summary: plain(row.detail ?? row.summary, 200),
         defaultAt: null,
+        judge: null,
         link: { type: 'errand', id: row.id },
         work: isWorkRepo(row.repo, open),
       }
@@ -181,6 +187,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.title, 120),
         summary: plain(row.text, 200),
         defaultAt: null,
+        judge: null,
         link: { type: 'signal', id: row.id },
         work: isWorkRepo(row.repo, open),
       }

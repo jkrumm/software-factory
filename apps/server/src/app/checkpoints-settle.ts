@@ -1,7 +1,9 @@
 import {
   defaultDue,
+  type DecisionForm,
   type DecisionId,
   guardVerdict,
+  JUDGE_MAX_TRIES,
   judgeInputOf,
   matchPolicy,
   precedentTerms,
@@ -14,6 +16,7 @@ import {
   type DecisionRecord,
   type DecisionStatus,
   type StandingPolicies,
+  type StepClaim,
   statusOf,
 } from '../domains/checkpoints/ports.ts'
 import { key } from '../kernel/keys.ts'
@@ -23,6 +26,7 @@ import {
   type CheckpointError,
   type CheckpointStores,
   answerIn,
+  formDigest,
   issueOf,
   waitingOn,
 } from './checkpoints.ts'
@@ -85,14 +89,21 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
   if (!first.value.waiting) return ok(settledOf(first.value.decision))
   const { title } = first.value
 
+  let judging = false
   for (const step of [policyStep, judgeStep, defaultStep]) {
     const stepped = await step(deps, first.value.decision, title)
     if (!stepped.ok) return lostRace(stepped.error) ? current(deps, id) : stepped
     // A call of another pass is in flight: leave the Decision as it is. Going on to the owner now would page him for work
     // the factory is about to settle.
     if (stepped.value === BUSY) return current(deps, id)
+    // The Judge has not seen it yet (its call failed and tries are left): the default may still come due, the owner waits.
+    if (stepped.value === RETRY) {
+      judging = true
+      continue
+    }
     if (stepped.value) return ok(settledOf(stepped.value))
   }
+  if (judging) return current(deps, id)
   const owner = await ownerStep(deps, first.value.decision)
   if (!owner.ok) return owner
   return current(deps, id)
@@ -105,9 +116,28 @@ async function current(deps: CheckpointDeps, id: DecisionId): Step<Settled> {
   })
 }
 
-/** What a step came to: it settled the Decision, it passed it on (null), or another pass's call is running (`busy`). */
+/**
+ * What a step came to: it settled the Decision, it passed it on (null), another pass's call is running or the Decision
+ * changed under the call (`busy`: the next pass takes it up), or the Judge failed with tries left (`retry`).
+ */
 const BUSY = 'busy' as const
-type StepResult = Step<DecisionRecord | typeof BUSY | null>
+const RETRY = 'retry' as const
+type Stepped = DecisionRecord | typeof BUSY | typeof RETRY | null
+type StepResult = Step<Stepped>
+
+/**
+ * The Decision under its lock, when it is still open and still the form the call was made on. An amend while a call was in
+ * flight clears the steps and changes the form: the late result must answer nothing.
+ */
+async function unchanged(
+  checkpoints: CheckpointStores['checkpoints'],
+  id: DecisionId,
+  form: DecisionForm,
+): Promise<DecisionRecord | null> {
+  const fresh = await checkpoints.lockDecision(id)
+  if (!fresh || statusOf(fresh) !== 'open') return null
+  return formDigest(fresh.form) === formDigest(form) ? fresh : null
+}
 
 const answered = (outcome: Awaited<ReturnType<typeof answerIn>>): Result<DecisionRecord, CheckpointError> =>
   outcome.ok ? ok(outcome.value.decision) : outcome
@@ -120,12 +150,13 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
   )
   if (!claimed.ok) return claimed
   if (claimed.value === 'in_flight') return ok(BUSY)
-  if (claimed.value === 'done') return ok(null)
+  if (claimed.value !== 'claimed') return ok(null)
 
   const rules = await deps.policies.rulesFor(decision.repo)
-  const recorded = await deps.uow.run(async (stores) => {
+  const recorded = await deps.uow.run<Stepped, CheckpointError>(async (stores) => {
     const at = deps.clock.now()
     const { checkpoints } = stores
+    if (!(await unchanged(checkpoints, decision.id, decision.form))) return ok(BUSY)
     if (!rules.ok) {
       await checkpoints.finishStep(decision.id, 'policy', {
         outcome: 'failed',
@@ -155,7 +186,7 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
 async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: string): StepResult {
   const now = deps.clock.now()
-  const claimed = await deps.uow.run<{ precedents: Precedent[] } | 'in_flight' | 'done', never>(
+  const claimed = await deps.uow.run<{ precedents: Precedent[] } | Exclude<StepClaim, 'claimed'>, never>(
     async ({ checkpoints }) => {
       const claim = await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS))
       if (claim !== 'claimed') return ok(claim)
@@ -165,6 +196,7 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
   )
   if (!claimed.ok) return claimed
   if (claimed.value === 'in_flight') return ok(BUSY)
+  if (claimed.value === 'retry_later') return ok(RETRY)
   if (claimed.value === 'done') return ok(null)
 
   const input = judgeInputOf({
@@ -176,14 +208,25 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
   })
   const verdict = await deps.judge.judge(input, key('factory-ask', decision.id))
 
-  const recorded = await deps.uow.run(async (stores) => {
+  const recorded = await deps.uow.run<Stepped, CheckpointError>(async (stores) => {
     const at = deps.clock.now()
     const { checkpoints } = stores
+    const fresh = await unchanged(checkpoints, decision.id, decision.form)
+    const claim = fresh?.steps.find((step) => step.step === 'judge')
+    // Amended, answered or withdrawn while the call ran: the Judge saw another form, so its verdict is dropped.
+    if (claim?.outcome !== null) return ok(BUSY)
     const done = async (outcome: 'passed' | 'rejected' | 'failed', detail: string): Promise<Result<null, never>> => {
       await checkpoints.finishStep(decision.id, 'judge', { outcome, detail, at })
       return ok(null)
     }
-    if (!verdict.ok) return done('failed', `${verdict.error.kind}: ${verdict.error.detail}`)
+    if (!verdict.ok) {
+      const why = `${verdict.error.kind}: ${verdict.error.detail}`
+      if (claim.tries < JUDGE_MAX_TRIES) {
+        await checkpoints.finishStep(decision.id, 'judge', { outcome: 'failed', detail: why, at })
+        return ok(RETRY)
+      }
+      return done('failed', `the Judge could not be reached after ${JUDGE_MAX_TRIES} tries: ${why}`)
+    }
     if (verdict.value.verdict === 'owner') return done('passed', verdict.value.reason || 'the Judge passed it on')
     const guarded = guardVerdict(decision.form, verdict.value)
     if (!guarded.ok) return done('rejected', guarded.why)
@@ -223,10 +266,11 @@ async function releaseOnError(
 
 /** The default: a reversible option the lead named, taken once its wait has run out with no answer. */
 async function defaultStep(deps: SettleDeps, decision: DecisionRecord): StepResult {
-  return deps.uow.run(async (stores) => {
+  return deps.uow.run<Stepped, CheckpointError>(async (stores) => {
     const at = deps.clock.now()
     const label = defaultDue(decision.form, decision.askedAt, at)
     if (label === null) return ok(null)
+    if (!(await unchanged(stores.checkpoints, decision.id, decision.form))) return ok(BUSY)
     const option = decision.form.options.find((candidate) => candidate.label === label)
     if (!option?.reversible) return ok(null)
     await stores.checkpoints.recordStep(decision.id, 'default', { outcome: 'answered', detail: label, at })
@@ -254,6 +298,8 @@ async function ownerStep(deps: SettleDeps, decision: DecisionRecord): Step<null>
     // Issue stopped waiting. Read it again under its lock, so no page is planned for a Decision that is settled.
     const fresh = await checkpoints.lockDecision(decision.id)
     if (!fresh || statusOf(fresh) !== 'open') return ok(null)
+    // Amended since it was read: its steps are cleared and the Judge has not seen this form. The next pass settles it afresh.
+    if (formDigest(fresh.form) !== formDigest(decision.form)) return ok(null)
     const issue = await issueOf(work, fresh.issueId)
     if (!issue || !waitingOn(issue, 'decision', fresh.id)) {
       await checkpoints.withdrawDecision(fresh.id, 'the Issue no longer waits for it', at)

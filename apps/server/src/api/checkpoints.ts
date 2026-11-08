@@ -44,6 +44,11 @@ import { issueRef } from './issue-ref.ts'
 
 const iso = (at: Date): string => at.toISOString()
 
+const judgeOf = (d: DecisionRecord): DecisionView['judge'] => {
+  const step = d.steps.find((candidate) => candidate.step === 'judge')
+  return step ? { outcome: step.outcome, detail: step.detail, at: step.at ? iso(step.at) : null } : null
+}
+
 export const decisionView = (d: DecisionRecord): DecisionView => ({
   id: d.id,
   issueId: d.issueId,
@@ -63,7 +68,8 @@ export const decisionView = (d: DecisionRecord): DecisionView => ({
   answeredAt: d.answeredAt ? iso(d.answeredAt) : null,
   withdrawnReason: d.withdrawnReason,
   worthAsking: d.worthAsking,
-  path: d.steps.map((step) => ({ ...step, at: step.at ? iso(step.at) : null })),
+  path: d.steps.map(({ step, outcome, at, detail }) => ({ step, outcome, at: at ? iso(at) : null, detail })),
+  judge: judgeOf(d),
 })
 
 const summaryOf = (artifact: ArtifactRecord, revisions: readonly RevisionRecord[]) => ({

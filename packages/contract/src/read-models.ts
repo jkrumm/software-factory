@@ -30,6 +30,8 @@ export const NeedItem = z
     stale: z.boolean(),
     /** when the factory takes the Decision's default; null for everything that has none */
     defaultAt: at.nullable(),
+    /** the Judge's reason for passing a Decision on, plain and cut; null for everything else and for a work-repo item the caller may not read */
+    judge: z.string().nullable(),
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal']), id: z.string() }),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
     redacted: z.boolean(),

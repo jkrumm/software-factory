@@ -11,7 +11,13 @@ import {
   VERDICTS,
   waitsForReview,
 } from '../domains/checkpoints/artifact.ts'
-import { type DecisionId, type MissingFields, readDecisionForm, type Settler } from '../domains/checkpoints/decision.ts'
+import {
+  type DecisionForm,
+  type DecisionId,
+  type MissingFields,
+  readDecisionForm,
+  type Settler,
+} from '../domains/checkpoints/decision.ts'
 import { type ErrandId, readErrand } from '../domains/checkpoints/errand.ts'
 import { deepLink, errandPage, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
@@ -102,8 +108,20 @@ export const artifactOfDecision = (id: DecisionId): ArtifactId => id as string a
 // ---------------------------------------------------------------------------------------------------------------------
 // Decisions
 
+/** A short digest of a form, whatever order its stored keys come back in: two forms are the same exactly when it is. */
+export const formDigest = (form: DecisionForm): string =>
+  digest(
+    JSON.stringify([
+      form.question,
+      form.recommendation,
+      form.checked,
+      form.options.map((o) => [o.label, o.reversible, o.cost]),
+      [form.noAnswer.consequence, form.noAnswer.default, form.noAnswer.waitMinutes],
+    ]),
+  )
+
 export interface Asked {
-  result: 'applied' | 'replayed'
+  result: 'applied' | 'replayed' | 'amended'
   decision: DecisionRecord
   issue: IssueMove
 }
@@ -112,7 +130,10 @@ export interface Asked {
  * `factory issue ask`: the lead raises a Decision. A form with a missing field is refused with the field named and
  * nothing is stored. The form is rendered as the Decision artifact's revision 1 (blob first, outside the transaction),
  * then one transaction records `asked`, which makes the Issue wait, and the Decision. The same ask again is the same
- * Decision. Settling it (policy, the Judge, the default, the owner) is the pass's, not this call's.
+ * Decision. A different form from the same asker while the Issue still waits on its open Decision amends that one
+ * instead of raising another: the form is replaced, the new rendering is the artifact's next revision, and the steps and
+ * unsent pages are cleared so the amended form is settled afresh. Settling it (policy, the Judge, the default, the owner)
+ * is the pass's, not this call's.
  */
 export async function askDecision(
   deps: CheckpointDeps,
@@ -131,13 +152,43 @@ export async function askDecision(
     const existing = await checkpoints.decisionByKey(askKey)
     const issue = await issueOf(work, input.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
+
+    const by = input.by ?? 'lead'
+    const open = (await checkpoints.decisions({ issueId: input.issueId, status: 'open', limit: 50 })).find(
+      (candidate) => candidate.askedBy === by && waitingOn(issue, 'decision', candidate.id),
+    )
+    if (open) {
+      if (formDigest(open.form) === formDigest(form))
+        return ok<Asked>({ result: 'replayed', decision: open, issue: moveOf(issue) })
+      const at = deps.clock.now()
+      const artifact = artifactOfDecision(open.id)
+      const revisions = await checkpoints.revisions(artifact)
+      const n = Math.max(0, ...revisions.map((revision) => revision.n)) + 1
+      if (!(await checkpoints.amendDecision(open.id, form))) {
+        return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
+      }
+      await checkpoints.insertRevision({
+        artifactId: artifact,
+        n,
+        key: key('revision', artifact, n),
+        blob: blob.value.path,
+        sha256: blob.value.sha256,
+        bytes: blob.value.bytes,
+        note: 'amended',
+        createdAt: at,
+      })
+      await checkpoints.cancelPages(open.id, at)
+      const amended = await checkpoints.decision(open.id)
+      if (!amended) throw new Error(`decision ${open.id} vanished inside its own transaction`)
+      return ok<Asked>({ result: 'amended', decision: amended, issue: moveOf(issue) })
+    }
     if (existing) return ok<Asked>({ result: 'replayed', decision: existing, issue: moveOf(issue) })
 
     const id = deps.ids.next('decision')
     const event: IssueEvent<'asked'> = {
       kind: 'asked',
       payload: { attempt: input.attempt, decision: { id, summary: form.question.slice(0, 200) } },
-      actor: input.by ?? 'lead',
+      actor: by,
     }
     const recorded = applied(
       await recordIn(work, deps, {
@@ -157,6 +208,7 @@ export async function askDecision(
       attempt: input.attempt,
       form,
       askedAt: at,
+      askedBy: by,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const artifact = artifactOfDecision(id)

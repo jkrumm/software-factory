@@ -69,6 +69,8 @@ export const DecisionView = z
     worthAsking: z.boolean().nullable(),
     /** the path to the answer: every step tried, in order */
     path: z.array(Step),
+    /** the Judge's step (its outcome and reason); null while it has none */
+    judge: z.object({ outcome: Step.shape.outcome, detail: z.string().nullable(), at: iso.nullable() }).nullable(),
   })
   .meta({ id: 'DecisionView' })
 export type DecisionView = z.infer<typeof DecisionView>
@@ -90,7 +92,7 @@ export const AskBody = z
 export type AskBody = z.infer<typeof AskBody>
 
 export const AskReply = z
-  .object({ result: z.enum(['applied', 'replayed']), decision: DecisionView, issue: IssueMove })
+  .object({ result: z.enum(['applied', 'replayed', 'amended']), decision: DecisionView, issue: IssueMove })
   .meta({ id: 'AskReply' })
 export type AskReply = z.infer<typeof AskReply>
 
