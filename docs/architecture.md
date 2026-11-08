@@ -98,7 +98,18 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   Promoting keeps a subject row for the signal's fingerprint (as for a person's request). A later outside signal with that
   fingerprint from the same source amends the promoted Issue while it is open (a `noted` event, fenced; the signal is stored
   `amended`, once per distinct text); when that Issue is closed it is held again as new, and while a signal is still held a
-  duplicate is that held signal (`replayed`, no second row).
+  duplicate is that held signal (`replayed`, no second row). A held signal can also be **dismissed** (`POST /signals/:id/dismiss`,
+  the owner or the Judge, a reason of 1 to 500 characters): state `dismissed` with `dismissed_reason`, `dismissed_by`
+  (`owner`, `judge` or `probe`) and `dismissed_at`, no Issue, and it leaves Needs you and the friction count. Only a held
+  signal can be dismissed or promoted; a later signal with a dismissed one's key is a new report, held under that key extended with the dismissed id (and so on down the chain). A **probe** (`probe: true` on `POST /signals` or the door's feedback, carried on the
+  `Signal` envelope) passes the loop guard, the work-repo rule and the trust gate as any signal does, then is stored
+  `dismissed` by `probe` under a key of its source and fingerprint (a replay stores once): it files nothing, is never held and
+  never reaches the triage workflow; its ack is `dropped`, detail `probe`.
+- **Screen.** The `screen` loop (below) has the Judge look at held signals. Prompt injection: the workflow's verdict can only
+  promote, dismiss or leave the one signal it was shown (a `leave` stores `screen_note`, `screened_at`; the Console shows it as
+  "Judge: ..." above Promote and Dismiss); a promote files an Issue whose text is still outside text, fenced as data in the
+  lead's brief, as the owner's promote does. A newly held signal waits for the next pass (no kick; the interval is
+  `FACTORY_LOOP_SCREEN_MS`, 10 minutes at least).
 - **Loop guard.** A change a loop made never fires that loop again.
 - **Stop the line.** While a repo's alert is unsolved, only its fix is admitted.
 
@@ -212,6 +223,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |
 | `friction` | the week's counts (`read/friction.ts`), cut at the newest import (`import_issues.imported_at`: the old core's history is never counted), against the rules in `domains/loops/friction.ts`: a rate per Issue closed with a minimum sample of 10 closed, or a bare count for the serious patterns (stall, lead lost, undelivered note, regression); retired mechanisms (the review gate, NL23) are skipped. One signal per pattern over its rule, 5 at most, filed on this repo through intake with the evidence Issues; a pattern whose Issue is open amends it with a note (intake's fingerprint). Due once a week, read from `friction_passes` | none |
 | `hygiene` | one project a tick (those with a `project.yaml`; `FACTORY_HYGIENE_REPOS` narrows): a throwaway checkout of the default branch swept by the probes (`check`, `links`, `retired`, `deps`, `cochange`, `adapters/hygiene/`), due again after `FACTORY_HYGIENE_EVERY_MS` (a week), read from `hygiene_passes`; at most 5 signals a project and pass, probe findings ranked in probe order and limited to 3, the rest named in `over_budget`; filed through intake as the project's own agent; a project whose `make check` needs a lab this host lacks says `hygiene: { check: false, reason: … }` in `project.yaml` and the `check` probe is skipped, the reason in its run detail | `factory-hygiene`: the stale and recently edited documents read against the code, at most the budget left (2 at least); its title is built from the kind and the path, so the same document is one pattern for intake; a failed ask is retried at the stored commit every `FACTORY_HYGIENE_RETRY_MS`, 3 attempts at most |
+| `screen` | up to 10 held signals not yet screened (oldest first, `intake_signals.screened_at` null, `screen_attempts` under 5, `screen_retry_at` due), one call each, outside any transaction; the answer is checked before anything is done (`domains/intake/screen.ts`): a promote needs a known non-work repo (the signal's own, else the one named), a duplicate must be an open Issue of the repo it was shown, else the verdict becomes `leave` with a note; then `promote` or `dismiss` as `judge` (each looks at the state again: an owner who acted first is counted, not an error). A failed, unparseable or timed-out call (a missing workflow too) leaves the signal held and records the attempt with a backoff of `min(10 min * 2^n, 6 h)`; the pass still ends ok and its summary says `screen workflow unavailable` when every call failed | `factory-screen`: stdin `ScreenRequest` `{ signal: { id, source, kind, origin, repo, title, text, link, receivedAt }, openIssues: [{ id, title, kind, state }] (open Issues of `signal.repo`, at most 40, empty with no repo), projects: [name] (known projects that are not work repos) }` with title and text scrubbed and labelled untrusted data; stdout `ScreenAnswer` `{ verdict: promote\|dismiss\|leave, reason (1..300), repo\|null, duplicateOf\|null, recommendation (<=300)\|null }`; call key `screen:<signal>:<attempt>` |
 
 ## API, client, CLI
 
@@ -233,12 +245,12 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the five answer
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the six answer
 verbs below, never a session start. The door holds only its own token. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's five answer verbs (a Decision's answer, an artifact's verdict
-and annotation, an Errand done, a held signal promoted), guarded against a cross-site page (JSON only, no cross-site fetch
+another node. The Console listener reads, and forwards exactly the owner's six answer verbs (a Decision's answer, an artifact's verdict
+and annotation, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
-from a signal already held. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
+from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
 served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
 
 ## Data
@@ -262,7 +274,7 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the five answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
+  it is read-only apart from the six answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow board, the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.

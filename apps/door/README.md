@@ -76,6 +76,7 @@ promotes it; a repeat of a promoted complaint amends its open Issue.
 | `version` | the app's build, 1 to 64 characters |
 | `route` | the screen or path the user was on, 1 to 256 characters |
 | `link` | a page about it, optional; userinfo and fragment are dropped |
+| `probe` | optional boolean, passed on untouched: a lead's test feedback is stored dismissed and never held (ack `dropped`, detail `probe`) |
 
 The body is strict: a `repo` (or any other field) is a 400. The repo is the door route `(feedback, <app>)`; without one the signal is held with no
 repo and the owner names it when promoting. Route an app with the server's registry, `POST /door/routes`

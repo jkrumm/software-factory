@@ -135,6 +135,7 @@ function checkReceived(project: RepoSignals, repo: string, branch: string, check
       text: title,
       link: check.url,
       madeBy: null,
+      probe: false,
     },
     alert: {
       subject,
@@ -176,6 +177,7 @@ function issueReceived(
       text: String(storable(body)),
       link: issue.html_url,
       madeBy: LOOP_MARKER.exec(body)?.[1] ?? null,
+      probe: false,
     },
     alert: {
       subject: `${repo}#${issue.number}`,

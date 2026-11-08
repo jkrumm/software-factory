@@ -6,7 +6,7 @@ import { compressResponse } from './compress.ts'
 export interface ConsoleHandlerOptions {
   /** the Console build */
   dir: string
-  /** answers `/health`, `/v1/*` and the five answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
+  /** answers `/health`, `/v1/*` and the six answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
 }
 
@@ -100,13 +100,14 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's five answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal. */
+/** The owner's six answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing. */
 const WRITES = [
   /^\/v1\/decisions\/[^/]+\/answer$/,
   /^\/v1\/artifacts\/[^/]+\/verdict$/,
   /^\/v1\/artifacts\/[^/]+\/annotations$/,
   /^\/v1\/errands\/[^/]+\/done$/,
   /^\/signals\/[^/]+\/promote$/,
+  /^\/signals\/[^/]+\/dismiss$/,
 ]
 
 const isWrite = (request: Request, path: string): boolean =>
@@ -170,7 +171,7 @@ function fileOf(dir: string, rawPath: string): string | null {
 
 /**
  * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
- * every path: a read method (or one of the five answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * every path: a read method (or one of the six answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
  * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes. A text answer to a GET is
  * compressed (br or gzip, whatever the client accepts), a static file once; the event stream is never touched.
  */
@@ -210,7 +211,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     })
   }
 
-  /** One of the five answer verbs: a same-origin JSON body of at most 64 KiB, forwarded verbatim. */
+  /** One of the six answer verbs: a same-origin JSON body of at most 64 KiB, forwarded verbatim. */
   const write = async (request: Request): Promise<Response> => {
     if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
       return errorResponse(415, 'a write sends application/json', 'unsupported_media_type')
@@ -227,7 +228,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     const rawPath = new URL(request.url).pathname
     if (isWrite(request, rawPath)) return write(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return errorResponse(405, 'the Console listener reads, and takes five answers', 'method_not_allowed', {
+      return errorResponse(405, 'the Console listener reads, and takes six answers', 'method_not_allowed', {
         allow: 'GET, HEAD',
       })
     }

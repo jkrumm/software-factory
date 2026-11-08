@@ -1,10 +1,30 @@
-import type { Signal } from '@software-factory/contract'
+import type { ScreenAnswer, ScreenRequest, Signal } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
+import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { HealRule, OpenIssue, Received, RepoSignals, Triaged } from './model.ts'
 import type { Topology } from './rules.ts'
 
-export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted'
+export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted' | 'dismissed'
+
+/** Why, by whom and when a signal was turned away: set exactly when its state is `dismissed`. */
+export interface Dismissal {
+  reason: string
+  by: 'owner' | 'judge' | 'probe'
+  at: Date
+}
+
+/** What the Judge's screening made of a held signal (`factory-screen`). */
+export interface Screening {
+  /** what it left to the owner, or why it was left; null before it was screened */
+  note: string | null
+  /** set once it was screened: it is not screened again */
+  at: Date | null
+  /** failed calls so far */
+  attempts: number
+  /** the next try of a failed call is due then */
+  retryAt: Date | null
+}
 
 /** A stored signal: the envelope and its alert detail, and what became of it. */
 export interface SignalRow {
@@ -15,6 +35,8 @@ export interface SignalRow {
   receivedAt: Date
   state: SignalState
   issueId: IssueId | null
+  dismissal: Dismissal | null
+  screening: Screening
 }
 
 /** One filed Issue seen from the source's side: an episode of a subject, or a stateless match by fingerprint. */
@@ -112,8 +134,15 @@ export interface IntakeStore {
   insertSignal(row: SignalRow): Promise<boolean>
   signal(id: string): Promise<SignalRow | null>
   signalByKey(key: string): Promise<SignalRow | null>
-  setSignal(id: string, patch: { state: SignalState; issueId: IssueId | null; repo?: string | null }): Promise<void>
+  setSignal(
+    id: string,
+    patch: { state: SignalState; issueId: IssueId | null; repo?: string | null; dismissal?: Dismissal },
+  ): Promise<void>
   signals(state: SignalState | null, limit: number): Promise<SignalRow[]>
+  /** held signals not screened yet whose retry is due and whose failed calls are under `maxAttempts`, oldest first */
+  screenable(now: Date, maxAttempts: number, limit: number): Promise<SignalRow[]>
+  /** records a screening on a signal that is still held; false when it is not */
+  setScreening(id: string, screening: Screening): Promise<boolean>
 
   latestSubject(source: string, subject: string): Promise<SubjectRow | null>
   /** the newest subject of the source with this fingerprint */
@@ -178,6 +207,11 @@ export interface ProjectSignals {
 /** Which host each repo's alerts sit on: the projects' `signals:` and `config/infra.json`'s hosts. */
 export interface IntakeTopology {
   load(): Promise<Result<Topology>>
+}
+
+/** `factory-screen`: the Judge's look at one held signal. */
+export interface ScreenWorkflow {
+  screen(request: ScreenRequest, key: Key): Promise<Result<ScreenAnswer, PortError>>
 }
 
 /** The Issues of a repo that are not closed, to match a person's signal against. Reads another domain's tables. */

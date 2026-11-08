@@ -101,6 +101,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),
   rule('POST', '/signals/:id/promote', OWNER),
+  rule('POST', '/signals/:id/dismiss', OWNER),
   rule('GET', '/door/routes', OWNER),
   rule('POST', '/door/routes', LEAD),
   rule('POST', '/door/routes/remove', LEAD),

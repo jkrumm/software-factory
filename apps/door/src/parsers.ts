@@ -204,6 +204,7 @@ const FeedbackPayload = z.strictObject({
   version: z.string(),
   route: z.string(),
   link: z.string().nullish(),
+  probe: z.boolean().optional(),
 })
 
 /** A required line of the envelope as the factory keeps it: cleaned and cut, and a payload that leaves nothing of it is refused. */
@@ -227,5 +228,6 @@ export function parseFeedback(app: string, payload: unknown): FeedbackRequest {
     title: required('title', body.title, MAX_TITLE_CHARS),
     text: cut(cleanText(body.text ?? ''), MAX_FEEDBACK_CHARS),
     link: body.link ? cut(withoutUserinfo(cleanText(body.link)).replace(/#.*$/s, ''), MAX_LINK_CHARS) : null,
+    probe: body.probe ?? false,
   }
 }

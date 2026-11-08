@@ -140,6 +140,9 @@ test('signals: the read token gets no word of any signal', async () => {
       receivedAt: '2026-11-07T10:00:00.000Z',
       state: 'filed',
       issue: 'issue_1',
+      dismissedReason: null,
+      dismissedBy: null,
+      screenNote: null,
       redacted: false,
     },
   ])

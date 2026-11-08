@@ -4,6 +4,7 @@ import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
+import { agwScreen } from './adapters/agw/screen.ts'
 import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
@@ -35,6 +36,7 @@ import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
+import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
@@ -58,6 +60,7 @@ import { err, ok, portError } from './kernel/result.ts'
 import { systemIds } from './kernel/ids.ts'
 import { healthOf, tickProblem } from './read/health.ts'
 import { planningSettings } from './app/planning-settings.ts'
+import { postgresOpenIssues } from './read/open-issues.ts'
 import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
 import { readFriction } from './read/friction.ts'
@@ -370,6 +373,26 @@ async function main(): Promise<void> {
         return ok(hygieneSummary(pass.value))
       },
     },
+    {
+      // The Judge looks at held signals: promote, dismiss or leave with a recommendation. Interval only: a newly held signal waits for the next pass.
+      name: 'screen',
+      intervalMs: loopSettings.intervalMs.screen,
+      onChange: false,
+      run: async () => {
+        const pass = await screenPass({
+          uow,
+          clock: writes.clock,
+          workflow: agwScreen(agw),
+          openIssues: postgresOpenIssues(sql),
+          projects: planning.signals,
+          promote: intake.api.promote,
+          dismiss: intake.api.dismiss,
+        })
+        if (!pass.ok) return pass
+        said('screen', pass.value.problems)
+        return ok(screenSummary(pass.value))
+      },
+    },
   ]
   const runner: LoopRunner = createLoopRunner({ loops: specs, clock: systemClock })
   const leadsTick = loopSettings.intervalMs.leads
@@ -444,7 +467,7 @@ async function main(): Promise<void> {
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
-  // tailnet ACL, there is no per-request identity. Only reads and the owner's five answer verbs (`WRITES` in console.ts) pass,
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's six answer verbs (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)

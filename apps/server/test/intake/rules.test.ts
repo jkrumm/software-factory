@@ -24,6 +24,7 @@ const signal = (over: Partial<Signal> = {}): Signal => ({
   text: '',
   link: null,
   madeBy: null,
+  probe: false,
   ...over,
 })
 

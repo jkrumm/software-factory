@@ -258,6 +258,7 @@ export function beszelPoller(deps: BeszelPollerDeps): { enabled: boolean; pass()
         text: cleanText(finding.summary),
         link: null,
         madeBy: null,
+        probe: false,
       },
       alert: {
         subject: c.subject,

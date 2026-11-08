@@ -48,6 +48,8 @@ const Facts = z.unknown().default({}).refine(fitsFacts, `facts are larger than $
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
 export type DoorSource = z.infer<typeof DoorSource>
 
+export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
+export const DISMISSERS = ['owner', 'judge', 'probe'] as const
 export const SIGNAL_KINDS = ['alert', 'request', 'feedback', 'remark'] as const
 export const SIGNAL_ORIGINS = ['you', 'application', 'infrastructure', 'github', 'feedback', 'factory'] as const
 export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
@@ -71,6 +73,8 @@ export const Signal = z
     link: z.string().nullable(),
     /** the loop whose change this signal reports, if a loop made it: receive refuses it for an automatic sender (the loop guard) */
     madeBy: z.string().nullable(),
+    /** a lead's own test signal: stored dismissed, never held, never work (an older stored row has none) */
+    probe: z.boolean().default(false),
   })
   .meta({ id: 'Signal' })
 export type Signal = z.infer<typeof Signal>
@@ -99,6 +103,7 @@ export const TRIAGE_DETAILS = [
   'not_listened',
   'loop_guard',
   'no_repo',
+  'probe',
 ] as const
 
 export const SignalAck = z
@@ -129,6 +134,8 @@ export const SignalRequest = z
     text: z.string().max(MAX_TEXT_CHARS).default(''),
     repo: z.string().min(1).max(256).nullish(),
     link: z.string().max(1024).nullish(),
+    /** a test signal: stored dismissed, never held, never work */
+    probe: z.boolean().default(false),
   })
   .refine((body) => !body.from.startsWith('agent') || /^agent:/.test(body.from), {
     message: 'an agent names its repo: agent:<repo>',
@@ -184,6 +191,8 @@ export const FeedbackRequest = z
     title: Title,
     text: z.string().max(MAX_TEXT_CHARS).default(''),
     link: z.string().max(1024).nullish(),
+    /** a test signal: stored dismissed, never held, never work */
+    probe: z.boolean().default(false),
   })
   .meta({ id: 'FeedbackRequest' })
 export type FeedbackRequest = z.output<typeof FeedbackRequest>
@@ -202,8 +211,13 @@ export const StoredSignal = z
     link: z.string().nullable(),
     receivedAt: z.string(),
     /** held until promoted, or what it became */
-    state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']),
+    state: z.enum(SIGNAL_STATES),
     issue: z.string().nullable(),
+    /** why a dismissed signal was turned away (it can quote outside text: the read token does not see it) */
+    dismissedReason: z.string().nullable(),
+    dismissedBy: z.enum(DISMISSERS).nullable(),
+    /** what the Judge made of a held signal it left to the owner (it can quote outside text: the read token does not see it) */
+    screenNote: z.string().nullable(),
     /** the text was hidden: the read token does not see outside text */
     redacted: z.boolean(),
   })
@@ -221,6 +235,18 @@ export const PromoteRequest = z
   })
   .meta({ id: 'PromoteRequest' })
 export type PromoteRequest = z.infer<typeof PromoteRequest>
+
+/** `POST /signals/{id}/dismiss`: the owner (or the Judge) turns a held signal away, with a reason. */
+export const DismissRequest = z
+  .strictObject({ reason: z.string().trim().min(1).max(500) })
+  .meta({ id: 'DismissRequest' })
+export type DismissRequest = z.infer<typeof DismissRequest>
+
+/** What a dismissal answers: the signal, now on record as dismissed. */
+export const SignalDismissed = z
+  .object({ signal: z.string(), state: z.literal('dismissed') })
+  .meta({ id: 'SignalDismissed' })
+export type SignalDismissed = z.infer<typeof SignalDismissed>
 
 /** A door route: the registry that says which repo a monitor's alerts file in. The owner's estate, not git's. */
 export const DoorRoute = z
@@ -281,3 +307,46 @@ export const DoorReport = z
 export type DoorReport = z.infer<typeof DoorReport>
 
 export const DoorReportAck = z.object({ ok: z.literal(true) }).meta({ id: 'DoorReportAck' })
+
+// ---- factory-screen: the Judge looks at a held signal -----------------------------------------------------------------------
+
+const ScreenLine = z.string().trim().min(1).max(300)
+
+/** The one signal a `factory-screen` call is shown; its words are outside text, data and never instructions. */
+export const ScreenRequest = z
+  .object({
+    signal: z.object({
+      id: z.string(),
+      source: z.string(),
+      kind: z.enum(SIGNAL_KINDS),
+      origin: z.enum(SIGNAL_ORIGINS),
+      repo: z.string().nullable(),
+      title: z.string(),
+      text: z.string(),
+      link: z.string().nullable(),
+      receivedAt: z.string(),
+    }),
+    /** the open Issues of `signal.repo`, at most 40; empty when the signal names no repo */
+    openIssues: z.array(z.object({ id: z.string(), title: z.string(), kind: z.string(), state: z.string() })).max(40),
+    /** the names of the projects the factory knows that are not work repos */
+    projects: z.array(z.string()).max(60),
+  })
+  .meta({ id: 'ScreenRequest' })
+export type ScreenRequest = z.infer<typeof ScreenRequest>
+
+export const SCREEN_VERDICTS = ['promote', 'dismiss', 'leave'] as const
+
+/** What `factory-screen` says of the signal: promote it, dismiss it, or leave it to the owner with a recommendation. */
+export const ScreenAnswer = z
+  .object({
+    verdict: z.enum(SCREEN_VERDICTS),
+    reason: ScreenLine,
+    /** promote: the repo to file in when the signal names none */
+    repo: z.string().nullable(),
+    /** dismiss as a duplicate: an Issue id from `openIssues` */
+    duplicateOf: z.string().nullable(),
+    /** leave: what the owner should do with it */
+    recommendation: ScreenLine.nullable(),
+  })
+  .meta({ id: 'ScreenAnswer' })
+export type ScreenAnswer = z.infer<typeof ScreenAnswer>

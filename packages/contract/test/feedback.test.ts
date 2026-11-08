@@ -5,7 +5,7 @@ const valid = { app: 'weather', version: '1.2.0', route: '/forecast', title: 'Th
 
 describe('FeedbackRequest', () => {
   test('the envelope parses, text defaults to empty, the source label and token key follow the app', () => {
-    expect(FeedbackRequest.parse(valid)).toEqual({ ...valid, text: '' })
+    expect(FeedbackRequest.parse(valid)).toEqual({ ...valid, text: '', probe: false })
     expect(feedbackSource('weather')).toBe('feedback:weather')
     expect(DoorSource.safeParse(feedbackTokenKey('a'.repeat(23))).success).toBe(true)
   })

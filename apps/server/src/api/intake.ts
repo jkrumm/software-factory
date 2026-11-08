@@ -7,9 +7,12 @@ import {
   DoorRouteInput,
   DoorRouteList,
   ErrorBody,
+  DismissRequest,
   FeedbackRequest,
   PromoteRequest,
+  SIGNAL_STATES,
   SignalAck,
+  SignalDismissed,
   SignalList,
   SignalRequest,
   StoredSignal,
@@ -27,7 +30,7 @@ import { errorResponses } from './errors.ts'
 /** The use cases the routes call, bound in `main.ts`. */
 export type IntakeApi = Pick<
   Intake,
-  'file' | 'alert' | 'feedback' | 'promote' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'
+  'file' | 'alert' | 'feedback' | 'promote' | 'dismiss' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'
 >
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
@@ -47,6 +50,7 @@ function problem(error: IntakeError): Response {
       return json(409, failure('detail' in error ? error.detail : `${error.kind}; try again`, error.kind))
     case 'trust_refused':
       return json(403, failure(error.detail, 'trust_refused'))
+    case 'invalid':
     case 'no_repo':
     case 'unknown_project':
     case 'filing_refused':
@@ -75,6 +79,9 @@ const storedOf = (row: SignalRow): StoredSignal =>
     receivedAt: row.receivedAt.toISOString(),
     state: row.state,
     issue: row.issueId,
+    dismissedReason: row.dismissal?.reason ?? null,
+    dismissedBy: row.dismissal?.by ?? null,
+    screenNote: row.screening.note,
     redacted: false,
   })
 
@@ -99,6 +106,7 @@ export const unwiredIntake: IntakeApi = (() => {
     alert: unavailable,
     feedback: unavailable,
     promote: unavailable,
+    dismiss: unavailable,
     list: unavailable,
     doorReport: unavailable,
     routes: unavailable,
@@ -138,7 +146,7 @@ export const intakeRoutes = (api: IntakeApi) =>
           return SignalList.parse({ signals: callerOf(request) === 'read' ? redactSignals(signals) : signals })
         }),
       {
-        query: z.object({ state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']).optional() }),
+        query: z.object({ state: z.enum(SIGNAL_STATES).optional() }),
         response: { 200: SignalList, ...errorResponses(400, 422, 503) },
         detail: {
           operationId: 'signal.list',
@@ -152,6 +160,16 @@ export const intakeRoutes = (api: IntakeApi) =>
       response: RESPONSES,
       detail: { operationId: 'signal.promote', summary: 'Let a held signal become work' },
     })
+    .post(
+      '/signals/:id/dismiss',
+      async ({ params, body }) => answer(await api.dismiss(params.id, body), (v) => SignalDismissed.parse(v)),
+      {
+        params: z.object({ id: z.string() }),
+        body: DismissRequest,
+        response: { 200: SignalDismissed, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: { operationId: 'signal.dismiss', summary: 'Turn a held signal away, with a reason' },
+      },
+    )
     .get(
       '/door/routes',
       async () =>

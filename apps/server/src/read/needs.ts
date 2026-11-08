@@ -82,6 +82,7 @@ const SignalRow = z.object({
   text: z.string(),
   received_at: z.date(),
   issue_id: z.string().nullable(),
+  screen_note: z.string().nullable(),
 })
 
 /**
@@ -115,7 +116,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
     WHERE r.done_at IS NULL AND i.state <> 'closed'
     ORDER BY r.raised_at DESC, r.id DESC`
   const signals: unknown[] = await sql`
-    SELECT id, repo, title, text, received_at, issue_id
+    SELECT id, repo, title, text, received_at, issue_id, screen_note
     FROM factory.intake_signals WHERE state = 'held'
     ORDER BY received_at DESC, id DESC`
 
@@ -187,7 +188,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.title, 120),
         summary: plain(row.text, 200),
         defaultAt: null,
-        judge: null,
+        judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'signal', id: row.id },
         work: isWorkRepo(row.repo, open),
       }

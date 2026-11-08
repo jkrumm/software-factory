@@ -4,7 +4,7 @@ import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { annotateArtifact, answerDecision, finishErrand, giveVerdict, promoteSignal } from '@/lib/api'
+import { annotateArtifact, answerDecision, finishErrand, dismissSignal, giveVerdict, promoteSignal } from '@/lib/api'
 import { ARTIFACT_KIND_LABEL, defaultWords, reversibleWords, VERDICTS } from '@/lib/needs'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
 import { useSettle } from '@/lib/settle'
@@ -289,10 +289,18 @@ function HeldSignalBody({ item, onSent }: BodyProps) {
     onSent: () => onSent('Promoted: it is work now'),
     onConflict: () => onSent(SETTLED),
   })
+  const [reason, setReason] = useState('')
+  const dismissal = useSettle<void>({
+    send: () => dismissSignal(item.id, reason.trim()),
+    keys: [['needs']],
+    onSent: () => onSent('Dismissed: it stays on record'),
+    onConflict: () => onSent(SETTLED),
+  })
   const needsRepo = item.repo === null
   return (
     <div className="grid gap-4">
       <Prose>{item.summary}</Prose>
+      {item.judge ? <p className="text-sm text-muted-foreground">Judge: {item.judge}</p> : null}
       <form
         className="grid gap-2"
         onSubmit={(event) => {
@@ -315,6 +323,27 @@ function HeldSignalBody({ item, onSent }: BodyProps) {
         </div>
       </form>
       <Problem words={settle.error} />
+      <form
+        className="grid gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          dismissal.send()
+        }}
+      >
+        <Input
+          aria-label="Reason"
+          placeholder="Why turn it away?"
+          maxLength={500}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+        />
+        <div>
+          <Button type="submit" variant="outline" disabled={dismissal.disabled || !reason.trim()}>
+            Dismiss
+          </Button>
+        </div>
+      </form>
+      <Problem words={dismissal.error} />
     </div>
   )
 }

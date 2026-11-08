@@ -106,6 +106,7 @@ async function fileOne(
     title,
     text: signalText(pattern, facts, refs),
     repo: FRICTION_REPO,
+    probe: false,
   })
   if (!filed.ok) {
     record.failed.push({ key: pattern.key, reason: reasonOf(filed.error).slice(0, 300) })

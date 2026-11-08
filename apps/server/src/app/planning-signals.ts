@@ -12,6 +12,8 @@ export interface ProjectSignalsPort {
   find(repo: string): Promise<Result<RepoSignalsView | null, PortError>>
   /** every project with automatic sources to poll */
   polled(): Promise<Result<RepoSignalsView[], PortError>>
+  /** the names of the projects that are not work repos, sorted */
+  names(): Promise<Result<string[], PortError>>
 }
 
 export function projectSignals(deps: PlanningDeps): ProjectSignalsPort {
@@ -25,6 +27,16 @@ export function projectSignals(deps: PlanningDeps): ProjectSignalsPort {
       deps.uow.run(async ({ planning }) => {
         const views = (await planning.projects()).map(signalsView)
         return ok(views.filter((view) => view.sources.length > 0))
+      }),
+    names: () =>
+      deps.uow.run(async ({ planning }) => {
+        const views = (await planning.projects()).map(signalsView)
+        return ok(
+          views
+            .filter((view) => !view.work)
+            .map((view) => view.repo)
+            .sort(),
+        )
       }),
   }
 }

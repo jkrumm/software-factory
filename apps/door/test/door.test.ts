@@ -417,7 +417,7 @@ describe('app feedback', () => {
     const response = await feedback()
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(ack('held', 'quarantined'))
-    expect(feedbacks).toEqual([{ app: 'weather', link: null, ...body }])
+    expect(feedbacks).toEqual([{ app: 'weather', link: null, probe: false, ...body }])
     expect(FeedbackRequest.safeParse(feedbacks[0]).success).toBe(true)
     expect(filed).toEqual([])
   })

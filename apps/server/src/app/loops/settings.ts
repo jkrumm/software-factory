@@ -17,6 +17,7 @@ const Env = z.object({
   FACTORY_LOOP_QUEUE_MS: ms.optional(),
   FACTORY_LOOP_FRICTION_MS: ms.optional(),
   FACTORY_LOOP_HYGIENE_MS: ms.optional(),
+  FACTORY_LOOP_SCREEN_MS: ms.optional(),
   /** only these projects (a comma list of names) are swept; unset is every project with a `project.yaml` */
   FACTORY_HYGIENE_REPOS: z.string().optional(),
   /** a project is swept again after this long */
@@ -58,7 +59,11 @@ export const DEFAULT_TICK_MS = 10_000
 const HYGIENE_MIN_TICK_MS = 15 * 60_000
 const hygieneTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, HYGIENE_MIN_TICK_MS))
 
-/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes). Throws one message naming every bad key. */
+/** The Judge screens held signals: at most one pass in this long, unless the tick is off (0). */
+const SCREEN_MIN_TICK_MS = 10 * 60_000
+const screenTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, SCREEN_MIN_TICK_MS))
+
+/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes, screen: at least 10). Throws one message naming every bad key. */
 export function loadLoopSettings(env: Record<string, string | undefined>): LoopSettings {
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
@@ -81,10 +86,14 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     queue: e.FACTORY_LOOP_QUEUE_MS,
     friction: e.FACTORY_LOOP_FRICTION_MS,
     hygiene: e.FACTORY_LOOP_HYGIENE_MS,
+    screen: e.FACTORY_LOOP_SCREEN_MS,
   }
   return {
     intervalMs: Object.fromEntries(
-      LOOP_NAMES.map((name) => [name, own[name] ?? (name === 'hygiene' ? hygieneTickMs(tickMs) : tickMs)]),
+      LOOP_NAMES.map((name) => [
+        name,
+        own[name] ?? (name === 'hygiene' ? hygieneTickMs(tickMs) : name === 'screen' ? screenTickMs(tickMs) : tickMs),
+      ]),
     ) as Record<LoopName, number>,
     tickMs,
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,

@@ -100,6 +100,9 @@ test('redactSignals keeps ids, kinds, times and states and drops every word, the
     receivedAt: '2026-11-07T10:00:00.000Z',
     state: 'filed',
     issue: null,
+    dismissedReason: null,
+    dismissedBy: null,
+    screenNote: null,
     redacted: false,
   })
   const out = redactSignals([signal('owner'), signal('agent'), signal('outside'), signal('machine')])

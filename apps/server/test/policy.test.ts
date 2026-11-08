@@ -99,6 +99,7 @@ describe('the policy table', () => {
       ['POST', '/v1/errands/:id/done'],
       ['GET', '/v1/errands'],
       ['POST', '/signals/:id/promote'],
+      ['POST', '/signals/:id/dismiss'],
       ['POST', '/issues'],
       ['POST', '/issues/:id/cancel'],
       ['POST', '/issues/:id/note'],
