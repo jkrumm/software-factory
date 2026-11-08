@@ -41,13 +41,12 @@ export function useFlow() {
   })
 }
 
-/** Each account's newest reading: the weekly figure first, the 5-hour window where the account has one. */
+/** Each account's newest reading: the weekly figure first, the 5-hour window where the account has one. A reading is not a change in the stream, so it polls whether or not the stream is open. */
 export function useAccounts() {
-  const live = useLive()
   return useQuery({
     queryKey: ['accounts'],
     queryFn: ({ signal }) => fetchAccounts(signal),
-    refetchInterval: live ? false : POLL_MS,
+    refetchInterval: POLL_MS,
   })
 }
 
