@@ -254,15 +254,19 @@ publish_console() { # $1 release dir
   fi
   target="http://127.0.0.1:${port:-$CONSOLE_PORT}"
   if ! command -v tailscale >/dev/null 2>&1; then log "WARNING: tailscale is not on PATH: the Console is not published on the tailnet"; return 0; fi
-  if ! status=$(tailscale serve status 2>&1); then
+  # The mini runs the Homebrew daemon: the bare CLI looks for the app's local API and answers 404, so it is pointed at the socket.
+  local ts=(tailscale)
+  [[ -S /var/run/tailscaled.socket ]] && ts=(tailscale --socket=/var/run/tailscaled.socket)
+  # The tailnet name already serves other ports (the door, a dashboard): only a mapping on 443 is in the way.
+  if ! status=$("${ts[@]}" serve status --json 2>&1); then
     log "WARNING: tailscale serve status failed: $status"; return 0
   fi
-  if [[ "$status" == *"$target"* ]]; then log "the Console is published on the tailnet already ($target)"; return 0; fi
-  if [[ -n "${status//[[:space:]]/}" && "$status" != *"No serve config"* ]]; then
-    log "WARNING: tailscale serve already serves something else; the Console is not published (tailscale serve status: $status)"
+  if [[ "$status" == *"\"$target\""* ]]; then log "the Console is published on the tailnet already ($target)"; return 0; fi
+  if [[ "$status" == *':443"'* ]]; then
+    log "WARNING: tailscale serve already serves something else on 443; the Console is not published"
     return 0
   fi
-  if out=$(tailscale serve --bg --https=443 "$target" 2>&1); then
+  if out=$("${ts[@]}" serve --bg --https=443 "$target" 2>&1); then
     log "the Console is published on the tailnet: $target"
   else
     log "WARNING: tailscale serve failed, the Console is not published: $out"
