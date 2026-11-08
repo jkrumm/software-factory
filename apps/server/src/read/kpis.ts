@@ -7,6 +7,16 @@ import { percentile, per, windowOf } from './stats.ts'
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
 
+/**
+ * The owner events that count as touches, of the given kinds. A `noted` event counts only when it is a note the owner
+ * sent with `issue note` (`noted:issue_<n>:owner:<call>`) and not the orchestrator steering a lead on the owner's token.
+ * The first note of a filing, an Errand done and a verdict note are the owner's request or answer, not a touch.
+ * `avoidableTouches` and the touch evidence of `readFrictionEvidence` both use this, so they agree.
+ */
+export const ownerTouch = (sql: SQL, kinds: readonly string[]) => sql`
+  actor = 'owner' AND result = 'applied' AND kind IN ${sql([...kinds])}
+  AND (kind <> 'noted' OR (key ~ '^noted:issue_[0-9]+:owner:' AND payload->>'via' IS DISTINCT FROM 'orchestrator'))`
+
 const Count = z.object({ n: z.coerce.number().int() })
 const Duration = z.object({ ms: z.coerce.number() })
 
@@ -25,8 +35,9 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
 
 /**
  * Avoidable touches by kind: an owner action on an Issue the factory should have settled. A Decision the owner answered and
- * did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. Not a verdict on a Concept or Spec and not
- * an Errand done: the owner wanted those.
+ * did not mark worth asking, an owner note sent to a lead, an owner wake, a cancel, a reopen. Not the first note of a
+ * filing, not the orchestrator steering a lead, not a verdict on a Concept or Spec and not an Errand done: the owner
+ * wanted those.
  */
 export async function avoidableTouches(sql: SQL, w: Window): Promise<Record<string, number>> {
   const counts: Record<string, number> = {
@@ -37,7 +48,7 @@ export async function avoidableTouches(sql: SQL, w: Window): Promise<Record<stri
   for (const kind of TOUCH_EVENTS) counts[kind] = 0
   const events: unknown[] = await sql`
     SELECT kind, count(*) AS n FROM factory.issue_events
-    WHERE actor = 'owner' AND result = 'applied' AND kind IN ${sql([...TOUCH_EVENTS])} AND at >= ${w.from} AND at < ${w.to}
+    WHERE ${ownerTouch(sql, TOUCH_EVENTS)} AND at >= ${w.from} AND at < ${w.to}
     GROUP BY kind`
   for (const raw of events) {
     const row = z.object({ kind: z.string() }).and(Count).parse(raw)
@@ -245,7 +256,7 @@ export async function readKpis(
       target: { kind: 'between', min: 0.05, max: 0.07 },
       measured: true,
       definition:
-        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. A verdict on a Concept or Spec and a done Errand are not counted, the owner wanted those.',
+        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, a note from the orchestrator steering a lead, a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them.',
     }),
     kpi({
       key: 'asks',

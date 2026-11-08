@@ -48,6 +48,9 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`.
 - **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day
   release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect (NL11).
+- **The orchestrator shares the owner's token**, so the log cannot tell its events from the owner's. A note it sends to steer a
+  lead carries `--via orchestrator` (`issue note`, `session note`) and is not an owner touch; cancels, wakes and answers
+  still count as the owner's until it has a principal of its own.
 - **Who may call what is `apps/server/src/api/policy.ts`.** A caller is decided by its bearer token alone (`owner`, `agent`,
   `machine`, `signal`, `read`); a route with no row is 403 for everyone, so a new route gets its row first and
   `apps/server/test/policy.test.ts` fails without one. Only `GET /health` is public. When in doubt, the owner alone.

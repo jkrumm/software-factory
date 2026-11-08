@@ -48,6 +48,8 @@ export interface NoteInput {
   actor: 'owner' | 'factory'
   wake?: boolean | undefined
   call?: string | undefined
+  /** the orchestrator steering a lead on the owner's token: not an owner touch */
+  via?: 'orchestrator' | undefined
 }
 
 /**
@@ -63,7 +65,10 @@ export function noteIssue(deps: Deps, input: NoteInput): Promise<Result<NoteOutc
       key: key('noted', input.issueId, input.actor, call),
       event: {
         kind: 'noted',
-        payload: { text: input.actor === 'owner' ? input.text : fence(input.text.slice(0, 4_000)) },
+        payload: {
+          text: input.actor === 'owner' ? input.text : fence(input.text.slice(0, 4_000)),
+          ...(input.via ? { via: input.via } : {}),
+        },
         actor: input.actor,
       },
     })
@@ -90,7 +95,13 @@ export type SessionNoteError = IssueWriteError | { kind: 'no_session'; session: 
  */
 export async function noteSession(
   deps: Deps,
-  input: { session: string; text: string; actor: 'owner' | 'factory'; call?: string | undefined },
+  input: {
+    session: string
+    text: string
+    actor: 'owner' | 'factory'
+    call?: string | undefined
+    via?: 'orchestrator' | undefined
+  },
 ): Promise<Result<NoteOutcome, SessionNoteError | PortError>> {
   const parsed = parseLeadKey(input.session)
   if (!parsed) return err({ kind: 'no_session', session: input.session })
@@ -100,5 +111,11 @@ export async function noteSession(
   })
   if (!current.ok) return current
   if (!current.value) return err({ kind: 'no_session', session: input.session })
-  return noteIssue(deps, { issueId: parsed.issue, text: input.text, actor: input.actor, call: input.call })
+  return noteIssue(deps, {
+    issueId: parsed.issue,
+    text: input.text,
+    actor: input.actor,
+    call: input.call,
+    via: input.via,
+  })
 }

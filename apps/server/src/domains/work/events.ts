@@ -29,7 +29,7 @@ export const PAYLOADS = {
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),
   /** an amend or a note reaches the lead */
-  noted: z.object({ text }),
+  noted: z.object({ text, via: z.enum(['orchestrator']).optional() }),
   /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */
   asked: z.object({ attempt, decision: checkpoint }),
   /** a Decision got its answer */

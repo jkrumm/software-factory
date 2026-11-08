@@ -34,6 +34,7 @@ interface EventOptions {
   detail?: string
   payload?: unknown
   outcome?: string
+  key?: string
 }
 
 async function issue(id: string, repo: string, state: string, version: number, wait?: string, outcome?: string) {
@@ -45,7 +46,7 @@ async function event(issueId: string, version: number | null, kind: string, at: 
   const result = o.result ?? 'applied'
   await sql`INSERT INTO factory.issue_events
     (id, issue_id, key, kind, payload, actor, at, result, detail, version, from_state, to_state, wait, outcome)
-    VALUES (${`event_${++keys}`}, ${issueId}, ${`key_${keys}`}, ${kind}, ${json(o.payload ?? {})}::text::jsonb,
+    VALUES (${`event_${++keys}`}, ${issueId}, ${o.key ?? `key_${keys}`}, ${kind}, ${json(o.payload ?? {})}::text::jsonb,
       ${o.actor ?? 'factory'}, ${at}, ${result}, ${o.detail ?? null}, ${result === 'applied' ? version : null},
       ${o.from ?? null}, ${result === 'applied' ? (o.to ?? 'queued') : null},
       ${o.wait === undefined ? null : json(o.wait)}::text::jsonb, ${o.outcome ?? null})`
@@ -112,7 +113,12 @@ async function seed() {
     actor: 'lead',
     wait: { reason: 'decision', holds: { id: 'decision_1', summary: 'which logger' }, since: 4, told: 4 },
   })
-  await event('issue_2', 5, 'noted', ago(10), { from: 'waiting', to: 'waiting', actor: 'owner' })
+  await event('issue_2', 5, 'noted', ago(10), {
+    from: 'waiting',
+    to: 'waiting',
+    actor: 'owner',
+    key: 'noted:issue_2:owner:call_1',
+  })
   await event('issue_2', null, 'closed', ago(5), { result: 'refused', detail: 'not working', actor: 'lead' })
 
   // issue_3 (work repo): a Concept under review
