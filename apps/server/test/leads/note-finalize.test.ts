@@ -107,6 +107,29 @@ describe('note_lead', () => {
     expect(row?.state).toBe('queued')
   })
 
+  test('the lead takes its repo claim back before the typing; a full repo types nothing and is asked again', async () => {
+    const { issue, effect } = await withNote()
+    w.claims.resumeError = portError('refused', 'Issue 1 waits for a claim in example: the repo is full')
+    expect(await noteLead(w.deps, effect)).toEqual({ ok: false, error: w.claims.resumeError })
+    expect(w.terminals.typed).toHaveLength(0)
+
+    w.claims.resumeError = null
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.claims.resumed).toEqual([{ issue, attempt: 1 }])
+    expect(w.terminals.typed).toHaveLength(1)
+  })
+
+  test('a note for a lead that waits again takes no claim', async () => {
+    const { issue, effect } = await withNote()
+    await w.event(issue, 'defer', {
+      kind: 'deferred',
+      payload: { attempt: 1, until: new Date(w.clock.now().getTime() + 3_600_000).toISOString() },
+      actor: 'lead',
+    })
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.claims.resumed).toHaveLength(0)
+  })
+
   test('an Issue that closed, or a note for an earlier attempt, types nothing', async () => {
     const { issue, effect } = await withNote()
     await w.event(issue, 'cancel', { kind: 'cancelled', payload: { reason: 'stop' }, actor: 'owner' })

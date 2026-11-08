@@ -126,7 +126,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
   replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
 - **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
-  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone.
+  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. Before the typing
+  the lead takes its repo's claim back (`resumeClaim` through `claims.resume`): a wait that ended left it without one, and
+  a full repo refuses so the outbox tries again later.
 - **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
   (the hook exits 2); the second time the Issue stalls as `unreported`. A stop with background work still running is no
   stop.

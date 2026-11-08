@@ -134,7 +134,12 @@ export interface World {
   clock: MovingClock
   terminals: FakeTerminals
   worktrees: FakeWorktrees
-  claims: { released: { issue: IssueId; attempt: number }[]; error: PortError | null } & Claims
+  claims: {
+    released: { issue: IssueId; attempt: number }[]
+    resumed: { issue: IssueId; attempt: number }[]
+    error: PortError | null
+    resumeError: PortError | null
+  } & Claims
   transcripts: { archived: unknown[]; error: PortError | null } & Transcripts
   repoError: PortError | null
   seatError: PortError | null
@@ -159,10 +164,17 @@ export async function startWorld(): Promise<World> {
     worktrees,
     claims: {
       released: [],
+      resumed: [],
       error: null,
+      resumeError: null,
       async release(input) {
         if (this.error) return err(this.error)
         this.released.push(input)
+        return ok(undefined)
+      },
+      async resume(input) {
+        if (this.resumeError) return err(this.resumeError)
+        this.resumed.push(input)
         return ok(undefined)
       },
     },
@@ -249,6 +261,8 @@ export async function startWorld(): Promise<World> {
     worktrees.reset()
     world.claims.released = []
     world.claims.error = null
+    world.claims.resumed = []
+    world.claims.resumeError = null
     world.transcripts.archived = []
     world.transcripts.error = null
     world.repoError = null
