@@ -79,7 +79,7 @@ promotes it; a repeat of a promoted complaint amends its open Issue.
 
 The body is strict: a `repo` (or any other field) is a 400. The repo is the door route `(feedback, <app>)`; without one the signal is held with no
 repo and the owner names it when promoting. Route an app with the server's registry, `POST /door/routes`
-(`factory door route-set`) with `{ "source": "feedback", "monitor": "<app>", "repo": "<repo>" }`. A work repo cannot be routed to. An app that sends
+(`factory door route-set`) with `{ "source": "feedback", "monitor": "<app>", "repo": "<repo>" }`. A work repo cannot be routed to. A lead may route or remove a route of its own Issue's repo with `--issue <id>`; another repo's route is the owner's. An app that sends
 nothing is normal: the "nothing accepted for 14 days" health line never names a `feedback-` source.
 
 ```ts

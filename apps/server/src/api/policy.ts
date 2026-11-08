@@ -16,9 +16,10 @@
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs, `ship`,
- *   `quality`, a revision, its own session read, a note to a session, the signal it files and the test slots it takes.
+ *   `quality`, a revision, its own session read, a note to a session, the signal it files, the test slots it takes and the
+ *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
- *   capacity, loops, the door's registry). When in doubt, the owner alone.
+ *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
  * - machine: exactly `POST /signals/alerts`, `POST /signals/feedback` and `POST /door/reports`, the door's three calls (the owner may make them too).
  * - signal: exactly `POST /signals`, and only as `owner:hermes` (`app/intake.ts`): the narrow caller that files the owner's
  *   words, so no surface holds the owner's token.
@@ -101,8 +102,8 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/loops/:name/run', OWNER),
   rule('POST', '/signals/:id/promote', OWNER),
   rule('GET', '/door/routes', OWNER),
-  rule('POST', '/door/routes', OWNER),
-  rule('POST', '/door/routes/remove', OWNER),
+  rule('POST', '/door/routes', LEAD),
+  rule('POST', '/door/routes/remove', LEAD),
   rule('GET', '/projects', OWNER),
   rule('GET', '/projects/:name', OWNER),
   rule('POST', '/projects/sync', OWNER),

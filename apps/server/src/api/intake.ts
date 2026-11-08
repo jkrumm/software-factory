@@ -85,6 +85,7 @@ const routeOf = (row: DoorRouteRow): DoorRoute =>
     repo: row.repo,
     quiet: row.quiet,
     lastQuietAt: row.lastQuietAt?.toISOString() ?? null,
+    setBy: row.setBy,
   })
 
 const RESPONSES = { 200: SignalAck, ...errorResponses(400, 404, 409, 422, 503) }
@@ -177,18 +178,29 @@ export const intakeRoutes = (api: IntakeApi) =>
     )
     .post(
       '/door/routes',
-      async ({ body }) => answer(await api.setRoute({ ...body, monitor: cleanText(body.monitor) }), routeOf),
+      async ({ body, request }) =>
+        answer(await api.setRoute({ ...body, monitor: cleanText(body.monitor) }, callerOf(request)), routeOf),
       {
         body: DoorRouteInput,
         response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
         detail: { operationId: 'door.route-set', summary: 'Route a monitor to a repo' },
       },
     )
-    .post('/door/routes/remove', async ({ body }) => answer(await api.removeRoute(body), routeOf), {
-      body: z.strictObject({ source: z.string().min(1), monitor: z.string().min(1) }).meta({ id: 'DoorRouteKey' }),
-      response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
-      detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
-    })
+    .post(
+      '/door/routes/remove',
+      async ({ body, request }) => answer(await api.removeRoute(body, callerOf(request)), routeOf),
+      {
+        body: z
+          .strictObject({
+            source: z.string().min(1),
+            monitor: z.string().min(1),
+            issue: z.string().min(1).max(64).optional(),
+          })
+          .meta({ id: 'DoorRouteKey' }),
+        response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
+        detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
+      },
+    )
     .post(
       '/door/reports',
       async ({ body }) => answer(await api.doorReport(body), () => DoorReportAck.parse({ ok: true })),
