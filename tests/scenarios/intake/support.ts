@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stateOf } from '../flow.ts'
-import { bearer, startServer, TOKENS, type ServerProcess, type World } from '../harness.ts'
+import { bearer, freePort, startServer, TOKENS, type ServerProcess, type World } from '../harness.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const DOOR_MAIN = join(ROOT, 'apps', 'door', 'src', 'main.ts')
@@ -124,51 +124,67 @@ export interface Door {
   feedback(app: string, payload: unknown): Promise<{ status: number; body: Ack }>
 }
 
-/** The real door process on a free port, with a tokens file of its own and the server as its only way out. */
+const DOOR_BOOT_ATTEMPTS = 5
+
+/**
+ * The real door process on a free port, with a tokens file of its own and the server as its only way out. A port can be
+ * taken between the probe and the door's bind, so a door that exits before it listens is started again on a new port;
+ * the last failure carries what the door wrote to stderr.
+ */
 export async function startDoor(estate: Estate, server: ServerProcess, sources: string[]): Promise<Door> {
   const tokens = Object.fromEntries(sources.map((source) => [source, `${source}-token-0123456789abcdef`]))
   const tokensFile = join(estate.dir, 'door-tokens.json')
   await writeFile(tokensFile, JSON.stringify(tokens), { mode: 0o600 })
-  const port = 20_000 + Math.floor(Math.random() * 20_000)
-  const proc = Bun.spawn([process.execPath, DOOR_MAIN], {
-    cwd: ROOT,
-    env: {
-      PATH: process.env.PATH ?? '',
-      HOME: process.env.HOME ?? '/tmp',
-      FACTORY_DOOR_PORT: String(port),
-      FACTORY_DOOR_TOKENS_FILE: tokensFile,
-      FACTORY_URL: server.url,
-      FACTORY_DOOR_TOKEN: TOKENS.machine,
-    },
-    stdout: 'ignore',
-    stderr: 'pipe',
-  })
-  const url = `http://127.0.0.1:${port}`
-  const send = async (path: string, token: string | undefined, payload: unknown) => {
-    const response = await fetch(`${url}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
+  const failures: string[] = []
+  for (let attempt = 1; attempt <= DOOR_BOOT_ATTEMPTS; attempt++) {
+    const port = await freePort()
+    const proc = Bun.spawn([process.execPath, DOOR_MAIN], {
+      cwd: ROOT,
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: process.env.HOME ?? '/tmp',
+        FACTORY_DOOR_PORT: String(port),
+        FACTORY_DOOR_TOKENS_FILE: tokensFile,
+        FACTORY_URL: server.url,
+        FACTORY_DOOR_TOKEN: TOKENS.machine,
+      },
+      stdout: 'ignore',
+      stderr: 'pipe',
     })
-    const text = await response.text()
-    return { status: response.status, body: text ? JSON.parse(text) : null }
+    const stderr = new Response(proc.stderr).text()
+    const url = `http://127.0.0.1:${port}`
+    const listening = await until('the door to listen', async () => {
+      if (proc.exitCode !== null) return 'exited' as const
+      const answered = await fetch(`${url}/alert/kuma`, { method: 'POST' }).then(
+        (response) => response.status === 401,
+        () => false,
+      )
+      return answered ? ('listening' as const) : false
+    })
+    if (listening === 'exited') {
+      failures.push(`attempt ${attempt} on port ${port}: the door exited ${proc.exitCode}\n${await stderr}`)
+      continue
+    }
+    const send = async (path: string, token: string | undefined, payload: unknown) => {
+      const response = await fetch(`${url}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      })
+      const text = await response.text()
+      return { status: response.status, body: text ? JSON.parse(text) : null }
+    }
+    return {
+      url,
+      stop: async () => {
+        proc.kill('SIGTERM')
+        await proc.exited
+      },
+      post: async (source, payload) => send(`/alert/${source}`, tokens[source], payload),
+      feedback: async (app, payload) => send(`/feedback/${app}`, tokens[`feedback-${app}`], payload),
+    }
   }
-  await until('the door to listen', async () => {
-    if (proc.exitCode !== null) throw new Error(`the door exited ${proc.exitCode}`)
-    return fetch(`${url}/alert/kuma`, { method: 'POST' }).then(
-      (response) => response.status === 401,
-      () => false,
-    )
-  })
-  return {
-    url,
-    stop: async () => {
-      proc.kill('SIGTERM')
-      await proc.exited
-    },
-    post: async (source, payload) => send(`/alert/${source}`, tokens[source], payload),
-    feedback: async (app, payload) => send(`/feedback/${app}`, tokens[`feedback-${app}`], payload),
-  }
+  throw new Error(`the door did not start in ${DOOR_BOOT_ATTEMPTS} attempts:\n${failures.join('\n')}`)
 }
 
 /** A Beszel hub that answers with one system at a steady memory level. */
