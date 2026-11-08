@@ -103,6 +103,7 @@ const routeOf = (row: Row): DoorRouteRow => ({
   source: text(row.source),
   monitor: text(row.monitor),
   repo: text(row.repo),
+  setBy: text(row.set_by),
   quiet: int(row.quiet),
   lastQuietAt: dateOrNull(row.last_quiet_at),
   lastEvent: textOrNull(row.last_event),
@@ -306,10 +307,11 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
       return rows.map(routeOf)
     },
 
-    async setRoute(source, monitor, repo) {
+    async setRoute(source, monitor, repo, setBy) {
       const [row]: Row[] = await tx`
-        INSERT INTO factory.intake_door_routes (source, monitor, repo) VALUES (${source}, ${monitor}, ${repo})
-        ON CONFLICT (source, monitor) DO UPDATE SET repo = EXCLUDED.repo
+        INSERT INTO factory.intake_door_routes (source, monitor, repo, set_by)
+        VALUES (${source}, ${monitor}, ${repo}, ${setBy})
+        ON CONFLICT (source, monitor) DO UPDATE SET repo = EXCLUDED.repo, set_by = EXCLUDED.set_by
         RETURNING *`
       await tx`DELETE FROM factory.intake_door_unrouted WHERE source = ${source} AND monitor = ${monitor}`
       if (!row) throw new Error('route was not stored')

@@ -586,14 +586,16 @@ describe('the door', () => {
     const listed = await intake.routes()
     expect(listed.ok && listed.value.unrouted.map((row) => [row.monitor, row.count])).toEqual([['web - Push', 1]])
 
-    expect(await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'chat' })).toMatchObject({ ok: false })
-    expect((await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'argo' })).ok).toBe(true)
+    expect(await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'chat' }, 'owner')).toMatchObject({
+      ok: false,
+    })
+    expect((await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'argo' }, 'owner')).ok).toBe(true)
     expect(done(await intake.alert(alert({ event: 'e2' })))).toMatchObject({ outcome: 'filed' })
     expect(await issues()).toEqual([{ id: 'issue_1', repo: 'argo', state: 'settling', outcome: null }])
   })
 
   test('an up with nothing open is counted on the route; a replayed up is not counted twice', async () => {
-    await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'vps' })
+    await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'vps' }, 'owner')
     expect(done(await intake.alert(alert({ status: 'up', event: 'u1' })))).toMatchObject({
       outcome: 'dropped',
       detail: 'quiet',
@@ -657,7 +659,7 @@ describe('app feedback through the door', () => {
 
   test('it is held with the envelope as a header, the repo from the app route, and a work repo drops it', async () => {
     expect(done(await intake.feedback(feedback()))).toMatchObject({ outcome: 'held', detail: 'quarantined' })
-    expect((await intake.setRoute({ source: 'feedback', monitor: 'weather', repo: 'argo' })).ok).toBe(true)
+    expect((await intake.setRoute({ source: 'feedback', monitor: 'weather', repo: 'argo' }, 'owner')).ok).toBe(true)
     const held = done(await intake.feedback(feedback({ title: 'Other', version: '1.3.0' })))
     const [row] = await db.sql`SELECT source, trust, repo, text FROM factory.intake_signals WHERE id = ${held.signal}`
     expect(row).toEqual({

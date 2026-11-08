@@ -61,6 +61,8 @@ export interface DoorRouteRow {
   source: string
   monitor: string
   repo: string
+  /** `owner`, or `lead:<issue id>` */
+  setBy: string
   quiet: number
   lastQuietAt: Date | null
   lastEvent: string | null
@@ -139,7 +141,7 @@ export interface IntakeStore {
 
   routeFor(source: string, monitor: string): Promise<DoorRouteRow | null>
   routes(): Promise<DoorRouteRow[]>
-  setRoute(source: string, monitor: string, repo: string): Promise<DoorRouteRow>
+  setRoute(source: string, monitor: string, repo: string, setBy: string): Promise<DoorRouteRow>
   removeRoute(source: string, monitor: string): Promise<DoorRouteRow | null>
   countQuiet(source: string, monitor: string, event: string, now: Date): Promise<boolean>
 

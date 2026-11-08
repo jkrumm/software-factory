@@ -230,6 +230,7 @@ export const DoorRoute = z
     repo: z.string(),
     quiet: z.number().int(),
     lastQuietAt: z.string().nullable(),
+    setBy: z.string(),
   })
   .meta({ id: 'DoorRoute' })
 export type DoorRoute = z.infer<typeof DoorRoute>
@@ -239,6 +240,12 @@ export const DoorRouteInput = z
     source: DoorSource,
     monitor: z.string().min(1).max(256),
     repo: z.string().min(1).max(256),
+    issue: z
+      .string()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe('the Issue a lead sets the route for; required with the agent token, ignored for the owner'),
   })
   .meta({ id: 'DoorRouteInput' })
 export type DoorRouteInput = z.output<typeof DoorRouteInput>

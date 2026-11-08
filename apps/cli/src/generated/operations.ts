@@ -155,6 +155,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'source', flag: 'source', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'monitor', flag: 'monitor', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'repo', flag: 'repo', kind: 'string', repeatable: false, required: true, untyped: false },
+      { name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     responses: {
@@ -181,6 +182,7 @@ export const OPERATIONS: readonly Operation[] = [
     bodyFields: [
       { name: 'source', flag: 'source', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'monitor', flag: 'monitor', kind: 'string', repeatable: false, required: true, untyped: false },
+      { name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     responses: {

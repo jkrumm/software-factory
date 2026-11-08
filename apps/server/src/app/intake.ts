@@ -42,7 +42,7 @@ import type { WorkStore } from '../domains/work/ports.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { IssueId } from '../kernel/ids.ts'
-import { idOf } from '../kernel/ids.ts'
+import { idOf, issueRef } from '../kernel/ids.ts'
 import { key as keyOf, type Key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, type IssueWriteError, recordIn, type WriteDeps } from './issues.ts'
@@ -801,21 +801,53 @@ export function createIntake(deps: IntakeDeps) {
   const routes = () =>
     uow.run(async (s) => ok({ routes: await s.intake.routes(), unrouted: await s.intake.unrouted(200) }))
 
-  async function setRoute(input: {
-    source: string
-    monitor: string
-    repo: string
-  }): Out<Awaited<ReturnType<IntakeStore['setRoute']>>> {
+  /**
+   * A lead (the agent token) names its Issue and may route or remove only a route of that Issue's repo: the owner's
+   * registry stays the owner's for every other repo. Returns who sets the route, `owner` or `lead:<issue id>`.
+   */
+  async function setterOf(
+    s: Stores,
+    input: { source: string; monitor: string; repo?: string; issue?: string },
+    caller: RequestCaller,
+  ): Out<string> {
+    if (caller !== 'agent') return ok('owner')
+    if (!input.issue) return refuse('trust_refused', 'a lead names its Issue with --issue to route a monitor')
+    const id = issueRef(input.issue)
+    if (!id) return refuse('not_found', `no Issue ${input.issue}`)
+    const issue = await loadIssue(s.work, id)
+    if (!issue) return refuse('not_found', `no Issue ${input.issue}`)
+    if (issue.state === 'closed') return refuse('trust_refused', `${id} is closed: a lead routes for an open Issue`)
+    if (input.repo !== undefined && input.repo !== issue.repo)
+      return refuse('trust_refused', `${id} is in ${issue.repo}: a lead routes only to its own repo`)
+    const current = await s.intake.routeFor(input.source, input.monitor)
+    if (current && current.repo !== issue.repo)
+      return refuse(
+        'trust_refused',
+        `${input.source} ${input.monitor} routes to ${current.repo}: that is not a lead's to change`,
+      )
+    return ok(`lead:${id}`)
+  }
+
+  async function setRoute(
+    input: { source: string; monitor: string; repo: string; issue?: string },
+    caller: RequestCaller,
+  ): Out<Awaited<ReturnType<IntakeStore['setRoute']>>> {
     const found = await deps.projects.find(input.repo)
     if (!found.ok) return found
     if (!found.value) return refuse('unknown_project', `${input.repo} is not a project the factory knows`)
     // A route into a work repo would let a monitor file there: the work repo hears the owner only.
     if (found.value.work) return refuse('unknown_project', `${input.repo} is a work repo: it hears the owner only`)
-    return uow.run(async (s) => ok(await s.intake.setRoute(input.source, input.monitor, input.repo)))
+    return uow.run(async (s) => {
+      const setBy = await setterOf(s, input, caller)
+      if (!setBy.ok) return setBy
+      return ok(await s.intake.setRoute(input.source, input.monitor, input.repo, setBy.value))
+    })
   }
 
-  const removeRoute = (input: { source: string; monitor: string }) =>
+  const removeRoute = (input: { source: string; monitor: string; issue?: string }, caller: RequestCaller) =>
     uow.run(async (s) => {
+      const setBy = await setterOf(s, input, caller)
+      if (!setBy.ok) return setBy
       const gone = await s.intake.removeRoute(input.source, input.monitor)
       return gone ? ok(gone) : refuse('not_found', `no route for ${input.source} ${input.monitor}`)
     })
