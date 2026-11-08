@@ -50,8 +50,8 @@ check:
 SLOT = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(notdir $(CURDIR)) test" --,)
 
 test:
-	@echo "==> unit tests (bun test apps packages scripts)"
-	@$(SLOT) bun test ./apps ./packages ./scripts
+	@echo "==> unit tests (bun test apps packages scripts integrations)"
+	@$(SLOT) bun test ./apps ./packages ./scripts ./integrations
 	@echo "==> scenarios (bun test tests)"
 	@$(SLOT) bun test ./tests
 
