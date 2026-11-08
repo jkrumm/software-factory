@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { TOUCH_EVENTS, type Window } from './kpis.ts'
-import { windowOf } from './stats.ts'
+import { frictionWindow } from './friction.ts'
 import { plain } from './words.ts'
 
 /** Refs shown per pattern. */
@@ -25,7 +25,7 @@ export async function readFrictionEvidence(
   options: { now: Date; days: number },
   keys: readonly string[],
 ): Promise<Record<string, string[]>> {
-  const w: Window = windowOf(options.now, options.days)
+  const { w } = await frictionWindow(sql, options)
   const out: Record<string, string[]> = {}
   for (const key of keys) {
     const refs = await refsOf(sql, w, key)

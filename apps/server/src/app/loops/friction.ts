@@ -57,14 +57,21 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
   let over: ReturnType<typeof withinBudget>
   try {
     model = await deps.friction(now)
-    over = withinBudget(patternsOver(model.counts))
+    over = withinBudget(patternsOver(model.counts, model.closed))
     const wanted = over.file.filter(hasIssueRefs).map((pattern) => pattern.key)
     evidence = wanted.length > 0 ? await deps.evidence(now, wanted) : {}
   } catch (error) {
     return err(portError('unreadable', `the friction counts could not be read: ${String(error).slice(0, 300)}`))
   }
 
-  const facts = { from: model.window.from, to: model.window.to, days: model.days, issues: model.issues }
+  const facts = {
+    from: model.window.from,
+    to: model.window.to,
+    days: model.days,
+    since: model.since,
+    issues: model.issues,
+    closed: model.closed,
+  }
   const record: FrictionPassRecord = {
     id: deps.ids.next('friction'),
     at: now,
