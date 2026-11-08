@@ -344,40 +344,40 @@ describe('cochange probe', () => {
 
   test('a pair in different directories that moves together is a finding; filters hold', () => {
     const pairs = coChanged([
-      ...commits(7, ['src/a/x.ts', 'lib/y.ts']),
-      ...commits(8, ['src/a/gen.ts', 'src/b/gen.sql']), // same stem
-      ...commits(8, ['src/c/one.ts', 'src/c/two.ts']), // same directory
-      ...commits(5, ['src/d/p.ts', 'src/e/q.ts']), // too few
-      ...commits(6, ['src/f/m.ts', 'src/g/n.ts']), // 6 of n's 12 commits: 0.5 < 0.7
-      ...commits(6, ['src/f/m.ts', 'src/h/o.ts']),
-      ...commits(6, ['src/g/n.ts']),
-      ...commits(6, ['src/h/o.ts']),
+      ...commits(16, ['src/a/x.ts', 'lib/y.ts']),
+      ...commits(17, ['src/a/gen.ts', 'src/b/gen.sql']), // same stem
+      ...commits(17, ['src/c/one.ts', 'src/c/two.ts']), // same directory
+      ...commits(14, ['src/d/p.ts', 'src/e/q.ts']), // too few
+      ...commits(15, ['src/f/m.ts', 'src/g/n.ts']), // 15 of n's 30 commits: 0.5 < 0.85
+      ...commits(15, ['src/f/m.ts', 'src/h/o.ts']),
+      ...commits(15, ['src/g/n.ts']),
+      ...commits(15, ['src/h/o.ts']),
       ...commits(
         7,
         Array.from({ length: 30 }, (_, i) => `big/d${i}/f${i}.ts`),
       ), // too many files
     ])
     expect(pairs.map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts'])
-    expect(pairs[0]).toMatchObject({ together: 7, inA: 7, inB: 7 })
-    expect(coChanged(commits(7, ['src/a/x.ts', 'lib/y.ts']), (file) => file !== 'lib/y.ts')).toEqual([])
+    expect(pairs[0]).toMatchObject({ together: 16, inA: 16, inB: 16 })
+    expect(coChanged(commits(16, ['src/a/x.ts', 'lib/y.ts']), (file) => file !== 'lib/y.ts')).toEqual([])
   })
 
   test('ignores lockfiles, docs, generated, fixtures and tests', () => {
-    const log = `\0${'a'.repeat(40)}\n\nbun.lock\nREADME.md\ndocs/x.ts\nsrc/generated/g.ts\nsrc/a.test.ts\ntest/t.ts\nsrc/real.ts\n`
+    const log = `\0${'a'.repeat(40)}\n\nbun.lock\nREADME.md\ndocs/x.ts\nsrc/generated/g.ts\nsrc/a.test.ts\ntest/t.ts\npackage.json\napps/x/manifest.json\nMakefile\nsrc/real.ts\n`
     expect(parseLog(log)).toEqual([['src/real.ts']])
   })
 
   test('over a real history', async () => {
     const { name, work } = makeRepo({ 'src/a/x.ts': '0', 'lib/y.ts': '0' })
-    for (let i = 1; i <= 7; i++) commit(work, { 'src/a/x.ts': `${i}`, 'lib/y.ts': `${i}` })
+    for (let i = 1; i <= 15; i++) commit(work, { 'src/a/x.ts': `${i}`, 'lib/y.ts': `${i}` })
     push(work)
     const report = await sweep(name)
     expect(run(report, 'cochange')?.outcome).toBe('found')
     expect(findings(report, 'cochange')[0]).toMatchObject({
       key: 'cochange:lib/y.ts|src/a/x.ts',
       title: 'Hygiene: lib/y.ts and src/a/x.ts change together',
-      lines: ['changed together in 8 of the last 300 commits (lib/y.ts: 8, src/a/x.ts: 8)'],
-      count: 8,
+      lines: ['changed together in 16 of the last 300 commits (lib/y.ts: 16, src/a/x.ts: 16)'],
+      count: 16,
     })
   })
 })
