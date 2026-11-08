@@ -427,7 +427,7 @@ async function main(): Promise<void> {
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   // The Console's listener: loopback too, published on the tailnet by `tailscale serve`. Only the owner's login passes, only
-  // reads, and the owner token is held by this closure alone. Without an owner login it does not start. It binds before
+  // reads and the owner's five answer verbs (`WRITES` in console.ts), and the owner token is held by this closure alone. Without an owner login it does not start. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)
   const consoleServer = consoleSettings.ownerLogin

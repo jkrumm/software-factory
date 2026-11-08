@@ -177,6 +177,10 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 
 The API stays loopback; the tailnet and the owner's GitHub user are the perimeter. The door is published on the tailnet
 with `tailscale serve` and holds only its own token. Nothing that can start Claude Code is reachable from another node.
+The Console listener reads, and forwards exactly the owner's five answer verbs (a Decision's answer, an artifact's verdict
+and annotation, an Errand done, a held signal promoted), guarded against a cross-site page (JSON only, no cross-site fetch
+metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
+from a signal already held.
 
 ## Data
 
@@ -199,8 +203,8 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener published by `tailscale serve`
-  that accepts only the owner's `Tailscale-User-Login` and can never spawn a session. Until then the page links
-  (`FACTORY_CONSOLE_URL`) are a setting.
+  that accepts only the owner's `Tailscale-User-Login` and can never spawn a session. The shell and Needs you (the answers
+  in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.
 - **Artifacts in the Console:** Markdown through a sanitiser, HTML in a sandboxed iframe with a network-blocking CSP and

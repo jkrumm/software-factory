@@ -53,12 +53,19 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener, published by `make deploy` with
   `tailscale serve`. It answers 403 to anything without the owner's `Tailscale-User-Login` (`FACTORY_CONSOLE_OWNER_LOGIN`;
-  unset, the listener does not start), 405 to anything but GET and HEAD, forwards only `/health` and `/v1/*` to the API
-  (the owner token stays in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and
-  serves `apps/console/dist` otherwise. It can never start a session: keep every write off it. Residual, accepted
-  (`docs/architecture.md` "Perimeter"): the header is the credential, so any process on the mini can forge it on
-  loopback and read what the owner reads, including what the read token is denied; the write side stays shut. The Console (`apps/console`,
-  `README.md` there) holds no logic the API could hold, and `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
+  unset, the listener does not start), forwards `GET`/`HEAD` of `/health` and `/v1/*` to the API (the owner token stays in
+  the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and serves
+  `apps/console/dist` otherwise. The one writes it forwards are the owner's five answer verbs and nothing else (405):
+  `decisions/:id/answer`, `artifacts/:id/verdict`, `artifacts/:id/annotations`, `errands/:id/done` and
+  `POST /signals/:id/promote`, each needing `content-type: application/json` (415), no cross-site `sec-fetch-site` and no
+  foreign `origin` (403; the proxy adds the login to any request from the node, cookies or not) and at most 64 KiB (413).
+  It can never start a session, and never cancels, reopens or files an Issue by its own words; promote files one only
+  from a signal already held. A new write goes through the Issue, not this list. Residual, accepted
+  (`docs/architecture.md` "Perimeter"): the header is the credential, so any process on the mini can forge it on loopback,
+  read what the owner reads (including what the read token is denied) and make those five answers, promote among them;
+  the `origin` check compares with the request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.
+  The Console (`apps/console`, `README.md` there) holds no logic the API could hold, and
+  `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
 - **Work repos hear only the owner** (NL18, no `project.yaml`), and the read token never sees their words
   (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).
 - **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts` and

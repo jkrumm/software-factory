@@ -72,8 +72,10 @@ export async function startLab(options: {
   env?: Record<string, string>
   /** gives every repo a bare `origin` with its default branch pushed, so a lead can start in a worktree of it */
   leads?: boolean
+  /** a world the caller made (to put its own files in `world.bin` first); the lab stops it with itself */
+  world?: World
 }): Promise<Lab> {
-  const world = await startWorld()
+  const world = options.world ?? (await startWorld())
   const base = await mkdtemp('/tmp/factory-lab-')
   const root = await realpath(await mkdir(join(base, 'src'), { recursive: true }).then(() => join(base, 'src')))
   for (const [name, files] of Object.entries(options.repos)) {
