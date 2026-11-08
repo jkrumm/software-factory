@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LOOP_NAMES, type LoopName } from '@software-factory/contract'
+import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
 
 const ms = z.coerce.number().int().min(0)
 
@@ -26,6 +27,8 @@ const Env = z.object({
   FACTORY_QUEUE_GAP_MS: ms.optional(),
   /** a stall younger than this is left to end by itself */
   FACTORY_STEWARD_MIN_STALL_MS: ms.optional(),
+  /** a working Issue whose lead session has been quiet this long with nothing reported is nudged by the steward */
+  FACTORY_STEWARD_IDLE_MS: ms.optional(),
   /** the steward asks `factory-steward` again after a failed or refused answer this long on */
   FACTORY_STEWARD_RETRY_MS: ms.optional(),
   /** an Issue still settling this long after it was filed is settled with no edges by the steward */
@@ -39,6 +42,7 @@ export interface LoopSettings {
   intervalMs: Record<LoopName, number>
   tickMs: number
   minStallMs: number
+  idleLeadMs: number
   retryMs: number
   queueGapMs: number
   settleTimeoutMs: number
@@ -84,6 +88,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     ) as Record<LoopName, number>,
     tickMs,
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,
+    idleLeadMs: e.FACTORY_STEWARD_IDLE_MS ?? DEFAULT_STEWARD_RULES.idleLeadMs,
     retryMs: e.FACTORY_STEWARD_RETRY_MS ?? 10 * 60_000,
     queueGapMs: e.FACTORY_QUEUE_GAP_MS ?? 30 * 60_000,
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,

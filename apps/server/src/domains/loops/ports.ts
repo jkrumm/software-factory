@@ -138,6 +138,8 @@ export interface ClaimHolder {
 export interface LoopReads {
   /** Issues waiting for a stall (`wall`, `unreported`, `blocked`, `lead_gone`, `regressed`), oldest first */
   stalled(limit: number): Promise<IssueId[]>
+  /** Issues in `working`, oldest first: the steward reads each lead's session for one gone quiet */
+  working(limit: number): Promise<IssueId[]>
   /** Issues still settling, oldest first */
   settling(limit: number): Promise<SettlingRow[]>
   /** the Issues of the repo that are not closed, other than `excluding` */

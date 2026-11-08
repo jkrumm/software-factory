@@ -33,9 +33,11 @@ export interface StewardRules {
   minStallMs: number
   /** the steward wakes an `unreported` stall this many times per attempt before it asks */
   maxWakes: number
+  /** a working Issue whose lead session has been quiet this long, with nothing reported, is stalled in all but name */
+  idleLeadMs: number
 }
 
-export const DEFAULT_STEWARD_RULES: StewardRules = { minStallMs: 2 * 60_000, maxWakes: 2 }
+export const DEFAULT_STEWARD_RULES: StewardRules = { minStallMs: 2 * 60_000, maxWakes: 2, idleLeadMs: 20 * 60_000 }
 
 /** What the rules say. `ask`: they do not, so the `factory-steward` workflow is asked. */
 export type StallAction =
@@ -68,6 +70,49 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
   if (facts.cause === 'wall') return { kind: 'wait', why: "the account's window is still closed" }
   if (facts.cause === 'unreported' && facts.stewardWakes < rules.maxWakes) {
     return { kind: 'wake', detail: `${STEWARD_DETAIL}it stopped without reporting: it is asked to report` }
+  }
+  return { kind: 'ask' }
+}
+
+/**
+ * The text every idle wake begins with, and so how a later pass counts them from the events alone (a `noted` event of the
+ * steward that starts with it). The wake an answer of the workflow sends begins with it too.
+ */
+export const IDLE_NOTE = 'steward: your session has been idle'
+
+/** What a nudge says to a lead that went quiet on a working Issue: how long, its last event, and what to do. */
+export function idleNote(minutes: number, lastEvent: string, extra = ''): string {
+  const head = `${IDLE_NOTE} for ${minutes} minute(s) with nothing reported. The last event on the Issue: ${lastEvent}.`
+  const tail =
+    'Check your background tasks (a subagent or a shell may be frozen: stop it and go on), then continue, or report with `factory issue ship|close|block|ask|defer`.'
+  return [head, extra, tail].filter(Boolean).join(' ')
+}
+
+/** What the steward knows of a working Issue whose lead is idle. */
+export interface IdleFacts {
+  /** when the session went quiet: its last turn ended */
+  idleSince: Date
+  /** the later of that and the last idle wake: the next wake waits another `idleLeadMs` from here */
+  quietSince: Date
+  /** idle wakes this attempt */
+  wakes: number
+  /** the Issue's latest event that is no idle wake, one line */
+  lastEvent: string
+}
+
+/**
+ * A lead whose turn ended with nothing reported and no tool running (a running tool is a `working` session, which is
+ * never read here) is woken with a note naming its last event, `maxWakes` times per attempt, each after another
+ * `idleLeadMs` of quiet; after that the workflow is asked.
+ */
+export function decideIdle(facts: IdleFacts, now: Date, rules: StewardRules): StallAction {
+  const quiet = now.getTime() - facts.quietSince.getTime()
+  if (quiet < rules.idleLeadMs) return { kind: 'wait', why: 'not idle long enough' }
+  if (facts.wakes < rules.maxWakes) {
+    return {
+      kind: 'wake',
+      detail: idleNote(Math.floor((now.getTime() - facts.idleSince.getTime()) / 60_000), facts.lastEvent),
+    }
   }
   return { kind: 'ask' }
 }

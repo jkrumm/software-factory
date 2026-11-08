@@ -58,6 +58,12 @@ export function loopReads(tx: SQL): LoopReads {
       return rows.map((row) => row.id as IssueId)
     },
 
+    async working(limit) {
+      const rows: { id: string }[] = await tx`
+        SELECT id FROM factory.issues WHERE state = 'working' ORDER BY id LIMIT ${limit}`
+      return rows.map((row) => row.id as IssueId)
+    },
+
     async settling(limit) {
       const rows: unknown[] = await tx`
         SELECT i.id, i.repo,

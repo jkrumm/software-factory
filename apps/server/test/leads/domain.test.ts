@@ -88,6 +88,24 @@ describe('session state, derived from the hook events', () => {
     expect(deriveSession([...[fact('limit_stop', 1)], fact('turn_started', 2)]).walled).toBe(false)
   })
 
+  test('a session is idle since its last turn ended, and never while a turn is open', () => {
+    const quiet = deriveSession([
+      fact('session_started', 0),
+      fact('turn_started', 1),
+      fact('turn_ended', 2),
+      fact('prompt_idle', 9),
+    ])
+    expect(quiet).toMatchObject({ state: 'idle', idleSince: new Date(T0 + 2000) })
+    expect(deriveSession([fact('session_started', 0), fact('turn_started', 1)]).idleSince).toBeNull()
+    expect(
+      deriveSession([fact('session_started', 0), fact('turn_started', 1), fact('session_ended', 3)]).idleSince,
+    ).toBeNull()
+    expect(deriveSession([fact('session_started', 4, { source: 'compact' })])).toMatchObject({
+      state: 'compacted',
+      idleSince: new Date(T0 + 4000),
+    })
+  })
+
   test('the claude session and its transcript come from the latest start', () => {
     const view = deriveSession([
       fact('session_started', 0, { claudeSessionId: 'old', transcriptPath: '/x/old.jsonl' }),
