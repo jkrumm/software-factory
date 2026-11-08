@@ -14,6 +14,14 @@ describe('the artifact frame (public/frame.html, public/frame/*)', () => {
     expect(html).not.toContain('type="module"')
   })
 
+  test('the shell, the frame and the rendered artifact tell Dark Reader to stay off', () => {
+    expect(read('index.html')).toContain('<meta name="darkreader-lock" />')
+    expect(read('public/frame.html')).toContain('<meta name="darkreader-lock" />')
+    const loader = read('public/frame/frame.js')
+    expect(loader).toContain("lock.name = 'darkreader-lock'")
+    expect(loader.indexOf('document.close()')).toBeLessThan(loader.indexOf("lock.name = 'darkreader-lock'"))
+  })
+
   test('the loader believes only its parent window, and renders once', () => {
     const loader = read('public/frame/frame.js')
     expect(loader).toContain('event.source !== parent')
