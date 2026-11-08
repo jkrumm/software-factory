@@ -156,10 +156,10 @@ export interface LoopReads {
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
   claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
-  /** the Issues each finding class of one loop and repo filed, with their closure and outcome, by class */
-  classIssues(loop: FindingLoop, repo: string): Promise<Record<string, ClassIssue[]>>
-  /** the same for every loop, repo and class */
-  allClassIssues(): Promise<{ loop: FindingLoop; repo: string; class: string; issues: ClassIssue[] }[]>
+  /** the Issues each finding class of one loop filed (in every repo), with their closure and outcome, by class */
+  classIssues(loop: FindingLoop): Promise<Record<string, ClassIssue[]>>
+  /** the same for every loop and class */
+  allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: ClassIssue[] }[]>
   /** the repos with a live lead (Issues `working` or `watching`) and those Issues, ordered by repo and id */
   liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
 }

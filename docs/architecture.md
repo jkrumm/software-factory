@@ -234,12 +234,13 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `screen` | up to 10 held signals not yet screened (oldest first, `intake_signals.screened_at` null, `screen_attempts` under 5, `screen_retry_at` due), one call each, outside any transaction; the answer is checked before anything is done (`domains/intake/screen.ts`): a promote needs a known non-work repo (the signal's own, else the one named), a duplicate must be an open Issue of the repo it was shown, else the verdict becomes `leave` with a note; then `promote` or `dismiss` as `judge` (each looks at the state again: an owner who acted first is counted, not an error). A failed, unparseable or timed-out call (a missing workflow too) leaves the signal held and records the attempt with a backoff of `min(10 min * 2^n, 6 h)`; the pass still ends ok and its summary says `screen workflow unavailable` when every call failed | `factory-screen`: stdin `ScreenRequest` `{ signal: { id, source, kind, origin, repo, title, text, link, receivedAt }, openIssues: [{ id, title, kind, state }] (open Issues of `signal.repo`, at most 40, empty with no repo), projects: [name] (known projects that are not work repos) }` with title and text scrubbed and labelled untrusted data; stdout `ScreenAnswer` `{ verdict: promote\|dismiss\|leave, reason (1..300), repo\|null, duplicateOf\|null, recommendation (<=300)\|null }`; call key `screen:<signal>:<attempt>` |
 
 **Finding classes.** `friction` and `hygiene` hold a noisy kind of finding back. A class is the loop plus the finding's
-first key segment (`judgment:<kind>` for a judgment): the probe, the kind of judgment, the pattern group. The fact is
+first key segment (`judgment:<kind>` for a judgment): the probe, the kind of judgment, the pattern group, across all
+repos: the noise is one probe misfiring everywhere, a few Issues per repo, so a per-repo class would never reach 3. The fact is
 `factory.loop_findings` (which class filed which Issue); the state is derived from the Issues' outcomes
 (`domains/loops/classes.ts`) and never stored. Of a class's ten newest decided Issues (done, healed, dropped or
 cancelled), with at least 3 decided, a share of dropped or cancelled above one half **holds** it for 14 days after its last
 Issue closed: it files nothing, and the held findings are named in the pass record's `overBudget`. After the hold it is on
-**probation**: one Issue at a time, none while another of its Issues is open, until one closes done, which forgives the
+**probation**: one Issue at a time across repos, none while another of its Issues is open in any repo, until one closes done, which forgives the
 history before it. Held and probation classes show on Improve ("Held finding classes") and in `GET /v1/finding-classes`
 (`factory read finding-classes`). Deviation: the owner asked for a rollup signal, and this is the section and the read
 model, not a signal: an agent-trust signal files an Issue, and no loops page exists to carry it.

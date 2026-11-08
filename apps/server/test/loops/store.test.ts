@@ -64,18 +64,18 @@ test('recordFinding stores the class once; classIssues reads filed time, closure
 
   await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'links', key: 'links:a.md' })
   await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'other', key: 'other:x' })
-  await loops.recordFinding({ issue: 'issue_21', loop: 'hygiene', repo: 'app', class: 'links', key: 'links:b.md' })
+  await loops.recordFinding({ issue: 'issue_21', loop: 'hygiene', repo: 'web', class: 'links', key: 'links:b.md' })
   await loops.recordFinding({ issue: 'issue_21', loop: 'friction', repo: 'software-factory', class: 'x', key: 'x' })
 
-  expect(await reads.classIssues('hygiene', 'app')).toEqual({
+  expect(await reads.classIssues('hygiene')).toEqual({
     links: [
       { issue: 'issue_20', filedAt: at(1), closedAt: at(5), outcome: 'dropped' },
       { issue: 'issue_21', filedAt: at(1), closedAt: null, outcome: null },
     ],
   })
-  expect(await reads.classIssues('friction', 'app')).toEqual({})
-  expect((await reads.allClassIssues()).map((g) => [g.loop, g.repo, g.class, g.issues.length])).toEqual([
-    ['hygiene', 'app', 'links', 2],
+  expect(await reads.classIssues('friction')).toEqual({})
+  expect((await reads.allClassIssues()).map((g) => [g.loop, g.class, g.issues.length])).toEqual([
+    ['hygiene', 'links', 2],
   ])
 })
 
