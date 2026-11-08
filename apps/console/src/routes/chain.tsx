@@ -1,13 +1,82 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { lazy, Suspense } from 'react'
 import { EmptyState, Page, PageHeader } from '@/components/page'
+import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
+import { useChain } from '@/lib/queries'
 
-export const Route = createFileRoute('/chain')({ component: Chain })
+// xyflow and dagre are their own chunk: the other screens do not carry them
+const ChainGraph = lazy(() => import('@/components/chain/graph'))
+
+const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
+
+export const Route = createFileRoute('/chain')({
+  /** `project` keeps that project's nodes and the nodes they are joined to: `/chain?project=argo` is a linkable view. */
+  validateSearch: (search: Record<string, unknown>): ChainFilters => {
+    const project = text(search.project)
+    return project ? { project } : {}
+  },
+  component: Chain,
+})
+
+const SELECT =
+  'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Chain() {
+  const { data, isPending } = useChain()
+  const filters = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+
+  if (!data)
+    return (
+      <Page wide>
+        <PageHeader title="Chain" note={isPending ? 'Loading' : 'No data yet'} />
+      </Page>
+    )
+
+  if (data.edges.length === 0) {
+    return (
+      <Page wide>
+        <PageHeader title="Chain" />
+        <EmptyState title="No dependencies">
+          Issues and plan rows that wait for another show here, blocker to dependent.
+        </EmptyState>
+      </Page>
+    )
+  }
+
+  const view = chainOf(data, filters)
+  const waiting = view.edges.filter((edge) => !edge.closed).length
+  const note = `${waiting} blocked, ${view.edges.length - waiting} done${view.isolated > 0 ? `. ${isolatedNote(view.isolated)}` : ''}`
+
   return (
-    <Page>
-      <PageHeader title="Chain" />
-      <EmptyState title="Comes in the next step" />
+    <Page wide>
+      <PageHeader title="Chain" note={note} />
+      <div className="mb-4 flex flex-wrap gap-3">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          Project
+          <select
+            className={SELECT}
+            value={filters.project ?? ''}
+            onChange={(e) => void navigate({ search: { project: e.target.value || undefined }, replace: true })}
+          >
+            <option value="">All projects</option>
+            {projectsOf(data).map((repo) => (
+              <option key={repo} value={repo}>
+                {repo}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {view.edges.length === 0 ? (
+        <EmptyState title="No dependencies">
+          {filters.project} has no Issue or plan row that waits or is waited for.
+        </EmptyState>
+      ) : (
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading</p>}>
+          <ChainGraph view={view} resetKey={filters.project ?? ''} />
+        </Suspense>
+      )}
     </Page>
   )
 }
