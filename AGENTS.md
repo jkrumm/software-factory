@@ -103,6 +103,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `docs/program.md` and `docs/plan.yaml` (the server files its rows as Issues).
 - Why a lead is briefed as it is: `apps/server/src/domains/leads/brief.ts`. What a reviewer treats as failure here:
   `REVIEW.md`.
+- The factory's client pieces (the Herdr glance mod, the Claude Code hook entries, `rd`'s contract, the Hermes `fleet`
+  skill): `integrations/`, an index and a README each. Other repos install them; the copies here are the source.
 - Moving to or away from the live core (windows, the way back): `docs/rewrite/cutover-runbook.md`.
 
 ## Validate and ship
