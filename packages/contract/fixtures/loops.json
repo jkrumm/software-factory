@@ -119,44 +119,99 @@
       "repo": "example-app",
       "issues": [
         {
+          "id": "issue_12",
+          "title": "Fix the checkout total",
+          "kind": "bug",
+          "state": "working",
+          "prio": 0,
+          "ageMinutes": 600,
+          "size": "small",
+          "summary": "",
+          "after": []
+        },
+        {
           "id": "issue_15",
           "title": "Add a dark theme",
           "kind": "feature",
           "state": "queued",
           "prio": 0,
-          "ageMinutes": 90,
-          "size": null,
+          "ageMinutes": 300,
+          "size": "medium",
           "summary": "",
           "after": []
         },
         {
-          "id": "issue_16",
-          "title": "Rework the checkout summary",
+          "id": "issue_20",
+          "title": "Show the coupon in the checkout summary",
           "kind": "feature",
           "state": "queued",
           "prio": 0,
-          "ageMinutes": 30,
-          "size": null,
-          "summary": "Move the coupon line into the summary.",
+          "ageMinutes": 120,
+          "size": "small",
+          "summary": "Reads the same checkout summary code the total fix changes.",
           "after": []
         },
         {
-          "id": "issue_12",
-          "title": "Fix the checkout total",
-          "kind": "bug",
-          "state": "working",
-          "prio": 10,
-          "ageMinutes": 240,
-          "size": null,
+          "id": "issue_21",
+          "title": "Add a coupon field to the cart",
+          "kind": "feature",
+          "state": "queued",
+          "prio": 0,
+          "ageMinutes": 90,
+          "size": "small",
           "summary": "",
           "after": []
+        },
+        {
+          "id": "issue_22",
+          "title": "Rework the checkout page layout",
+          "kind": "feature",
+          "state": "queued",
+          "prio": 50,
+          "ageMinutes": 60,
+          "size": "large",
+          "summary": "",
+          "after": ["issue_12"]
         }
       ]
     },
     "output": {
-      "edges": [{ "issue": "issue_16", "after": "issue_12", "reason": "both rewrite the checkout summary component" }],
-      "order": ["issue_15", "issue_16"],
-      "reason": "issue_16 touches the code issue_12 is changing"
+      "edges": [{ "issue": "issue_20", "after": "issue_12", "reason": "both change the checkout summary code" }],
+      "order": ["issue_22", "issue_21", "issue_15", "issue_20"],
+      "reason": "issue_22 has the highest priority; among equals the small unblocked one goes first"
+    }
+  },
+  "hygiene": {
+    "input": {
+      "repo": "example-app",
+      "cwd": "/srv/checkouts/example-app",
+      "ref": "3f9c2ab41d7e",
+      "stale": [
+        { "path": "docs/architecture.md", "why": "12 commits touch src/ since the document was last edited" },
+        { "path": "docs/deploy.md", "why": "the Makefile changed since the document was last edited" }
+      ],
+      "slop": [{ "path": "README.md", "why": "edited 2 days ago" }],
+      "max": 5
+    },
+    "output": {
+      "findings": [
+        {
+          "kind": "stale",
+          "path": "docs/architecture.md",
+          "title": "The architecture page names a queue module the code no longer has",
+          "evidence": "docs/architecture.md:14 says \"orders go through src/queue.ts\"; src/queue.ts does not exist, src/orders/index.ts:1 holds the handler.",
+          "fix": "Replace src/queue.ts with src/orders/index.ts in the module list."
+        },
+        {
+          "kind": "slop",
+          "path": "README.md",
+          "title": "The README opens with a preamble before the verdict",
+          "evidence": "README.md:3: \"This section aims to give you a brief overview of what the project is about.\"",
+          "fix": "Cut the sentence; open with what the project does."
+        }
+      ],
+      "read": 3,
+      "reason": "two verified defects among three candidates read"
     }
   }
 }
