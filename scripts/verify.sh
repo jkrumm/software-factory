@@ -23,7 +23,7 @@ ok() { echo "verify: ok: $*"; }
 # A path nothing deploys. Mirrors `isInert` in apps/server/src/domains/quality/evidence.ts (what the ship gate reads as no deploy): keep them equal.
 inert_path() {
   case "$1" in
-    docs/* | *.md | *.mdx | *.txt | LICENSE* | */LICENSE* | .gitignore | */.gitignore) return 0 ;;
+    docs/* | project.yaml | *.md | *.mdx | *.txt | LICENSE* | */LICENSE* | .gitignore | */.gitignore) return 0 ;;
     test/* | */test/* | tests/* | */tests/* | __tests__/* | */__tests__/*) return 0 ;;
     *.test.* | *.spec.*) return 0 ;;
   esac
@@ -49,7 +49,7 @@ if [[ "$deployed" == "$remote" ]]; then
   ok "deployed sha is origin/$REF (${deployed:0:12})"
 else
   # origin/$REF moved past the deploy. That is fine when every changed path needs no deploy (the factory's own `isInert` list,
-  # apps/server/src/domains/quality/evidence.ts: docs, markdown, text, licences, tests); a deployable path not deployed still fails.
+  # apps/server/src/domains/quality/evidence.ts: docs, project.yaml, markdown, text, licences, tests); a deployable path not deployed still fails.
   git -C "$REPO_DIR" fetch --quiet origin "$REF" || fail "git fetch origin $REF failed in $REPO_DIR"
   git -C "$REPO_DIR" cat-file -e "$remote^{commit}" 2>/dev/null || fail "origin/$REF ${remote:0:12} is not in $REPO_DIR after a fetch"
   git -C "$REPO_DIR" merge-base --is-ancestor "$deployed" "$remote" 2>/dev/null \

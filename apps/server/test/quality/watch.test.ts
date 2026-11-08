@@ -65,6 +65,8 @@ test('a regression detail is cut, not dropped', () => {
 test('docs, text, licences and tests are inert; everything else deploys', () => {
   for (const path of [
     'docs/a.md',
+    'docs/plan.yaml',
+    'project.yaml',
     'README.md',
     'notes/a.txt',
     'LICENSE',
@@ -77,9 +79,19 @@ test('docs, text, licences and tests are inert; everything else deploys', () => 
   ]) {
     expect(isInert(path)).toBe(true)
   }
-  for (const path of ['src/a.ts', 'Makefile', 'deploy/run.sh', 'ui/a.tsx', 'migrations/0001.sql']) {
+  for (const path of [
+    'src/a.ts',
+    'apps/server/src/a.ts',
+    'apps/project.yaml',
+    'Makefile',
+    'deploy/run.sh',
+    'ui/a.tsx',
+    'migrations/0001.sql',
+  ]) {
     expect(isInert(path)).toBe(false)
   }
   expect(deploys(['docs/a.md', 'a.test.ts'])).toBe(false)
+  expect(deploys(['project.yaml', 'docs/plan.yaml'])).toBe(false)
+  expect(deploys(['project.yaml', 'apps/server/src/a.ts'])).toBe(true)
   expect(deploys(['docs/a.md', 'src/a.ts'])).toBe(true)
 })

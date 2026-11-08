@@ -77,10 +77,14 @@ const TEXT_FILE = /\.(md|mdx|txt)$/
 const TEST_DIR = /(^|\/)(test|tests|__tests__)\//
 const TEST_FILE = /\.(test|spec)\./
 
-/** A path no deploy carries: documents, text, licences and tests. Mirrors `scripts/verify.sh`'s `inert_path`. */
+/**
+ * A path no deploy carries: documents (`docs/plan.yaml` is one), text, licences, tests and the root `project.yaml`, which
+ * the server reads from the default branch when it syncs projects. Mirrors `scripts/verify.sh`'s `inert_path`.
+ */
 export function isInert(path: string): boolean {
   return (
     path.startsWith('docs/') ||
+    path === 'project.yaml' ||
     TEXT_FILE.test(path) ||
     /(^|\/)LICENSE/.test(path) ||
     /(^|\/)\.gitignore$/.test(path) ||
