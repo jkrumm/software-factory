@@ -166,3 +166,19 @@ test('the deployed commit must hold where the work landed', async () => {
     detail: expect.stringContaining('is not in'),
   })
 })
+
+test('a deployed commit behind where the work landed only by changes no deploy carries still holds it', async () => {
+  const repo = await fresh()
+  const deployed = await repo.commit('src/a.ts', '1\n')
+  const docs = await repo.commit('docs/notes.md', 'x\n')
+  const tests = await repo.commit('src/a.test.ts', 't\n')
+  expect(await deployedHolds(repo.path, deployed, docs)).toMatchObject({ ok: true })
+  expect(await deployedHolds(repo.path, deployed, tests)).toMatchObject({ ok: true })
+  const code = await repo.commit('src/b.ts', '2\n')
+  expect(await deployedHolds(repo.path, deployed, code)).toMatchObject({
+    ok: false,
+    detail: expect.stringContaining('`make deploy` has not run'),
+  })
+  const after = await repo.commit('docs/more.md', 'y\n')
+  expect(await deployedHolds(repo.path, deployed, after)).toMatchObject({ ok: false })
+})

@@ -1,4 +1,4 @@
-import type { CommitRead, ReviewRange } from '../../domains/quality/evidence.ts'
+import { type CommitRead, deploys, type ReviewRange } from '../../domains/quality/evidence.ts'
 import type { Commits } from '../../domains/quality/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, childEnv, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
@@ -425,6 +425,18 @@ export async function deployedHolds(
   if (compared.exitCode === 0)
     return { ok: true, detail: `deployed ${full.slice(0, 12)} holds ${landedAt.slice(0, 12)}, where the work landed` }
   if (compared.exitCode === 1) {
+    // `landedAt` is the default branch's tip, so a docs commit pushed after the merge sits in it and is never deployed:
+    // behind it only by paths no deploy carries is the same as holding it (what `scripts/verify.sh` reads too).
+    const behind = await git(['merge-base', '--is-ancestor', full, landedAt])
+    if (behind.exitCode === 0) {
+      const changed = await git(['-c', 'core.quotePath=false', 'diff', '--name-only', '-z', full, landedAt])
+      if (changed.exitCode === 0 && !deploys(changed.stdout.split('\0').filter(Boolean))) {
+        return {
+          ok: true,
+          detail: `deployed ${full.slice(0, 12)} is behind ${landedAt.slice(0, 12)}, where the work landed, only by changes no deploy carries`,
+        }
+      }
+    }
     return {
       ok: false,
       detail: `deployed ${full.slice(0, 12)} does not hold ${landedAt.slice(0, 12)}, where the work landed: \`make deploy\` has not run on it`,
