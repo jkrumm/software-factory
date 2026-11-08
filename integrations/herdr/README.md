@@ -47,7 +47,7 @@ value is an object keyed by app terminal address, `mini/<terminal id>`, one entr
 }
 ```
 
-Every field can be `null`. `state` is the Issue's state in the language's words (`settling`, `queued`, `working`,
+Every field can be `null`. A closed Issue has no entry. `state` is the Issue's state in the language's words (`settling`, `queued`, `working`,
 `waiting`, `watching`), else the session's. `link` is the Issue's place in the Console: its newest Needs you item, else
 the flow (the Console has no Issue page yet), and `null` for a session without an Issue or without a Console URL. No
 Issue number, role or phase is shared, and none is shown: the screen says what the work is about. Only these fields are

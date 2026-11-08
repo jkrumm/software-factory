@@ -145,3 +145,13 @@ test('consoleLink', () => {
   expect(lib.consoleLink('file:///etc/passwd', 'flow', null)).toBeNull()
   expect(lib.consoleLink('ftp://c.example.com', 'needs', null)).toBeNull()
 })
+
+test('terminalsMap: a closed Issue has no entry', () => {
+  const out = lib.terminalsMap(
+    [{ id: 416, title: 'T', state: 'closed' }],
+    [{ id: 'lead-416-1', issue: 416, state: 'idle', terminal: { id: 't1k0' } }],
+    null,
+    'https://c.example.com',
+  )
+  expect(out).toEqual({})
+})

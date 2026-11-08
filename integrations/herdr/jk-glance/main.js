@@ -109,6 +109,8 @@ function terminalsMap(issues, sessions, needs, base) {
     .sort((a, b) => String(a.terminal.id).localeCompare(String(b.terminal.id)))
   for (const s of rows) {
     const c = Number.isInteger(s.issue) ? byId.get(s.issue) : null
+    // A closed Issue's lead has ended: its terminal and tab are gone, whatever the session read still says.
+    if (c?.state === 'closed') continue
     out[`mini/${s.terminal.id}`] = {
       title: c?.title ?? s.title ?? null,
       summary: c?.summary ?? s.summary ?? null,
