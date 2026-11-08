@@ -217,7 +217,9 @@ async function seed() {
     VALUES ('ship_1', 'issue_1', 1, 'ship_key_1', ${ago(47)}, 'refused', 'a commit is older than the attempt', '[]'::jsonb)`
   await sql`INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload) VALUES
     ('ev_1', 'issue_1', 1, 'ship_key_1', 'review', ${ago(47)}, '{"status":"covered"}'::jsonb),
-    ('ev_2', 'issue_2', 1, 'ship_key_2', 'review', ${ago(10)}, '{"status":"missing","reason":"none"}'::jsonb)`
+    ('ev_2', 'issue_2', 1, 'ship_key_2', 'review', ${ago(10)}, '{"status":"missing","reason":"none"}'::jsonb),
+    ('ev_3', 'issue_1', 1, 'ship_key_1', 'acceptance', ${ago(47)}, '{"statements":[{"status":"met","text":"x"}]}'::jsonb),
+    ('ev_4', 'issue_2', 1, 'ship_key_2', 'acceptance', ${ago(10)}, '{"statements":[]}'::jsonb)`
   await sql`INSERT INTO factory.quality_watches (key, issue_id, attempt, watch, started_at, window_ms, answer, answered_at) VALUES
     ('watch_1', 'issue_1', 1, 1, ${ago(48)}, 1000, 'passed', ${ago(47)}),
     ('watch_2', 'issue_2', 1, 1, ${ago(11)}, 1000, 'regressed', ${ago(10)})`
@@ -464,6 +466,7 @@ describe('the fixture', () => {
     expect(count('lead_gone')?.count).toBe(1)
     expect(count('undelivered_note')?.count).toBe(1)
     expect(count('unreviewed_ship')?.count).toBe(1)
+    expect(count('unstated_acceptance')?.count).toBe(1)
     expect(count('regression')?.count).toBe(1)
     expect(count('decision_settled:owner')?.count).toBe(2)
     expect(count('decision_settled:judge')?.count).toBe(1)

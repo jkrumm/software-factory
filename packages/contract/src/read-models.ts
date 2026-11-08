@@ -233,6 +233,7 @@ export const FrictionCount = z
       'lead_gone',
       'undelivered_note',
       'unreviewed_ship',
+      'unstated_acceptance',
       'regression',
       'decision_settled',
       'signal',

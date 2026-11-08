@@ -1,6 +1,6 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
-import type { CheckRecord, CommitsEvidence, ReviewEvidence } from './evidence.ts'
+import type { AcceptanceEvidence, CheckRecord, CommitsEvidence, ReviewEvidence } from './evidence.ts'
 import type { Outcome, Ran } from './watch.ts'
 
 /** A ship the gate looked at. */
@@ -20,6 +20,7 @@ export interface ShipRecord {
 export type StoredEvidence =
   | { id: string; kind: 'commits'; payload: CommitsEvidence }
   | { id: string; kind: 'review'; payload: ReviewEvidence }
+  | { id: string; kind: 'acceptance'; payload: AcceptanceEvidence }
 
 export type WatchAnswer = 'passed' | 'regressed' | 'ended'
 

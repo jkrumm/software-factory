@@ -10,6 +10,7 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
 import type { ShipAnswer, ShipInput } from '../app/quality-ship.ts'
+import { parseAcceptance } from '../domains/quality/evidence.ts'
 import type { StoredEvidence, QualityView } from '../domains/quality/store.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -56,6 +57,8 @@ const evidenceOf = (one: StoredEvidence) => {
       return { kind: 'commits' as const, ...one.payload }
     case 'review':
       return { kind: 'review' as const, ...one.payload }
+    case 'acceptance':
+      return { kind: 'acceptance' as const, ...one.payload }
   }
 }
 
@@ -94,11 +97,14 @@ export const qualityRoutes = (writes: QualityWrites) =>
       async ({ params, body, status }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
+        const acceptance = parseAcceptance(body.acceptance ?? [])
+        if (!acceptance.ok) return status(422, failure(acceptance.error, 'invalid'))
         const shipped = await writes.ship({
           issueId,
           attempt: body.attempt,
           call: body.call,
           commits: [...(body.commits ?? []), ...(body.commit ?? [])],
+          acceptance: acceptance.evidence,
         })
         if (!shipped.ok) {
           const out = failed(shipped.error)

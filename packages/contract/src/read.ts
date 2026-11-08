@@ -275,6 +275,8 @@ export const ReadShipLine = z
     detail: z.string().nullable(),
     commits: z.array(z.string()),
     review: z.object({ present: z.boolean(), note: z.string().nullable() }),
+    /** what the ship states against the acceptance; empty: it stated nothing; null: no record (a ship before this, or a refused one) */
+    acceptance: z.array(z.object({ status: z.enum(['met', 'not_met']), text: z.string() })).nullable(),
     watch: ReadWatchLine.nullable(),
     checks: z.array(ReadCheckLine),
   })

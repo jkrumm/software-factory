@@ -151,6 +151,17 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
         AND at >= ${w.from} AND at < ${w.to}`),
   )
 
+  // Ships before the acceptance existed have no acceptance row, so only a row with no statements counts: no backfill.
+  add(
+    'unstated_acceptance',
+    'unstated_acceptance',
+    'Ships that state nothing against the acceptance',
+    await one(sql`
+      SELECT count(*) AS n FROM factory.quality_evidence
+      WHERE kind = 'acceptance' AND jsonb_array_length(payload->'statements') = 0
+        AND at >= ${w.from} AND at < ${w.to}`),
+  )
+
   add(
     'regression',
     'regression',

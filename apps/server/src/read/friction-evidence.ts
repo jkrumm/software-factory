@@ -79,6 +79,12 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
       WHERE kind = 'review' AND payload->>'status' NOT IN ('covered', 'not_required')
         AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`)
   }
+  if (key === 'unstated_acceptance') {
+    return issueIds(sql`
+      SELECT issue_id FROM factory.quality_evidence
+      WHERE kind = 'acceptance' AND jsonb_array_length(payload->'statements') = 0
+        AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`)
+  }
   if (key === 'regression') {
     return issueIds(sql`
       SELECT issue_id FROM factory.quality_watches

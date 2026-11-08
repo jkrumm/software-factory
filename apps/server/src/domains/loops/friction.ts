@@ -43,6 +43,11 @@ export const THRESHOLDS: Record<Judged, Rule> = {
     rate: 0.25,
     why: 'ships with no review on one in four closed Issues is a habit or a broken review path',
   },
+  unstated_acceptance: {
+    min: 3,
+    rate: 0.25,
+    why: 'ships that state nothing against the acceptance on one in four closed Issues is a habit or a brief that never asks',
+  },
   regression: { min: 1, rate: null, why: 'a shipped change that regressed always needs a look' },
   avoidable_touch: {
     min: 3,

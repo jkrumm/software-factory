@@ -64,6 +64,40 @@ export interface ReviewEvidence {
   reason: string | null
 }
 
+/** One line of the acceptance the lead states: met, or not met and why. */
+export interface AcceptanceStatement {
+  status: 'met' | 'not_met'
+  text: string
+}
+
+/**
+ * What a ship states of the Issue's acceptance, one line per criterion. Empty is the recorded absence (the ship stated
+ * nothing), which the friction loop counts like an unreviewed ship. A record and a count, never a gate: `not_met` is honest.
+ */
+export interface AcceptanceEvidence {
+  statements: AcceptanceStatement[]
+}
+
+const STATEMENT = /^\s*(not[ _]met|met)\s*:\s*(\S[\s\S]*)$/i
+
+/** The lead's lines as statements, or the first line that is neither `met: <text>` nor `not met: <why>`. */
+export function parseAcceptance(
+  lines: readonly string[],
+): { ok: true; evidence: AcceptanceEvidence } | { ok: false; error: string } {
+  const statements: AcceptanceStatement[] = []
+  for (const line of lines) {
+    const found = STATEMENT.exec(line)
+    if (!found?.[1] || !found[2]) {
+      return {
+        ok: false,
+        error: `acceptance line "${line.slice(0, 80)}" must read "met: <what shows it>" or "not met: <why>"`,
+      }
+    }
+    statements.push({ status: found[1].toLowerCase() === 'met' ? 'met' : 'not_met', text: found[2].trim() })
+  }
+  return { ok: true, evidence: { statements } }
+}
+
 /** One check of a run of verify, as data, whatever it printed. */
 export interface CheckRecord {
   name: string

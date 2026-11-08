@@ -1,4 +1,5 @@
 import { judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
+import type { AcceptanceEvidence } from '../domains/quality/evidence.ts'
 import type { Commits, LeadCheckout, Review } from '../domains/quality/ports.ts'
 import type { QualityStore, StoredEvidence } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
@@ -31,6 +32,8 @@ export interface ShipInput {
   call: string
   /** the merged commits the lead names */
   commits: readonly string[]
+  /** what the lead states against each acceptance line; empty when it states nothing */
+  acceptance: AcceptanceEvidence
 }
 
 export interface ShipAnswer {
@@ -91,14 +94,14 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
       ? { read: read.value, problem: null }
       : { read: null, problem: `review could not be read: ${read.error.detail}` }
   }
-  return judgeShip({ reported: input.commits, commits, review })
+  return judgeShip({ reported: input.commits, commits, review, acceptance: input.acceptance })
 }
 
 /**
  * The lead's `ship`. The merged commits are checked outside any transaction: git for where they landed, agw for the
  * review. A ship the gate refuses is stored as refused with the verb's error and moves nothing. An accepted one records
- * `shipped` on the Issue (which plans the watch), its commits as evidence, and its review as evidence or the record
- * that there was none, in one transaction. The same call again gets the first answer without asking git.
+ * `shipped` on the Issue (which plans the watch), its commits as evidence, its review as evidence or the record
+ * that there was none, and what it states of the acceptance, in one transaction. The same call again gets the first answer without asking git.
  */
 export async function shipIssue(
   deps: ShipDeps,
@@ -155,6 +158,7 @@ export async function shipIssue(
     const evidence: StoredEvidence[] = [
       { id: deps.ids.next('evidence'), kind: 'commits', payload: verdict.commits },
       { id: deps.ids.next('evidence'), kind: 'review', payload: verdict.review },
+      { id: deps.ids.next('evidence'), kind: 'acceptance', payload: verdict.acceptance },
     ]
     await quality.recordShip({ ...ship, result: 'accepted', detail: null }, evidence)
     return ok({ result, detail: null, issue: recorded.value.issue, evidence })

@@ -70,6 +70,7 @@ export function redactIssueDetail(detail: ReadIssueDetail): ReadIssueDetail {
       detail: s.detail === null ? null : '',
       commits: [],
       review: { ...s.review, note: null },
+      acceptance: s.acceptance?.map((a) => ({ ...a, text: '' })) ?? null,
       checks: s.checks.map((c) => ({ ...c, summary: '' })),
     })),
     sessions,

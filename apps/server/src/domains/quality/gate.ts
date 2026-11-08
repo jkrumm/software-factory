@@ -1,6 +1,7 @@
 import type { Result } from '../../kernel/result.ts'
 import {
   type CommitRead,
+  type AcceptanceEvidence,
   type CommitsEvidence,
   deploys,
   MAX_RECORDED,
@@ -10,7 +11,7 @@ import {
 } from './evidence.ts'
 
 export type ShipVerdict =
-  | { accepted: true; commits: CommitsEvidence; review: ReviewEvidence }
+  | { accepted: true; commits: CommitsEvidence; review: ReviewEvidence; acceptance: AcceptanceEvidence }
   /** `error` is the verb's own: what the lead reads, naming what is missing */
   | { accepted: false; error: string }
 
@@ -29,6 +30,8 @@ export function judgeShip(input: {
   reported: readonly string[]
   commits: Result<CommitRead>
   review: ReviewOutcome
+  /** the lead's acceptance lines, parsed; recorded, never judged */
+  acceptance: AcceptanceEvidence
 }): ShipVerdict {
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.reported.length === 0) return refuse('ship names no merged commit')
@@ -48,5 +51,6 @@ export function judgeShip(input: {
       paths: read.paths.slice(0, MAX_RECORDED),
     },
     review: reviewOf({ ranges: read.reviewRanges, ...input.review }),
+    acceptance: input.acceptance,
   }
 }
