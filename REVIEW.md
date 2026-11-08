@@ -1,6 +1,6 @@
 ---
 # Read by `agw review route` (the tier of a range) and by the reviewer. Globs are repo-relative.
-none:        [docs/waves/**, docs/spikes/**, docs/evidence/**, docs/research/**, bun.lock]
+none:        [docs/wav*/**, docs/spikes/**, docs/evidence/**, docs/research/**, bun.lock]
 sensitive:   [apps/server/migrations/**, apps/server/src/adapters/postgres/**, apps/server/src/main.ts,
               apps/server/src/domains/capacity/**, apps/server/src/domains/quality/evidence.ts,
               apps/server/src/domains/quality/gate.ts, apps/server/src/domains/quality/watch.ts,
