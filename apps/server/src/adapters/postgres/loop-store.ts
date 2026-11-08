@@ -229,5 +229,12 @@ export function postgresLoopStore(tx: SQL): LoopStore {
             over_budget = ${JSON.stringify(next.overBudget)}::jsonb, failed = ${JSON.stringify(next.failed)}::jsonb
         WHERE id = ${id}`
     },
+
+    async recordFinding(row) {
+      await tx`
+        INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key)
+        VALUES (${row.issue}, ${row.loop}, ${row.repo}, ${row.class}, ${row.key})
+        ON CONFLICT (issue_id) DO NOTHING`
+    },
   }
 }

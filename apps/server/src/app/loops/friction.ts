@@ -10,20 +10,21 @@ import {
   signalTitle,
   withinBudget,
 } from '../../domains/loops/friction.ts'
-import type { FrictionPassRecord, LoopStore } from '../../domains/loops/ports.ts'
+import type { FrictionPassRecord, LoopReads, LoopStore } from '../../domains/loops/ports.ts'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import type { IdSource } from '../../kernel/ids.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { readGate, type ClassGate } from './gate.ts'
 
 /** The repo that carries the factory's own findings, and who files them. */
 export const FRICTION_REPO = 'software-factory'
 export const FRICTION_SOURCE = `agent:${FRICTION_REPO}`
 
 export interface FrictionDeps {
-  uow: UnitOfWork<{ loops: LoopStore }>
+  uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads }>
   clock: Clock
   ids: IdSource
   /** the counts of the last `FRICTION_WINDOW_DAYS` days ending at `now` (`read/friction.ts`, bound in `main.ts`) */
@@ -52,12 +53,23 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     return ok({ due: false, lastAt: last.value })
   }
 
+  const gated = await readGate(deps, { loop: 'friction', repo: FRICTION_REPO, now })
+  if (!gated.ok) return gated
+  const gate = gated.value
+
   let model: FrictionModel
   let evidence: Record<string, string[]>
   let over: ReturnType<typeof withinBudget>
+  const held: Pattern[] = []
   try {
     model = await deps.friction(now)
-    over = withinBudget(patternsOver(model.counts, model.closed))
+    // A held class is named before the budget counts: it does not use up a slot.
+    const allowed = patternsOver(model.counts, model.closed).filter((pattern) => {
+      if (gate.allows(pattern.key)) return true
+      held.push(pattern)
+      return false
+    })
+    over = withinBudget(allowed)
     const wanted = over.file.filter(hasIssueRefs).map((pattern) => pattern.key)
     evidence = wanted.length > 0 ? await deps.evidence(now, wanted) : {}
   } catch (error) {
@@ -79,10 +91,10 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     windowTo: new Date(model.window.to),
     issues: model.issues,
     filed: [],
-    overBudget: over.overBudget.map(({ key, count }) => ({ key, count })),
+    overBudget: [...over.overBudget, ...held].map(({ key, count }) => ({ key, count })),
     failed: [],
   }
-  for (const pattern of over.file) await fileOne(deps, pattern, facts, evidence[pattern.key] ?? [], record)
+  for (const pattern of over.file) await fileOne(deps, gate, pattern, facts, evidence[pattern.key] ?? [], record)
 
   const recorded = await deps.uow.run(async ({ loops }) => {
     await loops.recordFrictionPass(record)
@@ -94,6 +106,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
 
 async function fileOne(
   deps: FrictionDeps,
+  gate: ClassGate,
   pattern: Pattern,
   facts: Parameters<typeof signalText>[1],
   refs: string[],
@@ -115,8 +128,11 @@ async function fileOne(
   // A repeat of an Issue closed lately is intake recognising a known pattern; any other drop or hold means no Issue carries it.
   const { outcome, detail } = filed.value
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
-  if (stands) record.filed.push({ key: pattern.key, count: pattern.count, title })
-  else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
+  if (stands) {
+    record.filed.push({ key: pattern.key, count: pattern.count, title })
+    const lost = await gate.record(filed.value.issue, pattern.key)
+    if (lost) record.failed.push({ key: pattern.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
+  } else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
 
 export const frictionSummary = (pass: FrictionPass): string => {

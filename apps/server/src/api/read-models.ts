@@ -2,6 +2,7 @@ import {
   DaysQuery,
   DEFAULT_DAYS,
   ErrorBody,
+  FindingClassesModel,
   FlowModel,
   FrictionModel,
   KpiModel,
@@ -13,10 +14,12 @@ import {
 import type { SQL } from 'bun'
 import { Elysia } from 'elysia'
 import type * as z from 'zod'
+import { findingClasses } from '../app/loops/finding-classes.ts'
 import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFriction } from '../read/friction.ts'
 import { readKpis } from '../read/kpis.ts'
+import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { callerOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
@@ -162,6 +165,21 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.friction',
           summary:
             'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, held signals',
+        },
+      },
+    )
+    .get(
+      '/finding-classes',
+      async () => {
+        if (!deps) return unavailable
+        return Response.json(FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), now())))
+      },
+      {
+        response: { 200: FindingClassesModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.finding-classes',
+          summary:
+            'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
         },
       },
     )

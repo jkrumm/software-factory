@@ -8,6 +8,7 @@ import {
   ErrandReply,
   ErrorBody,
   FlowModel,
+  FindingClassesModel,
   FrictionModel,
   KpiModel,
   MachineModel,
@@ -49,6 +50,7 @@ export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
 export const fetchFriction = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
+export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)
 export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', ReadAccountList, signal)
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
 

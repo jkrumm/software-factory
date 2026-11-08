@@ -8,6 +8,7 @@ import {
   fetchDecision,
   fetchErrands,
   fetchFlow,
+  fetchFindingClasses,
   fetchFriction,
   fetchIssue,
   fetchKpis,
@@ -68,6 +69,16 @@ export function useFriction(days: number) {
   return useQuery({
     queryKey: ['friction', days],
     queryFn: ({ signal }) => fetchFriction(days, signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** The finding classes the friction and hygiene loops file, held ones first. */
+export function useFindingClasses() {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['finding-classes'],
+    queryFn: ({ signal }) => fetchFindingClasses(signal),
     refetchInterval: live ? false : POLL_MS,
   })
 }

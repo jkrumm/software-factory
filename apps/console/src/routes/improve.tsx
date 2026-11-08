@@ -1,9 +1,10 @@
-import type { FrictionModel, Kpi, KpiKey, KpiModel } from '@software-factory/contract'
+import type { FindingClassesModel, FrictionModel, Kpi, KpiKey, KpiModel } from '@software-factory/contract'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
+  classWords,
   DEFAULT_WINDOW,
   FRICTION_GROUP_LABEL,
   formatKpi,
@@ -17,7 +18,7 @@ import {
   windowOf,
   windowWords,
 } from '@/lib/improve'
-import { useFriction, useKpis } from '@/lib/queries'
+import { useFindingClasses, useFriction, useKpis } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -213,10 +214,37 @@ function FrictionSection({ model, pending }: { model: FrictionModel | undefined;
   )
 }
 
+function FindingClassesSection({ model }: { model: FindingClassesModel | undefined }) {
+  const quiet = (model?.classes ?? []).filter((c) => c.status !== 'open')
+  return (
+    <section aria-labelledby="improve-held-classes" className="grid gap-3">
+      <h2 id="improve-held-classes" className="text-sm font-medium text-muted-foreground">
+        Held finding classes
+      </h2>
+      {quiet.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{model ? 'No finding class is held.' : 'Loading'}</p>
+      ) : (
+        <ul aria-label="Held finding classes" className="divide-y rounded-xl border bg-card px-4 text-sm">
+          {quiet.map((c) => (
+            <li key={`${c.loop}/${c.repo}/${c.class}`} className="flex flex-col gap-0.5 py-2">
+              <span>
+                {c.loop} · {c.repo} · {c.class}{' '}
+                <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
+              </span>
+              <span className="text-muted-foreground">{classWords(c)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
   const kpis = useKpis(days)
   const friction = useFriction(days)
+  const classes = useFindingClasses()
 
   if (!kpis.data) {
     return (
@@ -235,6 +263,7 @@ function Improve() {
         <TargetsSection kpis={model.kpis} />
         <UsageSection kpis={model.kpis} />
         <FrictionSection model={friction.data} pending={friction.isPending} />
+        <FindingClassesSection model={classes.data} />
       </div>
     </Page>
   )

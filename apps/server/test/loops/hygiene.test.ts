@@ -18,7 +18,8 @@ import {
   skipped,
 } from '../../src/domains/loops/hygiene.ts'
 import type { HygieneChecker, Probe, ProbeFinding } from '../../src/domains/loops/hygiene-model.ts'
-import type { HygienePassRecord, LoopStore } from '../../src/domains/loops/ports.ts'
+import type { ClassIssue } from '../../src/domains/loops/classes.ts'
+import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
@@ -164,7 +165,19 @@ test('a failed judgment is retried after the gap while attempts remain; a full p
 const project = (name: string, hygiene: { check: boolean; reason?: string } = { check: true }) =>
   ({ name, repo: `/src/${name}`, source: 'file', project: { hygiene } }) as unknown as StoredProject
 
-function world(names: string[], broken: Set<string>, projects: StoredProject[] = names.map((n) => project(n))) {
+interface Extra {
+  findings?: ProbeFinding[]
+  classes?: Record<string, ClassIssue[]>
+}
+
+function world(
+  names: string[],
+  broken: Set<string>,
+  projects: StoredProject[] = names.map((n) => project(n)),
+  extra: Extra = {},
+) {
+  const recorded: { issue: string; class: string; key: string }[] = []
+  const filedBodies: string[] = []
   const rows: HygienePassRecord[] = []
   let at = now
   const sweeps: string[] = []
@@ -176,7 +189,11 @@ function world(names: string[], broken: Set<string>, projects: StoredProject[] =
       return [...newest.values()]
     },
     recordHygienePass: async (r: HygienePassRecord) => void rows.push(r),
+    recordFinding: async (f: { issue: string; class: string; key: string }) => {
+      if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
+    },
   } as unknown as LoopStore
+  const loopReads = { classIssues: async () => extra.classes ?? {} } as unknown as LoopReads
   const checker: HygieneChecker = {
     withCheckout: async (repo, _ref, use) =>
       broken.has(repo)
@@ -185,24 +202,42 @@ function world(names: string[], broken: Set<string>, projects: StoredProject[] =
     sweep: async (co, options) => {
       sweeps.push(co.ref)
       skips.push(options?.skipCheck)
-      return { ref: co.ref, runs: [], findings: [], stale: [], slop: [] }
+      return { ref: co.ref, runs: [], findings: extra.findings ?? [], stale: [], slop: [] }
     },
   }
   const deps: HygieneDeps = {
     uow: {
-      run: async (work) => work({ loops, planning: { projects: async () => projects } as never }),
+      run: async (work) => work({ loops, loopReads, planning: { projects: async () => projects } as never }),
       inTransaction: () => false,
     },
     clock: { now: () => at },
     ids: sequentialIds(),
     checker,
     workflow: { ask: async () => err(portError('gone', 'not asked')) },
-    file: async () => err({ kind: 'refused' } as never),
+    file: async (body) => {
+      if (!extra.findings) return err({ kind: 'refused' } as never)
+      filedBodies.push(body.title)
+      return ok({
+        outcome: 'filed',
+        detail: 'new',
+        issue: `issue_${filedBodies.length}`,
+        signal: null,
+        reason: null,
+      } as never)
+    },
     everyMs: 7 * DAY,
     retryMs: 6 * HOUR,
     repos: null,
   }
-  return { deps, rows, sweeps, skips, advance: (ms: number) => (at = new Date(at.getTime() + ms)) }
+  return {
+    deps,
+    rows,
+    sweeps,
+    skips,
+    recorded,
+    filedBodies,
+    advance: (ms: number) => (at = new Date(at.getTime() + ms)),
+  }
 }
 
 test('a checkout that fails records a pass, is not due before the retry gap, and the next project is swept meanwhile', async () => {
@@ -245,4 +280,46 @@ test('the loop ticks every 15 minutes at most, is off with the tick, and a setti
   expect(loadLoopSettings({ FACTORY_TICK_MS: '0' }).intervalMs.hygiene).toBe(0)
   expect(loadLoopSettings({ FACTORY_TICK_MS: '3600000' }).intervalMs.hygiene).toBe(3_600_000)
   expect(loadLoopSettings({ FACTORY_LOOP_HYGIENE_MS: '60000' }).intervalMs.hygiene).toBe(60_000)
+})
+
+// ---- finding classes ------------------------------------------------------------------------------------------------------
+
+const noisy = (n: number): ClassIssue[] =>
+  Array.from({ length: n }, (_, i) => ({
+    issue: `issue_${i + 100}`,
+    filedAt: ago(40 * DAY + i * DAY),
+    closedAt: ago(30 * DAY - i * DAY),
+    outcome: 'dropped' as const,
+  }))
+
+test('a held class files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
+  const findings = [
+    finding('cochange', 'cochange:a|b', 9),
+    finding('cochange', 'cochange:c|d', 8),
+    finding('links', 'links:x.md', 1),
+    finding('links', 'links:y.md', 1),
+    finding('links', 'links:z.md', 1),
+  ]
+  // the class was held 2 days ago: its newest Issue closed lately
+  const held = noisy(5).map((i, n) => ({ ...i, closedAt: ago(DAY + n * HOUR) }))
+  const w = world(['a'], new Set(), undefined, { findings, classes: { cochange: held } })
+  const pass = await hygienePass(w.deps)
+  expect(pass.ok).toBe(true)
+  // the three links fill the three probe slots; the held class does not take one
+  expect(w.filedBodies).toHaveLength(3)
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md', 'links:y.md', 'links:z.md'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key).sort()).toEqual(['cochange:a|b', 'cochange:c|d'])
+  expect(w.recorded.map((r) => [r.class, r.key])).toEqual([
+    ['links', 'links:x.md'],
+    ['links', 'links:y.md'],
+    ['links', 'links:z.md'],
+  ])
+})
+
+test('a class on probation files one finding in the pass', async () => {
+  const findings = [finding('cochange', 'cochange:a|b', 9), finding('cochange', 'cochange:c|d', 8)]
+  const w = world(['a'], new Set(), undefined, { findings, classes: { cochange: noisy(5) } })
+  await hygienePass(w.deps)
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['cochange:a|b'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:c|d'])
 })

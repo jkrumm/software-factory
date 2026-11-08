@@ -1,6 +1,14 @@
 import { expect, test } from 'bun:test'
-import type { Kpi } from '@software-factory/contract'
-import { formatKpi, sampleWords, targetStatus, targetWords, windowOf, windowWords } from '../src/lib/improve.ts'
+import type { FindingClass, Kpi } from '@software-factory/contract'
+import {
+  classWords,
+  formatKpi,
+  sampleWords,
+  targetStatus,
+  targetWords,
+  windowOf,
+  windowWords,
+} from '../src/lib/improve.ts'
 
 const kpi = (over: Partial<Kpi>): Kpi => ({
   key: 'avoidable_touches',
@@ -58,4 +66,23 @@ test('sampleWords and windowWords', () => {
   expect(sampleWords({ key: 'worth_asking', n: 1 })).toBe('1 Decision')
   expect(sampleWords({ key: 'queue_wait_p90', n: 0 })).toBe('0 samples')
   expect(windowWords({ from: '2026-11-01T00:00:00Z', to: '2026-11-08T10:00:00Z' })).toBe('2026-11-01 to 2026-11-08')
+})
+
+test('classWords: a held class says when it is asked again, a probation class how it files', () => {
+  const cls: FindingClass = {
+    loop: 'hygiene',
+    repo: 'app',
+    class: 'cochange',
+    status: 'held',
+    issues: 5,
+    decided: 4,
+    noise: 3,
+    share: 0.75,
+    open: 0,
+    heldUntil: '2026-11-15T10:00:00.000Z',
+  }
+  expect(classWords(cls)).toBe('3 of 4 dropped or cancelled, asked again 2026-11-15')
+  expect(classWords({ ...cls, status: 'probation' })).toBe(
+    '3 of 4 dropped or cancelled, one Issue at a time until one closes done',
+  )
 })

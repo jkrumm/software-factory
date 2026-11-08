@@ -233,6 +233,17 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `hygiene` | one project a tick (those with a `project.yaml`; `FACTORY_HYGIENE_REPOS` narrows): a throwaway checkout of the default branch swept by the probes (`check`, `links`, `retired`, `deps`, `cochange`, `adapters/hygiene/`), due again after `FACTORY_HYGIENE_EVERY_MS` (a week), read from `hygiene_passes`; at most 5 signals a project and pass, probe findings ranked in probe order and limited to 3, the rest named in `over_budget`; filed through intake as the project's own agent; a project whose `make check` needs a lab this host lacks says `hygiene: { check: false, reason: … }` in `project.yaml` and the `check` probe is skipped, the reason in its run detail | `factory-hygiene`: the stale and recently edited documents read against the code, at most the budget left (2 at least); its title is built from the kind and the path, so the same document is one pattern for intake; a failed ask is retried at the stored commit every `FACTORY_HYGIENE_RETRY_MS`, 3 attempts at most |
 | `screen` | up to 10 held signals not yet screened (oldest first, `intake_signals.screened_at` null, `screen_attempts` under 5, `screen_retry_at` due), one call each, outside any transaction; the answer is checked before anything is done (`domains/intake/screen.ts`): a promote needs a known non-work repo (the signal's own, else the one named), a duplicate must be an open Issue of the repo it was shown, else the verdict becomes `leave` with a note; then `promote` or `dismiss` as `judge` (each looks at the state again: an owner who acted first is counted, not an error). A failed, unparseable or timed-out call (a missing workflow too) leaves the signal held and records the attempt with a backoff of `min(10 min * 2^n, 6 h)`; the pass still ends ok and its summary says `screen workflow unavailable` when every call failed | `factory-screen`: stdin `ScreenRequest` `{ signal: { id, source, kind, origin, repo, title, text, link, receivedAt }, openIssues: [{ id, title, kind, state }] (open Issues of `signal.repo`, at most 40, empty with no repo), projects: [name] (known projects that are not work repos) }` with title and text scrubbed and labelled untrusted data; stdout `ScreenAnswer` `{ verdict: promote\|dismiss\|leave, reason (1..300), repo\|null, duplicateOf\|null, recommendation (<=300)\|null }`; call key `screen:<signal>:<attempt>` |
 
+**Finding classes.** `friction` and `hygiene` hold a noisy kind of finding back. A class is the loop plus the finding's
+first key segment (`judgment:<kind>` for a judgment): the probe, the kind of judgment, the pattern group. The fact is
+`factory.loop_findings` (which class filed which Issue); the state is derived from the Issues' outcomes
+(`domains/loops/classes.ts`) and never stored. Of a class's ten newest decided Issues (done, healed, dropped or
+cancelled), with at least 3 decided, a share of dropped or cancelled above one half **holds** it for 14 days after its last
+Issue closed: it files nothing, and the held findings are named in the pass record's `overBudget`. After the hold it is on
+**probation**: one Issue at a time, none while another of its Issues is open, until one closes done, which forgives the
+history before it. Held and probation classes show on Improve ("Held finding classes") and in `GET /v1/finding-classes`
+(`factory read finding-classes`). Deviation: the owner asked for a rollup signal, and this is the section and the read
+model, not a signal: an agent-trust signal files an Issue, and no loops page exists to carry it.
+
 ## API, client, CLI
 
 - **Elysia** with zod through Standard Schema and `@elysiajs/openapi` for the document. Who may call a route is the one
@@ -242,7 +253,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
   deploy-lock, follow and role verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
   the way to the same thing (`apps/cli/src/retired.ts`).
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
-- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, kpis and
+- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, kpis and
   the change stream. The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
   `GET /health` carries the heartbeat.
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the

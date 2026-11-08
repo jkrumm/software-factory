@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
+import { loopReads } from '../../src/read/loops.ts'
 import { claimRound } from '../../src/app/loops/claim.ts'
 import type { CallPolicy } from '../../src/domains/loops/calls.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
@@ -42,4 +43,73 @@ test('a claimed call is in flight; after a restart (lapseOpen) it is retaken und
   await loops.finishCall(keyFor(1), { outcome: 'failed', answer: null, detail: 'gone', at: later })
   expect((await ask(new Date(later.getTime() + 2_000))).kind).toBe('backoff')
   expect(await loops.lapseOpen(later)).toBe(0)
+})
+
+// ---- finding classes ------------------------------------------------------------------------------------------------------
+
+test('recordFinding stores the class once; classIssues reads filed time, closure and outcome', async () => {
+  const loops = postgresLoopStore(db.sql)
+  const reads = loopReads(db.sql)
+  const at = (day: number) => new Date(Date.UTC(2026, 9, day))
+  for (const [n, state, outcome] of [
+    [20, 'closed', 'dropped'],
+    [21, 'queued', null],
+  ] as const) {
+    await db.sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES (${`issue_${n}`}, 'app', ${state}, ${outcome}, 2)`
+    await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES (${`ev_f_${n}`}, ${`issue_${n}`}, ${`k_f_${n}`}, 'filed', '{}'::jsonb, 'factory', ${at(1)}, 'applied', 1, 'settling')`
+  }
+  await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+    VALUES ('ev_c_20', 'issue_20', 'k_c_20', 'closed', '{}'::jsonb, 'factory', ${at(5)}, 'applied', 2, 'closed')`
+
+  await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'links', key: 'links:a.md' })
+  await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'other', key: 'other:x' })
+  await loops.recordFinding({ issue: 'issue_21', loop: 'hygiene', repo: 'app', class: 'links', key: 'links:b.md' })
+  await loops.recordFinding({ issue: 'issue_21', loop: 'friction', repo: 'software-factory', class: 'x', key: 'x' })
+
+  expect(await reads.classIssues('hygiene', 'app')).toEqual({
+    links: [
+      { issue: 'issue_20', filedAt: at(1), closedAt: at(5), outcome: 'dropped' },
+      { issue: 'issue_21', filedAt: at(1), closedAt: null, outcome: null },
+    ],
+  })
+  expect(await reads.classIssues('friction', 'app')).toEqual({})
+  expect((await reads.allClassIssues()).map((g) => [g.loop, g.repo, g.class, g.issues.length])).toEqual([
+    ['hygiene', 'app', 'links', 2],
+  ])
+})
+
+test('the 0993 backfill classes the Issues the loops filed from their signal text', async () => {
+  const cluster = await startTestCluster()
+  try {
+    const all = await loadMigrations()
+    await migrate(
+      cluster.sql,
+      all.filter((m) => m.name < '0993'),
+    )
+    const texts: [number, string, string, string][] = [
+      [1, 'agent', 'filed', 'Swept: app @ abc1234\nProbe: cochange (cochange:a.ts|b.ts)\nEvidence (2 item(s)):\nx'],
+      [2, 'agent', 'amended', 'Swept: app @ abc1234\nJudgment: stale document docs/x.md\nFinding: t'],
+      [3, 'agent', 'filed', 'Pattern: Owner touches (touch:noted)\nWindow: a to b'],
+      [4, 'agent', 'filed', 'free text from an agent'],
+      [5, 'owner', 'filed', 'Probe: links (links:a.md)'],
+      [6, 'agent', 'filed', 'Swept: app @ abc1234\nProbe: check (check)\nEvidence'],
+    ]
+    for (const [n, trust, state, text] of texts) {
+      await cluster.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${`issue_${n}`}, 'app', 'queued', 1)`
+      await cluster.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
+        VALUES (${`signal_${n}`}, 'agent:app', 'request', 'factory', ${trust}, 'app', ${`fp${n}`}, 't', ${text}, now(), ${state}, ${`issue_${n}`})`
+    }
+    expect(await migrate(cluster.sql, all)).toEqual(['0993_finding_classes.sql'])
+    const rows: { issue_id: string; loop: string; repo: string; class: string; key: string }[] =
+      await cluster.sql`SELECT * FROM factory.loop_findings ORDER BY issue_id`
+    expect(rows.map((r) => [r.issue_id, r.loop, r.repo, r.class, r.key])).toEqual([
+      ['issue_1', 'hygiene', 'app', 'cochange', 'cochange:a.ts|b.ts'],
+      ['issue_2', 'hygiene', 'app', 'judgment:stale', 'judgment:stale:docs/x.md'],
+      ['issue_3', 'friction', 'app', 'touch', 'touch:noted'],
+      ['issue_6', 'hygiene', 'app', 'check', 'check'],
+    ])
+  } finally {
+    await cluster.stop()
+  }
 })

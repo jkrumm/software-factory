@@ -14,6 +14,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
+import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
@@ -25,6 +26,7 @@ export interface FrictionPassRecord {
   windowTo: Date
   issues: number
   filed: { key: string; count: number; title: string }[]
+  /** left out by the cap or by a held class */
   overBudget: { key: string; count: number }[]
   failed: { key: string; reason: string }[]
 }
@@ -48,6 +50,7 @@ export interface HygienePassRecord {
   report: SweepReport
   judgment: HygieneJudgment
   filed: { key: string; title: string }[]
+  /** left out by the cap or by a held class */
   overBudget: { key: string; title: string }[]
   failed: { key: string; reason: string }[]
 }
@@ -102,6 +105,8 @@ export interface LoopStore {
     id: string,
     next: Pick<HygienePassRecord, 'judgment' | 'filed' | 'overBudget' | 'failed'>,
   ): Promise<void>
+  /** the class of finding an Issue was filed for (`migrations/0993_finding_classes.sql`); a repeat is a no-op */
+  recordFinding(row: { issue: string; loop: FindingLoop; repo: string; class: string; key: string }): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */
@@ -150,6 +155,10 @@ export interface LoopReads {
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
   claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
+  /** the Issues each finding class of one loop and repo filed, with their closure and outcome, by class */
+  classIssues(loop: FindingLoop, repo: string): Promise<Record<string, ClassIssue[]>>
+  /** the same for every loop, repo and class */
+  allClassIssues(): Promise<{ loop: FindingLoop; repo: string; class: string; issues: ClassIssue[] }[]>
 }
 
 /** `factory-steward`: what a stalled Issue needs when the rules do not say. */
