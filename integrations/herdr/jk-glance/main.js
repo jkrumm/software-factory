@@ -22,7 +22,7 @@ const POLL_MS = 15000
 const STALE_MS = 2 * 60000
 const TOOLTIP_MAX = 160
 
-// <glance> pure helpers (scripts/jk-glance.test.ts runs this block on its own: no imports, no gpui)
+// <glance> pure helpers (integrations/herdr/jk-glance.test.ts runs this block on its own: no imports, no gpui)
 const asArray = (v) => (Array.isArray(v) ? v : [])
 const num = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
 
