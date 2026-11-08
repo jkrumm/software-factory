@@ -195,6 +195,13 @@ async function main(): Promise<void> {
       consoleUrl: checkpointSettings.line.consoleUrl,
     },
     planning: writes,
+    claimQueued: async () => {
+      const view = await planning.capacity.queue()
+      if (!view.ok) return view
+      return ok(
+        view.value.queue.filter((q) => q.reason?.kind === 'claim').map((q) => ({ issue: q.issue, repo: q.repo })),
+      )
+    },
     rules: { ...DEFAULT_STEWARD_RULES, minStallMs: loopSettings.minStallMs },
     retryMs: loopSettings.retryMs,
     settleTimeoutMs: loopSettings.settleTimeoutMs,

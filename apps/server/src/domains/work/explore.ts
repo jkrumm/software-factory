@@ -53,6 +53,8 @@ export function candidates(issue: Issue, now: Date): AnyIssueEvent[] {
     e('errand_done', { errand: 'errand_other' }, 'owner'),
     e('deferred', { attempt, until: later }, 'lead'),
     e('deferred', { attempt, after: ['issue_other' as IssueId] }, 'lead'),
+    e('deferred', { attempt, after: ['issue_other' as IssueId], why: 'it waits for a claim' }, 'steward'),
+    e('deferred', { attempt, until: later }, 'steward'),
     e('stalled', { attempt, cause: 'wall', detail: 'the window is spent' }, 'factory'),
     e('stalled', { attempt, cause: 'unreported', detail: 'stopped twice' }, 'factory'),
     e('stalled', { attempt, cause: 'blocked', detail: 'the API is down' }, 'lead'),
@@ -101,6 +103,7 @@ const shapeOf = (issue: Issue): string =>
   JSON.stringify([
     issue.state,
     issue.wait?.reason ?? null,
+    issue.wait !== null && 'watching' in issue.wait,
     Math.min(issue.attempt, 1),
     Math.min(issue.watch, 1),
     Math.min(issue.restarts, MAX_RESTARTS + 1),

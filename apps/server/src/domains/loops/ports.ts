@@ -126,6 +126,14 @@ export interface BlockedWatch {
   detail: string
 }
 
+/** A working or watching Issue that holds its repo's claim and waits (an open `after` edge) on Issues queued for want of one. */
+export interface ClaimHolder {
+  issue: IssueId
+  state: 'working' | 'watching'
+  /** the queued Issues of its own repo it is after */
+  blockers: IssueId[]
+}
+
 /** Read-only SQL on other domains' tables (`docs/architecture.md`: cross-domain SQL lives in `read/`). */
 export interface LoopReads {
   /** Issues waiting for a stall (`wall`, `unreported`, `blocked`, `lead_gone`, `regressed`), oldest first */
@@ -138,6 +146,8 @@ export interface LoopReads {
   queueIssues(): Promise<QueueIssue[]>
   /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked */
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
+  /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
+  claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
 }
 
 /** `factory-steward`: what a stalled Issue needs when the rules do not say. */

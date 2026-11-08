@@ -107,7 +107,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `verdict_given` | The owner's Verdict on it | owner |
 | `errand_raised` | The lead needs the owner's hands | lead |
 | `errand_done` | The owner did the Errand | owner |
-| `deferred` | The lead waits until a time, or until other Issues close | lead |
+| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked` | factory, lead (`blocked`) |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
 | `shipped` | The lead landed and deployed: the watch begins | lead |
@@ -159,10 +159,10 @@ stateDiagram-v2
   working --> closed: cancelled, closed
   waiting --> queued: woken (lead_gone)
   waiting --> working: answered (decision), verdict_given (review), errand_done (errand), woken (timer, dependency, wall, unreported, blocked, regressed)
-  waiting --> watching: shipped (timer)
+  waiting --> watching: woken (dependency), shipped (timer)
   waiting --> closed: cancelled, closed (timer)
   watching --> working: regressed
-  watching --> waiting: regressed (regressed)
+  watching --> waiting: deferred (dependency), regressed (regressed)
   watching --> closed: watch_passed, cancelled
   closed --> queued: reopened
   closed --> [*]

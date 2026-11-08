@@ -42,10 +42,11 @@ export const PAYLOADS = {
   errand_raised: z.object({ attempt, errand: checkpoint }),
   /** the owner did the errand */
   errand_done: z.object({ errand: text }),
-  /** the lead waits until a time, or until other Issues close */
+  /** the lead waits until a time, or until other Issues close (the steward defers a holder behind a queued Issue that needs its claim) */
   deferred: z.union([
     z.object({ attempt, until: z.iso.datetime({ offset: true }) }),
-    z.object({ attempt, after: z.array(issueRef).min(1).max(20) }),
+    // `why` is the steward's: it defers a holder behind the Issue that waits for the claim the holder keeps
+    z.object({ attempt, after: z.array(issueRef).min(1).max(20), why: text.optional() }),
   ]),
   /** a machine cause stopped the work: the steward's to end */
   stalled: z.object({ attempt, cause: z.enum(['wall', 'unreported', 'blocked']), detail: text }),
@@ -97,7 +98,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   verdict_given: ['owner'],
   errand_raised: ['lead'],
   errand_done: ['owner'],
-  deferred: ['lead'],
+  deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
   woken: ['factory', 'steward', 'owner'],
   shipped: ['lead'],

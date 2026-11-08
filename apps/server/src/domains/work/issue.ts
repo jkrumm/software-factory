@@ -51,7 +51,8 @@ export type PersonReason = { [R in WaitReason]: (typeof WAITS)[R]['exit'] extend
 /** A wait as a cell asks for it. A person's wait always holds its checkpoint. */
 export type WaitSpec =
   | { reason: 'timer'; until: string }
-  | { reason: 'dependency'; after: IssueId[] }
+  /** `watching`: the steward deferred a shipped Issue, so the wake goes back to the watch, not to the lead's work */
+  | { reason: 'dependency'; after: IssueId[]; watching?: true }
   | { reason: StallCause; detail: string }
   | { reason: PersonReason; holds: Checkpoint }
 

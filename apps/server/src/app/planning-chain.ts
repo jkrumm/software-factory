@@ -104,7 +104,11 @@ export async function settleIssue(
   })
 }
 
-/** Adds edges to an Issue that is queued or settling: a later `after`, from the owner or the queue loop. */
+/**
+ * Adds edges to an Issue that is settling, queued, working or watching: a later `after`, from the owner or the queue
+ * loop. On a working or watching Issue the edge is what lets the steward see a claim deadlock (it holds the repo's claim
+ * while it is after an Issue that waits for one).
+ */
 export async function addAfter(
   deps: PlanningDeps,
   input: { issue: IssueId; after: readonly IssueId[] },
@@ -120,11 +124,11 @@ export async function addAfter(
           : { kind: 'unknown_issue', issue: input.issue },
       )
     }
-    if (open.state !== 'queued' && open.state !== 'settling') {
+    if (!['settling', 'queued', 'working', 'watching'].includes(open.state)) {
       return err<PlanningError>({
         kind: 'wrong_state',
         issue: input.issue,
-        detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling or queued Issue takes an edge (a working lead defers with its own verb)`,
+        detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling, queued, working or watching Issue takes an edge`,
       })
     }
     const edges = await addEdges(stores, deps, input.issue, input.after)
