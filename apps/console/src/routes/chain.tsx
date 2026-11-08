@@ -60,7 +60,7 @@ function Chain() {
             onChange={(e) => void navigate({ search: { project: e.target.value || undefined }, replace: true })}
           >
             <option value="">All projects</option>
-            {projectsOf(data).map((repo) => (
+            {[...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort().map((repo) => (
               <option key={repo} value={repo}>
                 {repo}
               </option>
