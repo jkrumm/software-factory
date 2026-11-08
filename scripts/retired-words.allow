@@ -23,3 +23,5 @@ apps/console/vite.config.ts manifest  # the PWA web app manifest, a browser file
 tests/e2e/shell.e2e.ts manifest  # the PWA web app manifest, a browser file
 apps/server/test/hygiene/hygiene.test.ts wave  # fixture documents the sweep must find a retired word in
 apps/server/src/domains/loops/hygiene-model.ts wave  # docs/waves is a directory name the sweep skips
+apps/server/src/adapters/hygiene/probes/cochange.ts manifest  # manifest.json is a file name the co-change probe ignores, not a project manifest
+apps/server/test/hygiene/hygiene.test.ts manifest  # the same file name, in the probe's test

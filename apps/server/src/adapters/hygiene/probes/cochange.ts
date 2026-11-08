@@ -6,13 +6,16 @@ import { type Outcome, clean, finding, found } from './finding.ts'
 const COMMITS = 300
 const MIN_FILES = 2
 const MAX_FILES = 25
-const MIN_TOGETHER = 6
-const MIN_SHARE = 0.7
-const TOP = 3
+// Calibrated on the first live pass over the fleet: at 6 together and 0.7 it filed an API client with its types, a web-app descriptor with
+// package.json and a Makefile with its script, all coupling by design. A finding is a pair that moves as one, over and over.
+const MIN_TOGETHER = 15
+const MIN_SHARE = 0.85
+const TOP = 1
 
 const IGNORED = [
   /(^|\/)(bun\.lockb?|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|uv\.lock|poetry\.lock)$/,
   /\.md$/,
+  /(^|\/)(package\.json|manifest\.json|tsconfig[^/]*\.json|Makefile)$/,
   /^docs\//,
   /(^|\/)generated\//,
   /(^|\/)migrations\//,
