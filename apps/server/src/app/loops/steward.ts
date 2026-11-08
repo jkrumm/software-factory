@@ -2,7 +2,7 @@ import type { StewardAnswer } from '@software-factory/contract'
 import { scrub } from '../../kernel/scrub.ts'
 import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
-import type { LoopReads, LoopStore, StewardWorkflow } from '../../domains/loops/ports.ts'
+import type { ClaimHolder, LoopReads, LoopStore, StewardWorkflow } from '../../domains/loops/ports.ts'
 import {
   checkAnswer,
   type Checked,
@@ -21,7 +21,7 @@ import { WAITS } from '../../domains/work/issue.ts'
 import type { AppliedRecord } from '../../domains/work/machine.ts'
 import { replay } from '../../domains/work/machine.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
-import type { IssueId } from '../../kernel/ids.ts'
+import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import { key } from '../../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
@@ -44,6 +44,8 @@ export interface StewardDeps extends WriteDeps {
   checkpoints: CheckpointDeps
   /** planning's use case that settles an Issue: the edges and the event are one transaction */
   planning: PlanningDeps
+  /** capacity's side: the Issues queued for lack of a claim in their repo (called outside any transaction) */
+  claimQueued(): Promise<Result<{ issue: IssueId; repo: string }[], PortError>>
   rules: StewardRules
   retryMs: number
   /** an Issue still settling this long after it was filed is settled with no edges */
@@ -62,6 +64,7 @@ export interface StewardPass {
   decisions: number
   settled: number
   noted: number
+  deferred: number
   problems: string[]
 }
 
@@ -370,6 +373,77 @@ async function noteBlockedCheckouts(deps: StewardDeps, pass: StewardPass): Promi
   }
 }
 
+/**
+ * The claim deadlock: a working or watching Issue is after an Issue of its own repo that stays queued for lack of a
+ * claim, and holds the only one. It is deferred behind that Issue (a dependency wait frees the claim; the woken Issue is
+ * counted as owed and served before new leads), with the reason in the event itself. The edge is the owner's `after`. Only open planning edges are read, never what a lead or a
+ * subagent wrote: an Issue that merely mentions another is not detected.
+ */
+async function breakClaimDeadlocks(deps: StewardDeps, pass: StewardPass): Promise<void> {
+  const queued = await deps.claimQueued()
+  if (!queued.ok) {
+    pass.problems.push(`claim queue: ${queued.error.detail}`)
+    return
+  }
+  const holders = await deps.uow.run(async ({ loopReads }) =>
+    ok(
+      await loopReads.claimHolders(
+        queued.value.map((q) => q.issue),
+        PASS_LIMIT,
+      ),
+    ),
+  )
+  if (!holders.ok) {
+    pass.problems.push(`claim holders: ${holders.error.detail}`)
+    return
+  }
+  for (const holder of holders.value) {
+    const deferred = await deferHolder(deps, holder)
+    if (!deferred.ok) pass.problems.push(`${holder.issue}: ${deferred.error.detail}`)
+    else if (deferred.value) pass.deferred++
+  }
+}
+
+async function deferHolder(deps: StewardDeps, holder: ClaimHolder): Out<boolean> {
+  return deps.uow.run(async ({ work }) => {
+    const history = await work.history(holder.issue)
+    if (!history) return ok(false)
+    const issue = replay(holder.issue, history)
+    if (issue.state !== 'working' && issue.state !== 'watching') return ok(false)
+    const names = holder.blockers.map((id) => `Issue ${issueNumber(id)}`).join(', ')
+    const why = `${names} stays queued for lack of a claim in ${issue.repo}, and this Issue holds it while it is after ${holder.blockers.length === 1 ? 'that Issue' : 'them'}`
+    const wakes = holder.blockers.length === 1 ? 'it closes' : 'they close'
+    const resumes = issue.state === 'watching' ? 'the watch runs again' : 'work resumes'
+    const noted = await recordIn(work, deps, {
+      issueId: issue.id,
+      key: key('noted', 'steward', 'claim-deadlock', issue.id, issue.version),
+      event: {
+        kind: 'noted',
+        payload: {
+          text: `${why}: a deadlock. It is deferred behind ${names} and wakes when ${wakes}; then ${resumes}.`,
+        },
+        actor: 'steward',
+      },
+    })
+    if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
+    const deferred = await recordIn(work, deps, {
+      issueId: issue.id,
+      key: key('deferred', 'steward', 'claim-deadlock', issue.id, issue.version),
+      event: {
+        kind: 'deferred',
+        payload: { attempt: issue.attempt, after: holder.blockers, why },
+        actor: 'steward',
+      },
+    })
+    if (!deferred.ok) return err(portError('refused', JSON.stringify(deferred.error)))
+    // A refusal rolls the note back too: the deferral is one change.
+    if (deferred.value.result === 'refused' || deferred.value.result === 'ignored') {
+      return err(portError('refused', `the deferral was ${deferred.value.result}`))
+    }
+    return ok(deferred.value.result === 'applied')
+  })
+}
+
 /** An Issue that stays `settling` after the timeout is settled with no edges: nothing waits forever for an answer. */
 async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void> {
   const overdue = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.settling(PASS_LIMIT)))
@@ -396,6 +470,7 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
     decisions: 0,
     settled: 0,
     noted: 0,
+    deferred: 0,
     problems: [],
   }
   const stalled = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.stalled(STALL_LIMIT)))
@@ -403,9 +478,10 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   for (const id of stalled.value) await steward(deps, id, pass)
   await settleOverdue(deps, pass)
   await noteBlockedCheckouts(deps, pass)
-  if (pass.woken + pass.requeued + pass.decisions + pass.settled + pass.noted > 0) deps.changed()
+  await breakClaimDeadlocks(deps, pass)
+  if (pass.woken + pass.requeued + pass.decisions + pass.settled + pass.noted + pass.deferred > 0) deps.changed()
   return ok(pass)
 }
 
 export const stewardSummary = (pass: StewardPass): string =>
-  `looked at ${pass.looked} stalled; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} stalled; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

@@ -62,7 +62,7 @@ The full table, with what each word retires, is [`docs/language.md`](docs/langua
 | **State** | `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. Only an event moves it |
 | **Event** | A fact recorded on an Issue. 21 kinds, among them `filed`, `admitted`, `shipped`, `watch_passed` |
 | **Lead / Attempt** | The Claude Code session that owns an Issue, and its *n*th try |
-| **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver; asks a workflow only when the rules run out |
+| **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver, break a claim deadlock; asks a workflow only when the rules run out |
 | **Judge** | The workflow that tries to settle a Decision before the owner sees it |
 | **Gate** | A machine check a lead cannot talk past |
 | **Watch / Verify** | The window after a ship, and the check that ends it |
@@ -164,7 +164,7 @@ agw workflow with its own prompt and tools, called through a port with a hang gu
 
 | Loop | Deterministic | Workflow decides |
 |-|-|-|
-| Steward | wake, re-check, requeue, deliver | what a stalled Issue needs when the rules do not say |
+| Steward | wake, re-check, requeue, deliver, break a claim deadlock | what a stalled Issue needs when the rules do not say |
 | Judge | standing policy, precedent lookup | whether a Decision needs the owner |
 | Triage | fingerprint, routes, correlation window | kind, origin, amend-or-new |
 

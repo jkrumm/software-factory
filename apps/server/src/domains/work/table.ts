@@ -141,6 +141,25 @@ const defer = byLead((ctx: Ctx<'deferred'>): Cell => {
   return { to: 'waiting', wait: { reason: 'dependency', after: [...new Set(payload.after)] }, effects: [] }
 })
 
+/** The steward defers a holder behind an Issue that waits for the claim it keeps: only `after`, only for the attempt there is. */
+const stewardDefer = (ctx: Ctx<'deferred'>): Cell => {
+  const { payload } = ctx.event
+  if ('until' in payload) return refuse('the steward defers only behind other Issues, never until a time')
+  return defer(ctx)
+}
+const deferredBy =
+  (lead: (ctx: Ctx<'deferred'>) => Cell) =>
+  (ctx: Ctx<'deferred'>): Cell =>
+    ctx.event.actor === 'steward' ? stewardDefer(ctx) : lead(ctx)
+
+/** A shipped Issue deferred by the steward waits like any dependency, and goes back to its watch. */
+const deferWatching = (ctx: Ctx<'deferred'>): Cell => {
+  if (ctx.event.actor !== 'steward') return refuse('it shipped: the watch is on')
+  const deferred = stewardDefer(ctx)
+  if (!('to' in deferred) || deferred.to !== 'waiting' || deferred.wait?.reason !== 'dependency') return deferred
+  return { ...deferred, wait: { ...deferred.wait, watching: true } }
+}
+
 /** A lead reports its own block; a wall and an unreported stop are the factory's to see. */
 const stall = (ctx: Ctx<'stalled'>): Cell => {
   const { cause, attempt, detail } = ctx.event.payload
@@ -195,6 +214,16 @@ const wake = (ctx: Ctx<'woken'>): Cell => {
   }
   if (WAITS[wait.reason].exit === 'person') return refuse(`a ${wait.reason} wait ends with its answer, not a wake`)
   if (wait.reason === 'lead_gone') return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
+  if (wait.reason === 'dependency' && wait.watching) {
+    // The lead hears the note first; the new watch is the next one, and the old one ends with the wake.
+    return {
+      to: 'watching',
+      effects: [
+        noteLead(issue.id, issue.attempt, wait.told + 1, next(issue)),
+        startWatch(issue.id, issue.attempt, issue.watch + 1),
+      ],
+    }
+  }
   return resume(issue)
 }
 
@@ -284,7 +313,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: raiseErrand,
     errand_done: said('nothing waits for an errand'),
-    deferred: defer,
+    deferred: deferredBy(defer),
     stalled: stall,
     woken: said('it is not waiting'),
     shipped: ship,
@@ -308,7 +337,7 @@ export const TABLE: Table = {
     verdict_given: (ctx) => endsCheckpoint(ctx, 'review', ctx.event.payload.artifact),
     errand_raised: fromTimer(raiseErrand),
     errand_done: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
-    deferred: fromTimer(defer),
+    deferred: fromTimer(deferredBy(defer)),
     stalled: (ctx) =>
       ctx.event.payload.cause === 'blocked' ? fromTimer(stall)(ctx) : ignore('waiting: no lead turn is running'),
     woken: wake,
@@ -332,7 +361,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: watchIsOn,
     errand_done: said('nothing waits for an errand'),
-    deferred: watchIsOn,
+    deferred: deferWatching,
     stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse('it shipped: the watch is on') : ignore('watching')),
     woken: said('it is not waiting'),
     shipped: watchIsOn,

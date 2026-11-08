@@ -47,7 +47,8 @@ function evolve(
     wait: transition.wait,
     outcome: transition.outcome,
     attempt: kind === 'admitted' ? issue.attempt + 1 : issue.attempt,
-    watch: kind === 'shipped' ? issue.watch + 1 : issue.watch,
+    // A shipped Issue woken from a deferral begins a new watch; the old one ends with it.
+    watch: kind === 'shipped' || (kind === 'woken' && transition.to === 'watching') ? issue.watch + 1 : issue.watch,
     restarts: kind === 'lead_gone' && transition.to === 'queued' ? issue.restarts + 1 : issue.restarts,
     regressions: kind === 'regressed' ? issue.regressions + 1 : issue.regressions,
     closedAt: transition.to === 'closed' ? at : kind === 'reopened' ? null : issue.closedAt,

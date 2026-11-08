@@ -195,6 +195,7 @@ async function main(): Promise<void> {
       consoleUrl: checkpointSettings.line.consoleUrl,
     },
     planning: writes,
+    claimQueued: planning.claimQueued,
     rules: { ...DEFAULT_STEWARD_RULES, minStallMs: loopSettings.minStallMs },
     retryMs: loopSettings.retryMs,
     settleTimeoutMs: loopSettings.settleTimeoutMs,

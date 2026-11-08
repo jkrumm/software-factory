@@ -33,6 +33,8 @@ const QueueRowSchema = z.object({
   blockers: z.string(),
 })
 
+const Holder = z.object({ id: z.string(), state: z.enum(['working', 'watching']), blockers: z.array(z.string()) })
+
 const Blocked = z.object({
   issue_id: z.string(),
   watch: z.number().int(),
@@ -114,6 +116,23 @@ export function loopReads(tx: SQL): LoopReads {
           summary: row.summary,
           blockers: row.blockers === '' ? [] : (row.blockers.split(',') as IssueId[]),
         }
+      })
+    },
+
+    async claimHolders(queued, limit) {
+      if (queued.length === 0) return []
+      // Only the open planning edges: a holder that waits on a queued Issue of its own repo, by structure and never by text.
+      const rows: unknown[] = await tx`
+        SELECT h.id, h.state, array_agg(b.id ORDER BY b.id) AS blockers
+        FROM factory.planning_edges e
+        JOIN factory.issues h ON h.id = e.issue_id AND h.state IN ('working', 'watching')
+        JOIN factory.issues b ON b.id = e.after_issue AND b.state = 'queued' AND b.repo = h.repo
+        WHERE e.satisfied_at IS NULL AND b.id IN ${tx([...queued])}
+        GROUP BY h.id, h.state
+        ORDER BY h.id LIMIT ${limit}`
+      return rows.map((raw) => {
+        const row = Holder.parse(raw)
+        return { issue: row.id as IssueId, state: row.state, blockers: row.blockers as IssueId[] }
       })
     },
 
