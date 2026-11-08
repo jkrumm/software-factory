@@ -8,7 +8,7 @@ always-on machine against a few Claude Code subscriptions. It is a reference for
 own, and it builds itself: its changes go through its own Issues. It is not a product. Every factory is set up for its
 place; this one shows the language, the patterns and how far the automation reaches.
 
-The code is public and has no licence yet. MIT comes with the first version of the Console.
+MIT licensed. Read it, fork it, take the parts you want.
 
 ## Position
 
@@ -50,6 +50,25 @@ The factory itself never calls a model. Every judgment goes **deterministic code
 [agent-workflows](https://github.com/jkrumm/agent-workflows) workflow, then the owner**, and every change to a repo
 is made by Claude Code.
 
+## See it
+
+One Issue, signal to verify, as the Console shows it. The data is a seeded demo (`make e2e`), not a real estate.
+
+![The Issue page, signal to verify: a request and its amendment, the attempt, a note, a Decision the owner answered, a Spec the owner passed, the ship and the watch that passed](docs/demo/issue.png)
+
+| Screen | Question it answers |
+|-|-|
+| **Needs you** | What waits on the owner, and nothing else |
+| **Flow** | Every Issue by state, across projects |
+| **Issue** | One Issue end to end, the event log in plain words |
+| **Chain** | What waits on what, across repos |
+| **Improve** | The factory's KPIs against their targets, in 7-day windows |
+
+![Needs you, on a phone: one Decision with the lead's recommendation](docs/demo/phone-needs-you.png)
+
+The Console is a React PWA served by the factory's own server. It holds no logic the API could hold, and its listener
+forwards five owner answers and otherwise only reads (see [Gates are code](#gates-are-code)).
+
 ## The language
 
 One word per thing, in code, CLI, events, screens and docs. A retired word in the source fails `make check`.
@@ -69,6 +88,22 @@ The full table, with what each word retires, is [`docs/language.md`](docs/langua
 | **Wait / Stall** | A pause with a named exit, and a wait whose cause is a machine's to end |
 | **Checkpoint** | Where the factory stops for a person once policy, the Judge and a default have had their turn: Decision, Concept or Spec, Errand. Never a merge |
 | **Touch / Friction** | The owner acting on an Issue, and any counted waste, such as a touch the factory should have settled |
+
+## What it proves
+
+Patterns a factory needs, each one held by a check and not by a convention:
+
+| Pattern | Held by |
+|-|-|
+| **The state machine is a total table.** A new state or event must fill every cell | `tsc`; a seeded model test plays random event sequences |
+| **Facts are stored, state is derived.** No count or timer that the event log can answer is a column | the optimistic `version` guard; `make check` regenerates the state diagram |
+| **Claim, commit, call, record.** A port is never called inside a transaction | `scripts/boundaries.ts`; only `unit-of-work.ts` and `migrate.ts` open one |
+| **Every effect has a deterministic key.** A replayed pass spawns, prompts and posts nothing twice | `kernel/keys.ts`; the runner looks before it acts |
+| **Deterministic first, then a workflow, then the owner.** The server never calls a model | no model SDK in the tree; judgment goes through one port per loop |
+| **A caller is its token.** A route with no policy row is refused for everyone | `api/policy.ts` and the test that fails without a row |
+| **Hooks never speak.** Claude Code injects a hook's stdout into the session | the hook imports two modules and prints nothing |
+| **One word per thing.** A retired word fails the build | `scripts/retired-words.ts` |
+| **No private data in a public repo** | `scripts/public-scan.ts` (hosts, addresses, accounts, secrets, work repos) |
 
 ## Architecture
 
@@ -181,15 +216,15 @@ token and takes the repo from a server-side route registry, never from the paylo
 |-|-|
 | `apps/server` | the server: API, domains, use cases, loops, adapters, read models, migrations |
 | `apps/cli` | the `factory` CLI, generated from the server's OpenAPI document plus hand-written hook and slot verbs |
-| `apps/door` | the alert door: tailnet alerts become signals |
+| `apps/door` | the alert door: alerts from monitors become signals |
+| `apps/console` | the Console: a React PWA with Needs you, Flow, Issue, Chain and Improve |
 | `packages/contract` | zod schemas for every request, response and event; the source of the OpenAPI document |
 | `packages/client` | the typed client shared by the CLI and the door |
 | `tests/scenarios` | use cases run end to end against a real server and Postgres with fake runner and agw: the acceptance suite |
+| `tests/e2e` | Playwright against a seeded server: every Console screen, and the source of the demo screenshots |
+| `integrations/` | the client pieces other machines install: the Claude Code hooks, a Herdr mod, `rd`, a Hermes skill |
 | `scripts/`, `deploy/` | release-directory deploy, verify, launchers, boundary and retired-word checks |
 | `docs/` | product, language, architecture, decisions, design, research, evidence |
-
-The Console, a PWA with the owner's Needs, Flow, Chain and Improve screens, is next on the plan
-(`docs/plan.yaml`) and is not in the tree yet.
 
 ## Run it
 
@@ -202,7 +237,7 @@ make check   # format, lint, shellcheck, types, boundaries, retired words, gener
 make test    # the unit tests and the scenarios only
 ```
 
-`make check` is the gate. The scenarios run the use cases against a real server and Postgres, with a fake runner and a
+`make check` is the gate (it also builds the Console and runs its Playwright suite). The scenarios run the use cases against a real server and Postgres, with a fake runner and a
 fake agw, so a green run covers intake, queueing, leads, shipping and checkpoints.
 
 To run the server you provide a Postgres database (it keeps everything in the schema `factory` and applies its
@@ -219,9 +254,15 @@ the workflows, and a `project.yaml` per repo (deploy command, which signals it h
 launchers (`scripts/launch.sh`, `deploy/`) show one wiring for macOS and LaunchAgents; they resolve secrets through
 a secrets shim and are not meant to be copied unchanged.
 
+To refresh the demo screenshots: `make e2e`, then copy from `tests/e2e/out/screenshots`.
+
 ## Read next
 
 Start with [`docs/product.md`](docs/product.md) (what it is and how we know it works), then
 [`docs/language.md`](docs/language.md), [`docs/architecture.md`](docs/architecture.md) and
 [`docs/decisions.md`](docs/decisions.md) (what was decided and why). [`AGENTS.md`](AGENTS.md) holds the rules a
 contributing agent follows.
+
+## Licence
+
+[MIT](LICENSE). The factory is one owner's setup, published as a reference, with no promise of support.

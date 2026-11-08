@@ -64,3 +64,16 @@ for (const variant of VARIANTS) {
     })
   })
 }
+
+/** The README's demo: the Issue page tall enough to show the whole history, signal to passed watch. */
+test.describe('demo', () => {
+  test.use({ viewport: { width: 1280, height: 2150 }, colorScheme: 'dark' })
+
+  test('the Issue with a rich history, whole', async ({ page }) => {
+    const ids = JSON.parse(process.env.E2E_HISTORY ?? '{}') as { rich: string }
+    await page.goto(`/issues/${ids.rich.replace('issue_', '')}`)
+    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    await page.screenshot({ path: join(OUT, 'demo-issue.png'), animations: 'disabled' })
+  })
+})
