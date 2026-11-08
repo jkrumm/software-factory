@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 import { apiForward, consoleHandler } from '../src/api/console.ts'
 import { loadConsoleSettings } from '../src/console-settings.ts'
 
 const INDEX = '<!doctype html><title>console</title>'
+const BIG_JS = `export const rows = ${JSON.stringify(Array.from({ length: 200 }, (_, i) => `row number ${i}`))}\n`
+const BIG_JSON = JSON.stringify({ rows: Array.from({ length: 200 }, (_, i) => `row number ${i}`) })
 
 let dir = ''
 let forwarded: Request[] = []
@@ -24,11 +27,19 @@ beforeAll(async () => {
   await writeFile(join(dir, 'build', 'manifest.webmanifest'), '{}')
   await writeFile(join(dir, 'build', 'assets', 'app.js'), 'export {}')
   await writeFile(join(dir, 'build', 'assets', 'font.woff2'), 'x')
+  await writeFile(join(dir, 'build', 'assets', 'big.js'), BIG_JS)
   await writeFile(join(dir, 'secret.txt'), 'outside the build')
   handle = consoleHandler({
     dir: join(dir, 'build'),
     forward: async (request) => {
       forwarded.push(request)
+      const path = new URL(request.url).pathname
+      if (path === '/v1/big') return Response.json(JSON.parse(BIG_JSON))
+      if (path === '/v1/stream-big') {
+        return new Response(`event: hello\ndata: ${'x'.repeat(2000)}\n\n`, {
+          headers: { 'content-type': 'text/event-stream' },
+        })
+      }
       return new Response('api', { status: 200 })
     },
   })
@@ -174,6 +185,71 @@ describe('the listener', () => {
     const response = await missing(new Request('http://console.test/'))
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ error: 'the Console is not built' })
+  })
+})
+
+describe('compression', () => {
+  const asset = (encoding?: string, init: RequestInit = {}) =>
+    call('/assets/big.js', { ...init, headers: encoding ? { 'accept-encoding': encoding } : {} })
+
+  test('brotli and gzip round-trip a static asset, and keep its headers', async () => {
+    const br = await asset('gzip, deflate, br')
+    expect(br.headers.get('content-encoding')).toBe('br')
+    expect(br.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect(br.headers.get('x-content-type-options')).toBe('nosniff')
+    const brBytes = new Uint8Array(await br.arrayBuffer())
+    expect(brBytes.byteLength).toBeLessThan(BIG_JS.length)
+    expect(br.headers.get('content-length')).toBe(String(brBytes.byteLength))
+    expect(brotliDecompressSync(brBytes).toString()).toBe(BIG_JS)
+
+    const gz = await asset('gzip;q=0.8')
+    expect(gz.headers.get('content-encoding')).toBe('gzip')
+    expect(gunzipSync(new Uint8Array(await gz.arrayBuffer())).toString()).toBe(BIG_JS)
+
+    // the second answer comes from the cache and is the same bytes
+    expect(new Uint8Array(await (await asset('br')).arrayBuffer())).toEqual(brBytes)
+  })
+
+  test('nothing without a usable accept-encoding, and vary says so', async () => {
+    for (const encoding of [undefined, 'identity', 'br;q=0, gzip;q=0']) {
+      const response = await asset(encoding)
+      expect(response.headers.get('content-encoding')).toBeNull()
+      expect(response.headers.get('vary')).toContain('accept-encoding')
+      expect(await response.text()).toBe(BIG_JS)
+    }
+    const gz = await asset('br;q=0, gzip')
+    expect(gz.headers.get('content-encoding')).toBe('gzip')
+    expect(gz.headers.get('vary')).toContain('accept-encoding')
+  })
+
+  test('HEAD is untouched', async () => {
+    const response = await asset('br, gzip', { method: 'HEAD' })
+    expect(response.headers.get('content-encoding')).toBeNull()
+    expect(response.headers.get('content-length')).toBe(String(Buffer.byteLength(BIG_JS)))
+  })
+
+  test('a body under 1 KiB is untouched', async () => {
+    const small = await call('/assets/app.js', { headers: { 'accept-encoding': 'br, gzip' } })
+    expect(small.headers.get('content-encoding')).toBeNull()
+    expect(await small.text()).toBe('export {}')
+    const api = await call('/health', { headers: { 'accept-encoding': 'gzip' } })
+    expect(api.headers.get('content-encoding')).toBeNull()
+    expect(await api.text()).toBe('api')
+  })
+
+  test('a forwarded JSON body over 1 KiB is gzipped', async () => {
+    const response = await call('/v1/big', { headers: { 'accept-encoding': 'gzip' } })
+    expect(response.headers.get('content-encoding')).toBe('gzip')
+    expect(response.headers.get('vary')).toContain('accept-encoding')
+    expect(gunzipSync(new Uint8Array(await response.arrayBuffer())).toString()).toBe(BIG_JSON)
+  })
+
+  test('an event stream passes through untouched', async () => {
+    const response = await call('/v1/stream-big', { headers: { 'accept-encoding': 'br, gzip' } })
+    expect(response.headers.get('content-encoding')).toBeNull()
+    expect(response.headers.get('vary')).toBeNull()
+    expect(response.headers.get('content-type')).toBe('text/event-stream')
+    expect(await response.text()).toContain('event: hello')
   })
 })
 

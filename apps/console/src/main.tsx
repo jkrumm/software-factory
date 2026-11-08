@@ -5,7 +5,7 @@ import { registerSW } from 'virtual:pwa-register'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { startLive } from '@/lib/live'
-import { persister, queryClient, SNAPSHOT_MAX_AGE_MS } from '@/lib/queries'
+import { flowQuery, needsQuery, persister, queryClient, SNAPSHOT_MAX_AGE_MS } from '@/lib/queries'
 import { initTheme } from '@/lib/theme'
 import { router } from './router'
 import './styles/index.css'
@@ -16,6 +16,10 @@ startLive(queryClient)
 
 const root = document.getElementById('root')
 if (!root) throw new Error('index.html has no #root')
+
+// the first screen's data is requested now, in parallel with the rest of the boot
+void queryClient.prefetchQuery(needsQuery)
+if (location.pathname === '/flow') void queryClient.prefetchQuery(flowQuery)
 
 createRoot(root).render(
   <StrictMode>

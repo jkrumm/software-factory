@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { basename, extname, join, resolve, sep } from 'node:path'
 import { ErrorBody } from '@software-factory/contract'
+import { compressResponse } from './compress.ts'
 
 export interface ConsoleHandlerOptions {
   /** the Console build */
@@ -170,7 +171,8 @@ function fileOf(dir: string, rawPath: string): string | null {
 /**
  * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
  * every path: a read method (or one of the five answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
- * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes.
+ * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes. A text answer to a GET is
+ * compressed (br or gzip, whatever the client accepts), a static file once; the event stream is never touched.
  */
 export function consoleHandler(options: ConsoleHandlerOptions): (request: Request) => Promise<Response> {
   const indexFile = join(resolve(options.dir), 'index.html')
@@ -200,7 +202,12 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
       headers.set('content-length', String(Bun.file(served).size))
       return new Response(null, { headers })
     }
-    return new Response(Bun.file(served), { headers })
+    const bun = Bun.file(served)
+    return compressResponse(request, new Response(bun, { headers }), {
+      file: served,
+      size: bun.size,
+      modified: bun.lastModified,
+    })
   }
 
   /** One of the five answer verbs: a same-origin JSON body of at most 64 KiB, forwarded verbatim. */
@@ -224,7 +231,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
         allow: 'GET, HEAD',
       })
     }
-    if (forwarded(rawPath)) return options.forward(request)
+    if (forwarded(rawPath)) return compressResponse(request, await options.forward(request))
     return staticResponse(request, rawPath)
   }
 }
