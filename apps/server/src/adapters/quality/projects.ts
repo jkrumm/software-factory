@@ -10,10 +10,10 @@ const targetsOf = (makefile: string): Set<string> =>
   )
 
 /**
- * What a repo's Makefile says of its watch, until the project file brings the rest (planning, package 3): a repo with a
- * `verify` target is verified, and one with a `deploy` target is deployed by `make deploy`, so its watch also reads
- * `make version`. The window is the setting's; probes and migrations wait for the project file. A repo with no Makefile
- * has nothing to run, and its watch passes when the window is over.
+ * What a repo's Makefile says of its watch, for a repo with no `project.yaml` (`app/quality-projects.ts` reads the file
+ * when there is one): a repo with a `verify` target is verified, and one with a `deploy` target is deployed by
+ * `make deploy`, so its watch also reads `make version`. The window is the setting's and there are no probes. A repo
+ * with no Makefile has nothing to run, and its watch passes when the window is over.
  */
 export function makefileProjects(options: { windowMs: number }): Projects {
   return {

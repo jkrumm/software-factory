@@ -28,6 +28,7 @@ import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
+import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
@@ -133,7 +134,10 @@ async function main(): Promise<void> {
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots)
   const hygieneChecker = createHygieneChecker({ repos })
-  const projects = makefileProjects({ windowMs: settings.quality.windowMs })
+  const projects = projectFileProjects({
+    uow,
+    fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
+  })
   const intake = await composeIntake({
     sql,
     uow,
