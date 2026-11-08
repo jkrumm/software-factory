@@ -85,26 +85,54 @@ export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFie
 }
 
 const ENTITIES: Record<string, string> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&nbsp;': ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  middot: '\u00b7',
+  mdash: '\u2014',
+  ndash: '\u2013',
+  hellip: '\u2026',
+  rarr: '\u2192',
+  larr: '\u2190',
+  bull: '\u2022',
+  copy: '\u00a9',
+  laquo: '\u00ab',
+  raquo: '\u00bb',
+  times: '\u00d7',
+}
+
+/** Tags that sit inside a line of text: a browser shows `<code>make</code>,` as `make,`, so they leave no space behind. */
+const INLINE_TAGS =
+  'a|abbr|b|bdi|bdo|cite|code|data|dfn|em|i|kbd|mark|q|s|samp|small|span|strong|sub|sup|time|u|var|del|ins'
+
+/** An entity as the browser shows it: named (the common ones), decimal or hex; anything else stays as written. */
+function decodeEntities(text: string): string {
+  return text.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (entity, dec?: string, hex?: string, name?: string) => {
+    if (name) return ENTITIES[name] ?? entity
+    const code = dec ? Number(dec) : Number.parseInt(hex ?? '', 16)
+    return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity
+  })
 }
 
 /**
- * The text a reader can select, as a plain line: HTML without its tags, scripts and styles; Markdown without the marks
- * that do not show (emphasis, headings, quotes, links keep their text). Whitespace collapses. A quote is found in this
- * text, so a quote taken from the rendered page matches the source it came from.
+ * The text a reader can select, as a plain line. HTML: without comments, scripts and styles; inline tags leave nothing,
+ * every other tag a space; entities decoded. Markdown: without the marks that do not show (emphasis, headings, quotes,
+ * links keep their text). Whitespace collapses. A quote is found in this text, so a quote taken from the rendered page
+ * matches the source it came from.
  */
 export function readableText(content: string, format: Format): string {
   const flat =
     format === 'html'
-      ? content
-          .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-          .replace(/<[^>]*>/g, ' ')
-          .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (entity) => ENTITIES[entity] ?? entity)
+      ? decodeEntities(
+          content
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '')
+            .replace(new RegExp(`</?(?:${INLINE_TAGS})\\b[^>]*>`, 'gi'), '')
+            .replace(/<[^>]*>/g, ' '),
+        )
       : content
           .replace(/```[^\n]*\n?/g, ' ')
           .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -117,7 +145,8 @@ export type Anchor = 'anchored' | 'unanchored'
 
 /** A quote is anchored in a revision while its text is still in it; once it is gone the annotation is "Unanchored". */
 export function anchorOf(content: string, format: Format, quote: string): Anchor {
-  const wanted = readableText(quote, 'markdown')
+  // An HTML quote is the selection of a rendered page: only its whitespace folds. A Markdown quote is stripped like its source.
+  const wanted = format === 'html' ? quote.replace(/\s+/g, ' ').trim() : readableText(quote, 'markdown')
   if (wanted === '') return 'unanchored'
   return readableText(content, format).includes(wanted) ? 'anchored' : 'unanchored'
 }

@@ -203,6 +203,23 @@ test.describe('an HTML artifact', () => {
     expect(shown.annotations).toEqual([
       expect.objectContaining({ quote: claim, path: 'Launch report > Result', comment: 'Who pays on Saturday?' }),
     ])
+
+    // A passage with inline code, an underscore name, an entity and punctuation anchors as the browser shows it.
+    const markup = 'Run make, then check snake_case_name \u00b7 see \u00b7 the notes.'
+    await expect(composer).toBeHidden()
+    await expect.poll(() => frame.evaluate('getSelection().isCollapsed')).toBe(true)
+    await frame.evaluate(
+      "(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById('markup')); const s = getSelection(); s.removeAllRanges(); s.addRange(r) })()",
+    )
+    await expect(composer).toContainText(markup)
+    await composer.getByRole('textbox', { name: 'Comment' }).fill('Which target?')
+    await composer.getByRole('button', { name: 'Add comment' }).click()
+    await expect(region(page, 'On the text')).toContainText('Which target?')
+    await expect(region(page, 'Unanchored')).toHaveCount(0)
+    await expect.poll(() => frame.evaluate("CSS.highlights.get('factory')?.size ?? 0")).toBe(2)
+    const both = await detail(apiUrl, report)
+    expect(both.unanchored).toEqual([])
+    expect(both.annotations.map((a) => a.quote)).toContain(markup)
   })
 
   test('is not written to by a message of its own', async ({ page, apiUrl }) => {

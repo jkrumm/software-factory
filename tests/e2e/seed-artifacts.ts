@@ -44,6 +44,7 @@ export const REPORT_HTML = `<!doctype html>
 <h1>Launch report</h1>
 <h2>Result</h2>
 <p id="claim">The probe ships on Friday and nobody pays for it.</p>
+<p id="markup">Run <code>make</code>, then check <code>snake_case_name</code> &middot; see &#183; the <em>notes</em>.</p>
 <pre id="probe">pending</pre>
 <script>
 (async () => {
