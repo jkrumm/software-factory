@@ -2,7 +2,8 @@ import type { StewardAnswer } from '@software-factory/contract'
 import { scrub } from '../../kernel/scrub.ts'
 import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
-import type { ClaimHolder, LoopReads, LoopStore, StewardWorkflow } from '../../domains/loops/ports.ts'
+import { judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
+import type { ClaimHolder, LoopReads, LoopStore, MainCheckouts, StewardWorkflow } from '../../domains/loops/ports.ts'
 import {
   checkAnswer,
   type Checked,
@@ -60,6 +61,10 @@ export interface StewardDeps extends WriteDeps {
   settleTimeoutMs: number
   /** a watch with this many blocked checks in a row is told to its lead */
   blockedChecks: number
+  /** the main checkout of a repo with a live lead, read once per pass (called outside any transaction) */
+  checkouts: MainCheckouts
+  /** where the pass leaves the main-checkout findings, for the health lines */
+  findings: { report(found: MainCheckoutLine[]): void }
   /** lets the runner know the steward changed an Issue (the loop guard keeps it from firing the steward again) */
   changed(): void
 }
@@ -515,21 +520,70 @@ async function noteBlockedCheckouts(deps: StewardDeps, pass: StewardPass): Promi
     return
   }
   for (const watch of blocked.value) {
-    const noted = await deps.uow.run(async ({ work }) => {
-      const text = scrub(
-        `The checkout that verify needs could not be moved to the shipped commit for ${watch.checks} checks in a row since ${watch.since.toISOString()}: ${watch.detail.replace(/\s+/g, ' ').slice(0, 300)}. Verify cannot pass until it can; fix the checkout, then the watch goes on.`,
-      )
-      const recorded = await recordIn(work, deps, {
-        issueId: watch.issue,
-        key: key('noted', 'steward', 'blocked-checkout', watch.issue, watch.watch),
-        event: { kind: 'noted', payload: { text }, actor: 'steward' },
-      })
-      if (!recorded.ok) return err(portError('refused', JSON.stringify(recorded.error)))
-      return ok(recorded.value.result === 'applied')
-    })
-    if (!noted.ok) pass.problems.push(`${watch.issue}: ${noted.error.detail}`)
-    else if (noted.value) pass.noted++
+    const text = `The checkout that verify needs could not be moved to the shipped commit for ${watch.checks} checks in a row since ${watch.since.toISOString()}: ${watch.detail.replace(/\s+/g, ' ').slice(0, 300)}. Verify cannot pass until it can; fix the checkout, then the watch goes on.`
+    await noteOnce(deps, pass, watch.issue, key('noted', 'steward', 'blocked-checkout', watch.issue, watch.watch), text)
   }
+}
+
+/** One steward note on an Issue, recorded under its key (a replay or a repeat is `ignored`); counted when it was new. */
+async function noteOnce(
+  deps: StewardDeps,
+  pass: StewardPass,
+  issueId: IssueId,
+  noteKey: Key,
+  text: string,
+): Promise<void> {
+  const noted = await deps.uow.run(async ({ work }) => {
+    const recorded = await recordIn(work, deps, {
+      issueId,
+      key: noteKey,
+      event: { kind: 'noted', payload: { text: scrub(text) }, actor: 'steward' },
+    })
+    if (!recorded.ok) return err(portError('refused', JSON.stringify(recorded.error)))
+    return ok(recorded.value.result === 'applied')
+  })
+  if (!noted.ok) pass.problems.push(`${issueId}: ${noted.error.detail}`)
+  else if (noted.value) pass.noted++
+}
+
+/**
+ * The main checkout of a repo with a live lead (`working` or `watching`), read once per pass from local refs: off its
+ * default branch, or with tracked uncommitted changes, it is a health line and one note to each live lead of the repo
+ * (once per branch state and clean/dirty, not per changed path). A lead's work belongs in its worktree. A repo that
+ * cannot be read is a problem and leaves no line.
+ */
+async function noteMainCheckouts(deps: StewardDeps, pass: StewardPass): Promise<void> {
+  const live = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.liveRepos(PASS_LIMIT)))
+  if (!live.ok) {
+    pass.problems.push(`main checkouts: ${live.error.detail}`)
+    return
+  }
+  const lines: MainCheckoutLine[] = []
+  for (const { repo, issues } of live.value) {
+    const finding = await findMainCheckout(deps, pass, repo)
+    if (!finding) continue
+    lines.push({ repo, issues, since: deps.clock.now(), ...finding })
+    for (const issueId of issues) {
+      await noteOnce(
+        deps,
+        pass,
+        issueId,
+        key('noted', 'steward', 'main-checkout', issueId, finding.fingerprint),
+        finding.text,
+      )
+    }
+  }
+  deps.findings.report(lines)
+}
+
+/** What is wrong with a repo's main checkout, if anything; a checkout that cannot be read is a problem of the pass. */
+async function findMainCheckout(deps: StewardDeps, pass: StewardPass, repo: string) {
+  const looked = await deps.checkouts.look(repo)
+  if (!looked.ok) {
+    pass.problems.push(`main checkout ${repo}: ${looked.error.detail}`)
+    return null
+  }
+  return looked.value && judgeMainCheckout(looked.value)
 }
 
 /**
@@ -619,7 +673,10 @@ async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void
   }
 }
 
-/** One pass of the steward over the stalled Issues, the Issues settling too long and the checkouts blocked too long. */
+/**
+ * One pass of the steward over the stalled Issues, the Issues settling too long, the checkouts blocked too long and the
+ * main checkouts of repos with a live lead.
+ */
 export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   const pass: StewardPass = {
     looked: 0,
@@ -641,6 +698,7 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   else pass.problems.push(`working: ${working.error.detail}`)
   await settleOverdue(deps, pass)
   await noteBlockedCheckouts(deps, pass)
+  await noteMainCheckouts(deps, pass)
   await breakClaimDeadlocks(deps, pass)
   if (pass.woken + pass.requeued + pass.decisions + pass.settled + pass.noted + pass.deferred > 0) deps.changed()
   return ok(pass)

@@ -161,6 +161,16 @@ export function loopReads(tx: SQL): LoopReads {
       })
     },
 
+    async liveRepos(limit) {
+      const rows: { repo: string; issues: string[] }[] = await tx`
+        SELECT repo, array_agg(id ORDER BY id) AS issues
+        FROM factory.issues
+        WHERE state IN ('working', 'watching')
+        GROUP BY repo
+        ORDER BY repo LIMIT ${limit}`
+      return rows.map((row) => ({ repo: row.repo, issues: row.issues as IssueId[] }))
+    },
+
     async claimHolders(queued, limit) {
       if (queued.length === 0) return []
       // Only the open planning edges: a holder that waits on a queued Issue of its own repo, by structure and never by text.

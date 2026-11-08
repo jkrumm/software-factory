@@ -70,6 +70,7 @@ beforeAll(async () => {
     doorLines: async () => ['door source kuma: 4 POSTs refused since 2026-11-07T10:00Z'],
     loops: () => [],
     blockedStreak: 3,
+    mainCheckouts: () => [],
     streamPollMs: 20,
   })
   app = createApp({

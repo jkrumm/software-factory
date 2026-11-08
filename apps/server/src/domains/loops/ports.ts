@@ -13,6 +13,7 @@ import type {
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
+import type { MainCheckoutLook } from './checkout.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
@@ -159,6 +160,13 @@ export interface LoopReads {
   classIssues(loop: FindingLoop, repo: string): Promise<Record<string, ClassIssue[]>>
   /** the same for every loop, repo and class */
   allClassIssues(): Promise<{ loop: FindingLoop; repo: string; class: string; issues: ClassIssue[] }[]>
+  /** the repos with a live lead (Issues `working` or `watching`) and those Issues, ordered by repo and id */
+  liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
+}
+
+/** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */
+export interface MainCheckouts {
+  look(repo: string): Promise<Result<MainCheckoutLook | null, PortError>>
 }
 
 /** `factory-steward`: what a stalled Issue needs when the rules do not say. */

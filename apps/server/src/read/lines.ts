@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { LoopView, ReadAccountQuota, ReadHealthLine } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import type { MainCheckoutLine } from '../domains/loops/checkout.ts'
 import { LINE_TEXT_MAX } from './asks.ts'
 import { loopReads } from './loops.ts'
 import { cut, fallbackWords } from './plain.ts'
@@ -12,6 +13,8 @@ export interface LineSources {
   loops: () => LoopView[]
   /** a watch whose checkout stays blocked this many checks in a row is a line */
   blockedStreak: number
+  /** the main checkouts the steward found off their branch or dirty while a lead was live */
+  mainCheckouts: () => MainCheckoutLine[]
 }
 
 const shortHash = (text: string): string => createHash('sha256').update(text).digest('hex').slice(0, 12)
@@ -39,7 +42,7 @@ const line = (input: {
 
 /**
  * What needs a look and is not a question for the owner: a door line (a refused or silent source, an unrouted monitor), an
- * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked. Derived at read.
+ * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked, a repo's main checkout off its branch or dirty under a live lead. Derived at read.
  */
 export async function readHealthLines(
   sql: SQL,
@@ -91,6 +94,24 @@ export async function readHealthLines(
         repo: brief?.repo ?? null,
         visible: brief?.visible ?? false,
         text: `The checkout for the watch of Issue ${issueNumberOf(watch.issue)} stays blocked after ${watch.checks} checks`,
+      }),
+    )
+  }
+  const checkouts = sources.mainCheckouts()
+  const checkoutBriefs = await loadBriefs(
+    sql,
+    checkouts.flatMap((found) => found.issues.slice(0, 1)),
+  )
+  for (const found of checkouts) {
+    const brief = found.issues[0] ? checkoutBriefs.get(found.issues[0]) : undefined
+    lines.push(
+      line({
+        id: `main-checkout:${found.repo}`,
+        kind: 'main-checkout',
+        since: found.since.toISOString(),
+        repo: found.repo,
+        visible: brief?.visible ?? false,
+        text: found.text,
       }),
     )
   }
