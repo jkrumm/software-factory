@@ -1,3 +1,5 @@
 # <path> <rule or *>  # <reason>. One line per file and rule the scan must let through; a stale line fails it.
 apps/door/test/door.test.ts secret  # a made-up bearer proving the door refuses a token that is not its own
 apps/server/test/checkpoints/domain.test.ts ipv4  # a private address the owner's-line redaction must turn into [host]
+scripts/public-scan.ts *  # the rules themselves name what they forbid
+scripts/test/public-scan.test.ts *  # the fixtures that prove each rule is caught

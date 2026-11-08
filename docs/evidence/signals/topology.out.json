@@ -16,7 +16,7 @@
   ],
   "items_total": 556,
   "items_without_repo": 117,
-  "iuroot_launchd_jobs_counted_not_named": 7,
+  "work_root_launchd_jobs_counted_not_named": 7,
   "kuma_docker_monitors_without_a_running_container": [],
   "kuma_homelab_private_monitors_counted_not_named": 22,
   "kuma_monitors_live_total": 120,

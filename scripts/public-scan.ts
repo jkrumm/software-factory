@@ -60,19 +60,20 @@ export const RULES: Rule[] = [
   {
     rule: 'host',
     regex:
-      /\bssh\s+(?:-[A-Za-z]+\s+)*(?:iumac|homelab|vps|mini)\b|\biumac\b|\b[a-z0-9-]+\.(?:local|lan|internal|home\.arpa)\b/gi,
+      /\bssh\s+(?:-[A-Za-z]+\s+)*(?:iumac|homelab|vps|mini)\b|(?<![A-Za-z0-9])iumac(?![A-Za-z0-9])|\b[a-z0-9-]+\.(?:local|lan|internal|home\.arpa)\b/gi,
     use: 'a role (`the mini`) or <host>',
     ok: (m) => /^(host|env|self|window|document)\.local$/i.test(m),
   },
   {
     rule: 'account',
-    regex: /\b(?:tkrumm|careerpartner|iu\.org|iu-study\.[a-z.]+)\b|\bop:\/\/(?:private|careerpartner|tkrumm)\//gi,
+    regex:
+      /(?<![A-Za-z0-9])(?:tkrumm|careerpartner|iu\.org|iu-study\.[a-z.]+)(?![A-Za-z0-9])|\bop:\/\/(?:private|careerpartner|tkrumm)\//gi,
     use: '<see-1password>',
   },
   {
     rule: 'work-repo',
     regex:
-      /\biuroot\b|\bgitlab(?:\.[a-z.]+)?\b|\bepos(?:[._-][a-z][\w.-]*)|\bathena(?:-[a-z-]+)?\b|\bcare-knowledge\b|\bcfn-kafka\b|\bcrm-bridge[\w-]*|\binfra-(?:pilot|github-access)\b|\bterraform-monitoring\b|\bprometheus-(?:scripts|stack|epx|feuer)[\w-]*|\bgithub-migration-handover\b|\bteammate-switch[\w-]*/gi,
+      /(?<![A-Za-z0-9])iuroot(?![A-Za-z0-9])|\bgitlab(?:\.[a-z.]+)?\b|\bepos(?:[._-][a-z][\w.-]*)|\bathena(?:-[a-z-]+)?\b|\bcare-knowledge\b|\bcfn-kafka\b|\bcrm-bridge[\w-]*|\binfra-(?:pilot|github-access)\b|\bterraform-monitoring\b|\bprometheus-(?:scripts|stack|epx|feuer)[\w-]*|\bgithub-migration-handover\b|\bteammate-switch[\w-]*/gi,
     use: '<work-root> or <work-repo>',
   },
 ]

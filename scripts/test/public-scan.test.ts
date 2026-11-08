@@ -42,6 +42,10 @@ describe('public scan', () => {
     })
   }
 
+  test('a snake_case identifier is caught too', () => {
+    expect(findingsIn('f.json', join2('"iu', 'root_jobs": 1')).map((f) => f.rule)).toContain('work-repo')
+  })
+
   test('an op:// reference is a reference, not a value', () => {
     expect(findingsIn('.env.tpl', 'TOKEN=op://mini/software-factory/FACTORY_TOKEN')).toEqual([])
   })
