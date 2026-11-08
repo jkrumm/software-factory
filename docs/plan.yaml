@@ -239,3 +239,22 @@ rows:
       why: "NL7 - MIT and public after Console v0."
       change: "Add the MIT LICENSE, finish the README for a stranger (what it is, the patterns it proves, how to run it), a short demo (screenshots or a recording of an Issue from signal to verify), and a scan that no tracked file names a host, secret, account or work repo."
       acceptance: "LICENSE present; the README reads end to end; the scan is clean; the owner's verdict on the README artifact."
+
+  # The full Console's review, when there is enough to judge (the owner, 2026-11-08: "happy to give feedback when there is actual stuff to review").
+  - key: console-review
+    kind: chore
+    after: [console-flow, console-issue, console-chain, console-improve]
+    title: "The Console's review: the full Console, for the owner's verdict"
+    facts:
+      why: "The first look came too early (v0 was too thin to judge). This checkpoint comes when Flow, the Issue page, Chain and Improve are built and the first look's fixes have landed."
+      change: "Check that every signal from the first look (Issue 379) is closed; then write a Report artifact with screenshots of every screen on desktop and phone, the Console's response times, what is still not built, and at most three questions worth his time; ask for his verdict through the artifact page."
+      acceptance: "The owner's verdict is recorded in the Console; his comments become signals on this repo."
+  - key: hyperdx-per-app
+    repo: vps
+    after: [app-feedback]
+    title: "Every app's errors reach the factory as signals"
+    facts:
+      why: "The owner wants the HyperDX setup improved so an application's errors become work without him noticing them first; the factory's door takes alerts (docs/architecture.md Signals and triage), routed per monitor to a repo."
+      what: "HyperDX alerts and saved searches per app in observability/ (dashboards exported to the repo), the factory door's routes."
+      change: "For each app that sends telemetry, an error-rate alert (server spans with StatusCode Error, and the browser SDK's errors) whose webhook posts to the factory door with its own source token, and a door route from that monitor to the app's repo; thresholds stated in the alert's name; export the alerts to the repo."
+      acceptance: "Every app with telemetry has an alert routed to its repo (factory door routes lists them); a test alert from one app arrives as a signal on that app's repo and correlates with a Kuma alert of the same host into one incident."

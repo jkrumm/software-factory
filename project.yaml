@@ -11,4 +11,4 @@ ship:
   - { paths: ['**'], via: pr }
 signals:
   github: { author: jkrumm, since: 2026-11-07T06:30:00Z } # the owner's new issues come in; anyone else's need the label
-leads: 2
+leads: 3
