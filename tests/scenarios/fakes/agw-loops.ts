@@ -5,6 +5,8 @@ interface Scripted {
   /** a phrase of the title or detail, case-insensitive */
   match: string
   answer: unknown
+  /** the workflow fails (exit 1) instead of answering */
+  fail?: boolean
 }
 
 const scriptOf = (env: string): Scripted[] => {
@@ -13,8 +15,8 @@ const scriptOf = (env: string): Scripted[] => {
 }
 
 /**
- * `agw factory-steward`, `agw factory-triage` and `agw factory-queue`, input on stdin. A scenario scripts them with JSON files
- * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
+ * `agw factory-steward`, `agw factory-triage`, `agw factory-queue` and `agw factory-hygiene`, input on stdin. A scenario scripts them with JSON files
+ * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`, `FACTORY_FAKE_HYGIENE_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
  * from the Issue's title, the stall's detail or the signal's words. Nothing scripted answers "I cannot tell" (steward `none`,
  * triage the empty answer). Every call is logged with its stdin.
  */
@@ -36,6 +38,14 @@ export async function loopsFake(args: string[]): Promise<number> {
   if (args[0] === 'factory-queue') {
     const scripted = scriptOf('FACTORY_FAKE_QUEUE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
     return done('factory-queue', args, scripted?.answer ?? { edges: [], order: [], reason: 'nothing scripted' })
+  }
+  if (args[0] === 'factory-hygiene') {
+    const scripted = scriptOf('FACTORY_FAKE_HYGIENE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+    if (scripted?.fail) {
+      process.stderr.write('fake agw: factory-hygiene scripted to fail\n')
+      return 1
+    }
+    return done('factory-hygiene', args, scripted?.answer ?? { findings: [], read: 0, reason: 'nothing scripted' })
   }
   const scripted = scriptOf('FACTORY_FAKE_TRIAGE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
   return done(

@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
-import type { LoopStore } from '../../domains/loops/ports.ts'
+import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
 import type { QueueAskRow } from '../../domains/loops/queue.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 
@@ -70,6 +70,34 @@ const askOf = (raw: unknown): QueueAskRow => {
     afterShape: row.after_shape,
     detail: row.detail,
     finishedAt: row.finished_at,
+  }
+}
+
+const HygieneRow = z.object({
+  id: z.string(),
+  repo: z.string(),
+  at: z.date(),
+  ref: z.string(),
+  report: z.unknown(),
+  judgment: z.unknown(),
+  filed: z.unknown(),
+  over_budget: z.unknown(),
+  failed: z.unknown(),
+})
+
+const hygieneOf = (raw: unknown): HygienePassRecord => {
+  const row = HygieneRow.parse(raw)
+  const judgment = json(row.judgment) as Omit<HygienePassRecord['judgment'], 'judgedAt'> & { judgedAt: string | null }
+  return {
+    id: row.id,
+    repo: row.repo,
+    at: row.at,
+    ref: row.ref,
+    report: json(row.report) as HygienePassRecord['report'],
+    judgment: { ...judgment, judgedAt: judgment.judgedAt === null ? null : new Date(judgment.judgedAt) },
+    filed: json(row.filed) as HygienePassRecord['filed'],
+    overBudget: json(row.over_budget) as HygienePassRecord['overBudget'],
+    failed: json(row.failed) as HygienePassRecord['failed'],
   }
 }
 
@@ -173,6 +201,33 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         INSERT INTO factory.friction_passes (id, at, window_from, window_to, issues, filed, over_budget, failed)
         VALUES (${pass.id}, ${pass.at}, ${pass.windowFrom}, ${pass.windowTo}, ${pass.issues},
           ${JSON.stringify(pass.filed)}::jsonb, ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
+    },
+
+    async hygienePasses() {
+      const rows: unknown[] = await tx`SELECT DISTINCT ON (repo) * FROM factory.hygiene_passes ORDER BY repo, at DESC`
+      return rows.map(hygieneOf)
+    },
+
+    async lastHygienePass(repo) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.hygiene_passes WHERE repo = ${repo} ORDER BY at DESC LIMIT 1`
+      return rows[0] === undefined ? null : hygieneOf(rows[0])
+    },
+
+    async recordHygienePass(pass) {
+      await tx`
+        INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed)
+        VALUES (${pass.id}, ${pass.repo}, ${pass.at}, ${pass.ref}, ${JSON.stringify(pass.report)}::jsonb,
+          ${JSON.stringify(pass.judgment)}::jsonb, ${JSON.stringify(pass.filed)}::jsonb,
+          ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
+    },
+
+    async updateHygieneJudgment(id, next) {
+      await tx`
+        UPDATE factory.hygiene_passes
+        SET judgment = ${JSON.stringify(next.judgment)}::jsonb, filed = ${JSON.stringify(next.filed)}::jsonb,
+            over_budget = ${JSON.stringify(next.overBudget)}::jsonb, failed = ${JSON.stringify(next.failed)}::jsonb
+        WHERE id = ${id}`
     },
   }
 }

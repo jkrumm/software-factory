@@ -156,6 +156,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new, likely `after` edges |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |
 | `friction` | the week's counts (`read/friction.ts`), cut at the newest import (`import_issues.imported_at`: the old core's history is never counted), against the rules in `domains/loops/friction.ts`: a rate per Issue closed with a minimum sample of 10 closed, or a bare count for the serious patterns (stall, lead lost, undelivered note, regression); retired mechanisms (the review gate, NL23) are skipped. One signal per pattern over its rule, 5 at most, filed on this repo through intake with the evidence Issues; a pattern whose Issue is open amends it with a note (intake's fingerprint). Due once a week, read from `friction_passes` | none |
+| `hygiene` | one project a tick (those with a `project.yaml`; `FACTORY_HYGIENE_REPOS` narrows): a throwaway checkout of the default branch swept by the probes (`check`, `links`, `retired`, `deps`, `cochange`, `adapters/hygiene/`), due again after `FACTORY_HYGIENE_EVERY_MS` (a week), read from `hygiene_passes`; at most 5 signals a project and pass, probe findings ranked in probe order and limited to 3, the rest named in `over_budget`; filed through intake as the project's own agent | `factory-hygiene`: the stale and recently edited documents read against the code, at most the budget left (2 at least); its title is built from the kind and the path, so the same document is one pattern for intake; a failed ask is retried at the stored commit every `FACTORY_HYGIENE_RETRY_MS`, 3 attempts at most |
 
 ## API, client, CLI
 
@@ -202,8 +203,6 @@ Rows in `docs/plan.yaml` carry each of these.
   (`FACTORY_CONSOLE_URL`) are a setting.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.
-- **The hygiene loop.** The Judge, the steward, the queue loop and the friction loop are built; no loop yet sweeps stale
-  state.
 - **Artifacts in the Console:** Markdown through a sanitiser, HTML in a sandboxed iframe with a network-blocking CSP and
   an annotator that posts selections out; anchors are a quote plus a path with an "Unanchored" group as the fallback.
 - **Client work** in other repos: the Herdr glance, Hermes' factory skill, Argo's factory pages leaving for the Console.

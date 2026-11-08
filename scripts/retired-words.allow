@@ -21,3 +21,5 @@ apps/server/test/console.test.ts manifest  # manifest.webmanifest is a browser f
 apps/console/README.md manifest  # the PWA web app manifest, a browser file
 apps/console/vite.config.ts manifest  # the PWA web app manifest, a browser file
 tests/e2e/shell.e2e.ts manifest  # the PWA web app manifest, a browser file
+apps/server/test/hygiene/hygiene.test.ts wave  # fixture documents the sweep must find a retired word in
+apps/server/src/domains/loops/hygiene-model.ts wave  # docs/waves is a directory name the sweep skips

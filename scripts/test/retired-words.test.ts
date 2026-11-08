@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { ALLOW_FILE, checkRetiredWords, findingsIn, normalize, RETIRED, ROOT } from '../retired-words.ts'
+import { dirname, join, relative } from 'node:path'
+import {
+  ALLOW_FILE,
+  checkRetiredWords,
+  checkRetiredWordsIn,
+  findingsIn,
+  normalize,
+  RETIRED,
+  ROOT,
+} from '../retired-words.ts'
 
 let root: string | undefined
 
@@ -91,6 +99,39 @@ describe('the scan', () => {
     expect(await check({}, 'scripts/gone.sh park  # x')).toEqual([
       'retired-words.allow:1: scripts/gone.sh park matches nothing any more; delete it',
     ])
+  })
+})
+
+describe('--files mode', () => {
+  test('scans exactly the named files, docs included, and applies their exceptions', async () => {
+    root = await mkdtemp('/tmp/factory-words-')
+    await writeFile(join(root, 'a.md'), 'a wave\nparked\n')
+    await writeFile(join(root, 'b.md'), 'the initiative\n')
+    expect(await checkRetiredWordsIn(root, ['a.md'], 'a.md park  # history')).toEqual([
+      'a.md:1: "wave" is retired (docs/language.md); say plan (rows of docs/plan.yaml)',
+    ])
+  })
+
+  test('an exception that matches nothing in the named files is not reported', async () => {
+    root = await mkdtemp('/tmp/factory-words-')
+    await writeFile(join(root, 'a.md'), 'clean\n')
+    expect(await checkRetiredWordsIn(root, ['a.md'], 'a.md park  # history')).toEqual([])
+  })
+
+  test('the script prints findings on stderr, exits 1, and says "no retired words" when clean', async () => {
+    root = await mkdtemp('/tmp/factory-words-')
+    await writeFile(join(root, 'dirty.md'), 'a wave\n')
+    const dirty = Bun.spawnSync([
+      'bun',
+      join(ROOT, 'scripts/retired-words.ts'),
+      '--files',
+      relative(ROOT, join(root, 'dirty.md')),
+    ])
+    expect(dirty.exitCode).toBe(1)
+    expect(dirty.stderr.toString()).toContain('"wave" is retired (docs/language.md); say plan')
+    const clean = Bun.spawnSync(['bun', join(ROOT, 'scripts/retired-words.ts'), '--files', 'README.md'])
+    expect(clean.exitCode).toBe(0)
+    expect(clean.stdout.toString()).toBe('no retired words\n')
   })
 })
 

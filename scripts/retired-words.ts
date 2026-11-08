@@ -4,6 +4,7 @@
  * case-insensitive, in identifiers (camelCase, snake_case and kebab-case are split into words), strings and comments.
  * `docs/` is not scanned. An exception is a line in `retired-words.allow` with its reason. Run by
  * `make check`; exits 1 on a finding, a reasonless exception or an exception that no longer matches anything.
+ * `--files <paths…>` scans exactly those files (relative to the repo root, docs included) for the hygiene sweep.
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -126,12 +127,9 @@ async function filesUnder(root: string, dir: string): Promise<string[]> {
   return nested.flat()
 }
 
-/** Every finding not covered by an exception, and every problem with the exceptions themselves. */
-export async function checkRetiredWords(root: string, allowText: string): Promise<string[]> {
-  const { exceptions, problems } = parseExceptions(allowText)
-  const used = new Set<Exception>()
-  const out = [...problems]
-  const files = (await Promise.all(SCANNED.map((dir) => filesUnder(root, dir)))).flat().sort()
+/** The findings in `files` (relative to `root`) that no exception covers, marking the exceptions used. */
+async function scan(root: string, files: string[], exceptions: Exception[], used: Set<Exception>): Promise<string[]> {
+  const out: string[] = []
   for (const file of files) {
     const name = relative(root, join(root, file))
     for (const f of findingsIn(name, await readFile(join(root, file), 'utf8'))) {
@@ -143,17 +141,37 @@ export async function checkRetiredWords(root: string, allowText: string): Promis
       out.push(`${f.file}:${f.line}: "${f.found}" is retired (docs/language.md); say ${f.use}`)
     }
   }
+  return out
+}
+
+/** Every finding not covered by an exception, and every problem with the exceptions themselves. */
+export async function checkRetiredWords(root: string, allowText: string): Promise<string[]> {
+  const { exceptions, problems } = parseExceptions(allowText)
+  const used = new Set<Exception>()
+  const files = (await Promise.all(SCANNED.map((dir) => filesUnder(root, dir)))).flat().sort()
+  const out = [...problems, ...(await scan(root, files, exceptions, used))]
   for (const e of exceptions) {
     if (!used.has(e)) out.push(`retired-words.allow:${e.at}: ${e.file} ${e.term} matches nothing any more; delete it`)
   }
   return out
 }
 
+/** `--files` mode: exactly `files`, with the exceptions that name them; an exception left unused is not reported. */
+export async function checkRetiredWordsIn(root: string, files: string[], allowText: string): Promise<string[]> {
+  const { exceptions, problems } = parseExceptions(allowText)
+  return [...problems, ...(await scan(root, files, exceptions, new Set()))]
+}
+
 export const ROOT = join(import.meta.dir, '..')
 export const ALLOW_FILE = join(import.meta.dir, 'retired-words.allow')
 
 if (import.meta.main) {
-  const problems = await checkRetiredWords(ROOT, await readFile(ALLOW_FILE, 'utf8'))
+  const args = process.argv.slice(2)
+  const allowText = await readFile(ALLOW_FILE, 'utf8')
+  const problems =
+    args[0] === '--files'
+      ? await checkRetiredWordsIn(ROOT, args.slice(1), allowText)
+      : await checkRetiredWords(ROOT, allowText)
   for (const line of problems) console.error(line)
   if (problems.length) process.exit(1)
   console.log('no retired words')

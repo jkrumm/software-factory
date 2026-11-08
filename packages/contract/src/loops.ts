@@ -182,6 +182,57 @@ export const QueueAnswer = z.object({
 })
 export type QueueAnswer = z.infer<typeof QueueAnswer>
 
+// ---- factory-hygiene -----------------------------------------------------------------------------------------------------
+
+export const HYGIENE_KINDS = ['stale', 'slop'] as const
+
+/** A tracked file the factory's own scan picked for a read, with the reason it was picked. */
+export const HygieneCandidate = z.object({
+  /** relative to the checkout root */
+  path: z.string().min(1).max(300),
+  why: Line,
+})
+export type HygieneCandidate = z.infer<typeof HygieneCandidate>
+
+/**
+ * `cwd` is a read-only checkout of `ref`; the workflow reads the candidates and the code they describe there. `stale` are
+ * documents whose code moved on since they were last edited, `slop` are documents edited lately, read for filler.
+ */
+export const HygieneRequest = z.object({
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9._/-]+$/)
+    .min(1)
+    .max(200),
+  cwd: z.string().min(1).max(1_000),
+  ref: z.string().min(7).max(64),
+  stale: z.array(HygieneCandidate).max(20),
+  slop: z.array(HygieneCandidate).max(20),
+  /** the most findings the factory will file; the workflow returns its best, no more */
+  max: z.number().int().min(1).max(10),
+})
+export type HygieneRequest = z.infer<typeof HygieneRequest>
+
+export const HygieneFinding = z.object({
+  kind: z.enum(HYGIENE_KINDS),
+  /** one of the candidates' paths; the factory drops a finding about any other file */
+  path: z.string().min(1).max(300),
+  title: Line,
+  /** what was read: the quoted line or claim, and the code that contradicts it, with line numbers */
+  evidence: Text,
+  /** what to change */
+  fix: Text,
+})
+export type HygieneFinding = z.infer<typeof HygieneFinding>
+
+export const HygieneAnswer = z.object({
+  findings: z.array(HygieneFinding).max(10),
+  /** how many candidates were read */
+  read: z.number().int().min(0).max(40),
+  reason: Line,
+})
+export type HygieneAnswer = z.infer<typeof HygieneAnswer>
+
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
 export const LOOP_NAMES = [
@@ -194,6 +245,7 @@ export const LOOP_NAMES = [
   'triage',
   'queue',
   'friction',
+  'hygiene',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 
