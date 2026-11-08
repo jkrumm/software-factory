@@ -56,6 +56,7 @@ function play(seed: number, seen: Seen, extra?: (issue: Issue) => string | null)
     {
       kind: 'filed',
       payload: { repo: 'r', title: 't', kind: 'bug', origin: 'you' },
+      actor: 'factory',
       at: now,
       version: 1,
       transition: { from: null, to: 'settling', wait: null, outcome: null },
@@ -114,6 +115,7 @@ function play(seed: number, seen: Seen, extra?: (issue: Issue) => string | null)
     records.push({
       kind: event.kind,
       payload: event.payload,
+      actor: event.actor,
       at: now,
       version: next.version,
       transition: decided.transition,

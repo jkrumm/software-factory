@@ -89,6 +89,7 @@ export function postgresWorkStore(tx: SQL): WorkStore {
         return {
           kind: event.kind,
           payload: event.payload,
+          actor: event.actor,
           at: event.at,
           version: event.version,
           transition: event.transition,

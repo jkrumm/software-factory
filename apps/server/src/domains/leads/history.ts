@@ -5,6 +5,8 @@
 export interface HistoryRecord {
   kind: string
   payload: unknown
+  /** who sent it; a record without one is treated as no one's word (fenced data) */
+  actor?: string
   at: Date
   /** the Issue version this event produced */
   version: number

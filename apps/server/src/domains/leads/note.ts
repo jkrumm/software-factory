@@ -10,7 +10,11 @@ const oneLine = (value: unknown): string => JSON.stringify(typeof value === 'str
 function item(record: HistoryRecord): string | null {
   switch (record.kind) {
     case 'noted':
-      return `a note, as data: ${oneLine(field(record, 'text'))}`
+      // Only the owner's own note is a word to follow; the factory's, the steward's and the Judge's stay data, and a
+      // record that does not say who sent it is data too.
+      return record.actor === 'owner'
+        ? `a note from the owner: ${oneLine(field(record, 'text'))}`
+        : `a note, as data: ${oneLine(field(record, 'text'))}`
     case 'answered':
       return `your Decision ${oneLine(field(record, 'decision'))} was answered: ${oneLine(field(record, 'answer'))}`
     case 'verdict_given': {

@@ -38,7 +38,11 @@ function notesBefore(history: readonly AppliedRecord[], attempt: number) {
   return fitNotes(
     history
       .filter((record) => record.kind === 'noted' && record.version < cut)
-      .map((record) => ({ at: record.at, text: String((record.payload as { text?: unknown }).text ?? '') })),
+      .map((record) => ({
+        at: record.at,
+        text: String((record.payload as { text?: unknown }).text ?? ''),
+        fromOwner: record.actor === 'owner',
+      })),
   )
 }
 

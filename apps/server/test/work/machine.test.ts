@@ -200,11 +200,19 @@ describe('settled refines the kind', () => {
       {
         kind: 'filed',
         payload: { repo: filed.repo, title: filed.title, kind: 'feature', origin: filed.origin },
+        actor: 'factory',
         at: NOW,
         version: 1,
         transition: { from: null, to: 'settling', wait: null, outcome: null },
       },
-      { kind: 'settled', payload: settledPayload, at: NOW, version: 2, transition: settled.transition },
+      {
+        kind: 'settled',
+        payload: settledPayload,
+        actor: 'factory',
+        at: NOW,
+        version: 2,
+        transition: settled.transition,
+      },
     ] as AppliedRecord[]
   }
 
