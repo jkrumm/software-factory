@@ -5,11 +5,14 @@ export const DOOR_SOURCE_REFUSED_MIN = 3
 /** A source with no accepted message for this long is a line (a stale token, a monitor that was removed). */
 export const DOOR_SOURCE_QUIET_MS = 14 * 24 * 3_600_000
 
+/** An app's feedback token is a door source named `feedback-<app>`: an app that says nothing is normal, not a stale token. */
+const isFeedback = (source: string): boolean => source.startsWith('feedback-')
+
 const minute = (at: Date): string => `${at.toISOString().slice(0, 16)}Z`
 
 /**
  * The health lines of the door's sources, derived at read: a source refused at least three times with the last refusal
- * within `finishedMs`, and a source with nothing accepted for 14 days. Nothing here is stored as a transition.
+ * within `finishedMs`, and a source with nothing accepted for 14 days (an app's feedback source is never quiet, only refused). Nothing here is stored as a transition.
  */
 export function doorSourceLines(rows: readonly DoorSourceRow[], now: Date, finishedMs: number): string[] {
   const lines: string[] = []
@@ -21,6 +24,7 @@ export function doorSourceLines(rows: readonly DoorSourceRow[], now: Date, finis
         )
       }
     }
+    if (isFeedback(row.source)) continue
     const quiet = now.getTime() - (row.lastAccepted ?? row.firstSeen).getTime()
     if (quiet > DOOR_SOURCE_QUIET_MS) {
       lines.push(`door source ${row.source}: nothing accepted for ${Math.floor(quiet / 86_400_000)} days`)

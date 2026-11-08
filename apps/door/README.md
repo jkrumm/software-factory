@@ -1,6 +1,6 @@
 # factory door
 
-The one way an alert from the tailnet becomes a factory Issue. A Bun server of its own, one route: `POST /alert/<source>`.
+The one way an alert from the tailnet becomes a factory Issue. A Bun server of its own, two routes: `POST /alert/<source>` and `POST /feedback/<app>`.
 It holds no factory token and no database credential: it posts to the server's API over loopback HTTP, `POST /signals/alerts` for an
 alert and `POST /door/reports` for what it says about its sources. The body is an `AlertRequest` (`source`, `monitor`, `event`,
 `status`, `title`, `facts`), strict: it has no `repo`. The repo comes from the server's route registry, never from the door or the payload.
@@ -59,6 +59,41 @@ with the reason on stderr (the service's error log). `newToken` in `src/tokens.t
 base64url) into the file; the CLI verb that calls it comes with the CLI package, and until then the file is written by
 hand. The door reads the file at start, so restart it after a rotation. The owner seeds the tokens into 1Password. A
 deploy creates none.
+
+## Feedback
+
+An app sends its users' feedback as `POST /feedback/<app>` with its own token, the key `feedback-<app>` in the tokens file
+(`factory door token new feedback-<app>`; an app name is lowercase letters, digits and dashes, at most 23 characters). It passes the
+same checks as an alert, in the same order, then `parseFeedback` (`src/parsers.ts`), which adds the app from the path and files a
+`FeedbackRequest` with the server (`POST /signals/feedback`). The answer is the same `SignalAck` and the same status mapping; a
+refusal is logged as `refused feedback-<app>`. The server holds the text as outside data (`held`) until the owner or the Judge
+promotes it; a repeat of a promoted complaint amends its open Issue.
+
+| Field | Meaning |
+|-|-|
+| `title` | what the user said in a line, 1 to 500 characters; the same title (any case, digits and punctuation aside) is the same complaint |
+| `text` | the rest of it, optional |
+| `version` | the app's build, 1 to 64 characters |
+| `route` | the screen or path the user was on, 1 to 256 characters |
+| `link` | a page about it, optional; userinfo and fragment are dropped |
+
+The body is strict: a `repo` (or any other field) is a 400. The repo is the door route `(feedback, <app>)`; without one the signal is held with no
+repo and the owner names it when promoting. Route an app with the server's registry, `POST /door/routes`
+(`factory door route-set`) with `{ "source": "feedback", "monitor": "<app>", "repo": "<repo>" }`. A work repo cannot be routed to. An app that sends
+nothing is normal: the "nothing accepted for 14 days" health line never names a `feedback-` source.
+
+```ts
+// Server side of an app: the token stays on the server, never in the browser bundle.
+export async function sendFeedback(input: { title: string; text?: string; route: string }) {
+  const response = await fetch('https://<mini tailnet name>:8796/feedback/<app>', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.FEEDBACK_TOKEN}` },
+    body: JSON.stringify({ ...input, version: process.env.APP_VERSION ?? 'unknown' }),
+  })
+  if (!response.ok) throw new Error(`feedback refused: ${response.status}`)
+  return response.json() // a SignalAck: { outcome: 'held', detail: 'quarantined', ... }
+}
+```
 
 ## Routes
 

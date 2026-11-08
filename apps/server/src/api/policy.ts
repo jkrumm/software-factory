@@ -19,7 +19,7 @@
  *   `quality`, a revision, its own session read, a note to a session, the signal it files and the test slots it takes.
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, the door's registry). When in doubt, the owner alone.
- * - machine: exactly `POST /signals/alerts` and `POST /door/reports`, the door's two calls (the owner may make them too).
+ * - machine: exactly `POST /signals/alerts`, `POST /signals/feedback` and `POST /door/reports`, the door's three calls (the owner may make them too).
  * - signal: exactly `POST /signals`, and only as `owner:hermes` (`app/intake.ts`): the narrow caller that files the owner's
  *   words, so no surface holds the owner's token.
  *
@@ -51,8 +51,9 @@ export const POLICY: readonly Rule[] = [
   // -- public ----------------------------------------------------------------------------------------------------------
   rule('GET', '/health', 'public'),
 
-  // -- machine: the door's two calls ---------------------------------------------------------------------------------
+  // -- machine: the door's three calls -------------------------------------------------------------------------------
   rule('POST', '/signals/alerts', DOOR),
+  rule('POST', '/signals/feedback', DOOR),
   rule('POST', '/door/reports', DOOR),
 
   // -- lead verbs ----------------------------------------------------------------------------------------------------

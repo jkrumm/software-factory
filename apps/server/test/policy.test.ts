@@ -70,14 +70,14 @@ describe('the policy table', () => {
     }
   })
 
-  test('the machine is allowed on exactly POST /signals/alerts and POST /door/reports', async () => {
+  test("the machine is allowed on exactly the door's three calls", async () => {
     const machine = (await routes())
       .filter(({ method, route }) => {
         const callers = allowed(method, route)
         return callers !== 'public' && callers.includes('machine')
       })
       .map(({ method, route }) => `${method} ${route}`)
-    expect(machine.sort()).toEqual(['POST /door/reports', 'POST /signals/alerts'])
+    expect(machine.sort()).toEqual(['POST /door/reports', 'POST /signals/alerts', 'POST /signals/feedback'])
   })
 
   test('the signal token is allowed on exactly POST /signals', async () => {
@@ -163,6 +163,7 @@ describe('the auth plugin over HTTP', () => {
       ['GET', '/v1/loops'],
       ['POST', '/issues'],
       ['POST', '/signals/alerts'],
+      ['POST', '/signals/feedback'],
       ['POST', '/v1/issues/issue_1/close'],
     ] as const) {
       expect((await call(method, path, TOKENS.signal)).status).toBe(403)

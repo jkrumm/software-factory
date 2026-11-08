@@ -120,6 +120,8 @@ export interface Door {
   stop(): Promise<void>
   /** a POST to `/alert/<source>` with the source's bearer token */
   post(source: string, payload: unknown): Promise<{ status: number; body: Ack }>
+  /** a POST to `/feedback/<app>` with the app's `feedback-<app>` bearer token */
+  feedback(app: string, payload: unknown): Promise<{ status: number; body: Ack }>
 }
 
 /** The real door process on a free port, with a tokens file of its own and the server as its only way out. */
@@ -142,6 +144,15 @@ export async function startDoor(estate: Estate, server: ServerProcess, sources: 
     stderr: 'pipe',
   })
   const url = `http://127.0.0.1:${port}`
+  const send = async (path: string, token: string | undefined, payload: unknown) => {
+    const response = await fetch(`${url}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    const text = await response.text()
+    return { status: response.status, body: text ? JSON.parse(text) : null }
+  }
   await until('the door to listen', async () => {
     if (proc.exitCode !== null) throw new Error(`the door exited ${proc.exitCode}`)
     return fetch(`${url}/alert/kuma`, { method: 'POST' }).then(
@@ -155,15 +166,8 @@ export async function startDoor(estate: Estate, server: ServerProcess, sources: 
       proc.kill('SIGTERM')
       await proc.exited
     },
-    post: async (source, payload) => {
-      const response = await fetch(`${url}/alert/${source}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${tokens[source]}` },
-        body: JSON.stringify(payload),
-      })
-      const text = await response.text()
-      return { status: response.status, body: text ? JSON.parse(text) : null }
-    },
+    post: async (source, payload) => send(`/alert/${source}`, tokens[source], payload),
+    feedback: async (app, payload) => send(`/feedback/${app}`, tokens[`feedback-${app}`], payload),
   }
 }
 

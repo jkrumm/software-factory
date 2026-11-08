@@ -161,6 +161,33 @@ export const AlertRequest = z
   .meta({ id: 'AlertRequest' })
 export type AlertRequest = z.output<typeof AlertRequest>
 
+/** The door's token key for an app's feedback is `feedback-<app>`, a source name too: so an app name is 23 characters at most. */
+export const FeedbackApp = z.string().regex(/^[a-z][a-z0-9-]{0,22}$/, 'not an app name')
+
+/** The source label every feedback signal carries, and the door route's source for the app. */
+export const FEEDBACK_ROUTE_SOURCE = 'feedback'
+export const feedbackSource = (app: string): string => `feedback:${app}`
+/** The key of an app's token in the door's tokens file. */
+export const feedbackTokenKey = (app: string): string => `feedback-${app}`
+
+/**
+ * `POST /signals/feedback`: what the door files for one piece of an app's feedback. The shared envelope of every app: who
+ * (`app`), which build (`version`), where the user was (`route`), and what they said. Outside text: it is held until the owner
+ * or the Judge promotes it. There is no `repo` (the body is strict): the app's door route (`feedback`, `<app>`) picks it.
+ */
+export const FeedbackRequest = z
+  .strictObject({
+    app: FeedbackApp,
+    version: z.string().min(1).max(64),
+    /** the screen or path the user was on */
+    route: z.string().min(1).max(256),
+    title: Title,
+    text: z.string().max(MAX_TEXT_CHARS).default(''),
+    link: z.string().max(1024).nullish(),
+  })
+  .meta({ id: 'FeedbackRequest' })
+export type FeedbackRequest = z.output<typeof FeedbackRequest>
+
 /** One stored signal as the owner reads it, held ones first. */
 export const StoredSignal = z
   .object({
