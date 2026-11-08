@@ -142,7 +142,7 @@ export type TriageAnswer = z.infer<typeof TriageAnswer>
 
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
-export const LOOP_NAMES = ['leads', 'planning', 'watch', 'settle', 'send', 'steward', 'triage'] as const
+export const LOOP_NAMES = ['leads', 'planning', 'watch', 'settle', 'send', 'steward', 'triage', 'friction'] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 
 export const LoopView = z

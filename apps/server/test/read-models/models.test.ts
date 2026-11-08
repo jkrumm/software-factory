@@ -6,6 +6,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readChain } from '../../src/read/chain.ts'
 import { readFlow } from '../../src/read/flow.ts'
 import { readFriction } from '../../src/read/friction.ts'
+import { readFrictionEvidence } from '../../src/read/friction-evidence.ts'
 import { readKpis } from '../../src/read/kpis.ts'
 import { needsModel, readNeeds } from '../../src/read/needs.ts'
 
@@ -393,5 +394,28 @@ describe('the fixture', () => {
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const day = FrictionModel.parse(await readFriction(sql, { now: later, days: 1 }))
     expect(day.counts.find((c) => c.key === 'decision_settled:owner')?.count).toBe(0)
+  })
+
+  test('friction evidence: Issue refs exist exactly when the count is above zero, newest first, at most five', async () => {
+    const model = await readFriction(sql, { now: NOW, days: 7 })
+    const mapped = model.counts.filter(
+      (c) => !c.key.endsWith(':total') && !['decision_settled', 'undelivered_note', 'signal'].includes(c.group),
+    )
+    expect(mapped.length).toBeGreaterThan(10)
+    const evidence = await readFrictionEvidence(
+      sql,
+      { now: NOW, days: 7 },
+      mapped.map((c) => c.key),
+    )
+    for (const c of mapped) {
+      const refs = evidence[c.key] ?? []
+      expect(evidence[c.key], c.key).toBeDefined()
+      expect(refs.length > 0, c.key).toBe(c.count > 0)
+      expect(refs.length).toBeLessThanOrEqual(5)
+      for (const ref of refs) expect(ref).toMatch(/^issue_\d+$/)
+    }
+    expect(await readFrictionEvidence(sql, { now: NOW, days: 7 }, ['undelivered_note', 'signal_held:github'])).toEqual(
+      {},
+    )
   })
 })

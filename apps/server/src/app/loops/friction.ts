@@ -1,0 +1,123 @@
+import type { FrictionModel, SignalRequest } from '@software-factory/contract'
+import {
+  FRICTION_PASS_EVERY_MS,
+  FRICTION_WINDOW_DAYS,
+  hasIssueRefs,
+  named,
+  type Pattern,
+  patternsOver,
+  signalText,
+  signalTitle,
+  withinBudget,
+} from '../../domains/loops/friction.ts'
+import type { FrictionPassRecord, LoopStore } from '../../domains/loops/ports.ts'
+import type { Triaged } from '../../domains/intake/model.ts'
+import type { Clock } from '../../kernel/clock.ts'
+import type { IdSource } from '../../kernel/ids.ts'
+import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
+import type { IntakeError } from '../intake.ts'
+import type { UnitOfWork } from '../unit-of-work.ts'
+
+/** The repo that carries the factory's own findings, and who files them. */
+export const FRICTION_REPO = 'software-factory'
+export const FRICTION_SOURCE = `agent:${FRICTION_REPO}`
+
+export interface FrictionDeps {
+  uow: UnitOfWork<{ loops: LoopStore }>
+  clock: Clock
+  ids: IdSource
+  /** the counts of the last `FRICTION_WINDOW_DAYS` days ending at `now` (`read/friction.ts`, bound in `main.ts`) */
+  friction(now: Date): Promise<FrictionModel>
+  /** the most recent Issue refs behind the counts of these keys, for the same window */
+  evidence(now: Date, keys: string[]): Promise<Record<string, string[]>>
+  /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
+  file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
+}
+
+export type FrictionPass = { due: false; lastAt: Date } | { due: true; record: FrictionPassRecord }
+
+const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
+
+/**
+ * One tick of the friction loop (no model): when no pass was recorded in the last week, count the week's waste, file one
+ * signal for each pattern over its threshold (at most `MAX_SIGNALS_PER_PASS`, the rest are named in the record) and
+ * record the pass. A crash between filing and recording replays safely: intake's fingerprint turns a repeat into a note
+ * on the open Issue, or drops it when that Issue closed lately.
+ */
+export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionPass, PortError>> {
+  const now = deps.clock.now()
+  const last = await deps.uow.run(async ({ loops }) => ok(await loops.lastFrictionPassAt()))
+  if (!last.ok) return last
+  if (last.value && last.value.getTime() > now.getTime() - FRICTION_PASS_EVERY_MS) {
+    return ok({ due: false, lastAt: last.value })
+  }
+
+  let model: FrictionModel
+  let evidence: Record<string, string[]>
+  let over: ReturnType<typeof withinBudget>
+  try {
+    model = await deps.friction(now)
+    over = withinBudget(patternsOver(model.counts))
+    const wanted = over.file.filter(hasIssueRefs).map((pattern) => pattern.key)
+    evidence = wanted.length > 0 ? await deps.evidence(now, wanted) : {}
+  } catch (error) {
+    return err(portError('unreadable', `the friction counts could not be read: ${String(error).slice(0, 300)}`))
+  }
+
+  const facts = { from: model.window.from, to: model.window.to, days: model.days, issues: model.issues }
+  const record: FrictionPassRecord = {
+    id: deps.ids.next('friction'),
+    at: now,
+    windowFrom: new Date(model.window.from),
+    windowTo: new Date(model.window.to),
+    issues: model.issues,
+    filed: [],
+    overBudget: over.overBudget.map(({ key, count }) => ({ key, count })),
+    failed: [],
+  }
+  for (const pattern of over.file) await fileOne(deps, pattern, facts, evidence[pattern.key] ?? [], record)
+
+  const recorded = await deps.uow.run(async ({ loops }) => {
+    await loops.recordFrictionPass(record)
+    return ok(undefined)
+  })
+  if (!recorded.ok) return recorded
+  return ok({ due: true, record })
+}
+
+async function fileOne(
+  deps: FrictionDeps,
+  pattern: Pattern,
+  facts: Parameters<typeof signalText>[1],
+  refs: string[],
+  record: FrictionPassRecord,
+): Promise<void> {
+  const title = signalTitle(pattern)
+  const filed = await deps.file({
+    from: FRICTION_SOURCE,
+    kind: 'request',
+    title,
+    text: signalText(pattern, facts, refs),
+    repo: FRICTION_REPO,
+  })
+  if (!filed.ok) {
+    record.failed.push({ key: pattern.key, reason: reasonOf(filed.error).slice(0, 300) })
+    return
+  }
+  // A repeat of an Issue closed lately is intake recognising a known pattern; any other drop or hold means no Issue carries it.
+  const { outcome, detail } = filed.value
+  const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
+  if (stands) record.filed.push({ key: pattern.key, count: pattern.count, title })
+  else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
+}
+
+export const frictionSummary = (pass: FrictionPass): string => {
+  if (!pass.due) return `not due (last pass ${pass.lastAt.toISOString()})`
+  const { record } = pass
+  const parts = [`filed ${record.filed.length} signal(s) for ${FRICTION_WINDOW_DAYS} days`]
+  if (record.overBudget.length > 0) parts.push(`over budget, not filed: ${named(record.overBudget)}`)
+  if (record.failed.length > 0) {
+    parts.push(`failed: ${record.failed.map((f) => `${f.key} (${f.reason})`).join('; ')}`)
+  }
+  return parts.join('; ')
+}

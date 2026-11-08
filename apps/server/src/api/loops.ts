@@ -52,7 +52,7 @@ export const loopRoutes = (loops: LoopsApi | undefined) =>
         detail: {
           operationId: 'loop.run',
           summary:
-            'one pass of one loop now (leads, planning, watch, settle, send, steward, triage); a pass already running is waited for, not started again',
+            'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, friction); a pass already running is waited for, not started again',
         },
       },
     )

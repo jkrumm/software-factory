@@ -25,8 +25,10 @@ import { createApp } from './api/app.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
+import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
+import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
@@ -49,6 +51,8 @@ import { healthOf, tickProblem } from './read/health.ts'
 import { planningSettings } from './app/planning-settings.ts'
 import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
+import { readFriction } from './read/friction.ts'
+import { readFrictionEvidence } from './read/friction-evidence.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
@@ -280,6 +284,29 @@ async function main(): Promise<void> {
         if (!pass.ok) return pass
         said('triage', pass.value.problems)
         return ok(triageSummary(pass.value))
+      },
+    },
+    {
+      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a week, read from the table.
+      name: 'friction',
+      intervalMs: loopSettings.intervalMs.friction,
+      onChange: false,
+      run: async () => {
+        const pass = await frictionPass({
+          uow,
+          clock: writes.clock,
+          ids: systemIds,
+          friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS }),
+          evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS }, keys),
+          file: (body) => intake.api.file(body, 'agent'),
+        })
+        if (!pass.ok) return pass
+        if (pass.value.due)
+          said(
+            'friction',
+            pass.value.record.failed.map((f) => `${f.key}: ${f.reason}`),
+          )
+        return ok(frictionSummary(pass.value))
       },
     },
   ]

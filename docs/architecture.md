@@ -154,6 +154,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `settle`, `send` | Decision steps, pages | `factory-ask` (the Judge) |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`) | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new, likely `after` edges |
+| `friction` | the week's counts (`read/friction.ts`) against the thresholds in `domains/loops/friction.ts`: one signal per pattern over its threshold, 5 at most, filed on this repo through intake with the evidence Issues; due once a week, read from `friction_passes` | none |
 
 ## API, client, CLI
 
@@ -200,8 +201,8 @@ Rows in `docs/plan.yaml` carry each of these.
   (`FACTORY_CONSOLE_URL`) are a setting.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.
-- **The queue, friction and hygiene loops.** The Judge and the steward are built; `friction` and `kpis` exist as read
-  models, but no loop counts patterns or files findings yet.
+- **The queue and hygiene loops.** The Judge, the steward and the friction loop are built; no loop yet orders the queue
+  or sweeps stale state.
 - **Artifacts in the Console:** Markdown through a sanitiser, HTML in a sandboxed iframe with a network-blocking CSP and
   an annotator that posts selections out; anchors are a quote plus a path with an "Unanchored" group as the fallback.
 - **Client work** in other repos: the Herdr glance, Hermes' factory skill, Argo's factory pages leaving for the Console.
