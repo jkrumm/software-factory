@@ -128,28 +128,13 @@ test('offline after one load: the shell comes from the service worker and the ch
   await expect(chip(page)).toHaveText(/Offline - snapshot from .+/)
 })
 
-test('the perimeter: no login, a wrong login and any write are refused', async ({ playwright, consoleUrl }) => {
+test('the listener serves without any header and refuses a write', async ({ playwright, consoleUrl }) => {
   const anonymous = await playwright.request.newContext({ baseURL: consoleUrl, extraHTTPHeaders: {} })
   for (const path of ['/', '/v1/needs', '/manifest.webmanifest']) {
-    expect((await anonymous.get(path)).status(), `${path} without a login`).toBe(403)
+    expect((await anonymous.get(path)).status(), path).toBe(200)
   }
+  expect((await anonymous.post('/v1/issues', { data: {} })).status()).toBe(405)
   await anonymous.dispose()
-
-  const stranger = await playwright.request.newContext({
-    baseURL: consoleUrl,
-    extraHTTPHeaders: { 'Tailscale-User-Login': 'someone@example.com' },
-  })
-  for (const path of ['/', '/v1/needs', '/manifest.webmanifest']) {
-    expect((await stranger.get(path)).status(), `${path} with a wrong login`).toBe(403)
-  }
-  await stranger.dispose()
-
-  const owner = await playwright.request.newContext({
-    baseURL: consoleUrl,
-    extraHTTPHeaders: { 'Tailscale-User-Login': 'owner@example.com' },
-  })
-  expect((await owner.post('/v1/issues', { data: {} })).status()).toBe(405)
-  await owner.dispose()
 })
 
 test('the app is installable: a manifest with its icons and an active service worker', async ({ page, request }) => {

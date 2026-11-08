@@ -3,8 +3,6 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { bearer, freePort, type ServerProcess, startServer, startWorld, type World } from './harness.ts'
 
-const OWNER = 'owner@example.com'
-
 let world: World
 let server: ServerProcess
 let dir = ''
@@ -18,7 +16,6 @@ beforeAll(async () => {
   world = await startWorld()
   server = await startServer(world, {
     env: {
-      FACTORY_CONSOLE_OWNER_LOGIN: OWNER,
       FACTORY_CONSOLE_PORT: String(port),
       FACTORY_CONSOLE_DIR: dir,
     },
@@ -31,23 +28,15 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-test('the Console listener refuses a request without the owner login and serves the read slice with it', async () => {
+test('the Console listener starts when the build exists and serves the read slice without any header', async () => {
   expect(server.output()).toContain(`console listening on ${consoleUrl}`)
-  const without = await fetch(`${consoleUrl}/v1/overview`)
-  expect(without.status).toBe(403)
-  expect(await without.json()).toMatchObject({ code: 'forbidden' })
-  expect(
-    (await fetch(`${consoleUrl}/v1/overview`, { headers: { 'tailscale-user-login': 'other@example.com' } })).status,
-  ).toBe(403)
-
-  const owner = { 'tailscale-user-login': OWNER }
-  expect((await fetch(`${consoleUrl}/v1/overview`, { headers: owner })).status).toBe(200)
-  expect((await fetch(`${consoleUrl}/health`, { headers: owner })).status).toBe(200)
-  const index = await fetch(consoleUrl, { headers: owner })
+  expect((await fetch(`${consoleUrl}/v1/overview`)).status).toBe(200)
+  expect((await fetch(`${consoleUrl}/health`)).status).toBe(200)
+  const index = await fetch(consoleUrl)
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
   // a write that is not one of the five answers never passes, and the client's own token buys nothing here
-  const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: { ...owner, ...bearer() } })
+  const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: bearer() })
   expect(post.status).toBe(405)
 })
 
@@ -61,10 +50,10 @@ const ANSWERS = [
 
 const API_REFUSALS = [404, 422]
 
-const write = (path: string, headers: Record<string, string> = {}, body: string = '{}', login = true) =>
+const write = (path: string, headers: Record<string, string> = {}, body: string = '{}') =>
   fetch(`${consoleUrl}${path}`, {
     method: 'POST',
-    headers: { ...(login ? { 'tailscale-user-login': OWNER } : {}), 'content-type': 'application/json', ...headers },
+    headers: { 'content-type': 'application/json', ...headers },
     body,
   })
 
@@ -89,7 +78,7 @@ test('the five answer verbs reach the API with the body; the API, not the listen
 })
 
 test('everything else that writes stays 405, OPTIONS too', async () => {
-  const owner = { 'tailscale-user-login': OWNER, 'content-type': 'application/json' }
+  const json = { 'content-type': 'application/json' }
   const refused: [string, string][] = [
     ['POST', '/v1/issues'],
     ['POST', '/v1/issues/issue_1/cancel'],
@@ -106,7 +95,7 @@ test('everything else that writes stays 405, OPTIONS too', async () => {
   for (const [method, path] of refused) {
     const reply = await fetch(`${consoleUrl}${path}`, {
       method,
-      headers: owner,
+      headers: json,
       body: method === 'POST' || method === 'PUT' ? '{}' : undefined,
     })
     expect(reply.status, `${method} ${path}`).toBe(405)
@@ -114,15 +103,11 @@ test('everything else that writes stays 405, OPTIONS too', async () => {
   }
 })
 
-test('a write is refused without the login, with the wrong type, cross-site, from a foreign origin and over 64 KiB', async () => {
+test('a write is refused with the wrong type, cross-site, from a foreign origin and over 64 KiB', async () => {
   const path = ANSWERS[0] ?? ''
-  expect((await write(path, {}, '{}', false)).status).toBe(403)
-  expect((await write(path, { 'tailscale-user-login': 'other@example.com' })).status).toBe(403)
   expect((await write(path, { 'content-type': 'text/plain' })).status).toBe(415)
   expect((await write(path, { 'content-type': 'application/x-www-form-urlencoded' }, 'answer=x')).status).toBe(415)
-  expect(
-    (await fetch(`${consoleUrl}${path}`, { method: 'POST', headers: { 'tailscale-user-login': OWNER } })).status,
-  ).toBe(415)
+  expect((await fetch(`${consoleUrl}${path}`, { method: 'POST' })).status).toBe(415)
   for (const site of ['cross-site', 'same-site', 'none']) {
     expect((await write(path, { 'sec-fetch-site': site })).status, site).toBe(403)
   }
@@ -133,8 +118,7 @@ test('a write is refused without the login, with the wrong type, cross-site, fro
   expect(API_REFUSALS).toContain((await write(path, {}, ok)).status)
 })
 
-test('the main port is unchanged: it still wants a token and the login header buys nothing', async () => {
+test('the main port is unchanged: it still wants a token, and an open Console buys nothing', async () => {
   expect((await fetch(`${server.url}/v1/overview`)).status).toBe(401)
-  expect((await fetch(`${server.url}/v1/overview`, { headers: { 'tailscale-user-login': OWNER } })).status).toBe(401)
   expect((await fetch(`${server.url}/v1/overview`, { headers: bearer() })).status).toBe(200)
 })

@@ -4,19 +4,14 @@ import { join } from 'node:path'
 import { apiForward, consoleHandler } from '../src/api/console.ts'
 import { loadConsoleSettings } from '../src/console-settings.ts'
 
-const OWNER = 'owner@example.com'
 const INDEX = '<!doctype html><title>console</title>'
 
 let dir = ''
 let forwarded: Request[] = []
 let handle: (request: Request) => Promise<Response>
 
-const call = (path: string, init: RequestInit & { login?: string | null } = {}): Promise<Response> => {
-  const { login = OWNER, ...rest } = init
-  const headers = new Headers(rest.headers)
-  if (login !== null) headers.set('tailscale-user-login', login)
-  return handle(new Request(`http://console.test${path}`, { ...rest, headers }))
-}
+const call = (path: string, init: RequestInit = {}): Promise<Response> =>
+  handle(new Request(`http://console.test${path}`, init))
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-console-')
@@ -31,7 +26,6 @@ beforeAll(async () => {
   await writeFile(join(dir, 'build', 'assets', 'font.woff2'), 'x')
   await writeFile(join(dir, 'secret.txt'), 'outside the build')
   handle = consoleHandler({
-    ownerLogin: OWNER,
     dir: join(dir, 'build'),
     forward: async (request) => {
       forwarded.push(request)
@@ -42,33 +36,7 @@ beforeAll(async () => {
 
 afterAll(() => rm(dir, { recursive: true, force: true }))
 
-describe('the owner gate', () => {
-  const paths: [string, string][] = [
-    ['GET', '/'],
-    ['GET', '/assets/x.js'],
-    ['GET', '/v1/needs'],
-    ['GET', '/health'],
-    ['POST', '/v1/issues'],
-  ]
-
-  test('refuses a missing or wrong login on every path and method, with an ErrorBody', async () => {
-    forwarded = []
-    for (const login of [null, '', 'other@example.com', `${OWNER}.evil`]) {
-      for (const [method, path] of paths) {
-        const response = await call(path, { method, login })
-        expect(response.status).toBe(403)
-        expect(await response.json()).toMatchObject({ code: 'forbidden' })
-      }
-    }
-    expect(forwarded).toEqual([])
-  })
-
-  test('takes the owner login in any case', async () => {
-    expect((await call('/', { login: OWNER.toUpperCase() })).status).toBe(200)
-  })
-})
-
-describe('the owner', () => {
+describe('the listener', () => {
   test('GET / serves index.html with the CSP and the safe headers', async () => {
     const response = await call('/')
     expect(response.status).toBe(200)
@@ -153,6 +121,11 @@ describe('the owner', () => {
     }
   })
 
+  test('serves without any identity header', async () => {
+    expect((await call('/')).status).toBe(200)
+    expect((await call('/health')).status).toBe(200)
+  })
+
   test('every write method is 405, whatever the path', async () => {
     forwarded = []
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
@@ -197,8 +170,8 @@ describe('the owner', () => {
   })
 
   test('a build that is not there is 503', async () => {
-    const missing = consoleHandler({ ownerLogin: OWNER, dir: join(dir, 'nope'), forward: async () => new Response() })
-    const response = await missing(new Request('http://console.test/', { headers: { 'tailscale-user-login': OWNER } }))
+    const missing = consoleHandler({ dir: join(dir, 'nope'), forward: async () => new Response() })
+    const response = await missing(new Request('http://console.test/'))
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ error: 'the Console is not built' })
   })
@@ -221,7 +194,7 @@ describe('the API forward', () => {
         headers: {
           authorization: 'Bearer client-token',
           cookie: 'a=b',
-          'tailscale-user-login': OWNER,
+          'tailscale-user-login': 'someone@example.com',
           'tailscale-user-name': 'Owner',
           accept: 'text/event-stream',
         },
@@ -240,21 +213,17 @@ describe('the API forward', () => {
 })
 
 describe('console settings', () => {
-  test('no owner login: no listener; the port defaults to 7794 and the dir to apps/console/dist', () => {
+  test('the port defaults to 7795 and the dir to apps/console/dist', () => {
     const settings = loadConsoleSettings({})
-    expect(settings.ownerLogin).toBeNull()
-    expect(settings.port).toBe(7794)
+    expect(settings.port).toBe(7795)
     expect(settings.dir).toMatch(/apps\/console\/dist$/)
   })
 
-  test('the three keys are read', () => {
-    expect(
-      loadConsoleSettings({
-        FACTORY_CONSOLE_OWNER_LOGIN: OWNER,
-        FACTORY_CONSOLE_PORT: '9000',
-        FACTORY_CONSOLE_DIR: '/tmp/x',
-      }),
-    ).toEqual({ ownerLogin: OWNER, port: 9000, dir: '/tmp/x' })
+  test('the two keys are read', () => {
+    expect(loadConsoleSettings({ FACTORY_CONSOLE_PORT: '9000', FACTORY_CONSOLE_DIR: '/tmp/x' })).toEqual({
+      port: 9000,
+      dir: '/tmp/x',
+    })
   })
 
   test('a bad port refuses', () => {

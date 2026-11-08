@@ -51,19 +51,20 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **Trust boundary.** The owner's token can start Claude Code with `--dangerously-skip-permissions`: a spawn's repo must be
   inside `FACTORY_REPO_ROOTS` after `realpath` (`adapters/git/repos.ts`). The API is loopback only; the tailnet and the
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
-- **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener, published by `make deploy` with
-  `tailscale serve`. It answers 403 to anything without the owner's `Tailscale-User-Login` (`FACTORY_CONSOLE_OWNER_LOGIN`;
-  unset, the listener does not start), forwards `GET`/`HEAD` of `/health` and `/v1/*` to the API (the owner token stays in
-  the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and serves
+- **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener (`FACTORY_CONSOLE_PORT`, default 7795; 7794 is the agw gateway's), published on the tailnet by
+  dotfiles-private's serve row on :8797 (not by `make deploy`) and started whenever the Console is built. It answers 405 to
+  anything but `GET`/`HEAD` (bar the five verbs below), forwards only `/health` and `/v1/*` to the API (the owner token stays
+  in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and serves
   `apps/console/dist` otherwise. The one writes it forwards are the owner's five answer verbs and nothing else (405):
   `decisions/:id/answer`, `artifacts/:id/verdict`, `artifacts/:id/annotations`, `errands/:id/done` and
   `POST /signals/:id/promote`, each needing `content-type: application/json` (415), no cross-site `sec-fetch-site` and no
-  foreign `origin` (403; the proxy adds the login to any request from the node, cookies or not) and at most 64 KiB (413).
+  foreign `origin` (403; there is no per-request identity, so a page in the owner's browser could send one) and at most 64 KiB (413).
   It can never start a session, and never cancels, reopens or files an Issue by its own words; promote files one only
   from a signal already held. `/frame.html` and `/frame/*`, the artifact's sandboxed frame, are served under their own CSP
   (scripts, no network), the page keeps `script-src 'self'`. A new write goes through the Issue, not this list. Residual, accepted
-  (`docs/architecture.md` "Perimeter"): the header is the credential, so any process on the mini can forge it on loopback,
-  read what the owner reads (including what the read token is denied) and make those five answers, promote among them;
+  (`docs/architecture.md` "Perimeter", NL25): there is no per-request identity and the ACL tag grant is the perimeter, so any
+  tagged node granted :8797 and any process on the mini reads what the owner reads (including what the read token is denied)
+  and can make those five answers, promote among them;
   the `origin` check compares with the request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.
   The Console (`apps/console`, `README.md` there) holds no logic the API could hold, and
   `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.

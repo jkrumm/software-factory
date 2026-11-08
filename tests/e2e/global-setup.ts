@@ -8,33 +8,7 @@ import { startLab } from '../scenarios/planning/lab.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
 import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
 
-export const OWNER_LOGIN = 'owner@example.com'
 const DIST = join(import.meta.dir, '..', '..', 'apps', 'console', 'dist')
-
-/**
- * What `tailscale serve` does in front of the Console listener: the owner's login on every request. The browser's
- * extra headers do not reach a service worker's script fetch, so the tests open the app through this and keep the
- * listener itself (E2E_CONSOLE_URL) for the requests that must arrive without a login.
- */
-function tailnetProxy(target: string) {
-  return Bun.serve({
-    port: 0,
-    hostname: '127.0.0.1',
-    idleTimeout: 0,
-    fetch: (request) => {
-      const url = new URL(request.url)
-      const headers = new Headers(request.headers)
-      headers.set('Tailscale-User-Login', OWNER_LOGIN)
-      return fetch(`${target}${url.pathname}${url.search}`, {
-        method: request.method,
-        headers,
-        body: request.body,
-        redirect: 'manual',
-        decompress: false,
-      })
-    },
-  })
-}
 
 /**
  * A private Postgres and the real server with its Console listener on the built `apps/console/dist` (the Makefile builds
@@ -64,7 +38,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       FACTORY_NTFY_TOPIC: 'factory',
       NTFY_TOKEN: 'e2e-token',
       FACTORY_CONSOLE_URL: 'https://console.example.test',
-      FACTORY_CONSOLE_OWNER_LOGIN: OWNER_LOGIN,
       FACTORY_CONSOLE_PORT: String(consolePort),
       FACTORY_CONSOLE_DIR: DIST,
       FACTORY_DATA_DIR: dataDir,
@@ -74,13 +47,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_ARTIFACTS = JSON.stringify(await seedArtifacts(lab))
   await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
-  const tailnet = tailnetProxy(consoleUrl)
   process.env.E2E_API_URL = lab.server.url
   process.env.E2E_CONSOLE_URL = consoleUrl
-  process.env.E2E_APP_URL = `http://127.0.0.1:${tailnet.port}`
   process.env.E2E_WORLD_BIN = world.bin
   return async () => {
-    await tailnet.stop(true)
     await lab.stop()
     await ntfy.stop(true)
     await estate.stop()

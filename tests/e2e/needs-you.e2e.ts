@@ -240,10 +240,7 @@ test('a write the allow-list refuses stays refused through the listener, and a c
   playwright,
   consoleUrl,
 }) => {
-  const owner = await playwright.request.newContext({
-    baseURL: consoleUrl,
-    extraHTTPHeaders: { 'Tailscale-User-Login': 'owner@example.com' },
-  })
+  const owner = await playwright.request.newContext({ baseURL: consoleUrl })
   for (const path of ['/v1/issues', '/v1/issues/issue_1/cancel', '/v1/issues/issue_1/ask']) {
     expect((await owner.post(path, { data: {} })).status(), path).toBe(405)
   }

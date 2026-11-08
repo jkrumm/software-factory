@@ -2,15 +2,12 @@ import { join } from 'node:path'
 import * as z from 'zod'
 
 const Env = z.object({
-  /** the owner's tailnet login; absent, the Console listener is not started (fail closed) */
-  FACTORY_CONSOLE_OWNER_LOGIN: z.string().min(1).optional(),
-  FACTORY_CONSOLE_PORT: z.coerce.number().int().min(1).max(65535).default(7794),
+  FACTORY_CONSOLE_PORT: z.coerce.number().int().min(1).max(65535).default(7795),
   /** the Console build; a release has the same layout as the repo */
   FACTORY_CONSOLE_DIR: z.string().min(1).optional(),
 })
 
 export interface ConsoleSettings {
-  ownerLogin: string | null
   port: number
   dir: string
 }
@@ -25,7 +22,6 @@ export function loadConsoleSettings(env: Record<string, string | undefined>): Co
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
   return {
-    ownerLogin: parsed.data.FACTORY_CONSOLE_OWNER_LOGIN ?? null,
     port: parsed.data.FACTORY_CONSOLE_PORT,
     dir: parsed.data.FACTORY_CONSOLE_DIR ?? DEFAULT_DIR,
   }

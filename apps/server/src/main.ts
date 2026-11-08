@@ -26,6 +26,7 @@ import { postgresQualityStore } from './adapters/quality/store.ts'
 import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
+import { join } from 'node:path'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
@@ -430,17 +431,18 @@ async function main(): Promise<void> {
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
-  // The Console's listener: loopback too, published on the tailnet by `tailscale serve`. Only the owner's login passes, only
-  // reads and the owner's five answer verbs (`WRITES` in console.ts), and the owner token is held by this closure alone. Without an owner login it does not start. It binds before
+  // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's five answer verbs (`WRITES` in console.ts) pass,
+  // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)
-  const consoleServer = consoleSettings.ownerLogin
+  const consoleBuilt = await Bun.file(join(consoleSettings.dir, 'index.html')).exists()
+  const consoleServer = consoleBuilt
     ? Bun.serve({
         hostname: HOSTNAME,
         port: consoleSettings.port,
         idleTimeout: IDLE_TIMEOUT_S,
         fetch: consoleHandler({
-          ownerLogin: consoleSettings.ownerLogin,
           dir: consoleSettings.dir,
           forward: apiForward({
             handle: (request) => app.handle(request),
@@ -451,7 +453,7 @@ async function main(): Promise<void> {
       })
     : null
   if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
-  else console.log('console not started: FACTORY_CONSOLE_OWNER_LOGIN is not set')
+  else console.log(`console not started: ${join(consoleSettings.dir, 'index.html')} is not built`)
   intake.start()
   runner.start()
 
