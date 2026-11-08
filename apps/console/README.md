@@ -49,8 +49,8 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly five writes, the owner's answers (a Decision's answer, an
-artifact's verdict and comment, an Errand done, a held signal promoted); the app posts JSON to them same-origin, and
+invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly six writes, the owner's answers (a Decision's answer, an
+artifact's verdict and comment, an Errand done, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
 queries poll every 15 s and the chip says `Polling`.
 
@@ -101,7 +101,7 @@ whitespace folded to single spaces: the API anchors it on the artifact's readabl
 state, the facts (account, weekly quota, insights), how the Issue was filed and amended (`triage`), each attempt and its
 state, the owner's notes, the Decisions and artifacts with links to their own pages, shipping with its watch and checks,
 and the history, oldest first. Every figure is the API's, only phrased; no id is on screen. A Needs you card links to it
-(Open Issue). It is read-only on purpose: the listener forwards five answer verbs and none of them is a note or a cancel,
+(Open Issue). It is read-only on purpose: the listener forwards six answer verbs and none of them is a note or a cancel,
 and the Console never cancels an Issue or starts a session. An open Decision links to `/needs-you?item=<id>`, an artifact
 to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 

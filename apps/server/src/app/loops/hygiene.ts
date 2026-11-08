@@ -71,6 +71,7 @@ async function fileOne(
     title: input.title,
     text: input.text,
     repo: input.repoText,
+    probe: false,
   })
   if (!filed.ok) {
     added.failed.push({ key: input.id, reason: reasonOf(filed.error).slice(0, 300) })

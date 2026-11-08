@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test'
 import { readState, statePathOf } from '../scenarios/fakes/hc-state.ts'
 import { sessionOf } from '../scenarios/flow.ts'
 import { expect, test } from './fixtures.ts'
-import { api } from './seed.ts'
+import { api, holdSignal } from './seed.ts'
 
 /**
  * The Needs you screen against the real server whose leads are real sessions of the fake `hc` (seed.ts): what the owner
@@ -153,6 +153,26 @@ test('a deep link opens the item expanded and focused; the ntfy link lands on th
   await page.getByRole('link', { name: 'Back to the list' }).click()
   await expect(page).toHaveURL(/\/needs-you$/)
   await expect(page.getByText('That one is already settled.')).toHaveCount(0)
+})
+
+test('a held signal dismissed with a reason leaves Needs you and stays on record', async ({ page, apiUrl }) => {
+  // its own signal, so the held ones the other tests settle are left alone
+  await holdSignal(apiUrl, 'The footer link is dead', 'dismissal')
+  const held = await needNamed(apiUrl, 'The footer link is dead')
+  await open(page, held.title)
+  const signal = card(page, held.title)
+  await expect(signal.getByRole('button', { name: 'Dismiss' })).toBeDisabled()
+  await signal.getByLabel('Reason').fill('Not a real complaint')
+  await signal.getByRole('button', { name: 'Dismiss' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Dismissed' })).toBeVisible()
+  expect((await needs(apiUrl)).map((need) => need.id)).not.toContain(held.id)
+  const { signals } = await api<{
+    signals: { id: string; dismissedReason: string | null; dismissedBy: string | null }[]
+  }>(apiUrl, '/v1/signals?state=dismissed')
+  expect(signals.find((s) => s.id === held.id)).toMatchObject({
+    dismissedReason: 'Not a real complaint',
+    dismissedBy: 'owner',
+  })
 })
 
 test('an Errand done, a held signal promoted and a verdict each move the API state', async ({ page, apiUrl }) => {

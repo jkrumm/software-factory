@@ -144,6 +144,7 @@ describe('the GitHub label source', () => {
       text: 'it crashes',
       link: 'https://github.com/o/r/issues/7',
       madeBy: null,
+      probe: false,
     })
     expect(first?.alert).toEqual({
       subject: 'o/r#7',

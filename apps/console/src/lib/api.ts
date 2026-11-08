@@ -15,6 +15,7 @@ import {
   ReadAccountList,
   ReadIssueDetail,
   SignalAck,
+  SignalDismissed,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
 
@@ -89,6 +90,9 @@ export const finishErrand = (id: string, note: string) =>
   postJson(`/v1/errands/${encodeURIComponent(id)}/done`, note ? { note } : {}, ErrandReply)
 export const promoteSignal = (id: string, repo: string | null) =>
   postJson(`/signals/${encodeURIComponent(id)}/promote`, repo ? { repo } : {}, SignalAck)
+
+export const dismissSignal = (id: string, reason: string) =>
+  postJson(`/signals/${encodeURIComponent(id)}/dismiss`, { reason }, SignalDismissed)
 
 /** The artifact page's own writes: an annotation on the revision shown, with its heading path, and the verdict on it. */
 export const postAnnotation = (id: string, body: { revision: number; quote: string; path?: string; comment: string }) =>

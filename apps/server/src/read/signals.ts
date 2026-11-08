@@ -14,6 +14,7 @@ export function redactSignals(signals: readonly StoredSignal[]): StoredSignal[] 
     text: '',
     link: null,
     repo: null,
+    dismissedReason: null,
     redacted: true,
   }))
 }

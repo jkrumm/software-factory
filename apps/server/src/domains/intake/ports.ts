@@ -4,7 +4,14 @@ import type { PortError, Result } from '../../kernel/result.ts'
 import type { HealRule, OpenIssue, Received, RepoSignals, Triaged } from './model.ts'
 import type { Topology } from './rules.ts'
 
-export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted'
+export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted' | 'dismissed'
+
+/** Why, by whom and when a signal was turned away: set exactly when its state is `dismissed`. */
+export interface Dismissal {
+  reason: string
+  by: 'owner' | 'judge' | 'probe'
+  at: Date
+}
 
 /** A stored signal: the envelope and its alert detail, and what became of it. */
 export interface SignalRow {
@@ -15,6 +22,7 @@ export interface SignalRow {
   receivedAt: Date
   state: SignalState
   issueId: IssueId | null
+  dismissal: Dismissal | null
 }
 
 /** One filed Issue seen from the source's side: an episode of a subject, or a stateless match by fingerprint. */
@@ -112,7 +120,10 @@ export interface IntakeStore {
   insertSignal(row: SignalRow): Promise<boolean>
   signal(id: string): Promise<SignalRow | null>
   signalByKey(key: string): Promise<SignalRow | null>
-  setSignal(id: string, patch: { state: SignalState; issueId: IssueId | null; repo?: string | null }): Promise<void>
+  setSignal(
+    id: string,
+    patch: { state: SignalState; issueId: IssueId | null; repo?: string | null; dismissal?: Dismissal },
+  ): Promise<void>
   signals(state: SignalState | null, limit: number): Promise<SignalRow[]>
 
   latestSubject(source: string, subject: string): Promise<SubjectRow | null>

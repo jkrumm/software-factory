@@ -35,7 +35,7 @@ test('the Console listener starts when the build exists and serves the read slic
   const index = await fetch(consoleUrl)
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
-  // a write that is not one of the five answers never passes, and the client's own token buys nothing here
+  // a write that is not one of the six answers never passes, and the client's own token buys nothing here
   const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: bearer() })
   expect(post.status).toBe(405)
 })
@@ -46,6 +46,7 @@ const ANSWERS = [
   '/v1/artifacts/artifact_none/annotations',
   '/v1/errands/errand_none/done',
   '/signals/signal_none/promote',
+  '/signals/signal_none/dismiss',
 ]
 
 const API_REFUSALS = [404, 422]
@@ -57,7 +58,7 @@ const write = (path: string, headers: Record<string, string> = {}, body: string 
     body,
   })
 
-test('the five answer verbs reach the API with the body; the API, not the listener, answers', async () => {
+test('the six answer verbs reach the API with the body; the API, not the listener, answers', async () => {
   for (const path of ANSWERS) {
     const reply = await write(path)
     // the API's own refusal of an unknown id or an empty answer, with its ErrorBody

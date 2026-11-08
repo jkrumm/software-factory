@@ -57,6 +57,7 @@ const received = (row: Row): ReceivedInput => ({
     text: row.text,
     link: row.link,
     madeBy: row.made_by,
+    probe: row.dismissed_by === 'probe',
   }),
   alert: row.alert === null ? null : Alert.parse(row.alert),
 })
@@ -66,8 +67,16 @@ const signalOf = (row: Row): SignalRow => ({
   key: textOrNull(row.key),
   received: received(row),
   receivedAt: date(row.received_at),
-  state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted']).parse(row.state),
+  state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed']).parse(row.state),
   issueId: textOrNull(row.issue_id) as IssueId | null,
+  dismissal:
+    row.state === 'dismissed'
+      ? {
+          reason: text(row.dismissed_reason),
+          by: z.enum(['owner', 'judge', 'probe']).parse(row.dismissed_by),
+          at: date(row.dismissed_at),
+        }
+      : null,
 })
 
 const subjectOf = (row: Row): SubjectRow => ({
@@ -146,10 +155,12 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
       const { signal, alert } = row.received
       const rows: unknown[] = await tx`
         INSERT INTO factory.intake_signals
-          (id, key, source, kind, origin, trust, repo, fingerprint, title, text, link, made_by, alert, received_at, state, issue_id)
+          (id, key, source, kind, origin, trust, repo, fingerprint, title, text, link, made_by, alert, received_at, state, issue_id,
+           dismissed_reason, dismissed_by, dismissed_at)
         VALUES (${row.id}, ${row.key}, ${signal.source}, ${signal.kind}, ${signal.origin}, ${signal.trust}, ${signal.repo},
           ${signal.fingerprint}, ${signal.title}, ${signal.text}, ${signal.link}, ${signal.madeBy},
-          ${alert ? json(alert) : null}::text::jsonb, ${row.receivedAt}, ${row.state}, ${row.issueId})
+          ${alert ? json(alert) : null}::text::jsonb, ${row.receivedAt}, ${row.state}, ${row.issueId},
+          ${row.dismissal?.reason ?? null}, ${row.dismissal?.by ?? null}, ${row.dismissal?.at ?? null})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -168,7 +179,9 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
     async setSignal(id, patch) {
       await tx`
         UPDATE factory.intake_signals
-        SET state = ${patch.state}, issue_id = ${patch.issueId}, repo = COALESCE(${patch.repo ?? null}, repo)
+        SET state = ${patch.state}, issue_id = ${patch.issueId}, repo = COALESCE(${patch.repo ?? null}, repo),
+          dismissed_reason = ${patch.dismissal?.reason ?? null}, dismissed_by = ${patch.dismissal?.by ?? null},
+          dismissed_at = ${patch.dismissal?.at ?? null}
         WHERE id = ${id}`
     },
 

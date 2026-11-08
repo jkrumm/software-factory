@@ -98,7 +98,13 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   Promoting keeps a subject row for the signal's fingerprint (as for a person's request). A later outside signal with that
   fingerprint from the same source amends the promoted Issue while it is open (a `noted` event, fenced; the signal is stored
   `amended`, once per distinct text); when that Issue is closed it is held again as new, and while a signal is still held a
-  duplicate is that held signal (`replayed`, no second row).
+  duplicate is that held signal (`replayed`, no second row). A held signal can also be **dismissed** (`POST /signals/:id/dismiss`,
+  the owner or the Judge, a reason of 1 to 500 characters): state `dismissed` with `dismissed_reason`, `dismissed_by`
+  (`owner`, `judge` or `probe`) and `dismissed_at`, no Issue, and it leaves Needs you and the friction count. Only a held
+  signal can be dismissed or promoted. A **probe** (`probe: true` on `POST /signals` or the door's feedback, carried on the
+  `Signal` envelope) passes the loop guard, the work-repo rule and the trust gate as any signal does, then is stored
+  `dismissed` by `probe` under a key of its source and fingerprint (a replay stores once): it files nothing, is never held and
+  never reaches the triage workflow; its ack is `dropped`, detail `probe`.
 - **Loop guard.** A change a loop made never fires that loop again.
 - **Stop the line.** While a repo's alert is unsolved, only its fix is admitted.
 
@@ -233,12 +239,12 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the five answer
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the six answer
 verbs below, never a session start. The door holds only its own token. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's five answer verbs (a Decision's answer, an artifact's verdict
-and annotation, an Errand done, a held signal promoted), guarded against a cross-site page (JSON only, no cross-site fetch
+another node. The Console listener reads, and forwards exactly the owner's six answer verbs (a Decision's answer, an artifact's verdict
+and annotation, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
-from a signal already held. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
+from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
 served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
 
 ## Data
@@ -262,7 +268,7 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the five answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
+  it is read-only apart from the six answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow board, the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.

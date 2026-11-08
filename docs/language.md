@@ -12,8 +12,10 @@ check, `docs/architecture.md`).
 | **Triage** | Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped | Classify and dedup, as words a person meets |
 | **Incident** | One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue | An Issue per alert |
 | **Amend** | Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note | |
-| **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo` | |
+| **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo`, `probe` | |
 | **Promote** | A held signal becomes work: the owner's or the Judge's call | |
+| **Dismiss** | A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
+| **Probe** | A test signal a lead marks (`probe: true`) so it is stored dismissed and never held; its ack is `dropped`, detail `probe` | |
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
 | **Work repo** | A repo no `project.yaml` describes. The read token never sees its words | |
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |

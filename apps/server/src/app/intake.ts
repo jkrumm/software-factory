@@ -7,7 +7,9 @@ import {
   feedbackSource,
   feedbackTokenKey,
   MAX_TITLE_CHARS,
+  type DismissRequest,
   type PromoteRequest,
+  type SignalDismissed,
   type Signal,
   type SignalRequest,
   storable,
@@ -15,6 +17,7 @@ import {
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
 import type { Alert, HealRule, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
 import type {
+  Dismissal,
   IntakeSink,
   IntakeStore,
   IntakeTopology,
@@ -53,7 +56,7 @@ export type IntakeWrites = UnitOfWork<Stores>
 
 /** What a use case of intake refuses besides a failed write. */
 export type IntakeRefusal = {
-  kind: 'not_found' | 'not_held' | 'no_repo' | 'unknown_project' | 'trust_refused'
+  kind: 'not_found' | 'not_held' | 'invalid' | 'no_repo' | 'unknown_project' | 'trust_refused'
   detail: string
 }
 
@@ -99,6 +102,8 @@ const RUNBOOK_LEASE_MS = 150_000
 const SETTLE_BATCH = 20
 const UNROUTED_BATCH = 20
 const TAIL = 500
+const MAX_DISMISS_REASON = 500
+const PROBE_REASON = 'marked as a probe'
 
 const refuse = (kind: IntakeRefusal['kind'], detail: string): Result<never, IntakeRefusal> => err({ kind, detail })
 
@@ -114,7 +119,7 @@ const dropped = (detail: Triaged['detail'], reason: string): Triaged => triaged(
 
 /** What a replayed event answers: what it answered the first time. */
 function replayedOf(row: SignalRow): Triaged {
-  const outcome = row.state === 'promoted' ? 'filed' : row.state
+  const outcome = row.state === 'promoted' ? 'filed' : row.state === 'dismissed' ? 'dropped' : row.state
   return triaged(outcome, 'replayed', row.issueId, row.id)
 }
 
@@ -167,6 +172,7 @@ export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): R
     text: cleanText(body.text),
     link: body.link ? cleanText(body.link) : null,
     madeBy: null,
+    probe: body.probe,
   })
 }
 
@@ -205,9 +211,10 @@ export function createIntake(deps: IntakeDeps) {
     key: Key | null,
     state: SignalState,
     issueId: IssueId | null,
+    dismissal: Dismissal | null = null,
   ): Promise<string> {
     const id = ids.next('signal')
-    await s.intake.insertSignal({ id, key, received, receivedAt: clock.now(), state, issueId })
+    await s.intake.insertSignal({ id, key, received, receivedAt: clock.now(), state, issueId, dismissal })
     return id
   }
 
@@ -540,6 +547,16 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- quarantine ----
 
+  /** A lead's own test signal: stored dismissed, never held, never work. A replay finds the stored one. */
+  async function probeIn(s: Stores, r: Received): Out<Triaged> {
+    const key = keyOf('probe', r.signal.source, r.signal.fingerprint)
+    const existing = await s.intake.signalByKey(key)
+    const id =
+      existing?.id ??
+      (await store(s, r, key, 'dismissed', null, { reason: PROBE_REASON, by: 'probe', at: clock.now() }))
+    return ok(triaged('dropped', 'probe', null, id, 'marked as a probe: stored dismissed, never shown to the owner'))
+  }
+
   async function hold(s: Stores, r: Received, again?: IssueId): Out<Triaged> {
     const heldKey = r.alert
       ? keyOf('held', r.signal.source, r.alert.subject)
@@ -547,7 +564,7 @@ export function createIntake(deps: IntakeDeps) {
         ? keyOf('held', r.signal.source, r.signal.fingerprint, again)
         : keyOf('held', r.signal.source, r.signal.fingerprint)
     const existing = await s.intake.signalByKey(heldKey)
-    if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
+    if (existing) return ok({ ...replayedOf(existing), outcome: existing.state === 'dismissed' ? 'dropped' : 'held' })
     const id = await store(s, r, heldKey, 'held', null)
     return ok(triaged('held', 'quarantined', null, id, 'outside text waits for the owner or the Judge'))
   }
@@ -594,6 +611,7 @@ export function createIntake(deps: IntakeDeps) {
       const where = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
       if (!where.ok) return where
       if (where.value?.work) return ok(dropped('work_repo', `${signal.repo} is a work repo: it hears the owner only`))
+      if (signal.probe) return uow.run(async (s) => probeIn(s, r))
       return uow.run(async (s) => outsideIn(s, r))
     }
 
@@ -601,6 +619,7 @@ export function createIntake(deps: IntakeDeps) {
     if (!found.ok) return found
     const verdict = gate(signal, found.value)
     if (!verdict.pass) return ok(dropped(verdict.detail, verdict.reason))
+    if (signal.probe) return uow.run(async (s) => probeIn(s, r))
     const info = found.value as RepoSignals
 
     if (alert?.status === 'down' || alert?.status === 'up') {
@@ -690,6 +709,26 @@ export function createIntake(deps: IntakeDeps) {
     })
   }
 
+  /** The owner (or the Judge) turns a held signal away: it files nothing and stays on record as dismissed. */
+  async function dismiss(id: string, body: DismissRequest, by: 'owner' | 'judge' = 'owner'): Out<SignalDismissed> {
+    const reason = body.reason.trim()
+    if (reason.length === 0 || reason.length > MAX_DISMISS_REASON) {
+      return refuse('invalid', `a reason of 1 to ${MAX_DISMISS_REASON} characters is required`)
+    }
+    return uow.run(async (s): Out<SignalDismissed> => {
+      await s.intake.lock(`dismiss:${id}`)
+      const current = await s.intake.signal(id)
+      if (!current) return refuse('not_found', `no signal ${id}`)
+      if (current.state !== 'held') return refuse('not_held', `signal ${id} is ${current.state}`)
+      await s.intake.setSignal(id, {
+        state: 'dismissed',
+        issueId: null,
+        dismissal: { reason, by, at: clock.now() },
+      })
+      return ok({ signal: id, state: 'dismissed' })
+    })
+  }
+
   function list(state: SignalState | null): Out<SignalRow[]> {
     return uow.run(async (s) => ok(await s.intake.signals(state, 200)))
   }
@@ -734,6 +773,7 @@ export function createIntake(deps: IntakeDeps) {
         text: factsText(input.facts),
         link: typeof link === 'string' ? link : null,
         madeBy: null,
+        probe: false,
       },
       alert: { subject: input.monitor, event: input.event, status: input.status, facts: input.facts },
     }
@@ -777,6 +817,7 @@ export function createIntake(deps: IntakeDeps) {
         text,
         link: raw.link ? cleanText(raw.link) : null,
         madeBy: null,
+        probe: raw.probe,
       },
       alert: null,
     })
@@ -961,6 +1002,7 @@ export function createIntake(deps: IntakeDeps) {
           text: place.mapped ? '' : HOME_ASK,
           link: null,
           madeBy: null,
+          probe: false,
         },
         alert: {
           subject: row.monitor,
@@ -1062,6 +1104,7 @@ export function createIntake(deps: IntakeDeps) {
     alert,
     feedback,
     promote,
+    dismiss,
     list,
     doorReport,
     routes,

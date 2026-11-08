@@ -15,7 +15,7 @@ beforeAll(async () => {
   world = await startWorld()
   estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'vps' }, { repo: 'chat', work: true }])
   server = await startIntakeServer(world, estate)
-  door = await startDoor(estate, server, ['kuma'])
+  door = await startDoor(estate, server, ['kuma', 'feedback-argo'])
 })
 
 afterAll(async () => {
@@ -159,6 +159,61 @@ test("the repo comes from the door's routes, never from a payload", async () => 
     (s: { id: string }) => s.id === sneaky.body.signal,
   )
   expect(stored).toMatchObject({ repo: 'vps' })
+}, 20000)
+
+test('a held signal is dismissed with a reason: out of Needs you, on record, nothing filed', async () => {
+  const held = await signalFile({ from: 'feedback:argo', title: 'Spam about a prize', text: 'click here' })
+  expect(held).toMatchObject({ outcome: 'held' })
+  const id = held.signal as string
+  const needsIds = async () => ((await get(server, '/v1/needs')).body.items as { id: string }[]).map((i) => i.id)
+  expect(await needsIds()).toContain(id)
+
+  expect((await cli(['signal', 'dismiss', id, '--reason', ''])).code).not.toBe(0)
+  const dismissed = await cli(['signal', 'dismiss', id, '--reason', 'spam, not about the product'])
+  expect(dismissed.code).toBe(0)
+  expect(JSON.parse(dismissed.out)).toEqual({ signal: id, state: 'dismissed' })
+  expect(await needsIds()).not.toContain(id)
+
+  const listed = JSON.parse((await cli(['signal', 'list', '--state', 'dismissed'])).out) as {
+    signals: { id: string; state: string; dismissedReason: string; dismissedBy: string; issue: string | null }[]
+  }
+  expect(listed.signals.find((s) => s.id === id)).toMatchObject({
+    state: 'dismissed',
+    dismissedReason: 'spam, not about the product',
+    dismissedBy: 'owner',
+    issue: null,
+  })
+  expect((await cli(['signal', 'dismiss', id, '--reason', 'again'])).code).not.toBe(0)
+  expect((await cli(['signal', 'promote', id, '--body', JSON.stringify({ repo: 'argo' })])).code).not.toBe(0)
+}, 20000)
+
+test('a probe is stored dismissed, never shown, files nothing, and a replay stores once', async () => {
+  const issuesBefore = (await world.db.sql`SELECT 1 FROM factory.issues`).length
+  const feedbackProbe = await door.feedback('argo', {
+    title: 'Probe from a lead',
+    version: '1.0.0',
+    route: '/x',
+    probe: true,
+  })
+  expect(feedbackProbe).toMatchObject({ status: 200, body: { outcome: 'dropped', detail: 'probe', issue: null } })
+  const replay = await door.feedback('argo', { title: 'Probe from a lead', version: '1.0.0', route: '/x', probe: true })
+  expect(replay.body.signal).toBe(feedbackProbe.body.signal)
+
+  const agent = await signalFile({ from: 'agent:vps', title: 'Probe from an agent', probe: true })
+  expect(agent).toMatchObject({ outcome: 'dropped', detail: 'probe', issue: null })
+  expect(await signalFile({ from: 'agent:vps', title: 'Probe from an agent', probe: true })).toMatchObject({
+    signal: agent.signal,
+  })
+
+  const needsIds = ((await get(server, '/v1/needs')).body.items as { id: string }[]).map((i) => i.id)
+  for (const id of [feedbackProbe.body.signal, agent.signal]) expect(needsIds).not.toContain(id)
+  const rows = await world.db.sql`
+    SELECT state, dismissed_by, dismissed_reason FROM factory.intake_signals WHERE title LIKE 'Probe from%'`
+  expect(rows).toEqual([
+    { state: 'dismissed', dismissed_by: 'probe', dismissed_reason: 'marked as a probe' },
+    { state: 'dismissed', dismissed_by: 'probe', dismissed_reason: 'marked as a probe' },
+  ])
+  expect((await world.db.sql`SELECT 1 FROM factory.issues`).length).toBe(issuesBefore)
 }, 20000)
 
 test('writing signals called neither hc nor agw', async () => {

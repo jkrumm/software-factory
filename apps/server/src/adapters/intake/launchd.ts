@@ -62,6 +62,7 @@ function receivedOf(
       text: clean,
       link: null,
       madeBy: null,
+      probe: false,
     },
     alert: { subject: label, event, status, facts: storable(facts) },
   }

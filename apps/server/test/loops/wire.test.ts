@@ -139,6 +139,7 @@ const signal = {
   text: 'token=abcdef123456 also happens with coupons',
   link: null,
   madeBy: null,
+  probe: false,
 } as const
 
 test('amend: the signal is sent scrubbed with the candidates, and the Issue it names must be one it was shown', async () => {

@@ -104,6 +104,7 @@ describe('the failed launchd job source', () => {
       text: `Failed launchd job "${JOB}" (exit 1)`,
       link: null,
       madeBy: null,
+      probe: false,
     })
     expect(first?.alert).toEqual({
       subject: JOB,

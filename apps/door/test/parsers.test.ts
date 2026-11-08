@@ -218,7 +218,12 @@ describe('feedback', () => {
       version: '1.2.0',
       route: '/forecast',
       link: null,
+      probe: false,
     })
+  })
+
+  test('a probe flag is forwarded untouched', () => {
+    expect(parseFeedback('weather', { ...payload, probe: true }).probe).toBe(true)
   })
 
   test('a link loses its userinfo and fragment; overlong fields are cut', () => {
