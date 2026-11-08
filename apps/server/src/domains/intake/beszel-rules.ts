@@ -1,6 +1,6 @@
 import type { Thresholds } from './infra.ts'
 
-/** The rules of the Beszel source (docs/design.md §8 "Beszel"): pure, no I/O, one finding per rule. */
+/** The rules of the Beszel source: pure, no I/O, one finding per rule. */
 export const RULES = ['memory', 'swap', 'swap_growth', 'disk', 'load', 'silent'] as const
 export type RuleName = (typeof RULES)[number]
 

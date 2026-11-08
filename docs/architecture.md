@@ -1,193 +1,207 @@
-# Architecture: the target of the rewrite
+# Architecture: what is built
 
 **A modular monolith on Bun: plain TypeScript and zod, Postgres as the only store, domains with no I/O behind ports,
-Elysia at the edge, a generated CLI and a static Console served by the same process.** This is the target the rewrite
-builds (`docs/rewrite.md`). Until the cutover, `docs/design.md` describes the running factory. Words follow
-`docs/language.md`.
-
-## What stays
-
-Interactive Claude Code in herdr-core, one lead per Issue, the factory never calling a model, deterministic keys on
-every effect, spool-first hooks with empty stdout, the advisory process lock, the loopback API, `secrets-run`, the
-make contract (`check`, `test`, `deploy`, `verify`, `version`, `logs`), `FACTORY_REF=<branch>` deploys, and the
-`factory role get <role> --format json` contract `rd` reads. The rules in `AGENTS.md` hold unless a decision says
-otherwise.
+Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08
+(`docs/rewrite/state.md` is the log of how it got here). Words follow `docs/language.md`; the rules a change must keep
+are in `AGENTS.md`; why something is as it is, in `docs/decisions.md`. This page says where things are and how they fit.
+What is not built yet is the last section.
 
 ## Layout
 
 ```
 apps/
-  server/     Elysia app: domains, application services, adapters; serves the Console build
-  console/    Vite + React SPA (client only, holds no logic the API could hold)
-  door/       alert door, unchanged in role: loopback, no token, posts signals
-  cli/        `factory`, generated from the OpenAPI document plus the hook and slot verbs
+  server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
+  door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
+  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, follow and role verbs
 packages/
-  contract/   zod schemas: every request, response and event; the OpenAPI source
-  client/     typed client for the Console (Eden) and the CLI's transport
+  contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
+  client/     typed client (Eden) and the CLI's transport, including the change-stream follower
 tests/
-  scenarios/  use cases run against a real server with fake hc and agw: the factory's acceptance suite
-  e2e/        Playwright against the Console on a seeded server
+  scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
+config/       roles.json (tier and effort per role), infra.json (the Beszel thresholds)
+scripts/      deploy, verify, launch, env-file, the boundary and retired-word checks, the cutover tools
+deploy/       LaunchAgent templates
 ```
 
 ## The server
 
 ```
 apps/server/src/
-  kernel/        Result, ids, clock, keys, the event envelope. Imports nothing else
+  kernel/        Result, ids, clock, keys, the event envelope, agw call types. Imports nothing else
   domains/       pure: types, rules, state machines, ports (interfaces). No I/O, no SQL, no Elysia
-    intake/        signal envelope, trust, fingerprint, correlation into incidents, amend-or-new
-    planning/      plans, the chain, queue order
-    capacity/      accounts, windows, memory, load, repo claims, test slots
-    work/          the Issue: the total state machine and its events
-    leads/         attempts, briefs, notes, session state derived from hook events
-    quality/       gates: evidence, watch, verify, review as evidence
-    checkpoints/   decisions, artifacts and revisions, annotations, verdicts, errands, the ledger
-  app/           use cases that coordinate domains in one transaction, then run effects
-    loops/         steward, judge, triage, queue, friction, hygiene: each a tick with a budget
-  adapters/      postgres repositories, hc runner, agw, git, gh, ntfy, tailscale, filesystem
-  api/           Elysia route groups per domain, the stream, auth, Console static files
-  read/          read models (SQL views and projections) for the API: flow, chain, needs, kpis
+    intake/        signal envelope, trust and routing rules, fingerprints, incidents, the Beszel rules
+    planning/      projects, plans, the chain, queue order
+    capacity/      accounts and windows, memory, load, repo claims, queue state, test slots, admission
+    work/          the Issue: events, the total transition table, effects, the generated diagram
+    leads/         attempts, the brief, notes, session state derived from hook events, the stop rule
+    quality/       the ship gate, evidence, the watch and verify
+    checkpoints/   Decisions, artifacts and revisions, errands, the owner's pages
+    loops/         what the steward and triage decide: stall rules, settling
+  app/           use cases: one transaction to claim, the port call outside it, one to record
+    loops/         the loop runner and the steward and triage passes
+  adapters/      postgres stores, hc terminals, agw, git, ntfy, filesystem blobs, the intake pollers, the hook socket
+  api/           Elysia route groups, auth and the caller policy
+  read/          read models (SQL projections) for the API and the stream
+  compose-*.ts   wiring of each domain; main.ts boots, takes the process lock first and shuts down in order
 ```
 
-**Rules, enforced in `make check` by a boundary script:**
+**Rules, enforced in `make check` by `scripts/boundaries.ts`:**
 
 - `domains/*` import only `kernel` and their own folder. A domain reaches another only through `app/`.
-- Each domain owns its tables. Cross-domain SQL lives in `read/` and is read-only.
+- Each domain owns its tables. `read/` crosses them and is read-only.
 - A port is an interface in its domain; an adapter in `adapters/` implements it; tests use fakes of the same interface.
-- Only `app/` opens a transaction. A port is never called inside one: claim, commit, call, record.
-- Every port returns `Result<T, PortError>`; only a programming error throws.
+- Only the unit of work and the migration runner open a transaction. A port is never called inside one: claim,
+  commit, call, record.
+- Every port returns `Result<T, PortError>`; only a programming error throws. `PortError.kind` is `timeout`, `gone`,
+  `refused` or `unreadable`.
+- An intake poller reads the outside world and hands signals to the sink; it touches nothing else of the server.
+- `apps/cli/src/hook.ts` imports only `node:fs` and the spool half of the contract.
 
-```ts
-type PortError = { kind: 'timeout' | 'gone' | 'refused' | 'unreadable'; detail: string }
-type Result<T> = { ok: true; value: T } | { ok: false; error: PortError }
-```
+## The Issue machine
 
-## The Issue state machine
+States: `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. `apply(state, event)` is a total table in
+`domains/work/table.ts`: every `(state, event)` cell is written down as a transition with its effects, a named refusal
+or a named ignore, and a missing cell fails `tsc`. The diagram and the wait table in `docs/language.md` are generated
+from that table.
 
-States: `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. The machine is a total table: every
-`(state, event)` cell is written down, and a missing cell fails `tsc`.
-
-```ts
-type Cell =
-  | { to: State; reason?: WaitReason; effects: Effect[] }
-  | { refuse: string } // the verb's error, named
-  | { ignore: string } // why this changes nothing
-const TABLE: { [S in State]: { [E in EventKind]: (ctx: Ctx) => Cell } } = {
-  /* every cell */
-}
-```
-
-- **Pure:** `apply(state, event)` returns the next state and effects; `app/` stores the event, the new state (`UPDATE
-  ... WHERE id = $1 AND version = $2`) and the effects in an outbox in one transaction, then runs the effects.
-- **Model test:** a seeded generator plays random event sequences and checks invariants: a machine wait always has an
-  exit that needs no person; a wait on the owner always states what it holds; a closed Issue reopens only by its verb.
-- **Diagram:** generated from `TABLE` into `docs/language.md`, so the words and the code cannot drift.
-- No XState, no workflow engine. Events in Postgres plus a row version are the whole mechanism.
+- **One writer.** `app/` stores the event, the new state (`UPDATE … WHERE id = $1 AND version = $2`) and the effects in an
+  outbox in one transaction, then the outbox runs the effects (`app/outbox.ts`): claimed with a lease, retried with a
+  doubling delay. A late event that names an old attempt, watch, wait or checkpoint is ignored or refused by the table.
+- **Model test** (`apps/server/test/work/model.test.ts`): a seeded generator plays random event sequences and checks
+  invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds; a
+  closed Issue reopens only by its verb, within 30 days.
+- No XState, no workflow engine. Events in Postgres plus a row version are the whole mechanism (NL11).
 
 ## Signals and triage
 
-Every input is one envelope and goes through `intake.receive`:
+Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `fingerprint`, `title`, `text`, `link`) and goes
+through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/language.md`).
 
-```ts
-const Signal = z.object({
-  source: z.string(), // kuma, hyperdx, beszel, github, feedback:<app>, owner:hermes, agent:<repo>
-  kind: z.enum(['alert', 'request', 'feedback', 'remark']),
-  origin: z.enum(['you', 'application', 'infrastructure', 'github', 'feedback', 'factory']),
-  trust: z.enum(['owner', 'machine', 'agent', 'outside']),
-  repo: z.string().nullable(), // from the route or the caller, never from an outside payload
-  fingerprint: z.string(),
-  title: z.string(),
-  text: z.string(),
-  link: z.string().nullable(),
-})
-// receive(signal): 'filed' | 'amended' | 'incident' | 'held' | 'dropped'
-```
+- **Sources.** The owner (`factory signal`, Hermes through the narrow `signal` caller as `owner:hermes`), agents
+  (`agent:<repo>`), the alert door (Kuma and HyperDX), and three pollers: GitHub (the owner's new issues and failing
+  checks; anyone else's need the label and are held), Beszel (host rules from `config/infra.json`) and launchd (a
+  LaunchAgent's state). `repo` comes from the route, the door registry or the caller, never from an outside payload.
+- **Who may file where.** `domains/intake/rules.ts` gates a signal: a work repo hears only the owner (NL18), an unknown
+  repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's and Beszel's are routed.
+- **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
+  down fires Beszel, HyperDX and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
+- **Amend or new.** A repeat of a fingerprint inside its window changes nothing. An owner or agent signal that matches an
+  open Issue amends it and reaches its lead as a note; deterministic matching first, the `factory-triage` workflow when
+  unsure. A `down` waits out a heal grace as `held`: an `up` inside it makes it `healed`, and a project's heal rule runs
+  `make restart` in its repo (`adapters/intake/runbook.ts`, outside any transaction) before an Issue is filed.
+- **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as data.
+- **Loop guard.** A change a loop made never fires that loop again.
+- **Stop the line.** While a repo's alert is unsolved, only its fix is admitted.
 
-- **Correlation:** alerts on one host or dependency inside a window join one incident (the VPS down fires Beszel,
-  HyperDX and Kuma; one Issue). The host and dependency map comes from the manifests; the window is a setting.
-- **Amend or new:** an owner or agent signal that matches an open Issue amends it and reaches its lead as a note;
-  deterministic matching first, the triage workflow when unsure.
-- **Quarantine:** an outside signal (others' GitHub issues, app feedback) is held and reaches a lead only after the
-  owner or the Judge promotes it, fenced as data.
-- **Loop guard:** a change a loop made never fires that loop again.
-- A project's `signals:` lists the automatic sources it hears. Work repos hear the owner only.
-- `factory signal` is how the owner, Hermes and agents put work in. `factory issue new` remains for plan rows and
-  the rewrite orchestrator.
+## Capacity and leads
+
+- **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
+  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings), the repo's claims
+  (`leads: N` plus one for a fix; `pace` allows one), then an account with room. The first that says no names itself and
+  its numbers as the queue reason. It never spills to another account past a window or a cap; with every account closed it
+  waits for the first opening. Owed Issues are served before new ones.
+- **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
+  then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
+  crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
+  byte-identical in every brief so the prompt cache serves them, then the Issue as filed, its facts and its notes.
+- **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
+  replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
+- **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
+  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone.
+- **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
+  (the hook exits 2); the second time the Issue stalls as `unreported`. A stop with background work still running is no
+  stop.
+- **Finalize** (`app/leads-finalize.ts`), once per attempt and in this order: the claim goes back, the terminals close,
+  the transcripts are archived, the worktree and branch are removed when clean.
+- **Test slots** (`domains/capacity/slots.ts`): a host-wide semaphore around `make test`, so parallel checks do not pile
+  their load; `factory slot run` takes a slot, a wait past 45 minutes exits 75 without running, and a server that is down
+  runs the tests anyway.
+
+## Quality
+
+- **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the
+  default branch, read by the factory, never taken from the lead. Without that the ship is refused with the error named and
+  counted as friction. A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
+  with its reason; it never refuses a ship (NL23). `evidence.ts` decides whether the paths deploy at all; its inert paths
+  equal `scripts/verify.sh`'s.
+- **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
+  their own loop, so a slow verify never holds the leads' pass. A red check is retried with a doubling delay before it is
+  a regression; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
+  rechecked, never passed.
+- **Reopen** (`app/quality-reopen.ts`) is the owner's, within 30 days of closing.
+
+## Checkpoints
+
+A Decision is a form with every field required (recommendation, what was checked, cost per option, what happens with no
+answer). It is settled in order: standing policy (`FACTORY_CHECKPOINT_POLICY_FILE`), the Judge (`factory-ask`),
+which reads the plan, the docs and the precedents of the ledger), the default after its wait when the option is reversible, then
+the owner. A step is a claimed call with a 35-minute lease past the Judge's 30-minute hang guard. A Concept or Spec is a
+revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
+named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
 
 ## Loops and agw
 
-Each loop is an `app/loops` tick with a trigger and a budget. Its deterministic part runs in the server; its judgment
-is a dedicated agw workflow with its own prompt, tools and skills (`agent-workflows`), called through the agw port
-with a 30-minute hang guard.
+A loop is a named tick (`app/loops/runner.ts`) with a trigger (an interval, or a kick when something changed), a budget
+and single-flight passes. Its deterministic part runs in the server; its judgment is a dedicated agw workflow with its
+own prompt, tools and skills (`agent-workflows`), called through the agw port with a 30-minute hang guard. A call is
+recorded in `loop_calls` under its key, so the next boot takes it up again.
 
 | Loop | Deterministic | agw workflow |
 |-|-|-|
-| Steward | wake, re-check, requeue, deliver | `factory-steward`: what a stalled Issue needs when the rules do not say |
-| Judge | standing policy in `project.yaml`, precedent lookup (Postgres text search) | `factory-ask`: Haiku high, reads the plan, docs and precedents |
-| Triage | fingerprint, routes, correlation window | `factory-triage`: kind, origin, size, amend-or-new, likely `after` edges |
-| Queue | cycle check, real blockers | `factory-queue`: proposed edges and order; never overrides the owner's `prio` |
-| Friction | SQL view over the event log, thresholds | weekly pattern pass |
-| Hygiene | `make check`, outdated deps, retired words, broken links, co-change scan | staleness, unslop, untangle findings |
-
-A Decision goes through: standing policy, then the lead's own required fields (recommendation, what it checked, cost
-per option, consequence of no answer), then the Judge, then the default after a wait when the option is reversible,
-then the owner. The owner's line (ntfy) carries checkpoints only.
+| `leads` | spool replay, start, notes, finalize, the outbox | none |
+| `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits | none |
+| `watch` | verify and probes | none |
+| `settle`, `send` | Decision steps, pages | `factory-ask` (the Judge) |
+| `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`) | `factory-steward`: what a stalled Issue needs when the rules do not say |
+| `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new, likely `after` edges |
 
 ## API, client, CLI
 
-- **Elysia** (as Argo and Iris) with zod through Standard Schema, `@elysiajs/openapi` for the document,
-  `@elysiajs/eden` for the Console's typed client. Versions are checked when the skeleton is built.
-- **The CLI is generated** from the OpenAPI document, one command per operation, keeping agw's contract: `--format
-  json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot and role verbs stay
-  hand-written where their contracts demand it.
+- **Elysia** with zod through Standard Schema and `@elysiajs/openapi` for the document. Who may call a route is the one
+  table in `api/policy.ts`; a walk of the OpenAPI document fails the tests on a route without a row.
+- **The CLI is generated** from the OpenAPI document (`apps/cli/scripts/generate.ts`), one command per operation, keeping
+  agw's contract: `--format json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot,
+  deploy-lock, follow and role verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
+  the way to the same thing (`apps/cli/src/retired.ts`).
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
-- The hook socket stays a plain `Bun.serve` unix listener: its contract (mode 0600, empty stdout) does not change.
-- Reads cover needs, since a cursor, flow, chain, Issues, sessions, artifacts, signals, kpis, friction and the stream.
-  Writes the Console may use: answer, verdict, comment, note, cancel, errand done, promote.
+- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, kpis and
+  the change stream. The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
+  `GET /health` carries the heartbeat.
+- The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
+  hook's, not the API's.
 
 ## Perimeter
 
-The API stays loopback. A second loopback listener serves the Console and its routes and is published with
-`tailscale serve` (HTTPS on the tailnet, so the PWA installs). The tailnet is the perimeter, and the listener accepts
-only requests carrying the owner's `Tailscale-User-Login`, because other tailnet nodes (servers) must not reach a
-process that can start Claude Code. That listener can never spawn a session.
-
-## The Console
-
-| Layer | Choice |
-|-|-|
-| Build | Vite 8, React 19, TypeScript strict |
-| Primitives | `@base-ui/react` with shadcn components (`shadcn init -b base -t vite`) in the repo |
-| Style | Tailwind 4, Basalt's tokens (`basalt-ui tokens:css --only core`) through an `@theme inline` bridge, Basalt's fonts, Phosphor icons; a test fails on any raw colour |
-| Routing | TanStack Router: typed search params, deep links from ntfy and Herdr |
-| Server state | TanStack Query, invalidated from the event stream; polling is the fallback |
-| Tables | TanStack Table and Virtual; cards under a breakpoint |
-| Forms | TanStack Form with the contract's schemas |
-| Chain | `@xyflow/react` with `@dagrejs/dagre` |
-| Keys, palette | TanStack Hotkeys (pre-1.0, pin exactly), `cmdk` in a Base UI dialog |
-| Local state | a small store on `useSyncExternalStore` |
-| PWA | `vite-plugin-pwa`; the last snapshot shown with its age when offline; no Web Push |
-
-The Console stays thin: every rule, filter and number comes from the API. Patterns come from the owner's work chat
-UI (shell, tokens, primitives) and Argo (TanStack wiring); no code is copied from the work repo.
-
-**Artifacts** are Markdown or HTML made from shared templates in Basalt's look, so a lead produces them easily and
-they render and annotate the same way. Markdown renders in the page through a sanitiser; HTML runs in a
-`sandbox="allow-scripts"` iframe with a network-blocking CSP and an injected annotator that posts selections out.
-Anchors are a quote plus a path, with an "Unanchored" group as the fallback.
+The API stays loopback; the tailnet and the owner's GitHub user are the perimeter. The door is published on the tailnet
+with `tailscale serve` and holds only its own token. Nothing that can start Claude Code is reachable from another node.
 
 ## Data
 
-Blobs (artifact revisions) live under the factory's data directory, never in git. The cutover imports Issues, events,
-decisions and evidence from the current schema so the KPIs keep their history; everything else is rebuilt. Usage and
-cost come from the `usage` schema by join, never copied.
+One database, schema `factory`; migrations apply under an advisory lock and a checksum. The cutover imported Issues,
+events, decisions and evidence from the old schema (`apps/server/scripts/import/`, `docs/rewrite/cutover-runbook.md`), so
+the KPIs keep their history. Usage and cost come from the `usage` schema by join, never copied.
 
 ## Tests
 
-- **Unit** where logic is pure and dense: the state machine, correlation, gates, the queue order.
-- **Model test** of the state machine.
-- **Scenarios** (`tests/scenarios`): use cases end to end against a real server and Postgres with fake hc and agw.
-  They are the acceptance suite, and a lead runs the ones its change touches as its proof.
-- **E2E** (`tests/e2e`, Playwright) for the Console's flows; the verifier adds screenshots per change.
-- `make check`: frozen install, oxfmt, oxlint (type-aware), `tsc`, the boundary script, the retired-word check,
-  `bun test`, scenarios. E2E runs in `make check` once the Console exists.
+- **Unit** where logic is pure and dense: the machine, correlation, the gate, admission, the queue order.
+- **Model test** of the machine.
+- **Scenarios** (`tests/scenarios`): use cases end to end against a real server and Postgres with fake hc and agw. They
+  are the acceptance suite, and a lead runs the ones its change touches as its proof.
+- `make check`: frozen install, oxfmt, oxlint (type-aware), shellcheck, `tsc`, the boundary script, the retired-word
+  check, the generated diagram and CLI freshness, `bun test`, scenarios.
+
+## Not built yet
+
+Rows in `docs/plan.yaml` carry each of these.
+
+- **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
+  Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener published by `tailscale serve`
+  that accepts only the owner's `Tailscale-User-Login` and can never spawn a session. Until then the page links
+  (`FACTORY_CONSOLE_URL`) are a setting.
+- **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
+  the env allow-list for a rollback and the new core reads none of them.
+- **The queue, friction and hygiene loops.** The Judge and the steward are built; `friction` and `kpis` exist as read
+  models, but no loop counts patterns or files findings yet.
+- **Artifacts in the Console:** Markdown through a sanitiser, HTML in a sandboxed iframe with a network-blocking CSP and
+  an annotator that posts selections out; anchors are a quote plus a path with an "Unanchored" group as the fallback.
+- **Client work** in other repos: the Herdr glance, Hermes' factory skill, Argo's factory pages leaving for the Console.

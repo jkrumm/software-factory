@@ -34,7 +34,7 @@ export interface StopFacts {
 }
 
 /**
- * A lead's stop (`docs/design.md` §5, "Following a lead"): sent back once with one line when it reports nothing; the stop
+ * A lead's stop: sent back once with one line when it reports nothing; the stop
  * that follows a send-back (`stopHookActive`) stalls the Issue as `unreported`. The same stop asked again, without the
  * flag (a retried hook), is let through and records nothing. A turn answering the owner is never sent back.
  */

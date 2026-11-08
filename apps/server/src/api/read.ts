@@ -34,7 +34,7 @@ const Id = z.object({ id: z.string() })
 const surfaceOf = (request: Request) => ({ redact: callerOf(request) === 'read' })
 
 /**
- * The legacy-compatible read API (`/v1`, `docs/design.md` §11) and the change stream. GET only; the policy lets the owner, an
+ * The read API (`/v1`, `docs/architecture.md`) and the change stream. GET only; the policy lets the owner, an
  * agent and the read token through (`api/policy.ts`, `GET /v1/*`). Unbound (the OpenAPI document alone), the routes answer 503.
  */
 export const readRoutes = (read: ReadApi | undefined) =>
