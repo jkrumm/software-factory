@@ -10,6 +10,7 @@ import {
   DecisionView,
   ErrandList,
   ErrandReply,
+  NeedsModel,
   PageList,
   PassReply,
 } from '@software-factory/contract'
@@ -28,7 +29,7 @@ let server: ServerProcess
 let dir: string
 let issues = 0
 
-const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'errand', 'annotate'].map(
+const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate'].map(
   (name) => `example-${name}`,
 )
 
@@ -338,6 +339,7 @@ test('a Decision missing a field is refused with the field named, and nothing is
   expect(refused.code).toBe(2)
   expect(refused.err).toContain('missing_field')
   expect(refused.err).toContain('recommendation')
+  expect(refused.err).toContain('Nothing was raised: ask again with every field')
   const unreversible = await cli(
     'issue',
     'ask',
@@ -461,7 +463,72 @@ test('a replayed outbox pages once: the same asks and passes again send nothing'
   expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'review'])
 })
 
-test('only the Judge called agw, three times', async () => {
+test('a Decision reaches Needs you only after the Judge saw it, and is amended by a second ask on the open question', async () => {
+  const issueId = await workingIssue('example-amend')
+  const needs = () => ok((json) => NeedsModel.parse(json), 'read', 'needs')
+  const before = (await askCalls()).length
+  const asked = await ok(
+    (json) => AskReply.parse(json),
+    'issue',
+    'ask',
+    issueId,
+    ...body(FORM('Which backup window for the nightly dump?')),
+  )
+  const id = asked.decision.id
+  expect(asked).toMatchObject({ result: 'applied', decision: { judge: null } })
+  expect((await needs()).items.filter((item) => item.id === id)).toEqual([])
+  expect(await askCalls()).toHaveLength(before)
+
+  await pass()
+  const calls = await askCalls()
+  expect(calls).toHaveLength(before + 1)
+  expect(JSON.parse(calls.at(-1)?.stdin ?? '{}')).toMatchObject({
+    question: 'Which backup window for the nightly dump?',
+  })
+  const listed = (await needs()).items.find((item) => item.id === id)
+  expect(listed).toMatchObject({ kind: 'decision', judge: 'nothing scripted: a taste question' })
+  const shown = await ok((json) => DecisionView.parse(json), 'decision', 'show', id)
+  expect(shown.judge).toMatchObject({ outcome: 'passed', detail: 'nothing scripted: a taste question' })
+
+  const amended = await ok(
+    (json) => AskReply.parse(json),
+    'issue',
+    'ask',
+    issueId,
+    ...body(FORM('Which backup window, 02:00 or 04:00, for the nightly dump?', { recommendation: 'winston' })),
+  )
+  expect(amended).toMatchObject({ result: 'amended', decision: { id, recommendation: 'winston', judge: null } })
+  expect((await needs()).items.filter((item) => item.id === id)).toEqual([])
+  const same = await ok(
+    (json) => AskReply.parse(json),
+    'issue',
+    'ask',
+    issueId,
+    ...body(FORM('Which backup window, 02:00 or 04:00, for the nightly dump?', { recommendation: 'winston' })),
+  )
+  expect(same.result).toBe('replayed')
+  await pass()
+  expect((await askCalls()).length).toBe(before + 2)
+  expect((await needs()).items.find((item) => item.id === id)).toMatchObject({ kind: 'decision' })
+  await ok((json) => DecisionReply.parse(json), 'decision', 'answer', id, 'pino')
+  const next = await ok(
+    (json) => AskReply.parse(json),
+    'issue',
+    'ask',
+    issueId,
+    ...body(FORM('Which retention for the dump files?')),
+  )
+  expect(next.result).toBe('applied')
+  expect(next.decision.id).not.toBe(id)
+})
+
+test('only the Judge called agw, five times', async () => {
   const calls = (await world.calls()).filter((call) => call.tool === 'agw')
-  expect(calls.map((call) => call.args[0])).toEqual(['factory-ask', 'factory-ask', 'factory-ask'])
+  expect(calls.map((call) => call.args[0])).toEqual([
+    'factory-ask',
+    'factory-ask',
+    'factory-ask',
+    'factory-ask',
+    'factory-ask',
+  ])
 })

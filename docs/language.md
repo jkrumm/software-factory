@@ -56,7 +56,7 @@ check, `docs/architecture.md`).
 | **Artifact** | What a lead hands to a person. One model, four kinds: | Document |
 | Concept | A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's `DESIGN.md` | |
 | Spec | A larger plan to review | |
-| Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer | Ask (noun), question, decision card |
+| Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it | Ask (noun), question, decision card |
 | Report | For information, never waits. A spike is a Report with a verdict | |
 | **Errand** | Something only the owner's hands can do: a portal step, a device run, a 1Password prompt | Hands-only asks, the separate human queue |
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |

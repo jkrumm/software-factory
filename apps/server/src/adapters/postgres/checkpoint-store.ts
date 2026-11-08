@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { ARTIFACT_KINDS, FORMATS, type ArtifactId, VERDICTS } from '../../domains/checkpoints/artifact.ts'
-import { type DecisionId, SETTLERS } from '../../domains/checkpoints/decision.ts'
+import { type DecisionId, JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, SETTLERS } from '../../domains/checkpoints/decision.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
 import {
@@ -38,6 +38,7 @@ const DecisionRow = z.object({
   options: z.array(Option),
   no_answer: NoAnswer,
   asked_at: z.date(),
+  asked_by: z.enum(['lead', 'steward']),
   answer: z.string().nullable(),
   settled_by: z.enum(SETTLERS).nullable(),
   source: z.string().nullable(),
@@ -53,6 +54,7 @@ const StepRow = z.object({
   outcome: z.enum(STEP_OUTCOMES).nullable(),
   detail: z.string().nullable(),
   at: z.date().nullable(),
+  tries: z.number().int(),
 })
 
 const PrecedentRow = z.object({
@@ -147,6 +149,7 @@ const decisionOf = (raw: unknown, steps: Step[]): DecisionRecord => {
       noAnswer: row.no_answer,
     },
     askedAt: row.asked_at,
+    askedBy: row.asked_by,
     answer: row.answer,
     settledBy: row.settled_by,
     source: row.source,
@@ -236,12 +239,12 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     const grouped = new Map<string, Step[]>()
     if (ids.length === 0) return grouped
     const rows: unknown[] = await tx`
-      SELECT decision_id, step, outcome, detail, at FROM factory.decision_steps
+      SELECT decision_id, step, outcome, detail, at, tries FROM factory.decision_steps
       WHERE decision_id IN ${tx(ids)} ORDER BY array_position(ARRAY['policy', 'judge', 'default', 'owner'], step)`
     for (const raw of rows) {
       const row = StepRow.parse(raw)
       const list = grouped.get(row.decision_id) ?? []
-      list.push({ step: row.step, outcome: row.outcome, at: row.at, detail: row.detail })
+      list.push({ step: row.step, outcome: row.outcome, at: row.at, detail: row.detail, tries: row.tries })
       grouped.set(row.decision_id, list)
     }
     return grouped
@@ -256,12 +259,25 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async insertDecision(d) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.decisions
-          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at)
+          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, asked_by)
         VALUES (${d.id}, ${d.key}, ${d.issueId}, ${d.repo}, ${d.attempt}, ${d.form.question}, ${d.form.recommendation},
-                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt})
+                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt}, ${d.askedBy})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
+    },
+
+    async amendDecision(id, form) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.decisions
+        SET question = ${form.question}, recommendation = ${form.recommendation}, checked = ${form.checked},
+            options = ${form.options}, no_answer = ${form.noAnswer}
+        WHERE id = ${id} AND answered_at IS NULL AND withdrawn_at IS NULL
+        RETURNING id`
+      if (rows.length !== 1) return false
+      await tx`DELETE FROM factory.decision_steps WHERE decision_id = ${id}`
+      await tx`UPDATE factory.artifacts SET title = ${form.question.slice(0, 200)} WHERE id = ${id}`
+      return true
     },
 
     async decision(id) {
@@ -348,16 +364,26 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     },
 
     async claimStep(id, step, now, until) {
+      // A failed Judge call is claimed again once its backoff ran out and tries are left; every other step is claimed once.
+      const retryBefore = new Date(now.getTime() - JUDGE_BACKOFF_MS)
       const rows: unknown[] = await tx`
         INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${id}, ${step}, ${until})
-        ON CONFLICT (decision_id, step) DO UPDATE SET claimed_until = ${until}
-        WHERE factory.decision_steps.outcome IS NULL
-          AND (factory.decision_steps.claimed_until IS NULL OR factory.decision_steps.claimed_until <= ${now})
+        ON CONFLICT (decision_id, step) DO UPDATE SET
+          claimed_until = ${until},
+          tries = CASE WHEN factory.decision_steps.outcome = 'failed' THEN factory.decision_steps.tries + 1 ELSE factory.decision_steps.tries END,
+          detail = CASE WHEN factory.decision_steps.outcome = 'failed' THEN NULL ELSE factory.decision_steps.detail END,
+          outcome = NULL,
+          at = NULL
+        WHERE (factory.decision_steps.outcome IS NULL
+               AND (factory.decision_steps.claimed_until IS NULL OR factory.decision_steps.claimed_until <= ${now}))
+          OR (factory.decision_steps.step = 'judge' AND factory.decision_steps.outcome = 'failed'
+              AND factory.decision_steps.tries < ${JUDGE_MAX_TRIES} AND factory.decision_steps.at <= ${retryBefore})
         RETURNING decision_id`
       if (rows.length === 1) return 'claimed'
-      const [held]: { outcome: string | null }[] = await tx`
-        SELECT outcome FROM factory.decision_steps WHERE decision_id = ${id} AND step = ${step}`
-      return held?.outcome === null ? 'in_flight' : 'done'
+      const [held]: { outcome: string | null; tries: number }[] = await tx`
+        SELECT outcome, tries FROM factory.decision_steps WHERE decision_id = ${id} AND step = ${step}`
+      if (held?.outcome === null) return 'in_flight'
+      return step === 'judge' && held?.outcome === 'failed' && held.tries < JUDGE_MAX_TRIES ? 'retry_later' : 'done'
     },
 
     async finishStep(id, step, done) {
@@ -494,7 +520,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const rows: unknown[] = await tx`
         INSERT INTO factory.checkpoint_pages (key, kind, checkpoint, issue_id, title, body, link, planned_at)
         VALUES (${page.key}, ${page.kind}, ${page.checkpoint}, ${page.issueId}, ${page.title}, ${page.body}, ${page.link}, ${at})
-        ON CONFLICT (key) DO NOTHING
+        ON CONFLICT (key) DO UPDATE SET
+          title = ${page.title}, body = ${page.body}, link = ${page.link}, planned_at = ${at},
+          cancelled_at = NULL, attempts = 0, error = NULL, claimed_until = NULL
+        WHERE factory.checkpoint_pages.sent_at IS NULL AND factory.checkpoint_pages.cancelled_at IS NOT NULL
         RETURNING key`
       return rows.length === 1
     },

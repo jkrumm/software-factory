@@ -57,6 +57,7 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   ageMs: 7_200_000,
   stale: false,
   defaultAt: null,
+  judge: null,
   link: { type: 'decision', id },
   work,
 })

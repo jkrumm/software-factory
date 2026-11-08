@@ -33,6 +33,11 @@ export interface DecisionForm {
   noAnswer: NoAnswer
 }
 
+/** The Judge is called up to this many times; a Decision reaches the owner unjudged only after the last one failed. */
+export const JUDGE_MAX_TRIES = 3
+/** The wait after a failed Judge call before the next try. */
+export const JUDGE_BACKOFF_MS = 5 * 60_000
+
 export const MAX_OPTIONS = 10
 export const MAX_TEXT = 4000
 export const MAX_WAIT_MINUTES = 7 * 24 * 60
@@ -108,7 +113,11 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
   }
 
   if (problems.length > 0) {
-    return err({ kind: 'missing_field', fields: problems, detail: `a Decision needs: ${problems.join(', ')}` })
+    return err({
+      kind: 'missing_field',
+      fields: problems,
+      detail: `a Decision needs: ${problems.join(', ')}. Nothing was raised: ask again with every field.`,
+    })
   }
   return ok({
     question,

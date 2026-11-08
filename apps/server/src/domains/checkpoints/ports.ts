@@ -10,8 +10,12 @@ import type { Page } from './page.ts'
 export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open'] as const
 export type StepOutcome = (typeof STEP_OUTCOMES)[number]
 
-/** `claimed`: the caller makes the call. `in_flight`: another caller's call is running, so the Decision is left alone. `done`: the step has an outcome already. */
-export type StepClaim = 'claimed' | 'in_flight' | 'done'
+/**
+ * `claimed`: the caller makes the call. `in_flight`: another caller's call is running, so the Decision is left alone.
+ * `done`: the step has an outcome already. `retry_later`: the Judge's call failed, tries are left and the backoff has not
+ * run out, so the Decision waits for it.
+ */
+export type StepClaim = 'claimed' | 'in_flight' | 'done' | 'retry_later'
 
 export interface Step {
   step: Settler
@@ -19,6 +23,8 @@ export interface Step {
   outcome: StepOutcome | null
   at: Date | null
   detail: string | null
+  /** the calls made for this step (the Judge's are tried again after a failure) */
+  tries: number
 }
 
 /** A Decision as stored: the form, and what became of it. Its status is derived from these facts. */
@@ -30,6 +36,7 @@ export interface DecisionRecord {
   attempt: number
   form: DecisionForm
   askedAt: Date
+  askedBy: 'lead' | 'steward'
   answer: string | null
   settledBy: Settler | null
   /** what backs the answer: the policy rule's reason, the Judge's source, the default, "the owner" */
@@ -133,6 +140,8 @@ export interface CheckpointStore {
       'steps' | 'answer' | 'settledBy' | 'source' | 'answeredAt' | 'withdrawnAt' | 'withdrawnReason' | 'worthAsking'
     >,
   ): Promise<boolean>
+  /** a new form for an open Decision (id, key and askedAt stay): its step rows are cleared so it is settled afresh, and its artifact's title follows. False when it is answered or withdrawn. */
+  amendDecision(id: DecisionId, form: DecisionForm): Promise<boolean>
   decision(id: DecisionId): Promise<DecisionRecord | null>
   /** the Decision with its row locked until the transaction ends: whoever settles it or plans its page reads it this way, so the two cannot pass each other */
   lockDecision(id: DecisionId): Promise<DecisionRecord | null>
@@ -147,7 +156,7 @@ export interface CheckpointStore {
   openDecisions(limit: number): Promise<DecisionRecord[]>
   /** answered Decisions that look like this question (the `to_tsquery` OR expression), the owner's own answers first */
   precedents(terms: string, input: { excluding: DecisionId; limit: number }): Promise<Precedent[]>
-  /** takes the step for a call: true when this caller may make it (not done, not leased to another) */
+  /** takes the step for a call: `claimed` when this caller may make it (not done, not leased to another; a failed Judge call whose backoff ran out and has tries left is claimed again) */
   claimStep(id: DecisionId, step: Settler, now: Date, until: Date): Promise<StepClaim>
   finishStep(
     id: DecisionId,
