@@ -1,5 +1,5 @@
-import { TriageAnswer, type TriageCandidate } from '@software-factory/contract'
-import type { OpenIssue } from '../../domains/intake/model.ts'
+import { TriageAnswer, type TriageCandidate, type TriageSettled } from '@software-factory/contract'
+import type { ClosedIssue, OpenIssue } from '../../domains/intake/model.ts'
 import type { TriageWorkflow } from '../../domains/intake/ports.ts'
 import type { AgwPort } from '../../kernel/agw.ts'
 import type { IssueId } from '../../kernel/ids.ts'
@@ -16,12 +16,18 @@ const digest = (text: string): string => new Bun.CryptoHasher('sha256').update(t
  */
 export function agwAmend(agw: AgwPort): TriageWorkflow {
   return {
-    async amendOrNew({ signal, candidates }) {
+    async amendOrNew({ signal, candidates, settled }) {
       const shown: TriageCandidate[] = candidates.map((c: OpenIssue) => ({
         id: c.id,
         title: scrub(c.title).slice(0, 500) || c.id,
         kind: c.kind,
         state: c.state,
+      }))
+      const closed: TriageSettled[] = settled.map((c: ClosedIssue) => ({
+        id: c.id,
+        title: scrub(c.title).slice(0, 500) || c.id,
+        outcome: c.outcome.slice(0, 40) || 'closed',
+        reason: c.reason === null ? null : scrub(c.reason).slice(0, 300),
       }))
       const text = scrub(signal.text).slice(0, 8_000)
       const answered = await agw.run({
@@ -30,6 +36,7 @@ export function agwAmend(agw: AgwPort): TriageWorkflow {
           mode: 'amend',
           repo: signal.repo ?? 'unknown',
           candidates: shown,
+          settled: closed,
           signal: {
             title: scrub(signal.title).slice(0, 500),
             text,
@@ -38,15 +45,29 @@ export function agwAmend(agw: AgwPort): TriageWorkflow {
             origin: signal.origin,
           },
         },
-        key: key('triage', 'amend', signal.source, signal.fingerprint, digest(`${signal.title}\n${text}`)),
+        key: key(
+          'triage',
+          'amend',
+          signal.source,
+          signal.fingerprint,
+          digest(`${signal.title}\n${text}\n${closed.map((c) => c.id).join(',')}`),
+        ),
         output: TriageAnswer,
       })
       if (!answered.ok) return answered
-      const { amend, after } = answered.value
+      const { amend, after, reason } = answered.value
+      const settledId = answered.value.settled ?? null
       if (after.length > 0) return err(portError('refused', 'an amend answer names no edges'))
-      if (amend === null) return ok({ amend: null })
+      if (settledId !== null) {
+        if (!closed.some((c) => c.id === settledId)) {
+          return err(portError('refused', `${settledId} is not a settled Issue it was shown`))
+        }
+        if (amend !== null) return err(portError('refused', 'an answer is either an amend or settled, not both'))
+        return ok({ amend: null, settled: settledId as IssueId, reason })
+      }
+      if (amend === null) return ok({ amend: null, settled: null, reason })
       if (!shown.some((c) => c.id === amend)) return err(portError('refused', `${amend} is not an Issue it was shown`))
-      return ok({ amend: amend as IssueId })
+      return ok({ amend: amend as IssueId, settled: null, reason })
     },
   }
 }

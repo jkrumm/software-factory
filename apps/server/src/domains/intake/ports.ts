@@ -2,7 +2,7 @@ import type { ScreenAnswer, ScreenRequest, Signal } from '@software-factory/cont
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { HealRule, OpenIssue, Received, RepoSignals, Triaged } from './model.ts'
+import type { ClosedIssue, HealRule, OpenIssue, Received, RepoSignals, Triaged } from './model.ts'
 import type { Topology } from './rules.ts'
 
 export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted' | 'dismissed'
@@ -217,11 +217,17 @@ export interface ScreenWorkflow {
 /** The Issues of a repo that are not closed, to match a person's signal against. Reads another domain's tables. */
 export interface OpenIssues {
   inRepo(repo: string): Promise<Result<OpenIssue[]>>
+  /** Issues of the repo whose closing was applied at or after `since`, newest first. */
+  closedSince(repo: string, since: Date, limit: number): Promise<Result<ClosedIssue[]>>
 }
 
 /** What the triage workflow decides when the deterministic match is unsure: amend one of the candidates, or file anew. */
 export interface TriageWorkflow {
-  amendOrNew(input: { signal: Signal; candidates: readonly OpenIssue[] }): Promise<Result<{ amend: IssueId | null }>>
+  amendOrNew(input: {
+    signal: Signal
+    candidates: readonly OpenIssue[]
+    settled: readonly ClosedIssue[]
+  }): Promise<Result<{ amend: IssueId | null; settled?: IssueId | null; reason?: string }>>
 }
 
 export type RunbookRun = { ran: false; reason: string } | { ran: true; exit: number; tail: string }

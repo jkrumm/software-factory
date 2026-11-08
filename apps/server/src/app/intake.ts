@@ -16,7 +16,15 @@ import {
 } from '@software-factory/contract'
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
 import { NOT_SCREENED } from '../domains/intake/screen.ts'
-import type { Alert, HealRule, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
+import type {
+  Alert,
+  ClosedIssue,
+  HealRule,
+  OpenIssue,
+  Received,
+  RepoSignals,
+  Triaged,
+} from '../domains/intake/model.ts'
 import type {
   Dismissal,
   IntakeSink,
@@ -40,6 +48,7 @@ import {
   matchOpen,
   noteOf,
   originOf,
+  overlap,
   type Topology,
 } from '../domains/intake/rules.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -105,6 +114,13 @@ const UNROUTED_BATCH = 20
 const TAIL = 500
 const MAX_DISMISS_REASON = 500
 const PROBE_REASON = 'marked as a probe'
+/** The workflow sees the Issues closed this recently, so a restated ask can be answered "already settled". */
+const SETTLED_WINDOW_MS = 24 * 60 * 60_000
+const MAX_SETTLED = 20
+const MAX_OPEN_SHOWN = 40
+
+/** What the triage workflow decided: amend an open Issue, call it already settled, or neither (file anew). */
+type Decision = { amend: IssueId | null; settled?: IssueId | null; reason?: string }
 
 const refuse = (kind: IntakeRefusal['kind'], detail: string): Result<never, IntakeRefusal> => err({ kind, detail })
 
@@ -275,14 +291,14 @@ export function createIntake(deps: IntakeDeps) {
     return ok(triaged('amended', detail, issue.id, signal))
   }
 
-  async function join(s: Stores, r: Received, alert: Alert, issue: Issue, groupKey: string): Out<Triaged> {
+  async function join(s: Stores, r: Received, alert: Alert, issue: Issue, groupKey: string | null): Out<Triaged> {
     const now = clock.now()
     const noted = await note(
       s,
       issue.id,
       keyOf('noted', 'signal', r.signal.source, alert.subject, alert.event),
       r,
-      'joins this incident',
+      groupKey ? 'joins this incident' : 'a related alert',
     )
     if (!noted.ok) return noted
     await s.intake.insertSubject({
@@ -298,9 +314,22 @@ export function createIntake(deps: IntakeDeps) {
       writeback: false,
       admitted: null,
     })
+    if (!groupKey) {
+      const matched = await store(s, r, eventKeyOf(r), 'amended', issue.id)
+      return ok(triaged('amended', 'matched', issue.id, matched))
+    }
     await s.intake.touchIncident(issue.id, now)
     const signal = await store(s, r, eventKeyOf(r), 'incident', issue.id)
     return ok(triaged('incident', 'joined', issue.id, signal))
+  }
+
+  /** The workflow found the ask already settled by a recently closed Issue: stored dismissed by the judge, nothing filed. */
+  async function settledIn(s: Stores, r: Received, decision: Decision, stateKey: Key | null): Out<Triaged> {
+    const id = decision.settled as IssueId
+    const head = `already settled: ${id}`
+    const reason = (decision.reason ? `${head} — ${decision.reason}` : head).slice(0, MAX_DISMISS_REASON)
+    const stored = await store(s, r, stateKey, 'dismissed', null, { reason, by: 'judge', at: clock.now() })
+    return ok(triaged('dropped', 'settled', null, stored, head))
   }
 
   async function fileNew(
@@ -354,7 +383,7 @@ export function createIntake(deps: IntakeDeps) {
     s: Stores,
     r: Received,
     alert: Alert,
-    ctx: { info: RepoSignals; topology: Topology; settle?: unknown },
+    ctx: { info: RepoSignals; topology: Topology; settle?: unknown; decision?: Decision },
   ): Out<Triaged> {
     const now = clock.now()
     const { signal } = r
@@ -378,6 +407,12 @@ export function createIntake(deps: IntakeDeps) {
         const issue = await loadIssue(s.work, incident.issueId)
         if (isOpen(issue)) return join(s, r, alert, issue, groupKey)
       }
+    }
+
+    if (ctx.decision?.settled) return settledIn(s, r, ctx.decision, evKey)
+    if (ctx.decision?.amend) {
+      const issue = await loadIssue(s.work, ctx.decision.amend)
+      if (isOpen(issue)) return join(s, r, alert, issue, groupKey)
     }
 
     const rule = ctx.settle === undefined ? ctx.info.heal.find((h) => h.when === `${signal.source}.down`) : undefined
@@ -513,7 +548,7 @@ export function createIntake(deps: IntakeDeps) {
     return filed
   }
 
-  async function humanIn(s: Stores, r: Received, decision: { amend: IssueId | null }): Out<Triaged> {
+  async function humanIn(s: Stores, r: Received, decision: Decision): Out<Triaged> {
     const { signal } = r
     // The same words twice are one note (a replay); the same title with other text is a new one the lead must hear.
     const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
@@ -524,6 +559,7 @@ export function createIntake(deps: IntakeDeps) {
       null,
     )
     if (repeat) return repeat
+    if (decision.settled) return settledIn(s, r, decision, null)
     if (decision.amend) {
       const issue = await loadIssue(s.work, decision.amend)
       if (isOpen(issue)) {
@@ -621,6 +657,56 @@ export function createIntake(deps: IntakeDeps) {
     return ok(triaged('amended', 'matched', issue.id, stored))
   }
 
+  /** Whether `repeatIn` would answer this signal: an Issue carries its fingerprint, open or closed within the window. */
+  async function fingerprintKnown(s: Stores, r: Received): Promise<boolean> {
+    const match = await s.intake.latestByFingerprint(r.signal.source, r.signal.fingerprint)
+    if (!match) return false
+    const issue = await loadIssue(s.work, match.issueId)
+    const recent = clock.now().getTime() - match.filedAt.getTime() < settings.fingerprintWindowMs
+    return issue !== null && (isOpen(issue) || recent)
+  }
+
+  /** The workflow's call, outside any transaction: the open Issues and those closed in the last day; null when it did not answer. */
+  async function askTriage(signal: Signal, open: readonly OpenIssue[]): Promise<Decision | null> {
+    const closed = signal.repo
+      ? await deps.openIssues.closedSince(signal.repo, new Date(clock.now().getTime() - SETTLED_WINDOW_MS), MAX_SETTLED)
+      : ok<ClosedIssue[]>([])
+    const settled = closed.ok ? closed.value : []
+    if (open.length === 0 && settled.length === 0) return null
+    const asked = await deps.triage.amendOrNew({ signal, candidates: open, settled })
+    return asked.ok ? asked.value : null
+  }
+
+  /**
+   * A `down` that no fingerprint-free road already handles (a replayed event, a subject with an open Issue, an open
+   * incident of its host) goes to the workflow, which may amend an open Issue or call it already settled.
+   */
+  async function decideDown(
+    r: Received,
+    alert: Alert,
+    info: RepoSignals,
+    topology: Topology,
+  ): Promise<Result<Decision | undefined, IntakeError>> {
+    const { signal } = r
+    const evKey = eventKeyOf(r) as Key
+    const handled = await uow.run(async (s) => {
+      if ((await s.intake.signalByKey(evKey)) || (await s.intake.seen(evKey))) return ok(true)
+      const latest = await s.intake.latestSubject(signal.source, alert.subject)
+      if (latest && isOpen(await loadIssue(s.work, latest.issueId))) return ok(true)
+      const groupKey = groupOf(topology, r, signal.repo as string, info.host)
+      if (!groupKey) return ok(false)
+      const incident = await s.intake.latestIncident(groupKey)
+      if (!incident || clock.now().getTime() - incident.lastAlertAt.getTime() > settings.incidentWindowMs)
+        return ok(false)
+      return ok(isOpen(await loadIssue(s.work, incident.issueId)))
+    })
+    if (!handled.ok) return handled
+    if (handled.value) return ok(undefined)
+    const open = await deps.openIssues.inRepo(signal.repo as string)
+    if (!open.ok) return open
+    return ok((await askTriage(signal, open.value.slice(0, MAX_OPEN_SHOWN))) ?? undefined)
+  }
+
   // ---- receive ----
 
   async function receive(r: Received): Out<Triaged> {
@@ -648,9 +734,14 @@ export function createIntake(deps: IntakeDeps) {
       const topology = await deps.topology.load()
       if (!topology.ok) return topology
       const name = `subject:${signal.source}:${alert.subject}`
+      const decided = alert.status === 'down' ? await decideDown(r, alert, info, topology.value) : ok(undefined)
+      if (!decided.ok) return decided
+      const decision = decided.value
       return uow.run(async (s) => {
         await s.intake.lock(name)
-        return alert.status === 'down' ? downIn(s, r, alert, { info, topology: topology.value }) : upIn(s, r, alert)
+        return alert.status === 'down'
+          ? downIn(s, r, alert, { info, topology: topology.value, decision })
+          : upIn(s, r, alert)
       })
     }
     if (alert) {
@@ -660,15 +751,24 @@ export function createIntake(deps: IntakeDeps) {
       })
     }
 
-    // A person's or an agent's signal: amend an open Issue when the title says so, ask the workflow when it is unsure.
+    // A person's or an agent's signal: amend an open Issue when the title clearly says so; otherwise the workflow sees
+    // the open Issues and the ones closed in the last day, unless the fingerprint already settles it.
     const open = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok<OpenIssue[]>([])
     if (!open.ok) return open
     const match = matchOpen(signal.title, open.value)
-    let decision: { amend: IssueId | null } = { amend: match.kind === 'match' ? match.issue.id : null }
-    if (match.kind === 'unsure') {
-      const asked = await deps.triage.amendOrNew({ signal, candidates: match.candidates })
-      // An unanswered workflow files anew: a duplicate costs a note, a lost request costs the work.
-      if (asked.ok) decision = asked.value
+    let decision: Decision = { amend: match.kind === 'match' ? match.issue.id : null }
+    if (match.kind !== 'match') {
+      const known = await uow.run(async (s) => ok(await fingerprintKnown(s, r)))
+      if (!known.ok) return known
+      if (!known.value) {
+        const ordered = open.value
+          .map((issue) => ({ issue, score: overlap(signal.title, issue.title) }))
+          .sort((a, b) => b.score - a.score || a.issue.id.localeCompare(b.issue.id))
+          .slice(0, MAX_OPEN_SHOWN)
+          .map((entry) => entry.issue)
+        // An unanswered workflow files anew: a duplicate costs a note, a lost request costs the work.
+        decision = (await askTriage(signal, ordered)) ?? decision
+      }
     }
     return uow.run(async (s) => {
       await s.intake.lock(`human:${signal.source}:${signal.fingerprint}`)

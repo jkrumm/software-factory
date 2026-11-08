@@ -104,6 +104,7 @@ export const TRIAGE_DETAILS = [
   'loop_guard',
   'no_repo',
   'probe',
+  'settled',
 ] as const
 
 export const SignalAck = z
