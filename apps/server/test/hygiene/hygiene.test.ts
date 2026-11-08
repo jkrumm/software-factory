@@ -220,6 +220,8 @@ describe('links probe', () => {
     writeFileSync(join(root, 'a.md'), '')
     expect(brokenLinks(root, 'b.md', '[x](a.md)')).toEqual([])
     expect(brokenLinks(root, 'b.md', '[x](../../etc/passwd)')).toHaveLength(1)
+    writeFileSync(join(root, 'foo(1).md'), '')
+    expect(brokenLinks(root, 'b.md', '[x](foo(1).md)')).toEqual([])
   })
 })
 

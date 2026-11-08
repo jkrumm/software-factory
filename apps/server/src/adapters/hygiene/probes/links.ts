@@ -5,7 +5,7 @@ import { type Outcome, clean, finding, found } from './finding.ts'
 
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const INLINE_CODE = /(`+)[^`]*?\1/g
-const LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g
+const LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
 
 export interface BrokenLink {
