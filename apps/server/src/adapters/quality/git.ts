@@ -319,8 +319,8 @@ export class GitCommits implements Commits {
   }
 
   /**
-   * Removes from `held` the commits on the line that are the squash of `squashed` (they changed exactly its paths) and
-   * returns the branch's range to review in their place; null, and `held` untouched, where none is.
+   * Removes from `held` the first commit on the line that is the squash of `squashed` (it changed exactly its paths) and
+   * returns the branch's range to review in its place; null, and `held` untouched, where none is.
    */
   private async takeSquashes(
     repo: string,
@@ -329,14 +329,14 @@ export class GitCommits implements Commits {
   ): Promise<ReviewRange | null> {
     const branchRange = await this.squashedRange(repo, cut, squashed)
     if (!branchRange) return null
-    let attested = false
-    for (const at of [...held]) {
+    for (const at of [...held].sort((a, b) => a - b)) {
       const sha = line[at]
       if (!sha || !(await this.samePaths(repo, { base: `${sha}^`, head: sha }, branchRange))) continue
+      // One squash stands for the branch; a later commit with the same paths is not it and keeps its own range.
       held.delete(at)
-      attested = true
+      return branchRange
     }
-    return attested ? branchRange : null
+    return null
   }
 
   /** The held positions of the line, neighbours as one range each. */
