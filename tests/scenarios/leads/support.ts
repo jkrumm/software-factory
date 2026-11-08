@@ -62,6 +62,9 @@ export async function startLeadsWorld(env: Record<string, string> = {}): Promise
   await git(origin, 'init', '-q', '--bare', '-b', 'master')
   await mkdir(repo)
   await git(repo, 'init', '-q', '-b', 'master')
+  // The leads' worktrees live in the repo (`.claude/worktrees/`). A machine's global gitignore hides them; a clean
+  // runner does not, and a scenario's `git add -A` would commit them as paths of the change.
+  await Bun.write(join(repo, '.git', 'info', 'exclude'), '.claude/worktrees/\n')
   await Bun.write(join(repo, 'README.md'), '# example\n')
   await Bun.write(join(repo, 'project.yaml'), 'apiVersion: factory/v2\nname: example\nleads: 8\n')
   await git(repo, 'add', '.')
