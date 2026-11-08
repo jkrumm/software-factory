@@ -123,7 +123,7 @@ export async function ship(
   world: World,
   server: ServerProcess,
   id: string,
-  body: { attempt?: number; call: string; commits: string[] },
+  body: { attempt?: number; call: string; commits: string[]; acceptance?: string[] },
 ): Promise<Answer<ShipAnswer>> {
   const raw = await factory(
     world,

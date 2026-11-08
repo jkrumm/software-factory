@@ -36,9 +36,15 @@ const ReviewEvidence = z.object({
   reason: z.string().nullable(),
 })
 
-/** What a ship proved: its merged commits, and its review or the record that there was none. */
+const AcceptanceEvidence = z.object({
+  kind: z.literal('acceptance'),
+  /** the lead's one line per acceptance criterion; empty is the recorded absence: the ship stated nothing */
+  statements: z.array(z.object({ status: z.enum(['met', 'not_met']), text: z.string() })),
+})
+
+/** What a ship proved: its merged commits, its review or the record that there was none, and what it states of the acceptance. */
 export const QualityEvidence = z
-  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence])
+  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence, AcceptanceEvidence])
   .meta({ id: 'QualityEvidence' })
 export type QualityEvidence = z.infer<typeof QualityEvidence>
 
@@ -51,6 +57,8 @@ export const ShipBody = z
     commits: z.array(z.string().min(1)).max(50).optional(),
     /** the flag form `--commit <sha>` (repeatable), joined with `commits` */
     commit: z.array(z.string().min(1)).max(50).optional(),
+    /** one line per acceptance criterion, `met: <what shows it>` or `not met: <why>`; a record, never a gate */
+    acceptance: z.array(z.string().min(1).max(500)).max(20).optional(),
   })
   .meta({ id: 'ShipBody' })
 export type ShipBody = z.infer<typeof ShipBody>

@@ -131,6 +131,14 @@ function reviewOf(payload: unknown): ReadShipLine['review'] {
   return { present: status === 'covered', note: reason ?? (status ? status.replaceAll('_', ' ') : null) }
 }
 
+function acceptanceOf(payload: unknown): ReadShipLine['acceptance'] {
+  if (!isRecord(payload) || !Array.isArray(payload.statements)) return null
+  return payload.statements.filter(isRecord).map((s) => ({
+    status: s.status === 'met' ? ('met' as const) : ('not_met' as const),
+    text: typeof s.text === 'string' ? s.text : '',
+  }))
+}
+
 /**
  * Every call of ship, oldest first, with the commits and review it proved, the watch it opened (the first watch begun at
  * or after the ship and before the next accepted ship) and that watch's verify runs.
@@ -173,6 +181,7 @@ export async function loadShipping(sql: SQL, issue: string): Promise<ReadShipLin
       detail: ship.detail,
       commits: isRecord(commits) ? strings(commits.commits) : strings(ship.reported),
       review: reviewOf(own('review')),
+      acceptance: acceptanceOf(own('acceptance')),
       watch: watch
         ? {
             startedAt: watch.started_at.toISOString(),

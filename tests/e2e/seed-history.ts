@@ -68,7 +68,9 @@ export async function seedHistory(lab: Lab): Promise<SeededHistory> {
     ('evidence_e2e_1', ${rich}, 1, ${ship}, 'commits', now() - interval '30 minutes',
       '{"commits":["a1b2c3d4e5f60718293a4b5c6d7e8f9012345678","b2c3d4e5f60718293a4b5c6d7e8f90123456789a"],"landedAt":null,"mergedAt":null,"deploys":true,"paths":["src/export.ts"]}'::jsonb),
     ('evidence_e2e_2', ${rich}, 1, ${ship}, 'review', now() - interval '30 minutes',
-      '{"status":"covered","tier":"standard","ranges":[],"uncovered":[],"reason":null}'::jsonb)`
+      '{"status":"covered","tier":"standard","ranges":[],"uncovered":[],"reason":null}'::jsonb),
+    ('evidence_e2e_3', ${rich}, 1, ${ship}, 'acceptance', now() - interval '30 minutes',
+      '{"statements":[{"status":"met","text":"the export downloads"},{"status":"not_met","text":"no CSV header yet"}]}'::jsonb)`
   await sql`INSERT INTO factory.quality_watches (key, issue_id, attempt, watch, started_at, window_ms, answer, answered_at)
     VALUES ('start_watch:e2e:1', ${rich}, 1, 1, now() - interval '29 minutes', 60000, 'passed', now() - interval '28 minutes')`
   await sql`INSERT INTO factory.quality_checks (watch_key, n, at, outcome, checks)

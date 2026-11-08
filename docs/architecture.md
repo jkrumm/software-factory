@@ -171,7 +171,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the
   default branch, read by the factory, never taken from the lead. Without that the ship is refused with the error named and
   counted as friction. A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
-  with its reason; it never refuses a ship (NL23). `evidence.ts` decides whether the paths deploy at all; its inert paths
+  with its reason; it never refuses a ship (NL23). The lead also states one line per acceptance line of the Issue
+  (`--acceptance "met: ..."` or `"not met: ..."`; the factory parses no criteria), recorded as `acceptance` evidence and shown on the
+  Issue page; a malformed line is refused (422), a `not met` never refuses, and a ship that states nothing is counted as
+  friction (`unstated_acceptance`) like an unreviewed one. `evidence.ts` decides whether the paths deploy at all; its inert paths
   equal `scripts/verify.sh`'s.
 - **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
   their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`

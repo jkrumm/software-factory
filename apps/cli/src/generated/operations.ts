@@ -419,6 +419,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'commits', flag: 'commits', kind: 'string', repeatable: true, required: false, untyped: false },
       { name: 'commit', flag: 'commit', kind: 'string', repeatable: true, required: false, untyped: false },
+      { name: 'acceptance', flag: 'acceptance', kind: 'string', repeatable: true, required: false, untyped: false },
     ],
     args: [],
     responses: {

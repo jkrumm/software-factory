@@ -62,6 +62,34 @@ describe('ship: the gate', () => {
     expect(view.watches).toMatchObject([{ watch: 1, answer: null, windowMs: 60_000, checks: [] }])
   })
 
+  test('a ship states its acceptance lines: recorded as given, a malformed line is refused, none is an empty record', async () => {
+    await scriptReview(it.lw.world, 'covered')
+    const id = await workingIssue(it.lw, 'acceptance')
+    const sha = await commit(it.lw, 'src/acc.ts', 'export const acc = 1\n', 'feat: acc')
+
+    const malformed = await ship(it.lw.world, it.lw.server, id, {
+      call: 'ship-1',
+      commits: [sha],
+      acceptance: ['done'],
+    })
+    expect(malformed.code).not.toBe(0)
+    expect((await show(it.lw.world, it.lw.server, id)).ships).toEqual([])
+
+    const stated = await ship(it.lw.world, it.lw.server, id, {
+      call: 'ship-2',
+      commits: [sha],
+      acceptance: ['met: it shows', 'Not met: later'],
+    })
+    expect(stated.code).toBe(0)
+    expect(stated.json.evidence[2]).toEqual({
+      kind: 'acceptance',
+      statements: [
+        { status: 'met', text: 'it shows' },
+        { status: 'not_met', text: 'later' },
+      ],
+    })
+  })
+
   test('the same ship again is a replay: nothing is asked of git or agw, nothing doubles', async () => {
     await scriptReview(it.lw.world, 'covered')
     const id = await workingIssue(it.lw, 'replay')
@@ -73,7 +101,7 @@ describe('ship: the gate', () => {
     const again = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
     expect(again.code).toBe(0)
     expect(again.json.result).toBe('replayed')
-    expect(again.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
+    expect(again.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
     expect(await agwCalls()).toBe(asked)
     expect((await show(it.lw.world, it.lw.server, id)).ships).toHaveLength(1)
   })
@@ -182,7 +210,7 @@ describe('the watch', () => {
         ],
       })
       const evidence = (await show(it.lw.world, it.lw.server, id)).ships[0]?.evidence ?? []
-      expect(evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
+      expect(evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
     },
     LONG,
   )

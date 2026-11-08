@@ -154,6 +154,7 @@ test('shipping: the accepted ship with its commits, review, and the watch that p
     detail: expect.stringContaining('older than this attempt'),
     commits: [old],
     review: { present: false, note: null },
+    acceptance: null,
     watch: null,
     checks: [],
   })

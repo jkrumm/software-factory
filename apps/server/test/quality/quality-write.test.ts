@@ -10,7 +10,7 @@ import { showQuality } from '../../src/app/quality-read.ts'
 import { reopenIssue } from '../../src/app/quality-reopen.ts'
 import { type QualityUnit, type ShipDeps, shipIssue } from '../../src/app/quality-ship.ts'
 import { checkWatches, startWatchPort, type WatchDeps } from '../../src/app/quality-watch.ts'
-import type { CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
+import type { AcceptanceEvidence, CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
 import type {
   AttemptCheckout,
   Commits,
@@ -155,8 +155,13 @@ async function working(): Promise<IssueId> {
   return issue.id
 }
 
-const ship = (issueId: IssueId, call = 'call-1', attempt = 1, named = [SHA]) =>
-  shipIssue(deps(), { issueId, attempt, call, commits: named })
+const ship = (
+  issueId: IssueId,
+  call = 'call-1',
+  attempt = 1,
+  named = [SHA],
+  acceptance: AcceptanceEvidence = { statements: [] },
+) => shipIssue(deps(), { issueId, attempt, call, commits: named, acceptance })
 
 const stateOf = async (issueId: IssueId) => {
   const [row] = await db.sql`SELECT state, wait_reason, outcome, version FROM factory.issues WHERE id = ${issueId}`
@@ -187,13 +192,39 @@ describe('the ship gate', () => {
     const issueId = await working()
     const shipped = value(await ship(issueId))
     expect(shipped).toMatchObject({ result: 'applied', detail: null, issue: { state: 'watching', watch: 1 } })
-    expect(shipped.evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
+    expect(shipped.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
     expect(shipped.evidence[0]).toMatchObject({ payload: { commits: [SHA], landedAt: 'f'.repeat(40), deploys: true } })
     expect(shipped.evidence[1]).toMatchObject({ payload: { status: 'covered', tier: 'standard' } })
     expect((await stateOf(issueId)).state).toBe('watching')
     expect((await outbox(issueId)).map((e: { kind: string }) => e.kind)).toContain('start_watch')
     const view = value(await showQuality({ uow }, issueId))
-    expect(view.ships.map((s) => [s.result, s.attempt, s.evidence.length])).toEqual([['accepted', 1, 2]])
+    expect(view.ships.map((s) => [s.result, s.attempt, s.evidence.length])).toEqual([['accepted', 1, 3]])
+  })
+
+  test('what the ship states against the acceptance is evidence; stating nothing is recorded as empty', async () => {
+    const stated = await working()
+    const one = value(
+      await ship(stated, 'call-1', 1, [SHA], {
+        statements: [
+          { status: 'met', text: 'the page shows it' },
+          { status: 'not_met', text: 'no time' },
+        ],
+      }),
+    )
+    expect(one.evidence[2]).toMatchObject({
+      kind: 'acceptance',
+      payload: {
+        statements: [
+          { status: 'met', text: 'the page shows it' },
+          { status: 'not_met', text: 'no time' },
+        ],
+      },
+    })
+    const replay = value(await ship(stated, 'call-1'))
+    expect(replay.result).toBe('replayed')
+    expect(replay.evidence[2]).toEqual(one.evidence[2])
+    const silent = value(await ship(await working(), 'call-2'))
+    expect(silent.evidence[2]).toMatchObject({ kind: 'acceptance', payload: { statements: [] } })
   })
 
   test('a ship that names no commit is refused with its error named, and the refusal is stored', async () => {
@@ -263,12 +294,12 @@ describe('the ship gate', () => {
     const reads = commitReads
     const again = value(await ship(issueId))
     expect(again).toMatchObject({ result: 'replayed', issue: { state: 'watching', version: 5 } })
-    expect(again.evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
+    expect(again.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
     expect(commitReads).toBe(reads)
     const [counts] = await db.sql`
       SELECT (SELECT count(*) FROM factory.quality_ships)::int AS ships, (SELECT count(*) FROM factory.quality_evidence)::int AS evidence,
              (SELECT count(*) FROM factory.issue_effects WHERE kind = 'start_watch')::int AS watches`
-    expect(counts).toEqual({ ships: 1, evidence: 2, watches: 1 })
+    expect(counts).toEqual({ ships: 1, evidence: 3, watches: 1 })
   })
 
   test('the Issue refusing the ship is the verb’s error: another attempt, or a closed Issue', async () => {
@@ -299,7 +330,12 @@ describe('the ship gate', () => {
         return commitAnswer
       },
     }
-    value(await shipIssue({ ...deps(), commits: spy }, { issueId, attempt: 1, call: 'call-1', commits: [SHA] }))
+    value(
+      await shipIssue(
+        { ...deps(), commits: spy },
+        { issueId, attempt: 1, call: 'call-1', commits: [SHA], acceptance: { statements: [] } },
+      ),
+    )
     expect(seen).toEqual([
       { repo: '/roots/example', branch: 'factory/issue_1-1', cut: 'c'.repeat(40), reported: [SHA] },
     ])
@@ -362,7 +398,7 @@ describe('the watch', () => {
     expect((await watchRow())?.answer).toBe('passed')
     const view = value(await showQuality({ uow }, issueId))
     expect(view.watches[0]?.checks).toMatchObject([{ n: 1, outcome: 'green' }])
-    expect(view.ships[0]?.evidence.map((e) => e.kind)).toEqual(['commits', 'review'])
+    expect(view.ships[0]?.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
     expect(inside).toEqual([])
   })
 

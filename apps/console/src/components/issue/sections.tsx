@@ -290,6 +290,23 @@ export function Shipping({ issue, now }: { issue: Issue; now: number }) {
             Review: {ship.review.present ? 'present' : 'none'}
             {ship.review.note ? <span className="text-muted-foreground"> ({ship.review.note})</span> : null}
           </p>
+          {ship.result === 'accepted' && ship.acceptance ? (
+            ship.acceptance.length === 0 ? (
+              <p>
+                Acceptance: none <span className="text-muted-foreground"> (no statement against the acceptance)</span>
+              </p>
+            ) : (
+              <ul className="grid gap-1">
+                {ship.acceptance.map((line, i) => (
+                  <li key={`${line.status}|${i}`}>
+                    <span className="font-medium">{line.status === 'met' ? 'Met' : 'Not met'}</span>
+                    <span className="text-muted-foreground">: </span>
+                    {line.text}
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
           {ship.watch ? <p>Watch: {watchWords(ship.watch, now)}</p> : null}
           {ship.checks.length > 0 ? (
             <ul className="grid gap-1">

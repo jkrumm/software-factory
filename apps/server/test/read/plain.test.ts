@@ -235,6 +235,7 @@ describe('the read token', () => {
           detail: null,
           commits: ['secret'],
           review: { present: true, note: 'secret' },
+          acceptance: [{ status: 'not_met', text: 'secret' }],
           watch: {
             startedAt: '2026-11-07T10:03:00.000Z',
             windowMs: 60000,
@@ -250,6 +251,7 @@ describe('the read token', () => {
           detail: 'secret',
           commits: [],
           review: { present: false, note: null },
+          acceptance: null,
           watch: null,
           checks: [],
         },
