@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
+import type { QueueAskRow } from '../../domains/loops/queue.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 
 const Row = z.object({
@@ -35,6 +36,43 @@ const callOf = (raw: unknown): CallRow => {
   }
 }
 
+const AskRow = z.object({
+  key: z.string(),
+  repo: z.string(),
+  shape: z.string(),
+  round: z.number().int(),
+  claimed_at: z.date(),
+  lease_until: z.date(),
+  outcome: z.enum(['answered', 'rejected', 'failed']).nullable(),
+  answer: z.unknown(),
+  applied: z.unknown(),
+  refused: z.unknown(),
+  after_shape: z.string().nullable(),
+  detail: z.string().nullable(),
+  finished_at: z.date().nullable(),
+})
+
+const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
+
+const askOf = (raw: unknown): QueueAskRow => {
+  const row = AskRow.parse(raw)
+  return {
+    key: row.key,
+    repo: row.repo,
+    shape: row.shape,
+    round: row.round,
+    claimedAt: row.claimed_at,
+    leaseUntil: row.lease_until,
+    outcome: row.outcome,
+    answer: json(row.answer),
+    applied: (json(row.applied) ?? null) as QueueAskRow['applied'],
+    refused: (json(row.refused) ?? null) as QueueAskRow['refused'],
+    afterShape: row.after_shape,
+    detail: row.detail,
+    finishedAt: row.finished_at,
+  }
+}
+
 /** The loops' table (`migrations/0700_loops.sql`), on the transaction's connection. */
 export function postgresLoopStore(tx: SQL): LoopStore {
   return {
@@ -63,7 +101,9 @@ export function postgresLoopStore(tx: SQL): LoopStore {
     async lapseOpen(now) {
       const lapsed: unknown[] = await tx`
         UPDATE factory.loop_calls SET lease_until = ${now} WHERE outcome IS NULL AND lease_until > ${now} RETURNING key`
-      return lapsed.length
+      const lapsedAsks: unknown[] = await tx`
+        UPDATE factory.queue_asks SET lease_until = ${now} WHERE outcome IS NULL AND lease_until > ${now} RETURNING key`
+      return lapsed.length + lapsedAsks.length
     },
 
     async finishCall(key, result) {
@@ -72,6 +112,55 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         SET outcome = ${result.outcome}, answer = ${result.answer === undefined ? null : JSON.stringify(result.answer)}::jsonb,
             detail = ${result.detail}, finished_at = ${result.at}
         WHERE key = ${key} AND outcome IS NULL`
+    },
+
+    async queueAsks(repo, shape) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.queue_asks WHERE repo = ${repo} AND shape = ${shape} ORDER BY round`
+      return rows.map(askOf)
+    },
+
+    async claimQueueAsk(row) {
+      const inserted: unknown[] = await tx`
+        INSERT INTO factory.queue_asks (key, repo, shape, round, claimed_at, lease_until)
+        VALUES (${row.key}, ${row.repo}, ${row.shape}, ${row.round}, ${row.claimedAt}, ${row.leaseUntil})
+        ON CONFLICT DO NOTHING RETURNING key`
+      return inserted.length === 1
+    },
+
+    async retakeQueueAsk(key, claimedAt, leaseUntil) {
+      const taken: unknown[] = await tx`
+        UPDATE factory.queue_asks SET claimed_at = ${claimedAt}, lease_until = ${leaseUntil}
+        WHERE key = ${key} AND outcome IS NULL AND lease_until <= ${claimedAt} RETURNING key`
+      return taken.length === 1
+    },
+
+    async finishQueueAsk(key, result) {
+      await tx`
+        UPDATE factory.queue_asks
+        SET outcome = ${result.outcome}, answer = ${result.answer === undefined ? null : JSON.stringify(result.answer)}::jsonb,
+            detail = ${result.detail}, finished_at = ${result.at}
+        WHERE key = ${key} AND outcome IS NULL`
+    },
+
+    async recordQueueApplied(key, result) {
+      await tx`
+        UPDATE factory.queue_asks
+        SET applied = ${JSON.stringify(result.applied)}::jsonb, refused = ${JSON.stringify(result.refused)}::jsonb,
+            after_shape = ${result.afterShape}
+        WHERE key = ${key} AND applied IS NULL`
+    },
+
+    async shapeAsked(repo, shape) {
+      const rows: unknown[] = await tx`
+        SELECT 1 AS found FROM factory.queue_asks
+        WHERE repo = ${repo} AND outcome = 'answered' AND (shape = ${shape} OR after_shape = ${shape}) LIMIT 1`
+      return rows.length > 0
+    },
+
+    async lastQueueAskAt(repo) {
+      const rows: unknown[] = await tx`SELECT max(claimed_at) AS at FROM factory.queue_asks WHERE repo = ${repo}`
+      return z.object({ at: z.date().nullable() }).parse(rows[0]).at
     },
 
     async lastFrictionPassAt() {

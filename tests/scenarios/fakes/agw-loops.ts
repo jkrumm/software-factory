@@ -13,8 +13,8 @@ const scriptOf = (env: string): Scripted[] => {
 }
 
 /**
- * `agw factory-steward` and `agw factory-triage`, input on stdin. A scenario scripts them with JSON files
- * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
+ * `agw factory-steward`, `agw factory-triage` and `agw factory-queue`, input on stdin. A scenario scripts them with JSON files
+ * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
  * from the Issue's title, the stall's detail or the signal's words. Nothing scripted answers "I cannot tell" (steward `none`,
  * triage the empty answer). Every call is logged with its stdin.
  */
@@ -32,6 +32,10 @@ export async function loopsFake(args: string[]): Promise<number> {
       args,
       scripted?.answer ?? { action: 'none', note: '', reason: 'nothing scripted', decision: null },
     )
+  }
+  if (args[0] === 'factory-queue') {
+    const scripted = scriptOf('FACTORY_FAKE_QUEUE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+    return done('factory-queue', args, scripted?.answer ?? { edges: [], order: [], reason: 'nothing scripted' })
   }
   const scripted = scriptOf('FACTORY_FAKE_TRIAGE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
   return done(

@@ -13,7 +13,10 @@ const Env = z.object({
   FACTORY_LOOP_SEND_MS: ms.optional(),
   FACTORY_LOOP_STEWARD_MS: ms.optional(),
   FACTORY_LOOP_TRIAGE_MS: ms.optional(),
+  FACTORY_LOOP_QUEUE_MS: ms.optional(),
   FACTORY_LOOP_FRICTION_MS: ms.optional(),
+  /** a repo is asked about a new queue shape at most once in this long */
+  FACTORY_QUEUE_GAP_MS: ms.optional(),
   /** a stall younger than this is left to end by itself */
   FACTORY_STEWARD_MIN_STALL_MS: ms.optional(),
   /** the steward asks `factory-steward` again after a failed or refused answer this long on */
@@ -30,6 +33,7 @@ export interface LoopSettings {
   tickMs: number
   minStallMs: number
   retryMs: number
+  queueGapMs: number
   settleTimeoutMs: number
   blockedChecks: number
 }
@@ -52,6 +56,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     send: e.FACTORY_LOOP_SEND_MS,
     steward: e.FACTORY_LOOP_STEWARD_MS,
     triage: e.FACTORY_LOOP_TRIAGE_MS,
+    queue: e.FACTORY_LOOP_QUEUE_MS,
     friction: e.FACTORY_LOOP_FRICTION_MS,
   }
   return {
@@ -59,6 +64,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     tickMs,
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,
     retryMs: e.FACTORY_STEWARD_RETRY_MS ?? 10 * 60_000,
+    queueGapMs: e.FACTORY_QUEUE_GAP_MS ?? 30 * 60_000,
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,
     blockedChecks: e.FACTORY_BLOCKED_CHECKS ?? 6,
   }

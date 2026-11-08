@@ -21,6 +21,18 @@ const Settling = z.object({
 
 const Candidate = z.object({ id: z.string(), title: z.string(), kind: z.string(), state: z.string() })
 
+const QueueRowSchema = z.object({
+  id: z.string(),
+  repo: z.string(),
+  state: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  filed_at: z.date(),
+  summary: z.string(),
+  prio: z.number().int(),
+  blockers: z.string(),
+})
+
 const Blocked = z.object({
   issue_id: z.string(),
   watch: z.number().int(),
@@ -77,6 +89,32 @@ export function loopReads(tx: SQL): LoopReads {
         WHERE i.repo = ${repo} AND i.state <> 'closed' AND i.id <> ${excluding}
         ORDER BY i.id DESC LIMIT ${limit}`
       return rows.map((raw) => Candidate.parse(raw)).map((row) => ({ ...row, id: row.id as IssueId }))
+    },
+
+    async queueIssues() {
+      const rows: unknown[] = await tx`
+        SELECT i.id, i.repo, i.state, f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.at AS filed_at,
+          COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), '') AS summary,
+          COALESCE((SELECT p.value FROM factory.planning_prios p WHERE p.issue_id = i.id ORDER BY p.at DESC, p.id DESC LIMIT 1), 0) AS prio,
+          COALESCE((SELECT string_agg(e.after_issue, ',' ORDER BY e.after_issue) FROM factory.planning_edges e JOIN factory.issues b ON b.id = e.after_issue WHERE e.issue_id = i.id AND e.satisfied_at IS NULL AND b.state <> 'closed'), '') AS blockers
+        FROM factory.issues i
+        JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+        WHERE i.state IN ('queued', 'working', 'waiting', 'watching')
+        ORDER BY i.repo, i.id`
+      return rows.map((raw) => {
+        const row = QueueRowSchema.parse(raw)
+        return {
+          id: row.id as IssueId,
+          repo: row.repo,
+          title: row.title,
+          kind: row.kind,
+          state: row.state,
+          prio: row.prio,
+          filedAt: row.filed_at,
+          summary: row.summary,
+          blockers: row.blockers === '' ? [] : (row.blockers.split(',') as IssueId[]),
+        }
+      })
     },
 
     async blockedCheckouts(streak, limit) {

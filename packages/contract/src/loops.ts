@@ -140,9 +140,61 @@ export const TriageAnswer = z.object({
 })
 export type TriageAnswer = z.infer<typeof TriageAnswer>
 
+// ---- factory-queue -------------------------------------------------------------------------------------------------------
+
+/** An id as the workflow's schema takes it; the factory supplies `issue_<n>`, the answer is checked against what was shown. */
+const WireId = z
+  .string()
+  .regex(/^[A-Za-z0-9._-]+$/, 'letters, digits, dot, underscore, hyphen')
+  .min(1)
+  .max(64)
+
+export const QueueIssue = z.object({
+  id: IssueId,
+  title: z.string().min(1).max(500),
+  kind: z.string().min(1).max(40),
+  /** `queued` is to be ordered; any other state is chain context */
+  state: z.string().min(1).max(40),
+  prio: z.number().int().min(-1000).max(1000),
+  ageMinutes: z.number().int().min(0),
+  size: z.enum(['small', 'medium', 'large']).nullable(),
+  summary: z.string().max(600),
+  /** the Issue's open blockers; may name an Issue that is not shown */
+  after: z.array(IssueId).max(20),
+})
+export type QueueIssue = z.infer<typeof QueueIssue>
+
+export const QueueRequest = z.object({
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9._/-]+$/)
+    .min(1)
+    .max(200),
+  issues: z.array(QueueIssue).min(1).max(40),
+})
+export type QueueRequest = z.infer<typeof QueueRequest>
+
+export const QueueAnswer = z.object({
+  edges: z.array(z.object({ issue: WireId, after: WireId, reason: Line })).max(10),
+  /** every queued Issue once, the one to start first at the front; empty when the factory order stands */
+  order: z.array(WireId).max(40),
+  reason: Line,
+})
+export type QueueAnswer = z.infer<typeof QueueAnswer>
+
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
-export const LOOP_NAMES = ['leads', 'planning', 'watch', 'settle', 'send', 'steward', 'triage', 'friction'] as const
+export const LOOP_NAMES = [
+  'leads',
+  'planning',
+  'watch',
+  'settle',
+  'send',
+  'steward',
+  'triage',
+  'queue',
+  'friction',
+] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 
 export const LoopView = z

@@ -2,6 +2,7 @@ import { connect, ping } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
+import { agwQueue } from './adapters/agw/queue.ts'
 import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
@@ -29,6 +30,7 @@ import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/ru
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
+import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
@@ -286,6 +288,26 @@ async function main(): Promise<void> {
         if (!pass.ok) return pass
         said('triage', pass.value.problems)
         return ok(triageSummary(pass.value))
+      },
+    },
+    {
+      // Deterministic first (cycles, real blockers, the queue's shape, a budget); `factory-queue` only for an unclear order.
+      name: 'queue',
+      intervalMs: loopSettings.intervalMs.queue,
+      onChange: true,
+      run: async () => {
+        const pass = await queuePass({
+          uow,
+          clock: writes.clock,
+          workflow: agwQueue(agw),
+          planning: writes,
+          retryMs: loopSettings.retryMs,
+          minGapMs: loopSettings.queueGapMs,
+          changed: () => runner.changed('queue'),
+        })
+        if (!pass.ok) return pass
+        said('queue', pass.value.problems)
+        return ok(queueSummary(pass.value))
       },
     },
     {

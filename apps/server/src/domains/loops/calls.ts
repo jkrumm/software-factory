@@ -30,12 +30,15 @@ export interface CallPolicy {
   leaseMs: number
 }
 
+/** The fields `planCall` reads: any stored ask with these plans the same way. */
+export type CallTiming = Pick<CallRow, 'key' | 'outcome' | 'leaseUntil' | 'finishedAt'>
+
 /** What the rows of one subject say to do now. */
-export type CallPlan =
-  | { kind: 'answered'; row: CallRow }
+export type CallPlan<R extends CallTiming = CallRow> =
+  | { kind: 'answered'; row: R }
   | { kind: 'in_flight' }
   /** a call whose lease lapsed (the server stopped under it): asked again under its own key, which agw answers from the run it has */
-  | { kind: 'retake'; row: CallRow }
+  | { kind: 'retake'; row: R }
   | { kind: 'backoff'; until: Date }
   | { kind: 'exhausted'; rounds: number }
   | { kind: 'claim'; round: number }
@@ -45,7 +48,7 @@ export type CallPlan =
  * acts on the stored answer), a round in flight is left to its call until its lease lapses and then retaken, a failed or
  * rejected round is retried after `retryMs`, and a subject that used up its rounds is not asked again.
  */
-export function planCall(rows: readonly CallRow[], now: Date, policy: CallPolicy): CallPlan {
+export function planCall<R extends CallTiming>(rows: readonly R[], now: Date, policy: CallPolicy): CallPlan<R> {
   const answered = rows.find((row) => row.outcome === 'answered')
   if (answered) return { kind: 'answered', row: answered }
   if (rows.some((row) => row.outcome === null && row.leaseUntil > now)) return { kind: 'in_flight' }

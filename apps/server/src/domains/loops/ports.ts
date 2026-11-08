@@ -1,4 +1,6 @@
 import type {
+  QueueAnswer,
+  QueueRequest,
   StewardAnswer,
   StewardStall,
   TriageAnswer,
@@ -9,6 +11,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
+import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
 /** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
 export interface FrictionPassRecord {
@@ -38,6 +41,27 @@ export interface LoopStore {
     key: string,
     result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
   ): Promise<void>
+  /** the asks of `factory-queue` about one shape of a repo's queue, oldest first */
+  queueAsks(repo: string, shape: string): Promise<QueueAskRow[]>
+  /** false when the round is claimed already (another pass came first) */
+  claimQueueAsk(
+    row: Pick<QueueAskRow, 'key' | 'repo' | 'shape' | 'round' | 'claimedAt' | 'leaseUntil'>,
+  ): Promise<boolean>
+  /** takes an ask whose lease lapsed back for this pass; false when another pass did first */
+  retakeQueueAsk(key: string, claimedAt: Date, leaseUntil: Date): Promise<boolean>
+  finishQueueAsk(
+    key: string,
+    result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
+  ): Promise<void>
+  /** what was done with an answer: the edges applied and refused, and the queue's shape after them */
+  recordQueueApplied(
+    key: string,
+    result: { applied: QueueEdge[]; refused: RefusedEdge[]; afterShape: string },
+  ): Promise<void>
+  /** an answered ask has this shape, or left the queue in it: asking again would be the same question */
+  shapeAsked(repo: string, shape: string): Promise<boolean>
+  /** when the repo was last asked (claimed, a failed ask included); null before the first */
+  lastQueueAskAt(repo: string): Promise<Date | null>
   /** when the newest friction pass ran; null before the first */
   lastFrictionPassAt(): Promise<Date | null>
   recordFrictionPass(pass: FrictionPassRecord): Promise<void>
@@ -73,6 +97,8 @@ export interface LoopReads {
   settling(limit: number): Promise<SettlingRow[]>
   /** the Issues of the repo that are not closed, other than `excluding` */
   openIssues(repo: string, excluding: IssueId, limit: number): Promise<TriageCandidate[]>
+  /** every open Issue that is not settling, with its priority and open blockers, for the queue loop */
+  queueIssues(): Promise<QueueIssue[]>
   /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked */
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
 }
@@ -85,4 +111,9 @@ export interface StewardWorkflow {
 /** `factory-triage` for an Issue that is settling: the Issues it must wait for. */
 export interface SettleWorkflow {
   settle(request: Extract<TriageRequest, { mode: 'settle' }>, key: Key): Promise<Result<TriageAnswer, PortError>>
+}
+
+/** `factory-queue`: edges and an order for a repo's queued Issues. */
+export interface QueueWorkflow {
+  ask(request: QueueRequest, key: Key): Promise<Result<QueueAnswer, PortError>>
 }

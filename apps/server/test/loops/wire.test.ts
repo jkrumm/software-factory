@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import {
   JudgeInputWire,
   JudgeVerdictWire,
+  QueueAnswer,
+  QueueRequest,
   StewardAnswer,
   StewardStall,
   TriageAnswer,
@@ -11,6 +13,7 @@ import {
 } from '@software-factory/contract'
 import { agwAmend } from '../../src/adapters/agw/amend.ts'
 import { agwJudge } from '../../src/adapters/agw/judge.ts'
+import { agwQueue } from '../../src/adapters/agw/queue.ts'
 import { agwSettle, agwSteward } from '../../src/adapters/agw/steward.ts'
 import type { Precedent } from '../../src/domains/checkpoints/decision.ts'
 import { judgeInputOf } from '../../src/domains/checkpoints/decision.ts'
@@ -42,6 +45,8 @@ test('the fixture’s examples parse with the factory’s schemas', () => {
   expect(TriageRequest.parse(fixture.triage.settleInput)).toEqual(fixture.triage.settleInput)
   expect(TriageAnswer.parse(fixture.triage.amendOutput)).toEqual(fixture.triage.amendOutput)
   expect(TriageAnswer.parse(fixture.triage.settleOutput)).toEqual(fixture.triage.settleOutput)
+  expect(QueueRequest.parse(fixture.queue.input)).toEqual(fixture.queue.input)
+  expect(QueueAnswer.parse(fixture.queue.output)).toEqual(fixture.queue.output)
 })
 
 test('the Judge’s input as the checkpoints build it is the shape the workflow takes', () => {
@@ -91,17 +96,21 @@ test('each adapter sends its workflow the input as given, under the key it was h
     'factory-ask': fixture.judge.output,
     'factory-steward': fixture.steward.output,
     'factory-triage': fixture.triage.settleOutput,
+    'factory-queue': fixture.queue.output,
   })
   const k = key('test', 1)
   expect(await agwJudge(port).judge(fixture.judge.input, k)).toEqual(ok(fixture.judge.output))
   expect(await agwSteward(port).ask(fixture.steward.input, k)).toEqual(ok(fixture.steward.output))
   expect(await agwSettle(port).settle(fixture.triage.settleInput, k)).toEqual(ok(fixture.triage.settleOutput))
+  expect(await agwQueue(port).ask(fixture.queue.input, k)).toEqual(ok(fixture.queue.output))
   expect(calls.map((c) => [c.workflow, c.key])).toEqual([
     ['factory-ask', k],
     ['factory-steward', k],
     ['factory-triage', k],
+    ['factory-queue', k],
   ])
   expect(calls[1]?.input).toEqual(fixture.steward.input)
+  expect(calls[3]?.input).toEqual(fixture.queue.input)
 })
 
 const open = (n: number, title: string): OpenIssue => ({
