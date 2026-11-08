@@ -262,3 +262,37 @@ rows:
       what: "HyperDX alerts and saved searches per app in observability/ (dashboards exported to the repo), the factory door's routes."
       change: "For each app that sends telemetry, an error-rate alert (server spans with StatusCode Error, and the browser SDK's errors) whose webhook posts to the factory door with its own source token, and a door route from that monitor to the app's repo; thresholds stated in the alert's name; export the alerts to the repo."
       acceptance: "Every app with telemetry has an alert routed to its repo (factory door routes lists them); a test alert from one app arrives as a signal on that app's repo and correlates with a Kuma alert of the same host into one incident."
+
+  # Maturing the factory (the owner, 2026-11-08 evening: "queue a lot of pending work especially towards maturing the factory").
+  - key: self-watch
+    title: The factory watches itself the way the orchestrator did
+    facts:
+      why: "The rewrite orchestrator's exception (NL14) ends after the day-7 report. Today it caught by hand what the factory should catch itself (docs/rewrite/state.md, 2026-11-08): master CI red under parallel merges, two leads taking one migration number, a timer wait that never ended, an idle lead on a working Issue, a claim deadlock, a false regression from a manifest edit."
+      change: "A self-watch loop (app/loops) that files signals on this repo with evidence: master's CI red on two runs in a row (turn on the GitHub checks intake for this repo: signals.github.checks), two migration files with one number, a wait past its exit with no event, a lead idle past the steward's threshold, a regression whose only cause is an inert path, the heartbeat stale. Each is deterministic; one signal per subject, amended while it stays open."
+      acceptance: "Scenarios for each condition; one live signal from a provoked red check on a scratch branch; nothing files twice for one subject."
+  - key: merge-guard
+    title: Parallel leads never merge onto a red or moved master
+    facts:
+      why: "With three leads here, master's CI went red on most runs for an afternoon (430, 434, 435) and two leads took one migration number (468)."
+      change: "Before a lead merges its PR it rebases on the current master, takes the next free migration number if it adds one, re-runs make check, and merges only while master's last CI run is green; say this in AGENTS.md and the lead's brief; make check names the next free migration number."
+      acceptance: "Scenario: two leads adding migrations get distinct numbers; a merge while master is red is refused with the reason; AGENTS.md and the brief state the rule."
+  - key: fix-classes
+    title: "Fix commits are sorted by class, so the KPI 'fix commits per week' is measured"
+    facts:
+      why: "docs/product.md lists fix commits per week by class as a KPI; the self-audit (447) found it is not measured."
+      change: "Read fix commits per repo from git (conventional type fix), sort them deterministically where the scope says enough and through a small agw workflow otherwise into the classes of docs/product.md, store the result, show it on Improve."
+      acceptance: "Improve shows fix commits per week by class for the last four weeks; a scenario with fixture commits; the agw workflow has a fixture test."
+  - key: backlog-triage
+    title: Every open GitHub issue in the owner's repos is triaged into the factory
+    facts:
+      why: "The GitHub intake hears new issues since 2026-11-07 06:30 only; older open issues in the owner's repos were never triaged (software-factory alone has one open, 'Cloud review 2026-10')."
+      change: "List the open GitHub issues in every project the factory knows (gh), and file each as a signal with origin github through intake, so triage dedupes against open Issues and quarantines what others wrote; close none, comment on none; report what became Issues, what merged, what is held."
+      acceptance: "Every open issue has a signal with its triage outcome; a table of the outcomes in the Issue's evidence; nothing written to GitHub."
+  - key: morning-report
+    kind: docs
+    not_before: 2026-11-09T05:30:00Z
+    title: "The owner's morning Report, and an example Spec with its questions"
+    facts:
+      why: "The owner asked for a morning report of where the factory stands in its new tooling, and for an example Spec and questions so he can try the review tooling on something real."
+      change: "1. A Report artifact: what the definition (docs/product.md, NL1 to NL25) promised and what is built, the KPIs since the cutover (factory read kpis, friction), what the loops did overnight, what failed and was fixed, open risks, and what needs him; short, in his words, no ids where a title says more. 2. A Spec artifact for a real next step that needs his taste: which of the Console's components and patterns move into basalt-ui (NL4: Basalt learns from the Console as its first consumer on Base UI and Tailwind 4) - list each candidate with a screenshot, its API, and the cost; 3. two or three Decisions on that Spec through the factory's Decision verb, each with recommendation, what was checked, cost per option and the consequence of no answer, so they reach Needs you only through the Judge."
+      acceptance: "The Report and the Spec are in Needs you; the Decisions are complete and judged; the Issue waits on the Spec's verdict."
