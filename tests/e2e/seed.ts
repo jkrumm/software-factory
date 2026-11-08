@@ -107,7 +107,7 @@ export async function seed(lab: Lab): Promise<void> {
 
   const sql = lab.world.db.sql
   await sql`INSERT INTO factory.planning_projects (name, repo, source, project) VALUES
-    ('chat', '/tmp/e2e/chat', 'defaults', '{}'::jsonb) ON CONFLICT (name) DO NOTHING`
+    ('chat', '/tmp/e2e/chat', 'defaults', '{"apiVersion":"factory/v2","name":"chat"}'::jsonb) ON CONFLICT (name) DO NOTHING`
   // a Decision with a default that is still running down its wait (the real owner step comes only after it), as a row
   await sql`INSERT INTO factory.decisions
     (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at)

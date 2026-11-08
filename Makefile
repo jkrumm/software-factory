@@ -49,11 +49,15 @@ check:
 # cutover. It fails open: a server that is down or a full house runs the tests anyway.
 SLOT = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(notdir $(CURDIR)) test" --,)
 
+# Every test file may start a private Postgres cluster in beforeAll and a scenario drives real processes; initdb alone takes seconds
+# on a loaded runner. Bun 1.4 ignores `timeout` in bunfig.toml (tests ran at 5 s on CI), so the flag carries it.
+TEST_TIMEOUT = --timeout 30000
+
 test:
 	@echo "==> unit tests (bun test apps packages scripts integrations)"
-	@$(SLOT) bun test ./apps ./packages ./scripts ./integrations
+	@$(SLOT) bun test $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
 	@echo "==> scenarios (bun test tests)"
-	@$(SLOT) bun test ./tests
+	@$(SLOT) bun test $(TEST_TIMEOUT) ./tests
 
 # The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
 e2e:
