@@ -34,6 +34,21 @@ async function open(page: Page, title: string) {
   await expect(card(page, title).getByRole('button').first()).toHaveAttribute('aria-expanded', 'true')
 }
 
+test('a card header and the other pressable controls show a pointer, and the card reacts to hover', async ({
+  page,
+}) => {
+  await page.goto('/needs-you')
+  const header = card(page, 'Which logging library').getByRole('button').first()
+  await expect(header).toHaveCSS('cursor', 'pointer')
+  const surface = card(page, 'Which logging library')
+  const before = await surface.evaluate(
+    (node) => node.ownerDocument.defaultView?.getComputedStyle(node).backgroundColor,
+  )
+  await header.hover()
+  await expect(surface).not.toHaveCSS('background-color', before)
+  await expect(page.getByRole('button', { name: 'Open command palette' })).toHaveCSS('cursor', 'pointer')
+})
+
 test('the list groups what waits and the open cards show everything the owner decides on, with no id on screen', async ({
   page,
   apiUrl,

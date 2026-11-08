@@ -62,6 +62,15 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Tailwind 4's preflight leaves buttons on the default arrow; anything the owner can press shows a pointer. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  select:not(:disabled),
+  summary,
+  label:has(input[type='checkbox'], input[type='radio']) {
+    cursor: pointer;
+  }
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
