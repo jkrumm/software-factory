@@ -18,7 +18,7 @@ This factory exists to show how far past that a solo setup can go.
 - **First, the owner:** one senior developer with a portfolio of unrelated repos, one always-on machine and a few
   Claude subscriptions.
 - **Then the reader:** a factory engineer building one for a company. This repo is an implementation, and it is also
-  the proof: it manifests the language, the patterns and the loops, and shows the degree of automation they reach.
+  the proof: it embodies the language, the patterns and the loops, and shows the degree of automation they reach.
   Nobody runs it as it stands; every factory is set up and configured for its place.
 
 ## Jobs it does for the owner
