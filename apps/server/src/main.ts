@@ -67,7 +67,7 @@ import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
 import { createShutdown } from './shutdown.ts'
 
-/** The API and the Console's listener both bind loopback only; `tailscale serve` publishes the Console's. */
+/** The API and the Console's listener both bind loopback only; dotfiles-private's serve row publishes the Console's. */
 const HOSTNAME = '127.0.0.1'
 
 /** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
