@@ -1,5 +1,5 @@
 import type { LeadAttempt } from '../domains/leads/ports.ts'
-import { leadKey } from '../domains/leads/names.ts'
+import { leadKey, tabName } from '../domains/leads/names.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import { key } from '../kernel/keys.ts'
 import { ok } from '../kernel/result.ts'
@@ -10,25 +10,31 @@ import { leadGone } from './leads-start.ts'
  * Finds the leads whose terminal is gone: each started lead of a `working` Issue is looked up in herdr-core by its key,
  * and one with no running terminal, past the grace (from the later of its start and its last hook event), is a lead
  * gone. A core that does not answer says nothing, never "gone". The lost terminal is also a fact of the session's
- * hook stream (`pane_gone`), so its derived state reads `gone`. Returns how many leads were found gone.
+ * hook stream (`pane_gone`), so its derived state reads `gone`. The same look names the tab of each lead that runs
+ * (`nameTab`: the app adopts a tab after the start, so the start cannot). Returns how many leads were found gone.
  */
 export async function followLeads(deps: LeadDeps): Promise<number> {
   const followed = await deps.uow.run(async ({ work, leads }) => {
-    const out: { row: LeadAttempt; since: Date | null }[] = []
+    const out: { row: LeadAttempt; since: Date | null; title: string }[] = []
     for (const row of await leads.followed()) {
       const loaded = await loadIssue(work, row.issueId)
       if (loaded?.issue.state !== 'working' || loaded.issue.attempt !== row.attempt) continue
       const view = deriveSession(await leads.hookFacts(leadKey(row.issueId, row.attempt)))
-      out.push({ row, since: view.lastEventAt ?? row.startedAt })
+      out.push({ row, since: view.lastEventAt ?? row.startedAt, title: loaded.issue.title })
     }
     return ok(out)
   })
   if (!followed.ok) return 0
   let lost = 0
-  for (const { row, since } of followed.value) {
+  for (const { row, since, title } of followed.value) {
     const name = leadKey(row.issueId, row.attempt)
     const found = await deps.terminals.find(name)
-    if (!found.ok || found.value.some((terminal) => terminal.live)) continue
+    if (!found.ok) continue
+    // The label marks a tab the factory made; the name comes from the title, so a lead started before the label carried it is named too.
+    for (const { live, tab, tabName: made } of found.value) {
+      if (live && tab && made) await deps.terminals.nameTab({ tab, name: tabName(title) })
+    }
+    if (found.value.some((terminal) => terminal.live)) continue
     const quiet = deps.clock.now().getTime() - Math.max(row.startedAt?.getTime() ?? 0, since?.getTime() ?? 0)
     if (quiet < deps.graceMs) continue
     const at = deps.clock.now()

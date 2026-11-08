@@ -50,6 +50,7 @@ const info = (address: string, live = true): TerminalInfo => ({
   turn: 0,
   exitCode: null,
   tab: 'tb-1',
+  tabName: null,
   space: 'sp-1',
 })
 
@@ -59,6 +60,7 @@ export class FakeTerminals implements Terminals {
   started: StartTerminal[] = []
   typed: { terminal: string; text: string; force: boolean }[] = []
   closed: string[] = []
+  named: { tab: string; name: string }[] = []
   startError: PortError | null = null
   typeAnswers: Result<'typed' | 'busy'>[] = []
   next = 1
@@ -71,7 +73,7 @@ export class FakeTerminals implements Terminals {
     const existing = this.terminals.get(input.key)?.find((t) => t.live)
     if (existing) return ok(existing)
     this.started.push(input)
-    const made = info(`t${this.next++}`)
+    const made = { ...info(`t${this.next++}`), tabName: input.tabName }
     this.terminals.set(input.key, [made])
     return ok(made)
   }
@@ -84,6 +86,9 @@ export class FakeTerminals implements Terminals {
     this.terminals.delete(k)
     return ok(undefined)
   }
+  async nameTab(input: { tab: string; name: string }) {
+    this.named.push(input)
+  }
   lose(k: string) {
     this.terminals.set(
       k,
@@ -95,6 +100,7 @@ export class FakeTerminals implements Terminals {
     this.started = []
     this.typed = []
     this.closed = []
+    this.named = []
     this.startError = null
     this.typeAnswers = []
   }

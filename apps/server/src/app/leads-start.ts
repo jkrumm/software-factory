@@ -1,5 +1,5 @@
 import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
-import { leadBranch, leadKey } from '../domains/leads/names.ts'
+import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
 import type { BriefSignal, LeadAttempt } from '../domains/leads/ports.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -141,6 +141,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       tier: role.value.tier,
       effort: role.value.effort,
       account,
+      tabName: tabName(current.title),
     })
     if (!started.ok) return fail(started.error)
 

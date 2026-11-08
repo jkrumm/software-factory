@@ -197,4 +197,29 @@ describe('following the leads', () => {
     }
     expect(await followLeads(silent as never)).toBe(0)
   })
+
+  test('the tab of a lead that runs is named on a pass; a terminal without a tab name is never touched', async () => {
+    await running()
+    const [started] = w.terminals.started
+    await followLeads(w.deps)
+    expect(w.terminals.named).toEqual([{ tab: 'tb-1', name: started?.tabName ?? '' }])
+    expect(started?.tabName).toMatch(/^Lead/)
+
+    // a lead started before the label carried the name: the key is in it, the name still comes from the title
+    w.terminals.named = []
+    w.terminals.terminals.set(
+      'lead-1-1',
+      (w.terminals.terminals.get('lead-1-1') ?? []).map((t) => ({ ...t, tabName: 'lead-1-1' })),
+    )
+    await followLeads(w.deps)
+    expect(w.terminals.named).toEqual([{ tab: 'tb-1', name: started?.tabName ?? '' }])
+
+    w.terminals.named = []
+    w.terminals.terminals.set(
+      'lead-1-1',
+      (w.terminals.terminals.get('lead-1-1') ?? []).map((t) => ({ ...t, tabName: null })),
+    )
+    await followLeads(w.deps)
+    expect(w.terminals.named).toEqual([])
+  })
 })

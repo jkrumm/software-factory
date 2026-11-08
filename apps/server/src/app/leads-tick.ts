@@ -25,7 +25,7 @@ export interface LeadTickDeps {
 }
 
 /**
- * One pass of the lead tick: the spool's lines are stored, the leads whose terminal is gone are found, then the outbox
+ * One pass of the lead tick: the spool's lines are stored, the leads whose terminal is gone are found (and the tabs of those that run named), then the outbox
  * runs (claim, call, record). Every step finds its own work done, so a pass twice in a row does nothing twice. A step
  * that fails does not hold the others back.
  */

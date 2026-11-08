@@ -17,3 +17,19 @@ export function parseLeadKey(session: string): { issue: IssueId; attempt: number
 
 /** The lead's branch, cut from the repo's default branch as the remote has it. */
 export const leadBranch = (issue: IssueId, attempt: number): string => `factory/${issueNumber(issue)}-${attempt}`
+
+const TAB_NAME_MAX = 32
+const TAB_NAME_PREFIX = 'Lead: '
+
+/**
+ * The name of a lead's tab in the Herdr app: `Lead: <topic>`, the topic being the start of the Issue's title (cut at the
+ * first `,` `;` `—` `–`, without a leading article, at most four words) shortened to fit 32 characters. No number: the
+ * tab says what the lead works on, the Issue is one click away. A blank title is just `Lead`.
+ */
+export function tabName(title: string): string {
+  const head = (title.split(/[,;—–]/)[0] ?? '').trim().replace(/^(?:a|an|the)\s+/i, '')
+  const words = head.split(/\s+/).filter(Boolean).slice(0, 4)
+  if (words.length === 0) return 'Lead'
+  while (words.length > 1 && (TAB_NAME_PREFIX + words.join(' ')).length > TAB_NAME_MAX) words.pop()
+  return (TAB_NAME_PREFIX + words.join(' ')).slice(0, TAB_NAME_MAX)
+}
