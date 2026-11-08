@@ -25,5 +25,5 @@
     "tests",
     "scripts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "apps/console", "tests/e2e"]
 }

@@ -8,5 +8,16 @@
   "arrowParens": "always",
   "bracketSpacing": true,
   "sortPackageJson": false,
-  "ignorePatterns": ["**/*.md", "docs/**", ".claude/**", "bun.lock", "deploy/**", "node_modules/**"]
+  "ignorePatterns": [
+    "**/*.md",
+    "docs/**",
+    ".claude/**",
+    "bun.lock",
+    "deploy/**",
+    "node_modules/**",
+    "apps/console/src/routeTree.gen.ts",
+    "apps/console/src/styles/tokens.css",
+    "apps/console/dist/**",
+    "apps/console/components.json"
+  ]
 }

@@ -5,3 +5,6 @@ node_modules/
 !.env.door.tpl
 dist/
 *.log
+tests/e2e/out/
+test-results/
+playwright-report/

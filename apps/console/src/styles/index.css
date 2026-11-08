@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/nunito-sans/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import './tokens.css';
+
+/* The theme is the `data-theme` attribute main.tsx sets before first render. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * The only bridge from Basalt's tokens to the classes shadcn's components use. Every value is a `var()` of a `--vx-*`
+ * token: no colour literal lives outside tokens.css (test/no-raw-colour.test.ts).
+ */
+@theme inline {
+  --color-background: var(--vx-surface-bg);
+  --color-foreground: var(--vx-ink);
+  --color-card: var(--vx-surface-panel);
+  --color-card-foreground: var(--vx-ink);
+  --color-popover: var(--vx-surface-overlay);
+  --color-popover-foreground: var(--vx-ink);
+  --color-primary: var(--vx-accent-fill);
+  --color-primary-foreground: var(--vx-on-accent);
+  --color-secondary: var(--vx-surface-subtle);
+  --color-secondary-foreground: var(--vx-ink);
+  --color-muted: var(--vx-surface-subtle);
+  --color-muted-foreground: var(--vx-faint);
+  --color-accent: var(--vx-surface-row-hover);
+  --color-accent-foreground: var(--vx-ink);
+  --color-destructive: var(--vx-bad-solid);
+  --color-destructive-foreground: var(--vx-surface-bg);
+  --color-border: var(--vx-surface-border);
+  --color-input: var(--vx-surface-border);
+  --color-ring: var(--vx-accent);
+  --color-scrim: color-mix(in srgb, var(--vx-surface-bg) 70%, transparent);
+  --color-good: var(--vx-good-solid);
+  --color-warn: var(--vx-warn-solid);
+
+  --radius-sm: var(--vx-radius-fine);
+  --radius-md: var(--vx-radius-tight);
+  --radius-lg: var(--vx-radius-ctrl);
+  --radius-xl: var(--vx-radius-card);
+  --radius-2xl: var(--vx-radius-floating);
+  --radius-4xl: var(--vx-radius-pill);
+
+  /* Basalt's families (its fonts:css stacks); the faces are self-hosted from @fontsource-variable. */
+  --font-sans:
+    'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    overscroll-behavior: none;
+  }
+}

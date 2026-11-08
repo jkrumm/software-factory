@@ -1,0 +1,207 @@
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
+import { holdSignal, needsCount } from './seed.ts'
+
+const SCREENS = [
+  { label: 'Needs you', path: '/needs-you', key: 'N' },
+  { label: 'Flow', path: '/flow', key: 'F' },
+  { label: 'Chain', path: '/chain', key: 'C' },
+  { label: 'Improve', path: '/improve', key: 'I' },
+] as const
+
+const chip = (page: Page) => page.getByRole('status').filter({ hasText: /Live|Polling|Offline/ })
+const badge = (page: Page) => page.getByRole('navigation', { name: 'Main' }).getByLabel(/\d+ waiting/)
+
+test('the root redirects to Needs you, the badge is the API count and no id leaks onto the page', async ({
+  page,
+  apiUrl,
+}) => {
+  const count = await needsCount(apiUrl)
+  expect(count).toBeGreaterThan(1)
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/needs-you$/)
+  await expect(badge(page)).toHaveText(String(count))
+  await expect(page.getByText(`${count} waiting`, { exact: true })).toBeVisible()
+  expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+})
+
+test('the four screens open from the navigation and from G then N, F, C, I', async ({ page }) => {
+  await page.goto('/needs-you')
+  const nav = page.getByRole('navigation', { name: 'Main' })
+  for (const { label, path } of SCREENS) {
+    await nav.getByRole('link', { name: label }).click()
+    await expect(page).toHaveURL(new RegExp(`${path}$`))
+  }
+  await page.locator('main').click()
+  for (const { path, key } of [...SCREENS].reverse()) {
+    await page.keyboard.press('g')
+    await page.keyboard.press(key.toLowerCase())
+    await expect(page).toHaveURL(new RegExp(`${path}$`))
+  }
+})
+
+test('the palette opens on Mod+K, filters, navigates on Enter, closes on Escape and gives focus back', async ({
+  page,
+}) => {
+  await page.goto('/needs-you')
+  const trigger = page.getByRole('button', { name: 'Open command palette' })
+  await trigger.focus()
+  const dialog = page.getByRole('dialog')
+
+  await page.keyboard.press('ControlOrMeta+K')
+  await expect(dialog).toBeVisible()
+  const input = dialog.getByPlaceholder('Type a command')
+  await expect(input).toBeFocused()
+  await input.fill('improve')
+  await expect(dialog.getByRole('option')).toHaveCount(1)
+  await page.keyboard.press('Enter')
+  await expect(dialog).toBeHidden()
+  await expect(page).toHaveURL(/\/improve$/)
+
+  await trigger.focus()
+  await page.keyboard.press('ControlOrMeta+K')
+  await expect(dialog).toBeVisible()
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+
+  await page.keyboard.press('ControlOrMeta+K')
+  await dialog.getByPlaceholder('Type a command').fill('theme: light')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.keyboard.press('ControlOrMeta+K')
+  await dialog.getByPlaceholder('Type a command').fill('theme: dark')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test('a new thing that waits on the owner moves the badge without a reload, and the chip says Live', async ({
+  page,
+  apiUrl,
+}) => {
+  await page.goto('/needs-you')
+  const before = await needsCount(apiUrl)
+  await expect(badge(page)).toHaveText(String(before))
+  await expect(chip(page)).toHaveText(/Live/)
+  await page.evaluate('window.__kept = true')
+
+  await holdSignal(apiUrl, 'Live update')
+  await expect(badge(page)).toHaveText(String(before + 1))
+  await expect(chip(page)).toHaveText(/Live/)
+  expect(await page.evaluate('window.__kept')).toBe(true)
+})
+
+test.describe('without the event stream', () => {
+  test.use({ serviceWorkers: 'block' })
+  test.setTimeout(60_000)
+
+  test('the chip says Polling and the count still follows within the polling interval', async ({ page, apiUrl }) => {
+    await page.route('**/v1/stream*', (route) => route.abort())
+    await page.goto('/needs-you')
+    const before = await needsCount(apiUrl)
+    await expect(chip(page)).toHaveText(/Polling/)
+    await expect(badge(page)).toHaveText(String(before))
+
+    await holdSignal(apiUrl, 'Polled update')
+    await expect(badge(page)).toHaveText(String(before + 1), { timeout: 25_000 })
+    await expect(chip(page)).toHaveText(/Polling/)
+  })
+})
+
+test('offline after one load: the shell comes from the service worker and the chip shows the snapshot age', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/needs-you')
+  await expect(chip(page)).toHaveText(/Live/)
+  await page.evaluate('navigator.serviceWorker.ready.then(() => true)')
+  // the snapshot is written to storage a moment after the data arrives
+  await expect.poll(() => page.evaluate("localStorage.getItem('console-snapshot')?.includes('counts')")).toBe(true)
+  // the worker controls the page from its next load on
+  await page.reload()
+  await expect.poll(() => page.evaluate('navigator.serviceWorker.controller !== null')).toBe(true)
+
+  await context.setOffline(true)
+  await page.reload()
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
+  await expect(chip(page)).toHaveText(/Offline - snapshot from .+/)
+})
+
+test('the perimeter: no login, a wrong login and any write are refused', async ({ playwright, consoleUrl }) => {
+  const anonymous = await playwright.request.newContext({ baseURL: consoleUrl, extraHTTPHeaders: {} })
+  for (const path of ['/', '/v1/needs', '/manifest.webmanifest']) {
+    expect((await anonymous.get(path)).status(), `${path} without a login`).toBe(403)
+  }
+  await anonymous.dispose()
+
+  const stranger = await playwright.request.newContext({
+    baseURL: consoleUrl,
+    extraHTTPHeaders: { 'Tailscale-User-Login': 'someone@example.com' },
+  })
+  for (const path of ['/', '/v1/needs', '/manifest.webmanifest']) {
+    expect((await stranger.get(path)).status(), `${path} with a wrong login`).toBe(403)
+  }
+  await stranger.dispose()
+
+  const owner = await playwright.request.newContext({
+    baseURL: consoleUrl,
+    extraHTTPHeaders: { 'Tailscale-User-Login': 'owner@example.com' },
+  })
+  expect((await owner.post('/v1/issues', { data: {} })).status()).toBe(405)
+  await owner.dispose()
+})
+
+test('the app is installable: a manifest with its icons and an active service worker', async ({ page, request }) => {
+  const response = await request.get('/manifest.webmanifest')
+  expect(response.status()).toBe(200)
+  const manifest = (await response.json()) as {
+    name: string
+    start_url: string
+    display: string
+    icons: { src: string; sizes: string }[]
+  }
+  expect(manifest).toMatchObject({ name: 'Software Factory', start_url: '/', display: 'standalone' })
+  expect(manifest.icons.map((icon) => icon.sizes)).toEqual(expect.arrayContaining(['192x192', '512x512']))
+  for (const icon of manifest.icons) {
+    const png = await request.get(icon.src)
+    expect(png.status(), icon.src).toBe(200)
+    expect(png.headers()['content-type'], icon.src).toContain('image/png')
+  }
+
+  await page.goto('/')
+  await expect
+    .poll(() => page.evaluate('navigator.serviceWorker.ready.then((r) => r.active?.state ?? null)'))
+    .toBe('activated')
+  await page.reload()
+  await expect.poll(() => page.evaluate('navigator.serviceWorker.controller?.state ?? null')).toBe('activated')
+})
+
+test.describe('layout', () => {
+  test.describe('phone', () => {
+    test.use({ viewport: { width: 390, height: 844 } })
+
+    test('the tab bar is at the bottom and the side rail is gone', async ({ page }) => {
+      await page.goto('/needs-you')
+      const nav = page.getByRole('navigation', { name: 'Main' })
+      await expect(nav).toHaveCount(1)
+      await expect(nav).toBeVisible()
+      const box = await nav.boundingBox()
+      expect(box?.y ?? 0).toBeGreaterThan(844 / 2)
+      expect(box?.width).toBeCloseTo(390, 0)
+    })
+  })
+
+  test.describe('desktop', () => {
+    test.use({ viewport: { width: 1280, height: 800 } })
+
+    test('the side rail is at the left and the tab bar is gone', async ({ page }) => {
+      await page.goto('/needs-you')
+      const nav = page.getByRole('navigation', { name: 'Main' })
+      await expect(nav).toHaveCount(1)
+      const box = await nav.boundingBox()
+      expect(box?.x).toBe(0)
+      expect(box?.width).toBeLessThan(400)
+    })
+  })
+})

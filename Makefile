@@ -1,9 +1,10 @@
 .DEFAULT_GOAL := help
-.PHONY: help check test fmt deploy rollback verify version rehearse
+.PHONY: help check test e2e fmt deploy rollback verify version rehearse
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc and tokens, e2e tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make test    the unit tests and the scenarios"
+	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
 	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
 	@echo "make rollback swap back to the previous release (data/previous-sha): service, /health at the old sha, current, CLI, door (DRY_RUN=1 prints the plan)"
@@ -23,6 +24,12 @@ check:
 	@shellcheck scripts/*.sh scripts/gameday/*.sh
 	@echo "==> typecheck (tsc --noEmit)"
 	@bunx --no-install tsc --noEmit
+	@echo "==> typecheck console (apps/console)"
+	@bun run --cwd apps/console typecheck
+	@echo "==> console tokens are current (basalt-ui tokens:check)"
+	@bun run --cwd apps/console tokens:check
+	@echo "==> typecheck e2e (tests/e2e)"
+	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
 	@echo "==> boundaries (scripts/boundaries.ts)"
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
@@ -32,6 +39,7 @@ check:
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
 	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory e2e
 	@echo "==> check passed"
 
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
@@ -44,6 +52,13 @@ test:
 	@$(SLOT) bun test ./apps ./packages ./scripts
 	@echo "==> scenarios (bun test tests)"
 	@$(SLOT) bun test ./tests
+
+# The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
+e2e:
+	@echo "==> console build (apps/console/dist)"
+	@bun run --cwd apps/console build
+	@echo "==> e2e (playwright, tests/e2e)"
+	@$(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts
 
 fmt:
 	@bunx --no-install oxfmt --write .
