@@ -36,6 +36,14 @@ describe('project.yaml', () => {
     expect(parse('{ chek: false }').ok).toBe(false)
   })
 
+  test("host is a slug naming the host the project's alerts sit on", () => {
+    const parse = (host: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhost: ${host}`), 'lab')
+    const ok = parse('macmini')
+    expect(ok.ok && ok.project.host).toBe('macmini')
+    expect(parse('Not A Slug').ok).toBe(false)
+    expect(defaultProject('lab').host).toBeUndefined()
+  })
+
   test('leads, slots.run and signals are read; jobs and ticktick are accepted and dropped', () => {
     const parsed = parseProject(
       yaml(
@@ -156,6 +164,7 @@ describe('what intake hears', () => {
       stored({
         apiVersion: 'factory/v2',
         name: 'x',
+        host: 'macmini',
         signals: { github: { label: 'factory', checks: true, author: 'me', since: '2026-11-07' }, launchd: ['com.x'] },
         heal: [{ when: 'kuma.down', grace: '5m', runbook: 'make restart', max: 2 }],
       }),
@@ -163,12 +172,13 @@ describe('what intake hears', () => {
     expect(view).toEqual({
       repo: 'x',
       work: false,
+      host: 'macmini',
       sources: ['github', 'checks', 'launchd'],
       github: { label: 'factory', author: 'me', since: '2026-11-07', checks: true },
       launchd: ['com.x'],
       heal: [{ when: 'kuma.down', graceMs: 300_000, runbook: 'make restart', max: 2 }],
     })
     const work = signalsView(stored({ apiVersion: 'factory/v2', name: 'x' }, 'defaults'))
-    expect(work).toMatchObject({ work: true, sources: [], github: null, launchd: [], heal: [] })
+    expect(work).toMatchObject({ work: true, host: null, sources: [], github: null, launchd: [], heal: [] })
   })
 })

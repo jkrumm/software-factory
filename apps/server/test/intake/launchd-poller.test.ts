@@ -11,6 +11,7 @@ const JOB = 'com.example.job'
 const project = (launchd: string[] = [JOB], extra: Partial<RepoSignals> = {}): RepoSignals => ({
   repo: 'r',
   work: false,
+  host: null,
   sources: ['launchd'],
   github: null,
   launchd,

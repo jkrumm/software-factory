@@ -1,6 +1,7 @@
 # The factory's own project description (docs/language.md, Project). Read from the default branch by `factory project sync`.
 apiVersion: factory/v2
 name: software-factory
+host: macmini # the host its alerts sit on (config/infra.json), so its Kuma and HyperDX alerts join that host's incident
 deploy:
   mode: make # `make deploy` on the mini, `make verify` proves it
   targets:

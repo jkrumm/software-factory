@@ -44,6 +44,8 @@ export interface RepoSignals {
   repo: string
   /** a work repo hears the owner only (NL18) */
   work: boolean
+  /** the host named in its project.yaml */
+  host: string | null
   /** the automatic sources its `signals:` lists (`github`, `checks`, `launchd`); the door's sources come with a route */
   sources: readonly string[]
   github: { label: string; author: string | null; since: string | null; checks: boolean } | null

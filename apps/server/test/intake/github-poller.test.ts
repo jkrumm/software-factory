@@ -20,6 +20,7 @@ interface Call {
 const project = (extra: Partial<RepoSignals> = {}): RepoSignals => ({
   repo: 'r',
   work: false,
+  host: null,
   sources: ['github', 'checks'],
   github: { label: 'factory', author: null, since: null, checks: false },
   launchd: [],
