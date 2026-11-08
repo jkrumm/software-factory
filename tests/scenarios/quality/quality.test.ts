@@ -1,6 +1,17 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { LeadsWorld } from '../leads/support.ts'
-import { commit, gitIn, scriptReview, ship, show, startQualityWorld, stateOf, until, workingIssue } from './support.ts'
+import {
+  commit,
+  gitIn,
+  projectMake,
+  scriptReview,
+  ship,
+  show,
+  startQualityWorld,
+  stateOf,
+  until,
+  workingIssue,
+} from './support.ts'
 
 // A lead starts through the leads' own tick (a worktree, a terminal) before each Issue ships: more than bun's 5 s default.
 setDefaultTimeout(60_000)
@@ -8,10 +19,13 @@ setDefaultTimeout(60_000)
 const LONG = 60_000
 
 /** One world for a describe: the leads' scenario world, the quality settings, and the describe's own watch window. */
-function lab(windowMs: number) {
+function lab(windowMs: number, options: Parameters<typeof startQualityWorld>[1] = {}) {
   const it = { lw: undefined as unknown as LeadsWorld }
   beforeAll(async () => {
-    it.lw = await startQualityWorld({ FACTORY_WATCH_WINDOW_MS: String(windowMs) })
+    it.lw = await startQualityWorld(
+      { FACTORY_WATCH_WINDOW_MS: String(windowMs) },
+      { project: projectMake(Math.floor(windowMs / 1000)), ...options },
+    )
   })
   afterAll(async () => {
     await it.lw.stop()
@@ -139,7 +153,7 @@ describe('ship: the gate', () => {
 })
 
 describe('the watch', () => {
-  const it = lab(2_500)
+  const it = lab(3_000)
 
   test(
     'the window comes first, then verify; green closes the Issue done',
@@ -158,7 +172,7 @@ describe('the watch', () => {
         true,
       )
       const watch = (await show(it.lw.world, it.lw.server, id)).watches[0]
-      expect(watch).toMatchObject({ watch: 1, answer: 'passed', windowMs: 2_500 })
+      expect(watch).toMatchObject({ watch: 1, answer: 'passed', windowMs: 3_000 })
       expect(watch?.checks).toHaveLength(1)
       expect(watch?.checks[0]).toMatchObject({
         outcome: 'green',
@@ -253,6 +267,74 @@ describe('regression', () => {
       expect(watch?.answer).toBe('passed')
       expect(watch?.checks.map((c) => c.outcome)[0]).toBe('red')
       expect(watch?.checks.at(-1)?.outcome).toBe('green')
+    },
+    LONG,
+  )
+})
+
+/** A Makefile like a CI-deployed repo's: `make verify`, a no-op `deploy`, and no `version`. */
+const MAKEFILE_NO_VERSION = 'verify:\n\t@test ! -e red\ndeploy:\n\t@true\n'
+
+describe('the watch reads the project file', () => {
+  const auto = lab(60_000, {
+    makefile: MAKEFILE_NO_VERSION,
+    project: 'apiVersion: factory/v2\nname: example\nleads: 8\ndeploy:\n  mode: auto\n  hold: 2s\n',
+  })
+
+  test(
+    'deploy mode auto: the file’s hold, make verify, and no make version although a deploy target exists',
+    async () => {
+      await scriptReview(auto.lw.world, 'covered')
+      const id = await workingIssue(auto.lw, 'auto')
+      const sha = await commit(auto.lw, 'src/a.ts', 'export const a = 1\n', 'feat: a')
+      expect((await ship(auto.lw.world, auto.lw.server, id, { call: 'ship-1', commits: [sha] })).code).toBe(0)
+
+      await until('the Issue to close', async () => (await stateOf(auto.lw.world, id)) === 'closed:done')
+      const watch = (await show(auto.lw.world, auto.lw.server, id)).watches[0]
+      expect(watch).toMatchObject({ answer: 'passed', windowMs: 2_000 })
+      expect(watch?.checks[0]).toMatchObject({ outcome: 'green', checks: [{ name: 'make verify', ok: true }] })
+    },
+    LONG,
+  )
+
+  const missing = lab(200, {
+    makefile: MAKEFILE_NO_VERSION,
+    project: projectMake(),
+  })
+
+  test(
+    'deploy mode make without a version target stays red, and the lead is told why',
+    async () => {
+      await scriptReview(missing.lw.world, 'covered')
+      const id = await workingIssue(missing.lw, 'no version')
+      const sha = await commit(missing.lw, 'src/a.ts', 'export const a = 1\n', 'feat: a')
+      expect((await ship(missing.lw.world, missing.lw.server, id, { call: 'ship-1', commits: [sha] })).code).toBe(0)
+
+      await until('the regression', async () => (await stateOf(missing.lw.world, id)) === 'working')
+      const watch = (await show(missing.lw.world, missing.lw.server, id)).watches[0]
+      expect(watch?.answer).toBe('regressed')
+      expect(watch?.checks[0]?.checks).toMatchObject([
+        { name: 'deployed version', ok: false, detail: expect.stringContaining('no `make version` target') },
+        { name: 'make verify', ok: true },
+      ])
+    },
+    LONG,
+  )
+
+  const bare = lab(1_500, { project: null })
+
+  test(
+    'a repo without a project.yaml is read from its Makefile, as before',
+    async () => {
+      await scriptReview(bare.lw.world, 'covered')
+      const id = await workingIssue(bare.lw, 'bare')
+      const sha = await commit(bare.lw, 'src/a.ts', 'export const a = 1\n', 'feat: a')
+      expect((await ship(bare.lw.world, bare.lw.server, id, { call: 'ship-1', commits: [sha] })).code).toBe(0)
+
+      await until('the Issue to close', async () => (await stateOf(bare.lw.world, id)) === 'closed:done')
+      const watch = (await show(bare.lw.world, bare.lw.server, id)).watches[0]
+      expect(watch).toMatchObject({ answer: 'passed', windowMs: 1_500 })
+      expect(watch?.checks[0]?.checks.map((c) => c.name)).toEqual(['deployed version', 'make verify'])
     },
     LONG,
   )

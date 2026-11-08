@@ -125,7 +125,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   with its reason; it never refuses a ship (NL23). `evidence.ts` decides whether the paths deploy at all; its inert paths
   equal `scripts/verify.sh`'s.
 - **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
-  their own loop, so a slow verify never holds the leads' pass. A red check is retried with a doubling delay before it is
+  their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`
+  (`app/quality-projects.ts`): deploy mode, `hold` as the window, `make verify` from a target, URL targets and probes. Only
+  mode `make` reads `make version`; a missing version target there is red. A file with no target leaves verify to the
+  Makefile, and a repo without a `project.yaml` is read from its Makefile alone (`adapters/quality/projects.ts`). A red check is retried with a doubling delay before it is
   a regression; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
   rechecked, never passed.
 - **Reopen** (`app/quality-reopen.ts`) is the owner's, within 30 days of closing.

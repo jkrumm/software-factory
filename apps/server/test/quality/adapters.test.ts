@@ -216,3 +216,17 @@ test('agw review: a failing, silent or unexpected agw is an error result', async
     error: { kind: 'unreadable', detail: expect.stringContaining('unexpected') },
   })
 })
+
+test('a project’s other make target runs beside verify, each its own check; a missing one is red', async () => {
+  const repo = await fresh()
+  const got = checks(
+    await new MakeAndProbes().run(
+      { repo: repo.path, makeVerify: true, makeTargets: ['no-such-target'], probes: [] },
+      signal(),
+    ),
+  )
+  expect(got.map((c) => [c.name, c.ok])).toEqual([
+    ['make verify', true],
+    ['make no-such-target', false],
+  ])
+})

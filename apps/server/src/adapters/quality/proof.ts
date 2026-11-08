@@ -48,15 +48,20 @@ export class MakeAndProbes implements Proof {
     } = {},
   ) {}
 
-  async run({ repo, makeVerify, version, probes }: ProofInput, signal: AbortSignal): Promise<Result<Check[]>> {
-    const sync = makeVerify || version ? await this.sync(repo, signal) : undefined
+  async run(
+    { repo, makeVerify, makeTargets = [], version, probes }: ProofInput,
+    signal: AbortSignal,
+  ): Promise<Result<Check[]>> {
+    const sync = makeVerify || makeTargets.length > 0 || version ? await this.sync(repo, signal) : undefined
     const checks = await Promise.all(probes.map((probe) => this.probe(probe, signal)))
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
     if (sync?.state === 'blocked')
       return ok([{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...checks])
     const advanced: Check[] = sync?.state === 'advanced' ? [{ name: 'checkout', ok: true, detail: sync.detail }] : []
     const deployed = version ? [await this.version(repo, version, signal)] : []
-    const verify = makeVerify ? [await this.makeVerify(repo, signal)] : []
+    const verify: Check[] = []
+    for (const target of [...(makeVerify ? ['verify'] : []), ...makeTargets])
+      verify.push(await this.makeVerify(repo, target, signal))
     // A check the server killed on its way down says nothing about production: the next server asks again.
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
     return ok([...advanced, ...deployed, ...verify, ...checks])
@@ -109,12 +114,12 @@ export class MakeAndProbes implements Proof {
     }
   }
 
-  private async makeVerify(repo: string, signal: AbortSignal): Promise<Check> {
+  private async makeVerify(repo: string, target: string, signal: AbortSignal): Promise<Check> {
     const run = this.options.run ?? runProcess
-    const name = 'make verify'
+    const name = `make ${target}`
     try {
       // Its own group: a kill reaches the recipes `make` started, not `make` alone.
-      const done = await run(['sh', '-c', 'exec make -C "$1" verify 2>&1', 'sh', repo], MAKE_TIMEOUT_MS, {
+      const done = await run(['sh', '-c', 'exec make -C "$1" "$2" 2>&1', 'sh', repo, target], MAKE_TIMEOUT_MS, {
         env: childEnv({ GIT_TERMINAL_PROMPT: '0' }),
         group: true,
         signal,

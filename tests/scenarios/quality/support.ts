@@ -41,10 +41,27 @@ export async function workingIssue(lw: LeadsWorld, title: string): Promise<strin
   return id
 }
 
-/** A git repo like the leads' scenarios make, with a Makefile committed and pushed before any worktree is cut. */
-export async function startQualityWorld(env: Record<string, string> = {}): Promise<LeadsWorld> {
+/** The project file of a quality world unless the scenario brings its own: `make deploy` deploys, so the watch reads `make version`. */
+export const projectMake = (holdSeconds = 0): string =>
+  `apiVersion: factory/v2\nname: example\nleads: 8\ndeploy:\n  mode: make\n  hold: ${holdSeconds}s\n`
+
+/**
+ * A git repo like the leads' scenarios make, with a Makefile and a project file committed, pushed and synced before any
+ * worktree is cut. `project: null` leaves the repo without a `project.yaml`.
+ */
+export async function startQualityWorld(
+  env: Record<string, string> = {},
+  options: { makefile?: string; project?: string | null } = {},
+): Promise<LeadsWorld> {
   const lw = await startLeadsWorld({ ...QUALITY_ENV, ...env })
-  await commit(lw, 'Makefile', MAKEFILE, 'chore: make contract')
+  await commit(lw, 'Makefile', options.makefile ?? MAKEFILE, 'chore: make contract')
+  if (options.project === null) {
+    await gitIn(lw, 'rm', '-q', 'project.yaml')
+    await gitIn(lw, 'commit', '-q', '-m', 'chore: no project file')
+    await gitIn(lw, 'push', '-q', 'origin', 'master')
+  } else await commit(lw, 'project.yaml', options.project ?? projectMake(), 'chore: project file')
+  const synced = await lw.cli(['project', 'sync'])
+  if (synced.code !== 0) throw new Error(`project sync exited ${synced.code}: ${synced.err}`)
   return lw
 }
 

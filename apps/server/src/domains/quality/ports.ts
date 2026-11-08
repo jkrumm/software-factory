@@ -28,6 +28,8 @@ export interface ProofInput {
   repo: string
   /** the make contract says the repo has `make verify` */
   makeVerify: boolean
+  /** other make targets to run, as the project names them */
+  makeTargets?: string[]
   /**
    * Set where the deployed version must hold what was shipped (a change that deploys, under deploy mode `make`): the
    * `origin/<default>` the ship found, or why there is none, which is red. Unset: the change deploys nothing.
