@@ -80,6 +80,9 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
  */
 export const IDLE_NOTE = 'steward: your session has been idle'
 
+/** How the `unreported` stall of a quiet lead begins (its detail), so the steward finds it again among the events. */
+export const IDLE_STALL = "the lead's session has been idle"
+
 /** What a nudge says to a lead that went quiet on a working Issue: how long, its last event, and what to do. */
 export function idleNote(minutes: number, lastEvent: string, extra = ''): string {
   const head = `${IDLE_NOTE} for ${minutes} minute(s) with nothing reported. The last event on the Issue: ${lastEvent}.`

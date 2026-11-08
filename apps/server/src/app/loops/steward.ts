@@ -10,6 +10,7 @@ import {
   decideStall,
   fallbackDecision,
   IDLE_NOTE,
+  IDLE_STALL,
   idleNote,
   type IdleFacts,
   MAX_ROUNDS,
@@ -65,6 +66,8 @@ export interface StewardDeps extends WriteDeps {
 
 export interface StewardPass {
   looked: number
+  /** working Issues whose lead session was quiet */
+  quiet: number
   woken: number
   requeued: number
   asked: number
@@ -358,6 +361,10 @@ interface Idle {
 const isIdleNote = (record: AppliedRecord): boolean =>
   record.kind === 'noted' && field(record.payload, 'text').startsWith(IDLE_NOTE)
 
+/** The stall a quiet lead's Decision is raised from; like a wake, it ends one idle episode and begins the next. */
+const isIdleStall = (record: AppliedRecord): boolean =>
+  record.kind === 'stalled' && field(record.payload, 'detail').startsWith(IDLE_STALL)
+
 /**
  * A working Issue whose lead session went quiet: its turn ended, no tool runs, nothing was reported since the turn began
  * (`working` and mid-turn sessions are never read here). Null for every other Issue.
@@ -378,6 +385,7 @@ async function loadIdle(deps: StewardDeps, id: IssueId): Out<Idle | null> {
     const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
     const wakes = history.filter((record) => record.version > lastAdmitted && isIdleNote(record))
     const lastWake = wakes.at(-1)
+    const lastStall = history.findLast((record) => record.version > lastAdmitted && isIdleStall(record))
     const last = history.findLast((record) => !isIdleNote(record))
     const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
     const quietSince = lastWake && lastWake.at > view.idleSince ? lastWake.at : view.idleSince
@@ -389,9 +397,9 @@ async function loadIdle(deps: StewardDeps, id: IssueId): Out<Idle | null> {
         title: issue.title,
         kind: issue.kind,
         cause: 'unreported',
-        detail: `the lead's session has been idle since ${view.idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
-        // the idle episode: the last idle wake's version, so a later episode is a new subject of the workflow
-        since: lastWake?.version ?? issue.version,
+        detail: `${IDLE_STALL} since ${view.idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
+        // the idle episode: the version of the last wake or idle stall, so a later episode is a new subject of the workflow
+        since: Math.max(lastWake?.version ?? 0, lastStall?.version ?? 0) || issue.version,
         stalledAt: view.idleSince,
         attempt: issue.attempt,
         restarts: issue.restarts,
@@ -479,7 +487,7 @@ async function nudgeIdle(deps: StewardDeps, id: IssueId, pass: StewardPass): Pro
   if (!loaded.ok) return tally(pass, id, loaded)
   const idle = loaded.value
   if (!idle) return
-  pass.looked++
+  pass.quiet++
   const now = deps.clock.now()
   const action = decideIdle(idle.idle, now, deps.rules)
   if (action.kind === 'wake') {
@@ -615,6 +623,7 @@ async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void
 export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   const pass: StewardPass = {
     looked: 0,
+    quiet: 0,
     woken: 0,
     requeued: 0,
     asked: 0,
@@ -638,4 +647,4 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
 }
 
 export const stewardSummary = (pass: StewardPass): string =>
-  `looked at ${pass.looked} stalled; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} stalled and ${pass.quiet} quiet; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

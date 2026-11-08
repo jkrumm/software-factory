@@ -13,11 +13,13 @@ import { callsOf, eventsOf, runLoop, script, state, working } from './support.ts
 let lab: Lab
 let dir: string
 let stewardScript: string
+let askScript: string
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-idle-')
   stewardScript = join(dir, 'steward.json')
-  await script(stewardScript, [])
+  askScript = join(dir, 'ask.json')
+  await Promise.all([script(stewardScript, []), script(askScript, [])])
   lab = await startLab({
     leads: true,
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\nleads: 8\n' } },
@@ -26,6 +28,7 @@ beforeAll(async () => {
       FACTORY_STEWARD_MIN_STALL_MS: '0',
       FACTORY_STEWARD_IDLE_MS: '0',
       FACTORY_FAKE_STEWARD_SCRIPT: stewardScript,
+      FACTORY_FAKE_ASK_SCRIPT: askScript,
     },
   })
   expect((await lab.cli(['project', 'sync'])).code).toBe(0)
@@ -113,7 +116,53 @@ test('after maxWakes the workflow is asked, and an answer that wakes it is anoth
   expect(kinds.filter((kind) => kind === 'noted')).toHaveLength(3)
 })
 
-test('a lead that reported or is waiting is not nudged', async () => {
+const DECISION = {
+  action: 'raise_decision',
+  note: '',
+  reason: 'the choice is not the steward’s',
+  decision: {
+    question: 'Should the quiet lead be given more time?',
+    recommendation: 'try again',
+    checked: 'The history shows two wakes and no report.',
+    options: [
+      { label: 'try again', reversible: true, cost: 'the lead is woken and may go quiet again' },
+      { label: 'drop', reversible: true, cost: 'the work is not done; it can be filed again' },
+    ],
+    noAnswer: { consequence: 'the Issue stays stalled', default: null, waitMinutes: null },
+  },
+}
+
+test('a Decision raised for a quiet lead ends one episode: the lead going quiet again is asked about again', async () => {
+  const issue = await working(lab, 'app', 'the glorp lead goes quiet twice')
+  const session = await open(issue)
+  await script(stewardScript, [{ match: 'glorp', answer: DECISION }])
+  await script(askScript, [
+    {
+      match: 'quiet lead',
+      verdict: {
+        verdict: 'answer',
+        answer: 'try again',
+        reason: 'the plan says to retry',
+        source: 'plan: docs/plan.md',
+      },
+    },
+  ])
+
+  for (const episode of [1, 2]) {
+    await goQuiet(session)
+    // the first episode spends the two wakes; the second finds them spent and asks at once
+    if (episode === 1) for (let wake = 0; wake < 2; wake++) await runLoop(lab, 'steward')
+    const ran = await runLoop(lab, 'steward')
+    expect(ran.summary).toContain('Decisions 1')
+    expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'decision' })
+    await lab.cli(['checkpoint', 'pass'])
+    expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+    await hook(lab.world, 'user-prompt-submit', session, { session_id: `again-${episode}` })
+  }
+  expect((await callsOf(lab, 'factory-steward')).filter((call) => call.input.issue === issue)).toHaveLength(2)
+})
+
+test('a lead that deferred before going quiet is not nudged', async () => {
   const issue = await working(lab, 'app', 'reported before going quiet')
   const session = await open(issue)
   await must(lab, [
