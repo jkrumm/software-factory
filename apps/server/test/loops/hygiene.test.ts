@@ -102,7 +102,7 @@ test('signal titles carry no counts and the text names what was swept, the evide
     'Reproduce: make check',
   )
   const f = { kind: 'stale' as const, path: 'docs/a.md', title: 'The doc is behind', evidence: 'ev', fix: 'fx' }
-  expect(judgmentTitle(f)).toBe('Hygiene: The doc is behind')
+  expect(judgmentTitle(f)).toBe(`Hygiene: ${f.kind} document ${f.path}`)
   expect(judgmentKey(f)).toBe('judgment:stale:docs/a.md')
   const text = judgmentSignalText(f, { repo: 'app', ref: '0123456789' })
   for (const part of ['app @ 0123456', 'Evidence: ev', 'Fix: fx', 'Reproduce:']) expect(text).toContain(part)

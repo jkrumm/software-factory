@@ -5,6 +5,7 @@ import {
   judgmentKey,
   judgmentSignalText,
   judgmentTitle,
+  nothingToRead,
   planHygiene,
   probeBudget,
   probeFiledCount,
@@ -108,7 +109,7 @@ async function judge(
     report,
     max: judgmentBudget(input.probeFiled),
   })
-  if (!request) return skipped('no document to read')
+  if (!request) return skipped(nothingToRead(report))
 
   const asked = await deps.workflow.ask(request, key('hygiene', target.repoText, target.passId, input.attempt))
   const judgedAt = deps.clock.now()
@@ -208,7 +209,7 @@ async function retryPass(
   const added = nothingAdded()
   const attempt = row.judgment.attempts + 1
   const probeFiled = probeFiledCount(row)
-  const nothingToRead = !requestOf({
+  const noRequest = !requestOf({
     repo: target.repoText,
     cwd: '-',
     ref: row.ref,
@@ -217,8 +218,8 @@ async function retryPass(
   })
 
   let judgment: HygieneJudgment
-  if (nothingToRead) {
-    judgment = skipped('no document to read')
+  if (noRequest) {
+    judgment = skipped(nothingToRead(row.report))
   } else {
     const retried = await deps.checker.withCheckout(target.repoText, row.report.ref, (checkout) =>
       judge(deps, target, checkout, row.report, { probeFiled, attempt }, added),

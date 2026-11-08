@@ -46,6 +46,8 @@ export interface SweepReport {
   stale: HygieneCandidate[]
   /** living documents edited lately, most recent first */
   slop: HygieneCandidate[]
+  /** why the candidates could not be read (the history scan failed); absent when they were */
+  candidatesError?: string
 }
 
 /** A detached, throwaway worktree of the repo at `ref`. */

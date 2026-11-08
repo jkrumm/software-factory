@@ -318,6 +318,11 @@ describe('deps probe', () => {
     expect(run(await sweep(makeRepo({ 'a.txt': 'x' }).name), 'deps')?.outcome).toBe('skipped')
     const noInstall = await sweep(makeRepo({ 'package.json': '{}' }).name, { bun: fakeBun(TABLE, 1) })
     expect(run(noInstall, 'deps')?.outcome).toBe('failed')
+    // a gate that could not get its dependencies is not a red gate
+    const withGate = makeRepo({ 'package.json': '{}', Makefile: 'check:\n\texit 1\n' })
+    const gated = await sweep(withGate.name, { bun: fakeBun(TABLE, 1) })
+    expect(run(gated, 'check')?.outcome).toBe('failed')
+    expect(findings(gated, 'check')).toEqual([])
   })
 })
 

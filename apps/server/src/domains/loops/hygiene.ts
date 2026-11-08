@@ -103,8 +103,13 @@ export function checkAnswer(answer: HygieneAnswer, request: HygieneRequest): Che
 export const judgmentKey = (finding: Pick<HygieneFinding, 'kind' | 'path'>): string =>
   `${JUDGMENT_PREFIX}${finding.kind}:${finding.path}`
 
-export const judgmentTitle = (finding: Pick<HygieneFinding, 'title'>): string =>
-  `Hygiene: ${finding.title}`.slice(0, 512)
+/** Built from the kind and the path, never from the model's wording: intake fingerprints the title, so the same document is one pattern. */
+export const judgmentTitle = (finding: Pick<HygieneFinding, 'kind' | 'path'>): string =>
+  `Hygiene: ${finding.kind} document ${finding.path}`.slice(0, 512)
+
+/** Why there is nothing to ask: a history scan that failed is said, not hidden behind an empty list. */
+export const nothingToRead = (report: Pick<SweepReport, 'candidatesError'>): string =>
+  report.candidatesError ? `the documents could not be listed: ${report.candidatesError}` : 'no document to read'
 
 export interface Swept {
   repo: string
@@ -129,6 +134,7 @@ export function judgmentSignalText(finding: HygieneFinding, swept: Swept): strin
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Judgment: ${finding.kind} document ${finding.path}`,
+    `Finding: ${finding.title}`,
     `Evidence: ${finding.evidence}`,
     `Fix: ${finding.fix}`,
     `Reproduce: read ${finding.path} at ${shortRef(swept.ref)} against the code it describes`,

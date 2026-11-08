@@ -169,7 +169,7 @@ test('a due project is swept: red check and a broken link are filed, the answer 
     [
       'Hygiene: broken links in docs/guide.md',
       'Hygiene: make check is red on the default branch',
-      'Hygiene: The guide repeats itself',
+      'Hygiene: slop document docs/guide.md',
     ].sort(),
   )
   expect(signals.every((s) => s.repo === 'h1')).toBe(true)
@@ -178,7 +178,8 @@ test('a due project is swept: red check and a broken link are filed, the answer 
   expect(check?.text).toContain('the gate is red')
   expect(check?.text).toContain('Reproduce: make check')
   expect(signals.find((s) => s.title.includes('broken links'))?.text).toContain('missing-0.md')
-  const judged = signals.find((s) => s.title.includes('repeats itself'))
+  const judged = signals.find((s) => s.title.includes('slop document'))
+  expect(judged?.text).toContain('Finding: The guide repeats itself')
   expect(judged?.text).toContain('Fix: Cut the repeated lines.')
   expect(judged?.text).toContain('Evidence: docs/guide.md repeats itself')
 

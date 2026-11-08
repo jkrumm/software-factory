@@ -19,7 +19,12 @@ interface DocHistory {
 
 /** One `git log` over the markdown: the last edit of each living document and the lines edited lately. */
 async function histories(tools: Tools, path: string, docs: Set<string>, now: Date): Promise<Map<string, DocHistory>> {
-  const out = await gitOut(tools, path, ['log', '--format=%x00%H%x09%cI', '--numstat', '--', '*.md'], 120_000)
+  const out = await gitOut(
+    tools,
+    path,
+    ['log', '--no-renames', '--format=%x00%H%x09%cI', '--numstat', '--', '*.md'],
+    120_000,
+  )
   const history = new Map<string, DocHistory>()
   for (const block of out.split('\0').slice(1)) {
     const [head = '', ...rows] = block.split('\n')

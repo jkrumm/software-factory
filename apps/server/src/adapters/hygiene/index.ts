@@ -52,13 +52,26 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       cochange: () => cochangeProbe(tools, path),
     }
     const [history, ...results] = await Promise.all([
-      docs.then((list) => candidates(tools, path, list)).catch(() => ({ stale: [], slop: [] })),
+      docs
+        .then((list) => candidates(tools, path, list))
+        .catch((error: unknown) => ({
+          stale: [],
+          slop: [],
+          candidatesError: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+        })),
       ...(Object.keys(quick) as (keyof typeof quick)[]).map(
         async (probe) => [probe, await guarded(quick[probe])] as const,
       ),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
-    outcomes.set('check', await guarded(() => checkProbe(tools, path)))
+    // A gate that cannot run for want of its dependencies says nothing about the branch: it is not a red check.
+    const deps = outcomes.get('deps')
+    outcomes.set(
+      'check',
+      deps?.outcome === 'failed' && deps.detail.startsWith('bun install')
+        ? failed(`not run: ${deps.detail}`)
+        : await guarded(() => checkProbe(tools, path)),
+    )
 
     const runs: ProbeRun[] = []
     const findings = []
