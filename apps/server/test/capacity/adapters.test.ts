@@ -120,6 +120,24 @@ describe('the account picker', () => {
     expect(await drifted.read(at)).toMatchObject({ ok: false, error: { kind: 'unreadable' } })
   })
 
+  test('a row with a negative age or an absurd epoch is dropped; a normal row stays', async () => {
+    const source = claudeAccountSource({
+      bin: await usage([
+        row('me'),
+        row('future', { age_s: -60 }),
+        row('stale', { age_s: 8 * 24 * 3600 }),
+        row('epoch', { five_hour_resets_at: 99_999_999_999 }),
+        row('zero', { exhausted_until: 0 }),
+        row('pct', { five_hour: -1 }),
+      ]),
+    })
+    expect(value(await source.read(at)).map((r) => r.account)).toEqual(['me'])
+    expect(await claudeAccountSource({ bin: await usage([row('future', { age_s: -1 })]) }).read(at)).toMatchObject({
+      ok: false,
+      error: { kind: 'unreadable' },
+    })
+  })
+
   test('a picker that is missing, fails, hangs or prints nonsense is an error result', async () => {
     expect(await claudeAccountSource({ bin: join(dir, 'nope') }).read(at)).toMatchObject({
       ok: false,
