@@ -59,6 +59,7 @@ function setup(
     writebacks?: Writeback[]
     receive?: 'fail'
     apiUrl?: string | null
+    backlog?: boolean
   } = {},
 ) {
   const calls: Call[] = []
@@ -115,6 +116,7 @@ function setup(
     sourceRoot: '/src',
     token: 'token' in options ? (options.token ?? null) : TOKEN,
     ...(options.apiUrl === null ? {} : { apiUrl: options.apiUrl ?? API }),
+    ...(options.backlog ? { backlog: true } : {}),
     fetch: fetchFake,
     run,
     log: (line) => logged.push(line),
@@ -327,6 +329,83 @@ describe('the held outside issues', () => {
     gh.world.everyone = [mine(2, 'Old news', { created_at: '2026-10-31T23:59:59Z' })]
     await gh.poller.pass()
     expect(gh.received).toEqual([])
+  })
+})
+
+describe('the backlog sweep', () => {
+  const backlogOptions = { backlog: true, projects: [withGithub({ author: AUTHOR, since: SINCE })] }
+
+  test('off by default: no sweep query is made', async () => {
+    const gh = setup()
+    await gh.poller.pass()
+    expect(gh.calls.some((call) => call.url.includes('&page='))).toBe(false)
+  })
+
+  test("every older open issue is filed once: the owner's and the labelled as machine, a stranger's as outside; nothing is written", async () => {
+    const gh = setup(backlogOptions)
+    gh.world.everyone = [
+      mine(1, 'Old own', { created_at: '2026-01-01T00:00:00Z' }),
+      stranger(2, 'Old stranger', { created_at: '2026-01-02T00:00:00Z' }),
+      item(3, 'Old labelled', { user: { login: 'someone' } }),
+      item(4, 'A PR', { pull_request: { url: 'x' } }),
+    ]
+    await gh.poller.pass()
+    const backlog = gh.received.filter((r) => r.alert?.facts && (r.alert.facts as { backlog?: boolean }).backlog)
+    expect(backlog.map((r) => [r.alert?.subject, r.alert?.event, r.signal.trust])).toEqual([
+      ['o/r#1', 'backlog', 'machine'],
+      ['o/r#2', 'seen', 'outside'],
+      ['o/r#3', 'backlog', 'machine'],
+    ])
+    for (const r of backlog) expect(r.alert?.facts).toMatchObject({ writeback: false })
+    for (const r of backlog) expect(r.alert?.facts).not.toHaveProperty('admitted')
+    expect(gh.calls.filter((call) => call.method !== 'GET')).toEqual([])
+    expect(gh.logged).toContain('github backlog: o/r 3 open')
+    expect(gh.logged).toContain('github backlog: o/r#1 filed/new -')
+  })
+
+  test('the sweep runs on the first pass only and pages until a short page', async () => {
+    const gh = setup({
+      ...backlogOptions,
+      answer: (url) => {
+        const page = /[?&]page=(\d+)/.exec(url)?.[1]
+        if (page === '1') return Response.json(Array.from({ length: 100 }, (_, i) => stranger(i + 1, `T${i + 1}`)))
+        if (page === '2') return Response.json([stranger(101, 'T101')])
+        return undefined
+      },
+    })
+    await gh.poller.pass()
+    const sweeps = () => gh.calls.filter((call) => call.url.includes('&page=')).length
+    expect(sweeps()).toBe(2)
+    expect(gh.received).toHaveLength(101)
+    await gh.poller.pass()
+    expect(sweeps()).toBe(2)
+  })
+
+  test('a work repo and a project without github are not swept; a failing page is one line', async () => {
+    const gh = setup({
+      backlog: true,
+      projects: [project({ work: true }), project({ github: null }), withGithub({})],
+      answer: (url) => (url.includes('&page=') ? new Response('boom', { status: 500 }) : undefined),
+    })
+    await gh.poller.pass()
+    expect(gh.calls.filter((call) => call.url.includes('&page=')).length).toBe(1)
+    expect(gh.logged).toContain('github backlog: o/r page 1 500, incomplete')
+  })
+
+  test('a sweep that could not read a repo whole runs again on the next pass', async () => {
+    let fail = true
+    const gh = setup({
+      ...backlogOptions,
+      answer: (url) => (fail && url.includes('&page=') ? new Response('boom', { status: 500 }) : undefined),
+    })
+    gh.world.everyone = [stranger(1, 'Old stranger')]
+    await gh.poller.pass()
+    expect(gh.received).toHaveLength(1)
+    fail = false
+    await gh.poller.pass()
+    expect(gh.logged).toContain('github backlog: o/r 1 open')
+    await gh.poller.pass()
+    expect(gh.calls.filter((call) => call.url.includes('&page=')).length).toBe(2)
   })
 })
 

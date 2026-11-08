@@ -813,6 +813,7 @@ export function createIntake(deps: IntakeDeps) {
       const issue = filed.value.issue.id
       await s.intake.setSignal(id, { state: 'promoted', issueId: issue, repo })
       // A promoted signal is found by its fingerprint next time (an alert by its subject too): a duplicate amends the Issue.
+      const fromBacklog = (r.alert?.facts as { backlog?: unknown } | null)?.backlog === true
       await s.intake.insertSubject({
         source: r.signal.source,
         subject: r.alert?.subject ?? r.signal.fingerprint,
@@ -823,9 +824,9 @@ export function createIntake(deps: IntakeDeps) {
         lastSeen: now,
         repeats: 0,
         upAt: null,
-        // A stranger's issue is answered with a comment, never closed on GitHub.
-        writeback: r.alert !== null && r.signal.source === 'github',
-        admitted: r.alert !== null && r.signal.source === 'github' ? 'label' : null,
+        // A stranger's issue is answered with a comment, never closed on GitHub; the backlog sweep's writes nothing.
+        writeback: r.alert !== null && r.signal.source === 'github' && !fromBacklog,
+        admitted: r.alert !== null && r.signal.source === 'github' && !fromBacklog ? 'label' : null,
       })
       return ok(triaged('filed', 'promoted', issue, id))
     })

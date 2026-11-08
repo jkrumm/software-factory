@@ -15,6 +15,8 @@ const PAGE_SIZE = 50
 const NAME = /^[A-Za-z0-9._-]+$/
 const MAX_WRITEBACKS = 20
 const MAX_SUMMARY_CHARS = 300
+const BACKLOG_PAGE_SIZE = 100
+const MAX_BACKLOG_PAGES = 10
 const COMMENTS_PAGE_SIZE = 100
 const MAX_COMMENT_PAGES = 10
 /** GitHub says "you cannot write here" (or the issue is gone): recorded, not retried every pass. */
@@ -41,6 +43,8 @@ export interface GithubPollerDeps {
   log?: (line: string) => void
   /** not read here; accepted so the three pollers share one shape */
   clock?: Clock
+  /** `FACTORY_GITHUB_BACKLOG`: the first pass after a start also files every older open issue (once per process) */
+  backlog?: boolean
 }
 
 const Issues = z.array(
@@ -156,13 +160,20 @@ function checkReceived(project: RepoSignals, repo: string, branch: string, check
 /** How an issue came in: through the label, as the owner's own, or not at all (a stranger's, held). */
 type Admitted = 'label' | 'author' | null
 
+/**
+ * One open issue as a signal. `admitted` is how the poller let it in (the label or the author query; null is a stranger's,
+ * held). The backlog sweep passes `backlog` with no `admitted`: it writes nothing to GitHub, so the facts carry
+ * `writeback: false` (and a promote of the held one honours that), and `trusted` (the label's and the owner's own issues)
+ * decides the trust instead of `admitted`.
+ */
 function issueReceived(
   project: RepoSignals,
   repo: string,
   issue: GithubIssue,
-  event: 'labeled' | 'opened' | 'seen',
-  admitted: Admitted,
+  how: { event: string; admitted: Admitted; backlog?: { trusted: boolean } },
 ): Received {
+  const { event, admitted, backlog } = how
+  const trusted = backlog ? backlog.trusted : admitted !== null
   const title = cleanText(issue.title.slice(0, MAX_TITLE_CHARS)) || `${repo}#${issue.number}`
   const body = (issue.body ?? '').slice(0, MAX_BODY_CHARS)
   return {
@@ -170,7 +181,7 @@ function issueReceived(
       source: 'github',
       kind: 'request',
       origin: 'github',
-      trust: admitted ? 'machine' : 'outside',
+      trust: trusted ? 'machine' : 'outside',
       repo: project.repo,
       fingerprint: fingerprintOf(repo, title),
       title,
@@ -190,6 +201,7 @@ function issueReceived(
         ...(issue.user ? { author: issue.user.login } : {}),
         body,
         ...(admitted ? { admitted } : {}),
+        ...(backlog ? { backlog: true } : {}),
         writeback: admitted !== null,
       }),
     },
@@ -289,7 +301,7 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
       author !== undefined && issue.user?.login.toLowerCase() === author ? 'author' : 'label'
     const add = (issue: GithubIssue, event: 'labeled' | 'opened' | 'seen', admitted: Admitted) => {
       seen.add(issue.number)
-      found.push(issueReceived(project, repo, issue, event, admitted))
+      found.push(issueReceived(project, repo, issue, { event, admitted }))
     }
 
     const labelled = await listIssues(
@@ -401,6 +413,70 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
     return new Set(subjects.value.filter((s) => s.open).map((s) => s.subject))
   }
 
+  /**
+   * Every open issue of one project, oldest first, pull requests left out. `complete` is false when a page failed: the
+   * issues already read are still filed, and the sweep runs again on the next pass (idempotent).
+   */
+  async function backlogOf(repo: string): Promise<{ issues: GithubIssue[]; complete: boolean }> {
+    const all: GithubIssue[] = []
+    for (let page = 1; page <= MAX_BACKLOG_PAGES; page++) {
+      let issues: GithubIssue[]
+      try {
+        issues = await read(
+          `${api}/repos/${repo}/issues?state=open&per_page=${BACKLOG_PAGE_SIZE}&page=${page}&sort=created&direction=asc`,
+          Issues,
+        )
+      } catch (error) {
+        log(`github backlog: ${repo} page ${page} ${statusOf(error)}, incomplete`)
+        return { issues: all, complete: false }
+      }
+      all.push(...issues.filter((issue) => issue.pull_request === undefined))
+      if (issues.length < BACKLOG_PAGE_SIZE) return { issues: all, complete: true }
+    }
+    log(`github backlog: ${repo} more than ${MAX_BACKLOG_PAGES * BACKLOG_PAGE_SIZE} open issues, the newest are unseen`)
+    return { issues: all, complete: true }
+  }
+
+  /**
+   * The older open issues: each goes through intake as any issue of the poller does (triage amends or joins open Issues,
+   * an outsider's is held), and one line per issue says what became of it. Nothing is written to GitHub. Returns false
+   * when a repo could not be read whole.
+   */
+  async function sweepBacklog(projects: readonly RepoSignals[]): Promise<boolean> {
+    let complete = true
+    for (const project of projects) {
+      if (project.work || !project.github) continue
+      const remote = await remoteOf(project.repo)
+      if (!remote) {
+        log(`github backlog: ${project.repo} has no github.com origin, skipped`)
+        continue
+      }
+      const repo = `${remote.owner}/${remote.name}`
+      const label = project.github.label.toLowerCase()
+      const author = project.github.author?.toLowerCase()
+      const found = await backlogOf(repo)
+      complete &&= found.complete
+      log(`github backlog: ${repo} ${found.issues.length} open`)
+      for (const issue of found.issues) {
+        const trusted =
+          issue.labels.some((l) => l.name.toLowerCase() === label) ||
+          (author !== undefined && issue.user?.login.toLowerCase() === author)
+        const received = issueReceived(project, repo, issue, {
+          event: trusted ? 'backlog' : 'seen',
+          admitted: null,
+          backlog: { trusted },
+        })
+        const answer = await deps.sink.receive(received)
+        log(
+          answer.ok
+            ? `github backlog: ${repo}#${issue.number} ${answer.value.outcome}/${answer.value.detail} ${answer.value.issue ?? answer.value.signal ?? '-'}`
+            : `github backlog: ${repo}#${issue.number} not filed (${answer.error.kind})`,
+        )
+      }
+    }
+    return complete
+  }
+
   async function pollProjects(projects: readonly RepoSignals[]): Promise<void> {
     let skippedHost = false
     for (const project of projects) {
@@ -483,13 +559,16 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
     }
   }
 
+  let swept = !deps.backlog
   return {
     enabled,
     async pass() {
       if (!enabled) return
       const polled = await deps.projects.polled()
-      if (polled.ok) await pollProjects(polled.value)
-      else log(`github intake: projects unknown (${polled.error.kind})`)
+      if (polled.ok) {
+        if (!swept) swept = await sweepBacklog(polled.value)
+        await pollProjects(polled.value)
+      } else log(`github intake: projects unknown (${polled.error.kind})`)
       await writeBack()
     },
   }

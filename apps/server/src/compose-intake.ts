@@ -68,6 +68,7 @@ export async function composeIntake(input: {
     sourceRoot: env.sourceRoot,
     token: env.github.token,
     apiUrl: env.github.apiUrl,
+    backlog: env.github.backlog,
     clock: input.clock,
   })
   const beszel = beszelPoller({
