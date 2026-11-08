@@ -16,15 +16,23 @@ export interface CheckpointSettings {
   line: OwnersLine
 }
 
+/** The factory's data directory: `FACTORY_DATA_DIR`, else `$HOME/.software-factory/data`. */
+export function factoryDataDir(env: Record<string, string | undefined>): string {
+  const parsed = Env.safeParse(env)
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
+  }
+  return parsed.data.FACTORY_DATA_DIR ?? join(parsed.data.HOME ?? '/tmp', '.software-factory', 'data')
+}
+
 /** The checkpoints domain's settings from the environment (`FACTORY_NTFY_URL`, `FACTORY_NTFY_TOPIC`, `NTFY_TOKEN`, `FACTORY_CONSOLE_URL` are the owner's line's). */
 export function loadCheckpointSettings(env: Record<string, string | undefined>): CheckpointSettings {
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
-  const dataDir = parsed.data.FACTORY_DATA_DIR ?? join(parsed.data.HOME ?? '/tmp', '.software-factory', 'data')
   return {
-    blobDir: join(dataDir, 'blobs'),
+    blobDir: join(factoryDataDir(env), 'blobs'),
     policyFile: parsed.data.FACTORY_CHECKPOINT_POLICY_FILE ?? null,
     line: loadOwnersLine(env),
   }

@@ -1,4 +1,5 @@
 import {
+  type Checkout,
   type HygieneChecker,
   PROBES,
   type Probe,
@@ -18,6 +19,8 @@ import { retiredProbe } from './probes/retired.ts'
 
 export interface HygieneCheckerOptions {
   repos: RepoLocator
+  /** the factory's data directory: the throwaway worktrees live under `<workDir>/hygiene/` */
+  workDir: string
   git?: string
   make?: string
   bun?: string
@@ -39,7 +42,7 @@ async function guarded(run: () => Promise<Outcome>): Promise<Outcome> {
 export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChecker {
   const tools: Tools = { git: options.git ?? 'git', make: options.make ?? 'make', bun: options.bun ?? 'bun' }
 
-  async function sweep(checkout: { path: string; ref: string }): Promise<SweepReport> {
+  async function sweep(checkout: Checkout): Promise<SweepReport> {
     const { path } = checkout
     const markdown = trackedMarkdown(tools, path)
     markdown.catch(() => {})
@@ -70,7 +73,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       'check',
       deps?.outcome === 'failed' && deps.detail.startsWith('bun install')
         ? failed(`not run: ${deps.detail}`)
-        : await guarded(() => checkProbe(tools, path)),
+        : await guarded(() => checkProbe(tools, checkout)),
     )
 
     const runs: ProbeRun[] = []
@@ -84,7 +87,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
   }
 
   return {
-    withCheckout: (repo, ref, use) => withCheckout(tools, options.repos, repo, ref, use),
+    withCheckout: (repo, ref, use) => withCheckout(tools, options.repos, options.workDir, repo, ref, use),
     sweep,
   }
 }

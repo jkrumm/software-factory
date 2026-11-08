@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,7 +83,12 @@ function fakeBun(table: string, installExit = 0): string {
 }
 
 const checker = (options: { make?: string; bun?: string } = {}) =>
-  createHygieneChecker({ repos: rootedRepos([join(base, 'repos')]), bun: fakeBun(''), ...options })
+  createHygieneChecker({
+    repos: rootedRepos([join(base, 'repos')]),
+    workDir: join(base, 'data'),
+    bun: fakeBun(''),
+    ...options,
+  })
 
 async function sweep(name: string, options: { make?: string; bun?: string } = {}): Promise<SweepReport> {
   const c = checker(options)
@@ -109,6 +115,18 @@ afterAll(() => {
 })
 
 describe('withCheckout', () => {
+  test('worktrees abandoned for over 6 hours are removed, fresh ones stay', async () => {
+    const { name } = makeRepo({ 'a.txt': 'one\n' })
+    const hygiene = join(base, 'data', 'hygiene')
+    mkdirSync(join(hygiene, 'stale-x'), { recursive: true })
+    mkdirSync(join(hygiene, 'fresh-x'), { recursive: true })
+    const old = new Date(Date.now() - 7 * 3_600_000)
+    utimesSync(join(hygiene, 'stale-x'), old, old)
+    expect((await checker().withCheckout(name, null, async () => 'x')).ok).toBe(true)
+    expect(existsSync(join(hygiene, 'stale-x'))).toBe(false)
+    expect(existsSync(join(hygiene, 'fresh-x'))).toBe(true)
+  })
+
   test('a detached worktree of origin default at a full sha, removed afterwards', async () => {
     const { name, work } = makeRepo({ 'a.txt': 'one\n' })
     const c = checker()
@@ -120,7 +138,9 @@ describe('withCheckout', () => {
       expect(readFileSync(join(checkout.path, 'a.txt'), 'utf8')).toBe('one\n')
       // the canonical name: agw allows reads below a directory by it, and the temp directory is a link on macOS
       expect(checkout.path).toBe(realpathSync(checkout.path))
-      expect(checkout.path.startsWith(join(realpathSync(tmpdir()), 'factory-hygiene'))).toBe(true)
+      expect(checkout.path.startsWith(`${join(realpathSync(join(base, 'data')), 'hygiene')}/`)).toBe(true)
+      expect(checkout.path.startsWith(`${join(realpathSync(tmpdir()), 'factory-hygiene')}/`)).toBe(false)
+      expect(realpathSync(checkout.source)).toBe(realpathSync(work))
       return 'used'
     })
     expect(result).toEqual({ ok: true, value: 'used' })
@@ -185,6 +205,42 @@ describe('check probe', () => {
     expect(run(await sweep(makeRepo({ 'a.txt': 'x' }).name), 'check')?.outcome).toBe('skipped')
     const broken = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 0\n' }).name, { make: '/nonexistent/make' })
     expect(run(broken, 'check')?.outcome).toBe('failed')
+  })
+
+  // red only where the path contains /hygiene/, as a gate that cannot run under the throwaway location
+  const PATH_BOUND = `check:\n\t@case "$$(pwd)" in */hygiene/*) exit 1 ;; esac\n`
+
+  test('red only in the throwaway checkout, green in the project own checkout: failed, no finding', async () => {
+    const report = await sweep(makeRepo({ Makefile: PATH_BOUND }).name)
+    expect(run(report, 'check')?.outcome).toBe('failed')
+    expect(run(report, 'check')?.detail).toContain("green in the project's own checkout")
+    expect(findings(report, 'check')).toEqual([])
+  })
+
+  test('red everywhere is a finding confirmed in the own checkout', async () => {
+    const report = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 1\n' }).name)
+    expect(run(report, 'check')?.outcome).toBe('found')
+    expect(run(report, 'check')?.detail).toContain("confirmed in the project's own checkout")
+    expect(findings(report, 'check')).toHaveLength(1)
+  })
+
+  test('a dirty own checkout never hides a red: the finding is filed, not confirmed', async () => {
+    const { name, work } = makeRepo({ Makefile: PATH_BOUND })
+    writeFileSync(join(work, 'untracked.txt'), 'x')
+    const report = await sweep(name)
+    expect(run(report, 'check')?.outcome).toBe('found')
+    expect(run(report, 'check')?.detail).toContain('not confirmed')
+    expect(findings(report, 'check')).toHaveLength(1)
+  })
+
+  test('a make that cannot run in the own checkout is failed, never a finding', async () => {
+    const make = join(fake, 'make-own-127')
+    writeFileSync(make, '#!/bin/sh\ncase "$(pwd)" in */hygiene/*) exit 1 ;; esac\nexit 127\n')
+    chmodSync(make, 0o755)
+    const report = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 1\n' }).name, { make })
+    expect(run(report, 'check')?.outcome).toBe('failed')
+    expect(run(report, 'check')?.detail).toContain('cannot run')
+    expect(findings(report, 'check')).toEqual([])
   })
 
   test('the sweep runs the probes in PROBES order, one run each', async () => {
@@ -365,6 +421,27 @@ describe('cochange probe', () => {
   test('ignores lockfiles, docs, generated, fixtures and tests', () => {
     const log = `\0${'a'.repeat(40)}\n\nbun.lock\nREADME.md\ndocs/x.ts\nsrc/generated/g.ts\nsrc/a.test.ts\ntest/t.ts\npackage.json\napps/x/manifest.json\nMakefile\nsrc/real.ts\n`
     expect(parseLog(log)).toEqual([['src/real.ts']])
+  })
+
+  test('ignores generated files: drizzle meta, lockfiles, codegen, snapshots', () => {
+    const files = [
+      'drizzle/meta/_journal.json',
+      'drizzle/meta/0001_snapshot.json',
+      'yarn/x.lock',
+      'uv.lock',
+      'go.sum',
+      'src/api.gen.ts',
+      'src/routeTree.gen.tsx',
+      'src/__generated__/x.ts',
+      'foo.generated.ts',
+      'src/a.snap',
+    ]
+    const log = `\0${'a'.repeat(40)}\n\n${files.join('\n')}\nsrc/real.ts\n`
+    expect(parseLog(log)).toEqual([['src/real.ts']])
+    const generatedPair = Array.from({ length: 20 }, (_, i) =>
+      parseLog(`\0${String(i).padStart(40, '0')}\n\nlib/api.gen.ts\ndrizzle/meta/_journal.json\n`),
+    ).flat()
+    expect(coChanged(generatedPair)).toEqual([])
   })
 
   test('over a real history', async () => {

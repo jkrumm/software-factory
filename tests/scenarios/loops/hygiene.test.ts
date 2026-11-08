@@ -30,7 +30,9 @@ const doc = (links: number): string =>
     ...Array.from({ length: 16 }, (_, i) => `Line ${i} of the document.`),
   ].join('\n')
 
-const makefile = (repo: string) => `check:\n\t@echo run >> ${mark(repo)}\n\t@echo the gate is red\n\t@exit 1\n`
+// the mark is left by the throwaway checkout only: the confirming run in the project's own checkout is not a sweep
+const makefile = (repo: string) =>
+  `check:\n\t@case "$$(pwd)" in */hygiene/*) echo run >> ${mark(repo)} ;; esac\n\t@echo the gate is red\n\t@exit 1\n`
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-hygiene-scenario-')
@@ -43,6 +45,7 @@ beforeAll(async () => {
       work: {},
     },
     env: {
+      FACTORY_DATA_DIR: join(dir, 'data'),
       FACTORY_FAKE_HYGIENE_SCRIPT: hygieneScript,
       FACTORY_HYGIENE_EVERY_MS: String(7 * 24 * 3_600_000),
       FACTORY_HYGIENE_RETRY_MS: String(FAKE_RETRY_MS),
@@ -185,7 +188,7 @@ test('a due project is swept: red check and a broken link are filed, the answer 
 
   const [ask, ...more] = await asksFor('h1')
   expect(more).toEqual([])
-  expect(String(ask?.input.cwd)).toMatch(/factory-hygiene\/h1-[0-9a-f]{7}-/)
+  expect(String(ask?.input.cwd)).toMatch(/\/hygiene\/h1-[0-9a-f]{7}-/)
   expect(String(ask?.input.ref)).toMatch(/^[0-9a-f]{40}$/)
   expect(((ask?.input.slop ?? []) as { path: string }[]).map((c) => c.path)).toContain('docs/guide.md')
   expect(ask?.input.max).toBe(3)
