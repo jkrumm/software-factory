@@ -102,6 +102,15 @@ const ENTITIES: Record<string, string> = {
   laquo: '\u00ab',
   raquo: '\u00bb',
   times: '\u00d7',
+  lsquo: '\u2018',
+  rsquo: '\u2019',
+  ldquo: '\u201c',
+  rdquo: '\u201d',
+  deg: '\u00b0',
+  euro: '\u20ac',
+  ne: '\u2260',
+  le: '\u2264',
+  ge: '\u2265',
 }
 
 /** Tags that sit inside a line of text: a browser shows `<code>make</code>,` as `make,`, so they leave no space behind. */

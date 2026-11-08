@@ -249,6 +249,12 @@ describe('artifacts', () => {
       expect(anchorOf(html, 'html', quote)).toBe('unanchored')
   })
 
+  test('typographic quotes and common symbols decode', () => {
+    expect(readableText('<p>don&rsquo;t &ldquo;stop&rdquo; at 5&deg; &ne; 6</p>', 'html')).toBe(
+      'don’t “stop” at 5° ≠ 6',
+    )
+  })
+
   test('numeric entities out of range or unknown named ones stay as written', () => {
     expect(readableText('<p>&#0; &#x110000; &bogus; &lt;b&gt;</p>', 'html')).toBe('&#0; &#x110000; &bogus; <b>')
   })
