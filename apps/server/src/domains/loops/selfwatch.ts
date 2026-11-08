@@ -28,6 +28,18 @@ const iso = (date: Date): string => date.toISOString()
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 const oneLine = (text: string, max = 160): string => text.replace(/\s+/g, ' ').trim().slice(0, max)
 
+const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+/**
+ * An id in words: intake's fingerprint drops digits, so "issue_470" and "issue_471" would be one subject. A subject Issue's
+ * own title stays out of the title too (intake amends an open Issue whose title shares 60% of its words, and the subject
+ * Issue is open): the title names the Issue by its spelled id, the text carries its title.
+ */
+const spelled = (id: string): string =>
+  id
+    .replace(/\d/g, (digit) => ` ${DIGIT_WORDS[Number(digit)]} `)
+    .replace(/\s+/g, ' ')
+    .trim()
+
 // ---- 1. ci_red ------------------------------------------------------------------------------------------------------------
 
 /**
@@ -120,9 +132,9 @@ export function waitFindings(waits: readonly WaitFact[], now: Date, graceMs: num
     found.push({
       kind: 'wait_overdue',
       subject: `${wait.issue}:${wait.reason}`,
-      title: `Self-watch: ${wait.reason} wait overdue for ${wait.issue} ${oneLine(wait.title, 200)}`,
+      title: `Self-watch: ${wait.reason} wait overdue for ${spelled(wait.issue)}`,
       facts: [
-        `${wait.issue} waits for a ${wait.reason}, since v${wait.since} (${iso(wait.sinceAt)})`,
+        `${wait.issue} (${oneLine(wait.title, 200)}) waits for a ${wait.reason}, since v${wait.since} (${iso(wait.sinceAt)})`,
         wait.reason === 'timer'
           ? `until: ${wait.until}`
           : `after: ${wait.after.map((a) => `${a.issue} closed ${a.closedAt ? iso(a.closedAt) : 'never'}`).join(', ')}`,
@@ -144,9 +156,9 @@ export function idleFindings(leads: readonly IdleLead[], now: Date, idleLeadMs: 
     .map((lead) => ({
       kind: 'lead_idle' as const,
       subject: lead.lead,
-      title: `Self-watch: lead ${lead.lead} idle past the steward's threshold on ${oneLine(lead.title, 200)}`,
+      title: `Self-watch: lead ${spelled(lead.lead)} idle past the steward's threshold`,
       facts: [
-        `${lead.issue} is working, its lead ${lead.lead} reported nothing`,
+        `${lead.issue} (${oneLine(lead.title, 200)}) is working, its lead ${lead.lead} reported nothing`,
         `idle since ${iso(lead.idleSince)}`,
         `threshold: ${Math.round(idleLeadMs / 60_000)} min (FACTORY_STEWARD_IDLE_MS)`,
       ],
@@ -172,9 +184,9 @@ export function inertRegressionFindings(
     found.push({
       kind: 'inert_regression',
       subject: regression.issue,
-      title: `Self-watch: regression after a ship of inert paths only: ${oneLine(regression.title, 200)}`,
+      title: `Self-watch: regression of ${spelled(regression.issue)} after a ship of inert paths only`,
       facts: [
-        `${regression.issue} regressed: ${oneLine(regression.detail, 200)}`,
+        `${regression.issue} (${oneLine(regression.title, 200)}) regressed: ${oneLine(regression.detail, 200)}`,
         `shipped commits: ${ship.commits.slice(0, MAX_LISTED).map(short).join(', ')}${ship.commits.length > MAX_LISTED ? ` and ${ship.commits.length - MAX_LISTED} more` : ''}`,
         `their paths, all inert: ${ship.paths.slice(0, MAX_LINES).join(', ')}`,
       ],

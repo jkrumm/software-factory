@@ -32,7 +32,11 @@ export function gitMigrationFiles(
         const listed = await git(['for-each-ref', '--format=%(refname)', 'refs/heads/', 'refs/remotes/origin/'])
         if (listed.exitCode !== 0) return err(portError('unreadable', `the refs of ${repo} are not readable`))
         const refs: { ref: string; added: string[] }[] = []
-        for (const ref of lines(listed.stdout).slice(0, MAX_REFS)) {
+        const all = lines(listed.stdout)
+        if (all.length > MAX_REFS) {
+          return err(portError('unreadable', `${all.length} refs in ${repo}, more than the ${MAX_REFS} compared`))
+        }
+        for (const ref of all) {
           if (ref === `refs/remotes/${BASE}` || ref === 'refs/remotes/origin/HEAD') continue
           const diff = await git([
             'diff',
