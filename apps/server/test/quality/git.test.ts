@@ -182,3 +182,13 @@ test('a deployed commit behind where the work landed only by changes no deploy c
   const after = await repo.commit('docs/more.md', 'y\n')
   expect(await deployedHolds(repo.path, deployed, after)).toMatchObject({ ok: false })
 })
+
+test('a plan or project.yaml edit after the deploy never regresses it; a change under apps/ does', async () => {
+  const repo = await fresh()
+  const deployed = await repo.commit('apps/server/a.ts', '1\n')
+  await repo.commit('project.yaml', 'a: 1\n')
+  const plan = await repo.commit('docs/plan.yaml', 'b: 1\n')
+  expect(await deployedHolds(repo.path, deployed, plan)).toMatchObject({ ok: true })
+  const code = await repo.commit('apps/server/b.ts', '2\n')
+  expect(await deployedHolds(repo.path, deployed, code)).toMatchObject({ ok: false })
+})
