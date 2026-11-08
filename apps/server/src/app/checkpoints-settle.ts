@@ -186,12 +186,16 @@ async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResul
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
 async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: string): StepResult {
   const now = deps.clock.now()
-  const claimed = await deps.uow.run<{ precedents: Precedent[] } | Exclude<StepClaim, 'claimed'>, never>(
+  const claimed = await deps.uow.run<{ precedents: Precedent[]; tries: number } | Exclude<StepClaim, 'claimed'>, never>(
     async ({ checkpoints }) => {
       const claim = await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS))
       if (claim !== 'claimed') return ok(claim)
       const terms = precedentTerms(decision.form.question)
-      return ok({ precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [] })
+      const tries = (await checkpoints.decision(decision.id))?.steps.find((step) => step.step === 'judge')?.tries ?? 1
+      return ok({
+        precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [],
+        tries,
+      })
     },
   )
   if (!claimed.ok) return claimed
@@ -206,7 +210,11 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
     form: decision.form,
     precedents: claimed.value.precedents,
   })
-  const verdict = await deps.judge.judge(input, key('factory-ask', decision.id))
+  // The key names the try and the form: a retry or a re-judge of an amended form must not find the earlier run.
+  const verdict = await deps.judge.judge(
+    input,
+    key('factory-ask', decision.id, claimed.value.tries, formDigest(decision.form)),
+  )
 
   const recorded = await deps.uow.run<Stepped, CheckpointError>(async (stores) => {
     const at = deps.clock.now()

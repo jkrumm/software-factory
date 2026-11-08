@@ -155,7 +155,8 @@ export async function askDecision(
 
     const by = input.by ?? 'lead'
     const open = (await checkpoints.decisions({ issueId: input.issueId, status: 'open', limit: 50 })).find(
-      (candidate) => candidate.askedBy === by && waitingOn(issue, 'decision', candidate.id),
+      (candidate) =>
+        candidate.askedBy === by && candidate.attempt === input.attempt && waitingOn(issue, 'decision', candidate.id),
     )
     if (open) {
       if (formDigest(open.form) === formDigest(form))

@@ -54,7 +54,7 @@ afterAll(async () => {
 const clock: FixedClock = fixedClock('2026-03-01T12:00:00Z')
 let deps: SettleDeps & PageDeps
 let rules: PolicyRule[]
-let judgeCalls: { question: string; precedents: number }[]
+let judgeCalls: { question: string; precedents: number; key: string }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let sent: string[]
 let sendResult: () => Result<void>
@@ -63,8 +63,8 @@ let duringJudge: (() => Promise<unknown>) | null
 
 const policies: StandingPolicies = { rulesFor: () => Promise.resolve(ok(rules)) }
 const judge: JudgePort = {
-  judge: async (input) => {
-    judgeCalls.push({ question: input.question, precedents: input.precedents.length })
+  judge: async (input, key) => {
+    judgeCalls.push({ question: input.question, precedents: input.precedents.length, key })
     await duringJudge?.()
     return judgeAnswer()
   },
@@ -255,6 +255,8 @@ describe('amending', () => {
 
     value(await settleDecision(deps, first.decision.id))
     expect(judgeCalls.map((call) => call.question)).toEqual([FORM.question, AMENDED.question])
+    // The amended form is a new agw run, not the verdict computed for the old form.
+    expect(judgeCalls[0]?.key).not.toBe(judgeCalls[1]?.key)
     const [revived] = await db.sql`SELECT cancelled_at, body FROM factory.checkpoint_pages`
     expect(revived?.cancelled_at).toBeNull()
     expect(revived?.body).toContain('winston')
@@ -337,7 +339,7 @@ describe('settling, in turn', () => {
     const { decision } = await ask(issueId, { question: 'Which retention for the access log rows?' })
     const settled = value(await settleDecision(deps, decision.id))
     expect(settled).toMatchObject({ status: 'answered', settledBy: 'judge' })
-    expect(judgeCalls).toEqual([{ question: 'Which retention for the access log rows?', precedents: 1 }])
+    expect(judgeCalls).toMatchObject([{ question: 'Which retention for the access log rows?', precedents: 1 }])
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.source).toBe('plan: docs/decisions.md')
     expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([
@@ -390,6 +392,8 @@ describe('settling, in turn', () => {
     clock.advance(JUDGE_BACKOFF_MS)
     value(await settleDecision(deps, decision.id))
     expect(judgeCalls).toHaveLength(3)
+    // Each try is its own agw run: the same key would hand back the first failed one.
+    expect(new Set(judgeCalls.map((call) => call.key)).size).toBe(3)
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.steps.map((s) => [s.step, s.outcome, s.tries])).toEqual([
       ['policy', 'passed', 1],
