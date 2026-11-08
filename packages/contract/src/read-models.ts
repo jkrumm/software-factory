@@ -232,7 +232,7 @@ export const FrictionCount = z
     ]),
     label: z.string(),
     count: z.number().int(),
-    /** per Issue filed in the window; null when there was none */
+    /** per Issue closed in the window; null when none closed */
     perIssue: z.number().nullable(),
   })
   .meta({ id: 'FrictionCount' })
@@ -242,9 +242,14 @@ export const FrictionModel = z
   .strictObject({
     at,
     days: z.number().int(),
+    /** `from` is the later of `days` ago and `since`: nothing older is counted */
     window: z.strictObject({ from: at, to: at }),
-    /** Issues filed in the window: what `perIssue` divides by */
+    /** the import marker: the old core's history ends here and only the new core's own events count; null when nothing was imported */
+    since: at.nullable(),
+    /** Issues filed in the window */
     issues: z.number().int(),
+    /** Issues closed in the window: what `perIssue` divides by, and the sample a rate stands on */
+    closed: z.number().int(),
     counts: z.array(FrictionCount),
   })
   .meta({ id: 'FrictionModel' })

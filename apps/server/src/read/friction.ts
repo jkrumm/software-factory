@@ -38,14 +38,37 @@ const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nu
 const one = async (rows: Promise<unknown[]>): Promise<number> => Count.parse((await rows)[0]).n
 const grouped = async (rows: Promise<unknown[]>) => (await rows).map((raw) => Grouped.parse(raw))
 
-/** The counts of waste in the last `days` days: counts only, no model. Read-only SQL. */
+const Marker = z.object({ at: z.coerce.date().nullable() })
+
+/**
+ * The window friction counts in: the last `days` days, cut at the import marker. The cutover imported the old core's
+ * history with its original timestamps, so before the newest import ran, nothing was recorded by this core. A database
+ * with no import has no marker and no cut.
+ */
+export async function frictionWindow(
+  sql: SQL,
+  options: { now: Date; days: number },
+): Promise<{ w: Window; since: Date | null }> {
+  const { at: since } = Marker.parse((await sql`SELECT max(imported_at) AS at FROM factory.import_issues`)[0])
+  const w = windowOf(options.now, options.days)
+  return { w: since && since > w.from ? { from: since, to: w.to } : w, since }
+}
+
+/** Issues closed in the window: what the per-Issue rates divide by. */
+const issuesClosed = async (sql: SQL, w: Window): Promise<number> =>
+  one(sql`
+    SELECT count(*) AS n FROM factory.issue_events
+    WHERE to_state = 'closed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`)
+
+/** The counts of waste in the last `days` days since the import: counts only, no model. Read-only SQL. */
 export async function readFriction(sql: SQL, options: { now: Date; days: number }): Promise<FrictionModel> {
   const { now } = options
-  const w: Window = windowOf(now, options.days)
+  const { w, since } = await frictionWindow(sql, options)
   const issues = await issuesFiled(sql, w)
+  const closed = await issuesClosed(sql, w)
   const counts: FrictionCount[] = []
   const add = (group: FrictionCount['group'], key: string, label: string, count: number) =>
-    counts.push({ key, group, label, count, perIssue: per(count, issues) })
+    counts.push({ key, group, label, count, perIssue: per(count, closed) })
 
   const touches = await avoidableTouches(sql, w)
   for (const [kind, label] of Object.entries(TOUCHES))
@@ -146,7 +169,9 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
     at: now.toISOString(),
     days: options.days,
     window: { from: w.from.toISOString(), to: w.to.toISOString() },
+    since: since?.toISOString() ?? null,
     issues,
+    closed,
     counts,
   }
 }

@@ -155,7 +155,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`) | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new, likely `after` edges |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |
-| `friction` | the week's counts (`read/friction.ts`) against the thresholds in `domains/loops/friction.ts`: one signal per pattern over its threshold, 5 at most, filed on this repo through intake with the evidence Issues; due once a week, read from `friction_passes` | none |
+| `friction` | the week's counts (`read/friction.ts`), cut at the newest import (`import_issues.imported_at`: the old core's history is never counted), against the rules in `domains/loops/friction.ts`: a rate per Issue closed with a minimum sample of 10 closed, or a bare count for the serious patterns (stall, lead lost, undelivered note, regression); retired mechanisms (the review gate, NL23) are skipped. One signal per pattern over its rule, 5 at most, filed on this repo through intake with the evidence Issues; a pattern whose Issue is open amends it with a note (intake's fingerprint). Due once a week, read from `friction_passes` | none |
 
 ## API, client, CLI
 

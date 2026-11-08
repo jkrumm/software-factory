@@ -367,8 +367,10 @@ describe('the fixture', () => {
   test('friction: counts by kind with plain labels, per Issue, and the zero ones present', async () => {
     const model = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
     expect(model.issues).toBe(9)
+    expect(model.closed).toBe(2)
+    expect(model.since).toBeNull()
     const count = (key: string) => model.counts.find((c) => c.key === key)
-    expect(count('touch:decision_answered')).toMatchObject({ count: 1, perIssue: 1 / 9 })
+    expect(count('touch:decision_answered')).toMatchObject({ count: 1, perIssue: 1 / 2 })
     expect(count('touch:noted')?.count).toBe(1)
     expect(count('touch:cancelled')?.count).toBe(1)
     expect(count('touch:reopened')?.count).toBe(0)
@@ -394,6 +396,24 @@ describe('the fixture', () => {
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const day = FrictionModel.parse(await readFriction(sql, { now: later, days: 1 }))
     expect(day.counts.find((c) => c.key === 'decision_settled:owner')?.count).toBe(0)
+  })
+
+  test('friction counts nothing older than the newest import, and the evidence agrees', async () => {
+    await sql`INSERT INTO factory.import_issues (issue_id, legacy_id, imported_at, last_event, carried_version)
+      VALUES ('issue_6', 6, ${ago(2)}, 1, 1)`
+    try {
+      const model = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
+      expect(model.since).toBe(ago(2).toISOString())
+      expect(model.window.from).toBe(ago(2).toISOString())
+      const count = (key: string) => model.counts.find((c) => c.key === key)?.count
+      expect(count('lead_gone')).toBe(1) // 1.2 hours ago: the new core's own
+      expect(count('regression')).toBe(0) // answered 10 hours ago: history
+      expect(model.issues).toBeLessThan(9)
+      const evidence = await readFrictionEvidence(sql, { now: NOW, days: 7 }, ['lead_gone', 'regression'])
+      expect(evidence).toEqual({ lead_gone: ['issue_6'], regression: [] })
+    } finally {
+      await sql`DELETE FROM factory.import_issues WHERE issue_id = 'issue_6'`
+    }
   })
 
   test('friction evidence: Issue refs exist exactly when the count is above zero, newest first, at most five', async () => {
