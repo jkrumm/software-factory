@@ -17,7 +17,13 @@ import {
   type Swept,
 } from '../../domains/loops/hygiene.ts'
 import type { Checkout, HygieneChecker, SweepReport } from '../../domains/loops/hygiene-model.ts'
-import type { HygieneJudgment, HygienePassRecord, HygieneWorkflow, LoopStore } from '../../domains/loops/ports.ts'
+import type {
+  HygieneJudgment,
+  HygienePassRecord,
+  HygieneWorkflow,
+  LoopReads,
+  LoopStore,
+} from '../../domains/loops/ports.ts'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
@@ -27,9 +33,10 @@ import { key } from '../../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { readGate, type ClassGate } from './gate.ts'
 
 export interface HygieneDeps {
-  uow: UnitOfWork<{ loops: LoopStore; planning: PlanningStore }>
+  uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads; planning: PlanningStore }>
   clock: Clock
   ids: IdSource
   checker: HygieneChecker
@@ -62,6 +69,7 @@ const nothingAdded = (): Added => ({ filed: [], overBudget: [], failed: [] })
 /** File one signal. A filed, amended or repeat-dropped outcome stands (an Issue carries it); any other drop is a failure. */
 async function fileOne(
   deps: HygieneDeps,
+  gate: ClassGate,
   input: { repoText: string; name: string; id: string; title: string; text: string },
   added: Added,
 ): Promise<void> {
@@ -79,8 +87,11 @@ async function fileOne(
   }
   const { outcome, detail } = filed.value
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
-  if (stands) added.filed.push({ key: input.id, title: input.title })
-  else added.failed.push({ key: input.id, reason: `${outcome}: ${detail}`.slice(0, 300) })
+  if (stands) {
+    added.filed.push({ key: input.id, title: input.title })
+    const lost = await gate.record(filed.value.issue, input.id)
+    if (lost) added.failed.push({ key: input.id, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
+  } else added.failed.push({ key: input.id, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
 
 interface Target {
@@ -99,6 +110,7 @@ interface Target {
  */
 async function judge(
   deps: HygieneDeps,
+  gate: ClassGate,
   target: Target,
   checkout: Checkout,
   report: SweepReport,
@@ -128,8 +140,14 @@ async function judge(
   const checked = checkAnswer(asked.value, request)
   const swept: Swept = { repo: target.name, ref: checkout.ref }
   for (const finding of checked.findings) {
+    // The model was asked already; a finding of a held class is named, not filed.
+    if (!gate.allows(judgmentKey(finding))) {
+      added.overBudget.push({ key: judgmentKey(finding), title: finding.title })
+      continue
+    }
     await fileOne(
       deps,
+      gate,
       {
         ...target,
         id: judgmentKey(finding),
@@ -153,13 +171,20 @@ async function judge(
 }
 
 async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<Result<HygienePass, PortError>> {
+  const gated = await readGate(deps, { loop: 'hygiene', repo: target.repoText, now })
+  if (!gated.ok) return gated
+  const gate = gated.value
   const added = nothingAdded()
   const swept = await deps.checker.withCheckout(target.repoText, null, async (checkout) => {
     const report = await deps.checker.sweep(checkout, { skipCheck: target.skipCheck })
-    const { file, overBudget } = probeBudget(rankProbeFindings(report.findings))
+    // A held class is named before the budget counts: it does not use up a slot.
+    const ranked = rankProbeFindings(report.findings)
+    const allowed = ranked.filter((finding) => gate.allows(finding.key))
+    const { file } = probeBudget(allowed)
     for (const finding of file) {
       await fileOne(
         deps,
+        gate,
         {
           ...target,
           id: finding.key,
@@ -169,8 +194,18 @@ async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<R
         added,
       )
     }
-    for (const finding of overBudget) added.overBudget.push({ key: finding.key, title: finding.title })
-    const judgment = await judge(deps, target, checkout, report, { probeFiled: added.filed.length, attempt: 1 }, added)
+    for (const finding of ranked) {
+      if (!file.includes(finding)) added.overBudget.push({ key: finding.key, title: finding.title })
+    }
+    const judgment = await judge(
+      deps,
+      gate,
+      target,
+      checkout,
+      report,
+      { probeFiled: added.filed.length, attempt: 1 },
+      added,
+    )
     return { report, judgment }
   })
   // A checkout that cannot be made is recorded as a sweep that ran nothing: the project is asked again after `retryMs`, and
@@ -209,6 +244,9 @@ async function retryPass(
   target: Target,
   row: HygienePassRecord,
 ): Promise<Result<HygienePass, PortError>> {
+  const gated = await readGate(deps, { loop: 'hygiene', repo: target.repoText, now: deps.clock.now() })
+  if (!gated.ok) return gated
+  const gate = gated.value
   const added = nothingAdded()
   const attempt = row.judgment.attempts + 1
   const probeFiled = probeFiledCount(row)
@@ -225,7 +263,7 @@ async function retryPass(
     judgment = skipped(nothingToRead(row.report))
   } else {
     const retried = await deps.checker.withCheckout(target.repoText, row.report.ref, (checkout) =>
-      judge(deps, target, checkout, row.report, { probeFiled, attempt }, added),
+      judge(deps, gate, target, checkout, row.report, { probeFiled, attempt }, added),
     )
     // A checkout that cannot be made counts as an attempt, or the same project would be retried every tick.
     judgment = retried.ok

@@ -11,6 +11,11 @@ import {
   THRESHOLDS,
   withinBudget,
 } from '../../src/domains/loops/friction.ts'
+import type { ClassIssue } from '../../src/domains/loops/classes.ts'
+import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
+import { frictionPass, type FrictionDeps } from '../../src/app/loops/friction.ts'
+import { sequentialIds } from '../../src/kernel/ids.ts'
+import { ok } from '../../src/kernel/result.ts'
 
 /** 40 Issues closed: well past the minimum sample, and `n / 40` is each count's rate. */
 const CLOSED = 40
@@ -163,4 +168,65 @@ test('a pattern without Issues says so', () => {
     .join('')
   expect(note).toContain('no Issue behind it')
   expect(note).not.toContain('cut at the import')
+})
+
+// ---- finding classes ------------------------------------------------------------------------------------------------------
+
+const DAY = 86_400_000
+const passNow = new Date('2026-11-20T12:00:00Z')
+
+function frictionWorld(classes: Record<string, ClassIssue[]>) {
+  const recorded: { issue: string; class: string; key: string }[] = []
+  const records: FrictionPassRecord[] = []
+  const loops = {
+    lastFrictionPassAt: async () => null,
+    recordFrictionPass: async (r: FrictionPassRecord) => void records.push(r),
+    recordFinding: async (f: { issue: string; class: string; key: string }) => {
+      if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
+    },
+  } as unknown as LoopStore
+  const loopReads = { classIssues: async () => classes } as unknown as LoopReads
+  let filed = 0
+  const deps: FrictionDeps = {
+    uow: { run: async (work) => work({ loops, loopReads }), inTransaction: () => false },
+    clock: { now: () => passNow },
+    ids: sequentialIds(),
+    friction: async () => ({
+      at: passNow.toISOString(),
+      days: 7,
+      window: { from: new Date(passNow.getTime() - 7 * DAY).toISOString(), to: passNow.toISOString() },
+      since: null,
+      issues: 40,
+      closed: 40,
+      counts: [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
+    }),
+    evidence: async () => ({}),
+    file: async () =>
+      ok({ outcome: 'filed', detail: 'new', issue: `issue_${++filed}`, signal: null, reason: null }) as never,
+  }
+  return { deps, recorded, records }
+}
+
+const noisyFriction = (): ClassIssue[] =>
+  Array.from({ length: 5 }, (_, i) => ({
+    issue: `issue_${i + 100}`,
+    filedAt: new Date(passNow.getTime() - (40 - i) * DAY),
+    closedAt: new Date(passNow.getTime() - (2 + i) * DAY),
+    outcome: 'dropped' as const,
+  }))
+
+test('a held friction class is named in overBudget and not filed; the others are filed and recorded', async () => {
+  const w = frictionWorld({ lead_gone: noisyFriction() })
+  expect((await frictionPass(w.deps)).ok).toBe(true)
+  expect(w.records[0]?.filed.map((f) => f.key)).toEqual(['regression'])
+  expect(w.records[0]?.overBudget.map((f) => f.key)).toEqual(['lead_gone'])
+  expect(w.recorded.map((r) => [r.class, r.key])).toEqual([['regression', 'regression']])
+})
+
+test('with no history every class files', async () => {
+  const w = frictionWorld({})
+  await frictionPass(w.deps)
+  expect(w.records[0]?.filed).toHaveLength(2)
+  expect(w.records[0]?.overBudget).toEqual([])
+  expect(w.recorded).toHaveLength(2)
 })

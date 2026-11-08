@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import type { ClassIssue } from '../domains/loops/classes.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 
@@ -44,11 +45,46 @@ const Blocked = z.object({
   detail: z.string().nullable(),
 })
 
+const ClassRow = z.object({
+  loop: z.enum(['friction', 'hygiene']),
+  repo: z.string(),
+  class: z.string(),
+  issue: z.string(),
+  filed_at: z.date(),
+  closed_at: z.date().nullable(),
+  outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
+})
+
+const classRows = (rows: unknown[]) =>
+  rows.map((raw) => {
+    const row = ClassRow.parse(raw)
+    const issue: ClassIssue = {
+      issue: row.issue,
+      filedAt: row.filed_at,
+      closedAt: row.closed_at,
+      outcome: row.outcome,
+    }
+    return { loop: row.loop, repo: row.repo, class: row.class, issue }
+  })
+
 /**
  * What the loops read across the work, intake and quality tables: which Issues stall, which still settle, what is open
  * beside an Issue, and whose watch has a checkout that stays blocked. Read-only SQL on the caller's transaction.
  */
 export function loopReads(tx: SQL): LoopReads {
+  // A finding's Issues: filed at its `filed` event, closed at the applied event that moved it to `closed`.
+  const classes = async (filter: { loop: string; repo: string } | null) => {
+    const rows: unknown[] = await tx`
+      SELECT lf.loop, lf.repo, lf.class, i.id AS issue, f.at AS filed_at, i.outcome,
+        (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed' ORDER BY c.version DESC LIMIT 1) AS closed_at
+      FROM factory.loop_findings lf
+      JOIN factory.issues i ON i.id = lf.issue_id
+      JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+      WHERE ${filter === null ? tx`TRUE` : tx`lf.loop = ${filter.loop} AND lf.repo = ${filter.repo}`}
+      ORDER BY lf.loop, lf.repo, lf.class, i.id`
+    return classRows(rows)
+  }
+
   return {
     async stalled(limit) {
       const rows: { id: string }[] = await tx`
@@ -167,6 +203,26 @@ export function loopReads(tx: SQL): LoopReads {
           detail: row.detail ?? '',
         }
       })
+    },
+
+    async classIssues(loop, repo) {
+      const out: Record<string, ClassIssue[]> = {}
+      for (const row of await classes({ loop, repo })) (out[row.class] ??= []).push(row.issue)
+      return out
+    },
+
+    async allClassIssues() {
+      const groups = new Map<
+        string,
+        { loop: 'friction' | 'hygiene'; repo: string; class: string; issues: ClassIssue[] }
+      >()
+      for (const row of await classes(null)) {
+        const id = `${row.loop}\u0000${row.repo}\u0000${row.class}`
+        const group = groups.get(id) ?? { loop: row.loop, repo: row.repo, class: row.class, issues: [] }
+        group.issues.push(row.issue)
+        groups.set(id, group)
+      }
+      return [...groups.values()]
     },
   }
 }
