@@ -12,6 +12,7 @@ import {
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import {
+  type ErrandScreenPort,
   type JudgePort,
   type DecisionRecord,
   type DecisionStatus,
@@ -34,6 +35,7 @@ import {
 export interface SettleDeps extends CheckpointDeps {
   policies: StandingPolicies
   judge: JudgePort
+  errandScreen: ErrandScreenPort
 }
 
 /**

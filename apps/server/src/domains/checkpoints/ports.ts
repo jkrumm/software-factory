@@ -1,3 +1,4 @@
+import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
@@ -114,6 +115,14 @@ export interface ErrandRecord {
   raisedAt: Date
   doneAt: Date | null
   doneNote: string | null
+  /** when the screen let it through to the owner; null while held, and for good once turned away */
+  reachedOwnerAt: Date | null
+  /** failed screen calls so far, and when the next is due */
+  screenTries: number
+  screenRetryAt: Date | null
+  screenBy: 'rule' | 'judge' | 'failed' | null
+  screenNote: string | null
+  turnedAwayAt: Date | null
 }
 
 /** `failing`: unsent after the attempts a healthy line needs; it is still tried, and the error says why. */
@@ -189,6 +198,16 @@ export interface CheckpointStore {
   errands(filter: { issueId?: IssueId; open?: boolean; limit: number }): Promise<ErrandRecord[]>
   /** false when it is done already */
   finishErrand(id: ErrandId, at: Date, note: string | null): Promise<boolean>
+  /** the open Errands the screen has not let through, oldest first, whose retry is due */
+  unscreenedErrands(now: Date, limit: number): Promise<ErrandRecord[]>
+  lockErrand(id: ErrandId): Promise<ErrandRecord | null>
+  /** each of these is false when the Errand is done already */
+  failErrandScreen(id: ErrandId, failed: { tries: number; retryAt: Date; note: string }): Promise<boolean>
+  reachOwner(
+    id: ErrandId,
+    reached: { at: Date; by: 'rule' | 'judge' | 'failed'; note: string; tries: number },
+  ): Promise<boolean>
+  turnAwayErrand(id: ErrandId, away: { at: Date; by: 'rule' | 'judge'; reason: string }): Promise<boolean>
 
   /** false when the page's key is stored already */
   planPage(page: Page, at: Date): Promise<boolean>
@@ -213,6 +232,11 @@ export interface StandingPolicies {
 /** The Judge: the `factory-ask` agw workflow, package 7's. The key is the Decision's, so a call asked again finds its run. */
 export interface JudgePort {
   judge(input: JudgeInput, key: Key): Promise<Result<JudgeVerdict>>
+}
+
+/** The Errand screen: the `factory-errand` agw workflow. The key names the Errand and the try. */
+export interface ErrandScreenPort {
+  screen(request: ErrandScreenRequest, key: Key): Promise<Result<ErrandScreenAnswer>>
 }
 
 /** The owner's line. One call, never inside a transaction. */

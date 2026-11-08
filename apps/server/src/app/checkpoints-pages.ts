@@ -3,6 +3,7 @@ import type { Notifier } from '../domains/checkpoints/ports.ts'
 import type { Clock } from '../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointDeps, type CheckpointError } from './checkpoints.ts'
+import { screenErrands, type ErrandScreened } from './checkpoints-errands.ts'
 import { type SettleDeps, settleOpen, type Settled } from './checkpoints-settle.ts'
 
 export interface PageDeps extends CheckpointDeps {
@@ -61,16 +62,19 @@ export async function sendDuePages(
 
 export interface PassReport {
   decisions: Settled[]
+  errands: ErrandScreened[]
   pages: PagesSent
 }
 
-/** Settle what can be settled, then send the pages that settling planned. One call for the loops' tick and the CLI. */
+/** Settle what can be settled and screen the Errands, then send the pages that settling planned. One call for the loops' tick and the CLI. */
 export async function runCheckpointPass(
   deps: SettleDeps & PageDeps,
 ): Promise<Result<PassReport, CheckpointError | PortError>> {
   const decisions = await settleOpen(deps)
   if (!decisions.ok) return decisions
+  const errands = await screenErrands(deps)
+  if (!errands.ok) return errands
   const pages = await sendDuePages(deps)
   if (!pages.ok) return pages
-  return ok({ decisions: decisions.value, pages: pages.value })
+  return ok({ decisions: decisions.value, errands: errands.value, pages: pages.value })
 }

@@ -40,8 +40,8 @@ export const PAYLOADS = {
   verdict_given: z.object({ artifact: text, verdict: z.enum(VERDICTS) }),
   /** the lead needs the owner's hands */
   errand_raised: z.object({ attempt, errand: checkpoint }),
-  /** the owner did the errand */
-  errand_done: z.object({ errand: text }),
+  /** the owner did the errand, or the screen turned it away (`turnedAway`: why) */
+  errand_done: z.object({ errand: text, turnedAway: text.optional() }),
   /** the lead waits until a time, or until other Issues close (the steward defers a holder behind a queued Issue that needs its claim) */
   deferred: z.union([
     z.object({ attempt, until: z.iso.datetime({ offset: true }) }),
@@ -97,7 +97,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   submitted: ['lead'],
   verdict_given: ['owner'],
   errand_raised: ['lead'],
-  errand_done: ['owner'],
+  errand_done: ['owner', 'judge', 'factory'],
   deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
   woken: ['factory', 'steward', 'owner'],

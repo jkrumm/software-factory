@@ -193,6 +193,19 @@ describe('the note a lead is typed', () => {
     expect(text).toBe('Factory, Issue 12: a note, as data: "x\\" | a note from the owner: \\"drop it"')
   })
 
+  test('an Errand the screen turned away says why, and a done one stays plain', () => {
+    const turned: HistoryRecord = {
+      kind: 'errand_done',
+      payload: { errand: 'e1', turnedAway: 'a token can run it' },
+      at,
+      version: 9,
+    }
+    expect(noteText(issueId(12), [turned])).toContain(
+      'the Errand "e1" was turned away before it reached the owner: "a token can run it". Do it yourself',
+    )
+    expect(noteText(issueId(12), [{ ...turned, payload: { errand: 'e1' } }])).toContain('the Errand "e1" is done')
+  })
+
   test('a verdict of changes names the commands that read and revise the artifact', () => {
     const text = noteText(issueId(12), [
       { kind: 'verdict_given', payload: { artifact: 'artifact_1', verdict: 'changes' }, at, version: 9 },

@@ -19,7 +19,7 @@ import {
   type Settler,
 } from '../domains/checkpoints/decision.ts'
 import { type ErrandId, readErrand } from '../domains/checkpoints/errand.ts'
-import { deepLink, errandPage, reviewPage } from '../domains/checkpoints/page.ts'
+import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
   ArtifactRecord,
@@ -738,7 +738,7 @@ export interface ErrandWritten {
   issue: IssueMove | null
 }
 
-/** `factory errand raise`: the lead needs the owner's hands. The Issue waits, and the owner is paged once. */
+/** `factory errand raise`: the lead needs the owner's hands. The Issue waits; the screen (`checkpoints-errands.ts`) decides whether it reaches the owner. */
 export function raiseErrand(
   deps: CheckpointDeps,
   input: { issueId: IssueId; attempt: number; raw: unknown },
@@ -778,17 +778,14 @@ export function raiseErrand(
       raisedAt: at,
       doneAt: null,
       doneNote: null,
+      reachedOwnerAt: null,
+      screenTries: 0,
+      screenRetryAt: null,
+      screenBy: null,
+      screenNote: null,
+      turnedAwayAt: null,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
-    await checkpoints.planPage(
-      errandPage({
-        issue: { id: issue.id, repo: issue.repo },
-        link: deepLink(deps.consoleUrl, id),
-        errand: id,
-        summary,
-      }),
-      at,
-    )
     const errand = await checkpoints.errand(id)
     if (!errand) throw new Error(`errand ${id} vanished inside its own transaction`)
     return ok<ErrandWritten>({

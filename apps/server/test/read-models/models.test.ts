@@ -206,8 +206,8 @@ async function seed() {
   await decision('decision_4', 'issue_1', ago(31), { by: 'judge', at: ago(30) })
   await sql`INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
     VALUES ('artifact_1', 'key_artifact_1', 'issue_3', 'concept', 'Concept for issue_3 caching', 'markdown', 'lead', ${ago(3)})`
-  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at)
-    VALUES ('errand_1', 'key_errand_1', 'issue_4', 1, 'Rotate the key', 'In the portal', ${ago(2)})`
+  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at)
+    VALUES ('errand_1', 'key_errand_1', 'issue_4', 1, 'Rotate the key', 'In the portal', ${ago(2)}, ${ago(2)})`
   await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state) VALUES
     ('signal_1', 'feedback', 'feedback', 'feedback', 'outside', 'work-app', 'f1', 'Odd report', 'secret words', ${ago(48)}, 'held'),
     ('signal_2', 'github', 'request', 'github', 'outside', 'app', 'f2', 'Public report', 'public words', ${ago(1)}, 'held')`

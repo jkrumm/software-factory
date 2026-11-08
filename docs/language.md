@@ -61,7 +61,8 @@ check, `docs/architecture.md`).
 | Spec | A larger plan to review | |
 | Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it | Ask (noun), question, decision card |
 | Report | For information, never waits. A spike is a Report with a verdict | |
-| **Errand** | Something only the owner's hands can do: a portal step, a device run, a 1Password prompt | Hands-only asks, the separate human queue |
+| **Errand** | Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then `factory-errand`) passes it | Hands-only asks, the separate human queue |
+| **Turn away** | An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason | |
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
@@ -109,7 +110,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it | owner |
 | `errand_raised` | The lead needs the owner's hands | lead |
-| `errand_done` | The owner did the Errand | owner |
+| `errand_done` | The owner did the Errand, or the screen turned it away (`turnedAway`: the reason) | owner, judge, factory |
 | `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked` | factory, lead (`blocked`) |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |

@@ -32,8 +32,8 @@ beforeAll(async () => {
     VALUES ('decision_scn', 'scn-decision', ${open}, 'argo', 1, 'Which logging library should argo use?', 'pino',
       'read the sizes', '[]'::jsonb, '{"consequence":"console","default":"pino","waitMinutes":60}'::jsonb, now() - interval '2 hours')`
   await sql`INSERT INTO factory.decision_steps (decision_id, step, outcome, at) VALUES ('decision_scn', 'owner', 'open', now())`
-  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at)
-    VALUES ('errand_scn', 'scn-errand', ${work}, 1, 'Rotate the chat API key in the portal', NULL, now() - interval '1 hour')`
+  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at)
+    VALUES ('errand_scn', 'scn-errand', ${work}, 1, 'Rotate the chat API key in the portal', NULL, now() - interval '1 hour', now() - interval '1 hour')`
   await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state)
     VALUES ('signal_scn', 'feedback', 'feedback', 'feedback', 'outside', 'chat', 'scn', 'A private complaint', 'private words', now(), 'held')`
 }, 60_000)

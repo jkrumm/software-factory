@@ -374,7 +374,10 @@ test('an Errand raised by the lead and done by the owner: paged once, and the le
   const open = await ok((json) => ErrandList.parse(json).errands, 'errand', 'list', '--open', 'yes')
   expect(open.map((e) => e.id)).toEqual([raised.errand.id])
 
-  expect((await pass()).pages.sent).toEqual([`page:errand:${raised.errand.id}`])
+  // held by the screen until the pass lets it through, then paged in the same pass
+  const passed = await pass()
+  expect(passed.errands).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+  expect(passed.pages.sent).toEqual([`page:errand:${raised.errand.id}`])
   expect(published.filter((p) => p.tags === 'errand')).toHaveLength(1)
 
   const done = await ok(
@@ -522,12 +525,13 @@ test('a Decision reaches Needs you only after the Judge saw it, and is amended b
   expect(next.decision.id).not.toBe(id)
 })
 
-test('only the Judge called agw, five times', async () => {
+test('only the Judge and the Errand screen called agw', async () => {
   const calls = (await world.calls()).filter((call) => call.tool === 'agw')
   expect(calls.map((call) => call.args[0])).toEqual([
     'factory-ask',
     'factory-ask',
     'factory-ask',
+    'factory-errand',
     'factory-ask',
     'factory-ask',
   ])

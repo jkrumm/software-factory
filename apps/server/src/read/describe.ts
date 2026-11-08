@@ -49,8 +49,10 @@ export function describeEvent(kind: string, payload: unknown): string {
       return `Reviewed: ${VERDICT_WORDS[field(payload, 'verdict') ?? ''] ?? 'a verdict was given'}.`
     case 'errand_raised':
       return 'An errand for the owner was raised.'
-    case 'errand_done':
-      return 'The errand was done.'
+    case 'errand_done': {
+      const turnedAway = field(payload, 'turnedAway')
+      return turnedAway ? `An errand was turned away: ${cut(plainText(turnedAway))}` : 'The errand was done.'
+    }
     case 'deferred':
       return 'Deferred.'
     case 'stalled':

@@ -34,7 +34,8 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
           AND v.revision = (SELECT max(r.n) FROM factory.artifact_revisions r WHERE r.artifact_id = a.id))
     ORDER BY a.created_at, a.id`
   const errands: { id: string; issue_id: string; summary: string; raised_at: Date }[] = await sql`
-    SELECT id, issue_id, summary, raised_at FROM factory.errands WHERE done_at IS NULL ORDER BY raised_at, id`
+    SELECT id, issue_id, summary, raised_at FROM factory.errands
+    WHERE done_at IS NULL AND reached_owner_at IS NOT NULL ORDER BY raised_at, id`
   const waiting: Waiting[] = [
     ...decisions.map((d): Waiting => ({
       id: d.id,

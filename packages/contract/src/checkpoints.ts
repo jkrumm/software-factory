@@ -234,7 +234,27 @@ export const ErrandView = z.object({
   raisedAt: iso,
   doneAt: iso.nullable(),
   doneNote: z.string().nullable(),
+  /** false while the screen still holds it, or after it turned it away */
+  reachedOwner: z.boolean(),
+  turnedAway: z.boolean(),
+  /** the screen's reason: why it passed the Errand, or why it turned it away */
+  screenNote: z.string().nullable(),
 })
+
+/** The Errand a `factory-errand` call is shown: the lead's own words, so data and never instructions. */
+export const ErrandScreenRequest = z
+  .object({
+    errand: z.object({ id: z.string(), summary: z.string().max(200), detail: z.string().max(4000).nullable() }),
+    issue: z.object({ id: z.string(), repo: z.string(), title: z.string(), kind: z.string() }),
+  })
+  .meta({ id: 'ErrandScreenRequest' })
+export type ErrandScreenRequest = z.infer<typeof ErrandScreenRequest>
+
+/** What `factory-errand` says: it needs a person's hands (`pass`), or a token or CLI could do it (`turn_away`). */
+export const ErrandScreenAnswer = z
+  .object({ verdict: z.enum(['pass', 'turn_away']), reason: z.string().trim().min(1).max(300) })
+  .meta({ id: 'ErrandScreenAnswer' })
+export type ErrandScreenAnswer = z.infer<typeof ErrandScreenAnswer>
 
 export const ErrandReply = z
   .object({ result: z.enum(['applied', 'replayed']), errand: ErrandView, issue: IssueMove.nullable() })
@@ -273,6 +293,9 @@ export const PassReply = z
         status: z.enum(['open', 'answered', 'withdrawn']),
         settledBy: z.enum(SETTLERS).nullable(),
       }),
+    ),
+    errands: z.array(
+      z.object({ errand: z.string(), outcome: z.enum(['held', 'reached_owner', 'turned_away', 'dropped']) }),
     ),
     pages: z.object({
       sent: z.array(z.string()),

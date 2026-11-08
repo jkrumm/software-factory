@@ -73,6 +73,7 @@ const ErrandRow = z.object({
   summary: z.string(),
   detail: z.string().nullable(),
   raised_at: z.date(),
+  screen_note: z.string().nullable(),
 })
 
 const SignalRow = z.object({
@@ -111,9 +112,9 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
     WHERE i.state = 'waiting' AND i.wait_reason = 'review'
     ORDER BY e.at DESC, i.id DESC`
   const errands: unknown[] = await sql`
-    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at
+    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note
     FROM factory.errands r JOIN factory.issues i ON i.id = r.issue_id
-    WHERE r.done_at IS NULL AND i.state <> 'closed'
+    WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND i.state <> 'closed'
     ORDER BY r.raised_at DESC, r.id DESC`
   const signals: unknown[] = await sql`
     SELECT id, repo, title, text, received_at, issue_id, screen_note
@@ -172,7 +173,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         title: plain(row.summary, 120),
         summary: plain(row.detail ?? row.summary, 200),
         defaultAt: null,
-        judge: null,
+        judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'errand', id: row.id },
         work: isWorkRepo(row.repo, open),
       }

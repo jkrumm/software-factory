@@ -116,6 +116,12 @@ const ErrandRow = z.object({
   raised_at: z.date(),
   done_at: z.date().nullable(),
   done_note: z.string().nullable(),
+  reached_owner_at: z.date().nullable(),
+  screen_tries: z.number().int(),
+  screen_retry_at: z.date().nullable(),
+  screen_by: z.enum(['rule', 'judge', 'failed']).nullable(),
+  screen_note: z.string().nullable(),
+  turned_away_at: z.date().nullable(),
 })
 
 const PageRow = z.object({
@@ -226,6 +232,12 @@ const errandOf = (raw: unknown): ErrandRecord => {
     raisedAt: row.raised_at,
     doneAt: row.done_at,
     doneNote: row.done_note,
+    reachedOwnerAt: row.reached_owner_at,
+    screenTries: row.screen_tries,
+    screenRetryAt: row.screen_retry_at,
+    screenBy: row.screen_by,
+    screenNote: row.screen_note,
+    turnedAwayAt: row.turned_away_at,
   }
 }
 
@@ -513,6 +525,45 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async finishErrand(id, at, note) {
       const rows: unknown[] = await tx`
         UPDATE factory.errands SET done_at = ${at}, done_note = ${note} WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async unscreenedErrands(now, limit) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.errands
+        WHERE reached_owner_at IS NULL AND done_at IS NULL AND (screen_retry_at IS NULL OR screen_retry_at <= ${now})
+        ORDER BY raised_at, id LIMIT ${limit}`
+      return rows.map(errandOf)
+    },
+
+    async lockErrand(id) {
+      const [row] = await tx`SELECT * FROM factory.errands WHERE id = ${id} FOR UPDATE`
+      return row ? errandOf(row) : null
+    },
+
+    async failErrandScreen(id, failed) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET screen_tries = ${failed.tries}, screen_retry_at = ${failed.retryAt}, screen_note = ${failed.note}
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async reachOwner(id, reached) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET reached_owner_at = ${reached.at}, screen_by = ${reached.by}, screen_note = ${reached.note},
+            screen_tries = ${reached.tries}, screen_retry_at = NULL
+        WHERE id = ${id} AND done_at IS NULL AND reached_owner_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async turnAwayErrand(id, away) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET done_at = ${away.at}, turned_away_at = ${away.at}, done_note = ${away.reason},
+            screen_note = ${away.reason}, screen_by = ${away.by}, screen_retry_at = NULL
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1
     },
 

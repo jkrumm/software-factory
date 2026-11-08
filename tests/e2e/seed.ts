@@ -96,6 +96,8 @@ export async function seed(lab: Lab): Promise<void> {
     'Settings > Keys > Rotate, then paste the new key into 1Password.',
   )
   await raise(phone, 'Plug in the test phone and run the smoke suite', 'USB, trust the computer, run the suite once.')
+  // an Errand is screened before it reaches the owner (the fake agw passes it)
+  await api(url, '/v1/checkpoints/pass', {})
 
   const file = async (repo: string, title: string) =>
     (await api<{ issue: string }>(url, '/signals', { from: 'owner:hermes', repo, title })).issue
@@ -117,8 +119,8 @@ export async function seed(lab: Lab): Promise<void> {
       '{"consequence":"The lead logs to the console until someone answers.","default":"pino","waitMinutes":600}'::jsonb,
       now() - interval '2 hours')`
   await sql`INSERT INTO factory.decision_steps (decision_id, step, outcome, at) VALUES ('decision_e2e', 'owner', 'open', now())`
-  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at)
-    VALUES ('errand_e2e', 'e2e-errand', ${rotate}, 1, 'Rotate the chat API key in the portal', 'Settings > Keys > Rotate', now() - interval '1 hour')`
+  await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at)
+    VALUES ('errand_e2e', 'e2e-errand', ${rotate}, 1, 'Rotate the chat API key in the portal', 'Settings > Keys > Rotate', now() - interval '1 hour', now() - interval '1 hour')`
   // one app each: a source that files again at once is held back by intake
   for (const app of ['argo', 'chat', 'harbor']) await holdSignal(url, 'The export button does nothing', app)
 }
