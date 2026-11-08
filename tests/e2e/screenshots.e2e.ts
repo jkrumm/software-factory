@@ -9,6 +9,7 @@ const SCREENS = [
   { name: 'flow', path: '/flow' },
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
+  { name: 'improve-30', path: '/improve?days=30' },
 ] as const
 
 /** The artifact page: a Markdown Spec, an HTML Report, and a Report compared with its first revision. */

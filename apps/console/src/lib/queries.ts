@@ -6,6 +6,8 @@ import {
   fetchDecision,
   fetchErrands,
   fetchFlow,
+  fetchFriction,
+  fetchKpis,
   fetchMachine,
   fetchNeeds,
 } from './api.ts'
@@ -13,7 +15,7 @@ import { useLive } from './live.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 export const SNAPSHOT_MAX_AGE_MS = 7 * DAY_MS
-export const POLL_MS = 15_000
+const POLL_MS = 15_000
 
 /** gcTime is not below the snapshot's maxAge: a persisted query must outlive the page to be restored. */
 export const queryClient = new QueryClient({
@@ -35,6 +37,26 @@ export function useNeeds() {
 export function useFlow() {
   const live = useLive()
   return useQuery({ ...flowQuery, refetchInterval: live ? false : POLL_MS })
+}
+
+/** The KPIs of the last `days` days. */
+export function useKpis(days: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['kpis', days],
+    queryFn: ({ signal }) => fetchKpis(days, signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** The friction counts of the last `days` days. */
+export function useFriction(days: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['friction', days],
+    queryFn: ({ signal }) => fetchFriction(days, signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
 }
 
 /** Each account's newest reading: the weekly figure first, the 5-hour window where the account has one. A reading is not a change in the stream, so it polls whether or not the stream is open. */
