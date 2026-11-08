@@ -5,6 +5,7 @@ import {
   type FlowIssue,
   type FlowModel,
   type QueueReason as QueueReasonSchema,
+  SIGNAL_ORIGINS,
 } from '@software-factory/contract'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
@@ -18,6 +19,7 @@ const Open = z.object({
   state: z.enum(FLOW_STATES),
   wait_reason: z.string().nullable(),
   title: z.string(),
+  origin: z.enum(SIGNAL_ORIGINS),
   since: z.date(),
 })
 
@@ -26,6 +28,7 @@ const Closed = z.object({
   repo: z.string(),
   outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
   title: z.string(),
+  origin: z.enum(SIGNAL_ORIGINS),
   closed_at: z.date(),
 })
 
@@ -44,7 +47,8 @@ export async function readFlow(
   const repoOf = (repo: string): string => (hidden(repo) ? REDACTED_REPO : repo)
   const titleOf = (repo: string, title: string): string => (hidden(repo) ? REDACTED_TITLE : plain(title, 120))
   const open: unknown[] = await sql`
-    SELECT i.id, i.repo, i.state, i.wait_reason, f.payload->>'title' AS title, COALESCE(s.at, f.at) AS since
+    SELECT i.id, i.repo, i.state, i.wait_reason, f.payload->>'title' AS title,
+      f.payload->>'origin' AS origin, COALESCE(s.at, f.at) AS since
     FROM factory.issues i
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
     LEFT JOIN LATERAL (
@@ -55,7 +59,8 @@ export async function readFlow(
     WHERE i.state <> 'closed'
     ORDER BY since, i.id`
   const closed: unknown[] = await sql`
-    SELECT i.id, i.repo, i.outcome, f.payload->>'title' AS title, c.at AS closed_at
+    SELECT i.id, i.repo, i.outcome, f.payload->>'title' AS title, f.payload->>'origin' AS origin,
+      c.at AS closed_at
     FROM factory.issues i
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
     JOIN LATERAL (
@@ -81,6 +86,7 @@ export async function readFlow(
       id: row.id,
       repo: repoOf(row.repo),
       title: titleOf(row.repo, row.title),
+      origin: row.origin,
       since: row.since.toISOString(),
       waitReason: row.wait_reason,
       queue: row.state === 'queued' && !hidden(row.repo) ? (options.queue?.get(row.id) ?? null) : null,
@@ -105,6 +111,7 @@ export async function readFlow(
         id: row.id,
         repo: repoOf(row.repo),
         title: titleOf(row.repo, row.title),
+        origin: row.origin,
         outcome: row.outcome,
         closedAt: row.closed_at.toISOString(),
       }

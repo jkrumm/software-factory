@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { QueueReason, QueueStatesView } from './capacity.ts'
+import { SIGNAL_ORIGINS } from './intake.ts'
 import { IssueRef } from './planning.ts'
 
 /**
@@ -64,6 +65,8 @@ export const FlowIssue = z
     id: IssueRef,
     repo: z.string(),
     title: z.string(),
+    /** where it came from: a shape, so a work repo's Issue shows it too */
+    origin: z.enum(SIGNAL_ORIGINS),
     /** when it entered the state it is in */
     since: at,
     /** the wait of a `waiting` Issue */
@@ -84,6 +87,7 @@ export const FlowClosed = z
     id: IssueRef,
     repo: z.string(),
     title: z.string(),
+    origin: z.enum(SIGNAL_ORIGINS),
     outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
     closedAt: at,
   })

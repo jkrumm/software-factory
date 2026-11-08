@@ -117,6 +117,11 @@ test('flow and chain: the read token gets no title and no repo name of a work re
     // an Issue of a project with its own project.yaml keeps its words
     expect(read).toContain('Tidy the open app')
   }
+  // origin is a shape, not words: the read token sees it for a work repo's Issue too
+  const flowRead = FlowModel.parse(await (await get(app, '/v1/flow', TOKENS.read)).json())
+  const readIssues = Object.values(flowRead.states).flatMap((column) => column.issues)
+  expect(readIssues.length).toBeGreaterThan(0)
+  expect(readIssues.every((i) => typeof i.origin === 'string')).toBe(true)
 })
 
 test('signals: the read token gets no word of any signal', async () => {
