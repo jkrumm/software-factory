@@ -5,7 +5,7 @@ import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
-import { admissionPass, queueView } from './app/capacity-admit.ts'
+import { admissionPass, claimQueued, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
 import { giveSlotBack, touchSlot } from './app/capacity-slots.ts'
@@ -30,6 +30,8 @@ export interface PlanningComposition {
   capacity: CapacityApi
   /** capacity's side of the leads' ports: the account, the repo claim, the window */
   leads: ReturnType<typeof capacityForLeads>
+  /** the steward's port: the Issues queued for lack of a claim, read without polling or sampling the host */
+  claimQueued: () => ReturnType<typeof claimQueued>
   /** planning's side of intake's `ProjectSignals` */
   signals: ReturnType<typeof projectSignals>
   /** the checkpoints' `StandingPolicies`, read from each project's `project.yaml` */
@@ -126,6 +128,7 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
       giveSlotBack: (id) => giveSlotBack(writes, id),
     },
     leads: capacityForLeads(writes),
+    claimQueued: () => claimQueued(capacity),
     signals: projectSignals(writes),
     policies: standingPolicies(writes),
     pass,

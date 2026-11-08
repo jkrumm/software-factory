@@ -322,6 +322,21 @@ export async function queueView(
   return viewed.ok ? ok({ queue: viewed.value, notes: host.notes }) : viewed
 }
 
+/**
+ * The queued Issues that stay queued for lack of a claim, from the stored readings alone: no account poll and no host
+ * reading (a null load and memory are skipped, as in a failed reading), so what is left is the chain and the repo's
+ * claims. A deadlock is a deadlock whatever the load is, and the steward calls this every pass.
+ */
+export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: IssueId; repo: string }[], PortError>> {
+  const noHost: HostInputs = { load: null, memory: null, notes: [] }
+  const viewed = await deps.uow.run(async (stores) => {
+    const snap = await snapshotOf(stores, deps.clock.now())
+    return ok(evaluateQueue(snap, noHost, deps.limits))
+  })
+  if (!viewed.ok) return viewed
+  return ok(viewed.value.filter((q) => q.reason?.kind === 'claim').map((q) => ({ issue: q.issue, repo: q.repo })))
+}
+
 /** Gives an Issue's claim back (finalize calls this from every exit path). True when it held one. Idempotent. */
 export async function releaseClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<boolean, PortError>> {
   return deps.uow.run(async ({ capacity }) => {
