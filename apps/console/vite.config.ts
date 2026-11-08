@@ -45,7 +45,15 @@ export default defineConfig({
   build: { assetsInlineLimit: 0 },
   define: { __BUILD_ID__: JSON.stringify(Date.now().toString(36)) },
   plugins: [
-    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
+      // only the artifacts route (react-markdown, 176 KB) is its own chunk; the other routes stay in the entry
+      codeSplittingOptions: {
+        defaultBehavior: [],
+        splitBehavior: ({ routeId }) => (routeId === '/artifacts/$id' ? [['component']] : undefined),
+      },
+    }),
     react(),
     tailwindcss(),
     themeColorMeta(),

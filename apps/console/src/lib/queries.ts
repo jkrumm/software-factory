@@ -14,23 +14,19 @@ export const queryClient = new QueryClient({
 
 export const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'console-snapshot' })
 
+/** The options of the two first-screen queries, shared by the hooks and by the prefetch at boot. */
+export const needsQuery = { queryKey: ['needs'], queryFn: ({ signal }: { signal: AbortSignal }) => fetchNeeds(signal) }
+export const flowQuery = { queryKey: ['flow'], queryFn: ({ signal }: { signal: AbortSignal }) => fetchFlow(signal) }
+
 /** The queries poll while the stream is not open. */
 export function useNeeds() {
   const live = useLive()
-  return useQuery({
-    queryKey: ['needs'],
-    queryFn: ({ signal }) => fetchNeeds(signal),
-    refetchInterval: live ? false : POLL_MS,
-  })
+  return useQuery({ ...needsQuery, refetchInterval: live ? false : POLL_MS })
 }
 
 export function useFlow() {
   const live = useLive()
-  return useQuery({
-    queryKey: ['flow'],
-    queryFn: ({ signal }) => fetchFlow(signal),
-    refetchInterval: live ? false : POLL_MS,
-  })
+  return useQuery({ ...flowQuery, refetchInterval: live ? false : POLL_MS })
 }
 
 /** The detail of one item that waits: the same invalidation as the lists, so an answer elsewhere shows at once. */
