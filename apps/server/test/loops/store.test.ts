@@ -79,7 +79,7 @@ test('recordFinding stores the class once; classIssues reads filed time, closure
   ])
 })
 
-test('the 0993 backfill classes the Issues the loops filed from their signal text', async () => {
+test('the backfill classes the Issues the loops filed from their signal text, with its line breaks or as intake stores it on one line', async () => {
   const cluster = await startTestCluster()
   try {
     const all = await loadMigrations()
@@ -93,14 +93,27 @@ test('the 0993 backfill classes the Issues the loops filed from their signal tex
       [3, 'agent', 'filed', 'Pattern: Owner touches (touch:noted)\nWindow: a to b'],
       [4, 'agent', 'filed', 'free text from an agent'],
       [5, 'owner', 'filed', 'Probe: links (links:a.md)'],
-      [6, 'agent', 'filed', 'Swept: app @ abc1234\nProbe: check (check)\nEvidence'],
+      [6, 'agent', 'filed', 'Swept: app @ abc1234\nProbe: check (check)\nEvidence (1 item(s)):\nx'],
+      [
+        7,
+        'agent',
+        'filed',
+        'Swept: app @ abc1234 Probe: links (links:docs/a b.md) Evidence (1 item(s)), up to the first 1 lines: x',
+      ],
+      [8, 'agent', 'filed', 'Swept: app @ abc1234 Judgment: slop document docs/y.md Finding: t Evidence: e Fix: f'],
+      [
+        9,
+        'agent',
+        'filed',
+        'Pattern: Stalled because the lead was blocked (stall:blocked) Window: a to b (7 days) Count: 26',
+      ],
     ]
     for (const [n, trust, state, text] of texts) {
       await cluster.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${`issue_${n}`}, 'app', 'queued', 1)`
       await cluster.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
         VALUES (${`signal_${n}`}, 'agent:app', 'request', 'factory', ${trust}, 'app', ${`fp${n}`}, 't', ${text}, now(), ${state}, ${`issue_${n}`})`
     }
-    expect(await migrate(cluster.sql, all)).toEqual(['0993_finding_classes.sql'])
+    expect(await migrate(cluster.sql, all)).toContain('0994_finding_classes_backfill.sql')
     const rows: { issue_id: string; loop: string; repo: string; class: string; key: string }[] =
       await cluster.sql`SELECT * FROM factory.loop_findings ORDER BY issue_id`
     expect(rows.map((r) => [r.issue_id, r.loop, r.repo, r.class, r.key])).toEqual([
@@ -108,6 +121,9 @@ test('the 0993 backfill classes the Issues the loops filed from their signal tex
       ['issue_2', 'hygiene', 'app', 'judgment:stale', 'judgment:stale:docs/x.md'],
       ['issue_3', 'friction', 'app', 'touch', 'touch:noted'],
       ['issue_6', 'hygiene', 'app', 'check', 'check'],
+      ['issue_7', 'hygiene', 'app', 'links', 'links:docs/a b.md'],
+      ['issue_8', 'hygiene', 'app', 'judgment:slop', 'judgment:slop:docs/y.md'],
+      ['issue_9', 'friction', 'app', 'stall', 'stall:blocked'],
     ])
   } finally {
     await cluster.stop()
