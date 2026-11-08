@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Checkout } from '../../domains/loops/hygiene-model.ts'
@@ -55,7 +55,8 @@ export async function withCheckout<T>(
   try {
     await gitOut(tools, dir, ['fetch', '-q', 'origin'], FETCH_TIMEOUT_MS)
     const sha = await resolve(tools, dir, ref)
-    const parent = join(tmpdir(), 'factory-hygiene')
+    // The real path: agw allows reads below a directory by its canonical name, and the temp directory is a link on macOS.
+    const parent = join(await realpath(tmpdir()), 'factory-hygiene')
     await mkdir(parent, { recursive: true })
     path = await mkdtemp(join(parent, `${repo.replace(/[^A-Za-z0-9._-]+/g, '-')}-${sha.slice(0, 7)}-`))
     await gitOut(tools, dir, ['worktree', 'add', '-q', '--detach', path, sha])

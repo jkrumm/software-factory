@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { HygieneAnswer, HygieneRequest } from '@software-factory/contract'
 import {
   checkAnswer,
@@ -225,4 +226,12 @@ test('planHygiene treats a no-checkout row as due after the retry gap, not after
   expect(plan([failedRow, row('b', ago(DAY)), row('c', ago(DAY))])).toEqual({ kind: 'full', repo: 'a' })
   const recent = { ...row('a', ago(HOUR)), ref: NO_REF }
   expect(plan([recent, row('b', ago(DAY)), row('c', ago(DAY))])).toEqual({ kind: 'none' })
+})
+
+test('the loop ticks every 15 minutes at most, is off with the tick, and a setting wins', () => {
+  expect(loadLoopSettings({}).intervalMs.hygiene).toBe(15 * 60_000)
+  expect(loadLoopSettings({}).intervalMs.friction).toBe(10_000)
+  expect(loadLoopSettings({ FACTORY_TICK_MS: '0' }).intervalMs.hygiene).toBe(0)
+  expect(loadLoopSettings({ FACTORY_TICK_MS: '3600000' }).intervalMs.hygiene).toBe(3_600_000)
+  expect(loadLoopSettings({ FACTORY_LOOP_HYGIENE_MS: '60000' }).intervalMs.hygiene).toBe(60_000)
 })

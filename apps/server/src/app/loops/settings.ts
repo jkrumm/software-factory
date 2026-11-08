@@ -50,6 +50,10 @@ export interface LoopSettings {
 
 export const DEFAULT_TICK_MS = 10_000
 
+/** One sweep runs `make check` over a project: at most one in this long, unless the tick is off (0). */
+const HYGIENE_MIN_TICK_MS = 15 * 60_000
+const hygieneTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, HYGIENE_MIN_TICK_MS))
+
 /** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default. Throws one message naming every bad key. */
 export function loadLoopSettings(env: Record<string, string | undefined>): LoopSettings {
   const parsed = Env.safeParse(env)
@@ -75,7 +79,9 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     hygiene: e.FACTORY_LOOP_HYGIENE_MS,
   }
   return {
-    intervalMs: Object.fromEntries(LOOP_NAMES.map((name) => [name, own[name] ?? tickMs])) as Record<LoopName, number>,
+    intervalMs: Object.fromEntries(
+      LOOP_NAMES.map((name) => [name, own[name] ?? (name === 'hygiene' ? hygieneTickMs(tickMs) : tickMs)]),
+    ) as Record<LoopName, number>,
     tickMs,
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,
     retryMs: e.FACTORY_STEWARD_RETRY_MS ?? 10 * 60_000,
