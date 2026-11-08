@@ -177,7 +177,13 @@ function trendAt(
   windowMin: number,
   n: number,
   value: (s: Sample) => number | null,
-  judge: (t: { newest: number; oldest: number; perHour: number; last: Sample }) => Pick<Trend, 'met' | 'hoursToFull'>,
+  judge: (t: {
+    newest: number
+    oldest: number
+    perHour: number
+    last: Sample
+    points: Sample[]
+  }) => Pick<Trend, 'met' | 'hoursToFull'>,
 ): Trend {
   const stop = (samples[end] as Sample).at.getTime()
   const points = samples.slice(0, end + 1).filter((s) => s.at.getTime() > stop - windowMin * MIN && value(s) !== null)
@@ -189,7 +195,7 @@ function trendAt(
   const timeOf = (group: Sample[]) => (group[Math.floor(group.length / 2)] as Sample).at.getTime()
   const hours = (timeOf(recent) - timeOf(old)) / (60 * MIN)
   const perHour = hours > 0 ? (newest - oldest) / hours : 0
-  const verdict = judge({ newest, oldest, perHour, last: points.at(-1) as Sample })
+  const verdict = judge({ newest, oldest, perHour, last: points.at(-1) as Sample, points })
   return { ...verdict, newest, oldest, perHour }
 }
 
@@ -257,17 +263,41 @@ function swapGrowth(samples: readonly Sample[], now: Date, t: Thresholds['swap_g
   }
 }
 
+/** The medians of the window's three equal parts, oldest first; null when a part has too few samples to say. */
+function thirdMedians(points: readonly Sample[], value: (s: Sample) => number | null): [number, number, number] | null {
+  const size = Math.floor(points.length / 3)
+  if (size < 1) return null
+  const part = (i: number) =>
+    median(points.slice(i * size, i === 2 ? points.length : (i + 1) * size).map((s) => value(s) as number))
+  return [part(0), part(1), part(2)]
+}
+
+/** Each third of a window must carry at least this share of the net growth: a burst at one end, or a swing that came back, does not. */
+const SUSTAINED_SHARE = 0.25
+
+/**
+ * Fills toward full: the net growth over the window is sustained (each third of it carries a share, so a short burst or
+ * a reversed swing is not a fill), the disk is past the free-space floor (`minPct`), and at that rate it is full within `fillHours`.
+ */
 function diskFill(samples: readonly Sample[], now: Date, t: Thresholds['disk']) {
+  const used = (s: Sample) => (s.diskUsedGb !== null && s.diskTotalGb !== null ? s.diskUsedGb : null)
   return trend(samples, now, {
     windowMin: t.windowMin,
     n: t.medianN,
     clearMin: t.clearMin,
-    value: (s) => (s.diskUsedGb !== null && s.diskTotalGb !== null ? s.diskUsedGb : null),
-    judge: ({ newest, perHour, last }) => {
+    value: used,
+    judge: ({ newest, oldest, perHour, last, points }) => {
       const total = last.diskTotalGb
       const pct = last.diskPct
       if (total === null || pct === null || perHour <= t.growthGbPerHour || pct < t.minPct)
         return { met: false, hoursToFull: null }
+      const thirds = thirdMedians(points, used)
+      const net = newest - oldest
+      const sustained =
+        thirds !== null &&
+        thirds[1] - thirds[0] >= SUSTAINED_SHARE * net &&
+        thirds[2] - thirds[1] >= SUSTAINED_SHARE * net
+      if (!sustained) return { met: false, hoursToFull: null }
       const hoursToFull = Math.max(0, total - newest) / perHour
       return { met: hoursToFull < t.fillHours, hoursToFull }
     },
