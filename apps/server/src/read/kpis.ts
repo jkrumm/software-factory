@@ -82,15 +82,17 @@ const queueWaits = (sql: SQL, w: Window) =>
  * Cost and window points of the Issues filed in the window, joined from the `usage` schema, which another component owns
  * in this database. A session is an Issue's when usage tagged it with the Issue's number, or when it is (or is a subagent
  * of) a Claude session a lead of the Issue reported in its hook events (`claudeSessionId`). The five-hour window's
- * points come from `usage.session_window_share`. Null when the schema, a table or a column is not there.
+ * points come from `usage.session_window_share`. Null when the schema, a table or a column is not there, or the factory's
+ * database role may not read the schema.
  */
 async function usageOf(sql: SQL, w: Window): Promise<{ cost: number | null; points: number | null }> {
-  const [found] = await sql`
-    SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS records,
-      to_regclass('usage.session_window_share') IS NOT NULL AS shares`
-  const present = z.object({ records: z.boolean(), shares: z.boolean() }).parse(found)
-  if (!present.records) return { cost: null, points: null }
   try {
+    // inside the try: `to_regclass` raises "permission denied for schema usage" when the factory's role has no USAGE on it
+    const [found] = await sql`
+      SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS records,
+        to_regclass('usage.session_window_share') IS NOT NULL AS shares`
+    const present = z.object({ records: z.boolean(), shares: z.boolean() }).parse(found)
+    if (!present.records) return { cost: null, points: null }
     const sessions = sql`
       SELECT DISTINCT s.id AS session_id
       FROM factory.issues i
