@@ -26,34 +26,35 @@ The call runs `secrets-run run --env-file=.env.tpl -- …` inside the factory ch
 `FACTORY_TOKEN` and `FACTORY_READ_TOKEN`; the CLI takes `FACTORY_TOKEN` when both are set, so the call carries that
 token although it only uses read verbs. The token never appears on a command line.
 
-The Console's base URL is `FACTORY_CONSOLE_URL` in `~/.config/factory/env` on the dev host. Without it the rows show
+The Console's base URL is `FACTORY_CONSOLE_URL` in `~/.config/factory/env` on the dev host: the clean door, `https://factory.<dev domain>`. Without it the rows show
 but do not link, and the tooltip says so.
 
 ## Cross-mod contract
 
-The same poll publishes `shared("jk.factory.terminals")` when its content changed. The `jk-pane` mod (it stays in
-dotfiles, `config/herdr-app/mods/jk-pane`) reads it to draw each terminal's header. The value is an object keyed by app
-terminal address, `mini/<terminal id>`, one entry per live session that has a terminal:
+The same poll publishes `shared("jk.factory.terminals")` when its content changed. The `jk-pane` and `jk-tabs` mods (they
+stay in dotfiles, `config/herdr-app/mods`) read it to draw each terminal's header and the Console link on its tab. The
+value is an object keyed by app terminal address, `mini/<terminal id>`, one entry per live session that has a terminal:
 
 ```json
 {
   "mini/t1a": {
-    "issue": 362,
-    "title": "filed title",
-    "short": "short title",
+    "title": "the Issue's title",
     "summary": "one sentence",
-    "phase": "…",
-    "role": "lead",
     "state": "working",
-    "repo": "repo-name"
+    "repo": "repo-name",
+    "link": "https://factory.<dev domain>/needs-you?item=<id>"
   }
 }
 ```
 
-Every field can be `null`. `issue` is the Issue id (or `null` for a session without one). `title` is the Issue's filed
-title, `short` its working title, `summary` and `phase` come from the Issue, `role` and `state` from the session, `repo`
-from the Issue or the session's working folder. Only these fields are shared: no insights, no elapsed time, because the
-value is persisted and every mod re-renders when it changes.
+Every field can be `null`. `state` is the Issue's state in the language's words (`settling`, `queued`, `working`,
+`waiting`, `watching`), else the session's. `link` is the Issue's place in the Console: its newest Needs you item, else
+the flow (the Console has no Issue page yet), and `null` for a session without an Issue or without a Console URL. No
+Issue number, role or phase is shared, and none is shown: the screen says what the work is about. Only these fields are
+shared: no insights, no elapsed time, because the value is persisted and every mod re-renders when it changes.
+
+A lead's tab goes with its terminal: when the Issue's lead ends, the factory removes the terminal and the app drops the
+tab.
 
 ## Install
 
