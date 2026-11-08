@@ -209,3 +209,33 @@ rows:
       why: NL24 - the second burn-in Report; after it the rewrite orchestrator's exception (NL14) ends.
       change: The same Report as day 3 over seven days, compared with day 3, plus whether the way back (the pinned old core) can now be removed.
       acceptance: The Report reaches the owner as an artifact for his verdict.
+
+  # The rest of the plan after the cutover that needs no Console review (docs/rewrite.md "After the cutover").
+  - key: integrations
+    title: "integrations/: the factory's client pieces live in this repo"
+    facts:
+      why: "The owner wants shared mods in the repo instead of Herdr-only tweaks, so the factory reads as a reference implementation others can copy."
+      what: "A new integrations/ directory: the Herdr glance mod, the Claude Code hook settings a lead needs, the rd and Hermes client calls, each with a short README."
+      change: "Move or copy the factory-specific pieces that live in dotfiles (the Herdr glance and board mod, the hook entries) into integrations/ as the source, with dotfiles installing from here; document each piece's contract (which verbs it calls, which token it holds)."
+      acceptance: "integrations/ holds every client piece with its README; dotfiles installs them from this repo; no hostnames or tokens in tracked files; make check passes here and in dotfiles."
+  - key: iris-scope
+    repo: iris
+    title: Iris is a Hermes client only
+    facts:
+      why: "NL2 - Iris is a Hermes interface; the factory's own surfaces move to the Console (NL1)."
+      change: "Remove or redirect Iris' direct factory views and calls so it reaches the factory only through Hermes; keep the voice path to Hermes intact."
+      acceptance: "Iris builds and its check passes; no direct factory API call remains outside the Hermes path; a voice request still becomes one factory signal via Hermes."
+  - key: app-feedback
+    title: Apps send feedback as signals in one shared shape
+    facts:
+      why: "The owner wants a per-app feedback path with a shared standard; outside text is quarantined until the owner or the Judge promotes it (docs/architecture.md Signals and triage)."
+      change: "Define the feedback signal envelope (source feedback:<app>, trust outside, the app's version and route) in packages/contract, accept it on the door or a dedicated route with a per-app token, and document how an app sends it; wire one app as the reference (free-planning-poker or weatherorb)."
+      acceptance: "Scenarios: a feedback signal from an app is held, promoted by the owner becomes an Issue in that app's repo, and a duplicate amends; one live feedback from the reference app reaches Needs you."
+  - key: public-launch
+    kind: docs
+    after: [console-first-look, readme, integrations]
+    title: "The public launch: MIT, README and a demo"
+    facts:
+      why: "NL7 - MIT and public after Console v0."
+      change: "Add the MIT LICENSE, finish the README for a stranger (what it is, the patterns it proves, how to run it), a short demo (screenshots or a recording of an Issue from signal to verify), and a scan that no tracked file names a host, secret, account or work repo."
+      acceptance: "LICENSE present; the README reads end to end; the scan is clean; the owner's verdict on the README artifact."
