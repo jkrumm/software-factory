@@ -364,6 +364,36 @@ describe('the fixture', () => {
     await sql`DROP SCHEMA usage CASCADE`
   })
 
+  test('kpis: a role with no USAGE on the usage schema leaves cost unmeasured instead of failing the read', async () => {
+    await sql`CREATE SCHEMA usage`
+    await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
+    await sql`CREATE ROLE kpi_no_usage`
+    try {
+      await sql`GRANT USAGE ON SCHEMA factory TO kpi_no_usage`
+      await sql`GRANT SELECT ON ALL TABLES IN SCHEMA factory TO kpi_no_usage`
+      // the failed statement leaves the transaction aborted (a COMMIT would be refused), so it always ends in a rollback
+      const rollback = new Error('rollback')
+      let model: KpiModel | undefined
+      await sql
+        .begin(async (tx) => {
+          await tx`SET LOCAL ROLE kpi_no_usage`
+          model = KpiModel.parse(await readKpis(tx, { now: NOW, days: 7 }))
+          throw rollback
+        })
+        .catch((error: unknown) => {
+          if (error !== rollback) throw error
+        })
+      if (!model) throw new Error('readKpis did not answer')
+      expect(model.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
+      expect(model.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
+      expect(model.kpis.find((k) => k.key === 'avoidable_touches')?.measured).toBe(true)
+    } finally {
+      await sql`DROP OWNED BY kpi_no_usage`
+      await sql`DROP ROLE kpi_no_usage`
+      await sql`DROP SCHEMA usage CASCADE`
+    }
+  })
+
   test('friction: counts by kind with plain labels, per Issue, and the zero ones present', async () => {
     const model = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
     expect(model.issues).toBe(9)
