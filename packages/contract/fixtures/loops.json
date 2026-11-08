@@ -113,5 +113,50 @@
       "size": "small",
       "reason": "it touches the same checkout summary code"
     }
+  },
+  "queue": {
+    "input": {
+      "repo": "example-app",
+      "issues": [
+        {
+          "id": "issue_15",
+          "title": "Add a dark theme",
+          "kind": "feature",
+          "state": "queued",
+          "prio": 0,
+          "ageMinutes": 90,
+          "size": null,
+          "summary": "",
+          "after": []
+        },
+        {
+          "id": "issue_16",
+          "title": "Rework the checkout summary",
+          "kind": "feature",
+          "state": "queued",
+          "prio": 0,
+          "ageMinutes": 30,
+          "size": null,
+          "summary": "Move the coupon line into the summary.",
+          "after": []
+        },
+        {
+          "id": "issue_12",
+          "title": "Fix the checkout total",
+          "kind": "bug",
+          "state": "working",
+          "prio": 10,
+          "ageMinutes": 240,
+          "size": null,
+          "summary": "",
+          "after": []
+        }
+      ]
+    },
+    "output": {
+      "edges": [{ "issue": "issue_16", "after": "issue_12", "reason": "both rewrite the checkout summary component" }],
+      "order": ["issue_15", "issue_16"],
+      "reason": "issue_16 touches the code issue_12 is changing"
+    }
   }
 }

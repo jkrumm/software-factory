@@ -12,7 +12,7 @@ const workflow = args[0]
 process.exitCode =
   workflow === 'factory-ask'
     ? await askFake(args)
-    : workflow === 'factory-steward' || workflow === 'factory-triage'
+    : workflow === 'factory-steward' || workflow === 'factory-triage' || workflow === 'factory-queue'
       ? await loopsFake(args)
       : workflow === 'run' && args[1] === 'wait'
         ? runWait(args)
