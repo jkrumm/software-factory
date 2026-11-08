@@ -18,7 +18,7 @@ const ASK_HUMAN = join(DOTFILES, 'scripts', 'ask-human.sh')
 const TEST_SLOT = join(DOTFILES, 'hooks', 'test-slot.ts')
 const REVIEW_GUARD = join(DOTFILES, 'hooks', 'review-bypass-guard.ts')
 const FAKE_HC = join(DOTFILES, 'scripts', 'remote-dev-fake-hc.sh')
-const SETTINGS = join(DOTFILES, 'config', 'settings.template.json')
+const HOOKS = join(import.meta.dir, '..', '..', '..', 'integrations', 'claude-code', 'hooks.json')
 const CLI = join(import.meta.dir, '..', '..', '..', 'apps', 'cli', 'bin', 'factory.ts')
 
 const have = (...files: string[]) =>
@@ -359,7 +359,7 @@ describe('hooks', () => {
     expect(help.code).toBe(0)
   })
 
-  // config/settings.template.json: `[ -n "$FACTORY_SESSION" ] && command -v factory >/dev/null && factory hook <event>; exit 0`
+  // integrations/claude-code/hooks.json: `[ -n "$FACTORY_SESSION" ] && command -v factory >/dev/null && factory hook <event>; exit 0`
   const EVENTS = ['session-start', 'user-prompt-submit', 'stop', 'stop-failure', 'notification', 'session-end'] as const
   const INPUT: Record<(typeof EVENTS)[number], Record<string, unknown>> = {
     'session-start': { source: 'startup', session_id: 'dot-1' },
@@ -370,20 +370,20 @@ describe('hooks', () => {
     'session-end': { reason: 'other' },
   }
 
-  test.skipIf(!have(SETTINGS))(
-    'each hook command of the settings template runs: stdout empty, exit 0, the server recorded it',
+  test.skipIf(!have(HOOKS))(
+    'each hook command of integrations/claude-code/hooks.json runs: stdout empty, exit 0, the server recorded it',
     async () => {
       const issue = await v.w.admitted('a lead whose hooks fire')
       await v.w.tick()
       const session = `lead-${issue.slice('issue_'.length)}-1`
-      const settings = JSON.parse(readFileSync(SETTINGS, 'utf8')) as {
+      const settings = JSON.parse(readFileSync(HOOKS, 'utf8')) as {
         hooks: Record<string, { hooks: { command: string }[] }[]>
       }
       const commands = Object.values(settings.hooks)
         .flat()
         .flatMap((entry) => entry.hooks.map((hook) => hook.command))
       for (const event of EVENTS) {
-        const command = commands.find((text) => text.includes(`factory hook ${event}`))
+        const command = commands.find((text) => text.includes(`factory hook ${event};`))
         expect(command).toBeDefined()
         const ran = await sh(['sh', '-c', command ?? ''], { FACTORY_SESSION: session }, JSON.stringify(INPUT[event]))
         // Stop exits 2 only for a send-back (a lead that still has work stopped), with the reason on stderr.
