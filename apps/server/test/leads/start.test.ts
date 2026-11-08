@@ -43,6 +43,8 @@ describe('start_lead', () => {
       effort: 'high',
     })
     expect(started?.prompt).toContain('be careful with the migration')
+    expect(started?.prompt).toContain('## Notes from the owner, recorded before you started')
+    expect(started?.prompt).not.toContain('## Notes recorded before you started')
     expect(await events(issue, 'lead_started')).toEqual([{ payload: { attempt: 1, terminal: 't1' }, version: 5 }])
   })
 
