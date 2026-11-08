@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import * as z from 'zod'
 import { createApp, OPENAPI_PATH } from '../src/api/app.ts'
+import { resolveCaller } from '../src/api/auth.ts'
 import { type Caller, POLICY, ruleFor } from '../src/api/policy.ts'
 
 const TOKENS = {
@@ -8,6 +9,7 @@ const TOKENS = {
   agent: 'agent-token-0123456789',
   machine: 'door-token-0123456789',
   signal: 'signal-token-0123456789',
+  orchestrator: 'orchestrator-token-0123456789',
   read: 'read-token-0123456789',
 }
 const app = createApp({
@@ -31,6 +33,15 @@ async function routes(): Promise<{ method: string; route: string }[]> {
   )
   return [...found, { method: 'PUT', route: '/slots/:id' }, { method: 'DELETE', route: '/slots/:id' }]
 }
+
+const PERSON_ROUTES = [
+  ['POST', '/v1/decisions/:id/worth-asking'],
+  ['POST', '/v1/artifacts/:id/verdict'],
+  ['POST', '/v1/artifacts/:id/annotations'],
+  ['POST', '/v1/errands/:id/done'],
+  ['POST', '/signals/:id/promote'],
+  ['POST', '/signals/:id/dismiss'],
+] as const
 
 const allowed = (method: string, route: string): readonly Caller[] | 'public' => {
   const rule = ruleFor(method, route)
@@ -94,12 +105,7 @@ describe('the policy table', () => {
     for (const [method, route] of [
       ['POST', '/issues/:id/reopen'],
       ['POST', '/v1/decisions/:id/answer'],
-      ['POST', '/v1/artifacts/:id/verdict'],
-      ['POST', '/v1/artifacts/:id/annotations'],
-      ['POST', '/v1/errands/:id/done'],
       ['GET', '/v1/errands'],
-      ['POST', '/signals/:id/promote'],
-      ['POST', '/signals/:id/dismiss'],
       ['POST', '/issues'],
       ['POST', '/issues/:id/cancel'],
       ['POST', '/issues/:id/note'],
@@ -108,13 +114,29 @@ describe('the policy table', () => {
       ['PUT', '/queue'],
       ['POST', '/v1/loops/:name/run'],
     ] as const) {
-      expect(allowed(method, route)).toEqual(['owner'])
+      expect(allowed(method, route)).toEqual(['owner', 'orchestrator'])
     }
+    for (const [method, route] of PERSON_ROUTES) expect(allowed(method, route)).toEqual(['owner'])
+  })
+
+  test('the orchestrator may cancel, note, answer, reopen and file, and may not judge or do the owner hands', () => {
+    for (const [method, route] of [
+      ['POST', '/issues'],
+      ['POST', '/issues/:id/cancel'],
+      ['POST', '/issues/:id/note'],
+      ['POST', '/issues/:id/answer'],
+      ['POST', '/issues/:id/reopen'],
+      ['POST', '/v1/decisions/:id/answer'],
+      ['POST', '/v1/sessions/:session/note'],
+    ] as const) {
+      expect(allowed(method, route)).toContain('orchestrator')
+    }
+    for (const [method, route] of PERSON_ROUTES) expect(allowed(method, route)).not.toContain('orchestrator')
   })
 
   test('a lead may call a session note but no owner verb of the Issue', () => {
-    expect(allowed('POST', '/v1/sessions/:session/note')).toEqual(['owner', 'agent'])
-    expect(allowed('POST', '/issues/:id/ship')).toEqual(['owner', 'agent'])
+    expect(allowed('POST', '/v1/sessions/:session/note')).toEqual(['owner', 'orchestrator', 'agent'])
+    expect(allowed('POST', '/issues/:id/ship')).toEqual(['owner', 'orchestrator', 'agent'])
   })
 
   test('a route without a row has no entry', () => {
@@ -177,6 +199,29 @@ describe('the auth plugin over HTTP', () => {
     }
     expect((await call('POST', '/v1/loops/steward/run', TOKENS.owner)).status).toBe(503)
     expect((await call('POST', '/signals', TOKENS.signal)).status).not.toBe(403)
+  })
+
+  test('the orchestrator is refused on a PERSON row over HTTP, and an unset token is no caller', async () => {
+    for (const path of ['/v1/decisions/d1/worth-asking', '/v1/artifacts/a1/verdict', '/v1/errands/e1/done']) {
+      const response = await call('POST', path, TOKENS.orchestrator)
+      expect(response.status).toBe(403)
+    }
+    const without = createApp({
+      tokens: { owner: TOKENS.owner },
+      health: { read: () => Promise.reject(new Error('unused')) },
+    })
+    const response = await without.handle(
+      new Request('http://localhost/issues/issue_1/cancel', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TOKENS.orchestrator}` },
+      }),
+    )
+    expect(response.status).toBe(401)
+  })
+
+  test('resolveCaller names the orchestrator by its token, and no one by an unset one', () => {
+    expect(resolveCaller(TOKENS, `Bearer ${TOKENS.orchestrator}`)).toBe('orchestrator')
+    expect(resolveCaller({ owner: TOKENS.owner }, `Bearer ${TOKENS.orchestrator}`)).toBeNull()
   })
 
   test('GET /health needs no token', async () => {

@@ -1,6 +1,7 @@
 import { parseLeadKey } from '../domains/leads/names.ts'
 import { fence } from '../domains/intake/rules.ts'
 import { replay } from '../domains/work/machine.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
@@ -22,12 +23,12 @@ type Deps = WriteDeps & { uow: IssueWrites }
  */
 export function cancelIssue(
   deps: Deps,
-  input: { issueId: IssueId; reason: string; call?: string | undefined },
+  input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined },
 ): Promise<Result<Recorded, IssueWriteError | PortError>> {
   return recordIssueEvent(deps, {
     issueId: input.issueId,
     key: key('cancelled', input.issueId, input.call ?? deps.ids.next('call')),
-    event: { kind: 'cancelled', payload: { reason: input.reason }, actor: 'owner' },
+    event: { kind: 'cancelled', payload: { reason: input.reason }, actor: input.actor },
   })
 }
 
@@ -44,8 +45,8 @@ export const took = (recorded: Recorded): boolean =>
 export interface NoteInput {
   issueId: IssueId
   text: string
-  /** `owner` for the owner's token; `factory` for an agent's, whose text the lead reads fenced as data */
-  actor: 'owner' | 'factory'
+  /** `owner` or `orchestrator` for their tokens (text unfenced); `factory` for an agent's, whose text the lead reads fenced as data */
+  actor: OwnerActor | 'factory'
   wake?: boolean | undefined
   call?: string | undefined
   /** the orchestrator steering a lead on the owner's token: not an owner touch */
@@ -66,7 +67,7 @@ export function noteIssue(deps: Deps, input: NoteInput): Promise<Result<NoteOutc
       event: {
         kind: 'noted',
         payload: {
-          text: input.actor === 'owner' ? input.text : fence(input.text.slice(0, 4_000)),
+          text: input.actor !== 'factory' ? input.text : fence(input.text.slice(0, 4_000)),
           ...(input.via ? { via: input.via } : {}),
         },
         actor: input.actor,
@@ -80,7 +81,7 @@ export function noteIssue(deps: Deps, input: NoteInput): Promise<Result<NoteOutc
       event: {
         kind: 'woken',
         payload: { since: noted.value.issue.wait?.since ?? 1, detail: 'the owner woke it with a note' },
-        actor: 'owner',
+        actor: input.actor === 'orchestrator' ? 'orchestrator' : 'owner',
       },
     })
     return woken.ok ? ok({ noted: noted.value, woken: woken.value }) : woken
@@ -98,7 +99,7 @@ export async function noteSession(
   input: {
     session: string
     text: string
-    actor: 'owner' | 'factory'
+    actor: OwnerActor | 'factory'
     call?: string | undefined
     via?: 'orchestrator' | undefined
   },

@@ -1,5 +1,6 @@
 import type { Kind } from '../domains/work/issue.ts'
 import { cycleThrough, type Edge } from '../domains/planning/chain.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { type Key, key } from '../kernel/keys.ts'
 import { err, ok, type Result } from '../kernel/result.ts'
@@ -143,6 +144,8 @@ export interface PrioInput {
   value: number
   /** a repeated key records nothing again */
   key: Key
+  /** who set it, recorded as free text: the owner (the default) or the orchestrator */
+  actor?: OwnerActor | undefined
 }
 
 /**
@@ -162,7 +165,7 @@ export async function setPrio(
       key: input.key,
       issue: input.issue,
       value: input.value,
-      actor: 'owner',
+      actor: input.actor ?? 'owner',
       at: deps.clock.now(),
     })
     return ok({ recorded })

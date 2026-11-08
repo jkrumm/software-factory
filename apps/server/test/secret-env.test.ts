@@ -24,6 +24,7 @@ test('every token setting of settings.ts is on the one list of secrets a child n
       'FACTORY_AGENT_TOKEN',
       'FACTORY_DOOR_TOKEN',
       'FACTORY_SIGNAL_TOKEN',
+      'FACTORY_ORCHESTRATOR_TOKEN',
       'FACTORY_READ_TOKEN',
     ]),
   )

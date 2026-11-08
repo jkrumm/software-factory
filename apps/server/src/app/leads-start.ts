@@ -40,7 +40,8 @@ function notesBefore(history: readonly AppliedRecord[], attempt: number) {
     .map((record) => ({
       at: record.at,
       text: String((record.payload as { text?: unknown }).text ?? ''),
-      fromOwner: record.actor === 'owner',
+      // the orchestrator is the owner's delegate: its steer has the owner's budget in the brief
+      fromOwner: record.actor === 'owner' || record.actor === 'orchestrator',
     }))
   // Each kind has its own budget: a run of alert repeats must not push the owner's steer out of the brief.
   const owner = fitNotes(notes.filter((note) => note.fromOwner))

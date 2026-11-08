@@ -66,7 +66,7 @@ check, `docs/architecture.md`).
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
-| **Settler** | Who settled a Decision, in the order tried: `policy`, `judge`, `default`, `owner` | |
+| **Settler** | Who settled a Decision, in the order tried: `policy`, `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |
 | **Decision status** | `open`, `answered`, or `withdrawn` (the Issue no longer waits for it: it closed or was cancelled) | |
 | **Revision** | One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each `revise` | |
 | **Annotation** | A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored" | |
@@ -88,7 +88,7 @@ check, `docs/architecture.md`).
 | **Touch** | The owner acting on an Issue. **Avoidable touch**: one the factory should have settled | Zero-touch |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
 | **Surface** | Console, Herdr, Iris, Argo, ntfy | |
-| **Caller** | Who a request comes from, decided by its token: `owner`, `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
+| **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar six routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
 | **Flow** | The read model of Issues by state over time; **Chain** is its graph | |
 | **Change** | One row of the change stream: a kind, ids and states, never words. Its **cursor** (`<txid>.<seq>`) resumes the stream without losing or doubling a change | |
 

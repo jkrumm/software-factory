@@ -18,8 +18,9 @@ import type { NoteInput, NoteOutcome, SessionNoteError } from '../app/issue-owne
 import { took } from '../app/issue-owner.ts'
 import type { Written } from './written.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
-import { callerOf } from './auth.ts'
+import { callerOf, ownerActorOf } from './auth.ts'
 import { decisionView, failed as checkpointFailure } from './checkpoints.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
@@ -28,17 +29,18 @@ import { failure, issueMove, verbResponse, writeFailure } from './written.ts'
 /** The owner's Issue verbs and the session note, bound in `main.ts`. */
 export interface IssueApi {
   file(input: NewIssueInput): Promise<Result<NewIssued, NewIssueError | PortError>>
-  cancel(input: { issueId: IssueId; reason: string; call?: string | undefined }): Promise<Written>
+  cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   answer(input: {
     issueId: IssueId
     answer: string
+    by: OwnerActor
     decision?: string | undefined
   }): Promise<Result<Answered, IssueAnswerError | PortError>>
   sessionNote(input: {
     session: string
     text: string
-    actor: 'owner' | 'factory'
+    actor: OwnerActor | 'factory'
     call?: string | undefined
     via?: 'orchestrator' | undefined
   }): Promise<Result<NoteOutcome, SessionNoteError | PortError>>
@@ -129,7 +131,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
   return new Elysia()
     .post(
       '/issues',
-      async ({ body }) => {
+      async ({ body, request }) => {
         const after: IssueId[] = []
         for (const text of body.after ?? []) {
           const id = issueRef(text)
@@ -144,6 +146,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           key: body.key,
           source: body.source ?? 'request',
           after,
+          actor: ownerActorOf(request),
         })
         if (!filed.ok) return fileFailure(filed.error)
         return Response.json(
@@ -165,10 +168,12 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
     )
     .post(
       '/issues/:id/cancel',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownIssue(params.id)
-        return verbResponse(await api.cancel({ issueId, reason: body.reason, call: body.call }))
+        return verbResponse(
+          await api.cancel({ issueId, reason: body.reason, actor: ownerActorOf(request), call: body.call }),
+        )
       },
       {
         params: Params,
@@ -182,11 +187,18 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
     )
     .post(
       '/issues/:id/note',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownIssue(params.id)
         return noteResponse(
-          await api.note({ issueId, text: body.text, actor: 'owner', wake: body.wake, call: body.call, via: body.via }),
+          await api.note({
+            issueId,
+            text: body.text,
+            actor: ownerActorOf(request),
+            wake: body.wake,
+            call: body.call,
+            via: body.via,
+          }),
         )
       },
       {
@@ -203,10 +215,15 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
     )
     .post(
       '/issues/:id/answer',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownIssue(params.id)
-        const answered = await api.answer({ issueId, answer: body.answer, decision: body.decision })
+        const answered = await api.answer({
+          issueId,
+          answer: body.answer,
+          by: ownerActorOf(request),
+          decision: body.decision,
+        })
         if (!answered.ok) return answerFailure(answered.error)
         return Response.json(
           DecisionReply.parse({ decision: decisionView(answered.value.decision), issue: answered.value.issue }),
@@ -229,7 +246,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         const sent = await api.sessionNote({
           session: params.session,
           text: body.text,
-          actor: callerOf(request) === 'owner' ? 'owner' : 'factory',
+          actor: callerOf(request) === 'agent' ? 'factory' : ownerActorOf(request),
           call: body.call ?? body.id,
           via: body.via,
         })

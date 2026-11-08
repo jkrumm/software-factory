@@ -1,7 +1,13 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { ARTIFACT_KINDS, FORMATS, type ArtifactId, VERDICTS } from '../../domains/checkpoints/artifact.ts'
-import { type DecisionId, JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, SETTLERS } from '../../domains/checkpoints/decision.ts'
+import {
+  type DecisionId,
+  JUDGE_BACKOFF_MS,
+  JUDGE_MAX_TRIES,
+  SETTLERS,
+  STEPS,
+} from '../../domains/checkpoints/decision.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
 import {
@@ -50,7 +56,7 @@ const DecisionRow = z.object({
 
 const StepRow = z.object({
   decision_id: z.string(),
-  step: z.enum(SETTLERS),
+  step: z.enum(STEPS),
   outcome: z.enum(STEP_OUTCOMES).nullable(),
   detail: z.string().nullable(),
   at: z.date().nullable(),

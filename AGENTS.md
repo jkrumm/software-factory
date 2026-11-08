@@ -48,13 +48,14 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`.
 - **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day
   release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect (NL11).
-- **The orchestrator shares the owner's token**, so the log cannot tell its events from the owner's. A note it sends to steer a
-  lead carries `--via orchestrator` (`issue note`, `session note`) and is not an owner touch; cancels, wakes and answers
-  still count as the owner's until it has a principal of its own.
-- **Who may call what is `apps/server/src/api/policy.ts`.** A caller is decided by its bearer token alone (`owner`, `agent`,
+- **The orchestrator has its own principal:** token `FACTORY_ORCHESTRATOR_TOKEN` (optional, in `FACTORY_TOKEN` of its
+  terminal), caller and actor `orchestrator`. It has the owner's rights bar six owner-only routes (worth-asking, verdict,
+  annotations, Errand done, promote and dismiss of a held signal), and every owner-touch count reads the owner alone; its steering is the friction group
+  `orchestrator_steer`. `--via orchestrator` stays only for a client still on the owner token.
+- **Who may call what is `apps/server/src/api/policy.ts`.** A caller is decided by its bearer token alone (`owner`, `orchestrator`, `agent`,
   `machine`, `signal`, `read`); a route with no row is 403 for everyone, so a new route gets its row first and
   `apps/server/test/policy.test.ts` fails without one. Only `GET /health` is public. When in doubt, the owner alone.
-- **Trust boundary.** The owner's token can start Claude Code with `--dangerously-skip-permissions`: a spawn's repo must be
+- **Trust boundary.** The owner's token and the orchestrator's can start Claude Code with `--dangerously-skip-permissions`: a spawn's repo must be
   inside `FACTORY_REPO_ROOTS` after `realpath` (`adapters/git/repos.ts`). The API is loopback only; the tailnet and the
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener (`FACTORY_CONSOLE_PORT`, default 7795; 7794 is the agw gateway's), published on the tailnet by

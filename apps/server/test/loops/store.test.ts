@@ -100,7 +100,7 @@ test('the 0993 backfill classes the Issues the loops filed from their signal tex
       await cluster.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
         VALUES (${`signal_${n}`}, 'agent:app', 'request', 'factory', ${trust}, 'app', ${`fp${n}`}, 't', ${text}, now(), ${state}, ${`issue_${n}`})`
     }
-    expect(await migrate(cluster.sql, all)).toEqual(['0993_finding_classes.sql'])
+    expect(await migrate(cluster.sql, all)).toContain('0993_finding_classes.sql')
     const rows: { issue_id: string; loop: string; repo: string; class: string; key: string }[] =
       await cluster.sql`SELECT * FROM factory.loop_findings ORDER BY issue_id`
     expect(rows.map((r) => [r.issue_id, r.loop, r.repo, r.class, r.key])).toEqual([

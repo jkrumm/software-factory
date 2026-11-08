@@ -49,6 +49,7 @@ const TRUST_WORDS: Record<string, string> = {
 
 const SETTLED_BY_WORDS: Record<string, string> = {
   owner: 'by you',
+  orchestrator: 'by the orchestrator, for you',
   policy: 'by policy',
   judge: 'by the judge',
   default: 'by the default, no one answered in time',

@@ -99,6 +99,7 @@ export function sampleWords(kpi: Pick<Kpi, 'key' | 'n'>): string {
 
 export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   avoidable_touch: 'Avoidable touches',
+  orchestrator_steer: 'The orchestrator steering leads',
   refusal: 'Refusals',
   stall: 'Stalls',
   lead_gone: 'Leads that went away',

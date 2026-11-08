@@ -10,6 +10,7 @@ const NEVER: Record<string, string> = {
   FACTORY_AGENT_TOKEN: 'secret (.env.tpl)',
   FACTORY_DOOR_TOKEN: 'secret (.env.tpl)',
   FACTORY_SIGNAL_TOKEN: 'secret (.env.server.tpl)',
+  FACTORY_ORCHESTRATOR_TOKEN: 'secret (.env.server.tpl)',
   FACTORY_READ_TOKEN: 'secret (.env.tpl)',
   FACTORY_GITHUB_TOKEN: 'secret (.env.tpl)',
   FACTORY_DB_PASSWORD: 'secret (.env.tpl); launch.sh builds DATABASE_URL from it',

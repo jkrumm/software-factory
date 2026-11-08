@@ -172,6 +172,22 @@ describe('the paths', () => {
     ).toBe('refused')
   })
 
+  test('the orchestrator may cancel, note and reopen, and may not give a verdict or finish an Errand', () => {
+    const working = drive(settledAndWorking).issue
+    expect(apply(working, ev('noted', { text: 'steer' }, 'orchestrator'), { now: NOW }).result).toBe('applied')
+    expect(apply(working, ev('cancelled', { reason: 'no' }, 'orchestrator'), { now: NOW }).result).toBe('applied')
+    expect(
+      detail(
+        apply(working, ev('verdict_given', { artifact: 'artifact_1', verdict: 'looks_good' }, 'orchestrator'), {
+          now: NOW,
+        }),
+      ),
+    ).toBe("refused: verdict_given is not the orchestrator's to send")
+    expect(detail(apply(working, ev('errand_done', { errand: 'errand_1' }, 'orchestrator'), { now: NOW }))).toBe(
+      "refused: errand_done is not the orchestrator's to send",
+    )
+  })
+
   test('an incident that heals before a lead closes as healed; a lead cannot heal', () => {
     const healed = ev('closed', { attempt: null, outcome: 'healed', reason: 'cleared' }, 'factory')
     expect(drive([healed]).issue).toMatchObject({ state: 'closed', outcome: 'healed' })

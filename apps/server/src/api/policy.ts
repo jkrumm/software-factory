@@ -3,7 +3,7 @@
  *
  * **Tokens.** A caller is resolved from `Authorization: Bearer <token>` and nothing else. `FACTORY_TOKEN` is the owner's
  * and is required; `FACTORY_AGENT_TOKEN` (a lead's session), `FACTORY_DOOR_TOKEN` (the alert door),
- * `FACTORY_SIGNAL_TOKEN` (Hermes' filing) and `FACTORY_READ_TOKEN` are optional, and a caller whose token is not set does not exist. Every token is at least 16
+ * `FACTORY_SIGNAL_TOKEN` (Hermes' filing), `FACTORY_ORCHESTRATOR_TOKEN` (the owner's delegate agent) and `FACTORY_READ_TOKEN` are optional, and a caller whose token is not set does not exist. Every token is at least 16
  * characters and all are different (`settings.ts`). A token is compared in constant time. The hook socket is not here:
  * its mode (0600) is its credential.
  *
@@ -11,7 +11,7 @@
  * below. No token, or an unknown one, is 401 `unauthorized`; a known caller the row does not list is 403 `forbidden`.
  * The first row that matches wins, so a narrower row goes before a wider one.
  *
- * **The classes** (the owner is on every row but `public`):
+ * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the six `PERSON` rows):
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
@@ -20,6 +20,11 @@
  *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
+ * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
+ *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/annotations`, `POST /v1/errands/:id/done`, and
+ *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
+ * - orchestrator: the owner's delegate agent. It has the owner's rights on every other row (it steers, cancels, reopens, files and
+ *   answers) so the log and the owner-touch counts can tell it from the owner; its token is the only difference.
  * - machine: exactly `POST /signals/alerts`, `POST /signals/feedback` and `POST /door/reports`, the door's three calls (the owner may make them too).
  * - signal: exactly `POST /signals`, and only as `owner:hermes` (`app/intake.ts`): the narrow caller that files the owner's
  *   words, so no surface holds the owner's token.
@@ -27,7 +32,7 @@
  * Adding a route: add its row here, in the class it belongs to. `test/policy.test.ts` walks the OpenAPI document and
  * fails on a route without a row.
  */
-export const CALLERS = ['owner', 'agent', 'machine', 'signal', 'read'] as const
+export const CALLERS = ['owner', 'orchestrator', 'agent', 'machine', 'signal', 'read'] as const
 export type Caller = (typeof CALLERS)[number]
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -40,11 +45,12 @@ export interface Rule {
   callers: readonly Caller[] | 'public'
 }
 
-const OWNER: readonly Caller[] = ['owner']
-const LEAD: readonly Caller[] = ['owner', 'agent']
-const READ: readonly Caller[] = ['owner', 'agent', 'read']
-const DOOR: readonly Caller[] = ['owner', 'machine']
-const FILE: readonly Caller[] = ['owner', 'agent', 'signal']
+const PERSON: readonly Caller[] = ['owner']
+const OWNER: readonly Caller[] = ['owner', 'orchestrator']
+const LEAD: readonly Caller[] = ['owner', 'orchestrator', 'agent']
+const READ: readonly Caller[] = ['owner', 'orchestrator', 'agent', 'read']
+const DOOR: readonly Caller[] = ['owner', 'orchestrator', 'machine']
+const FILE: readonly Caller[] = ['owner', 'orchestrator', 'agent', 'signal']
 
 const rule = (method: Method, route: string, callers: Rule['callers']): Rule => ({ method, route, callers })
 
@@ -94,14 +100,14 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/issues/:id/answer', OWNER),
   rule('POST', '/issues/:id/prio', OWNER),
   rule('POST', '/v1/decisions/:id/answer', OWNER),
-  rule('POST', '/v1/decisions/:id/worth-asking', OWNER),
-  rule('POST', '/v1/artifacts/:id/annotations', OWNER),
-  rule('POST', '/v1/artifacts/:id/verdict', OWNER),
-  rule('POST', '/v1/errands/:id/done', OWNER),
+  rule('POST', '/v1/decisions/:id/worth-asking', PERSON),
+  rule('POST', '/v1/artifacts/:id/annotations', PERSON),
+  rule('POST', '/v1/artifacts/:id/verdict', PERSON),
+  rule('POST', '/v1/errands/:id/done', PERSON),
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),
-  rule('POST', '/signals/:id/promote', OWNER),
-  rule('POST', '/signals/:id/dismiss', OWNER),
+  rule('POST', '/signals/:id/promote', PERSON),
+  rule('POST', '/signals/:id/dismiss', PERSON),
   rule('GET', '/door/routes', OWNER),
   rule('POST', '/door/routes', LEAD),
   rule('POST', '/door/routes/remove', LEAD),

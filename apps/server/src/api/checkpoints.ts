@@ -39,6 +39,7 @@ import {
 } from '../domains/checkpoints/ports.ts'
 import { idOf } from '../kernel/ids.ts'
 import type { PortError } from '../kernel/result.ts'
+import { ownerActorOf } from './auth.ts'
 import { type ErrorStatus, errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 
@@ -252,10 +253,10 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     )
     .post(
       '/decisions/:id/answer',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const id = idOf('decision', params.id)
         if (!id) return unknownId('Decision', params.id)
-        const result = await uses.answer({ decisionId: id, answer: body.answer })
+        const result = await uses.answer({ decisionId: id, answer: body.answer, by: ownerActorOf(request) })
         if (!result.ok) return failed(result.error)
         return Response.json(
           DecisionReply.parse({ decision: decisionView(result.value.decision), issue: result.value.issue }),

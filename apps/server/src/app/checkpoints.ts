@@ -283,7 +283,12 @@ export async function answerIn(
     return ok({ status: 'withdrawn', decision: withdrawn ?? fresh })
   }
 
-  const actor = answering.by === 'owner' ? 'owner' : answering.by === 'judge' ? 'judge' : 'factory'
+  const actor =
+    answering.by === 'owner' || answering.by === 'orchestrator'
+      ? answering.by
+      : answering.by === 'judge'
+        ? 'judge'
+        : 'factory'
   if (answering.note) {
     const noted = applied(
       await recordIn(work, deps, {
@@ -322,10 +327,13 @@ export interface Answered {
   issue: IssueMove | null
 }
 
-/** The owner answers a Decision (the last step of settling, or an early answer to one still open). */
+/**
+ * The owner answers a Decision (the last step of settling, or an early answer to one still open); the orchestrator may
+ * answer for him, recorded as its own (`settled_by` and the event's actor).
+ */
 export function answerDecision(
   deps: CheckpointDeps,
-  input: { decisionId: DecisionId; answer: unknown },
+  input: { decisionId: DecisionId; answer: unknown; by?: 'owner' | 'orchestrator' },
 ): Promise<CheckpointResult<Answered>> {
   const text = typeof input.answer === 'string' ? input.answer.trim() : ''
   if (text === '') {
@@ -334,7 +342,8 @@ export function answerDecision(
   return deps.uow.run(async (stores) => {
     const decision = await stores.checkpoints.decision(input.decisionId)
     if (!decision) return err(notFound('Decision', input.decisionId))
-    const outcome = await answerIn(stores, deps, { decision, text, by: 'owner', source: 'the owner', note: null })
+    const by = input.by ?? 'owner'
+    const outcome = await answerIn(stores, deps, { decision, text, by, source: `the ${by}`, note: null })
     if (!outcome.ok) return outcome
     if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })
     const { recorded } = outcome.value

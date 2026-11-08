@@ -205,7 +205,7 @@ agw workflow with its own prompt and tools, called through a port with a hang gu
 
 ### Gates are code
 
-What an agent is told does not change what it can do. Tokens decide the caller (`owner`, `agent`, `machine`, `read`).
+What an agent is told does not change what it can do. Tokens decide the caller (`owner`, `orchestrator`, `agent`, `machine`, `read`).
 The API listens on loopback only. A hook appends to a spool first, then posts to a unix socket, and exits 0 whatever
 happens. Its stdout stays empty, because Claude Code injects a hook's stdout into the session. The alert door holds no factory
 token and takes the repo from a server-side route registry, never from the payload.
@@ -241,8 +241,8 @@ make test    # the unit tests and the scenarios only
 fake agw, so a green run covers intake, queueing, leads, shipping and checkpoints.
 
 To run the server you provide a Postgres database (it keeps everything in the schema `factory` and applies its
-migrations at start), a port, and the owner's bearer token (16 characters or more). The agent, door and read callers
-get their own tokens through `FACTORY_AGENT_TOKEN`, `FACTORY_DOOR_TOKEN` and `FACTORY_READ_TOKEN`; a caller without
+migrations at start), a port, and the owner's bearer token (16 characters or more). The agent, orchestrator, door and read callers
+get their own tokens through `FACTORY_AGENT_TOKEN`, `FACTORY_ORCHESTRATOR_TOKEN`, `FACTORY_DOOR_TOKEN` and `FACTORY_READ_TOKEN`; a caller without
 one does not exist:
 
 ```sh

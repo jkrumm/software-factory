@@ -12,7 +12,7 @@ import { TABLE } from '../../src/domains/work/table.ts'
  * against the invariants. A failure names its seed; `WORK_MODEL_SEED=<seed> bun test apps/server/test/work` plays that
  * sequence alone.
  */
-const SEQUENCES = 10_000
+const SEQUENCES = 20_000
 const MAX_STEPS = 60
 const DAY_MS = 24 * 60 * 60_000
 

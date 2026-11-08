@@ -522,6 +522,7 @@ async function launchViaScript(
     FACTORY_AGENT_TOKEN: TOKENS.agent,
     FACTORY_DOOR_TOKEN: TOKENS.machine,
     FACTORY_SIGNAL_TOKEN: TOKENS.signal,
+    FACTORY_ORCHESTRATOR_TOKEN: TOKENS.orchestrator,
     FACTORY_GITHUB_TOKEN: 'rehearsal-not-a-token',
     NTFY_TOKEN: 'rehearsal-not-a-token',
   }

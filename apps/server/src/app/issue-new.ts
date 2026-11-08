@@ -1,6 +1,7 @@
 import { cleanText } from '@software-factory/contract'
 import { projectOf, repoTextOf } from '../domains/planning/sync.ts'
 import type { Issue } from '../domains/work/issue.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
@@ -18,6 +19,8 @@ export interface NewIssueInput {
   key?: string | undefined
   source: 'request' | 'alert'
   after: readonly IssueId[]
+  /** who files it: the owner, or the orchestrator for him (a filing is not a touch either way) */
+  actor: OwnerActor
 }
 
 export type NewIssueError =
@@ -73,7 +76,7 @@ export async function fileNewIssue(
           kind: input.source === 'alert' ? 'incident' : 'feature',
           origin: input.source === 'alert' ? 'application' : 'you',
         },
-        actor: 'owner',
+        actor: input.actor,
       },
     })
     if (!filed.ok) return filed
@@ -86,7 +89,7 @@ export async function fileNewIssue(
     const noted = await recordIn(stores.work, deps, {
       issueId: issue.id,
       key: key('request', request, 'note'),
-      event: { kind: 'noted', payload: { text }, actor: 'owner' },
+      event: { kind: 'noted', payload: { text }, actor: input.actor },
     })
     return noted.ok ? ok({ issue: noted.value.issue, filed: true }) : noted
   })

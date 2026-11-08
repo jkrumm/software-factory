@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { ownerTouch, TOUCH_EVENTS, type Window } from './kpis.ts'
+import { orchestratorSteer, ownerTouch, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { plain } from './words.ts'
 
@@ -89,6 +89,18 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
       SELECT issue_id FROM factory.decisions
       WHERE settled_by = 'owner' AND worth_asking IS NOT TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}
       ORDER BY answered_at DESC`)
+  }
+  if (key === 'steer:decision_answered') {
+    return issueIds(sql`
+      SELECT issue_id FROM factory.decisions
+      WHERE settled_by = 'orchestrator' AND worth_asking IS NOT TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}
+      ORDER BY answered_at DESC`)
+  }
+  if (head === 'steer' && (TOUCH_EVENTS as readonly string[]).includes(tail)) {
+    return issueIds(sql`
+      SELECT issue_id FROM factory.issue_events
+      WHERE ${orchestratorSteer(sql, [tail])} AND at >= ${w.from} AND at < ${w.to}
+      ORDER BY at DESC`)
   }
   if (head === 'touch' && (TOUCH_EVENTS as readonly string[]).includes(tail)) {
     return issueIds(sql`

@@ -252,6 +252,14 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   agw's contract: `--format json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot,
   deploy-lock, follow and role verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
   the way to the same thing (`apps/cli/src/retired.ts`).
+- **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
+  (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is
+  optional, all differ, and a caller whose token is unset does not exist. The orchestrator, the owner's delegate agent, is on
+  every owner row except the six that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's
+  verdict and annotations, an Errand done, a held signal's promote and dismiss). Its events carry the actor `orchestrator` and a Decision it answers is settled by
+  `orchestrator`, so the owner-touch counts (`read/kpis.ts` `ownerTouch`) read the owner alone and its steering is the friction
+  group `orchestrator_steer` (`steer:*`). A lead hears its note exactly as the owner's. Rows from before the token (the owner's
+  actor with `via: orchestrator`) count as steering too.
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, kpis and
   the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
@@ -265,7 +273,7 @@ The API stays loopback. The door and the Console are published on the tailnet by
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
 per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the six answer
-verbs below, never a session start. The door holds only its own token. Nothing that can start Claude Code is reachable from
+verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus six owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
 another node. The Console listener reads, and forwards exactly the owner's six answer verbs (a Decision's answer, an artifact's verdict
 and annotation, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only

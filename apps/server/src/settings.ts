@@ -13,6 +13,7 @@ const Env = z.object({
   FACTORY_AGENT_TOKEN: token.optional(),
   FACTORY_DOOR_TOKEN: token.optional(),
   FACTORY_SIGNAL_TOKEN: token.optional(),
+  FACTORY_ORCHESTRATOR_TOKEN: token.optional(),
   FACTORY_READ_TOKEN: token.optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (from secrets-run)'),
   PORT: z.coerce.number().int().min(1).max(65_535),
@@ -33,6 +34,7 @@ export interface Tokens {
   agent?: string
   machine?: string
   signal?: string
+  orchestrator?: string
   read?: string
 }
 
@@ -78,6 +80,7 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     'FACTORY_AGENT_TOKEN',
     'FACTORY_DOOR_TOKEN',
     'FACTORY_SIGNAL_TOKEN',
+    'FACTORY_ORCHESTRATOR_TOKEN',
     'FACTORY_READ_TOKEN',
   ] as const) {
     const value = data[key]
@@ -93,6 +96,7 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
       ...(data.FACTORY_AGENT_TOKEN ? { agent: data.FACTORY_AGENT_TOKEN } : {}),
       ...(data.FACTORY_DOOR_TOKEN ? { machine: data.FACTORY_DOOR_TOKEN } : {}),
       ...(data.FACTORY_SIGNAL_TOKEN ? { signal: data.FACTORY_SIGNAL_TOKEN } : {}),
+      ...(data.FACTORY_ORCHESTRATOR_TOKEN ? { orchestrator: data.FACTORY_ORCHESTRATOR_TOKEN } : {}),
       ...(data.FACTORY_READ_TOKEN ? { read: data.FACTORY_READ_TOKEN } : {}),
     },
     databaseUrl: parsed.data.DATABASE_URL,
