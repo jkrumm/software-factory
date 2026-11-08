@@ -4,7 +4,7 @@
 // never argv) and the Console's base URL (FACTORY_CONSOLE_URL in the mini's ~/.config/factory/env). Each part parses on
 // its own and keeps its last good answer; no good poll for 2 min dims the block. All API text is data, never interpreted.
 // The same poll also reads the Issues and live sessions and publishes shared("jk.factory.terminals"), the feed jk-pane's
-// header shows (only when it changed).
+// header and the tab's Console link show (only when it changed).
 import { View, div } from 'gpui-kit'
 import { v_flex } from 'gpui-base'
 import { exec, theme, machines, shared, setShared } from 'herdr'
@@ -97,9 +97,11 @@ function repoOf(path) {
   return p.split('/').pop() || null
 }
 
-// What the pane header shows per terminal: app terminal address (`mini/<id>`) -> the Issue's words plus the session's own role.
-// Only these fields are shared (shared is persisted and every mod re-renders on a change): no insights, no elapsed time.
-function terminalsMap(issues, sessions) {
+// What the pane header and the tab show per terminal: app terminal address (`mini/<id>`) -> the Issue's words, its state
+// (the language's: settling, queued, working, waiting, watching) and the Console link. No ids, roles or phases: the screen
+// says what the work is about, the link is where the Issue is. Only these fields are shared (shared is persisted and every
+// mod re-renders on a change): no insights, no elapsed time.
+function terminalsMap(issues, sessions, needs, base) {
   const byId = new Map(asArray(issues).map((c) => [c.id, c]))
   const out = {}
   const rows = asArray(sessions)
@@ -108,14 +110,11 @@ function terminalsMap(issues, sessions) {
   for (const s of rows) {
     const c = Number.isInteger(s.issue) ? byId.get(s.issue) : null
     out[`mini/${s.terminal.id}`] = {
-      issue: Number.isInteger(s.issue) ? s.issue : null,
-      title: c?.filedTitle ?? s.title ?? null,
-      short: c?.title ?? s.title ?? null,
+      title: c?.title ?? s.title ?? null,
       summary: c?.summary ?? s.summary ?? null,
-      phase: c?.phase ?? null,
-      role: s.role ?? null,
-      state: s.state ?? null,
+      state: c?.state ?? s.state ?? null,
       repo: c?.repoName ?? repoOf(s.repo),
+      link: Number.isInteger(s.issue) ? issueLink(base, s.issue, needs) : null,
     }
   }
   return out
@@ -161,6 +160,15 @@ function consoleLink(base, kind, item) {
   const id = item?.id
   return `${b}/needs-you${id != null && id !== '' ? `?item=${encodeURIComponent(String(id))}` : ''}`
 }
+
+// An Issue's place in the Console. The Console has no Issue page yet, so: the Issue's newest Needs you item when it has
+// one, else the flow. Null when the base is not an http(s) URL.
+function issueLink(base, issue, needs) {
+  const ref = `issue_${issue}`
+  const own = { items: asArray(needs?.items).filter((i) => i.issue === ref) }
+  const item = newestItem(own)
+  return consoleLink(base, item ? 'needs' : 'flow', item)
+}
 // </glance>
 
 export default class JkGlance extends View {
@@ -199,9 +207,9 @@ export default class JkGlance extends View {
     })
   }
 
-  // The header feed, only when it changed.
+  // The header and tab feed, only when it changed.
   publish() {
-    const json = JSON.stringify(terminalsMap(this.issues, this.sessions))
+    const json = JSON.stringify(terminalsMap(this.issues, this.sessions, this.needs, this.base))
     if (json === this.published) return
     this.published = json
     setShared('jk.factory.terminals', JSON.parse(json))
