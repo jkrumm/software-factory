@@ -222,7 +222,7 @@ export class GitCommits implements Commits {
     const paths = await this.pathsOf(repo, full, onBranch)
     // Without a cut (no worktree on record) the ship's range starts at the parent of the oldest commit it names.
     const from = cut ?? (await this.parentOfOldest(repo, full))
-    const reviewRanges = landedAt && from ? await this.rangesOf(repo, from, landedAt, commits) : []
+    const reviewRanges = landedAt && from ? await this.rangesOf(repo, from, landedAt, commits, onBranch) : []
     return { landedAt, commits, paths, mergedAt: await this.newestOf(repo, full), reviewRanges }
   }
 
@@ -277,10 +277,18 @@ export class GitCommits implements Commits {
   /**
    * The Issue's own commits as ranges of `landedAt`'s first-parent line since `cut`: each commit stands for the
    * first-parent commit that holds it (itself, or the merge that brought it in), and neighbours on that line are one
-   * range. A commit that is not an ancestor of `landedAt` (a squashed branch's own commits) is covered by the commit
-   * that squashed it.
+   * range. A commit that is not an ancestor of `landedAt` is a squashed branch's own commit, and a review is bound to
+   * the commits it judged, never to the squash commit (its tree and ancestry are not the reviewed head's): where a
+   * commit on the line changed exactly the paths those commits did, it is the squash, and the range to review is the
+   * branch's own commits instead. Where none matches, the commit on the line stays the range: stricter, never lighter.
    */
-  private async rangesOf(repo: string, cut: string, landedAt: string, own: readonly string[]): Promise<ReviewRange[]> {
+  private async rangesOf(
+    repo: string,
+    cut: string,
+    landedAt: string,
+    own: readonly string[],
+    onBranch: readonly string[],
+  ): Promise<ReviewRange[]> {
     const listed = async (args: string[]): Promise<string[]> => {
       const done = await gitIn(repo, ['rev-list', ...args], this.options)
       if (done.exitCode !== 0) throw new Error(`git rev-list failed (exit ${done.exitCode})`)
@@ -289,6 +297,7 @@ export class GitCommits implements Commits {
     const line = (await listed(['--first-parent', `${cut}..${landedAt}`])).reverse()
     const index = new Map(line.map((sha, i) => [sha, i]))
     const held = new Set<number>()
+    const squashed: string[] = []
     for (const sha of own) {
       const direct = index.get(sha)
       if (direct !== undefined) {
@@ -296,11 +305,42 @@ export class GitCommits implements Commits {
         continue
       }
       const onBase = await gitIn(repo, ['merge-base', '--is-ancestor', sha, landedAt], this.options)
-      if (onBase.exitCode !== 0) continue
+      if (onBase.exitCode !== 0) {
+        if (onBranch.includes(sha)) squashed.push(sha)
+        continue
+      }
       const holder = (await listed(['--first-parent', '--ancestry-path', `${sha}..${landedAt}`])).at(-1)
       const at = holder === undefined ? undefined : index.get(holder)
       if (at !== undefined) held.add(at)
     }
+    const branchRange = await this.takeSquashes(repo, cut, { line, held, squashed })
+    const ranges = await this.runsOf(repo, line, held)
+    return branchRange ? [...ranges, branchRange] : ranges
+  }
+
+  /**
+   * Removes from `held` the commits on the line that are the squash of `squashed` (they changed exactly its paths) and
+   * returns the branch's range to review in their place; null, and `held` untouched, where none is.
+   */
+  private async takeSquashes(
+    repo: string,
+    cut: string,
+    { line, held, squashed }: { line: readonly string[]; held: Set<number>; squashed: readonly string[] },
+  ): Promise<ReviewRange | null> {
+    const branchRange = await this.squashedRange(repo, cut, squashed)
+    if (!branchRange) return null
+    let attested = false
+    for (const at of [...held]) {
+      const sha = line[at]
+      if (!sha || !(await this.samePaths(repo, { base: `${sha}^`, head: sha }, branchRange))) continue
+      held.delete(at)
+      attested = true
+    }
+    return attested ? branchRange : null
+  }
+
+  /** The held positions of the line, neighbours as one range each. */
+  private async runsOf(repo: string, line: readonly string[], held: ReadonlySet<number>): Promise<ReviewRange[]> {
     const runs: { first: number; last: number }[] = []
     for (const at of [...held].sort((a, b) => a - b)) {
       const run = runs.at(-1)
@@ -317,6 +357,37 @@ export class GitCommits implements Commits {
       ranges.push({ base: resolved.stdout.trim(), head })
     }
     return ranges
+  }
+
+  /** The squashed branch commits as one range: from the parent of the oldest to the newest, in the branch's own order. */
+  private async squashedRange(repo: string, cut: string, squashed: readonly string[]): Promise<ReviewRange | null> {
+    if (squashed.length === 0) return null
+    const ordered = await gitIn(
+      repo,
+      ['rev-list', '--topo-order', '--reverse', ...squashed, '--not', cut],
+      this.options,
+    )
+    if (ordered.exitCode !== 0) throw new Error(`git rev-list failed (exit ${ordered.exitCode})`)
+    const mine = lines(ordered.stdout).filter((sha) => squashed.includes(sha))
+    const oldest = mine[0]
+    const head = mine.at(-1)
+    if (!oldest || !head) return null
+    const parent = await gitIn(repo, ['rev-parse', '-q', '--verify', `${oldest}^`], this.options)
+    return parent.exitCode === 0 ? { base: parent.stdout.trim(), head } : null
+  }
+
+  /** Whether two ranges changed exactly the same paths. */
+  private async samePaths(repo: string, a: ReviewRange, b: ReviewRange): Promise<boolean> {
+    const changed = async ({ base, head }: ReviewRange): Promise<string | null> => {
+      const done = await gitIn(
+        repo,
+        ['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', base, head],
+        this.options,
+      )
+      return done.exitCode === 0 ? done.stdout : null
+    }
+    const [one, two] = await Promise.all([changed(a), changed(b)])
+    return one !== null && one !== '' && one === two
   }
 
   /**
