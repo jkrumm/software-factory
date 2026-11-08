@@ -371,10 +371,19 @@ describe('the fixture', () => {
     try {
       await sql`GRANT USAGE ON SCHEMA factory TO kpi_no_usage`
       await sql`GRANT SELECT ON ALL TABLES IN SCHEMA factory TO kpi_no_usage`
-      const model = await sql.begin(async (tx) => {
-        await tx`SET LOCAL ROLE kpi_no_usage`
-        return KpiModel.parse(await readKpis(tx, { now: NOW, days: 7 }))
-      })
+      // the failed statement leaves the transaction aborted (a COMMIT would be refused), so it always ends in a rollback
+      const rollback = new Error('rollback')
+      let model: KpiModel | undefined
+      await sql
+        .begin(async (tx) => {
+          await tx`SET LOCAL ROLE kpi_no_usage`
+          model = KpiModel.parse(await readKpis(tx, { now: NOW, days: 7 }))
+          throw rollback
+        })
+        .catch((error: unknown) => {
+          if (error !== rollback) throw error
+        })
+      if (!model) throw new Error('readKpis did not answer')
       expect(model.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
       expect(model.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
       expect(model.kpis.find((k) => k.key === 'avoidable_touches')?.measured).toBe(true)
