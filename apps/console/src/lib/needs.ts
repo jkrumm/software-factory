@@ -26,6 +26,9 @@ export function defaultWords(defaultAt: string, now: number): string {
 /** Where an item comes from, as a word: the repo, or "App feedback" for outside text that names none. */
 export const originOf = (item: Pick<NeedItem, 'repo'>): string => item.repo ?? 'App feedback'
 
+/** The Issue page's route parameter of an item's `issue_<n>`: the number. */
+export const issueNumber = (ref: string): string => ref.replace(/^issue_/, '')
+
 export const reversibleWords = (reversible: boolean): string => (reversible ? 'reversible' : 'not reversible')
 
 export const KIND_LABEL = {

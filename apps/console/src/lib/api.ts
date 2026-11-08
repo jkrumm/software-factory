@@ -12,6 +12,7 @@ import {
   MachineModel,
   NeedsModel,
   ReadAccountList,
+  ReadIssueDetail,
   SignalAck,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
@@ -71,6 +72,9 @@ export const fetchArtifact = (id: string, revision?: number, signal?: AbortSigna
     ArtifactDetail,
     signal,
   )
+/** One Issue with its history, by number (`12`); a 404 is an `ApiError`. */
+export const fetchIssue = (id: string, signal?: AbortSignal) =>
+  getJson(`/v1/issues/${encodeURIComponent(id)}`, ReadIssueDetail, signal)
 export const fetchErrands = (signal?: AbortSignal) => getJson('/v1/errands', ErrandList, signal)
 
 export const answerDecision = (id: string, answer: string) =>

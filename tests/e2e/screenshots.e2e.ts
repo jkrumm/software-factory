@@ -22,6 +22,15 @@ function artifactScreens() {
   ]
 }
 
+/** The Issue page: the seeded Issue with a rich history, and the one that is working. */
+function issueScreens() {
+  const ids = JSON.parse(process.env.E2E_HISTORY ?? '{}') as { rich: string; working: string }
+  return [
+    { name: 'issue', path: `/issues/${ids.rich.replace('issue_', '')}` },
+    { name: 'issue-working', path: `/issues/${ids.working.replace('issue_', '')}` },
+  ]
+}
+
 const VARIANTS = [
   { name: 'desktop-dark', viewport: { width: 1280, height: 800 }, colorScheme: 'dark' },
   { name: 'desktop-light', viewport: { width: 1280, height: 800 }, colorScheme: 'light' },
@@ -35,7 +44,7 @@ for (const variant of VARIANTS) {
     test('the screens, the artifact page and the open palette', async ({ page, apiUrl }) => {
       const shot = (name: string) =>
         page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), fullPage: true, animations: 'disabled' })
-      for (const { name, path } of [...SCREENS, ...artifactScreens()]) {
+      for (const { name, path } of [...SCREENS, ...artifactScreens(), ...issueScreens()]) {
         await page.goto(path)
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')

@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test'
-import { defaultWords, errorWords, originOf, reversibleWords, spanWords, waitingWords } from '../src/lib/needs.ts'
+import {
+  defaultWords,
+  errorWords,
+  issueNumber,
+  originOf,
+  reversibleWords,
+  spanWords,
+  waitingWords,
+} from '../src/lib/needs.ts'
 
 const MIN = 60_000
 
@@ -31,4 +39,8 @@ test('errorWords: 409 is settled elsewhere, no status is unreachable, the rest s
   expect(errorWords(null, null)).toBe('Could not reach the factory')
   expect(errorWords(422, 'a verdict needs: note')).toBe('a verdict needs: note')
   expect(errorWords(500, null)).toBe('The factory refused this')
+})
+
+test('issueNumber turns an Issue ref into the page parameter', () => {
+  expect(issueNumber('issue_286')).toBe('286')
 })
