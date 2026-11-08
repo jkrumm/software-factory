@@ -55,15 +55,15 @@ const isFile = async (path: string): Promise<boolean> => (await stat(path).catch
 
 /**
  * The `forward` of the Console listener: a fresh request to the same path and query on the API, carrying the owner's token
- * and none of the client's credentials (`authorization`, `cookie`, every `tailscale-*` header). The client's signal rides
- * along, so a stream is cancelled when the client leaves.
+ * and none of the client's credentials (`authorization`, `cookie`, every `tailscale-*` header), and the body of a write
+ * verbatim. The client's signal rides along, so a stream is cancelled when the client leaves.
  */
 export function apiForward(options: {
   handle: (request: Request) => Promise<Response>
   origin: string
   ownerToken: string
 }): (request: Request) => Promise<Response> {
-  return (request) => {
+  return async (request) => {
     const headers = new Headers(request.headers)
     for (const name of [...headers.keys()]) {
       if (name === 'authorization' || name === 'cookie' || name.startsWith('tailscale-')) headers.delete(name)
@@ -74,6 +74,7 @@ export function apiForward(options: {
       new Request(`${options.origin}${url.pathname}${url.search}`, {
         method: request.method,
         headers,
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer(),
         signal: request.signal,
       }),
     )
@@ -81,6 +82,58 @@ export function apiForward(options: {
 }
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
+
+/** The owner's five answer verbs: the only writes the listener forwards. Nothing here starts a session or files, cancels or reopens an Issue. */
+const WRITES = [
+  /^\/v1\/decisions\/[^/]+\/answer$/,
+  /^\/v1\/artifacts\/[^/]+\/verdict$/,
+  /^\/v1\/artifacts\/[^/]+\/annotations$/,
+  /^\/v1\/errands\/[^/]+\/done$/,
+  /^\/signals\/[^/]+\/promote$/,
+]
+
+const isWrite = (request: Request, path: string): boolean =>
+  request.method === 'POST' && WRITES.some((route) => route.test(path))
+
+const MAX_BODY = 64 * 1024
+
+/** The body, or null when it is over the cap (counted as it arrives, whatever `content-length` claims). */
+async function boundedBody(request: Request): Promise<Uint8Array | null> {
+  const declared = Number(request.headers.get('content-length') ?? 0)
+  if (declared > MAX_BODY) return null
+  const chunks: Uint8Array[] = []
+  let size = 0
+  if (request.body) {
+    for await (const chunk of request.body) {
+      size += chunk.byteLength
+      if (size > MAX_BODY) return null
+      chunks.push(chunk)
+    }
+  }
+  const body = new Uint8Array(size)
+  let at = 0
+  for (const chunk of chunks) {
+    body.set(chunk, at)
+    at += chunk.byteLength
+  }
+  return body
+}
+
+/**
+ * The tailnet proxy adds the login to any request from the node, so a page on another site could make the browser send
+ * one: a write must come from the Console itself (a JSON body no form can send, and no cross-site fetch metadata).
+ */
+function crossSite(request: Request): boolean {
+  const site = request.headers.get('sec-fetch-site')
+  if (site !== null && site !== 'same-origin') return true
+  const origin = request.headers.get('origin')
+  if (origin === null) return false
+  try {
+    return new URL(origin).host !== request.headers.get('host')
+  } catch {
+    return true
+  }
+}
 
 /** The file a request path names inside `dir`, or null when it names nothing inside it. */
 function fileOf(dir: string, rawPath: string): string | null {
@@ -99,8 +152,9 @@ function fileOf(dir: string, rawPath: string): string | null {
 }
 
 /**
- * The Console listener's handler. Three gates in a fixed order, for every path: the owner's login, a read method, then
- * either the API's read slice (`/health`, `/v1/*`) or a static file. Nothing that can write or start a session passes.
+ * The Console listener's handler. Gates in a fixed order, for every path: the owner's login, a read method (or one of the
+ * five answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes.
  */
 export function consoleHandler(options: ConsoleHandlerOptions): (request: Request) => Promise<Response> {
   const owner = digest(options.ownerLogin)
@@ -133,15 +187,31 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     return new Response(Bun.file(served), { headers })
   }
 
+  /** One of the five answer verbs: a same-origin JSON body of at most 64 KiB, forwarded verbatim. */
+  const write = async (request: Request): Promise<Response> => {
+    if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
+      return errorResponse(415, 'a write sends application/json', 'unsupported_media_type')
+    }
+    if (crossSite(request)) return errorResponse(403, 'a write comes from the Console itself', 'forbidden')
+    const body = await boundedBody(request)
+    if (body === null) return errorResponse(413, 'the body is over 64 KiB', 'payload_too_large')
+    return options.forward(
+      new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }),
+    )
+  }
+
   return async (request) => {
     const login = request.headers.get(LOGIN_HEADER)
     if (login === null || !timingSafeEqual(digest(login), owner)) {
       return errorResponse(403, 'this listener answers its owner only', 'forbidden')
     }
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return errorResponse(405, 'the Console listener only reads', 'method_not_allowed', { allow: 'GET, HEAD' })
-    }
     const rawPath = new URL(request.url).pathname
+    if (isWrite(request, rawPath)) return write(request)
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return errorResponse(405, 'the Console listener reads, and takes five answers', 'method_not_allowed', {
+        allow: 'GET, HEAD',
+      })
+    }
     if (forwarded(rawPath)) return options.forward(request)
     return staticResponse(request, rawPath)
   }

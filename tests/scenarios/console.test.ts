@@ -46,9 +46,91 @@ test('the Console listener refuses a request without the owner login and serves 
   const index = await fetch(consoleUrl, { headers: owner })
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
-  // a write never passes, and the client's own token buys nothing here
+  // a write that is not one of the five answers never passes, and the client's own token buys nothing here
   const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: { ...owner, ...bearer() } })
   expect(post.status).toBe(405)
+})
+
+const ANSWERS = [
+  '/v1/decisions/decision_none/answer',
+  '/v1/artifacts/artifact_none/verdict',
+  '/v1/artifacts/artifact_none/annotations',
+  '/v1/errands/errand_none/done',
+  '/signals/signal_none/promote',
+]
+
+const API_REFUSALS = [404, 422]
+
+const write = (path: string, headers: Record<string, string> = {}, body: string = '{}', login = true) =>
+  fetch(`${consoleUrl}${path}`, {
+    method: 'POST',
+    headers: { ...(login ? { 'tailscale-user-login': OWNER } : {}), 'content-type': 'application/json', ...headers },
+    body,
+  })
+
+test('the five answer verbs reach the API with the body; the API, not the listener, answers', async () => {
+  for (const path of ANSWERS) {
+    const reply = await write(path)
+    // the API's own refusal of an unknown id or an empty answer, with its ErrorBody
+    expect(API_REFUSALS, path).toContain(reply.status)
+    expect(await reply.json(), path).toMatchObject({ code: expect.any(String) })
+  }
+  // a same-origin browser request: fetch metadata and an origin that is the listener's own host
+  const browser = await write(ANSWERS[0] ?? '', {
+    'sec-fetch-site': 'same-origin',
+    origin: consoleUrl,
+    host: new URL(consoleUrl).host,
+  })
+  expect(API_REFUSALS).toContain(browser.status)
+  // the client's own authorization is dropped: forwarded, a wrong token would be a 401
+  expect(API_REFUSALS).toContain(
+    (await write(ANSWERS[0] ?? '', { authorization: 'Bearer not-the-owner-token' })).status,
+  )
+})
+
+test('everything else that writes stays 405, OPTIONS too', async () => {
+  const owner = { 'tailscale-user-login': OWNER, 'content-type': 'application/json' }
+  const refused: [string, string][] = [
+    ['POST', '/v1/issues'],
+    ['POST', '/v1/issues/issue_1/cancel'],
+    ['POST', '/v1/issues/issue_1/reopen'],
+    ['POST', '/v1/issues/issue_1/ask'],
+    ['POST', '/signals'],
+    ['POST', '/v1/decisions/decision_none/worth-asking'],
+    ['POST', '/v1/decisions/decision_none/answer/extra'],
+    ['PUT', '/v1/decisions/decision_none/answer'],
+    ['DELETE', '/v1/errands/errand_none/done'],
+    ['OPTIONS', '/v1/decisions/decision_none/answer'],
+    ['POST', '/'],
+  ]
+  for (const [method, path] of refused) {
+    const reply = await fetch(`${consoleUrl}${path}`, {
+      method,
+      headers: owner,
+      body: method === 'POST' || method === 'PUT' ? '{}' : undefined,
+    })
+    expect(reply.status, `${method} ${path}`).toBe(405)
+    expect(reply.headers.get('allow')).toBe('GET, HEAD')
+  }
+})
+
+test('a write is refused without the login, with the wrong type, cross-site, from a foreign origin and over 64 KiB', async () => {
+  const path = ANSWERS[0] ?? ''
+  expect((await write(path, {}, '{}', false)).status).toBe(403)
+  expect((await write(path, { 'tailscale-user-login': 'other@example.com' })).status).toBe(403)
+  expect((await write(path, { 'content-type': 'text/plain' })).status).toBe(415)
+  expect((await write(path, { 'content-type': 'application/x-www-form-urlencoded' }, 'answer=x')).status).toBe(415)
+  expect(
+    (await fetch(`${consoleUrl}${path}`, { method: 'POST', headers: { 'tailscale-user-login': OWNER } })).status,
+  ).toBe(415)
+  for (const site of ['cross-site', 'same-site', 'none']) {
+    expect((await write(path, { 'sec-fetch-site': site })).status, site).toBe(403)
+  }
+  expect((await write(path, { origin: 'https://evil.example.com' })).status).toBe(403)
+  expect((await write(path, { origin: 'null' })).status).toBe(403)
+  expect((await write(path, {}, JSON.stringify({ answer: 'x'.repeat(64 * 1024 + 1) }))).status).toBe(413)
+  const ok = JSON.stringify({ answer: 'x'.repeat(60 * 1024) })
+  expect(API_REFUSALS).toContain((await write(path, {}, ok)).status)
 })
 
 test('the main port is unchanged: it still wants a token and the login header buys nothing', async () => {
