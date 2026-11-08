@@ -173,19 +173,124 @@ export type ReadEvidenceLine = z.infer<typeof ReadEvidenceLine>
 
 export const ReadAskLine = z
   .object({
+    /** the Decision's id: the Console links `/needs-you` with it */
+    id: z.string(),
     question: z.string(),
     options: z.array(z.string()),
     default: z.string().nullable(),
     answer: z.string().nullable(),
     askedAt: iso,
+    /** the lead's recommendation, as it wrote it */
+    recommendation: z.string(),
+    /** what the lead checked before asking */
+    checked: z.string(),
+    /** `open` while it waits, `answered`, or `withdrawn` when the Issue stopped waiting for it */
+    status: z.enum(['open', 'answered', 'withdrawn']),
+    answeredAt: iso.nullable(),
+    /** who settled it: policy, judge, default or owner; null while open */
+    settledBy: z.string().nullable(),
   })
   .meta({ id: 'ReadAskLine' })
 export type ReadAskLine = z.infer<typeof ReadAskLine>
 
+/** One signal that filed or amended the Issue. The first line filed it, the rest amended it. */
+export const ReadTriageLine = z
+  .object({
+    at: iso,
+    /** the signal's state once routed: filed, amended, incident or promoted */
+    outcome: z.enum(['filed', 'amended', 'incident', 'promoted']),
+    title: z.string(),
+    text: z.string(),
+    /** you, application, infrastructure, github, feedback or factory */
+    origin: z.string(),
+    /** owner, machine, agent or outside */
+    trust: z.string(),
+    source: z.string(),
+    /** alert, request, feedback or remark */
+    kind: z.string(),
+    link: z.string().nullable(),
+  })
+  .meta({ id: 'ReadTriageLine' })
+export type ReadTriageLine = z.infer<typeof ReadTriageLine>
+
+/** A note the owner sent to the lead, in full. */
+export const ReadNoteLine = z
+  .object({
+    at: iso,
+    text: z.string(),
+    /** the lead key it was typed to; null when no lead was running to receive it (the next brief carries it) */
+    session: z.string().nullable(),
+    /** true once typed into the lead, false while claimed but unconfirmed; null when no delivery exists */
+    delivered: z.boolean().nullable(),
+  })
+  .meta({ id: 'ReadNoteLine' })
+export type ReadNoteLine = z.infer<typeof ReadNoteLine>
+
+/** A Concept, Spec or Report submitted for the Issue. */
+export const ReadArtifactLine = z
+  .object({
+    /** the Console links `/artifacts/<id>` */
+    id: z.string(),
+    kind: z.string(),
+    title: z.string(),
+    revisions: z.number().int(),
+    /** the owner's latest verdict word (looks_good, with_notes, changes, no_longer_applies); null while none */
+    verdict: z.string().nullable(),
+    at: iso,
+  })
+  .meta({ id: 'ReadArtifactLine' })
+export type ReadArtifactLine = z.infer<typeof ReadArtifactLine>
+
+/** One run of verify while a ship was watched. */
+export const ReadCheckLine = z
+  .object({
+    at: iso,
+    /** green, red or blocked */
+    result: z.string(),
+    /** one line: the failed checks, or that all passed */
+    summary: z.string(),
+  })
+  .meta({ id: 'ReadCheckLine' })
+export type ReadCheckLine = z.infer<typeof ReadCheckLine>
+
+/** The watch a ship opened. */
+export const ReadWatchLine = z
+  .object({
+    startedAt: iso,
+    windowMs: z.number().int(),
+    /** null while it runs */
+    answer: z.enum(['passed', 'regressed', 'ended']).nullable(),
+    answeredAt: iso.nullable(),
+  })
+  .meta({ id: 'ReadWatchLine' })
+export type ReadWatchLine = z.infer<typeof ReadWatchLine>
+
+/** One call of ship: what the gate said, the commits, the review, the watch it opened and its verify runs. */
+export const ReadShipLine = z
+  .object({
+    at: iso,
+    attempt: z.number().int(),
+    result: z.enum(['accepted', 'refused']),
+    /** why it was refused; null when accepted */
+    detail: z.string().nullable(),
+    commits: z.array(z.string()),
+    review: z.object({ present: z.boolean(), note: z.string().nullable() }),
+    watch: ReadWatchLine.nullable(),
+    checks: z.array(ReadCheckLine),
+  })
+  .meta({ id: 'ReadShipLine' })
+export type ReadShipLine = z.infer<typeof ReadShipLine>
+
 export const ReadIssueDetail = ReadIssueCard.extend({
+  /** how the Issue came to be: the signals routed to it, oldest first; empty for an Issue filed another way */
+  triage: z.array(ReadTriageLine),
+  /** the owner's notes to the lead, oldest first */
+  notes: z.array(ReadNoteLine),
   timeline: z.array(ReadTimelineLine),
   evidence: z.array(ReadEvidenceLine),
   asks: z.array(ReadAskLine),
+  artifacts: z.array(ReadArtifactLine),
+  shipping: z.array(ReadShipLine),
   sessions: z.array(ReadSessionCard),
 }).meta({ id: 'ReadIssueDetail' })
 export type ReadIssueDetail = z.infer<typeof ReadIssueDetail>

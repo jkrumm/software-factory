@@ -53,7 +53,25 @@ export function redactIssueDetail(detail: ReadIssueDetail): ReadIssueDetail {
     ...redactIssueCard(detail),
     timeline: detail.timeline.map((line) => ({ ...line, text: line.kind })),
     evidence: detail.evidence.map((e) => ({ ...e, link: null, note: null })),
-    asks: detail.asks.map((a) => ({ ...a, question: QUESTION_WORDS, options: [], default: null, answer: null })),
+    asks: detail.asks.map((a) => ({
+      ...a,
+      question: QUESTION_WORDS,
+      options: [],
+      default: null,
+      answer: null,
+      recommendation: '',
+      checked: '',
+    })),
+    triage: detail.triage.map((t) => ({ ...t, title: HIDDEN, text: '', link: null, source: '' })),
+    notes: detail.notes.map((n) => ({ ...n, text: '' })),
+    artifacts: detail.artifacts.map((a) => ({ ...a, title: ITEM_WORDS })),
+    shipping: detail.shipping.map((s) => ({
+      ...s,
+      detail: s.detail === null ? null : '',
+      commits: [],
+      review: { ...s.review, note: null },
+      checks: s.checks.map((c) => ({ ...c, summary: '' })),
+    })),
     sessions,
   }
 }
