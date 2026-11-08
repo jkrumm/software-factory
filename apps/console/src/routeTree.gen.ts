@@ -14,6 +14,7 @@ import { Route as ChainRouteImport } from './routes/chain'
 import { Route as FlowRouteImport } from './routes/flow'
 import { Route as ImproveRouteImport } from './routes/improve'
 import { Route as NeedsYouRouteImport } from './routes/needs-you'
+import { Route as ArtifactsIdRouteImport } from './routes/artifacts.$id'
 import { Route as CheckpointsIdRouteImport } from './routes/checkpoints.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const NeedsYouRoute = NeedsYouRouteImport.update({
   path: '/needs-you',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArtifactsIdRoute = ArtifactsIdRouteImport.update({
+  id: '/artifacts/$id',
+  path: '/artifacts/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckpointsIdRoute = CheckpointsIdRouteImport.update({
   id: '/checkpoints/$id',
   path: '/checkpoints/$id',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/flow': typeof FlowRoute
   '/improve': typeof ImproveRoute
   '/needs-you': typeof NeedsYouRoute
+  '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/flow': typeof FlowRoute
   '/improve': typeof ImproveRoute
   '/needs-you': typeof NeedsYouRoute
+  '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
 }
 export interface FileRoutesById {
@@ -70,14 +78,28 @@ export interface FileRoutesById {
   '/flow': typeof FlowRoute
   '/improve': typeof ImproveRoute
   '/needs-you': typeof NeedsYouRoute
+  '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/chain' | '/flow' | '/improve' | '/needs-you' | '/checkpoints/$id'
+    | '/'
+    | '/chain'
+    | '/flow'
+    | '/improve'
+    | '/needs-you'
+    | '/artifacts/$id'
+    | '/checkpoints/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chain' | '/flow' | '/improve' | '/needs-you' | '/checkpoints/$id'
+  to:
+    | '/'
+    | '/chain'
+    | '/flow'
+    | '/improve'
+    | '/needs-you'
+    | '/artifacts/$id'
+    | '/checkpoints/$id'
   id:
     | '__root__'
     | '/'
@@ -85,6 +107,7 @@ export interface FileRouteTypes {
     | '/flow'
     | '/improve'
     | '/needs-you'
+    | '/artifacts/$id'
     | '/checkpoints/$id'
   fileRoutesById: FileRoutesById
 }
@@ -94,6 +117,7 @@ export interface RootRouteChildren {
   FlowRoute: typeof FlowRoute
   ImproveRoute: typeof ImproveRoute
   NeedsYouRoute: typeof NeedsYouRoute
+  ArtifactsIdRoute: typeof ArtifactsIdRoute
   CheckpointsIdRoute: typeof CheckpointsIdRoute
 }
 
@@ -134,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NeedsYouRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/artifacts/$id': {
+      id: '/artifacts/$id'
+      path: '/artifacts/$id'
+      fullPath: '/artifacts/$id'
+      preLoaderRoute: typeof ArtifactsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkpoints/$id': {
       id: '/checkpoints/$id'
       path: '/checkpoints/$id'
@@ -150,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   FlowRoute: FlowRoute,
   ImproveRoute: ImproveRoute,
   NeedsYouRoute: NeedsYouRoute,
+  ArtifactsIdRoute: ArtifactsIdRoute,
   CheckpointsIdRoute: CheckpointsIdRoute,
 }
 export const routeTree = rootRouteImport

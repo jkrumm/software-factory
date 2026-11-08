@@ -23,12 +23,35 @@ const CSP = [
   "font-src 'self'",
   "manifest-src 'self'",
   "worker-src 'self'",
-  "frame-src 'none'",
+  "frame-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join('; ')
+
+/**
+ * The policy of the artifact frame (`/frame.html` and `/frame/*`, the one document the page frames). A srcdoc, blob or
+ * data frame would inherit the page's policy; a frame loaded from a URL has its own, so the artifact's inline script runs
+ * while no request leaves the frame, and the page keeps `script-src 'self'`. Sandboxed even when opened on its own.
+ */
+const FRAME_CSP = [
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'unsafe-inline'",
+  'img-src data:',
+  'font-src data:',
+  "connect-src 'none'",
+  "media-src 'none'",
+  "object-src 'none'",
+  "frame-src 'none'",
+  "form-action 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'self'",
+  'sandbox allow-scripts',
+].join('; ')
+
+const isFrame = (path: string): boolean => path === '/frame.html' || path.startsWith('/frame/')
 
 /** Types Bun gets wrong or does not know for a Console build. */
 const TYPES: Record<string, string> = {
@@ -44,7 +67,7 @@ const TYPES: Record<string, string> = {
   '.map': 'application/json',
 }
 
-const NO_CACHE = /^(index\.html|sw\.js|registerSW\.js|manifest\.webmanifest|workbox-.*\.js)$/
+const NO_CACHE = /^(index\.html|frame\.html|sw\.js|registerSW\.js|manifest\.webmanifest|workbox-.*\.js)$/
 
 const digest = (text: string): Buffer => createHash('sha256').update(text.toLowerCase()).digest()
 
@@ -177,7 +200,8 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'no-referrer',
     })
-    if (name.endsWith('.html')) headers.set('content-security-policy', CSP)
+    if (isFrame(rawPath)) headers.set('content-security-policy', FRAME_CSP)
+    else if (name.endsWith('.html')) headers.set('content-security-policy', CSP)
     if (NO_CACHE.test(name)) headers.set('cache-control', 'no-cache')
     else if (rawPath.startsWith('/assets/')) headers.set('cache-control', 'public, max-age=31536000, immutable')
     if (request.method === 'HEAD') {

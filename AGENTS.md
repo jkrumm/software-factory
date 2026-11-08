@@ -60,7 +60,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `POST /signals/:id/promote`, each needing `content-type: application/json` (415), no cross-site `sec-fetch-site` and no
   foreign `origin` (403; the proxy adds the login to any request from the node, cookies or not) and at most 64 KiB (413).
   It can never start a session, and never cancels, reopens or files an Issue by its own words; promote files one only
-  from a signal already held. A new write goes through the Issue, not this list. Residual, accepted
+  from a signal already held. `/frame.html` and `/frame/*`, the artifact's sandboxed frame, are served under their own CSP
+  (scripts, no network), the page keeps `script-src 'self'`. A new write goes through the Issue, not this list. Residual, accepted
   (`docs/architecture.md` "Perimeter"): the header is the credential, so any process on the mini can forge it on loopback,
   read what the owner reads (including what the read token is denied) and make those five answers, promote among them;
   the `origin` check compares with the request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.

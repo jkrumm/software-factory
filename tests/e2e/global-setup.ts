@@ -1,9 +1,12 @@
 import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { freePort, startWorld } from '../scenarios/harness.ts'
 import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
+import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
 
 export const OWNER_LOGIN = 'owner@example.com'
 const DIST = join(import.meta.dir, '..', '..', 'apps', 'console', 'dist')
@@ -44,13 +47,16 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const world = await startWorld()
   const estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'chat', work: true }])
   const consolePort = await freePort()
+  const dataDir = await mkdtemp(join(tmpdir(), 'factory-e2e-data-'))
   // the owner's line: a page being sent is what puts a Decision on the owner's list
   const ntfy = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') })
   // `chat` is the work repo of the estate (outside text redacted for the read token); these have project files, so leads run in them
   const lab = await startLab({
     world,
     leads: true,
-    repos: Object.fromEntries(LEAD_REPOS.map((name) => [name, { project: `apiVersion: factory/v2\nname: ${name}\n` }])),
+    repos: Object.fromEntries(
+      [...LEAD_REPOS, ...ARTIFACT_REPOS].map((name) => [name, { project: `apiVersion: factory/v2\nname: ${name}\n` }]),
+    ),
     env: {
       ...estate.env,
       FACTORY_LEADS_PER_ACCOUNT: '16',
@@ -61,8 +67,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       FACTORY_CONSOLE_OWNER_LOGIN: OWNER_LOGIN,
       FACTORY_CONSOLE_PORT: String(consolePort),
       FACTORY_CONSOLE_DIR: DIST,
+      FACTORY_DATA_DIR: dataDir,
     },
   })
+  // before `seed`, which leaves a project row the planning of a new Issue cannot read
+  process.env.E2E_ARTIFACTS = JSON.stringify(await seedArtifacts(lab))
   await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   const tailnet = tailnetProxy(consoleUrl)
@@ -75,5 +84,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     await lab.stop()
     await ntfy.stop(true)
     await estate.stop()
+    await rm(dataDir, { recursive: true, force: true })
   }
 }

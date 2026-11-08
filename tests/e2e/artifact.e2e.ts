@@ -1,0 +1,254 @@
+import { join } from 'node:path'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures.ts'
+import { readState, statePathOf } from '../scenarios/fakes/hc-state.ts'
+import { sessionOf } from '../scenarios/flow.ts'
+import { api } from './seed.ts'
+import { DROPPED, KEPT, SPEC_QUOTE, TARGET, type SeededArtifacts } from './seed-artifacts.ts'
+
+const seeded = (): SeededArtifacts => JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as SeededArtifacts
+
+interface Detail {
+  artifact: { title: string; issueId: string; revisions: { n: number }[] }
+  annotations: { quote: string; path: string | null; comment: string; revision: number }[]
+  unanchored: { quote: string; path: string | null; comment: string }[]
+  verdicts: { revision: number; verdict: string; note: string | null }[]
+}
+const detail = (apiUrl: string, id: string, revision?: number) =>
+  api<Detail>(apiUrl, `/v1/artifacts/${id}${revision ? `?revision=${revision}` : ''}`)
+
+/** Selects the text of the first text node that contains `text`, in a page or a frame. */
+const SELECT = (text: string) => `(() => {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const at = node.data.indexOf(${JSON.stringify(text)})
+    if (at === -1) continue
+    const range = document.createRange()
+    range.setStart(node, at)
+    range.setEnd(node, at + ${JSON.stringify(text)}.length)
+    const selection = getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return true
+  }
+  return false
+})()`
+
+const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
+
+test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a verdict the API records', async ({
+  page,
+  apiUrl,
+}) => {
+  const { spec } = seeded()
+  await page.goto(`/artifacts/${spec}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'The storage spec' })).toBeVisible()
+  const header = page.locator('main header')
+  await expect(header).toContainText('Spec')
+  await expect(header).toContainText('Markdown')
+  await expect(header).toContainText('Waiting for your verdict')
+  expect(await page.locator('body').innerText()).not.toMatch(/artifact_|issue_\d+|lead-\d+|#\d+/)
+
+  await page.evaluate(SELECT(SPEC_QUOTE))
+  const composer = page.getByRole('form', { name: 'Comment on the selection' })
+  await expect(composer).toBeVisible()
+  await expect(composer).toContainText(SPEC_QUOTE)
+  await composer.getByRole('textbox', { name: 'Comment' }).fill('Say why not Redis.')
+  await composer.getByRole('button', { name: 'Add comment' }).click()
+
+  const listed = region(page, 'On the text')
+  await expect(listed).toContainText('Say why not Redis.')
+  await expect(listed).toContainText('Queue storage > Options > Cost')
+  await expect(composer).toBeHidden()
+  await expect
+    .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
+    .toEqual([SPEC_QUOTE])
+  await listed.getByRole('button').first().click()
+
+  await page.getByRole('textbox', { name: 'General comment' }).fill('Overall: good direction.')
+  await page.getByRole('button', { name: 'Add general comment' }).click()
+  await expect(region(page, 'General')).toContainText('Overall: good direction.')
+
+  const verdict = region(page, 'Verdict')
+  await verdict.getByRole('button', { name: 'With notes' }).click()
+  await verdict.getByRole('textbox', { name: 'Verdict note' }).fill('Good, but name the lock.')
+  await verdict.getByRole('button', { name: 'Send verdict' }).click()
+  await expect(verdict).toContainText('With notes')
+  await expect(verdict).toContainText('Good, but name the lock.')
+  await expect(page.locator('main header')).toContainText('With notes')
+
+  // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
+  const shown = await detail(apiUrl, spec)
+  expect(await api(apiUrl, `/v1/issues/${shown.artifact.issueId}`)).toMatchObject({ state: 'working' })
+  const all = [...shown.annotations, ...shown.unanchored]
+  expect(all).toHaveLength(2)
+  expect(all).toContainEqual(
+    expect.objectContaining({
+      quote: SPEC_QUOTE,
+      path: 'Queue storage > Options > Cost',
+      comment: 'Say why not Redis.',
+    }),
+  )
+  expect(all).toContainEqual(
+    expect.objectContaining({ quote: shown.artifact.title, path: 'global', comment: 'Overall: good direction.' }),
+  )
+  expect(shown.verdicts).toEqual([
+    expect.objectContaining({ revision: 1, verdict: 'with_notes', note: 'Good, but name the lock.' }),
+  ])
+
+  // The lead hears it: the leads' loop types the owner's verdict into the lead's own terminal, once.
+  await api(apiUrl, '/v1/loops/leads/run', {})
+  await api(apiUrl, '/v1/loops/leads/run', {})
+  const bin = process.env.E2E_WORLD_BIN
+  if (!bin) throw new Error('E2E_WORLD_BIN is not set: the global setup starts the world')
+  const state = readState(statePathOf(join(bin, 'calls.jsonl')))
+  const lead = Object.values(state.terminals).find(
+    (terminal) => terminal.labels['factory.key'] === sessionOf(shown.artifact.issueId),
+  )
+  const heard = (lead?.sent ?? []).filter((text) => text.includes('Good, but name the lock.'))
+  expect(heard).toHaveLength(1)
+  expect(heard[0]).toContain('With notes')
+})
+
+/** A throwaway server on a free port that counts every request it gets. */
+function leakTarget() {
+  const hits: string[] = []
+  const server = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    fetch: (request) => {
+      hits.push(`${request.method} ${new URL(request.url).pathname}`)
+      return new Response('leak', { headers: { 'access-control-allow-origin': '*' } })
+    },
+  })
+  return { hits, url: `http://127.0.0.1:${server.port}`, stop: () => server.stop(true) }
+}
+
+test('the frame document has its own sandboxing policy and the page keeps its own', async ({ request }) => {
+  const frame = (await request.get('/frame.html')).headers()['content-security-policy'] ?? ''
+  expect(frame).toContain('sandbox allow-scripts')
+  expect(frame).toContain("connect-src 'none'")
+  expect(frame).not.toContain("default-src 'self'")
+  const page = (await request.get('/')).headers()['content-security-policy'] ?? ''
+  expect(page).toContain("script-src 'self';")
+  expect(page).toContain("frame-src 'self'")
+  expect(page).toContain("frame-ancestors 'none'")
+  expect(page).not.toContain('sandbox')
+})
+
+test.describe('an HTML artifact', () => {
+  // page.route does not see a service worker's requests, so the worker is blocked for this one
+  test.describe('without the service worker', () => {
+    test.use({ serviceWorkers: 'block' })
+
+    test('cannot reach the network or its parent', async ({ page, apiUrl }) => {
+      const { report } = seeded()
+      const target = leakTarget()
+      try {
+        // The probe script is seeded with a placeholder; the page gets it with this test's server in its place.
+        await page.route(`**/v1/artifacts/${report}*`, async (route) => {
+          const response = await route.fetch()
+          const body = (await response.json()) as { content: string }
+          // also a static meta refresh to the target, one second in: the frame must not follow it
+          const refresh = `<meta http-equiv="refresh" content="1;url=${target.url}/refresh">`
+          const content = refresh + body.content.replaceAll(TARGET, target.url)
+          await route.fulfill({ response, json: { ...body, content } })
+        })
+        await page.goto(`/artifacts/${report}`)
+        const probe = page.frameLocator('iframe[title="Artifact"]').locator('#probe')
+        await expect(probe).toContainText('"parent"')
+        const result = JSON.parse((await probe.textContent()) ?? '{}') as Record<string, string>
+        expect(result.parent).toBe('SecurityError')
+        expect(result.open).toBe('null')
+        expect(result.fetch).not.toBe('sent')
+        expect(result.xhr).not.toBe('sent')
+        expect(result.websocket).not.toBe('sent')
+        // the probe then navigates the frame away; give every attempt time to arrive
+        await page.waitForTimeout(1500)
+        expect(target.hits).toEqual([])
+        expect(await detail(apiUrl, report)).toMatchObject({ annotations: [], unanchored: [], verdicts: [] })
+      } finally {
+        await target.stop()
+      }
+    })
+  })
+
+  test('a selection in the frame reaches the Console and can be commented', async ({ page, apiUrl }) => {
+    const { report } = seeded()
+    // the frame is a navigation of its own: once the service worker controls the page, it must not answer it with the app shell
+    await page.goto('/needs-you')
+    await page.evaluate('navigator.serviceWorker.ready.then(() => true)')
+    await page.reload()
+    await expect.poll(() => page.evaluate('navigator.serviceWorker.controller !== null')).toBe(true)
+    await page.goto(`/artifacts/${report}`)
+    const frame = await (await page.locator('iframe[title="Artifact"]').elementHandle())?.contentFrame()
+    if (!frame) throw new Error('no frame')
+    const claim = 'The probe ships on Friday and nobody pays for it.'
+    await expect.poll(() => frame.evaluate(SELECT(claim))).toBe(true)
+    const composer = page.getByRole('form', { name: 'Comment on the selection' })
+    await expect(composer).toContainText(claim)
+    // cancelled, the same passage can be chosen again
+    await composer.getByRole('button', { name: 'Cancel' }).click()
+    await expect(composer).toBeHidden()
+    await expect.poll(() => frame.evaluate('getSelection().isCollapsed')).toBe(true)
+    await expect.poll(() => frame.evaluate(SELECT(claim))).toBe(true)
+    await expect(composer).toBeVisible()
+    await expect(composer).toContainText(claim)
+    await composer.getByRole('textbox', { name: 'Comment' }).fill('Who pays on Saturday?')
+    await composer.getByRole('button', { name: 'Add comment' }).click()
+    await expect(region(page, 'On the text')).toContainText('Who pays on Saturday?')
+    await expect.poll(() => frame.evaluate("CSS.highlights.get('factory')?.size ?? 0")).toBe(1)
+
+    const shown = await detail(apiUrl, report)
+    expect(shown.annotations).toEqual([
+      expect.objectContaining({ quote: claim, path: 'Launch report > Result', comment: 'Who pays on Saturday?' }),
+    ])
+  })
+
+  test('is not written to by a message of its own', async ({ page, apiUrl }) => {
+    const { report } = seeded()
+    const before = await detail(apiUrl, report)
+    await page.goto(`/artifacts/${report}`)
+    await expect(page.getByRole('heading', { level: 1, name: 'The launch report' })).toBeVisible()
+    // from the page itself, not the frame: not the frame's window, so it is ignored
+    await page.evaluate("window.postMessage({ type: 'factory.select', quote: 'forged', path: '' }, '*')")
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('form', { name: 'Comment on the selection' })).toHaveCount(0)
+    expect(await detail(apiUrl, report)).toEqual(before)
+  })
+})
+
+test('a new revision keeps one anchored comment and moves the other to Unanchored; compare shows both', async ({
+  page,
+  apiUrl,
+}) => {
+  const { revised } = seeded()
+  const shown = await detail(apiUrl, revised, 2)
+  expect(shown.annotations.map((a) => a.quote)).toEqual([KEPT])
+  expect(shown.unanchored.map((a) => a.quote)).toEqual([DROPPED])
+
+  await page.goto(`/artifacts/${revised}?revision=2`)
+  await expect(region(page, 'On the text')).toContainText('Name the lock.')
+  await expect(region(page, 'Unanchored')).toContainText('Why a minute?')
+  await expect(region(page, 'Unanchored')).not.toContainText('Name the lock.')
+  await expect
+    .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
+    .toEqual([KEPT])
+  await expect(region(page, 'Revision 2')).toBeVisible()
+  await expect(region(page, 'Revision 2')).not.toContainText(DROPPED)
+
+  await page.goto(`/artifacts/${revised}?revision=1`)
+  await expect(region(page, 'On the text')).toContainText('Why a minute?')
+  await expect(region(page, 'Revision 1')).toContainText(DROPPED)
+
+  await page.goto(`/artifacts/${revised}?revision=2&compare=1`)
+  const left = region(page, 'Revision 2')
+  const right = region(page, 'Revision 1')
+  await expect(left).toBeVisible()
+  await expect(right).toBeVisible()
+  await expect(right).toContainText(DROPPED)
+  await expect(left).not.toContainText(DROPPED)
+  await expect(left).toContainText('A failed row is retried at once.')
+  await page.getByLabel('Compare with').selectOption('')
+  await expect(page).not.toHaveURL(/compare=/)
+})

@@ -1,4 +1,5 @@
 import type { NeedItem } from '@software-factory/contract'
+import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -154,6 +155,13 @@ function ReviewBody({ item, onSent }: BodyProps) {
           {ARTIFACT_KIND_LABEL[data.artifact.kind] ?? data.artifact.kind}
         </span>
         <p className="font-heading text-base font-semibold">{data.artifact.title}</p>
+        <Link
+          to="/artifacts/$id"
+          params={{ id: data.artifact.id }}
+          className="w-fit text-sm text-primary underline underline-offset-4"
+        >
+          Open the full page
+        </Link>
       </div>
       <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-sans text-sm whitespace-pre-wrap">
         {data.content}

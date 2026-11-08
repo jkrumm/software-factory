@@ -71,3 +71,74 @@
     overscroll-behavior: none;
   }
 }
+
+/* Marked text in an artifact: the CSS Custom Highlight API, so the page's DOM is not touched. */
+::highlight(annotation) {
+  background-color: color-mix(in srgb, var(--vx-accent) 30%, transparent);
+}
+
+/* The rendered Markdown of an artifact. */
+.artifact-prose {
+  @apply text-[15px] leading-7 wrap-break-word;
+  max-width: var(--vx-prose-measure);
+}
+.artifact-prose > :first-child {
+  @apply mt-0;
+}
+.artifact-prose h1,
+.artifact-prose h2,
+.artifact-prose h3,
+.artifact-prose h4 {
+  @apply mt-6 mb-2 font-heading font-semibold tracking-tight;
+}
+.artifact-prose h1 {
+  @apply text-2xl;
+}
+.artifact-prose h2 {
+  @apply text-xl;
+}
+.artifact-prose h3 {
+  @apply text-lg;
+}
+.artifact-prose p,
+.artifact-prose ul,
+.artifact-prose ol,
+.artifact-prose blockquote,
+.artifact-prose pre,
+.artifact-prose table {
+  @apply my-3;
+}
+.artifact-prose ul {
+  @apply list-disc pl-6;
+}
+.artifact-prose ol {
+  @apply list-decimal pl-6;
+}
+.artifact-prose a {
+  @apply text-primary underline underline-offset-4;
+}
+.artifact-prose blockquote {
+  @apply border-l-2 pl-4 text-muted-foreground;
+}
+.artifact-prose code {
+  @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em];
+}
+.artifact-prose pre {
+  @apply overflow-x-auto rounded-lg border bg-muted p-3;
+}
+.artifact-prose pre code {
+  @apply bg-transparent p-0;
+}
+.artifact-prose table {
+  @apply block w-full overflow-x-auto border-collapse text-sm;
+}
+.artifact-prose th,
+.artifact-prose td {
+  @apply border px-3 py-1.5 text-left align-top;
+}
+.artifact-prose th {
+  @apply bg-muted font-semibold;
+}
+.artifact-prose hr {
+  @apply my-6;
+}

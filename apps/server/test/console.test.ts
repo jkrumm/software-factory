@@ -22,6 +22,9 @@ beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-console-')
   await mkdir(join(dir, 'build', 'assets'), { recursive: true })
   await writeFile(join(dir, 'build', 'index.html'), INDEX)
+  await mkdir(join(dir, 'build', 'frame'), { recursive: true })
+  await writeFile(join(dir, 'build', 'frame.html'), '<!doctype html><title>frame</title>')
+  await writeFile(join(dir, 'build', 'frame', 'frame.js'), '/* frame */')
   await writeFile(join(dir, 'build', 'sw.js'), 'self.skipWaiting()')
   await writeFile(join(dir, 'build', 'manifest.webmanifest'), '{}')
   await writeFile(join(dir, 'build', 'assets', 'app.js'), 'export {}')
@@ -76,6 +79,33 @@ describe('the owner', () => {
     expect(response.headers.get('cache-control')).toBe('no-cache')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+  })
+
+  test('the artifact frame has its own policy, and the page does not get it', async () => {
+    const page = (await call('/')).headers.get('content-security-policy') ?? ''
+    expect(page).toContain("script-src 'self';")
+    expect(page).toContain("frame-src 'self'")
+    expect(page).not.toContain("script-src 'self' 'unsafe-inline'")
+    expect(page).not.toContain('sandbox')
+
+    for (const path of ['/frame.html', '/frame/frame.js']) {
+      const response = await call(path)
+      expect(response.status).toBe(200)
+      const frame = response.headers.get('content-security-policy') ?? ''
+      expect(frame).toContain("default-src 'none'")
+      expect(frame).toContain("script-src 'self' 'unsafe-inline'")
+      expect(frame).toContain("connect-src 'none'")
+      expect(frame).toContain("frame-src 'none'")
+      expect(frame).toContain("form-action 'none'")
+      expect(frame).toContain("base-uri 'none'")
+      expect(frame).toContain('img-src data:')
+      expect(frame).toContain('sandbox allow-scripts')
+      expect(frame).not.toContain("default-src 'self'")
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+      expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+    }
+    expect((await call('/frame.html')).headers.get('cache-control')).toBe('no-cache')
+    expect((await call('/index.html')).headers.get('content-security-policy')).toBe(page)
   })
 
   test('an extension-less unknown path falls back to index.html', async () => {

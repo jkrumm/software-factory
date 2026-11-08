@@ -70,7 +70,9 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/v1\//, /^\/health/],
+        // the artifact frame is a document of its own, served under its own policy: never the app shell, never precached
+        navigateFallbackDenylist: [/^\/v1\//, /^\/health/, /^\/frame/],
+        globIgnores: ['frame.html', 'frame/**'],
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
       },
