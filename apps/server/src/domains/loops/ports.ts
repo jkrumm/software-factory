@@ -10,7 +10,19 @@ import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 
-/** The loops' own table, inside one transaction: the agw calls made, so none is made twice. */
+/** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
+export interface FrictionPassRecord {
+  id: string
+  at: Date
+  windowFrom: Date
+  windowTo: Date
+  issues: number
+  filed: { key: string; count: number; title: string }[]
+  overBudget: { key: string; count: number }[]
+  failed: { key: string; reason: string }[]
+}
+
+/** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction passes. */
 export interface LoopStore {
   /** the rounds of one subject, oldest first */
   calls(loop: CallLoop, issue: IssueId, subject: string): Promise<CallRow[]>
@@ -26,6 +38,9 @@ export interface LoopStore {
     key: string,
     result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
   ): Promise<void>
+  /** when the newest friction pass ran; null before the first */
+  lastFrictionPassAt(): Promise<Date | null>
+  recordFrictionPass(pass: FrictionPassRecord): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */

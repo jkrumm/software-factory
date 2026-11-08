@@ -73,5 +73,17 @@ export function postgresLoopStore(tx: SQL): LoopStore {
             detail = ${result.detail}, finished_at = ${result.at}
         WHERE key = ${key} AND outcome IS NULL`
     },
+
+    async lastFrictionPassAt() {
+      const rows: unknown[] = await tx`SELECT max(at) AS at FROM factory.friction_passes`
+      return z.object({ at: z.date().nullable() }).parse(rows[0]).at
+    },
+
+    async recordFrictionPass(pass) {
+      await tx`
+        INSERT INTO factory.friction_passes (id, at, window_from, window_to, issues, filed, over_budget, failed)
+        VALUES (${pass.id}, ${pass.at}, ${pass.windowFrom}, ${pass.windowTo}, ${pass.issues},
+          ${JSON.stringify(pass.filed)}::jsonb, ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
+    },
   }
 }

@@ -13,6 +13,7 @@ const Env = z.object({
   FACTORY_LOOP_SEND_MS: ms.optional(),
   FACTORY_LOOP_STEWARD_MS: ms.optional(),
   FACTORY_LOOP_TRIAGE_MS: ms.optional(),
+  FACTORY_LOOP_FRICTION_MS: ms.optional(),
   /** a stall younger than this is left to end by itself */
   FACTORY_STEWARD_MIN_STALL_MS: ms.optional(),
   /** the steward asks `factory-steward` again after a failed or refused answer this long on */
@@ -51,6 +52,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     send: e.FACTORY_LOOP_SEND_MS,
     steward: e.FACTORY_LOOP_STEWARD_MS,
     triage: e.FACTORY_LOOP_TRIAGE_MS,
+    friction: e.FACTORY_LOOP_FRICTION_MS,
   }
   return {
     intervalMs: Object.fromEntries(LOOP_NAMES.map((name) => [name, own[name] ?? tickMs])) as Record<LoopName, number>,
