@@ -3,7 +3,16 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { ArtifactId, ArtifactKind, Format, Verdict } from './artifact.ts'
-import type { DecisionForm, DecisionId, JudgeInput, JudgeVerdict, PolicyRule, Precedent, Settler } from './decision.ts'
+import type {
+  DecisionForm,
+  DecisionId,
+  JudgeInput,
+  JudgeVerdict,
+  PolicyRule,
+  Precedent,
+  Settler,
+  StepName,
+} from './decision.ts'
 import type { ErrandId } from './errand.ts'
 import type { Page } from './page.ts'
 
@@ -19,7 +28,7 @@ export type StepOutcome = (typeof STEP_OUTCOMES)[number]
 export type StepClaim = 'claimed' | 'in_flight' | 'done' | 'retry_later'
 
 export interface Step {
-  step: Settler
+  step: StepName
   /** null while a call is in flight */
   outcome: StepOutcome | null
   at: Date | null
@@ -166,16 +175,16 @@ export interface CheckpointStore {
   /** answered Decisions that look like this question (the `to_tsquery` OR expression), the owner's own answers first */
   precedents(terms: string, input: { excluding: DecisionId; limit: number }): Promise<Precedent[]>
   /** takes the step for a call: `claimed` when this caller may make it (not done, not leased to another; a failed Judge call whose backoff ran out and has tries left is claimed again) */
-  claimStep(id: DecisionId, step: Settler, now: Date, until: Date): Promise<StepClaim>
+  claimStep(id: DecisionId, step: StepName, now: Date, until: Date): Promise<StepClaim>
   finishStep(
     id: DecisionId,
-    step: Settler,
+    step: StepName,
     done: { outcome: Exclude<Step['outcome'], null>; detail: string | null; at: Date },
   ): Promise<void>
   /** a step with no call: true when this is the first time it is recorded */
   recordStep(
     id: DecisionId,
-    step: Settler,
+    step: StepName,
     done: { outcome: Exclude<Step['outcome'], null>; detail: string | null; at: Date },
   ): Promise<boolean>
 

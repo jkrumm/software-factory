@@ -102,6 +102,7 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
         setPrio(writes, {
           issue: request.issue,
           value: request.value,
+          actor: request.actor,
           key: key('prio', request.key ?? writes.ids.next('prio')),
         }),
     },

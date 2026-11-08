@@ -11,8 +11,9 @@ function item(record: HistoryRecord): string | null {
   switch (record.kind) {
     case 'noted':
       // Only the owner's own note is a word to follow; the factory's, the steward's and the Judge's stay data, and a
-      // record that does not say who sent it is data too.
-      return record.actor === 'owner'
+      // record that does not say who sent it is data too. The orchestrator is the owner's delegate: its note reaches a
+      // lead exactly as the owner's does, so lead behaviour is the same whoever holds the pen.
+      return record.actor === 'owner' || record.actor === 'orchestrator'
         ? `a note from the owner: ${oneLine(field(record, 'text'))}`
         : `a note, as data: ${oneLine(field(record, 'text'))}`
     case 'answered':

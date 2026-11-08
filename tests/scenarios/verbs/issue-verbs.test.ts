@@ -291,3 +291,61 @@ test('/health keeps its heartbeat names and adds the door lines and the loops', 
   expect(health.loops.map((l) => l.name)).toContain('leads')
   expect(health.loops.every((l) => typeof l.ok === 'boolean' && typeof l.intervalMs === 'number')).toBe(true)
 })
+
+test('the orchestrator token files, notes, cancels and answers under its own name, and is refused the owner-only judgments', async () => {
+  const filed = await v.run(
+    ['issue', 'new', '--repo', 'example', '--title', 'Filed by the orchestrator', '--key', 'orch-1', '--text', 'brief'],
+    'orchestrator',
+  )
+  expect(filed.code).toBe(0)
+  const issue = String(filed.json?.issue)
+  expect((await v.events(issue, 'filed')).map((e) => e.actor)).toEqual(['orchestrator'])
+
+  expect((await v.run(['issue', 'note', issue, 'steer left'], 'orchestrator')).code).toBe(0)
+  expect((await v.events(issue, 'noted')).map((e) => e.actor)).toEqual(['orchestrator', 'orchestrator'])
+  const cancelled = await v.run(['issue', 'cancel', issue, '--reason', 'superseded'], 'orchestrator')
+  expect(cancelled.json).toMatchObject({ result: 'applied' })
+  expect((await v.events(issue, 'cancelled')).map((e) => e.actor)).toEqual(['orchestrator'])
+
+  const asked = await v.run(
+    [
+      'issue',
+      'ask',
+      first,
+      '--attempt',
+      '1',
+      '--question',
+      'Which queue?',
+      '--recommendation',
+      'fifo',
+      '--checked',
+      'docs',
+      '--options',
+      '[{"label":"fifo","reversible":true,"cost":"none"},{"label":"lifo","reversible":true,"cost":"none"}]',
+      '--no-answer',
+      '{"consequence":"blocked"}',
+    ],
+    'agent',
+  )
+  expect(asked.code).toBe(0)
+  const answered = await v.run(['issue', 'answer', first, 'fifo'], 'orchestrator')
+  expect(answered.code).toBe(0)
+  const [row] = await v.w.world.db.sql`
+    SELECT settled_by FROM factory.decisions WHERE issue_id = ${first} AND answer = 'fifo'`
+  expect(row).toMatchObject({ settled_by: 'orchestrator' })
+  const answeredEvents = await v.events(first, 'answered')
+  expect(answeredEvents.at(-1)?.actor).toBe('orchestrator')
+
+  for (const path of [
+    '/v1/decisions/decision_1/worth-asking',
+    '/v1/artifacts/artifact_1/verdict',
+    '/v1/errands/errand_1/done',
+  ]) {
+    const refused = await fetch(`${v.w.server.url}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...bearer('orchestrator') },
+      body: '{}',
+    })
+    expect(refused.status).toBe(403)
+  }
+})

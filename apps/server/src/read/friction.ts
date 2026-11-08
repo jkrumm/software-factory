@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { FrictionCount, FrictionModel } from '@software-factory/contract'
-import { avoidableTouches, issuesFiled, type Window } from './kpis.ts'
+import { avoidableTouches, issuesFiled, orchestratorSteering, type Window } from './kpis.ts'
 import { per, windowOf } from './stats.ts'
 import { plain } from './words.ts'
 
@@ -25,8 +25,17 @@ const TOUCHES: Record<string, string> = {
   reopened: 'Issues the owner reopened',
 }
 
+const STEERS: Record<string, string> = {
+  decision_answered: 'Decisions the orchestrator answered that were not worth asking',
+  noted: 'Notes the orchestrator sent to a lead',
+  woken: 'Waits the orchestrator woke by hand',
+  cancelled: 'Issues the orchestrator cancelled',
+  reopened: 'Issues the orchestrator reopened',
+}
+
 const SETTLERS: Record<string, string> = {
   owner: 'Decisions settled by the owner',
+  orchestrator: 'Decisions settled by the orchestrator',
   policy: 'Decisions settled by standing policy',
   judge: 'Decisions settled by the Judge',
   default: 'Decisions settled by their default',
@@ -73,6 +82,10 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
   const touches = await avoidableTouches(sql, w)
   for (const [kind, label] of Object.entries(TOUCHES))
     add('avoidable_touch', `touch:${kind}`, label, touches[kind] ?? 0)
+
+  const steers = await orchestratorSteering(sql, w)
+  for (const [kind, label] of Object.entries(STEERS))
+    add('orchestrator_steer', `steer:${kind}`, label, steers[kind] ?? 0)
 
   const refused = await grouped(sql`
     SELECT kind AS key, detail, count(*) AS n FROM factory.issue_events

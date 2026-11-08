@@ -6,8 +6,12 @@ export { scrub }
 
 export type DecisionId = Id<'decision'>
 
-/** Who settled a Decision, in the order the steps are tried (`docs/architecture.md` §Loops and agw). */
-export const SETTLERS = ['policy', 'judge', 'default', 'owner'] as const
+/** The steps of settling a Decision, in the order they are tried (`docs/architecture.md` §Loops and agw). */
+export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
+export type StepName = (typeof STEPS)[number]
+
+/** Who settled a Decision: a step, or the orchestrator answering for the owner (never a step of its own). */
+export const SETTLERS = [...STEPS, 'orchestrator'] as const
 export type Settler = (typeof SETTLERS)[number]
 
 /** What one option costs and whether it can be taken back. A default is only ever a reversible option. */

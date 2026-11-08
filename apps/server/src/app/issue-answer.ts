@@ -1,4 +1,5 @@
 import type { DecisionId } from '../domains/checkpoints/decision.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { err, type PortError, type Result } from '../kernel/result.ts'
 import type { Answered, CheckpointError } from './checkpoints.ts'
@@ -17,7 +18,7 @@ export type IssueAnswerError =
  */
 export async function answerIssue(
   uses: Pick<CheckpointUses, 'decisions' | 'answer'>,
-  input: { issueId: IssueId; answer: string; decision?: string | undefined },
+  input: { issueId: IssueId; answer: string; by?: OwnerActor | undefined; decision?: string | undefined },
 ): Promise<Result<Answered, IssueAnswerError | PortError>> {
   const open = await uses.decisions({ issueId: input.issueId, status: 'open', limit: 50 })
   if (!open.ok) return open
@@ -26,10 +27,14 @@ export async function answerIssue(
     if (!ids.some((id) => id === input.decision)) {
       return err({ kind: 'not_found', what: 'open Decision', id: input.decision })
     }
-    return uses.answer({ decisionId: input.decision as DecisionId, answer: input.answer })
+    return uses.answer({
+      decisionId: input.decision as DecisionId,
+      answer: input.answer,
+      ...(input.by ? { by: input.by } : {}),
+    })
   }
   const [only, ...others] = ids
   if (only === undefined) return err({ kind: 'no_open_decision', issueId: input.issueId })
   if (others.length > 0) return err({ kind: 'ambiguous', issueId: input.issueId, decisions: ids })
-  return uses.answer({ decisionId: only, answer: input.answer })
+  return uses.answer({ decisionId: only, answer: input.answer, ...(input.by ? { by: input.by } : {}) })
 }

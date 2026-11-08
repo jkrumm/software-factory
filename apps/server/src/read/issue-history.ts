@@ -56,7 +56,7 @@ export async function loadTriage(sql: SQL, issue: string): Promise<ReadTriageLin
 export async function loadNotes(sql: SQL, issue: string): Promise<ReadNoteLine[]> {
   const events: { at: Date; version: number; payload: unknown }[] = await sql`
     SELECT at, version, payload FROM factory.issue_events
-    WHERE issue_id = ${issue} AND kind = 'noted' AND actor = 'owner' AND key NOT LIKE 'noted:signal:%' AND result = 'applied' ORDER BY version`
+    WHERE issue_id = ${issue} AND kind = 'noted' AND actor IN ('owner', 'orchestrator') AND key NOT LIKE 'noted:signal:%' AND result = 'applied' ORDER BY version`
   if (events.length === 0) return []
   const deliveries: { key: string; attempt: number; typed_at: Date | null }[] = await sql`
     SELECT key, attempt, typed_at FROM factory.lead_deliveries WHERE issue_id = ${issue} AND kind = 'note'`

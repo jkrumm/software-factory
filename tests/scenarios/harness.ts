@@ -11,12 +11,13 @@ const CLI = join(ROOT, 'apps', 'cli', 'bin', 'factory.ts')
 const FAKES = join(import.meta.dir, 'fakes')
 const BOOT_TIMEOUT_MS = 20_000
 
-/** The fixed tokens of the five callers: the server in a world knows all of them, the CLI sends one. */
+/** The fixed tokens of the six callers: the server in a world knows all of them, the CLI sends one. */
 export const TOKENS = {
   owner: 'scenario-owner-token-0001',
   agent: 'scenario-agent-token-0002',
   machine: 'scenario-door-token-0003',
   signal: 'scenario-signal-token-005',
+  orchestrator: 'scenario-orchestrator-006',
   read: 'scenario-read-token-00004',
 } as const
 export type Caller = keyof typeof TOKENS
@@ -134,6 +135,7 @@ export async function startServer(
       FACTORY_AGENT_TOKEN: TOKENS.agent,
       FACTORY_DOOR_TOKEN: TOKENS.machine,
       FACTORY_SIGNAL_TOKEN: TOKENS.signal,
+      FACTORY_ORCHESTRATOR_TOKEN: TOKENS.orchestrator,
       FACTORY_READ_TOKEN: TOKENS.read,
       // No Console build in this dir: the listener (a fixed port on the host) stays off unless a scenario asks for it.
       FACTORY_CONSOLE_DIR: join(ROOT, 'tests', 'scenarios', '.no-console'),

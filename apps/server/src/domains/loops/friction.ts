@@ -49,6 +49,11 @@ export const THRESHOLDS: Record<Judged, Rule> = {
     rate: 0.15,
     why: 'the owner stepping in on one in seven closed Issues for the same thing means the factory should have',
   },
+  orchestrator_steer: {
+    min: 5,
+    rate: 0.5,
+    why: "the orchestrator steering leads on one in two closed Issues is the factory's real avoidable-touch rate: its leads are not briefed or unblocked well enough to work alone",
+  },
   signal: {
     min: 3,
     rate: 0.2,

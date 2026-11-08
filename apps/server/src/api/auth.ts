@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { ErrorBody } from '@software-factory/contract'
 import { Elysia } from 'elysia'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { Tokens } from '../settings.ts'
 import { type Caller, CALLERS, ruleFor } from './policy.ts'
 
@@ -46,6 +47,10 @@ export function callerOf(request: Request): Caller {
   if (!caller) throw new Error('no caller was resolved for this request: the route is outside the auth plugin')
   return caller
 }
+
+/** Who an owner-rights call is recorded as: the orchestrator under its own name, every other caller that may make it as the owner. */
+export const ownerActorOf = (request: Request): OwnerActor =>
+  callerOf(request) === 'orchestrator' ? 'orchestrator' : 'owner'
 
 /**
  * Authenticates every route registered after it, before the body is read: resolves the caller from the bearer token and

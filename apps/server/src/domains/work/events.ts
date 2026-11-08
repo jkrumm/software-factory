@@ -86,26 +86,26 @@ export type AnyIssueEvent = { [K in EventKind]: IssueEvent<K> }[EventKind]
 
 /** Who may send each event; anyone else is refused. The owner is never the only way out of a machine wait. */
 export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
-  filed: ['factory', 'owner'],
+  filed: ['factory', 'owner', 'orchestrator'],
   settled: ['factory'],
   admitted: ['factory'],
   lead_started: ['factory'],
   lead_gone: ['factory'],
-  noted: ['owner', 'factory', 'steward', 'judge'],
+  noted: ['owner', 'orchestrator', 'factory', 'steward', 'judge'],
   asked: ['lead', 'steward'],
-  answered: ['owner', 'judge', 'factory'],
+  answered: ['owner', 'orchestrator', 'judge', 'factory'],
   submitted: ['lead'],
   verdict_given: ['owner'],
   errand_raised: ['lead'],
   errand_done: ['owner', 'judge', 'factory'],
   deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
-  woken: ['factory', 'steward', 'owner'],
+  woken: ['factory', 'steward', 'owner', 'orchestrator'],
   shipped: ['lead'],
   watch_passed: ['factory'],
   regressed: ['factory'],
-  reopened: ['owner', 'factory'],
-  cancelled: ['owner'],
+  reopened: ['owner', 'orchestrator', 'factory'],
+  cancelled: ['owner', 'orchestrator'],
   closed: ['lead', 'factory'],
 }
 

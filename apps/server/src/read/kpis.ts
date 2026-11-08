@@ -8,14 +8,29 @@ import { percentile, per, windowOf } from './stats.ts'
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
 
 /**
- * The owner events that count as touches, of the given kinds. A `noted` event counts only when it is a note the owner
- * sent with `issue note` (`noted:issue_<n>:owner:<call>`) and not the orchestrator steering a lead on the owner's token.
+ * The owner events that count as touches, of the given kinds. The orchestrator has its own actor, so it is excluded by
+ * construction. A `noted` event counts only when it is a note the owner sent with `issue note`
+ * (`noted:issue_<n>:owner:<call>`). The `via` guard keeps an old orchestrator client that still sends the owner's token
+ * (and `--via orchestrator`) out of the count; it can go once the orchestrator's token is in use everywhere.
  * The first note of a filing, an Errand done and a verdict note are the owner's request or answer, not a touch.
  * `avoidableTouches` and the touch evidence of `readFrictionEvidence` both use this, so they agree.
  */
 export const ownerTouch = (sql: SQL, kinds: readonly string[]) => sql`
   actor = 'owner' AND result = 'applied' AND kind IN ${sql([...kinds])}
   AND (kind <> 'noted' OR (key ~ '^noted:issue_[0-9]+:owner:' AND payload->>'via' IS DISTINCT FROM 'orchestrator'))`
+
+/**
+ * The orchestrator's steering events, of the given kinds: its own actor, and the legacy rows from before it had a token
+ * (the owner's actor with `via: orchestrator`, as `issue note` sent them), so history reads continuously. Reported beside
+ * the owner's touches, never in them. A `noted` event counts only when sent by `issue note`
+ * (`noted:issue_<n>:orchestrator:<call>`), not the first note of a filing.
+ */
+export const orchestratorSteer = (sql: SQL, kinds: readonly string[]) => sql`
+  result = 'applied' AND kind IN ${sql([...kinds])} AND (
+    (actor = 'orchestrator' AND (kind <> 'noted' OR key ~ '^noted:issue_[0-9]+:orchestrator:'))
+    OR (actor = 'owner' AND payload->>'via' = 'orchestrator'
+        AND (kind <> 'noted' OR key ~ '^noted:issue_[0-9]+:owner:'))
+  )`
 
 const Count = z.object({ n: z.coerce.number().int() })
 const Duration = z.object({ ms: z.coerce.number() })
@@ -49,6 +64,28 @@ export async function avoidableTouches(sql: SQL, w: Window): Promise<Record<stri
   const events: unknown[] = await sql`
     SELECT kind, count(*) AS n FROM factory.issue_events
     WHERE ${ownerTouch(sql, TOUCH_EVENTS)} AND at >= ${w.from} AND at < ${w.to}
+    GROUP BY kind`
+  for (const raw of events) {
+    const row = z.object({ kind: z.string() }).and(Count).parse(raw)
+    counts[row.kind] = row.n
+  }
+  return counts
+}
+
+/**
+ * The orchestrator's steering by kind (the touch kinds plus `decision_answered` for a Decision it answered and the owner
+ * did not mark worth asking). Not part of `avoidableTouches`: the owner-touch figures read the owner alone.
+ */
+export async function orchestratorSteering(sql: SQL, w: Window): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {
+    decision_answered: await one(sql`
+      SELECT count(*) AS n FROM factory.decisions
+      WHERE settled_by = 'orchestrator' AND worth_asking IS NOT TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}`),
+  }
+  for (const kind of TOUCH_EVENTS) counts[kind] = 0
+  const events: unknown[] = await sql`
+    SELECT kind, count(*) AS n FROM factory.issue_events
+    WHERE ${orchestratorSteer(sql, TOUCH_EVENTS)} AND at >= ${w.from} AND at < ${w.to}
     GROUP BY kind`
   for (const raw of events) {
     const row = z.object({ kind: z.string() }).and(Count).parse(raw)
@@ -226,7 +263,7 @@ export async function readKpis(
   const asked = await one(sql`
     SELECT count(*) AS n FROM factory.decisions
     WHERE asked_at >= ${w.from} AND asked_at < ${w.to}
-      AND (settled_by = 'owner' OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
+      AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
   const byOwner = await one(sql`
     SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const worth = await one(sql`
@@ -256,7 +293,7 @@ export async function readKpis(
       target: { kind: 'between', min: 0.05, max: 0.07 },
       measured: true,
       definition:
-        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, a note from the orchestrator steering a lead, a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them.',
+        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (it is reported separately, as its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them.',
     }),
     kpi({
       key: 'asks',

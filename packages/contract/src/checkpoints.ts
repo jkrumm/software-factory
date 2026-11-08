@@ -27,7 +27,8 @@ const NoAnswerInput = z.object({
   waitMinutes: z.number().int().nullable().optional(),
 })
 
-export const SETTLERS = ['policy', 'judge', 'default', 'owner'] as const
+export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
+export const SETTLERS = [...STEPS, 'orchestrator'] as const
 export const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
@@ -40,7 +41,7 @@ export const IssueMove = z.object({
 })
 
 export const Step = z.object({
-  step: z.enum(SETTLERS),
+  step: z.enum(STEPS),
   outcome: z.enum(['answered', 'passed', 'rejected', 'failed', 'open']).nullable(),
   at: iso.nullable(),
   detail: z.string().nullable(),

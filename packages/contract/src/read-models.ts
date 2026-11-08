@@ -227,6 +227,7 @@ export const FrictionCount = z
     key: z.string(),
     group: z.enum([
       'avoidable_touch',
+      'orchestrator_steer',
       'refusal',
       'stall',
       'lead_gone',

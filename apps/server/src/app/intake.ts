@@ -70,8 +70,8 @@ export type IntakeRefusal = {
   detail: string
 }
 
-/** Who is calling, as the token says (`api/policy.ts`); only the owner, an agent and the signal token may put a signal in. */
-export type RequestCaller = 'owner' | 'agent' | 'machine' | 'signal' | 'read'
+/** Who is calling, as the token says (`api/policy.ts`); only the owner, the orchestrator, an agent and the signal token may put a signal in. */
+export type RequestCaller = 'owner' | 'orchestrator' | 'agent' | 'machine' | 'signal' | 'read'
 
 /** The one source the signal token files as: Hermes, carrying the owner's words. */
 export const SIGNAL_SOURCE = 'owner:hermes'
@@ -172,7 +172,13 @@ export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): R
   }
   const [kind, who] = body.from.split(':') as [string, string | undefined]
   const claimed = kind === 'owner' ? 'owner' : kind === 'agent' ? 'agent' : 'outside'
-  const ceiling = caller === 'owner' || caller === 'signal' ? 'owner' : caller === 'agent' ? 'agent' : 'outside'
+  // The orchestrator files with the owner's ceiling: it is his delegate, and the trust column is not widened for it.
+  const ceiling =
+    caller === 'owner' || caller === 'orchestrator' || caller === 'signal'
+      ? 'owner'
+      : caller === 'agent'
+        ? 'agent'
+        : 'outside'
   if (TRUST_RANK[claimed] > TRUST_RANK[ceiling]) {
     return refuse('trust_refused', `the ${caller} token may not file a signal as ${body.from}`)
   }

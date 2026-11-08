@@ -11,8 +11,10 @@ import * as z from 'zod'
 import type { IssueWriteError, Recorded } from '../app/issues.ts'
 import type { ShipAnswer, ShipInput } from '../app/quality-ship.ts'
 import type { StoredEvidence, QualityView } from '../domains/quality/store.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
+import { ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 
@@ -23,6 +25,7 @@ export interface QualityWrites {
     issueId: IssueId
     call: string
     reason: string
+    actor: OwnerActor
   }): Promise<Result<Recorded, IssueWriteError | PortError>>
   show(issueId: IssueId): Promise<Result<QualityView, IssueWriteError | PortError>>
 }
@@ -118,10 +121,15 @@ export const qualityRoutes = (writes: QualityWrites) =>
     )
     .post(
       '/:id/reopen',
-      async ({ params, body, status }) => {
+      async ({ params, body, request, status }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
-        const reopened = await writes.reopen({ issueId, call: body.call, reason: body.reason })
+        const reopened = await writes.reopen({
+          issueId,
+          call: body.call,
+          reason: body.reason,
+          actor: ownerActorOf(request),
+        })
         if (!reopened.ok) {
           const out = failed(reopened.error)
           return out.status === 404

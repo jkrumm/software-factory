@@ -21,7 +21,9 @@ import type { PassResult } from '../app/planning-pass.ts'
 import type { SyncResult } from '../app/planning-sync.ts'
 import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
+import type { OwnerActor } from '../kernel/events.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+import { ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 
@@ -49,6 +51,7 @@ export interface PlanningApi {
     issue: IssueId
     value: number
     key: string | undefined
+    actor: OwnerActor
   }): Promise<Result<{ recorded: boolean }, PlanningError | PortError>>
 }
 
@@ -239,11 +242,11 @@ export const planningRoutes = (api?: PlanningApi) => {
     )
     .post(
       '/issues/:id/prio',
-      async ({ params, body, status }) => {
+      async ({ params, body, request, status }) => {
         if (!api) return status(503, unbound)
         const issue = issueRef(params.id)
         if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
-        const set = await api.prio({ issue, value: body.value, key: body.key })
+        const set = await api.prio({ issue, value: body.value, key: body.key, actor: ownerActorOf(request) })
         if (!set.ok) {
           const out = failureOf(set.error)
           return out.status === 404
