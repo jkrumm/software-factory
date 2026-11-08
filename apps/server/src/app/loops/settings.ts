@@ -123,7 +123,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                 ? fixClassesTickMs(tickMs)
                 : name === 'selfwatch'
                   ? selfwatchTickMs(tickMs)
-                : tickMs),
+                  : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,
