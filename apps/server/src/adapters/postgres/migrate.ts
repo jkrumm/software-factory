@@ -18,7 +18,7 @@ export interface Migration {
  * Numbers two applied migrations already share (two merges took the same one). The ledger keys on the name, so they
  * stay; renaming either would read as "applied but missing". No number is added here: a new migration takes a free one.
  */
-const SHARED_NUMBERS = new Set(['0993'])
+export const SHARED_NUMBERS = new Set(['0993'])
 
 /** The release's migrations in the order they apply; a file that is not named like one, or reuses a number, is an error, not skipped. */
 export async function loadMigrations(dir: string = MIGRATIONS_DIR): Promise<Migration[]> {

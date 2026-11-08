@@ -244,8 +244,15 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '31a597aa6da92c9523f852249b58a55334124e6f699f9a3b7df01c330ff63809',
+      '5de314eab1e6fb795ee909c1412b9a793766a13c14caf5ec690d63c64fcbecaa',
     )
+  })
+
+  test('the standing orders state the merge rule', () => {
+    expect(STANDING_ORDERS).toContain('git rebase origin/master')
+    expect(STANDING_ORDERS).toContain('next free migration number')
+    expect(STANDING_ORDERS).toContain('`make merge-guard`')
+    expect(STANDING_ORDERS).toMatch(/last CI run is red or still running/)
   })
 
   test('the standing orders list every verb in its plain flag form and say how news arrives', () => {
