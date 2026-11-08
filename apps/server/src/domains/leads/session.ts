@@ -43,16 +43,22 @@ function quietSince(state: SessionState, current: readonly HookFact[]): Date | n
 }
 
 /**
- * First match wins, read from the latest `session_started` so a resumed or compacted session starts clean:
+ * First match wins, read from the latest `session_started` that begins a life (`startup`, `clear`, `resume` or no source:
+ * a restarted process starts clean). A `compact` start does not: Claude Code fires it after a compaction, also mid-turn, so
+ * an open turn, the limit wall and the end of an earlier life carry on across it. Its `claudeSessionId` and `transcriptPath`
+ * still count, from the latest start of any source.
  * `gone` (the last of start, end and `pane_gone` is not a start; a later hook event withdraws a `pane_gone`, never an end),
- * `working` (a turn started and not ended), `compacted` (started again after a compaction, no turn since), `idle`, and
- * `starting` when no hook has spoken.
+ * `working` (a turn started and not ended), `compacted` (the latest start is a compaction and no turn started or ended
+ * since), `idle`, and `starting` when no hook has spoken.
  */
 export function deriveSession(facts: readonly HookFact[]): SessionView {
   const sorted = [...facts].sort(inOrder)
   const turnStarts = sorted.filter((fact) => fact.kind === 'turn_started')
   const lastStart = sorted.findLastIndex((fact) => fact.kind === 'session_started')
-  const current = lastStart < 0 ? sorted : sorted.slice(lastStart)
+  const lifeStart = sorted.findLastIndex(
+    (fact) => fact.kind === 'session_started' && text(fact.payload.source) !== 'compact',
+  )
+  const current = lifeStart < 0 ? sorted : sorted.slice(lifeStart)
   const start = lastStart < 0 ? undefined : sorted[lastStart]
 
   let ended = false
@@ -60,7 +66,6 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
   let open = false
   let walled = false
   let turnStartedAt: Date | null = null
-  let turnSinceStart = false
   for (const fact of current) {
     // A hook event is proof of life: it withdraws a lost pane, never a session that ended.
     if (fact.kind !== 'pane_gone') paneGone = false
@@ -74,7 +79,6 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
         break
       case 'turn_started':
         open = true
-        turnSinceStart = true
         walled = false
         turnStartedAt = fact.at
         break
@@ -89,20 +93,16 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
     }
   }
   const gone = ended || paneGone
+  const compacted =
+    start !== undefined &&
+    text(start.payload.source) === 'compact' &&
+    !sorted.slice(lastStart + 1).some((fact) => fact.kind === 'turn_started' || fact.kind === 'turn_ended')
 
   const lastTurn = turnStarts.at(-1)
   const previousTurn = turnStarts.at(-2)
   const last = sorted.at(-1)
   const state: SessionState =
-    sorted.length === 0
-      ? 'starting'
-      : gone
-        ? 'gone'
-        : open
-          ? 'working'
-          : start && text(start.payload.source) === 'compact' && !turnSinceStart
-            ? 'compacted'
-            : 'idle'
+    sorted.length === 0 ? 'starting' : gone ? 'gone' : open ? 'working' : compacted ? 'compacted' : 'idle'
   return {
     state,
     turns: turnStarts.length,
