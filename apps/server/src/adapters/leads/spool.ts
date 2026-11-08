@@ -1,5 +1,6 @@
 import { readdir, rename, stat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
+import { HookEventBody } from '@software-factory/contract'
 import { parseSpool, parseSummary, type SpoolLine, summarize, tryLock } from '@software-factory/contract/spool'
 
 /** An acknowledged spool larger than this is rotated once its session has been quiet for `QUIET_MS`. */
@@ -11,7 +12,15 @@ const LOCK_WAIT_MS = 500
 export interface ReplayResult {
   /** lines read, whether they were new to the database or not */
   lines: number
+  /** lines skipped for good: not an event, not valid, or refused by the database as data it can never store */
+  rejected: number
   rotated: string[]
+}
+
+/** A statement the database refused because of the data itself (SQLSTATE class 22: a NUL, a lone surrogate, ...): retrying cannot help. */
+export function isDataError(error: unknown): boolean {
+  const errno = (error as { errno?: unknown } | null)?.errno
+  return typeof errno === 'string' && errno.startsWith('22')
 }
 
 /**
@@ -38,7 +47,7 @@ export class SpoolReplayer {
   ) {}
 
   async replay(): Promise<ReplayResult> {
-    const result: ReplayResult = { lines: 0, rotated: [] }
+    const result: ReplayResult = { lines: 0, rejected: 0, rotated: [] }
     const files = await readdir(this.options.dir).catch(() => [] as string[])
     // A rotation that died between moving the file and storing its tail leaves `.retired`: store it, then let it go.
     for (const left of files.filter((f) => f.endsWith('.jsonl.retired'))) await this.recover(left, result)
@@ -79,10 +88,31 @@ export class SpoolReplayer {
     const text = await Bun.file(path).slice(from, size).text()
     // Only whole lines: a write in flight ends without its newline and is read on the next pass.
     const whole = text.slice(0, text.lastIndexOf('\n') + 1)
-    const events = parseSpool(whole)
-    result.lines += events.length
-    if (events.length) await this.options.sink(events)
+    // One line at a time: a line that can never be stored is skipped (counted, logged without its payload), so it cannot
+    // hold the offset and the lines behind it. Any other failure (the database gone) stops here and the offset stays.
+    const raws = whole.split('\n')
+    for (const [index, raw] of raws.entries()) {
+      if (!raw) continue
+      const [event] = parseSpool(raw)
+      if (!event || !HookEventBody.safeParse(event).success) {
+        await this.reject(path, from, index, 'not a valid event', result)
+        continue
+      }
+      result.lines++
+      try {
+        await this.options.sink([event])
+      } catch (error) {
+        if (!isDataError(error)) throw error
+        await this.reject(path, from, index, `refused by the database (${(error as { errno: string }).errno})`, result)
+      }
+    }
     return from + Buffer.byteLength(whole)
+  }
+
+  private async reject(path: string, from: number, index: number, why: string, result: ReplayResult): Promise<void> {
+    result.rejected++
+    const before = from ? (await Bun.file(path).slice(0, from).text()).split('\n').length - 1 : 0
+    console.error('spool line rejected', { file: path, line: before + index + 1, why })
   }
 
   /** Fully acknowledged, large, and no hook has written for a minute: its sums go to `.base` and the file is retired. */

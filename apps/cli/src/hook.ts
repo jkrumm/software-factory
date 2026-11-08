@@ -35,8 +35,17 @@ export const POST_TIMEOUT_MS = 300
 
 type Input = Record<string, unknown>
 
-const text = (value: unknown, max = 500): string | undefined =>
-  typeof value === 'string' && value ? value.slice(0, max) : undefined
+/**
+ * A bounded string the database can store: no NUL (jsonb refuses `\u0000`) and no lone surrogate (a cut through an emoji
+ * leaves its high half; jsonb refuses that too). One poisoned line would stall the whole spool replay behind it.
+ */
+const text = (value: unknown, max = 500): string | undefined => {
+  if (typeof value !== 'string') return undefined
+  let cut = value.replaceAll('\0', '').slice(0, max)
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1)
+  cut = cut.toWellFormed()
+  return cut || undefined
+}
 
 /** Only what the server derives from: no prompt text, no assistant message, nothing large. */
 function pick(entries: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -193,6 +202,51 @@ async function askStopCheck(
 }
 
 /**
+ * Counts the spool and appends the session's next line, or returns what was built when the append failed. The spool and
+ * the post are independent: a spool that cannot be written (disk full, a name too long) still lets the line go to the
+ * server, whenever it was built; undefined only when nothing could be built.
+ */
+async function spool(input: {
+  dir: string
+  file: string
+  session: string
+  mapped: { kind: SpoolLine['kind']; payload?: Record<string, unknown> }
+  now: number
+}): Promise<SpoolLine | undefined> {
+  const { dir, file, session, mapped } = input
+  let line: SpoolLine | undefined
+  try {
+    // Counting the spool and appending are one step: two overlapping hooks of a session must not write the same key.
+    // A directory or lock that cannot be had still lets the line be built (the append below then fails, and the post goes).
+    let release: Awaited<ReturnType<typeof tryLock>>
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+      release = await tryLock(file, LOCK_BUDGET_MS)
+    } catch {
+      // handled by the append
+    }
+    try {
+      const summary = readSummary(file)
+      // Without the lock the count may be stale: a random suffix keeps the key unique, and the line is still counted later.
+      const key = nextKey(summary, session, mapped.kind) + (release ? '' : `:${Math.random().toString(36).slice(2, 8)}`)
+      line = {
+        key,
+        session,
+        kind: mapped.kind,
+        at: nextAt(summary, input.now),
+        ...(mapped.payload ? { payload: mapped.payload } : {}),
+      }
+      append(file, line)
+    } finally {
+      release?.()
+    }
+  } catch {
+    // the post still tells the server
+  }
+  return line
+}
+
+/**
  * Never throws a failure into the session. The result is the one line the hook prints on stderr when a `Stop` is sent
  * back (exit 2), else nothing: every other outcome is a silent exit 0. Stdout stays empty but for the compaction line of an Issue's lead.
  */
@@ -228,30 +282,12 @@ export async function runHook(event: string, io: HookIo): Promise<string | undef
   // No place to spool is no place to lose an event to a stray relative path.
   if (!dir) return undefined
   const file = `${dir.replace(/\/+$/, '')}/${spoolFileName(session)}`
-  // Counting the spool and appending are one step: two overlapping hooks of a session must not write the same key.
-  mkdirSync(dir, { recursive: true, mode: 0o700 })
-  const release = await tryLock(file, LOCK_BUDGET_MS)
-  let line: SpoolLine
-  try {
-    const summary = readSummary(file)
-    // Without the lock the count may be stale: a random suffix keeps the key unique, and the line is still counted later.
-    const key = nextKey(summary, session, mapped.kind) + (release ? '' : `:${Math.random().toString(36).slice(2, 8)}`)
-    line = {
-      key,
-      session,
-      kind: mapped.kind,
-      at: nextAt(summary, io.now()),
-      ...(mapped.payload ? { payload: mapped.payload } : {}),
-    }
-    append(file, line)
-  } finally {
-    release?.()
-  }
+  const line = await spool({ dir, file, session, mapped, now: io.now() })
 
   const reread = compactedLead(event, input, session)
   if (reread) io.out?.(`${reread}\n`)
 
-  if (!socket) return undefined
+  if (!socket || !line) return undefined
   try {
     const response = await fetch('http://localhost/events', {
       unix: socket,

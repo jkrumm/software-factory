@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { SpoolLine } from '@software-factory/contract/spool'
 import { followLeads } from '../../src/app/leads-follow.ts'
-import { recordHook, stopCheck } from '../../src/app/leads-hooks.ts'
+import { appendFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { spoolFileName } from '@software-factory/contract/spool'
+import { SpoolReplayer } from '../../src/adapters/leads/spool.ts'
+import { recordHook, replayLines, stopCheck } from '../../src/app/leads-hooks.ts'
 import { startLead } from '../../src/app/leads-start.ts'
 import { startLead as startEffect } from '../../src/domains/work/effects.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
@@ -46,6 +50,30 @@ const issueRow = async (issue: IssueId) => {
 }
 
 describe('hook events', () => {
+  test('a spool with a poison line between two good ones stores both and moves on', async () => {
+    await running()
+    const dir = mkdtempSync('/tmp/factory-poison-')
+    try {
+      const file = join(dir, spoolFileName('lead-1-1'))
+      const put = (l: SpoolLine) => appendFileSync(file, `${JSON.stringify(l)}\n`)
+      put(line('session_started', 1))
+      put(line('prompt_blocked', 2, { message: 'bad\0nul' }))
+      put(line('turn_started', 3, { message: 'bad\uD83D' }))
+      put(line('turn_ended', 4))
+      const replayer = new SpoolReplayer({
+        dir,
+        now: () => new Date(),
+        sink: async (lines) => void (await replayLines(w.deps, lines)),
+      })
+      expect(await replayer.replay()).toMatchObject({ lines: 2, rejected: 2 })
+      const [count] = await w.db.sql`SELECT count(*)::int AS n FROM factory.lead_hook_events`
+      expect(count?.n).toBe(2)
+      expect(await replayer.replay()).toMatchObject({ lines: 0, rejected: 0 })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('a line is stored once; the same key again, or a session that is no lead, stores nothing', async () => {
     await running()
     const first = line('session_started', 1)
