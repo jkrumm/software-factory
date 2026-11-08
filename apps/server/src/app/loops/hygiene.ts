@@ -89,7 +89,7 @@ async function fileOne(
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
   if (stands) {
     added.filed.push({ key: input.id, title: input.title })
-    const lost = await gate.record(filed.value.issue, input.id)
+    const lost = await gate.record(filed.value.issue, input.id, input.repoText)
     if (lost) added.failed.push({ key: input.id, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
   } else added.failed.push({ key: input.id, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
@@ -171,7 +171,8 @@ async function judge(
 }
 
 async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<Result<HygienePass, PortError>> {
-  const gated = await readGate(deps, { loop: 'hygiene', repo: target.repoText, now })
+  // One repo per tick: the class's verdict spans every repo, so a class held by other repos' Issues holds here too.
+  const gated = await readGate(deps, { loop: 'hygiene', now })
   if (!gated.ok) return gated
   const gate = gated.value
   const added = nothingAdded()
@@ -244,7 +245,7 @@ async function retryPass(
   target: Target,
   row: HygienePassRecord,
 ): Promise<Result<HygienePass, PortError>> {
-  const gated = await readGate(deps, { loop: 'hygiene', repo: target.repoText, now: deps.clock.now() })
+  const gated = await readGate(deps, { loop: 'hygiene', now: deps.clock.now() })
   if (!gated.ok) return gated
   const gate = gated.value
   const added = nothingAdded()

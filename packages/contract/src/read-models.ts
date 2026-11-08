@@ -266,7 +266,6 @@ export type FrictionModel = z.infer<typeof FrictionModel>
 export const FindingClass = z
   .strictObject({
     loop: z.enum(['friction', 'hygiene']),
-    repo: z.string(),
     class: z.string(),
     status: z.enum(['open', 'probation', 'held']),
     /** every Issue the class filed */
@@ -288,7 +287,7 @@ export type FindingClass = z.infer<typeof FindingClass>
 export const FindingClassesModel = z
   .strictObject({
     at,
-    /** held first, then probation, then open; then by loop, repo and class */
+    /** held first, then probation, then open; then by loop and class */
     classes: z.array(FindingClass),
   })
   .meta({ id: 'FindingClassesModel' })

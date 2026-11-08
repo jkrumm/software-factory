@@ -4,23 +4,24 @@ import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 
 /**
- * What a pass may file, decided once at its start from the outcomes of each class's Issues. A class on probation may file
- * one Issue in the pass; `allows` claims that slot, so a second finding of the class is refused.
+ * What a pass may file, decided once at its start from the outcomes of each class's Issues. A class is the loop plus the
+ * key's first segment across every repo (one probe misfiring everywhere is the pattern). A class on probation may file one
+ * Issue at a time across repos: an open Issue of the class in any repo holds it. `allows` claims the slot for this pass.
  */
 export interface ClassGate {
   /** true when the finding's class may file now (and claims the class's slot for this pass) */
   allows(key: string): boolean
-  /** the finding stands as an Issue: remember which class filed it; the reason when that could not be stored */
-  record(issue: string | null, key: string): Promise<string | null>
+  /** the finding stands as an Issue: remember which class filed it; the reason when that could not be stored; `repo` is stored as a fact, not part of the class */
+  record(issue: string | null, key: string, repo: string): Promise<string | null>
 }
 
 const OPEN: ClassVerdict = { status: 'open', decided: 0, noise: 0, share: null, open: 0, heldUntil: null }
 
 export async function readGate(
   deps: { uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads }> },
-  input: { loop: FindingLoop; repo: string; now: Date },
+  input: { loop: FindingLoop; now: Date },
 ): Promise<Result<ClassGate, PortError>> {
-  const read = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.classIssues(input.loop, input.repo)))
+  const read = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.classIssues(input.loop)))
   if (!read.ok) return read
   const verdicts = new Map(Object.entries(read.value).map(([name, issues]) => [name, verdictOf(issues, input.now)]))
   const claimed = new Set<string>()
@@ -31,10 +32,10 @@ export async function readGate(
       claimed.add(name)
       return true
     },
-    async record(issue, key) {
+    async record(issue, key, repo) {
       if (issue === null) return null
       const recorded = await deps.uow.run(async ({ loops }) => {
-        await loops.recordFinding({ issue, loop: input.loop, repo: input.repo, class: classOf(input.loop, key), key })
+        await loops.recordFinding({ issue, loop: input.loop, repo, class: classOf(input.loop, key), key })
         return ok(undefined)
       })
       return recorded.ok ? null : `${recorded.error.kind}: ${recorded.error.detail}`

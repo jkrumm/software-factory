@@ -15,7 +15,6 @@ export async function findingClasses(
     const verdict = verdictOf(entry.issues, now)
     return {
       loop: entry.loop,
-      repo: entry.repo,
       class: entry.class,
       status: verdict.status,
       issues: entry.issues.length,
@@ -26,8 +25,6 @@ export async function findingClasses(
       heldUntil: verdict.heldUntil?.toISOString() ?? null,
     }
   })
-  classes.sort(
-    (a, b) => ORDER[a.status] - ORDER[b.status] || by(a.loop, b.loop) || by(a.repo, b.repo) || by(a.class, b.class),
-  )
+  classes.sort((a, b) => ORDER[a.status] - ORDER[b.status] || by(a.loop, b.loop) || by(a.class, b.class))
   return { at: now.toISOString(), classes }
 }
