@@ -23,7 +23,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   agent-workflows.
 - **The layers are enforced** by `scripts/boundaries.ts` in `make check`: `domains/*` import only `kernel` and their own
   folder and do no I/O; a domain reaches another through `app/`; `read/` writes nothing; only
-  `adapters/postgres/unit-of-work.ts` and `migrate.ts` open a transaction. A rule the script does not hold is written here.
+  `adapters/postgres/unit-of-work.ts`, `migrate.ts` and `read/bounded.ts` (a read-only, timed read) open a transaction. A rule the script does not hold is written here.
 - **Facts are stored, state is derived.** An Issue's state is the result of its applied events, kept on the row because its
   `version` guards the write; a count or a timer that `issue_events` can answer is never a column. A lead's session state is
   derived from its hook events when read. The transition table (`domains/work/table.ts`) is total: a new state or event

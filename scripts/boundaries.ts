@@ -37,8 +37,12 @@ const WRITING_SQL =
 /** Opens a transaction on Bun's SQL client. */
 const OPENS_TRANSACTION = /\.(begin|beginDistributed|transaction)\s*\(/
 
-/** The only two files that may open one: the unit of work (which `app/` gets as a port) and the migration runner. */
-const TRANSACTION_ADAPTERS = new Set(['adapters/postgres/unit-of-work.ts', 'adapters/postgres/migrate.ts'])
+/** The only three files that may open one: the unit of work (which `app/` gets as a port), the migration runner and the read models' bounded read (a read-only transaction with a statement timeout). */
+const TRANSACTION_ADAPTERS = new Set([
+  'adapters/postgres/unit-of-work.ts',
+  'adapters/postgres/migrate.ts',
+  'read/bounded.ts',
+])
 
 /** An intake source: it reads the outside world and hands signals to the sink, and touches nothing else of the server. */
 const INTAKE_POLLER = /^adapters\/intake\/(github|beszel|launchd)\.ts$/
@@ -158,7 +162,7 @@ export async function checkBoundaries(root: string): Promise<Violation[]> {
     }
     const opens = OPENS_TRANSACTION.exec(stripComments(source))
     if (opens && !TRANSACTION_ADAPTERS.has(name.split(sep).join('/'))) {
-      flag('only the Postgres unit of work and the migration runner open a transaction', opens[0])
+      flag('only the Postgres unit of work, the migration runner and the bounded read open a transaction', opens[0])
     }
     if (here.layer === 'read') {
       const write = WRITING_SQL.exec(stripComments(source))

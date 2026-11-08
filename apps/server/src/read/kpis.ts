@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { Kpi, KpiModel } from '@software-factory/contract'
+import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
@@ -8,7 +9,6 @@ export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
 
 const Count = z.object({ n: z.coerce.number().int() })
 const Duration = z.object({ ms: z.coerce.number() })
-const Cost = z.object({ cost: z.coerce.number(), points: z.coerce.number().nullable() })
 
 export interface Window {
   from: Date
@@ -78,45 +78,122 @@ const queueWaits = (sql: SQL, w: Window) =>
     ) s ON true
     WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${w.from} AND a.at < ${w.to}`)
 
+/** What one usage statement may take before the KPI degrades to unmeasured instead of holding a connection. */
+const USAGE_TIMEOUT_MS = 20_000
+/** `session_window_share` aggregates every quota interval whatever the filter, so a computed figure is reused this long. */
+const POINTS_TTL_MS = 15 * 60_000
+
+export interface PointsCache {
+  get(key: string, now: Date): number | undefined
+  set(key: string, points: number, now: Date): void
+}
+
+/** An in-memory cache of window points by session set; entries expire `POINTS_TTL_MS` after they were computed. */
+export function pointsCache(): PointsCache {
+  const entries = new Map<string, { points: number; at: number }>()
+  return {
+    get: (key, now) => {
+      const hit = entries.get(key)
+      if (hit && now.getTime() - hit.at < POINTS_TTL_MS && now.getTime() >= hit.at) return hit.points
+      entries.delete(key)
+      return undefined
+    },
+    set: (key, points, now) => void entries.set(key, { points, at: now.getTime() }),
+  }
+}
+
+const sharedPoints = pointsCache()
+
+const Ids = z.array(z.object({ id: z.union([z.string(), z.number(), z.bigint()]) }))
+const Texts = z.array(z.object({ v: z.string() }))
+
+/**
+ * The usage sessions of the Issues filed in the window. A session is an Issue's when usage tagged it with the Issue's
+ * number, or when it is (or is a subagent of) a Claude session a lead of the Issue reported in its hook events
+ * (`claudeSessionId`). Both sides are looked up from lists, never joined row by row: an OR join with a correlated subselect
+ * could use no index and ran past 100 s on the shared database.
+ */
+async function sessionsOf(tx: SQL, w: Window): Promise<Array<string | number | bigint>> {
+  const filed = Texts.parse(
+    await tx`
+      SELECT DISTINCT issue_id AS v FROM factory.issue_events
+      WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`,
+  ).map((r) => r.v)
+  if (filed.length === 0) return []
+  const numbers = filed.map((id) => id.slice('issue_'.length))
+  const claude = Texts.parse(
+    await tx`
+      SELECT DISTINCT payload->>'claudeSessionId' AS v FROM factory.lead_hook_events
+      WHERE issue_id = ANY(${tx.array(filed, 'TEXT')}) AND payload->>'claudeSessionId' IS NOT NULL`,
+  ).map((r) => r.v)
+  const byNumber = Ids.parse(
+    await tx`SELECT s.id FROM usage.sessions s WHERE s.issue_id = ANY(${tx.array(numbers, 'TEXT')})`,
+  )
+  const byClaude =
+    claude.length === 0
+      ? []
+      : Ids.parse(
+          await tx`
+            SELECT s.id FROM usage.sessions s
+            WHERE split_part(s.source_session_id, ':', 1) = ANY(${tx.array(claude, 'TEXT')})`,
+        )
+  const unique = new Map<string, string | number | bigint>()
+  for (const row of [...byNumber, ...byClaude]) unique.set(String(row.id), row.id)
+  return [...unique.values()]
+}
+
 /**
  * Cost and window points of the Issues filed in the window, joined from the `usage` schema, which another component owns
- * in this database. A session is an Issue's when usage tagged it with the Issue's number, or when it is (or is a subagent
- * of) a Claude session a lead of the Issue reported in its hook events (`claudeSessionId`). The five-hour window's
- * points come from `usage.session_window_share`. Null when the schema, a table or a column is not there, or the factory's
- * database role may not read the schema.
+ * in this database. The five-hour window's points come from `usage.session_window_share`. Each figure is its own bounded
+ * transaction: a statement past the timeout, a missing schema, table or column, or a role that may not read the schema
+ * leaves that figure null (unmeasured) and holds no connection. The points are reused for a few minutes, because the view
+ * costs seconds for any filter.
  */
-async function usageOf(sql: SQL, w: Window): Promise<{ cost: number | null; points: number | null }> {
+async function usageOf(
+  sql: SQL,
+  w: Window,
+  options: { now: Date; timeoutMs: number; cache: PointsCache },
+): Promise<{ cost: number | null; points: number | null }> {
+  let sessions: Array<string | number | bigint>
+  let cost: number
+  let shares: boolean
   try {
-    // inside the try: `to_regclass` raises "permission denied for schema usage" when the factory's role has no USAGE on it
-    const [found] = await sql`
-      SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS records,
-        to_regclass('usage.session_window_share') IS NOT NULL AS shares`
-    const present = z.object({ records: z.boolean(), shares: z.boolean() }).parse(found)
-    if (!present.records) return { cost: null, points: null }
-    const sessions = sql`
-      SELECT DISTINCT s.id AS session_id
-      FROM factory.issues i
-      JOIN usage.sessions s ON s.issue_id = substr(i.id, 7)
-        OR split_part(s.source_session_id, ':', 1) IN (
-          SELECT e.payload->>'claudeSessionId' FROM factory.lead_hook_events e
-          WHERE e.issue_id = i.id AND e.payload->>'claudeSessionId' IS NOT NULL)
-      WHERE i.id IN (
-        SELECT issue_id FROM factory.issue_events WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to})`
-    const cost = Cost.parse(
-      (
-        await sql`
-          WITH mine AS (${sessions})
-          SELECT (SELECT coalesce(sum(r.cost_usd), 0)::float8 FROM usage.records_unique r WHERE r.session_id IN (SELECT session_id FROM mine)) AS cost,
-            ${
-              present.shares
-                ? sql`(SELECT coalesce(sum(m.five_hour_pct), 0)::float8 FROM usage.session_window_share m WHERE m.session_id IN (SELECT session_id FROM mine))`
-                : sql`NULL::float8`
-            } AS points`
-      )[0],
-    )
-    return { cost: cost.cost, points: present.shares ? cost.points : null }
+    const found = await boundedRead(sql, options.timeoutMs, async (tx) => {
+      // inside the try: `to_regclass` raises "permission denied for schema usage" when the factory's role has no USAGE on it
+      const [row] = await tx`
+        SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS records,
+          to_regclass('usage.session_window_share') IS NOT NULL AS shares`
+      const present = z.object({ records: z.boolean(), shares: z.boolean() }).parse(row)
+      if (!present.records) return null
+      const ids = await sessionsOf(tx, w)
+      if (ids.length === 0) return { ids, cost: 0, shares: present.shares }
+      const [sum] = await tx`
+        SELECT coalesce(sum(r.cost_usd), 0)::float8 AS cost FROM usage.records_unique r
+        WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
+      return { ids, cost: z.object({ cost: z.coerce.number() }).parse(sum).cost, shares: present.shares }
+    })
+    if (!found) return { cost: null, points: null }
+    ;({ ids: sessions, cost, shares } = found)
   } catch {
     return { cost: null, points: null }
+  }
+  if (!shares) return { cost, points: null }
+  if (sessions.length === 0) return { cost, points: 0 }
+
+  const key = String(Bun.hash(sessions.map(String).sort().join(',')))
+  const cached = options.cache.get(key, options.now)
+  if (cached !== undefined) return { cost, points: cached }
+  try {
+    const points = await boundedRead(sql, options.timeoutMs, async (tx) => {
+      const [sum] = await tx`
+        SELECT coalesce(sum(m.five_hour_pct), 0)::float8 AS points FROM usage.session_window_share m
+        WHERE m.session_id = ANY(${tx.array(sessions, 'BIGINT')})`
+      return z.object({ points: z.coerce.number() }).parse(sum).points
+    })
+    options.cache.set(key, points, options.now)
+    return { cost, points }
+  } catch {
+    return { cost, points: null }
   }
 }
 
@@ -125,7 +202,10 @@ const NONE = { kind: 'unset', min: null, max: null } as const
 const kpi = (k: Omit<Kpi, 'target'> & { target?: Kpi['target'] }): Kpi => ({ ...k, target: k.target ?? NONE })
 
 /** The table in `docs/product.md`, computed over the last `days` days from the event log and the checkpoint tables. */
-export async function readKpis(sql: SQL, options: { now: Date; days: number }): Promise<KpiModel> {
+export async function readKpis(
+  sql: SQL,
+  options: { now: Date; days: number; usageTimeoutMs?: number; pointsCache?: PointsCache },
+): Promise<KpiModel> {
   const w = windowOf(options.now, options.days)
   const issues = await issuesFiled(sql, w)
 
@@ -148,7 +228,11 @@ export async function readKpis(sql: SQL, options: { now: Date; days: number }): 
   const refusals = await refusalCount(sql, w)
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
-  const usage = await usageOf(sql, w)
+  const usage = await usageOf(sql, w, {
+    now: options.now,
+    timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
+    cache: options.pointsCache ?? sharedPoints,
+  })
 
   const kpis: Kpi[] = [
     kpi({

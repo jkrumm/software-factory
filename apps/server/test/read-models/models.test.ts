@@ -7,7 +7,7 @@ import { readChain } from '../../src/read/chain.ts'
 import { readFlow } from '../../src/read/flow.ts'
 import { readFriction } from '../../src/read/friction.ts'
 import { readFrictionEvidence } from '../../src/read/friction-evidence.ts'
-import { readKpis } from '../../src/read/kpis.ts'
+import { pointsCache, readKpis } from '../../src/read/kpis.ts'
 import { needsModel, readNeeds } from '../../src/read/needs.ts'
 
 /** The read models over a real Postgres, seeded with SQL: the empty database, a fixture, the `usage` schema absent and present. */
@@ -366,6 +366,45 @@ describe('the fixture', () => {
     const broken = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
     expect(broken.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
     await sql`DROP SCHEMA usage CASCADE`
+  })
+
+  test('kpis: a usage statement past the timeout leaves its figure unmeasured and frees the connection; points are reused', async () => {
+    await sql`CREATE SCHEMA usage`
+    try {
+      await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
+      await sql`CREATE TABLE usage.records_unique (session_id bigint, cost_usd numeric)`
+      await sql`INSERT INTO usage.sessions VALUES (1, 'claude-a', '2')`
+      await sql`INSERT INTO usage.records_unique VALUES (1, 3.0)`
+      await sql`CREATE TABLE usage.share_rows (account text, session_id bigint, five_hour_pct float8)`
+      await sql`INSERT INTO usage.share_rows VALUES ('a', 1, 1.5)`
+      // the view is slow: it sleeps once per row it returns
+      await sql`CREATE VIEW usage.session_window_share AS SELECT account, session_id, five_hour_pct, (pg_sleep(1) IS NULL) AS slept FROM usage.share_rows`
+
+      const slow = KpiModel.parse(
+        await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 200, pointsCache: pointsCache() }),
+      )
+      expect(slow.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: true, value: 3 / 9 })
+      expect(slow.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
+
+      const cache = pointsCache()
+      const first = KpiModel.parse(
+        await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
+      )
+      expect(first.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true, value: 1.5 / 9 })
+      await sql`UPDATE usage.share_rows SET five_hour_pct = 9`
+      const again = KpiModel.parse(
+        await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
+      )
+      expect(again.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true, value: 1.5 / 9 })
+      const later = new Date(NOW.getTime() + 16 * 60_000)
+      const expired = KpiModel.parse(
+        await readKpis(sql, { now: later, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
+      )
+      expect(expired.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true })
+      expect(expired.kpis.find((k) => k.key === 'window_points')?.value).not.toBeCloseTo(1.5 / 9)
+    } finally {
+      await sql`DROP SCHEMA usage CASCADE`
+    }
   })
 
   test('kpis: a role with no USAGE on the usage schema leaves cost unmeasured instead of failing the read', async () => {

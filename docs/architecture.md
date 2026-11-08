@@ -50,7 +50,7 @@ apps/server/src/
 - `domains/*` import only `kernel` and their own folder. A domain reaches another only through `app/`.
 - Each domain owns its tables. `read/` crosses them and is read-only.
 - A port is an interface in its domain; an adapter in `adapters/` implements it; tests use fakes of the same interface.
-- Only the unit of work and the migration runner open a transaction. A port is never called inside one: claim,
+- Only the unit of work, the migration runner and the read models' bounded read (`read/bounded.ts`: read-only, with a statement timeout) open a transaction. A port is never called inside one: claim,
   commit, call, record.
 - Every port returns `Result<T, PortError>`; only a programming error throws. `PortError.kind` is `timeout`, `gone`,
   `refused` or `unreadable`.
