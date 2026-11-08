@@ -2,6 +2,7 @@ import { connect, ping } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
+import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
 import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
@@ -29,6 +30,7 @@ import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
+import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
@@ -39,6 +41,7 @@ import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
+import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
@@ -128,6 +131,8 @@ async function main(): Promise<void> {
     settings: planningSettings(process.env, { repoRoots: leadSettings.repoRoots }),
   })
   const checkout = leadCheckoutOf(uow)
+  const repos = rootedRepos(leadSettings.repoRoots)
+  const hygieneChecker = createHygieneChecker({ repos })
   const projects = makefileProjects({ windowMs: settings.quality.windowMs })
   const intake = await composeIntake({
     sql,
@@ -333,6 +338,32 @@ async function main(): Promise<void> {
         return ok(frictionSummary(pass.value))
       },
     },
+    {
+      // Deterministic sweep of one project a tick (probes in a throwaway checkout), `factory-hygiene` over the documents it picks.
+      name: 'hygiene',
+      intervalMs: loopSettings.intervalMs.hygiene,
+      onChange: false,
+      run: async () => {
+        const pass = await hygienePass({
+          uow,
+          clock: writes.clock,
+          ids: systemIds,
+          checker: hygieneChecker,
+          workflow: agwHygiene(agw),
+          file: (body) => intake.api.file(body, 'agent'),
+          everyMs: loopSettings.hygieneEveryMs,
+          retryMs: loopSettings.hygieneRetryMs,
+          repos: loopSettings.hygieneRepos,
+        })
+        if (!pass.ok) return pass
+        if (pass.value.due)
+          said(
+            'hygiene',
+            pass.value.record.failed.map((f) => `${f.key}: ${f.reason}`),
+          )
+        return ok(hygieneSummary(pass.value))
+      },
+    },
   ]
   const runner: LoopRunner = createLoopRunner({ loops: specs, clock: systemClock })
   const leadsTick = loopSettings.intervalMs.leads
@@ -370,7 +401,7 @@ async function main(): Promise<void> {
     planning: planning.planning,
     issues: composeIssues({
       writes,
-      filing: { ...writes, locate: (repo) => rootedRepos(leadSettings.repoRoots).locate(repo) },
+      filing: { ...writes, locate: (repo) => repos.locate(repo) },
       checkpoints,
     }),
     capacity: planning.capacity,

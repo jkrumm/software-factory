@@ -1,4 +1,7 @@
 import type {
+  HygieneAnswer,
+  HygieneFinding,
+  HygieneRequest,
   QueueAnswer,
   QueueRequest,
   StewardAnswer,
@@ -11,6 +14,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
+import type { SweepReport } from './hygiene-model.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
 /** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
@@ -25,7 +29,30 @@ export interface FrictionPassRecord {
   failed: { key: string; reason: string }[]
 }
 
-/** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction passes. */
+/** What `factory-hygiene` made of a sweep's documents; `skipped` is final (nothing to judge), `failed` is retried a few times. */
+export interface HygieneJudgment {
+  outcome: 'answered' | 'failed' | 'skipped'
+  attempts: number
+  judgedAt: Date | null
+  reason: string
+  /** the findings that passed the factory's own check */
+  findings: HygieneFinding[]
+}
+
+/** One full hygiene pass over one project as recorded (`migrations/0970_hygiene.sql`). */
+export interface HygienePassRecord {
+  id: string
+  repo: string
+  at: Date
+  ref: string
+  report: SweepReport
+  judgment: HygieneJudgment
+  filed: { key: string; title: string }[]
+  overBudget: { key: string; title: string }[]
+  failed: { key: string; reason: string }[]
+}
+
+/** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction and hygiene passes. */
 export interface LoopStore {
   /** the rounds of one subject, oldest first */
   calls(loop: CallLoop, issue: IssueId, subject: string): Promise<CallRow[]>
@@ -65,6 +92,16 @@ export interface LoopStore {
   /** when the newest friction pass ran; null before the first */
   lastFrictionPassAt(): Promise<Date | null>
   recordFrictionPass(pass: FrictionPassRecord): Promise<void>
+  /** the newest hygiene pass of each repo */
+  hygienePasses(): Promise<HygienePassRecord[]>
+  /** the newest hygiene pass of one repo; null before the first */
+  lastHygienePass(repo: string): Promise<HygienePassRecord | null>
+  recordHygienePass(pass: HygienePassRecord): Promise<void>
+  /** a judgment retry: the pass's judgment and the lists it extended, as the whole new values */
+  updateHygieneJudgment(
+    id: string,
+    next: Pick<HygienePassRecord, 'judgment' | 'filed' | 'overBudget' | 'failed'>,
+  ): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */
@@ -116,4 +153,9 @@ export interface SettleWorkflow {
 /** `factory-queue`: edges and an order for a repo's queued Issues. */
 export interface QueueWorkflow {
   ask(request: QueueRequest, key: Key): Promise<Result<QueueAnswer, PortError>>
+}
+
+/** `factory-hygiene`: the documents a sweep picked, read against the code they describe in a checkout. */
+export interface HygieneWorkflow {
+  ask(request: HygieneRequest, key: Key): Promise<Result<HygieneAnswer, PortError>>
 }

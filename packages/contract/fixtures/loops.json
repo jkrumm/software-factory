@@ -158,5 +158,28 @@
       "order": ["issue_15", "issue_16"],
       "reason": "issue_16 touches the code issue_12 is changing"
     }
+  },
+  "hygiene": {
+    "input": {
+      "repo": "example-app",
+      "cwd": "/tmp/factory-hygiene/example-app",
+      "ref": "3f2a9c1d",
+      "stale": [{ "path": "docs/checkout.md", "why": "last edited 2026-08-02; 61 commits to code since" }],
+      "slop": [{ "path": "README.md", "why": "edited 2 days ago; 140 lines" }],
+      "max": 3
+    },
+    "output": {
+      "findings": [
+        {
+          "kind": "stale",
+          "path": "docs/checkout.md",
+          "title": "The checkout doc still describes the coupon line in the total",
+          "evidence": "docs/checkout.md:14 says the total includes the coupon; src/checkout/summary.ts:40 shows the coupon is a separate line.",
+          "fix": "Move the coupon paragraph under the summary section and name the separate line."
+        }
+      ],
+      "read": 2,
+      "reason": "one document disagrees with the code, the README reads plain"
+    }
   }
 }
