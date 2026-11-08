@@ -40,6 +40,8 @@ export interface ScreenPass {
   notHeld: number
   /** calls that failed or whose answer could not be acted on */
   failed: number
+  /** of those, the ones whose call answered but promote or dismiss was refused */
+  actFailed: number
   problems: string[]
 }
 
@@ -120,7 +122,8 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
     pass.notHeld++
     return
   }
-  pass.problems.push(`${row.id}: ${detailOf(acted.error)}`)
+  pass.actFailed++
+  return fail(detailOf(acted.error))
 }
 
 /**
@@ -131,7 +134,16 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
  * A failed call leaves the signal held and records the attempt with a backoff; the pass itself still ends ok.
  */
 export async function screenPass(deps: ScreenDeps): Out<ScreenPass> {
-  const pass: ScreenPass = { looked: 0, promoted: 0, dismissed: 0, left: 0, notHeld: 0, failed: 0, problems: [] }
+  const pass: ScreenPass = {
+    looked: 0,
+    promoted: 0,
+    dismissed: 0,
+    left: 0,
+    notHeld: 0,
+    failed: 0,
+    actFailed: 0,
+    problems: [],
+  }
   const due = await deps.uow.run(async ({ intake }) =>
     ok(await intake.screenable(deps.clock.now(), MAX_SCREEN_ATTEMPTS, SCREEN_BATCH)),
   )
@@ -150,7 +162,8 @@ export function screenSummary(pass: ScreenPass): string {
   if (pass.looked === 0) return 'no held signal to screen'
   const done = `looked at ${pass.looked} held; promoted ${pass.promoted}, dismissed ${pass.dismissed}, left ${pass.left}, owner first ${pass.notHeld}`
   if (pass.failed === pass.looked) {
-    return `screen workflow unavailable: ${pass.failed} call(s) failed${pass.problems[0] ? ` (${pass.problems[0]})` : ''}`
+    const what = pass.actFailed === pass.failed ? 'acting failed' : 'screen workflow unavailable'
+    return `${what}: ${pass.failed} call(s) failed${pass.problems[0] ? ` (${pass.problems[0]})` : ''}`
   }
   const problems = pass.problems.length
     ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}`

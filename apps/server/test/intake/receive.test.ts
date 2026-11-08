@@ -592,10 +592,10 @@ describe('quarantine and the loop guard', () => {
     expect(await intake.dismiss(id, { reason: 'again' })).toMatchObject({ ok: false, error: { kind: 'not_held' } })
     expect(await intake.promote(id, { repo: 'argo' })).toMatchObject({ ok: false, error: { kind: 'not_held' } })
     expect(await issues()).toEqual([])
-    // the same complaint again is not held anew
+    // the same complaint again is a new report, held anew
     expect(done(await intake.receive(outside('Button is broken')))).toMatchObject({
-      outcome: 'dropped',
-      detail: 'replayed',
+      outcome: 'held',
+      detail: 'quarantined',
     })
   })
 
@@ -773,6 +773,31 @@ describe('app feedback through the door', () => {
     const again = done(await intake.feedback(feedback({ version: '1.3.0', route: '/settings', text: 'more' })))
     expect(again).toMatchObject({ outcome: 'held', detail: 'replayed', signal: first.signal })
     expect(await db.sql`SELECT 1 FROM factory.intake_signals`).toHaveLength(1)
+  })
+
+  test('a dismissed complaint filed again is a new held report; a replay of that one is the same row', async () => {
+    const heldIds = async () =>
+      (await db.sql`SELECT id FROM factory.intake_signals WHERE state = 'held'`).map((r: { id: string }) => r.id)
+    const first = done(await intake.feedback(feedback()))
+    expect(await intake.dismiss(first.signal as string, { reason: 'fixed' })).toMatchObject({ ok: true })
+    const second = done(await intake.feedback(feedback()))
+    expect(second).toMatchObject({ outcome: 'held', detail: 'quarantined' })
+    expect(second.signal).not.toBe(first.signal)
+    expect(await heldIds()).toEqual([second.signal as string])
+
+    expect(done(await intake.feedback(feedback()))).toMatchObject({
+      outcome: 'held',
+      detail: 'replayed',
+      signal: second.signal,
+    })
+    expect(await db.sql`SELECT 1 FROM factory.intake_signals`).toHaveLength(2)
+
+    expect(await intake.dismiss(second.signal as string, { reason: 'fixed again' })).toMatchObject({ ok: true })
+    const third = done(await intake.feedback(feedback()))
+    expect(third).toMatchObject({ outcome: 'held', detail: 'quarantined' })
+    expect([first.signal, second.signal]).not.toContain(third.signal)
+    expect(await db.sql`SELECT 1 FROM factory.intake_signals`).toHaveLength(3)
+    expect(await heldIds()).toEqual([third.signal as string])
   })
 
   test('a duplicate of a promoted complaint amends its open Issue once per text; a closed Issue holds it as new', async () => {

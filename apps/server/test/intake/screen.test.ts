@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { ScreenAnswer } from '@software-factory/contract'
-import { screenPass } from '../../src/app/loops/screen.ts'
+import { screenPass, screenSummary, type ScreenPass } from '../../src/app/loops/screen.ts'
 import type { IntakeStore, SignalRow } from '../../src/domains/intake/ports.ts'
 import { checkScreen, NOT_SCREENED, screenBackoffMs, screenRequest } from '../../src/domains/intake/screen.ts'
 import { err, ok } from '../../src/kernel/result.ts'
@@ -106,4 +106,27 @@ test('a signal the owner dismissed meanwhile is counted, not an error', async ()
     dismiss: async () => err({ kind: 'not_held', detail: 'signal_1 is dismissed' }),
   })
   expect(pass).toMatchObject({ ok: true, value: { looked: 1, notHeld: 1, dismissed: 0, problems: [] } })
+})
+
+test('a promote the factory refuses at act time records the attempt with a backoff, so it is not asked again at once', async () => {
+  const recorded: unknown[] = []
+  const store = {
+    screenable: async () => [row()],
+    setScreening: async (_id: string, screening: unknown) => {
+      recorded.push(screening)
+      return true
+    },
+  }
+  const pass = await screenPass({
+    uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
+    clock: { now: () => new Date('2026-11-08T11:00:00Z') },
+    workflow: { screen: async () => ok(answer({ verdict: 'promote' })) },
+    openIssues: { inRepo: async () => ok([]) },
+    projects: { find: async () => ok({ work: false }), names: async () => ok(['app']) },
+    promote: async () => err({ kind: 'unknown_project', detail: 'app is gone' }),
+    dismiss: async () => err({ kind: 'not_held', detail: 'x' }),
+  })
+  expect(pass).toMatchObject({ ok: true, value: { looked: 1, promoted: 0, failed: 1, actFailed: 1 } })
+  expect(recorded).toEqual([expect.objectContaining({ attempts: 1, retryAt: new Date('2026-11-08T11:10:00Z') })])
+  expect(screenSummary((pass as { value: ScreenPass }).value)).toStartWith('acting failed')
 })

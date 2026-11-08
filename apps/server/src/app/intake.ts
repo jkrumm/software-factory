@@ -568,13 +568,19 @@ export function createIntake(deps: IntakeDeps) {
   }
 
   async function hold(s: Stores, r: Received, again?: IssueId): Out<Triaged> {
-    const heldKey = r.alert
-      ? keyOf('held', r.signal.source, r.alert.subject)
+    const base = r.alert
+      ? ['held', r.signal.source, r.alert.subject]
       : again
-        ? keyOf('held', r.signal.source, r.signal.fingerprint, again)
-        : keyOf('held', r.signal.source, r.signal.fingerprint)
-    const existing = await s.intake.signalByKey(heldKey)
-    if (existing) return ok({ ...replayedOf(existing), outcome: existing.state === 'dismissed' ? 'dropped' : 'held' })
+        ? ['held', r.signal.source, r.signal.fingerprint, again]
+        : ['held', r.signal.source, r.signal.fingerprint]
+    // A dismissed report is answered; the next one with the same words is a new report, under the key after it.
+    let heldKey = keyOf(...base)
+    let existing = await s.intake.signalByKey(heldKey)
+    while (existing?.state === 'dismissed') {
+      heldKey = keyOf(...base, 'after', existing.id)
+      existing = await s.intake.signalByKey(heldKey)
+    }
+    if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
     const id = await store(s, r, heldKey, 'held', null)
     return ok(triaged('held', 'quarantined', null, id, 'outside text waits for the owner or the Judge'))
   }

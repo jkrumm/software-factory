@@ -101,7 +101,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   duplicate is that held signal (`replayed`, no second row). A held signal can also be **dismissed** (`POST /signals/:id/dismiss`,
   the owner or the Judge, a reason of 1 to 500 characters): state `dismissed` with `dismissed_reason`, `dismissed_by`
   (`owner`, `judge` or `probe`) and `dismissed_at`, no Issue, and it leaves Needs you and the friction count. Only a held
-  signal can be dismissed or promoted. A **probe** (`probe: true` on `POST /signals` or the door's feedback, carried on the
+  signal can be dismissed or promoted; a later signal with a dismissed one's key is a new report, held under that key extended with the dismissed id (and so on down the chain). A **probe** (`probe: true` on `POST /signals` or the door's feedback, carried on the
   `Signal` envelope) passes the loop guard, the work-repo rule and the trust gate as any signal does, then is stored
   `dismissed` by `probe` under a key of its source and fingerprint (a replay stores once): it files nothing, is never held and
   never reaches the triage workflow; its ack is `dropped`, detail `probe`.
