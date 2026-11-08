@@ -16,3 +16,8 @@ apps/server/scripts/import/run.ts park  # the old core's wait reason `parked`, c
 scripts/rehearse.ts ask judge  # FACTORY_ASK_JUDGE: the old core's setting, switched off when its release is booted on the copy
 apps/server/test/import/plan.test.ts classify  # old event kinds the planner is tested on
 apps/server/test/import/plan.test.ts park  # the old core wait reason `parked`, tested against the new stall
+apps/server/src/api/console.ts manifest  # manifest.webmanifest is a browser file name, not a project manifest
+apps/server/test/console.test.ts manifest  # manifest.webmanifest is a browser file name, not a project manifest
+apps/console/README.md manifest  # the PWA web app manifest, a browser file
+apps/console/vite.config.ts manifest  # the PWA web app manifest, a browser file
+tests/e2e/shell.e2e.ts manifest  # the PWA web app manifest, a browser file

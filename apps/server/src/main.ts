@@ -22,6 +22,8 @@ import { MakeAndProbes } from './adapters/quality/proof.ts'
 import { AgwReview } from './adapters/quality/review.ts'
 import { postgresQualityStore } from './adapters/quality/store.ts'
 import { createApp } from './api/app.ts'
+import { apiForward, consoleHandler } from './api/console.ts'
+import { loadConsoleSettings } from './console-settings.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
@@ -58,7 +60,7 @@ import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
 import { createShutdown } from './shutdown.ts'
 
-/** The API listens on loopback only; the tailnet listener for the Console comes with the Console. */
+/** The API and the Console's listener both bind loopback only; `tailscale serve` publishes the Console's. */
 const HOSTNAME = '127.0.0.1'
 
 /** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
@@ -373,6 +375,28 @@ async function main(): Promise<void> {
   runner.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
+  // The Console's listener: loopback too, published on the tailnet by `tailscale serve`. Only the owner's login passes, only
+  // reads, and the owner token is held by this closure alone. Without an owner login it does not start.
+  const consoleSettings = loadConsoleSettings(process.env)
+  const consoleServer = consoleSettings.ownerLogin
+    ? Bun.serve({
+        hostname: HOSTNAME,
+        port: consoleSettings.port,
+        idleTimeout: IDLE_TIMEOUT_S,
+        fetch: consoleHandler({
+          ownerLogin: consoleSettings.ownerLogin,
+          dir: consoleSettings.dir,
+          forward: apiForward({
+            handle: (request) => app.handle(request),
+            origin: `http://${HOSTNAME}:${settings.port}`,
+            ownerToken: settings.tokens.owner,
+          }),
+        }),
+      })
+    : null
+  if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
+  else console.log('console not started: FACTORY_CONSOLE_OWNER_LOGIN is not set')
+
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
   // waits for it, so the stop would never return and the process would keep the lock. The deadline ends the process
   // whatever step is stuck; the lock is let go before the pool closes, so a copy waiting for it boots as soon as the work is done.
@@ -380,6 +404,7 @@ async function main(): Promise<void> {
     deadlineMs: settings.shutdownDeadlineMs,
     steps: [
       { name: 'draining', run: async () => draining.abort() },
+      { name: 'console.stop', run: async () => void (await consoleServer?.stop(true)) },
       { name: 'server.stop', run: () => app.stop(true) },
       // A pass in an agw call is given a few seconds; its call is taken up again at the next boot under the same key.
       { name: 'loops.stop', run: () => runner.stop(10_000) },

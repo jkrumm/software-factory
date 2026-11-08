@@ -88,4 +88,23 @@ if [[ "$code" != "401" ]]; then
 fi
 ok "the door answers an unauthenticated POST /alert/kuma with 401"
 
+# 6. the Console's listener, when the settings file names an owner login: no login header is 403, the owner's is answered
+console_login="" console_port=7794
+if [[ -f "$ROOT/current/scripts/env-file.sh" ]]; then
+  settings=$( # shellcheck source=scripts/env-file.sh
+    source "$ROOT/current/scripts/env-file.sh" && load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" 2>/dev/null || exit 0
+    echo "${FACTORY_CONSOLE_OWNER_LOGIN:-},${FACTORY_CONSOLE_PORT:-7794}")
+  if [[ -n "$settings" ]]; then console_login="${settings%,*}"; console_port="${settings##*,}"; fi
+fi
+if [[ -z "$console_login" ]]; then
+  echo "verify: skipped: the Console is not configured (FACTORY_CONSOLE_OWNER_LOGIN is not in the settings file)"
+else
+  console_url="http://127.0.0.1:${console_port:-7794}"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$console_url/health")
+  [[ "$code" == "403" ]] || fail "the Console on $console_url answered $code to a request without the owner's login, expected 403"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Tailscale-User-Login: $console_login" "$console_url/health")
+  [[ "$code" == "200" ]] || fail "the Console on $console_url answered $code to GET /health with the owner's login, expected 200"
+  ok "the Console on $console_url answers 403 without the owner's login and 200 with it"
+fi
+
 echo "verify: all checks passed"

@@ -48,7 +48,7 @@ export interface ServerProcess {
   stop(): Promise<number>
 }
 
-async function freePort(): Promise<number> {
+export async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = createServer()
     probe.once('error', reject)
