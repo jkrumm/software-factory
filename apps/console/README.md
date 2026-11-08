@@ -4,7 +4,7 @@ The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (B
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
 navigation, connection chip, command palette, the status strip under the title (working / waiting / queued from
 `/v1/flow`, each account's weekly quota from `/v1/accounts`, the mini's load and swap from `/v1/machine`; the meters open
-the weekly reset and the 5-hour window), the Needs you screen, the Flow board and the Issue page; the other screens come in later steps.
+the weekly reset and the 5-hour window), the Needs you screen, the Flow board, the Issue page and the Chain; the other screens come in later steps.
 
 ## Flow
 
@@ -16,6 +16,20 @@ filtered view is linkable, and each column header counts what the filters leave.
 (`@tanstack/react-virtual`): only the visible cards are in the DOM. From the `lg` breakpoint (1024px) the columns sit side
 by side in a horizontally scrolling board; below it the board is one list with a tab per state (Working first, or the first
 state with cards). The layout switches with `matchMedia`, so only one of the two is ever rendered.
+
+## Chain
+
+`/chain` draws the dependencies between Issues and plan rows across projects from `GET /v1/chain`: `@xyflow/react` for the
+canvas, `@dagrejs/dagre` for the layout (`src/lib/chain.ts`, left to right, a blocker left of the node that waits for it),
+loaded as its own chunk so the other screens do not carry them. An arrow runs from the blocker into the node that runs after
+it. A blocked edge is solid and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
+labelled `done`; each edge also has an accessible text ("A blocks B"). A node shows the title, the project and the state as
+a word; a plan row is dashed and says "Not filed yet" and does not link, an Issue links to `/issues/<n>`. No id is on the
+page. Nodes with no edge at all are not drawn: the header counts them ("N items have no dependencies"). `?project=argo`
+keeps that project's nodes and every node an edge joins them to, so an edge across projects stays readable. With no edge
+the page says "No dependencies". The canvas pans and zooms inside its box (Controls zoom and fit; no minimap), so a phone
+never scrolls sideways. xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
+`tests/e2e/chain.e2e.ts` compares the page with the API on a seeded chain across two projects (`seed-chain.ts`).
 
 ## Build
 

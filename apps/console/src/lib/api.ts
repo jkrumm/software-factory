@@ -1,6 +1,7 @@
 import {
   ArtifactDetail,
   ArtifactReply,
+  ChainModel,
   DecisionReply,
   DecisionView,
   ErrandList,
@@ -42,6 +43,7 @@ async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal)
 }
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
+export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
 export const fetchFriction = (days: number, signal?: AbortSignal) =>

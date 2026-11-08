@@ -4,6 +4,7 @@ import {
   ApiError,
   fetchAccounts,
   fetchArtifact,
+  fetchChain,
   fetchDecision,
   fetchErrands,
   fetchFlow,
@@ -39,6 +40,16 @@ export function useNeeds() {
 export function useFlow() {
   const live = useLive()
   return useQuery({ ...flowQuery, refetchInterval: live ? false : POLL_MS })
+}
+
+/** The dependency chain across projects. */
+export function useChain() {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['chain'],
+    queryFn: ({ signal }) => fetchChain(signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
 }
 
 /** The KPIs of the last `days` days. */

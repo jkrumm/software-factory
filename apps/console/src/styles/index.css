@@ -151,3 +151,32 @@
 .artifact-prose hr {
   @apply my-6;
 }
+
+/* xyflow's own variables, pointed at the semantic tokens: no colour literal of its stylesheet reaches the chain screen. */
+.react-flow.chain-graph {
+  --xy-edge-stroke-default: var(--vx-faint);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-edge-label-background-color-default: var(--vx-surface-subtle);
+  --xy-edge-label-color-default: var(--vx-ink);
+  --xy-handle-background-color-default: var(--vx-faint);
+  --xy-handle-border-color-default: var(--vx-surface-panel);
+  --xy-controls-button-background-color-default: var(--vx-surface-panel);
+  --xy-controls-button-background-color-hover-default: var(--vx-surface-row-hover);
+  --xy-controls-button-color-default: var(--vx-ink);
+  --xy-controls-button-color-hover-default: var(--vx-ink);
+  --xy-controls-button-border-color-default: var(--vx-surface-border);
+  --xy-controls-box-shadow-default: none;
+}
+
+/* Blocked: solid and strong. Done: dashed and quiet. The label says which, so colour is not the only cue. */
+.chain-graph .chain-edge-blocked .react-flow__edge-path {
+  stroke: var(--vx-warn-solid);
+  stroke-width: 2.5;
+}
+.chain-graph .chain-edge-done .react-flow__edge-path {
+  stroke: var(--vx-faint);
+  stroke-dasharray: 6 5;
+}
+.chain-graph .react-flow__edge-text {
+  font-size: 11px;
+}
