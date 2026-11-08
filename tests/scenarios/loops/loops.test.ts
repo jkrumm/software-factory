@@ -253,7 +253,12 @@ test('a person’s signal that matches an open Issue only in part asks factory-t
   ])
   const ack = await signal('app', 'login page submit crash again', 'it is the 500 from /session')
   expect(ack).toMatchObject({ outcome: 'amended', detail: 'matched', issue: open })
-  const calls = (await callsOf(lab, 'factory-triage')).filter((call) => call.input.mode === 'amend')
+  // Any request beside an open Issue now reaches the workflow, so the call under test is picked by its signal.
+  const calls = (await callsOf(lab, 'factory-triage')).filter(
+    (call) =>
+      call.input.mode === 'amend' &&
+      (call.input.signal as { title?: string } | undefined)?.title === 'login page submit crash again',
+  )
   expect(calls).toHaveLength(1)
   expect(calls[0]?.input).toMatchObject({
     mode: 'amend',

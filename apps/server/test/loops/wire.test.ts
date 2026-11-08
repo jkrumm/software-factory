@@ -153,7 +153,9 @@ const signal = {
 test('amend: the signal is sent scrubbed with the candidates, and the Issue it names must be one it was shown', async () => {
   const candidates = [open(12, 'Fix the checkout total'), open(15, 'Add a dark theme')]
   const named = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_12' } })
-  expect(await agwAmend(named.port).amendOrNew({ signal, candidates })).toEqual(ok({ amend: 'issue_12' as IssueId }))
+  expect(await agwAmend(named.port).amendOrNew({ signal, candidates, settled: [] })).toEqual(
+    ok({ amend: 'issue_12' as IssueId, settled: null, reason: fixture.triage.amendOutput.reason }),
+  )
   expect(named.calls[0]?.input).toMatchObject({
     mode: 'amend',
     repo: 'app',
@@ -162,14 +164,45 @@ test('amend: the signal is sent scrubbed with the candidates, and the Issue it n
   expect(String(named.calls[0]?.key)).toStartWith('triage:amend:owner%3Ahermes:fp-1:')
 
   const unseen = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_99' } })
-  expect(await agwAmend(unseen.port).amendOrNew({ signal, candidates })).toMatchObject({
+  expect(await agwAmend(unseen.port).amendOrNew({ signal, candidates, settled: [] })).toMatchObject({
     ok: false,
     error: { kind: 'refused', detail: expect.stringContaining('issue_99') },
   })
 
   const none = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null } })
-  expect(await agwAmend(none.port).amendOrNew({ signal, candidates })).toEqual(ok({ amend: null }))
+  expect(await agwAmend(none.port).amendOrNew({ signal, candidates, settled: [] })).toEqual(
+    ok({ amend: null, settled: null, reason: fixture.triage.amendOutput.reason }),
+  )
 
   const edges = fakePort({ 'factory-triage': { ...fixture.triage.settleOutput } })
-  expect(await agwAmend(edges.port).amendOrNew({ signal, candidates })).toMatchObject({ ok: false })
+  expect(await agwAmend(edges.port).amendOrNew({ signal, candidates, settled: [] })).toMatchObject({ ok: false })
+})
+
+test('amend: a settled answer must name an Issue it was shown as settled, and is no amend', async () => {
+  const settled = [
+    {
+      id: 'issue_7' as IssueId,
+      title: 'Disk filling fast',
+      outcome: 'healed',
+      reason: 'token=abcdef123456 false alarm',
+      closedAt: new Date(),
+    },
+  ]
+  const candidates = [open(12, 'Fix the checkout total')]
+  const named = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null, settled: 'issue_7' } })
+  expect(await agwAmend(named.port).amendOrNew({ signal, candidates, settled })).toEqual(
+    ok({ amend: null, settled: 'issue_7' as IssueId, reason: fixture.triage.amendOutput.reason }),
+  )
+  expect(named.calls[0]?.input).toMatchObject({
+    settled: [{ id: 'issue_7', title: 'Disk filling fast', outcome: 'healed', reason: 'token=[redacted] false alarm' }],
+  })
+
+  const unseen = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null, settled: 'issue_8' } })
+  expect(await agwAmend(unseen.port).amendOrNew({ signal, candidates, settled })).toMatchObject({
+    ok: false,
+    error: { kind: 'refused', detail: expect.stringContaining('issue_8') },
+  })
+
+  const both = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_12', settled: 'issue_7' } })
+  expect(await agwAmend(both.port).amendOrNew({ signal, candidates, settled })).toMatchObject({ ok: false })
 })

@@ -60,3 +60,12 @@ export interface OpenIssue {
   kind: string
   state: string
 }
+
+/** An Issue closed recently, with how it closed: what a restated ask is checked against ("already settled"). */
+export interface ClosedIssue {
+  id: IssueId
+  title: string
+  outcome: string
+  reason: string | null
+  closedAt: Date
+}

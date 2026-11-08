@@ -171,5 +171,7 @@ test('prio orders the queue before age, and never an incident behind it', async 
 })
 
 test('admitting never asked agw', async () => {
-  expect((await lab.world.calls()).filter((call) => call.tool === 'agw')).toEqual([])
+  expect((await lab.world.calls()).filter((call) => call.tool === 'agw' && call.args[0] !== 'factory-triage')).toEqual(
+    [],
+  )
 })
