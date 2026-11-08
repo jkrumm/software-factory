@@ -35,11 +35,17 @@ type Look =
 function notesBefore(history: readonly AppliedRecord[], attempt: number) {
   const admitted = history.filter((record) => record.kind === 'admitted')[attempt - 1]
   const cut = admitted?.version ?? Number.POSITIVE_INFINITY
-  return fitNotes(
-    history
-      .filter((record) => record.kind === 'noted' && record.version < cut)
-      .map((record) => ({ at: record.at, text: String((record.payload as { text?: unknown }).text ?? '') })),
-  )
+  const notes = history
+    .filter((record) => record.kind === 'noted' && record.version < cut)
+    .map((record) => ({
+      at: record.at,
+      text: String((record.payload as { text?: unknown }).text ?? ''),
+      fromOwner: record.actor === 'owner',
+    }))
+  // Each kind has its own budget: a run of alert repeats must not push the owner's steer out of the brief.
+  const owner = fitNotes(notes.filter((note) => note.fromOwner))
+  const others = fitNotes(notes.filter((note) => !note.fromOwner))
+  return { shown: [...owner.shown, ...others.shown], more: owner.more + others.more }
 }
 
 /**

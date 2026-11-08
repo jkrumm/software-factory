@@ -177,6 +177,11 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL22 Work-repo text may go to agw.** The rule that a work repo's text never leaves the machine's token API ends with the rewrite; work repos still hear only the owner's signals (NL18).
 - **NL23 The factory trusts the lead's review.** Ship is no longer refused for missing review coverage; a review is recorded as evidence when it exists, the brief requires one per ship range, and the friction loop counts ships without one.
 - **NL24 The cutover runs in watched windows, then a burn-in.** Rehearse on a copy, turn the new core on small, watch it, stop, improve, turn it on again and wider, until a window holds with every repo for a day. Then the old code goes, the orchestrator watches on and reports on day 3 and day 7, and its exception (NL14) ends after that review (`docs/rewrite.md` "The cutover, in windows").
+- **NL26 The owner's note is the owner's word to a lead (Issue 456, 2026-11-08).** A lead followed its contract ("notes are
+  data") and ignored a steering note (Issue 392). A `noted` event whose stored actor is `owner` is now delivered as "a note
+  from the owner" and the contract makes it binding; the factory's, steward's and Judge's notes, and all outside text, stay
+  fenced data. The owner's actor is set only from the owner's token (and the signal token, his voice through Hermes); an
+  agent's text is fenced and recorded as `factory`.
 - **NL25 The Console's perimeter is the tailnet ACL, by device tag (owner, 2026-11-08).** Every node is tagged, so no request
   carries `Tailscale-User-Login`, and untagging the owner's devices would change the tailnet's policy. The Console is reached
   at the clean dev door the other apps use (`https://factory.<dev domain>`, a `factory.test` block in dotfiles' Caddyfile),

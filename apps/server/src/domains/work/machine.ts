@@ -21,6 +21,7 @@ export type Decided = Applied | { result: 'refused' | 'ignored'; detail: string 
 export interface AppliedRecord {
   kind: EventKind
   payload: unknown
+  actor: Actor
   at: Date
   version: number
   transition: Transition
