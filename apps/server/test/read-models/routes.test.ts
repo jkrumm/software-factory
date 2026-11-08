@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { ChainModel, FlowModel, NeedsModel } from '@software-factory/contract'
+import { ChainModel, FlowModel, MachineModel, NeedsModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { createApp } from '../../src/api/app.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -80,6 +80,23 @@ test('days: 1 to 90, default 7; anything else is a 422 with an ErrorBody', async
     expect(response.status).toBe(422)
     expect(await response.json()).toMatchObject({ code: 'invalid_request' })
   }
+})
+
+test('machine: the host reading with its ceilings for the owner and the read token; a failed reading is a 503', async () => {
+  const reading = {
+    load: 4.2,
+    loadCeiling: 60,
+    memory: { swapoutMbPer300s: 0, swapUsedPct: 12.5 },
+    memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 },
+  }
+  const bound = createApp({ ...base, readModels: { sql: db.sql, machine: () => Promise.resolve(reading) } })
+  expect((await get(bound, '/v1/machine')).status).toBe(401)
+  expect((await get(bound, '/v1/machine', TOKENS.machine)).status).toBe(403)
+  for (const token of [TOKENS.owner, TOKENS.read])
+    expect(MachineModel.parse(await (await get(bound, '/v1/machine', token)).json())).toMatchObject(reading)
+  const blind = createApp({ ...base, readModels: { sql: db.sql, machine: () => Promise.resolve(null) } })
+  expect((await get(blind, '/v1/machine', TOKENS.owner)).status).toBe(503)
+  expect((await get(app, '/v1/machine', TOKENS.owner)).status).toBe(503)
 })
 
 test('unbound, the models answer 503', async () => {

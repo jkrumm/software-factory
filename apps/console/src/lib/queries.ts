@@ -1,6 +1,14 @@
 import { QueryClient, useQuery } from '@tanstack/react-query'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
-import { fetchArtifact, fetchDecision, fetchErrands, fetchFlow, fetchNeeds } from './api.ts'
+import {
+  fetchAccounts,
+  fetchArtifact,
+  fetchDecision,
+  fetchErrands,
+  fetchFlow,
+  fetchMachine,
+  fetchNeeds,
+} from './api.ts'
 import { useLive } from './live.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -30,6 +38,25 @@ export function useFlow() {
     queryKey: ['flow'],
     queryFn: ({ signal }) => fetchFlow(signal),
     refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** Each account's newest reading: the weekly figure first, the 5-hour window where the account has one. */
+export function useAccounts() {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['accounts'],
+    queryFn: ({ signal }) => fetchAccounts(signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** The host's load and swap. A reading is not a change in the stream, so it polls whether or not the stream is open. */
+export function useMachine() {
+  return useQuery({
+    queryKey: ['machine'],
+    queryFn: ({ signal }) => fetchMachine(signal),
+    refetchInterval: POLL_MS,
   })
 }
 

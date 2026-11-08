@@ -4,6 +4,7 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import { useState } from 'react'
 import { ConnectionChip } from '@/components/connection-chip'
 import { CommandPalette } from '@/components/palette'
+import { StatusStrip } from '@/components/status-strip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -115,6 +116,7 @@ export function Shell() {
               </div>
             </div>
           </header>
+          <StatusStrip />
           <main className="min-h-0 flex-1 overflow-y-auto">
             <Outlet />
           </main>

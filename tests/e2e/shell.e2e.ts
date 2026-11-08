@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
-import { holdSignal, needsCount } from './seed.ts'
+import { api, holdSignal, needsCount } from './seed.ts'
 
 const SCREENS = [
   { label: 'Needs you', path: '/needs-you', key: 'N' },
@@ -189,4 +189,25 @@ test.describe('layout', () => {
       expect(box?.width).toBeLessThan(400)
     })
   })
+})
+
+test('the strip shows the counts, each account weekly and the machine, and opens the detail', async ({
+  page,
+  apiUrl,
+}) => {
+  const flow = await api<{ states: Record<'working' | 'waiting' | 'queued', { count: number }> }>(apiUrl, '/v1/flow')
+  const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
+  expect(accounts.length).toBeGreaterThan(0)
+  await page.goto('/needs-you')
+  const counts = page.getByLabel('Issues in flight')
+  await expect(counts).toContainText(`${flow.states.working.count} working`)
+  await expect(counts).toContainText(`${flow.states.waiting.count} waiting`)
+  await expect(counts).toContainText(`${flow.states.queued.count} queued`)
+  const toggle = page.getByRole('button', { expanded: false }).filter({ hasText: /load \d/ })
+  await expect(toggle).toBeVisible()
+  for (const { account } of accounts)
+    await expect(toggle.getByRole('meter', { name: `${account}, this week` })).toBeVisible()
+  await toggle.click()
+  await expect(page.locator('#strip-detail')).toContainText('Machine: load')
+  await expect(page.locator('#strip-detail').getByRole('columnheader', { name: '5-hour window' })).toBeVisible()
 })

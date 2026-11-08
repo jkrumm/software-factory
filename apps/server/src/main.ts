@@ -378,6 +378,17 @@ async function main(): Promise<void> {
     const view = await planning.capacity.queue()
     return view.ok ? queueReasonMap(view.value.queue) : null
   }
+  const machine = async () => {
+    const state = await planning.capacity.state()
+    if (!state.ok) return null
+    const { limits } = planning.capacity
+    return {
+      load: state.value.host.load,
+      loadCeiling: limits.loadCeiling,
+      memory: state.value.host.memory,
+      memoryCeilings: limits.memoryCeilings,
+    }
+  }
   const app = createApp({
     tokens: settings.tokens,
     intake: intake.api,
@@ -428,7 +439,7 @@ async function main(): Promise<void> {
       blockedStreak: loopSettings.blockedChecks,
       queueReasons,
     }),
-    readModels: { sql, queueReasons },
+    readModels: { sql, queueReasons, machine },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
