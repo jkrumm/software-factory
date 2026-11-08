@@ -70,8 +70,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
 - **Work repos hear only the owner** (NL18, no `project.yaml`), and the read token never sees their words
   (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).
-- **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts` and
-  `POST /door/reports`, nothing else), no database credential, and takes the repo from the door route registry
+- **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts`,
+  `POST /signals/feedback` and `POST /door/reports`, nothing else), no database credential, and takes the repo from the door route registry
   (`factory.door_routes`), never from the payload.
 - **Hooks: spool first, then post.** `factory hook <event>` does nothing without `FACTORY_SESSION`, appends to the spool,
   posts to the unix socket and exits 0 whatever happens (one exception: the Stop send-back, exit 2). `apps/cli/src/hook.ts`

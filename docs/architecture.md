@@ -81,6 +81,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   (`agent:<repo>`), the alert door (Kuma and HyperDX), and three pollers: GitHub (the owner's new issues and failing
   checks; anyone else's need the label and are held), Beszel (host rules from `config/infra.json`) and launchd (a
   LaunchAgent's state). `repo` comes from the route, the door registry or the caller, never from an outside payload.
+  **App feedback** is a door source of its own: `POST /feedback/<app>` with the app's token (`feedback-<app>` in the door's
+  tokens file) becomes `POST /signals/feedback`, one envelope for every app (`FeedbackRequest`: app, version, route, title,
+  text, link). It is a signal from `feedback:<app>`, trust `outside`, whose text opens with an `app/version/route` header;
+  the repo is the door route `(feedback, <app>)` or none, and the fingerprint is the repo (or app) and the title, never the
+  version or route, so one complaint from two builds is one.
 - **Who may file where.** `domains/intake/rules.ts` gates a signal: a work repo hears only the owner (NL18), an unknown
   repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's and Beszel's are routed.
 - **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
@@ -90,6 +95,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   unsure. A `down` waits out a heal grace as `held`: an `up` inside it makes it `healed`, and a project's heal rule runs
   `make restart` in its repo (`adapters/intake/runbook.ts`, outside any transaction) before an Issue is filed.
 - **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as data.
+  Promoting keeps a subject row for the signal's fingerprint (as for a person's request). A later outside signal with that
+  fingerprint from the same source amends the promoted Issue while it is open (a `noted` event, fenced; the signal is stored
+  `amended`, once per distinct text); when that Issue is closed it is held again as new, and while a signal is still held a
+  duplicate is that held signal (`replayed`, no second row).
 - **Loop guard.** A change a loop made never fires that loop again.
 - **Stop the line.** While a repo's alert is unsolved, only its fix is admitted.
 

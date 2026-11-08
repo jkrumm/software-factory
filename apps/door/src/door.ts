@@ -1,6 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { type AlertRequest, type DoorReport, MAX_FACTS_BYTES, SignalAck } from '@software-factory/contract'
-import { type Parser, PARSERS, PayloadError } from './parsers.ts'
+import {
+  type AlertRequest,
+  type DoorReport,
+  type FeedbackRequest,
+  feedbackTokenKey,
+  MAX_FACTS_BYTES,
+  SignalAck,
+} from '@software-factory/contract'
+import { parseFeedback, type Parser, PARSERS, PayloadError } from './parsers.ts'
 import type { Tokens } from './tokens.ts'
 
 /** Largest body the door reads; the cap is enforced on the bytes as they arrive, not on what the sender claims. */
@@ -14,6 +21,8 @@ export interface DoorOptions {
   tokens: Tokens
   /** files one alert with the server's API; throws when it cannot be reached */
   file: (input: AlertRequest) => Promise<Filed>
+  /** files one app's feedback with the server's API; throws when it cannot be reached. Without it `/feedback/<app>` is 404. */
+  feedback?: (input: FeedbackRequest) => Promise<Filed>
   parsers?: Readonly<Record<string, Parser>>
   /** one line per request: the time, the status and the source, never a body or a token */
   log?: (line: string) => void
@@ -27,6 +36,7 @@ export interface DoorOptions {
 export const PROBE_HEADER = 'x-factory-probe'
 
 const ROUTE = /^\/alert\/([a-z][a-z0-9-]{0,31})$/
+const FEEDBACK_ROUTE = /^\/feedback\/([a-z][a-z0-9-]{0,22})$/
 const digest = (value: string) => createHash('sha256').update(value).digest()
 /** What an unknown source is compared with, so it costs the same as a known one. */
 const NO_TOKEN = digest('no such source')
@@ -65,7 +75,7 @@ async function readBody(req: Request): Promise<string> {
 }
 
 /**
- * The door: `POST /alert/<source>` and nothing else. A request passes, in this order: the route and method, the bearer token of
+ * The door: `POST /alert/<source>` and `POST /feedback/<app>` and nothing else (an app's token is `feedback-<app>`). A request passes, in this order: the route and method, the bearer token of
  * that source (401 with no body, an unknown source the same), `application/json`, the size, the source's parser. A real alert
  * is filed with the server and its ack passed on (200); a server that cannot be reached, or answers 5xx, is 503.
  */
@@ -83,30 +93,47 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
     }
   }
 
-  async function handle(req: Request, source: string): Promise<Response> {
-    const parse = own(parsers, source)
-    // A token with no parser behind it: authorized, and then nothing to do with the body.
-    if (!parse) return reply(404, { error: 'no such source' })
+  /** The body of a request as JSON, or the response that refuses it: content type, size, syntax, in that order. */
+  async function payloadOf(req: Request): Promise<{ payload: unknown } | { refusal: Response }> {
     const type = req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
-    if (type !== 'application/json') return reply(415, { error: 'content-type must be application/json' })
-
+    if (type !== 'application/json') return { refusal: reply(415, { error: 'content-type must be application/json' }) }
     let text: string
     try {
       text = await readBody(req)
     } catch (error) {
-      if (error instanceof TooLarge) return reply(413, { error: `body is larger than ${MAX_BODY_BYTES} bytes` })
+      if (error instanceof TooLarge) {
+        return { refusal: reply(413, { error: `body is larger than ${MAX_BODY_BYTES} bytes` }) }
+      }
       throw error
     }
-    let payload: unknown
     try {
-      payload = JSON.parse(text)
+      return { payload: JSON.parse(text) }
     } catch {
-      return reply(400, { error: 'body is not valid JSON' })
+      return { refusal: reply(400, { error: 'body is not valid JSON' }) }
     }
+  }
+
+  /** What the server answered, as the door answers: its ack, or a refusal that names no reason. */
+  function answerOf(filed: Filed, what: string): Response {
+    if (filed.status === 200) {
+      const ack = SignalAck.safeParse(filed.body)
+      return ack.success ? reply(200, ack.data) : reply(502, { error: 'the factory answered another shape' })
+    }
+    // Its reason can name a path: the door says only that it was refused.
+    if (filed.status === 422) return reply(422, { error: `the ${what} was refused` })
+    return reply(filed.status >= 500 ? 503 : 502, { error: `the factory did not take the ${what}` })
+  }
+
+  async function handle(req: Request, source: string): Promise<Response> {
+    const parse = own(parsers, source)
+    // A token with no parser behind it: authorized, and then nothing to do with the body.
+    if (!parse) return reply(404, { error: 'no such source' })
+    const read = await payloadOf(req)
+    if ('refusal' in read) return read.refusal
 
     let parsed: ReturnType<Parser>
     try {
-      parsed = parse(payload)
+      parsed = parse(read.payload)
     } catch (error) {
       if (error instanceof PayloadError) return reply(400, { error: `not a ${source} payload: ${error.message}` })
       throw error
@@ -122,19 +149,43 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
     } catch {
       return reply(503, { error: 'the factory is not reachable' })
     }
-    if (filed.status === 200) {
-      const ack = SignalAck.safeParse(filed.body)
-      return ack.success ? reply(200, ack.data) : reply(502, { error: 'the factory answered another shape' })
+    return answerOf(filed, 'alert')
+  }
+
+  async function handleFeedback(req: Request, app: string): Promise<Response> {
+    if (!options.feedback) return reply(404, { error: 'no such source' })
+    const read = await payloadOf(req)
+    if ('refusal' in read) return read.refusal
+
+    let input: FeedbackRequest
+    try {
+      input = parseFeedback(app, read.payload)
+    } catch (error) {
+      if (error instanceof PayloadError) return reply(400, { error: `not a feedback payload: ${error.message}` })
+      throw error
     }
-    // Its reason can name a path: the door says only that the alert was refused.
-    if (filed.status === 422) return reply(422, { error: 'the alert was refused' })
-    return reply(filed.status >= 500 ? 503 : 502, { error: 'the factory did not take the alert' })
+    let filed: Filed
+    try {
+      filed = await options.feedback(input)
+    } catch {
+      return reply(503, { error: 'the factory is not reachable' })
+    }
+    return answerOf(filed, 'feedback')
+  }
+
+  /** The log label of a 401. A probe is the factory's own health check; a refusal on a source with a token is reported. */
+  function refused(req: Request, source: string): string {
+    if (req.headers.get(PROBE_HEADER) === '1') return `probe ${source}`
+    if (own(options.tokens, source) !== undefined) report({ kind: 'refused', source })
+    return `refused ${source}`
   }
 
   return async (req) => {
     const started = performance.now()
-    const match = ROUTE.exec(new URL(req.url).pathname)
-    const source = match?.[1]
+    const pathname = new URL(req.url).pathname
+    const app = FEEDBACK_ROUTE.exec(pathname)?.[1]
+    // One token table: an app's feedback token is `feedback-<app>`, and that is also its label in logs and reports.
+    const source = app ? feedbackTokenKey(app) : ROUTE.exec(pathname)?.[1]
     let label = '-'
     let response: Response
     try {
@@ -142,14 +193,10 @@ export function createDoor(options: DoorOptions): (req: Request) => Promise<Resp
       else if (req.method !== 'POST') response = reply(405, undefined, { allow: 'POST' })
       else if (!authorized(req, own(options.tokens, source))) {
         response = reply(401, undefined, { 'www-authenticate': 'Bearer' })
-        if (req.headers.get(PROBE_HEADER) === '1') label = `probe ${source}`
-        else {
-          label = `refused ${source}`
-          if (own(options.tokens, source) !== undefined) report({ kind: 'refused', source })
-        }
+        label = refused(req, source)
       } else {
         label = source
-        response = await handle(req, source)
+        response = app ? await handleFeedback(req, app) : await handle(req, source)
       }
     } catch (error) {
       log(`error ${error instanceof Error ? error.name : 'unknown'}`)
@@ -184,6 +231,15 @@ export function reportViaHttp(base: string, token: string): NonNullable<DoorOpti
   return async (report) => {
     const response = await post(base, token, '/door/reports', report)
     if (!response.ok) throw new Error(`report answered ${response.status}`)
+  }
+}
+
+/** Files an app's feedback with the server's API (`POST /signals/feedback`). */
+export function feedbackViaHttp(base: string, token: string): NonNullable<DoorOptions['feedback']> {
+  return async (input) => {
+    const response = await post(base, token, '/signals/feedback', input)
+    const body: unknown = await response.json().catch(() => null)
+    return { status: response.status, body }
   }
 }
 

@@ -1,10 +1,17 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { AlertRequest, type DoorReport, MAX_FACTS_BYTES, type SignalAck } from '@software-factory/contract'
+import {
+  AlertRequest,
+  type DoorReport,
+  FeedbackRequest,
+  MAX_FACTS_BYTES,
+  type SignalAck,
+} from '@software-factory/contract'
 import { createDoor, doorTokenFrom, fileViaHttp, type Filed, MAX_BODY_BYTES, reportViaHttp } from '../src/door.ts'
 
 const KUMA_TOKEN = 'kuma-token-0123456789-abcdef'
 const HYPERDX_TOKEN = 'hyperdx-token-0123456789-abcdef'
+const WEATHER_TOKEN = 'weather-token-0123456789-abcdef'
 const ack = (outcome: SignalAck['outcome'], detail: SignalAck['detail'], issue: string | null = null): SignalAck => ({
   outcome,
   detail,
@@ -15,15 +22,20 @@ const ack = (outcome: SignalAck['outcome'], detail: SignalAck['detail'], issue: 
 const fixture = (name: string): Promise<unknown> => Bun.file(join(import.meta.dir, 'fixtures', name)).json()
 
 let filed: AlertRequest[]
+let feedbacks: FeedbackRequest[]
 let answer: () => Promise<Filed>
 let logs: string[]
 let reports: DoorReport[]
 let reportFails = false
 
 const door = createDoor({
-  tokens: { kuma: KUMA_TOKEN, hyperdx: HYPERDX_TOKEN },
+  tokens: { kuma: KUMA_TOKEN, hyperdx: HYPERDX_TOKEN, 'feedback-weather': WEATHER_TOKEN },
   file: async (input) => {
     filed.push(input)
+    return answer()
+  },
+  feedback: async (input) => {
+    feedbacks.push(input)
     return answer()
   },
   log: (line) => logs.push(line),
@@ -37,6 +49,7 @@ const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: door })
 afterAll(() => server.stop(true))
 beforeEach(() => {
   filed = []
+  feedbacks = []
   logs = []
   reports = []
   reportFails = false
@@ -391,5 +404,66 @@ describe('the factory token', () => {
     expect(() => doorTokenFrom({})).toThrow('FACTORY_DOOR_TOKEN')
     expect(() => doorTokenFrom({ FACTORY_DOOR_TOKEN: '' })).toThrow('FACTORY_DOOR_TOKEN')
     expect(doorTokenFrom({ FACTORY_DOOR_TOKEN: 'door-token-0123456789' })).toBe('door-token-0123456789')
+  })
+})
+
+describe('app feedback', () => {
+  const body = { title: 'The chart is empty', text: 'on the forecast page', version: '1.2.0', route: '/forecast' }
+  const feedback = (init: Parameters<typeof send>[1] = {}, path = '/feedback/weather') =>
+    send(path, { token: WEATHER_TOKEN, body: JSON.stringify(body), ...init })
+
+  test('a feedback is filed as the envelope with the app from the path, and the ack is passed on', async () => {
+    answer = async () => ({ status: 200, body: ack('held', 'quarantined') })
+    const response = await feedback()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(ack('held', 'quarantined'))
+    expect(feedbacks).toEqual([{ app: 'weather', link: null, ...body }])
+    expect(FeedbackRequest.safeParse(feedbacks[0]).success).toBe(true)
+    expect(filed).toEqual([])
+  })
+
+  test('the order is route, method, token, content type, size, JSON, shape', async () => {
+    expect((await feedback({ method: 'GET', body: undefined })).status).toBe(405)
+    expect((await feedback({}, '/feedback/Weather')).status).toBe(404)
+    expect((await feedback({ token: null })).status).toBe(401)
+    expect((await feedback({ token: KUMA_TOKEN })).status).toBe(401)
+    expect((await feedback({ type: 'text/plain' })).status).toBe(415)
+    expect((await feedback({ body: 'x'.repeat(MAX_BODY_BYTES + 1) })).status).toBe(413)
+    expect((await feedback({ body: '{nope' })).status).toBe(400)
+    expect((await feedback({ body: JSON.stringify({ title: 'x' }) })).status).toBe(400)
+    expect(feedbacks).toEqual([])
+  })
+
+  test('an app with no token is 401 like any unknown source, and its token opens no alert route', async () => {
+    expect((await feedback({}, '/feedback/other')).status).toBe(401)
+    expect((await alert('kuma-down.json', '/alert/feedback-weather', { token: WEATHER_TOKEN })).status).toBe(404)
+    expect(feedbacks).toEqual([])
+  })
+
+  test('a repo in the payload is refused, never carried', async () => {
+    const response = await feedback({ body: JSON.stringify({ ...body, repo: 'chat' }) })
+    expect(response.status).toBe(400)
+    expect(feedbacks).toEqual([])
+  })
+
+  test('the server’s refusals and failures are mapped as for an alert, and a refusal is logged by app', async () => {
+    answer = async () => ({ status: 422, body: { error: '/secret/path' } })
+    const refused = await feedback()
+    expect(refused.status).toBe(422)
+    expect(await refused.json()).toEqual({ error: 'the feedback was refused' })
+    answer = async () => ({ status: 500, body: null })
+    expect((await feedback()).status).toBe(503)
+    answer = async () => ({ status: 404, body: null })
+    expect((await feedback()).status).toBe(502)
+    answer = async () => ({ status: 200, body: { nope: true } })
+    expect((await feedback()).status).toBe(502)
+    answer = async () => {
+      throw new Error('down')
+    }
+    expect((await feedback()).status).toBe(503)
+
+    await feedback({ token: 'wrong-token-0123456789' })
+    expect(logs.at(-1)).toContain('POST refused feedback-weather 401')
+    expect(reports).toContainEqual({ kind: 'refused', source: 'feedback-weather' })
   })
 })

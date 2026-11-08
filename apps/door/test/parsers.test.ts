@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { hyperdxMonitor, parseHyperdx, parseKuma, PayloadError } from '../src/parsers.ts'
+import { hyperdxMonitor, parseFeedback, parseHyperdx, parseKuma, PayloadError } from '../src/parsers.ts'
 
 const fixture = (name: string): Promise<unknown> => Bun.file(join(import.meta.dir, 'fixtures', name)).json()
 
@@ -204,5 +204,36 @@ describe('hyperdx', () => {
     expect(alert.monitor.length).toBeLessThanOrEqual(256)
     expect(alert.event.length).toBeLessThanOrEqual(256)
     expect(alert.title.length).toBeLessThanOrEqual(500)
+  })
+})
+
+describe('feedback', () => {
+  const payload = { title: ' The chart is empty ', text: 'it was\u0000 fine', version: '1.2.0', route: '/forecast' }
+
+  test('the app comes from the caller and the envelope is cleaned', () => {
+    expect(parseFeedback('weather', payload)).toEqual({
+      app: 'weather',
+      title: 'The chart is empty',
+      text: 'it was� fine',
+      version: '1.2.0',
+      route: '/forecast',
+      link: null,
+    })
+  })
+
+  test('a link loses its userinfo and fragment; overlong fields are cut', () => {
+    const parsed = parseFeedback('weather', {
+      ...payload,
+      link: 'https://user:pw@example.com/a?b=1#frag',
+      version: 'v'.repeat(100),
+    })
+    expect(parsed.link).toBe('https://example.com/a?b=1')
+    expect(parsed.version).toHaveLength(64)
+  })
+
+  test('a missing or empty required field, and any extra field such as a repo, is refused by name', () => {
+    expect(() => parseFeedback('weather', { ...payload, route: ' ' })).toThrow(PayloadError)
+    expect(() => parseFeedback('weather', { title: 'x' })).toThrow(PayloadError)
+    expect(() => parseFeedback('weather', { ...payload, repo: 'chat' })).toThrow(/repo/)
   })
 })

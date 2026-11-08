@@ -2,6 +2,10 @@ import {
   type AlertRequest,
   cleanText,
   type DoorReport,
+  FEEDBACK_ROUTE_SOURCE,
+  type FeedbackRequest,
+  feedbackSource,
+  feedbackTokenKey,
   MAX_TITLE_CHARS,
   type PromoteRequest,
   type Signal,
@@ -161,7 +165,7 @@ export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): R
     fingerprint: fingerprintOf(repo, cleanText(body.title)),
     title: cleanText(body.title).slice(0, MAX_TITLE_CHARS) || 'untitled',
     text: cleanText(body.text),
-    link: body.link ?? null,
+    link: body.link ? cleanText(body.link) : null,
     madeBy: null,
   })
 }
@@ -536,14 +540,46 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- quarantine ----
 
-  async function hold(s: Stores, r: Received): Out<Triaged> {
+  async function hold(s: Stores, r: Received, again?: IssueId): Out<Triaged> {
     const heldKey = r.alert
       ? keyOf('held', r.signal.source, r.alert.subject)
-      : keyOf('held', r.signal.source, r.signal.fingerprint)
+      : again
+        ? keyOf('held', r.signal.source, r.signal.fingerprint, again)
+        : keyOf('held', r.signal.source, r.signal.fingerprint)
     const existing = await s.intake.signalByKey(heldKey)
     if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
     const id = await store(s, r, heldKey, 'held', null)
     return ok(triaged('held', 'quarantined', null, id, 'outside text waits for the owner or the Judge'))
+  }
+
+  /**
+   * Outside text: held until promoted. The one exception is a complaint already promoted to an Issue that is still open,
+   * which amends it (the note is fenced data); one whose Issue is closed is held again as new, under a key of that Issue
+   * so a replay finds it. A duplicate of a still-held signal is the held one (a replay, no second row).
+   */
+  async function outsideIn(s: Stores, r: Received): Out<Triaged> {
+    const { signal } = r
+    if (r.alert) return hold(s, r)
+    await s.intake.lock(`outside:${signal.source}:${signal.fingerprint}`)
+    const match = await s.intake.latestByFingerprint(signal.source, signal.fingerprint)
+    if (!match) return hold(s, r)
+    const issue = await loadIssue(s.work, match.issueId)
+    if (!isOpen(issue)) return hold(s, r, match.issueId)
+    const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
+    const amendKey = keyOf('amended', 'signal', signal.source, signal.fingerprint, issue.id, said)
+    const prior = await s.intake.signalByKey(amendKey)
+    if (prior) return ok(replayedOf(prior))
+    const noted = await note(
+      s,
+      issue.id,
+      keyOf('noted', 'signal', signal.source, signal.fingerprint, issue.id, said),
+      r,
+      'repeated',
+    )
+    if (!noted.ok) return noted
+    await s.intake.touchSubject(match.id, { at: clock.now(), upAt: match.upAt, repeat: true })
+    const stored = await store(s, r, amendKey, 'amended', issue.id)
+    return ok(triaged('amended', 'matched', issue.id, stored))
   }
 
   // ---- receive ----
@@ -558,7 +594,7 @@ export function createIntake(deps: IntakeDeps) {
       const where = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
       if (!where.ok) return where
       if (where.value?.work) return ok(dropped('work_repo', `${signal.repo} is a work repo: it hears the owner only`))
-      return uow.run(async (s) => hold(s, r))
+      return uow.run(async (s) => outsideIn(s, r))
     }
 
     const found = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
@@ -635,22 +671,21 @@ export function createIntake(deps: IntakeDeps) {
       if (!filed.ok) return filed
       const issue = filed.value.issue.id
       await s.intake.setSignal(id, { state: 'promoted', issueId: issue, repo })
-      if (r.alert) {
-        await s.intake.insertSubject({
-          source: r.signal.source,
-          subject: r.alert.subject,
-          fingerprint: r.signal.fingerprint,
-          issueId: issue,
-          groupKey: null,
-          filedAt: now,
-          lastSeen: now,
-          repeats: 0,
-          upAt: null,
-          // A stranger's issue is answered with a comment, never closed on GitHub.
-          writeback: r.signal.source === 'github',
-          admitted: r.signal.source === 'github' ? 'label' : null,
-        })
-      }
+      // A promoted signal is found by its fingerprint next time (an alert by its subject too): a duplicate amends the Issue.
+      await s.intake.insertSubject({
+        source: r.signal.source,
+        subject: r.alert?.subject ?? r.signal.fingerprint,
+        fingerprint: r.signal.fingerprint,
+        issueId: issue,
+        groupKey: null,
+        filedAt: now,
+        lastSeen: now,
+        repeats: 0,
+        upAt: null,
+        // A stranger's issue is answered with a comment, never closed on GitHub.
+        writeback: r.alert !== null && r.signal.source === 'github',
+        admitted: r.alert !== null && r.signal.source === 'github' ? 'label' : null,
+      })
       return ok(triaged('filed', 'promoted', issue, id))
     })
   }
@@ -711,6 +746,43 @@ export function createIntake(deps: IntakeDeps) {
         if (!counted) out.value.detail = 'replayed'
       }
       await s.intake.doorAccepted(input.source, clock.now())
+      return ok(null)
+    })
+    return out
+  }
+
+  /**
+   * The door's feedback from an app: the envelope's version and route head the text as data, the door route
+   * (`feedback`, `<app>`) says which repo or none, and the payload never does. The fingerprint is the repo (or app) and the
+   * title only: the same complaint from two builds or screens is one.
+   */
+  async function feedback(raw: FeedbackRequest): Out<Triaged> {
+    const title = cleanText(raw.title).slice(0, MAX_TITLE_CHARS) || raw.app
+    const routed = await uow.run(async (s) => ok(await s.intake.routeFor(FEEDBACK_ROUTE_SOURCE, raw.app)))
+    if (!routed.ok) return routed
+    const repo = routed.value?.repo ?? null
+    const head = [`app: ${raw.app}`, `version: ${raw.version}`, `route: ${raw.route}`].map((line) =>
+      cleanText(line).slice(0, 300),
+    )
+    const text = [head.join('\n'), cleanText(raw.text)].filter(Boolean).join('\n\n')
+    const out = await receive({
+      signal: {
+        source: feedbackSource(raw.app),
+        kind: 'feedback',
+        origin: 'feedback',
+        trust: 'outside',
+        repo,
+        fingerprint: fingerprintOf(repo ?? raw.app, title),
+        title,
+        text,
+        link: raw.link ? cleanText(raw.link) : null,
+        madeBy: null,
+      },
+      alert: null,
+    })
+    if (!out.ok) return out
+    await uow.run(async (s) => {
+      await s.intake.doorAccepted(feedbackTokenKey(raw.app), clock.now())
       return ok(null)
     })
     return out
@@ -952,7 +1024,21 @@ export function createIntake(deps: IntakeDeps) {
     },
   }
 
-  return { receive, file, alert, promote, list, doorReport, routes, setRoute, removeRoute, settle, healthLines, sink }
+  return {
+    receive,
+    file,
+    alert,
+    feedback,
+    promote,
+    list,
+    doorReport,
+    routes,
+    setRoute,
+    removeRoute,
+    settle,
+    healthLines,
+    sink,
+  }
 }
 
 export type Intake = ReturnType<typeof createIntake>

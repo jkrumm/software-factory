@@ -1,4 +1,9 @@
-import { type AlertRequest, cleanText } from '@software-factory/contract'
+import {
+  type AlertRequest,
+  cleanText,
+  type FeedbackRequest,
+  MAX_TEXT_CHARS as MAX_FEEDBACK_CHARS,
+} from '@software-factory/contract'
 import { z } from 'zod'
 import { redactUrls, withoutUserinfo } from './redact.ts'
 
@@ -192,3 +197,35 @@ export const parseHyperdx: Parser = (payload) => {
 }
 
 export const PARSERS: Readonly<Record<string, Parser>> = { kuma: parseKuma, hyperdx: parseHyperdx }
+
+const FeedbackPayload = z.strictObject({
+  title: z.string(),
+  text: z.string().nullish(),
+  version: z.string(),
+  route: z.string(),
+  link: z.string().nullish(),
+})
+
+/** A required line of the envelope as the factory keeps it: cleaned and cut, and a payload that leaves nothing of it is refused. */
+const required = (label: string, text: string, max: number): string => {
+  const value = cut(cleanText(text), max)
+  if (!value) throw new PayloadError(`${label}: empty`)
+  return value
+}
+
+/**
+ * An app's feedback payload `{ title, text?, version, route, link? }` and the app from the URL as the shared envelope. The body is strict: a `repo`
+ * (or any other field) is a 400, because the app's route in the server's registry picks the repo and nothing in a payload does.
+ * Free text stays as the user wrote it (the server holds it as outside data); a link loses its userinfo and fragment.
+ */
+export function parseFeedback(app: string, payload: unknown): FeedbackRequest {
+  const body = shape(FeedbackPayload, payload)
+  return {
+    app,
+    version: required('version', body.version, 64),
+    route: required('route', body.route, 256),
+    title: required('title', body.title, MAX_TITLE_CHARS),
+    text: cut(cleanText(body.text ?? ''), MAX_FEEDBACK_CHARS),
+    link: body.link ? cut(withoutUserinfo(cleanText(body.link)).replace(/#.*$/s, ''), MAX_LINK_CHARS) : null,
+  }
+}

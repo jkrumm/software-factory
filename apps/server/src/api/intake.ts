@@ -7,6 +7,7 @@ import {
   DoorRouteInput,
   DoorRouteList,
   ErrorBody,
+  FeedbackRequest,
   PromoteRequest,
   SignalAck,
   SignalList,
@@ -26,7 +27,7 @@ import { errorResponses } from './errors.ts'
 /** The use cases the routes call, bound in `main.ts`. */
 export type IntakeApi = Pick<
   Intake,
-  'file' | 'alert' | 'promote' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'
+  'file' | 'alert' | 'feedback' | 'promote' | 'list' | 'doorReport' | 'routes' | 'setRoute' | 'removeRoute'
 >
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
@@ -95,6 +96,7 @@ export const unwiredIntake: IntakeApi = (() => {
   return {
     file: unavailable,
     alert: unavailable,
+    feedback: unavailable,
     promote: unavailable,
     list: unavailable,
     doorReport: unavailable,
@@ -107,7 +109,7 @@ export const unwiredIntake: IntakeApi = (() => {
 /**
  * Signals in, and the door's registry. `POST /signals` is `factory signal`'s entry (the owner, Hermes, agents, an app): the
  * token decides the trust and the claimed `from` can only lower it;
- * `POST /signals/alerts` is the door's, and its body is strict: a repo in it is a 400, because the door's routes pick
+ * `POST /signals/alerts` and `POST /signals/feedback` are the door's, and their bodies are strict: a repo in one is a 400, because the door's routes pick
  * the repo and nothing in a payload does.
  */
 export const intakeRoutes = (api: IntakeApi) =>
@@ -121,6 +123,11 @@ export const intakeRoutes = (api: IntakeApi) =>
       body: AlertRequest,
       response: RESPONSES,
       detail: { operationId: 'signal.alert', summary: "The door's entry: one alert of a monitoring source" },
+    })
+    .post('/signals/feedback', async ({ body }) => answer(await api.feedback(body), ackOf), {
+      body: FeedbackRequest,
+      response: RESPONSES,
+      detail: { operationId: 'signal.feedback', summary: "The door's entry: one piece of an app's feedback" },
     })
     .get(
       '/v1/signals',
