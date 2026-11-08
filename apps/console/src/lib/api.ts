@@ -1,13 +1,14 @@
 import {
   ArtifactDetail,
   ArtifactReply,
-  ChangeList,
   DecisionReply,
   DecisionView,
   ErrandList,
   ErrandReply,
   ErrorBody,
   FlowModel,
+  FrictionModel,
+  KpiModel,
   MachineModel,
   NeedsModel,
   ReadAccountList,
@@ -33,7 +34,7 @@ interface Schema<T> {
 }
 
 /** Same-origin GET of a `/v1` path, parsed with the contract's schema: the server's listener adds the credential. */
-export async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T> {
+async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal, headers: { accept: 'application/json' } })
   if (!response.ok) throw new ApiError(response.status, path)
   return schema.parse(await response.json())
@@ -41,10 +42,11 @@ export async function getJson<T>(path: string, schema: Schema<T>, signal?: Abort
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
+export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
+export const fetchFriction = (days: number, signal?: AbortSignal) =>
+  getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
 export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', ReadAccountList, signal)
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
-export const fetchChanges = (since?: string, signal?: AbortSignal) =>
-  getJson(since ? `/v1/changes?since=${encodeURIComponent(since)}` : '/v1/changes', ChangeList, signal)
 
 /** Same-origin POST of a JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
 async function postJson<T>(path: string, body: unknown, schema: Schema<T>): Promise<T> {
