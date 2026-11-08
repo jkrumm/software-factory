@@ -128,7 +128,7 @@ export interface PassResult {
   filed: Filed[]
   /** chain edges whose blocker was seen closed */
   satisfied: number
-  /** Issues whose dependency wait ended because every Issue they waited for closed */
+  /** Issues whose wait ended without a person: every Issue they waited for closed, or the time they deferred to came */
   woken: IssueId[]
   errors: string[]
 }
@@ -173,8 +173,32 @@ async function wakeDependents(stores: PlanningStores, deps: PlanningDeps): Promi
 }
 
 /**
+ * Wakes the Issues whose timer wait is over: the time the lead deferred to has come (a wait overdue by days ends on
+ * the first pass). Named and keyed like `wakeDependents`, so a replayed pass wakes once.
+ */
+async function wakeTimers(stores: PlanningStores, deps: PlanningDeps): Promise<Result<IssueId[], PortError>> {
+  const now = deps.clock.now().getTime()
+  const woken: IssueId[] = []
+  for (const wait of await stores.reads.timerWaits()) {
+    if (Date.parse(wait.until) > now) continue
+    const recorded = await recordIn(stores.work, deps, {
+      issueId: wait.issue,
+      key: key('woken', wait.issue, 'timer', wait.since),
+      event: {
+        kind: 'woken',
+        payload: { since: wait.since, detail: `its time has come: ${wait.until}` },
+        actor: 'factory',
+      },
+    })
+    if (!recorded.ok) return err(portError('refused', JSON.stringify(recorded.error)))
+    if (recorded.value.result === 'applied') woken.push(wait.issue)
+  }
+  return ok(woken)
+}
+
+/**
  * The planning part of a tick: read the projects, file the plan rows whose `after` rows have closed, mark the chain's
- * satisfied edges and wake the leads that waited on them. Every step is replay-safe, so a pass run twice does nothing
+ * satisfied edges and wake the leads that waited on them or on a time. Every step is replay-safe, so a pass run twice does nothing
  * twice. A failing step is an entry in `errors`; the others still go.
  */
 export async function planningPass(
@@ -200,8 +224,11 @@ export async function planningPass(
 
   const chain = await deps.uow.run(async (stores) => {
     const satisfied = await satisfyEdges(stores, deps.clock.now())
-    const woken = await wakeDependents(stores, deps)
-    return woken.ok ? ok({ satisfied, woken: woken.value }) : woken
+    const dependents = await wakeDependents(stores, deps)
+    if (!dependents.ok) return dependents
+    const timers = await wakeTimers(stores, deps)
+    if (!timers.ok) return timers
+    return ok({ satisfied, woken: [...dependents.value, ...timers.value] })
   })
   if (!chain.ok) {
     errors.push(`chain: ${chain.error.detail}`)

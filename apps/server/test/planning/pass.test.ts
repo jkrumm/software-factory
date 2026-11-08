@@ -4,7 +4,7 @@ import { addAfter, setPrio, settleIssue } from '../../src/app/planning-chain.ts'
 import { projectSignals } from '../../src/app/planning-signals.ts'
 import { projectStates } from '../../src/app/planning-views.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
-import { issueId } from '../../src/kernel/ids.ts'
+import { type IssueId, issueId } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { startWorld, value, type World } from './support.ts'
 
@@ -265,6 +265,42 @@ describe('the chain', () => {
     expect(value(await planningPass(world.deps)).woken).toEqual([])
     const [row] = await world.db.sql`SELECT state FROM factory.issues WHERE id = ${lead}`
     expect(row?.state).toBe('working')
+  })
+
+  describe('a lead that defers until a time', () => {
+    const deferredUntil = async (offsetMs: number) => {
+      world.source.add('x', { project: PROJECT('x') })
+      const lead = await world.queued({ repo: 'x' })
+      await world.send(lead, 'admitted', 'admitted', {})
+      await world.send(lead, 'lead_started', 'lead_started', { attempt: 1, terminal: 't' })
+      const until = new Date(world.clock.now().getTime() + offsetMs).toISOString()
+      expect(await world.send(lead, 'deferred', 'deferred', { attempt: 1, until }, 'lead')).toBe('waiting')
+      return lead
+    }
+    const stateOf = async (lead: IssueId) => {
+      const [row] = await world.db.sql`SELECT state FROM factory.issues WHERE id = ${lead}`
+      return row?.state
+    }
+
+    test('is woken once, when the time has come, and the lead is told', async () => {
+      const lead = await deferredUntil(60_000)
+      expect(value(await planningPass(world.deps)).woken).toEqual([])
+      expect(await stateOf(lead)).toBe('waiting')
+      world.clock.advance(61_000)
+      expect(value(await planningPass(world.deps)).woken).toEqual([lead])
+      expect(await stateOf(lead)).toBe('working')
+      expect(value(await planningPass(world.deps)).woken).toEqual([])
+      const told = await world.db
+        .sql`SELECT 1 FROM factory.issue_effects WHERE issue_id = ${lead} AND kind = 'note_lead'`
+      expect(told.length).toBe(1)
+    })
+
+    test('overdue by days, is woken on the first pass', async () => {
+      const lead = await deferredUntil(60_000)
+      world.clock.advance(3 * 24 * 60 * 60_000)
+      expect(value(await planningPass(world.deps)).woken).toEqual([lead])
+      expect(await stateOf(lead)).toBe('working')
+    })
   })
 
   test('an edge is satisfied once, when its blocker is seen closed', async () => {

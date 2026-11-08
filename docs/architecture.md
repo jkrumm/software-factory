@@ -119,6 +119,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   had shipped goes back to `watching` with a new watch (the old one ends). Only open planning edges are read, never free
   text: a lead or an in-session subagent that merely mentions another Issue is not detected, and a blocker queued for any
   other reason (load, memory, window, chain) or in another repo is left alone.
+- **The timer wake** (`wakeTimers` in `app/planning-pass.ts`). Every planning pass wakes each timer wait whose `until`
+  has passed, as `wakeDependents` does for dependency waits: a `woken` event by the factory, keyed by the wait's version,
+  so a replayed pass wakes once and a wait overdue by days ends on the first pass.
 - **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
   then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
@@ -193,7 +196,7 @@ recorded in `loop_calls` under its key, so the next boot takes it up again.
 | Loop | Deterministic | agw workflow |
 |-|-|-|
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
-| `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits | none |
+| `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
 | `watch` | verify and probes | none |
 | `settle`, `send` | Decision steps, pages | `factory-ask` (the Judge) |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), break a claim deadlock | `factory-steward`: what a stalled Issue needs when the rules do not say |

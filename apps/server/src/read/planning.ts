@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { DependencyWait, IssueReads, OpenIssueRow } from '../domains/planning/ports.ts'
+import type { DependencyWait, IssueReads, OpenIssueRow, TimerWait } from '../domains/planning/ports.ts'
 import { type IssueId, issueId } from '../kernel/ids.ts'
 
 const idOf = (text: string): IssueId => issueId(Number(text.slice('issue_'.length)))
@@ -17,6 +17,11 @@ const OpenRow = z.object({
 const WaitRow = z.object({
   id: z.string(),
   wait: z.object({ since: z.number().int(), after: z.array(z.string()) }),
+})
+
+const TimerRow = z.object({
+  id: z.string(),
+  wait: z.object({ since: z.number().int(), until: z.string() }),
 })
 
 /**
@@ -70,6 +75,21 @@ export function readIssues(tx: SQL): IssueReads {
       return rows.map((raw): DependencyWait => {
         const row = WaitRow.parse(raw)
         return { issue: idOf(row.id), since: row.wait.since, after: row.wait.after.map(idOf) }
+      })
+    },
+
+    async timerWaits() {
+      const rows: unknown[] = await tx`
+        SELECT i.id, e.wait
+        FROM factory.issues i
+        JOIN LATERAL (
+          SELECT wait FROM factory.issue_events x
+          WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
+        ) e ON true
+        WHERE i.state = 'waiting' AND i.wait_reason = 'timer'`
+      return rows.map((raw): TimerWait => {
+        const row = TimerRow.parse(raw)
+        return { issue: idOf(row.id), since: row.wait.since, until: row.wait.until }
       })
     },
   }
