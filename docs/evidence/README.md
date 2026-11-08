@@ -24,6 +24,8 @@ that keeps `lib/` and `signals/topology.out.json` as siblings of `golden/`.
 - `signals/topology.out.json` is the one file kept from `signals/`; `golden/backtest.py` reads it. The script that
   produced it (`signals/signals.py`) and `postmortem/`, `incidents/`, `toil/`, `gameday/`, `projects/`, `questions/`
   stayed in the archive.
+- `alert-sources/` is the 2026-11-08 check that every Kuma, HyperDX and Beszel alert reaches the factory: inventory, one live
+  test per source, and `routes.tsv`, the proposed door registry.
 
 ## Rules for every script
 
