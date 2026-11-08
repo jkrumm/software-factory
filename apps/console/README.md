@@ -41,6 +41,33 @@ bun run --cwd apps/console tokens:check   # fails when the file is stale
 override the palette stores in `localStorage`. The manifest and `<meta name="theme-color">` read their colour from
 `tokens.css` at build time.
 
+## Artifacts
+
+`/artifacts/<id>` (`?revision=n&compare=m`) is where the owner reads a Concept, Spec, Report or Decision, marks text and
+gives the verdict. A lead hands one over with the CLI:
+
+```
+factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.md
+factory artifact submit <issue> --attempt <n> --kind report --title "..." --content @artifact.html --content-format html
+factory artifact revise <artifact> --content @artifact.md --note "what changed"   # after a verdict of Changes
+```
+
+`factory artifact submit --help` has the rest. Start from `templates/artifact.md` (TLDR first, then the decision, options,
+risks, proof; tables with the minimum separator `|-|-|`) or `templates/artifact.html`: self-contained, Basalt's tokens as
+CSS variables with light and dark, semantic classes (`callout`, `table-wrap`, `pre`, `figure`), pictures as inline SVG or
+`data:` URLs. Its token block is generated (`bun run --cwd apps/console templates`, `templates:check` in `make check`).
+
+Markdown is rendered with react-markdown: raw HTML is dropped, `javascript:`/`data:` links are refused and an image shows
+its alt text instead of loading (the CSP is `img-src 'self' data:`). HTML runs in
+`<iframe sandbox="allow-scripts" src="/frame.html">`, a separate document: the listener serves `/frame.html` and `/frame/*`
+(`public/`) under their own CSP (`default-src 'none'`, no `connect-src`, `frame-src`, `form-action` or `base-uri`; images
+and fonts from `data:`; `sandbox allow-scripts`), so the artifact's inline script runs while nothing leaves the frame, and
+the page keeps `script-src 'self'` (a `srcdoc` frame would inherit it). The page posts `{type:'factory.render', html}` once
+the frame has loaded; `frame/frame.js` writes it into the document and adds `frame/annotator.js`, which posts
+`factory.ready` and `factory.select` back and paints `factory.highlight` with the CSS Custom Highlight API. Each side
+believes only its parent or its own frame's window, in the exact shape (zod on the page). A quote is the selected text with
+whitespace folded to single spaces: the API anchors it on the artifact's readable text.
+
 ## Colours are enforced
 
 `test/no-raw-colour.test.ts` fails on any colour literal in `src`, `index.html` and `vite.config.ts` except the generated

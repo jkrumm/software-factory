@@ -142,6 +142,17 @@ the owner. A step is a claimed call with a 35-minute lease past the Judge's 30-m
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
 
+The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side): the
+kind and format in words, the verdict state, a revision selector, the comments with "General" (a comment on the whole
+artifact hangs on the title with the path `global`) and "Unanchored" as their own groups, and for a Concept or Spec the
+verdict control. The owner marks text and comments on it; the page posts the quote (the selection with its whitespace
+folded, which is what the API anchors on) and the nearest heading path, and highlights the anchored comments with the CSS
+Custom Highlight API. Markdown renders through react-markdown without raw HTML, with unsafe URLs refused and no image
+loaded; HTML renders in an `<iframe sandbox="allow-scripts" src="/frame.html">`: a separate document the Console listener serves
+under its own CSP (no request can leave it, and unlike a `srcdoc` frame it does not inherit the page's policy, which keeps
+`script-src 'self'`). The page sends the artifact to the frame by `postMessage`; the injected annotator posts selections
+back, and the page believes only its own frame's well-formed messages. Templates for a lead are in `apps/console/templates/`.
+
 ## Loops and agw
 
 A loop is a named tick (`app/loops/runner.ts`) with a trigger (an interval, or a kick when something changed), a budget
@@ -183,7 +194,8 @@ with `tailscale serve` and holds only its own token. Nothing that can start Clau
 The Console listener reads, and forwards exactly the owner's five answer verbs (a Decision's answer, an artifact's verdict
 and annotation, an Errand done, a held signal promoted), guarded against a cross-site page (JSON only, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
-from a signal already held.
+from a signal already held. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
+served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
 
 ## Data
 
@@ -210,6 +222,4 @@ Rows in `docs/plan.yaml` carry each of these.
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.
-- **Artifacts in the Console:** Markdown through a sanitiser, HTML in a sandboxed iframe with a network-blocking CSP and
-  an annotator that posts selections out; anchors are a quote plus a path with an "Unanchored" group as the fallback.
 - **Client work** in other repos: the Herdr glance, Hermes' factory skill, Argo's factory pages leaving for the Console.

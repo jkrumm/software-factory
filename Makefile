@@ -2,7 +2,7 @@
 .PHONY: help check test e2e fmt deploy rollback verify version rehearse
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc and tokens, e2e tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens and artifact templates, e2e tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -28,6 +28,8 @@ check:
 	@bun run --cwd apps/console typecheck
 	@echo "==> console tokens are current (basalt-ui tokens:check)"
 	@bun run --cwd apps/console tokens:check
+	@echo "==> console artifact templates are current (scripts/templates.ts)"
+	@bun run --cwd apps/console templates:check
 	@echo "==> typecheck e2e (tests/e2e)"
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
 	@echo "==> boundaries (scripts/boundaries.ts)"

@@ -38,10 +38,17 @@ export function useDecision(id: string) {
   return useQuery({ queryKey: ['decision', id], queryFn: ({ signal }) => fetchDecision(id, signal) })
 }
 
-export function useArtifact(id: string) {
-  return useQuery({ queryKey: ['artifact', id], queryFn: ({ signal }) => fetchArtifact(id, signal) })
-}
-
 export function useErrands() {
   return useQuery({ queryKey: ['errands'], queryFn: ({ signal }) => fetchErrands(signal) })
+}
+
+/** One artifact revision (the latest when `revision` is undefined); polls while the stream is not open. */
+export function useArtifact(id: string, revision?: number, enabled = true) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['artifact', id, revision ?? 'latest'],
+    enabled,
+    queryFn: ({ signal }) => fetchArtifact(id, revision, signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
 }

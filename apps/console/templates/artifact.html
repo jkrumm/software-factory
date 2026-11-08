@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Title of the artifact</title>
+    <!--
+  A self-contained artifact in Basalt's look. Copy this file, replace the content between <main> and </main>, keep the
+  <style> block as it is. No external request is possible (the Console frames it under a closed policy), so a picture is
+  inline SVG or a data: URL and a font is the system font. Submit it with:
+    factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.html --content-format html
+-->
+    <style>
+      /* tokens:begin - generated from src/styles/tokens.css by scripts/templates.ts; do not edit */
+      :root {
+        --vx-surface-bg: #f2f2f5;
+        --vx-surface-panel: #fafafd;
+        --vx-surface-subtle: #f4f4f8;
+        --vx-surface-border: #e2e2e5;
+        --vx-ink: #262629;
+        --vx-ink2: #404043;
+        --vx-faint: #69696c;
+        --vx-accent: #4374a6;
+        --vx-accent-fill: #4374a6;
+        --vx-on-accent: #ffffff;
+        --vx-good-solid: #2f774b;
+        --vx-warn-solid: #935f00;
+        --vx-bad-solid: #b5403d;
+        --vx-good-soft: color-mix(in srgb, var(--vx-good-solid) 8%, transparent);
+        --vx-warn: color-mix(in srgb, var(--vx-warn-solid) 8%, transparent);
+        --vx-bad: color-mix(in srgb, var(--vx-bad-solid) 18%, transparent);
+        --vx-radius-card: 10px;
+        --vx-radius-ctrl: 6px;
+        --vx-radius-fine: 4px;
+        --vx-prose-measure: 72ch;
+        --vx-space-stack-sm: 8px;
+        --vx-space-stack-md: 12px;
+        --vx-space-stack-lg: 16px;
+        --vx-space-stack-xl: 24px;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --vx-surface-bg: #27272a;
+          --vx-surface-panel: #2b2b2e;
+          --vx-surface-subtle: #323235;
+          --vx-surface-border: #444447;
+          --vx-ink: #e5e5e9;
+          --vx-ink2: #dddde1;
+          --vx-faint: #a7a7aa;
+          --vx-accent: #a2c3f0;
+          --vx-accent-fill: #4374a6;
+          --vx-on-accent: #ffffff;
+          --vx-good-solid: #52c07c;
+          --vx-warn-solid: #e6a53d;
+          --vx-bad-solid: #fe8178;
+          --vx-good-soft: color-mix(in srgb, var(--vx-good-solid) 8%, transparent);
+          --vx-warn: color-mix(in srgb, var(--vx-warn-solid) 8%, transparent);
+          --vx-bad: color-mix(in srgb, var(--vx-bad-solid) 18%, transparent);
+          --vx-radius-card: 10px;
+          --vx-radius-ctrl: 6px;
+          --vx-radius-fine: 4px;
+          --vx-prose-measure: 72ch;
+          --vx-space-stack-sm: 8px;
+          --vx-space-stack-md: 12px;
+          --vx-space-stack-lg: 16px;
+          --vx-space-stack-xl: 24px;
+        }
+      }
+      /* tokens:end */
+
+      :root {
+        --font-sans:
+          'Nunito Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        --factory-highlight: color-mix(in srgb, var(--vx-accent) 30%, transparent);
+        --factory-highlight-ink: var(--vx-ink);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: var(--vx-space-stack-xl) var(--vx-space-stack-lg);
+        background: var(--vx-surface-bg);
+        color: var(--vx-ink);
+        font: 15px/1.65 var(--font-sans);
+      }
+      main {
+        max-width: var(--vx-prose-measure);
+        margin: 0 auto;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 0 0 var(--vx-space-stack-sm);
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin: var(--vx-space-stack-xl) 0 var(--vx-space-stack-sm);
+      }
+      h3 {
+        font-size: 1.1rem;
+        margin: var(--vx-space-stack-lg) 0 var(--vx-space-stack-sm);
+      }
+      p,
+      ul,
+      ol,
+      table,
+      pre,
+      figure,
+      .callout {
+        margin: var(--vx-space-stack-md) 0;
+      }
+      .meta {
+        color: var(--vx-faint);
+        font-size: 0.9rem;
+        margin: 0;
+      }
+      a {
+        color: var(--vx-accent);
+      }
+      .callout {
+        padding: var(--vx-space-stack-md) var(--vx-space-stack-lg);
+        background: var(--vx-surface-panel);
+        border: 1px solid var(--vx-surface-border);
+        border-left: 4px solid var(--vx-accent);
+        border-radius: var(--vx-radius-card);
+      }
+      .callout > :first-child {
+        margin-top: 0;
+      }
+      .callout > :last-child {
+        margin-bottom: 0;
+      }
+      .callout.good {
+        border-left-color: var(--vx-good-solid);
+        background: var(--vx-good-soft);
+      }
+      .callout.warn {
+        border-left-color: var(--vx-warn-solid);
+        background: var(--vx-warn);
+      }
+      .callout.bad {
+        border-left-color: var(--vx-bad-solid);
+        background: var(--vx-bad);
+      }
+      .callout-title {
+        font-weight: 700;
+        margin-bottom: var(--vx-space-stack-sm);
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.93rem;
+      }
+      th,
+      td {
+        border: 1px solid var(--vx-surface-border);
+        padding: 6px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--vx-surface-subtle);
+        font-weight: 700;
+      }
+      code,
+      pre {
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+      }
+      code {
+        background: var(--vx-surface-subtle);
+        padding: 1px 5px;
+        border-radius: var(--vx-radius-fine);
+      }
+      pre {
+        overflow-x: auto;
+        padding: var(--vx-space-stack-md);
+        background: var(--vx-surface-subtle);
+        border: 1px solid var(--vx-surface-border);
+        border-radius: var(--vx-radius-ctrl);
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      figure {
+        padding: var(--vx-space-stack-md);
+        background: var(--vx-surface-panel);
+        border: 1px solid var(--vx-surface-border);
+        border-radius: var(--vx-radius-card);
+      }
+      figure svg,
+      figure img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0 auto;
+      }
+      figcaption {
+        color: var(--vx-faint);
+        font-size: 0.88rem;
+        margin-top: var(--vx-space-stack-sm);
+        text-align: center;
+      }
+      .svg-line {
+        stroke: var(--vx-surface-border);
+        fill: none;
+        stroke-width: 2;
+      }
+      .svg-box {
+        fill: var(--vx-surface-subtle);
+        stroke: var(--vx-accent);
+        stroke-width: 2;
+      }
+      .svg-text {
+        fill: var(--vx-ink);
+        font: 14px var(--font-sans);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Title of the artifact</h1>
+      <p class="meta">Spec for the change in one line &middot; the Issue in words</p>
+
+      <div class="callout">
+        <div class="callout-title">TLDR</div>
+        <p>What is proposed, why, and what you are asked to decide, in three sentences at most.</p>
+      </div>
+
+      <h2>Decision</h2>
+      <p>The one thing that needs a yes, a no or a change. Say what happens without an answer.</p>
+
+      <h2>Options</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Option</th>
+              <th>Cost</th>
+              <th>Reversible</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Recommended option</td>
+              <td>Time, risk, money</td>
+              <td>Yes</td>
+            </tr>
+            <tr>
+              <td>Alternative</td>
+              <td>Time, risk, money</td>
+              <td>No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>How it works</h2>
+      <figure>
+        <svg viewBox="0 0 420 90" role="img" aria-label="A flows into B">
+          <rect class="svg-box" x="10" y="20" width="150" height="50" rx="8" />
+          <text class="svg-text" x="85" y="50" text-anchor="middle">A</text>
+          <line class="svg-line" x1="160" y1="45" x2="260" y2="45" />
+          <rect class="svg-box" x="260" y="20" width="150" height="50" rx="8" />
+          <text class="svg-text" x="335" y="50" text-anchor="middle">B</text>
+        </svg>
+        <figcaption>What the picture shows, in one line.</figcaption>
+      </figure>
+      <pre><code>factory artifact show &lt;artifact&gt;</code></pre>
+
+      <h2>Risks</h2>
+      <div class="callout warn">
+        <div class="callout-title">Watch for</div>
+        <p>What can go wrong and how it would show.</p>
+      </div>
+
+      <h2>Proof</h2>
+      <ul>
+        <li>What was run and what it showed.</li>
+      </ul>
+    </main>
+  </body>
+</html>

@@ -239,6 +239,32 @@ describe('artifacts', () => {
     expect(anchorOf(html, 'html', '<b>')).toBe('unanchored')
   })
 
+  test('an HTML quote matches what the browser shows: marks kept, inline tags glued, entities decoded', () => {
+    const html =
+      '<p>Run <code>make</code>, then <code>make_check</code> &middot; see &#183; and &#xB7; &mdash; <em>done</em>.</p><!-- hidden --><div>a</div><div>b</div>'
+    expect(readableText(html, 'html')).toBe('Run make, then make_check \u00b7 see \u00b7 and \u00b7 \u2014 done. a b')
+    for (const quote of ['make,', 'make_check', 'make_check \u00b7 see', 'see \u00b7 and \u00b7 \u2014 done.', 'a b'])
+      expect(anchorOf(html, 'html', quote)).toBe('anchored')
+    for (const quote of ['make ,', 'makecheck', 'hidden', '&middot;'])
+      expect(anchorOf(html, 'html', quote)).toBe('unanchored')
+  })
+
+  test('typographic quotes and common symbols decode', () => {
+    expect(readableText('<p>don&rsquo;t &ldquo;stop&rdquo; at 5&deg; &ne; 6</p>', 'html')).toBe(
+      'don’t “stop” at 5° ≠ 6',
+    )
+  })
+
+  test('numeric entities out of range or unknown named ones stay as written', () => {
+    expect(readableText('<p>&#0; &#x110000; &bogus; &lt;b&gt;</p>', 'html')).toBe('&#0; &#x110000; &bogus; <b>')
+  })
+
+  test('a Markdown quote keeps its own marks stripped, as its source (regression)', () => {
+    const md = 'Run `make_check` and keep the *queue*.'
+    expect(anchorOf(md, 'markdown', 'make_check and keep the queue')).toBe('anchored')
+    expect(anchorOf(md, 'markdown', 'keep the *queue*')).toBe('anchored')
+  })
+
   test('an empty quote anchors nowhere', () => {
     expect(anchorOf('text', 'markdown', '  ')).toBe('unanchored')
   })

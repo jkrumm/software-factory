@@ -11,6 +11,16 @@ const SCREENS = [
   { name: 'improve', path: '/improve' },
 ] as const
 
+/** The artifact page: a Markdown Spec, an HTML Report, and a Report compared with its first revision. */
+function artifactScreens() {
+  const ids = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { spec: string; report: string; revised: string }
+  return [
+    { name: 'artifact', path: `/artifacts/${ids.spec}` },
+    { name: 'artifact-html', path: `/artifacts/${ids.report}` },
+    { name: 'artifact-compare', path: `/artifacts/${ids.revised}?revision=2&compare=1` },
+  ]
+}
+
 const VARIANTS = [
   { name: 'desktop-dark', viewport: { width: 1280, height: 800 }, colorScheme: 'dark' },
   { name: 'desktop-light', viewport: { width: 1280, height: 800 }, colorScheme: 'light' },
@@ -21,10 +31,10 @@ for (const variant of VARIANTS) {
   test.describe(variant.name, () => {
     test.use({ viewport: variant.viewport, colorScheme: variant.colorScheme })
 
-    test('the four screens and the open palette', async ({ page, apiUrl }) => {
+    test('the screens, the artifact page and the open palette', async ({ page, apiUrl }) => {
       const shot = (name: string) =>
         page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), fullPage: true, animations: 'disabled' })
-      for (const { name, path } of SCREENS) {
+      for (const { name, path } of [...SCREENS, ...artifactScreens()]) {
         await page.goto(path)
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
