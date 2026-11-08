@@ -102,7 +102,7 @@ const markerOf = (issueId: string): string => `<!-- factory-issue:${issueId} -->
 const plainName = (name: string): boolean => NAME.test(name) && !/^\.+$/.test(name)
 
 /** `owner/name` of an `origin` that is github.com over https or ssh; anything else is not ours to poll. */
-function parseRemote(url: string): { owner: string; name: string } | undefined {
+export function parseRemote(url: string): { owner: string; name: string } | undefined {
   const found =
     /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url) ??
     /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url)

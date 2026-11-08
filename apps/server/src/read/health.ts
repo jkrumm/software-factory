@@ -20,9 +20,16 @@ export interface HealthFacts {
  * stale yet; a tick of 0 is off (the scenarios drive it) and is never judged. Three missed intervals, and at least a
  * minute, make a stale tick.
  */
-export function tickProblem(input: { tickMs: number; now: Date; startedAt: Date; tickAt: Date | null }): string | null {
+export function tickProblem(input: {
+  tickMs: number
+  now: Date
+  startedAt: Date
+  tickAt: Date | null
+  /** the age that makes a tick stale, in place of three intervals and a minute (`FACTORY_HEARTBEAT_STALE_MS`, for a scenario) */
+  limitMs?: number
+}): string | null {
   if (input.tickMs === 0) return null
-  const limit = Math.max(3 * input.tickMs, 60_000)
+  const limit = input.limitMs ?? Math.max(3 * input.tickMs, 60_000)
   if (input.tickAt === null) {
     return input.now.getTime() - input.startedAt.getTime() > limit ? 'no tick has succeeded yet' : null
   }
