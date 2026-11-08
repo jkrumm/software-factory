@@ -1,4 +1,4 @@
-import type { FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
+import type { FindingClass, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
 
 export const WINDOW_DAYS = [7, 30, 90] as const
 export type WindowDays = (typeof WINDOW_DAYS)[number]
@@ -115,3 +115,11 @@ export const perIssueWords = (perIssue: number | null): string => (perIssue === 
 /** "2026-11-01 to 2026-11-08" */
 export const windowWords = (window: { from: string; to: string }): string =>
   `${window.from.slice(0, 10)} to ${window.to.slice(0, 10)}`
+
+/** What a held or probation class says about itself, in the owner's words. */
+export function classWords(cls: FindingClass): string {
+  const outcomes = `${cls.noise} of ${cls.decided} dropped or cancelled`
+  if (cls.status === 'held')
+    return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
+  return `${outcomes}, one Issue at a time until one closes done`
+}

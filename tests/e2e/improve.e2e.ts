@@ -86,3 +86,23 @@ test('usage reads Not measured where the API says so, and no id leaks onto the p
   await expect(usage.getByText('Not measured: the usage schema is not joined here').first()).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
+
+test('held finding classes read what the API says: a line when none is held, else each class with its counts', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<{
+    classes: { loop: string; repo: string; class: string; status: string; decided: number; noise: number }[]
+  }>(apiUrl, '/v1/finding-classes')
+  await page.goto('/improve')
+  const quiet = model.classes.filter((c) => c.status !== 'open')
+  if (quiet.length === 0) {
+    await expect(page.getByText('No finding class is held.', { exact: true })).toBeVisible()
+    return
+  }
+  const list = page.getByRole('list', { name: 'Held finding classes' })
+  for (const c of quiet) {
+    const row = list.getByRole('listitem').filter({ hasText: `${c.loop} · ${c.repo} · ${c.class}` })
+    await expect(row).toContainText(`${c.noise} of ${c.decided} dropped or cancelled`)
+  }
+})

@@ -261,6 +261,39 @@ export const FrictionModel = z
   .meta({ id: 'FrictionModel' })
 export type FrictionModel = z.infer<typeof FrictionModel>
 
+// -- finding classes -----------------------------------------------------------------------------------------------------
+
+export const FindingClass = z
+  .strictObject({
+    loop: z.enum(['friction', 'hygiene']),
+    repo: z.string(),
+    class: z.string(),
+    status: z.enum(['open', 'probation', 'held']),
+    /** every Issue the class filed */
+    issues: z.number().int(),
+    /** decided Issues in the judged window */
+    decided: z.number().int(),
+    /** of those, dropped or cancelled */
+    noise: z.number().int(),
+    /** noise / decided; null with nothing decided */
+    share: z.number().nullable(),
+    /** Issues of the class not closed yet */
+    open: z.number().int(),
+    /** when a held class is asked again; null unless the window is over the share */
+    heldUntil: at.nullable(),
+  })
+  .meta({ id: 'FindingClass' })
+export type FindingClass = z.infer<typeof FindingClass>
+
+export const FindingClassesModel = z
+  .strictObject({
+    at,
+    /** held first, then probation, then open; then by loop, repo and class */
+    classes: z.array(FindingClass),
+  })
+  .meta({ id: 'FindingClassesModel' })
+export type FindingClassesModel = z.infer<typeof FindingClassesModel>
+
 // -- machine -------------------------------------------------------------------------------------------------------------
 
 /** The host's reading and the ceilings admission holds it to; a reading that failed is null. */
