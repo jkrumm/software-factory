@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { freePort, startServer, startWorld } from '../scenarios/harness.ts'
+import { freePort, startWorld } from '../scenarios/harness.ts'
 import { makeEstate } from '../scenarios/intake/support.ts'
-import { seed } from './seed.ts'
+import { startLab } from '../scenarios/planning/lab.ts'
+import { LEAD_REPOS, seed } from './seed.ts'
 
 export const OWNER_LOGIN = 'owner@example.com'
 const DIST = join(import.meta.dir, '..', '..', 'apps', 'console', 'dist')
@@ -34,7 +35,8 @@ function tailnetProxy(target: string) {
 
 /**
  * A private Postgres and the real server with its Console listener on the built `apps/console/dist` (the Makefile builds
- * it first), seeded through the API. The two URLs reach the tests as environment variables; the teardown stops it all.
+ * it first), seeded through the API with real leads (a repo with an origin, the fake `hc`: tests/e2e/seed.ts). The URLs
+ * and the world's directory reach the tests as environment variables; the teardown stops it all.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   if (!existsSync(join(DIST, 'index.html')))
@@ -42,24 +44,36 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const world = await startWorld()
   const estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'chat', work: true }])
   const consolePort = await freePort()
-  const server = await startServer(world, {
+  // the owner's line: a page being sent is what puts a Decision on the owner's list
+  const ntfy = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') })
+  // `chat` is the work repo of the estate (outside text redacted for the read token); these have project files, so leads run in them
+  const lab = await startLab({
+    world,
+    leads: true,
+    repos: Object.fromEntries(LEAD_REPOS.map((name) => [name, { project: `apiVersion: factory/v2\nname: ${name}\n` }])),
     env: {
       ...estate.env,
+      FACTORY_LEADS_PER_ACCOUNT: '16',
+      FACTORY_NTFY_URL: `http://127.0.0.1:${ntfy.port}`,
+      FACTORY_NTFY_TOPIC: 'factory',
+      NTFY_TOKEN: 'e2e-token',
+      FACTORY_CONSOLE_URL: 'https://console.example.test',
       FACTORY_CONSOLE_OWNER_LOGIN: OWNER_LOGIN,
       FACTORY_CONSOLE_PORT: String(consolePort),
       FACTORY_CONSOLE_DIR: DIST,
     },
   })
-  await seed(world, server.url)
+  await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   const tailnet = tailnetProxy(consoleUrl)
-  process.env.E2E_API_URL = server.url
+  process.env.E2E_API_URL = lab.server.url
   process.env.E2E_CONSOLE_URL = consoleUrl
   process.env.E2E_APP_URL = `http://127.0.0.1:${tailnet.port}`
+  process.env.E2E_WORLD_BIN = world.bin
   return async () => {
     await tailnet.stop(true)
-    await server.stop()
+    await lab.stop()
+    await ntfy.stop(true)
     await estate.stop()
-    await world.stop()
   }
 }

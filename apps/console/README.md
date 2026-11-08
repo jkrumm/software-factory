@@ -2,7 +2,7 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-navigation, connection chip, command palette; the screens' content comes in later steps.
+navigation, connection chip, command palette, and the Needs you screen; the other screens come in later steps.
 
 ## Build
 
@@ -22,7 +22,9 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id). `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
+invalidated by the build id). The listener forwards exactly five writes, the owner's answers (a Decision's answer, an
+artifact's verdict and comment, an Errand done, a held signal promoted); the app posts JSON to them same-origin, and
+`/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
 queries poll every 15 s and the chip says `Polling`.
 
 ## Tokens

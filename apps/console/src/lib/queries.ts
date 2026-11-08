@@ -1,6 +1,6 @@
 import { QueryClient, useQuery } from '@tanstack/react-query'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
-import { fetchFlow, fetchNeeds } from './api.ts'
+import { fetchArtifact, fetchDecision, fetchErrands, fetchFlow, fetchNeeds } from './api.ts'
 import { useLive } from './live.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -31,4 +31,17 @@ export function useFlow() {
     queryFn: ({ signal }) => fetchFlow(signal),
     refetchInterval: live ? false : POLL_MS,
   })
+}
+
+/** The detail of one item that waits: the same invalidation as the lists, so an answer elsewhere shows at once. */
+export function useDecision(id: string) {
+  return useQuery({ queryKey: ['decision', id], queryFn: ({ signal }) => fetchDecision(id, signal) })
+}
+
+export function useArtifact(id: string) {
+  return useQuery({ queryKey: ['artifact', id], queryFn: ({ signal }) => fetchArtifact(id, signal) })
+}
+
+export function useErrands() {
+  return useQuery({ queryKey: ['errands'], queryFn: ({ signal }) => fetchErrands(signal) })
 }
