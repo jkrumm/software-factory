@@ -51,8 +51,8 @@ async function event(issueId: string, version: number | null, kind: string, at: 
       ${o.wait === undefined ? null : json(o.wait)}::text::jsonb, ${o.outcome ?? null})`
 }
 
-const filed = (id: string, repo: string, title: string, at: Date) =>
-  event(id, 1, 'filed', at, { payload: { repo, title, kind: 'feature', origin: 'you' }, to: 'settling' })
+const filed = (id: string, repo: string, title: string, at: Date, origin = 'you') =>
+  event(id, 1, 'filed', at, { payload: { repo, title, kind: 'feature', origin }, to: 'settling' })
 
 describe('the empty database', () => {
   test('every model answers with zero counts, never an error', async () => {
@@ -141,7 +141,7 @@ async function seed() {
 
   // issue_5: queued behind issue_2
   await issue('issue_5', 'app', 'queued', 2)
-  await filed('issue_5', 'app', 'Second change', ago(4))
+  await filed('issue_5', 'app', 'Second change', ago(4), 'feedback')
   await event('issue_5', 2, 'settled', ago(3.9), { from: 'settling', to: 'queued' })
   await sql`INSERT INTO factory.planning_edges (issue_id, after_issue, created_at) VALUES ('issue_5', 'issue_2', ${ago(3.9)})`
 
@@ -172,7 +172,7 @@ async function seed() {
 
   // issue_9: cancelled by the owner 5 hours ago
   await issue('issue_9', 'app', 'closed', 2, undefined, 'cancelled')
-  await filed('issue_9', 'app', 'Sixth change', ago(12))
+  await filed('issue_9', 'app', 'Sixth change', ago(12), 'infrastructure')
   await event('issue_9', 2, 'cancelled', ago(5), {
     from: 'settling',
     to: 'closed',
@@ -274,6 +274,7 @@ describe('the fixture', () => {
       id: 'issue_5',
       repo: 'app',
       title: 'Second change',
+      origin: 'feedback',
       since: ago(3.9).toISOString(),
       queue: reason,
     })
@@ -285,6 +286,9 @@ describe('the fixture', () => {
       ['issue_7', 'wall'],
     ])
     expect(flow.closedRecently.map((c) => [c.id, c.outcome])).toEqual([['issue_9', 'cancelled']])
+    expect(flow.closedRecently[0]?.origin).toBe('infrastructure')
+    // origin is a shape: a work repo's Issue keeps it
+    expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.origin).toBe('you')
     expect(flow.perProject).toEqual([
       { repo: 'app', open: 4, working: 1, queued: 1 },
       { repo: 'work-app', open: 3, working: 0, queued: 0 },

@@ -85,7 +85,7 @@ test('flow and chain list both Issues, whatever state the loops have moved them 
   const flow = await read('/v1/flow', (json) => FlowModel.parse(json))
   const issues = Object.values(flow.states).flatMap((column) => column.issues)
   expect(issues.map((i) => i.id).sort()).toEqual([open, work].sort())
-  expect(issues.find((i) => i.id === open)).toMatchObject({ repo: 'argo', title: 'Pick a logger' })
+  expect(issues.find((i) => i.id === open)).toMatchObject({ repo: 'argo', title: 'Pick a logger', origin: 'you' })
   expect(flow.perProject.map((p) => [p.repo, p.open])).toEqual([
     ['argo', 1],
     ['chat', 1],

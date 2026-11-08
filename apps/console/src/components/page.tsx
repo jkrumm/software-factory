@@ -18,6 +18,10 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   )
 }
 
-export function Page({ children }: { children: ReactNode }) {
-  return <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8 md:py-8">{children}</div>
+export function Page({ children, wide }: { children: ReactNode; wide?: boolean }) {
+  return (
+    <div className={`mx-auto w-full px-4 py-6 md:px-8 md:py-8 ${wide ? 'max-w-screen-2xl' : 'max-w-4xl'}`}>
+      {children}
+    </div>
+  )
 }
