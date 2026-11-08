@@ -87,6 +87,11 @@ export interface Seats {
 export interface Claims {
   /** gives back the repo claim of the attempt; giving back twice is the same as once */
   release(input: { issue: IssueId; attempt: number }): Promise<Result<void>>
+  /**
+   * takes the repo claim back for a lead whose wait ended, before it is told so; `refused` while the repo is full (the
+   * outbox tries again), `gone` when the Issue is closed. Holding one already is the same as taking one.
+   */
+  resume(input: { issue: IssueId; attempt: number }): Promise<Result<void>>
 }
 
 export interface Windows {
