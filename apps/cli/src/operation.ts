@@ -56,6 +56,17 @@ export interface Operation {
 
 export const DEFAULT_URL = 'http://127.0.0.1:7793'
 
+/**
+ * Operations whose server side waits on git, agw or a running pass for up to the server's idle timeout (255 s,
+ * apps/server/src/main.ts). The transport's 10 s default would report "unreachable" while the server finishes and
+ * records the call; these wait a little longer than the server does, so the server's answer is the one that comes back.
+ */
+export const LONG_OPERATION_TIMEOUT_MS = 300_000
+const LONG_OPERATIONS: ReadonlySet<string> = new Set(['issue.ship', 'loop.run'])
+
+export const timeoutOf = (op: Operation): number | undefined =>
+  LONG_OPERATIONS.has(op.operationId) ? LONG_OPERATION_TIMEOUT_MS : undefined
+
 export interface Io {
   env: Record<string, string | undefined>
   out(text: string): void
@@ -218,7 +229,15 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
 export async function runOperation(op: Operation, invocation: Invocation, io: Io): Promise<void> {
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const { path, query, body } = await request(op, invocation, io)
-  const answer = await send({ base, method: op.method, path, query, body, token: tokenOf(io.env) })
+  const answer = await send({
+    base,
+    method: op.method,
+    path,
+    query,
+    body,
+    token: tokenOf(io.env),
+    timeoutMs: timeoutOf(op),
+  })
   if (!answer.reached) {
     throw new FactoryError('network', `server unreachable at ${base}: ${answer.reason}`, {
       hint: 'is the server up? make verify checks the deployment; factory version works offline',

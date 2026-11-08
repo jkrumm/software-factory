@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { Health } from '@software-factory/contract'
 import * as z from 'zod'
 import { FactoryError } from '../src/exit.ts'
-import { type BodyField, type Operation, runOperation } from '../src/operation.ts'
+import { type BodyField, LONG_OPERATION_TIMEOUT_MS, type Operation, runOperation, timeoutOf } from '../src/operation.ts'
 import { run } from '../src/run.ts'
 
 const healthy: Health = {
@@ -227,6 +227,13 @@ describe('runOperation', () => {
       body: '{"text":"hi"}',
       authorization: null,
     })
+  })
+
+  test('the ship and a loop pass wait past the transport default; the rest keep it', () => {
+    const named = (operationId: string): Operation => ({ ...op, operationId })
+    expect(timeoutOf(named('issue.ship'))).toBe(LONG_OPERATION_TIMEOUT_MS)
+    expect(timeoutOf(named('loop.run'))).toBe(LONG_OPERATION_TIMEOUT_MS)
+    expect(timeoutOf(named('issue.note'))).toBeUndefined()
   })
 
   test('a missing positional or body, or a body that is not JSON, is a usage error before any call', async () => {
