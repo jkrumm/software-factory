@@ -81,6 +81,7 @@ const storedOf = (row: SignalRow): StoredSignal =>
     issue: row.issueId,
     dismissedReason: row.dismissal?.reason ?? null,
     dismissedBy: row.dismissal?.by ?? null,
+    screenNote: row.screening.note,
     redacted: false,
   })
 

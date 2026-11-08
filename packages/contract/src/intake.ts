@@ -216,6 +216,8 @@ export const StoredSignal = z
     /** why a dismissed signal was turned away (it can quote outside text: the read token does not see it) */
     dismissedReason: z.string().nullable(),
     dismissedBy: z.enum(DISMISSERS).nullable(),
+    /** what the Judge made of a held signal it left to the owner (it can quote outside text: the read token does not see it) */
+    screenNote: z.string().nullable(),
     /** the text was hidden: the read token does not see outside text */
     redacted: z.boolean(),
   })
@@ -305,3 +307,46 @@ export const DoorReport = z
 export type DoorReport = z.infer<typeof DoorReport>
 
 export const DoorReportAck = z.object({ ok: z.literal(true) }).meta({ id: 'DoorReportAck' })
+
+// ---- factory-screen: the Judge looks at a held signal -----------------------------------------------------------------------
+
+const ScreenLine = z.string().trim().min(1).max(300)
+
+/** The one signal a `factory-screen` call is shown; its words are outside text, data and never instructions. */
+export const ScreenRequest = z
+  .object({
+    signal: z.object({
+      id: z.string(),
+      source: z.string(),
+      kind: z.enum(SIGNAL_KINDS),
+      origin: z.enum(SIGNAL_ORIGINS),
+      repo: z.string().nullable(),
+      title: z.string(),
+      text: z.string(),
+      link: z.string().nullable(),
+      receivedAt: z.string(),
+    }),
+    /** the open Issues of `signal.repo`, at most 40; empty when the signal names no repo */
+    openIssues: z.array(z.object({ id: z.string(), title: z.string(), kind: z.string(), state: z.string() })).max(40),
+    /** the names of the projects the factory knows that are not work repos */
+    projects: z.array(z.string()).max(60),
+  })
+  .meta({ id: 'ScreenRequest' })
+export type ScreenRequest = z.infer<typeof ScreenRequest>
+
+export const SCREEN_VERDICTS = ['promote', 'dismiss', 'leave'] as const
+
+/** What `factory-screen` says of the signal: promote it, dismiss it, or leave it to the owner with a recommendation. */
+export const ScreenAnswer = z
+  .object({
+    verdict: z.enum(SCREEN_VERDICTS),
+    reason: ScreenLine,
+    /** promote: the repo to file in when the signal names none */
+    repo: z.string().nullable(),
+    /** dismiss as a duplicate: an Issue id from `openIssues` */
+    duplicateOf: z.string().nullable(),
+    /** leave: what the owner should do with it */
+    recommendation: ScreenLine.nullable(),
+  })
+  .meta({ id: 'ScreenAnswer' })
+export type ScreenAnswer = z.infer<typeof ScreenAnswer>

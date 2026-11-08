@@ -17,7 +17,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `scripts/public-scan.ts` (in `make check`) fails on an address, tailnet name, e-mail, secret, home path, ssh alias, account
   or work-repo name in any tracked file; an exception is a line in `scripts/public-scan.allow` with its reason. Work repos
   appear only as `WorkRoot` and `work-repo-N`.
-- **The factory never calls a model.** Every judgment (triage, the steward, the Judge, the queue) is an `agw` workflow
+- **The factory never calls a model.** Every judgment (triage, the steward, the Judge, the queue, the screening of held signals) is an `agw` workflow
   called through `apps/server/src/adapters/agw/`. No model SDK in this repo.
 - **Dependencies point one way:** factory → agw, herdr-core, GitHub, the intake sources. Nothing here is imported by
   agent-workflows.

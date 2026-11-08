@@ -142,6 +142,7 @@ test('signals: the read token gets no word of any signal', async () => {
       issue: 'issue_1',
       dismissedReason: null,
       dismissedBy: null,
+      screenNote: null,
       redacted: false,
     },
   ])

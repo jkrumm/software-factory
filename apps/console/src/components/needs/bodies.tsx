@@ -300,6 +300,7 @@ function HeldSignalBody({ item, onSent }: BodyProps) {
   return (
     <div className="grid gap-4">
       <Prose>{item.summary}</Prose>
+      {item.judge ? <p className="text-sm text-muted-foreground">Judge: {item.judge}</p> : null}
       <form
         className="grid gap-2"
         onSubmit={(event) => {

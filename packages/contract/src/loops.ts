@@ -246,6 +246,7 @@ export const LOOP_NAMES = [
   'queue',
   'friction',
   'hygiene',
+  'screen',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

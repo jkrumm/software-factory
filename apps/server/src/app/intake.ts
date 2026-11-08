@@ -15,6 +15,7 @@ import {
   storable,
 } from '@software-factory/contract'
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
+import { NOT_SCREENED } from '../domains/intake/screen.ts'
 import type { Alert, HealRule, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
 import type {
   Dismissal,
@@ -214,7 +215,16 @@ export function createIntake(deps: IntakeDeps) {
     dismissal: Dismissal | null = null,
   ): Promise<string> {
     const id = ids.next('signal')
-    await s.intake.insertSignal({ id, key, received, receivedAt: clock.now(), state, issueId, dismissal })
+    await s.intake.insertSignal({
+      id,
+      key,
+      received,
+      receivedAt: clock.now(),
+      state,
+      issueId,
+      dismissal,
+      screening: NOT_SCREENED,
+    })
     return id
   }
 

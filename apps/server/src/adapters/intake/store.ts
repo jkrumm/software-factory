@@ -69,6 +69,12 @@ const signalOf = (row: Row): SignalRow => ({
   receivedAt: date(row.received_at),
   state: z.enum(['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed']).parse(row.state),
   issueId: textOrNull(row.issue_id) as IssueId | null,
+  screening: {
+    note: textOrNull(row.screen_note),
+    at: dateOrNull(row.screened_at),
+    attempts: int(row.screen_attempts),
+    retryAt: dateOrNull(row.screen_retry_at),
+  },
   dismissal:
     row.state === 'dismissed'
       ? {
@@ -190,6 +196,25 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
         ? await tx`SELECT * FROM factory.intake_signals WHERE state = ${state} ORDER BY received_at, id LIMIT ${limit}`
         : await tx`SELECT * FROM factory.intake_signals ORDER BY received_at DESC, id LIMIT ${limit}`
       return rows.map(signalOf)
+    },
+
+    async screenable(now, maxAttempts, limit) {
+      const rows: Row[] = await tx`
+        SELECT * FROM factory.intake_signals
+        WHERE state = 'held' AND screened_at IS NULL AND screen_attempts < ${maxAttempts}
+          AND (screen_retry_at IS NULL OR screen_retry_at <= ${now})
+        ORDER BY received_at, id LIMIT ${limit}`
+      return rows.map(signalOf)
+    },
+
+    async setScreening(id, screening) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.intake_signals
+        SET screen_note = ${screening.note}, screened_at = ${screening.at}, screen_attempts = ${screening.attempts},
+          screen_retry_at = ${screening.retryAt}
+        WHERE id = ${id} AND state = 'held'
+        RETURNING id`
+      return rows.length === 1
     },
 
     async latestSubject(source, subject) {

@@ -8,6 +8,8 @@ import {
   JudgeVerdictWire,
   QueueAnswer,
   QueueRequest,
+  ScreenAnswer,
+  ScreenRequest,
   StewardAnswer,
   StewardStall,
   TriageAnswer,
@@ -17,6 +19,7 @@ import { agwAmend } from '../../src/adapters/agw/amend.ts'
 import { agwHygiene } from '../../src/adapters/agw/hygiene.ts'
 import { agwJudge } from '../../src/adapters/agw/judge.ts'
 import { agwQueue } from '../../src/adapters/agw/queue.ts'
+import { agwScreen } from '../../src/adapters/agw/screen.ts'
 import { agwSettle, agwSteward } from '../../src/adapters/agw/steward.ts'
 import type { Precedent } from '../../src/domains/checkpoints/decision.ts'
 import { judgeInputOf } from '../../src/domains/checkpoints/decision.ts'
@@ -52,6 +55,8 @@ test('the fixture’s examples parse with the factory’s schemas', () => {
   expect(QueueAnswer.parse(fixture.queue.output)).toEqual(fixture.queue.output)
   expect(HygieneRequest.parse(fixture.hygiene.input)).toEqual(fixture.hygiene.input)
   expect(HygieneAnswer.parse(fixture.hygiene.output)).toEqual(fixture.hygiene.output)
+  expect(ScreenRequest.parse(fixture.screen.input)).toEqual(fixture.screen.input)
+  expect(ScreenAnswer.parse(fixture.screen.output)).toEqual(fixture.screen.output)
 })
 
 test('the Judge’s input as the checkpoints build it is the shape the workflow takes', () => {
@@ -103,6 +108,7 @@ test('each adapter sends its workflow the input as given, under the key it was h
     'factory-triage': fixture.triage.settleOutput,
     'factory-queue': fixture.queue.output,
     'factory-hygiene': fixture.hygiene.output,
+    'factory-screen': fixture.screen.output,
   })
   const k = key('test', 1)
   expect(await agwJudge(port).judge(fixture.judge.input, k)).toEqual(ok(fixture.judge.output))
@@ -110,12 +116,14 @@ test('each adapter sends its workflow the input as given, under the key it was h
   expect(await agwSettle(port).settle(fixture.triage.settleInput, k)).toEqual(ok(fixture.triage.settleOutput))
   expect(await agwQueue(port).ask(fixture.queue.input, k)).toEqual(ok(fixture.queue.output))
   expect(await agwHygiene(port).ask(fixture.hygiene.input, k)).toEqual(ok(fixture.hygiene.output))
+  expect(await agwScreen(port).screen(fixture.screen.input, k)).toEqual(ok(fixture.screen.output))
   expect(calls.map((c) => [c.workflow, c.key])).toEqual([
     ['factory-ask', k],
     ['factory-steward', k],
     ['factory-triage', k],
     ['factory-queue', k],
     ['factory-hygiene', k],
+    ['factory-screen', k],
   ])
   expect(calls[1]?.input).toEqual(fixture.steward.input)
   expect(calls[3]?.input).toEqual(fixture.queue.input)
