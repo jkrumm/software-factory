@@ -4,7 +4,7 @@ The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (B
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
 navigation, connection chip, command palette, the status strip under the title (working / waiting / queued from
 `/v1/flow`, each account's weekly quota from `/v1/accounts`, the mini's load and swap from `/v1/machine`; the meters open
-the weekly reset and the 5-hour window), the Needs you screen and the Flow board; the other screens come in later steps.
+the weekly reset and the 5-hour window), the Needs you screen, the Flow board and the Issue page; the other screens come in later steps.
 
 ## Flow
 
@@ -35,7 +35,7 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id). The listener forwards exactly five writes, the owner's answers (a Decision's answer, an
+invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly five writes, the owner's answers (a Decision's answer, an
 artifact's verdict and comment, an Errand done, a held signal promoted); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
 queries poll every 15 s and the chip says `Polling`.
@@ -80,6 +80,16 @@ the frame has loaded; `frame/frame.js` writes it into the document and adds `fra
 `factory.ready` and `factory.select` back and paints `factory.highlight` with the CSS Custom Highlight API. Each side
 believes only its parent or its own frame's window, in the exact shape (zod on the page). A quote is the selected text with
 whitespace folded to single spaces: the API anchors it on the artifact's readable text.
+
+## The Issue page
+
+`/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and nothing else: the title and
+state, the facts (account, weekly quota, insights), how the Issue was filed and amended (`triage`), each attempt and its
+state, the owner's notes, the Decisions and artifacts with links to their own pages, shipping with its watch and checks,
+and the history, oldest first. Every figure is the API's, only phrased; no id is on screen. A Needs you card links to it
+(Open Issue). It is read-only on purpose: the listener forwards five answer verbs and none of them is a note or a cancel,
+and the Console never cancels an Issue or starts a session. An open Decision links to `/needs-you?item=<id>`, an artifact
+to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 
 ## Colours are enforced
 

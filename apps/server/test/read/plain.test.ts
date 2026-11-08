@@ -190,11 +190,68 @@ describe('the read token', () => {
       evidence: [{ kind: 'review', link: 'https://secret', note: 'secret', at: '2026-11-07T10:00:00.000Z' }],
       asks: [
         {
+          id: 'decision_1',
           question: 'secret?',
           options: ['secret'],
           default: 'secret',
           answer: 'secret',
           askedAt: '2026-11-07T10:00:00.000Z',
+          recommendation: 'secret',
+          checked: 'secret',
+          status: 'answered',
+          answeredAt: '2026-11-07T10:05:00.000Z',
+          settledBy: 'owner',
+        },
+      ],
+      triage: [
+        {
+          at: '2026-11-07T09:00:00.000Z',
+          outcome: 'filed',
+          title: 'secret',
+          text: 'secret',
+          origin: 'you',
+          trust: 'owner',
+          source: 'secret-source',
+          kind: 'request',
+          link: 'https://secret',
+        },
+      ],
+      notes: [{ at: '2026-11-07T10:01:00.000Z', text: 'secret', session: 'lead-12-1', delivered: true }],
+      artifacts: [
+        {
+          id: 'artifact_1',
+          kind: 'spec',
+          title: 'secret',
+          revisions: 2,
+          verdict: 'looks_good',
+          at: '2026-11-07T10:02:00.000Z',
+        },
+      ],
+      shipping: [
+        {
+          at: '2026-11-07T10:03:00.000Z',
+          attempt: 1,
+          result: 'accepted',
+          detail: null,
+          commits: ['secret'],
+          review: { present: true, note: 'secret' },
+          watch: {
+            startedAt: '2026-11-07T10:03:00.000Z',
+            windowMs: 60000,
+            answer: 'passed',
+            answeredAt: '2026-11-07T10:04:00.000Z',
+          },
+          checks: [{ at: '2026-11-07T10:04:00.000Z', result: 'green', summary: 'secret' }],
+        },
+        {
+          at: '2026-11-07T10:02:30.000Z',
+          attempt: 1,
+          result: 'refused',
+          detail: 'secret',
+          commits: [],
+          review: { present: false, note: null },
+          watch: null,
+          checks: [],
         },
       ],
       sessions: [session(true)],
@@ -202,7 +259,17 @@ describe('the read token', () => {
     const red = redactIssueDetail(detail)
     expect(JSON.stringify(red)).not.toContain('secret')
     expect(red.timeline[0]).toMatchObject({ kind: 'asked', text: 'asked', session: 'lead-12-1' })
-    expect(red.asks[0]?.askedAt).toBe('2026-11-07T10:00:00.000Z')
+    expect(red.asks[0]).toMatchObject({
+      id: 'decision_1',
+      askedAt: '2026-11-07T10:00:00.000Z',
+      status: 'answered',
+      settledBy: 'owner',
+    })
+    expect(red.triage[0]).toMatchObject({ outcome: 'filed', kind: 'request', origin: 'you', link: null })
+    expect(red.notes[0]).toMatchObject({ text: '', delivered: true })
+    expect(red.artifacts[0]).toMatchObject({ id: 'artifact_1', revisions: 2, verdict: 'looks_good' })
+    expect(red.shipping[0]).toMatchObject({ result: 'accepted', commits: [], watch: { answer: 'passed' } })
+    expect(red.shipping[1]?.detail).toBe('')
   })
 
   test('an ask and a health line of a work repo get an opaque id and no text', () => {

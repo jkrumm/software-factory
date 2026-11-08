@@ -10,6 +10,7 @@ import type {
 } from '@software-factory/contract'
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
+import { loadArtifacts, loadNotes, loadShipping, loadTriage } from './issue-history.ts'
 import { describeEvent, phaseOf, stateSentence } from './describe.ts'
 import type { QueueReasons } from './flow.ts'
 import { aboutOf, cut, firstSentence, plainText } from './plain.ts'
@@ -233,6 +234,12 @@ export async function listCards(
 }
 
 interface DecisionRow {
+  id: string
+  recommendation: string
+  checked: string
+  settled_by: string | null
+  answered_at: Date | null
+  withdrawn_at: Date | null
   question: string
   options: unknown
   no_answer: unknown
@@ -272,9 +279,15 @@ export async function issueDetail(
     at: line.at.toISOString(),
   }))
   const decisions: DecisionRow[] = await sql`
-    SELECT question, options, no_answer, answer, asked_at FROM factory.decisions
+    SELECT id, recommendation, checked, settled_by, answered_at, withdrawn_at, question, options, no_answer, answer, asked_at FROM factory.decisions
     WHERE issue_id = ${row.id} ORDER BY asked_at`
   const asks: ReadAskLine[] = decisions.map((d) => ({
+    id: d.id,
+    recommendation: d.recommendation,
+    checked: d.checked,
+    status: d.answered_at ? 'answered' : d.withdrawn_at ? 'withdrawn' : 'open',
+    answeredAt: d.answered_at?.toISOString() ?? null,
+    settledBy: d.settled_by,
     question: d.question,
     options: Array.isArray(d.options)
       ? d.options.flatMap((option) => (isRecord(option) && typeof option.label === 'string' ? [option.label] : []))
@@ -284,5 +297,11 @@ export async function issueDetail(
     askedAt: d.asked_at.toISOString(),
   }))
   const sessions: ReadSessionCard[] = (leads.get(row.id) ?? []).map((lead) => lead.card)
-  return { ...card, timeline, evidence, asks, sessions }
+  const [triage, notes, artifacts, shipping] = await Promise.all([
+    loadTriage(sql, row.id),
+    loadNotes(sql, row.id),
+    loadArtifacts(sql, row.id),
+    loadShipping(sql, row.id),
+  ])
+  return { ...card, triage, notes, timeline, evidence, asks, artifacts, shipping, sessions }
 }

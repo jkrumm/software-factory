@@ -7,6 +7,7 @@ import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
 import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
+import { HISTORY_REPOS, seedHistory } from './seed-history.ts'
 
 const DIST = join(import.meta.dir, '..', '..', 'apps', 'console', 'dist')
 
@@ -19,7 +20,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   if (!existsSync(join(DIST, 'index.html')))
     throw new Error('apps/console/dist is not built: `make e2e` builds it first')
   const world = await startWorld()
-  const estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'chat', work: true }])
+  const estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'chat', work: true }, { repo: 'orion' }])
   const consolePort = await freePort()
   const dataDir = await mkdtemp(join(tmpdir(), 'factory-e2e-data-'))
   // the owner's line: a page being sent is what puts a Decision on the owner's list
@@ -29,7 +30,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     world,
     leads: true,
     repos: Object.fromEntries(
-      [...LEAD_REPOS, ...ARTIFACT_REPOS].map((name) => [name, { project: `apiVersion: factory/v2\nname: ${name}\n` }]),
+      [...LEAD_REPOS, ...ARTIFACT_REPOS, ...HISTORY_REPOS].map((name) => [
+        name,
+        { project: `apiVersion: factory/v2\nname: ${name}\n` },
+      ]),
     ),
     env: {
       ...estate.env,
@@ -45,6 +49,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   })
   // before `seed`, which leaves a project row the planning of a new Issue cannot read
   process.env.E2E_ARTIFACTS = JSON.stringify(await seedArtifacts(lab))
+  process.env.E2E_HISTORY = JSON.stringify(await seedHistory(lab))
   await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   process.env.E2E_API_URL = lab.server.url

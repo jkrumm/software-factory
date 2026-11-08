@@ -1,12 +1,14 @@
 import { QueryClient, useQuery } from '@tanstack/react-query'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import {
+  ApiError,
   fetchAccounts,
   fetchArtifact,
   fetchDecision,
   fetchErrands,
   fetchFlow,
   fetchFriction,
+  fetchIssue,
   fetchKpis,
   fetchMachine,
   fetchNeeds,
@@ -93,6 +95,17 @@ export function useArtifact(id: string, revision?: number, enabled = true) {
     queryKey: ['artifact', id, revision ?? 'latest'],
     enabled,
     queryFn: ({ signal }) => fetchArtifact(id, revision, signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** One Issue's page; polls while the stream is not open. An unknown Issue (404) is not retried. */
+export function useIssue(id: string) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['issue', id],
+    queryFn: ({ signal }) => fetchIssue(id, signal),
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
     refetchInterval: live ? false : POLL_MS,
   })
 }

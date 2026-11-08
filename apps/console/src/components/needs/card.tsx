@@ -1,8 +1,9 @@
 import type { NeedItem } from '@software-factory/contract'
+import { Link } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { originOf, waitingWords } from '@/lib/needs'
+import { issueNumber, originOf, waitingWords } from '@/lib/needs'
 import { BodyOf } from './bodies'
 
 /**
@@ -52,8 +53,17 @@ export function NeedCard({
         </button>
       </h3>
       {open ? (
-        <div className="border-t px-4 py-4">
+        <div className="grid gap-4 border-t px-4 py-4">
           <BodyOf item={item} onSent={onSent} />
+          {item.issue ? (
+            <Link
+              to="/issues/$id"
+              params={{ id: issueNumber(item.issue) }}
+              className="w-fit text-sm text-primary underline underline-offset-4"
+            >
+              Open Issue
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </article>
