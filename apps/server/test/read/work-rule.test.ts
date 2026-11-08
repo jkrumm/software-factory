@@ -63,6 +63,7 @@ beforeAll(async () => {
       doorLines: async () => [],
       loops: () => [],
       blockedStreak: 3,
+      mainCheckouts: () => [],
       streamPollMs: 20,
     }),
   })

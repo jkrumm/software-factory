@@ -1,6 +1,8 @@
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, expect, test } from 'bun:test'
 import { type GitRepo, startGitRepo } from '@software-factory/tests/git-repo'
-import { deployedHolds, GitCommits, syncCheckout } from '../../src/adapters/quality/git.ts'
+import { deployedHolds, GitCommits, readMainCheckout, syncCheckout } from '../../src/adapters/quality/git.ts'
 import type { CommitRead } from '../../src/domains/quality/evidence.ts'
 import type { Result } from '../../src/kernel/result.ts'
 
@@ -191,4 +193,42 @@ test('a plan or project.yaml edit after the deploy never regresses it; a change 
   expect(await deployedHolds(repo.path, deployed, plan)).toMatchObject({ ok: true })
   const code = await repo.commit('apps/server/b.ts', '2\n')
   expect(await deployedHolds(repo.path, deployed, code)).toMatchObject({ ok: false })
+})
+
+test('the main checkout on the default branch and clean reads as such', async () => {
+  const repo = await fresh()
+  expect(await readMainCheckout(repo.path)).toEqual({ branch: 'master', defaultBranch: 'master', dirty: [] })
+})
+
+test('the main checkout on another branch names it', async () => {
+  const repo = await fresh()
+  await repo.git('checkout', '-q', '-b', 'lead/work')
+  expect(await readMainCheckout(repo.path)).toEqual({ branch: 'lead/work', defaultBranch: 'master', dirty: [] })
+})
+
+test('tracked changes are dirty; an untracked file is not', async () => {
+  const repo = await fresh()
+  await writeFile(join(repo.path, 'untracked.txt'), 'x\n')
+  expect((await readMainCheckout(repo.path)).dirty).toEqual([])
+  await writeFile(join(repo.path, 'README.txt'), 'changed\n')
+  expect((await readMainCheckout(repo.path)).dirty).toEqual(['README.txt'])
+})
+
+test('a staged rename lists its new path once, even when the old path has a space at column 3', async () => {
+  const repo = await fresh()
+  await writeFile(join(repo.path, 'my file.ts'), 'x\n')
+  await repo.git('add', 'my file.ts')
+  await repo.git('commit', '-q', '-m', 'add')
+  await repo.git('mv', 'my file.ts', 'renamed.ts')
+  expect((await readMainCheckout(repo.path)).dirty).toEqual(['renamed.ts'])
+})
+
+test('a detached HEAD has no branch', async () => {
+  const repo = await fresh()
+  await repo.git('checkout', '-q', '--detach')
+  expect(await readMainCheckout(repo.path)).toMatchObject({ branch: null, defaultBranch: 'master' })
+})
+
+test('a directory that is no repo throws', async () => {
+  expect(readMainCheckout('/tmp/factory-no-such-repo')).rejects.toThrow()
 })

@@ -35,6 +35,8 @@ import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
+import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
+import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
@@ -138,6 +140,7 @@ async function main(): Promise<void> {
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots)
+  const mainCheckoutLines = new MainCheckoutLines()
   const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(process.env) })
   const projects = projectFileProjects({
     uow,
@@ -205,6 +208,8 @@ async function main(): Promise<void> {
     retryMs: loopSettings.retryMs,
     settleTimeoutMs: loopSettings.settleTimeoutMs,
     blockedChecks: loopSettings.blockedChecks,
+    checkouts: gitMainCheckouts(repos),
+    findings: mainCheckoutLines,
   }
   const lines = new Map<string, string>()
   /** A problem that stands is said once, not on every pass. */
@@ -462,6 +467,7 @@ async function main(): Promise<void> {
       doorLines: () => intake.doorLines(DOOR_LINES_RECENT_MS),
       loops: () => runner.view(),
       blockedStreak: loopSettings.blockedChecks,
+      mainCheckouts: () => mainCheckoutLines.current(),
       queueReasons,
     }),
     readModels: { sql, queueReasons, machine },

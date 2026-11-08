@@ -12,7 +12,7 @@ export interface GitOptions {
   signal?: AbortSignal
 }
 
-class GitTimeout extends Error {}
+export class GitTimeout extends Error {}
 
 /** Why the commits cannot count; the answer the lead gets. */
 class CommitsRefused extends Error {}
@@ -55,6 +55,44 @@ async function originDefault(repo: string, options: GitOptions): Promise<string 
 }
 
 const lines = (text: string): string[] => text.split('\n').filter(Boolean)
+
+/**
+ * A repo's main checkout as it is now, from local refs only (no fetch): the branch (null: a detached HEAD), the remote's
+ * default branch as last fetched (null when unknown), and the paths with tracked uncommitted changes (untracked files
+ * are not changes). A git that fails throws; `GitMainCheckouts` maps it.
+ */
+export async function readMainCheckout(
+  repo: string,
+  options: GitOptions = {},
+): Promise<{ branch: string | null; defaultBranch: string | null; dirty: string[] }> {
+  const head = await gitIn(repo, ['symbolic-ref', '-q', '--short', 'HEAD'], options)
+  // Exit 1 is what `-q` says of a detached HEAD; anything else is a git that failed.
+  if (head.exitCode !== 0 && head.exitCode !== 1) throw new Error(`git symbolic-ref failed (exit ${head.exitCode})`)
+  const status = await gitIn(
+    repo,
+    ['--no-optional-locks', '-c', 'core.quotePath=false', 'status', '--porcelain', '-z', '--untracked-files=no'],
+    options,
+  )
+  if (status.exitCode !== 0) throw new Error(`git status failed (exit ${status.exitCode})`)
+  const base = await originDefault(repo, options)
+  return {
+    branch: head.exitCode === 0 && head.stdout.trim() ? head.stdout.trim() : null,
+    defaultBranch: base ? base.replace(/^origin\//, '') : null,
+    dirty: dirtyPaths(status.stdout),
+  }
+}
+
+/** `XY path` entries of `status --porcelain -z`; a rename or copy (R or C) carries its source as the next entry, which is skipped. */
+function dirtyPaths(porcelain: string): string[] {
+  const entries = porcelain.split('\0').filter(Boolean)
+  const paths: string[] = []
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i] ?? ''
+    paths.push(entry.slice(3))
+    if (/[RC]/.test(entry.slice(0, 2))) i++
+  }
+  return paths
+}
 
 /**
  * Whether what the lead reported as merged is what the branch holds: every file the branch changes is, at a reported
