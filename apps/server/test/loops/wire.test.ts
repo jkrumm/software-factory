@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  FixClassesAnswer,
+  FixClassesRequest,
   HygieneAnswer,
   HygieneRequest,
   JudgeInputWire,
@@ -16,6 +18,7 @@ import {
   TriageRequest,
 } from '@software-factory/contract'
 import { agwAmend } from '../../src/adapters/agw/amend.ts'
+import { agwFixClasses } from '../../src/adapters/agw/fix-classes.ts'
 import { agwHygiene } from '../../src/adapters/agw/hygiene.ts'
 import { agwJudge } from '../../src/adapters/agw/judge.ts'
 import { agwQueue } from '../../src/adapters/agw/queue.ts'
@@ -40,6 +43,23 @@ const fixture = JSON.parse(
     'utf8',
   ),
 )
+
+const fixClassesFixture = JSON.parse(
+  await readFile(
+    join(import.meta.dir, '..', '..', '..', '..', 'packages', 'contract', 'fixtures', 'fix-classes.json'),
+    'utf8',
+  ),
+)
+
+test('the fix-classes fixture parses with the factory’s schemas and the adapter sends it as given', async () => {
+  expect(FixClassesRequest.parse(fixClassesFixture.input)).toEqual(fixClassesFixture.input)
+  expect(FixClassesAnswer.parse(fixClassesFixture.output)).toEqual(fixClassesFixture.output)
+  const { port, calls } = fakePort({ 'factory-fix-classes': fixClassesFixture.output })
+  const k = key('test', 2)
+  expect(await agwFixClasses(port).ask(fixClassesFixture.input, k)).toEqual(ok(fixClassesFixture.output))
+  expect(calls.map((c) => [c.workflow, c.key])).toEqual([['factory-fix-classes', k]])
+  expect(calls[0]?.input).toEqual(fixClassesFixture.input)
+})
 
 test('the fixture’s examples parse with the factory’s schemas', () => {
   expect(JudgeInputWire.parse(fixture.judge.input)).toEqual(fixture.judge.input)

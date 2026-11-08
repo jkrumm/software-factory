@@ -1,4 +1,12 @@
-import { formatKpi, perIssueWords, windowWords } from '../../apps/console/src/lib/improve.ts'
+import {
+  fixClassRows,
+  fixWeekLabel,
+  fixWeeksOldestFirst,
+  fixWeekTotals,
+  formatKpi,
+  perIssueWords,
+  windowWords,
+} from '../../apps/console/src/lib/improve.ts'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { api } from './seed.ts'
@@ -43,7 +51,7 @@ test('the headline numbers, the table and each friction count are what the API s
 
   await expectHeadline(page, kpis)
 
-  const table = page.getByRole('table')
+  const table = page.getByRole('region', { name: 'Targets' }).getByRole('table')
   expect(kpis.kpis).toHaveLength(11)
   for (const kpi of kpis.kpis) {
     const row = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: kpi.label }) })
@@ -105,4 +113,22 @@ test('held finding classes read what the API says: a line when none is held, els
     const row = list.getByRole('listitem').filter({ hasText: `${c.loop} · ${c.class}` })
     await expect(row).toContainText(`${c.noise} of ${c.decided} dropped or cancelled`)
   }
+})
+
+test('fix commits by class read what the API says, the weeks oldest first, with a total row', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<Parameters<typeof fixClassRows>[0] & { measured: boolean }>(apiUrl, '/v1/fix-commits')
+  expect(model.measured).toBe(true)
+  await page.goto('/improve')
+  const table = page.getByRole('region', { name: 'Fix commits by class' }).getByRole('table')
+  const head = table.getByRole('columnheader')
+  await expect(head).toHaveText(['Class', ...fixWeeksOldestFirst(model).map(fixWeekLabel)])
+  for (const row of fixClassRows(model)) {
+    const line = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: row.key, exact: true }) })
+    await expect(line.getByRole('cell')).toHaveText(row.counts.map(String))
+  }
+  const total = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Total' }) })
+  await expect(total.getByRole('cell')).toHaveText(fixWeekTotals(model).map(String))
 })

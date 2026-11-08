@@ -383,7 +383,8 @@ export async function readKpis(
       count: null,
       target: { kind: 'trend', min: null, max: null },
       measured: false,
-      definition: 'Not measured: the factory does not sort the commits that fix an earlier change yet.',
+      definition:
+        'Not counted here: fix commits are sorted by class by the fix-classes loop and shown by class and week on the Improve screen (GET /v1/fix-commits).',
     }),
     kpi({
       key: 'window_points',

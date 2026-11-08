@@ -1,4 +1,11 @@
-import type { FindingClassesModel, FrictionModel, Kpi, KpiKey, KpiModel } from '@software-factory/contract'
+import type {
+  FindingClassesModel,
+  FixCommitsModel,
+  FrictionModel,
+  Kpi,
+  KpiKey,
+  KpiModel,
+} from '@software-factory/contract'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +14,10 @@ import {
   classWords,
   DEFAULT_WINDOW,
   FRICTION_GROUP_LABEL,
+  fixClassRows,
+  fixWeekLabel,
+  fixWeeksOldestFirst,
+  fixWeekTotals,
   formatKpi,
   perIssueWords,
   sampleWords,
@@ -18,7 +29,7 @@ import {
   windowOf,
   windowWords,
 } from '@/lib/improve'
-import { useFindingClasses, useFriction, useKpis } from '@/lib/queries'
+import { useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -240,11 +251,70 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
   )
 }
 
+function FixClassesSection({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
+  const rows = model ? fixClassRows(model) : []
+  return (
+    <section aria-labelledby="improve-fix-commits" className="grid gap-3">
+      <h2 id="improve-fix-commits" className="text-sm font-medium text-muted-foreground">
+        Fix commits by class
+      </h2>
+      {!model || !model.measured ? (
+        <p className="text-sm text-muted-foreground">
+          {model ? 'No fix commits stored yet.' : pending ? 'Loading' : 'No data yet'}
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <table className="w-full text-sm">
+            <caption className="sr-only">Fix commits per class, by the week ending on the date shown</caption>
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Class
+                </th>
+                {fixWeeksOldestFirst(model).map((week) => (
+                  <th key={week.to} scope="col" className="px-4 py-2 text-right font-medium">
+                    {fixWeekLabel(week)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} className="border-t">
+                  <th scope="row" className="px-4 py-2 text-left font-medium" title={row.meaning}>
+                    {row.key}
+                  </th>
+                  {row.counts.map((n, i) => (
+                    <td key={i} className="px-4 py-2 text-right tabular-nums">
+                      {n}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr className="border-t font-medium">
+                <th scope="row" className="px-4 py-2 text-left">
+                  Total
+                </th>
+                {fixWeekTotals(model).map((n, i) => (
+                  <td key={i} className="px-4 py-2 text-right tabular-nums">
+                    {n}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
   const kpis = useKpis(days)
   const friction = useFriction(days)
   const classes = useFindingClasses()
+  const fixes = useFixCommits()
 
   if (!kpis.data) {
     return (
@@ -263,6 +333,7 @@ function Improve() {
         <TargetsSection kpis={model.kpis} />
         <UsageSection kpis={model.kpis} />
         <FrictionSection model={friction.data} pending={friction.isPending} />
+        <FixClassesSection model={fixes.data} pending={fixes.isPending} />
         <FindingClassesSection model={classes.data} />
       </div>
     </Page>

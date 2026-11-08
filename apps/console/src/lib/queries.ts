@@ -9,6 +9,7 @@ import {
   fetchErrands,
   fetchFlow,
   fetchFindingClasses,
+  fetchFixCommits,
   fetchFriction,
   fetchIssue,
   fetchKpis,
@@ -79,6 +80,16 @@ export function useFindingClasses() {
   return useQuery({
     queryKey: ['finding-classes'],
     queryFn: ({ signal }) => fetchFindingClasses(signal),
+    refetchInterval: live ? false : POLL_MS,
+  })
+}
+
+/** Fix commits by class over the last four weeks. */
+export function useFixCommits() {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['fix-commits'],
+    queryFn: ({ signal }) => fetchFixCommits(signal),
     refetchInterval: live ? false : POLL_MS,
   })
 }

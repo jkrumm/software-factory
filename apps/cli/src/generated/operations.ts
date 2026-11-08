@@ -20,6 +20,7 @@ import {
   ErrandReply,
   ErrorBody,
   FindingClassesModel,
+  FixCommitsModel,
   FlowModel,
   FrictionModel,
   Health,
@@ -1128,6 +1129,21 @@ export const OPERATIONS: readonly Operation[] = [
     responses: { 200: FindingClassesModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
+    operationId: 'read.fix-commits',
+    command: ['read', 'fix-commits'],
+    method: 'GET',
+    path: '/v1/fix-commits',
+    summary:
+      'fix commits of the projects by class over the last four weeks, the newest week first (week i is the 7 days ending i weeks ago), with what each class means',
+    pathParams: [],
+    queryParams: [],
+    body: false,
+    queryFlags: [],
+    bodyFields: [],
+    args: [],
+    responses: { 200: FixCommitsModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
+  },
+  {
     operationId: 'read.flow',
     command: ['read', 'flow'],
     method: 'GET',
@@ -1462,7 +1478,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/loops/{name}/run',
     summary:
-      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen); a pass already running is waited for, not started again',
+      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes); a pass already running is waited for, not started again',
     pathParams: ['name'],
     queryParams: [],
     body: false,

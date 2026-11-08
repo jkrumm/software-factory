@@ -121,6 +121,11 @@ export async function seed(lab: Lab): Promise<void> {
   await sql`INSERT INTO factory.decision_steps (decision_id, step, outcome, at) VALUES ('decision_e2e', 'owner', 'open', now())`
   await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at)
     VALUES ('errand_e2e', 'e2e-errand', ${rotate}, 1, 'Rotate the chat API key in the portal', 'Settings > Keys > Rotate', now() - interval '1 hour', now() - interval '1 hour')`
+  // fix commits by class: two this week, one three weeks ago
+  await sql`INSERT INTO factory.fix_commits (repo, sha, committed_at, subject, scope, class, by, reason) VALUES
+    ('argo', 'e2e0000000a1', now() - interval '1 day', 'fix(ci): pin the runner', 'ci', 'tooling', 'rule', 'scope ci'),
+    ('argo', 'e2e0000000a2', now() - interval '2 days', 'fix: a retried job ran twice', NULL, 'concurrency', 'workflow', 'a retry replayed a job'),
+    ('chat', 'e2e0000000a3', now() - interval '22 days', 'fix(docs): a stale link', 'docs', 'docs', 'rule', 'scope docs')`
   // one app each: a source that files again at once is held back by intake
   for (const app of ['argo', 'chat', 'harbor']) await holdSignal(url, 'The export button does nothing', app)
 }

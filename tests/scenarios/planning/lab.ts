@@ -14,15 +14,16 @@ export interface RepoFiles {
 
 export type { AccountRow }
 
-const git = async (cwd: string, ...args: string[]) => {
+const gitWith = async (extraEnv: Record<string, string>, cwd: string, ...args: string[]) => {
   const proc = Bun.spawn(['git', '-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
+    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', ...extraEnv },
   })
   const [err, code] = await Promise.all([proc.stderr.text(), proc.exited])
   if (code !== 0) throw new Error(`git ${args.join(' ')}: ${err}`)
 }
+const git = (cwd: string, ...args: string[]) => gitWith({}, cwd, ...args)
 
 /** `{ error: … }` of a failed command, as the CLI prints it on stderr. */
 export interface CliFailure {
@@ -61,8 +62,8 @@ export interface Lab {
   accounts(rows: AccountRow[]): Promise<void>
   /** sets what the host's memory reads */
   memory(input: { swapUsedMb: number; swapouts?: number }): Promise<void>
-  /** commits files to a repo's default branch */
-  commit(repo: string, files: Record<string, string>): Promise<void>
+  /** commits files to a repo's default branch; `message` and `date` (author and committer) default to "update" and now */
+  commit(repo: string, files: Record<string, string>, options?: { message?: string; date?: Date }): Promise<void>
   stop(): Promise<void>
 }
 
@@ -139,14 +140,22 @@ export async function startLab(options: {
       kind === 'incident' ? fileIncident(flow, { repo, title }) : fileIssue(flow, { repo, title }),
     accounts,
     memory,
-    commit: async (repo, files) => {
+    commit: async (repo, files, commitOptions = {}) => {
       const path = join(root, repo)
       for (const [file, text] of Object.entries(files)) {
         await mkdir(join(path, file, '..'), { recursive: true })
         await writeFile(join(path, file), text)
       }
       await git(path, 'add', '-A')
-      await git(path, 'commit', '-q', '-m', 'update')
+      const when = commitOptions.date?.toISOString()
+      await gitWith(
+        when ? { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } : {},
+        path,
+        'commit',
+        '-q',
+        '-m',
+        commitOptions.message ?? 'update',
+      )
       if (options.leads) await git(path, 'push', '-q', 'origin', 'main')
     },
     stop: async () => {

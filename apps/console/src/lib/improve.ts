@@ -1,4 +1,4 @@
-import type { FindingClass, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
+import type { FindingClass, FixCommitsModel, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
 
 export const WINDOW_DAYS = [7, 30, 90] as const
 export type WindowDays = (typeof WINDOW_DAYS)[number]
@@ -125,3 +125,33 @@ export function classWords(cls: FindingClass): string {
     return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
   return `${outcomes}, one Issue at a time until one closes done`
 }
+
+/** The model's weeks as the table reads them, the oldest first (the API sends the newest first). */
+export const fixWeeksOldestFirst = (model: Pick<FixCommitsModel, 'weeks'>): FixCommitsModel['weeks'] =>
+  [...model.weeks].reverse()
+
+/** A week's column heading: the day its window ends. */
+export const fixWeekLabel = (week: Pick<FixCommitsModel['weeks'][number], 'to'>): string => week.to.slice(0, 10)
+
+export interface FixClassRow {
+  key: string
+  meaning: string
+  /** per week, the oldest first */
+  counts: number[]
+  total: number
+}
+
+/** One row per class with a fix commit in any of the weeks, in the API's class order; a class with none is left out. */
+export function fixClassRows(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixClassRow[] {
+  const weeks = [...model.weeks].reverse()
+  return model.classes
+    .map((c) => {
+      const counts = weeks.map((w) => w.byClass[c.key] ?? 0)
+      return { key: c.key, meaning: c.meaning, counts, total: counts.reduce((a, b) => a + b, 0) }
+    })
+    .filter((row) => row.total > 0)
+}
+
+/** The total row: fix commits per week, the oldest first. */
+export const fixWeekTotals = (model: Pick<FixCommitsModel, 'weeks'>): number[] =>
+  [...model.weeks].reverse().map((w) => w.total)

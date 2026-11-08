@@ -1,4 +1,6 @@
 import type {
+  FixClassesAnswer,
+  FixClassesRequest,
   HygieneAnswer,
   HygieneFinding,
   HygieneRequest,
@@ -16,6 +18,7 @@ import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
+import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
@@ -108,6 +111,10 @@ export interface LoopStore {
   ): Promise<void>
   /** the class of finding an Issue was filed for (`migrations/0993_finding_classes.sql`); a repeat is a no-op */
   recordFinding(row: { issue: string; loop: FindingLoop; repo: string; class: string; key: string }): Promise<void>
+  /** the shas of one repo's fix commits stored already (`migrations/0997_fix_commits.sql`) */
+  storedFixShas(repo: string): Promise<Set<string>>
+  /** a repeat is a no-op */
+  recordFixCommits(rows: readonly FixCommitRow[]): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */
@@ -187,4 +194,14 @@ export interface QueueWorkflow {
 /** `factory-hygiene`: the documents a sweep picked, read against the code they describe in a checkout. */
 export interface HygieneWorkflow {
   ask(request: HygieneRequest, key: Key): Promise<Result<HygieneAnswer, PortError>>
+}
+
+/** `factory-fix-classes`: the class of each fix commit the rules did not settle. */
+export interface FixClassesWorkflow {
+  ask(request: FixClassesRequest, key: Key): Promise<Result<FixClassesAnswer, PortError>>
+}
+
+/** The fix commits of one project's default branch, read from git (called outside any transaction). */
+export interface FixCommitReader {
+  read(repo: string, since: Date): Promise<Result<FixCommit[], PortError>>
 }

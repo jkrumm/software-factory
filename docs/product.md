@@ -71,5 +71,22 @@ Read in 7-day windows, on the Console's Improve screen.
 | First verification passes | 91% | at least 90% |
 | Refusals per Issue | 1.18 | at most 0.25 |
 | Cycle p50, queue wait p90 | 37 min, 8.8 h | set after parallel leads |
-| Fix commits per week, by class | not measured | falling |
+| Fix commits per week, by class | measured from the first pass of the `fix-classes` loop, four weeks on Improve | falling |
 | Window points per Issue | not measured | trend only |
+
+### Fix classes
+
+A fix commit is a commit on a project's default branch whose subject is a conventional `fix`. The `fix-classes` loop sorts
+each into one class: by its scope where that settles it, by a workflow that reads the commit otherwise.
+
+| Class | A fix for |
+|-|-|
+| `tests` | tests, scenarios or e2e only |
+| `docs` | documentation only |
+| `tooling` | CI, dependencies, build, lint or scripts |
+| `review` | a follow-up to a finding of a review |
+| `logic` | wrong behaviour in the code's own logic |
+| `contract` | a mismatch across a boundary: an API, a schema, types, a migration or the shape of a config |
+| `concurrency` | races, locks, ordering, timers, replay or idempotence |
+| `environment` | deploy, host, process, paths, runtime or secrets |
+| `other` | none of the above |
