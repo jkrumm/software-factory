@@ -29,7 +29,11 @@ export function NeedCard({
   }, [open])
 
   return (
-    <article ref={card} data-open={open} className="scroll-mt-4 rounded-xl border bg-card text-card-foreground">
+    <article
+      ref={card}
+      data-open={open}
+      className="scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors has-[h3>button:hover]:bg-accent"
+    >
       <h3>
         <button
           ref={header}
