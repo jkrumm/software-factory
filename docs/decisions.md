@@ -177,8 +177,9 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL22 Work-repo text may go to agw.** The rule that a work repo's text never leaves the machine's token API ends with the rewrite; work repos still hear only the owner's signals (NL18).
 - **NL23 The factory trusts the lead's review.** Ship is no longer refused for missing review coverage; a review is recorded as evidence when it exists, the brief requires one per ship range, and the friction loop counts ships without one.
 - **NL24 The cutover runs in watched windows, then a burn-in.** Rehearse on a copy, turn the new core on small, watch it, stop, improve, turn it on again and wider, until a window holds with every repo for a day. Then the old code goes, the orchestrator watches on and reports on day 3 and day 7, and its exception (NL14) ends after that review (`docs/rewrite.md` "The cutover, in windows").
-- **NL25 The Console's perimeter is the tailnet ACL, by device tag, as Collie's (owner, 2026-11-08).** Every node is tagged, so no
-  request carries `Tailscale-User-Login`, and untagging the owner's devices would change the tailnet's policy. The Console is
-  published by a row in dotfiles-private's `tailscale-serve.mini.conf` on its own port (8797), and one grant lets `tag:mac`
-  and `tag:phone` reach `tag:devhost` on that port alone; servers, TVs and the tablet cannot connect. The login header check
-  and the deploy's own `tailscale serve` call go. The listener still forwards only the owner's answer verbs and never starts a session.
+- **NL25 The Console's perimeter is the tailnet ACL, by device tag (owner, 2026-11-08).** Every node is tagged, so no request
+  carries `Tailscale-User-Login`, and untagging the owner's devices would change the tailnet's policy. The Console is reached
+  at the clean dev door the other apps use (`https://factory.<dev domain>`, a `factory.test` block in dotfiles' Caddyfile),
+  whose existing :443 grant lets `tag:mac`, `tag:phone` and `tag:tablet` reach the mini; servers and TVs cannot connect. The
+  login header check and the deploy's own `tailscale serve` call go. The listener forwards only reads and the owner's answer
+  verbs and never starts a session.
