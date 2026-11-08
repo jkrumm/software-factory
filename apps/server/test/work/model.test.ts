@@ -5,6 +5,7 @@ import { type AnyIssueEvent, PAYLOADS } from '../../src/domains/work/events.ts'
 import { candidates, filedIssue } from '../../src/domains/work/explore.ts'
 import { type Issue, type State, STATES, WAIT_REASONS, WAITS, type WaitReason } from '../../src/domains/work/issue.ts'
 import { type AppliedRecord, apply, replay } from '../../src/domains/work/machine.ts'
+import { TABLE } from '../../src/domains/work/table.ts'
 
 /**
  * The model test (`docs/architecture.md` §The Issue state machine): random event sequences, each from its own seed,
@@ -143,8 +144,9 @@ function checkShape(issue: Issue, now: Date, fail: (what: string) => never): voi
     return decided.result === 'applied' && decided.transition.to !== 'waiting'
   }
   if (WAITS[wait.reason].exit === 'machine') {
-    if (!exits.some((event) => event.actor !== 'owner' && leaves(event))) {
-      fail(`the machine wait ${wait.reason} has no exit that needs no person`)
+    // The lead's own verbs leave a timer wait too, but the lead is not the machine: the clock or the steward must.
+    if (!exits.some((event) => (event.actor === 'factory' || event.actor === 'steward') && leaves(event))) {
+      fail(`the machine wait ${wait.reason} has no exit`)
     }
     return
   }
@@ -185,4 +187,24 @@ test('a failing sequence names its seed, and the seed plays it again', () => {
   expect(message).toContain(`model seed ${seed}, step`)
   expect(message).toContain('a planted invariant')
   expect(failure(seed ?? 0)).toBe(message)
+})
+
+test('a timer wait with no exit from the machine breaks the invariant', () => {
+  const seen: Seen = { states: new Set(), waits: new Set(), applied: new Set() }
+  const original = TABLE.waiting.woken
+  TABLE.waiting.woken = (ctx) => (ctx.issue.wait?.reason === 'timer' ? { ignore: 'x' } : original(ctx))
+  try {
+    const failure = (seed: number): string => {
+      try {
+        play(seed, seen)
+      } catch (error) {
+        return String(error)
+      }
+      return ''
+    }
+    const messages = [...Array(2000).keys()].map((n) => failure(n + 1)).filter((message) => message !== '')
+    expect(messages[0]).toContain('the machine wait timer has no exit')
+  } finally {
+    TABLE.waiting.woken = original
+  }
 })

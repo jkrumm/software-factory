@@ -52,6 +52,15 @@ export interface DependencyWait {
   after: IssueId[]
 }
 
+/** An Issue that waits for a time, as its events made it. */
+export interface TimerWait {
+  issue: IssueId
+  /** the version that began the wait: a wake must name it */
+  since: number
+  /** the time the lead deferred to, ISO */
+  until: string
+}
+
 /**
  * What planning reads of the Issues, which another domain owns: read-only, implemented under `read/` on the same
  * transaction.
@@ -63,4 +72,6 @@ export interface IssueReads {
   statesOf(ids: readonly IssueId[]): Promise<Map<IssueId, 'open' | 'closed'>>
   /** the Issues waiting on a dependency */
   dependencyWaits(): Promise<DependencyWait[]>
+  /** the Issues waiting for a time */
+  timerWaits(): Promise<TimerWait[]>
 }
