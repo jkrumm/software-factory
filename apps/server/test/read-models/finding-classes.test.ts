@@ -41,7 +41,7 @@ beforeAll(async () => {
   await finding('hygiene', 'app', 'links', day(11, 5), null)
   // held: three dropped or cancelled, the last closed 6 days ago
   await finding('hygiene', 'app', 'cochange', day(10, 25), day(10, 28), 'dropped')
-  await finding('hygiene', 'app', 'cochange', day(10, 26), day(10, 30), 'cancelled')
+  await finding('hygiene', 'web', 'cochange', day(10, 26), day(10, 30), 'cancelled')
   await finding('hygiene', 'app', 'cochange', day(10, 27), day(11, 1), 'dropped')
   // probation: the same, closed more than 14 days ago
   await finding('friction', 'software-factory', 'touch', day(9, 20), day(9, 25), 'dropped')
@@ -56,7 +56,6 @@ test('held first, then probation, then open, with the counts the verdict stands 
   expect(model.classes).toEqual([
     {
       loop: 'hygiene',
-      repo: 'app',
       class: 'cochange',
       status: 'held',
       issues: 3,
@@ -68,7 +67,6 @@ test('held first, then probation, then open, with the counts the verdict stands 
     },
     {
       loop: 'friction',
-      repo: 'software-factory',
       class: 'touch',
       status: 'probation',
       issues: 3,
@@ -80,7 +78,6 @@ test('held first, then probation, then open, with the counts the verdict stands 
     },
     {
       loop: 'hygiene',
-      repo: 'app',
       class: 'links',
       status: 'open',
       issues: 4,

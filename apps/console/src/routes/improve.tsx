@@ -226,9 +226,9 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
       ) : (
         <ul aria-label="Held finding classes" className="divide-y rounded-xl border bg-card px-4 text-sm">
           {quiet.map((c) => (
-            <li key={`${c.loop}/${c.repo}/${c.class}`} className="flex flex-col gap-0.5 py-2">
+            <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
               <span>
-                {c.loop} · {c.repo} · {c.class}{' '}
+                {c.loop} · {c.class}{' '}
                 <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
               </span>
               <span className="text-muted-foreground">{classWords(c)}</span>

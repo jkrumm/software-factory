@@ -71,7 +71,6 @@ test('sampleWords and windowWords', () => {
 test('classWords: a held class says when it is asked again, a probation class how it files', () => {
   const cls: FindingClass = {
     loop: 'hygiene',
-    repo: 'app',
     class: 'cochange',
     status: 'held',
     issues: 5,

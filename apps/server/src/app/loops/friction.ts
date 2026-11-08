@@ -53,7 +53,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     return ok({ due: false, lastAt: last.value })
   }
 
-  const gated = await readGate(deps, { loop: 'friction', repo: FRICTION_REPO, now })
+  const gated = await readGate(deps, { loop: 'friction', now })
   if (!gated.ok) return gated
   const gate = gated.value
 
@@ -130,7 +130,7 @@ async function fileOne(
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
   if (stands) {
     record.filed.push({ key: pattern.key, count: pattern.count, title })
-    const lost = await gate.record(filed.value.issue, pattern.key)
+    const lost = await gate.record(filed.value.issue, pattern.key, FRICTION_REPO)
     if (lost) record.failed.push({ key: pattern.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
   } else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }

@@ -176,7 +176,7 @@ function world(
   projects: StoredProject[] = names.map((n) => project(n)),
   extra: Extra = {},
 ) {
-  const recorded: { issue: string; class: string; key: string }[] = []
+  const recorded: { issue: string; class: string; key: string; repo: string }[] = []
   const filedBodies: string[] = []
   const rows: HygienePassRecord[] = []
   let at = now
@@ -189,7 +189,7 @@ function world(
       return [...newest.values()]
     },
     recordHygienePass: async (r: HygienePassRecord) => void rows.push(r),
-    recordFinding: async (f: { issue: string; class: string; key: string }) => {
+    recordFinding: async (f: { issue: string; class: string; key: string; repo: string }) => {
       if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
     },
   } as unknown as LoopStore
@@ -322,4 +322,15 @@ test('a class on probation files one finding in the pass', async () => {
   await hygienePass(w.deps)
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['cochange:a|b'])
   expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:c|d'])
+})
+
+test('a class held by noise from other repos holds in this repo too; its repo is still stored', async () => {
+  const findings = [finding('cochange', 'cochange:a|b', 9), finding('links', 'links:x.md', 1)]
+  // four noise Issues, filed two each by the sweeps of two other repos: the class is judged across all of them
+  const held = noisy(4).map((i, n) => ({ ...i, closedAt: ago(DAY + n * HOUR) }))
+  const w = world(['third'], new Set(), undefined, { findings, classes: { cochange: held } })
+  await hygienePass(w.deps)
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:a|b'])
+  expect(w.recorded.map((r) => [r.class, r.repo])).toEqual([['links', w.rows[0]?.repo ?? '']])
 })
