@@ -1,0 +1,103 @@
+source	monitor	repo
+kuma	1Password Backup - Push	dotfiles
+kuma	Agent Workflows Audio - Door	agent-workflows
+kuma	Agent Workflows Host - Door	agent-workflows
+kuma	Argo - Door	argo
+kuma	Beszel - Docker	homelab
+kuma	Beszel Agent - Docker	homelab
+kuma	Brain Backup - Push	dotfiles
+kuma	Brain Sync - Push	dotfiles
+kuma	Brain Web - Door	dotfiles
+kuma	Caddy - Docker	homelab
+kuma	ClickStack OTel - HTTP	vps
+kuma	Cloudflared - Docker	homelab
+kuma	Docker Socket Proxy - Docker	homelab
+kuma	Docker Socket Proxy Watchtower - Docker	homelab
+kuma	Dozzle - Docker	homelab
+kuma	Dozzle - HTTP	homelab
+kuma	EmailGateway - HTTP	email-gateway
+kuma	FileBrowser - Docker	homelab
+kuma	FPP - Analytics - HTTP	free-planning-poker
+kuma	FPP - Analytics Readmodel - Push	free-planning-poker
+kuma	FPP - DB - MySQL	free-planning-poker
+kuma	FPP - DB Backup - Push	free-planning-poker
+kuma	FPP - Frontend - HTTP	free-planning-poker
+kuma	FPP - Server - HTTP	free-planning-poker
+kuma	Garmin Collector - Push	argo
+kuma	Glance - Docker	homelab
+kuma	Glance - HTTP	homelab
+kuma	Hermes Agent - Push	hermes-agent
+kuma	Hermes Backup - Push	hermes-agent
+kuma	Hermes Serve - Push	hermes-agent
+kuma	Home Line - Push	linewatch
+kuma	Home Line - Watchdog	linewatch
+kuma	HomeLab Watchdog - Push	homelab
+kuma	HyperDX - HTTP	vps
+kuma	ImageCDN - HTTP	vps
+kuma	ImageCDN Origin - HTTP	vps
+kuma	Immich - HTTP	homelab
+kuma	Immich - Uptime	homelab
+kuma	Immich Backup - Push	homelab
+kuma	Immich ML - Docker	homelab
+kuma	Immich Postgres - Docker	homelab
+kuma	Immich Redis - Docker	homelab
+kuma	Immich Server - Docker	homelab
+kuma	Karakeep - Docker	homelab
+kuma	Karakeep - HTTP	homelab
+kuma	Karakeep Chrome - Docker	homelab
+kuma	Karakeep Meili - Docker	homelab
+kuma	MacMini Collie - Push	dotfiles
+kuma	MacMini Dev Host - Push	dotfiles
+kuma	MacMini Drift - Push	dotfiles
+kuma	MacMini Postgres Backup - Push	dotfiles
+kuma	MacMini Secret Seed - Push	dotfiles
+kuma	ntfy - Docker	homelab
+kuma	ntfy - HTTP	homelab
+kuma	Photos - HTTP	vps
+kuma	Photos - Uptime	vps
+kuma	Postgres - Backup - Push	vps
+kuma	Postgres - DB - Push	vps
+kuma	Restic Backup - Docker	homelab
+kuma	Restic Backup - Push	homelab
+kuma	RollHook - HTTP	rollhook
+kuma	RollHook - Ready - HTTP	rollhook
+kuma	S3 Gateway - Docker	homelab
+kuma	S3 Gateway - HTTP	homelab
+kuma	Samba - Docker	homelab
+kuma	Shutterflow - Images - HTTP	shutterflow
+kuma	Shutterflow - Share Server - HTTP	shutterflow
+kuma	Software Factory - Push	software-factory
+kuma	Traefik - HTTP	vps
+kuma	Umami - HTTP	vps
+kuma	Uptime Kuma - Docker	homelab
+kuma	Uptime Kuma - Uptime	homelab
+kuma	WalkingPad - Door	king-smith-walkingpad-mac
+kuma	Watchtower - Docker	homelab
+kuma	WeatherOrb - HTTP	weatherorb
+kuma	WeatherOrb Accounts Backup - Push	weatherorb
+kuma	WeatherOrb Watchdog - Degraded	weatherorb
+kuma	WeatherOrb Watchdog - Push	weatherorb
+hyperdx	argo-api server errors >= 5 (15m)	argo
+hyperdx	argo-dashboard browser errors >= 20 (1h)	argo
+hyperdx	email-gateway bounced or complained >= 1 (1h)	email-gateway
+hyperdx	email-gateway errors >= 3 (15m)	email-gateway
+hyperdx	email-gateway job failed >= 1 (15m)	email-gateway
+hyperdx	email-gateway LLM lane erroring >= 3 (15m)	email-gateway
+hyperdx	email-gateway send failed >= 1 (15m)	email-gateway
+hyperdx	email-gateway SES sending paused >= 1 (1h)	email-gateway
+hyperdx	email-gateway sync stalled (0 ok ticks) < 1 (1h)	email-gateway
+hyperdx	fpp browser errors >= 20 (1h)	free-planning-poker
+hyperdx	fpp server errors >= 3 (15m)	free-planning-poker
+hyperdx	imgproxy 5xx >= 3 (15m)	vps
+hyperdx	iris app errors >= 3 (1h)	iris
+hyperdx	iris-server errors >= 10 (1h)	iris
+hyperdx	OTel ingest stalled — 0 argo-api spans (30m)	vps
+hyperdx	rollhook error logs >= 1 (15m)	rollhook
+hyperdx	shutterflow email-otp mail send failed >= 1 (15m)	shutterflow
+hyperdx	shutterflow imgproxy 5xx >= 3 (15m)	shutterflow
+hyperdx	shutterflow master serving tripped >= 1 (5m)	shutterflow
+hyperdx	shutterflow master serving unreachable >= 1 (15m)	shutterflow
+hyperdx	shutterflow-share server errors >= 3 (15m)	shutterflow
+hyperdx	VPS edge 5xx rate > 5% (5m)	vps
+hyperdx	VPS edge p95 > 3s (15m)	vps
+hyperdx	VPS error logs >= 20 (15m)	vps
