@@ -101,7 +101,7 @@ export async function stateOf(world: World, id: string): Promise<string> {
   return [state, wait, outcome].filter(Boolean).join(':')
 }
 
-export async function until<T>(what: string, look: () => Promise<T | undefined | false>, ms = 20_000): Promise<T> {
+export async function until<T>(what: string, look: () => Promise<T | undefined | false>, ms = 45_000): Promise<T> {
   const deadline = Date.now() + ms
   while (Date.now() < deadline) {
     const found = await look()

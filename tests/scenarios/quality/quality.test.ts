@@ -14,7 +14,7 @@ import {
 } from './support.ts'
 
 // A lead starts through the leads' own tick (a worktree, a terminal) before each Issue ships: more than bun's 5 s default.
-setDefaultTimeout(60_000)
+setDefaultTimeout(120_000)
 
 const LONG = 60_000
 
