@@ -81,7 +81,7 @@
   },
   "coverage": {
     "commit_share_in_repos_with_deploy_records": 0.8444,
-    "iuroot": "out of scope: deploys run through GitLab CI, which is not queried (counts-only rule)",
+    "workroot": "out of scope: deploys run through the work forge CI, which is not queried (counts-only rule)",
     "repos_with_deploy_records_90d": [
       "agent-gateway",
       "argo",

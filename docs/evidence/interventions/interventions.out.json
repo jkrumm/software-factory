@@ -60,7 +60,7 @@
    "weatherorb": 5,
    "shutterflow": 3,
    "basalt-ui": 2,
-   "prometheus-scripts": 2,
+   "work-repo-1": 2,
    "argo": 1,
    "tinycast-extensions": 1
   },
@@ -113,7 +113,7 @@
      "ts": "2026-10-22T07:24:00Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The disk was mounted again at 07:15Z. WeatherOrb's archive work needed root on the homelab to prove that an immutable flag blocks an S3 PUT on a probe file and then to install a systemd timer that seals settled archive files.",
    "agent_did": "Prepared a reviewed rollout script and queued it through the present-human gate; the agent has no root on that host.",
    "owner_did": "Approved the dialog at the MacBook; the command ran 3 s after it was queued.",
@@ -143,7 +143,7 @@
      "ts": "2026-10-22T07:17:32Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "At 16:09Z on 10-21 the homelab agent told the WeatherOrb orchestrator to hold its S3 archive probes: the external disk had not come back, so the gateway served an empty stand-in directory. The orchestrator parked the work and waited to be told.",
    "agent_did": "Waited 15 h for a message instead of polling the one fact it needed: is the mount present and the bucket writable.",
    "owner_did": "Typed that the HomeLab HDD and S3 were back into the waiting session.",
@@ -183,7 +183,7 @@
      "ts": "2026-10-22T07:15:22Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "Unplanned homelab reboot at 15:53Z on 10-21 (power or hang). The host was back at 16:04Z, but the external encrypted disk stayed off the USB bus, so every container binding it was stopped. The agent's last word that evening: nothing moves until the enclosure is power-cycled at the site; tell me when.",
    "agent_did": "Contained the outage within 20 min (dependents stopped, mountpoint locked), wrote the restore checklist to memory and waited.",
    "owner_did": "Told the agent at 07:15 that a person on site had switched the disk back on, then approved the mount-guard dialog (unlock and mount) at the MacBook; it appeared and was approved within 2 s.",
@@ -214,7 +214,7 @@
      "ts": "2026-10-21T22:13:29Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The basalt orchestrator reported argo Wave 53 done and started Wave 54 while listing the remaining rollout waves, all for an app that is due a major overhaul.",
    "agent_did": "Kept executing the argo wave list.",
    "owner_did": "Decided to stop investing in argo ('chill with the Argo effort, it will get a major overhaul anyways') and said WeatherOrb is coordinated from its own session.",
@@ -232,9 +232,9 @@
    "when": "2026-10-21T19:48:03Z",
    "signal_ts": "2026-10-21T16:30:47Z",
    "closure_ts": "2026-10-21T19:48:09Z",
-   "repo": "prometheus-scripts",
+   "repo": "work-repo-1",
    "repos": [
-    "prometheus-scripts"
+    "work-repo-1"
    ],
    "episode": null,
    "sources": [
@@ -244,8 +244,8 @@
      "ts": "2026-10-21T19:48:03Z"
     }
    ],
-   "iuroot": true,
-   "signal": "(IuRoot session: withheld)",
+   "workroot": true,
+   "signal": "(WorkRoot session: withheld)",
    "agent_did": "(withheld)",
    "owner_did": "(withheld)",
    "closure": "(withheld)",
@@ -273,7 +273,7 @@
      "ts": "2026-10-21T16:31:32Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "A critical PHP remote-code-execution advisory, with fixed releases the same day, reached the owner through the news, not through the system.",
    "agent_did": "Nothing: no check matches new advisories against the container inventory, and the agent was mid-outage.",
    "owner_did": "Typed one line suggesting that any container running PHP be upgraded.",
@@ -308,7 +308,7 @@
      "ts": "2026-10-21T16:30:12Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The same outage in its first hour. An external uptime monitor emailed the owner about connection issues before anything in the system told him. Over the whole outage warden opened 54 items (19 attached as duplicates, 14 escalated to needs_decision, 11 of those asking for a read-only host shell).",
    "agent_did": "The homelab agent diagnosed the reboot and the missing disk in under 5 min, found that the watchdog logged the missing mount yet reported healthy (fixed and deployed by 16:10:48Z), stopped every container that binds the volume and wrote a mountpoint guard. Locking the bare mountpoint (clear SSD stand-in directories, set the immutable flag) needed root.",
    "owner_did": "Approved the root dialog within 2 s, then asked the agent what was going on because he had only the monitor's emails.",
@@ -361,7 +361,7 @@
      "ts": "2026-10-21T15:58:21Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The Max 7-day window was nearly spent (97 % the next morning). The basalt orchestrator had been parked at the owner's direction since 10-19, knowing the reset time; the WeatherOrb and shutterflow orchestrators since the owner's spend freeze (entry 17). The shutterflow one had also died on an API error at 22:22Z and idled for 17.6 h.",
    "agent_did": "Held position as directed ('still paused'); a parked session resumes only when someone types. A stop hook made the basalt session repeat 'still paused' eleven times in 34 s on 10-19.",
    "owner_did": "Typed a short continue note, with the reset five minutes away, into each of the three sessions at 15:56Z and 'go now' into two of them at 15:58Z, after a pause of about 23 h (at least 45 h for the basalt session).",
@@ -396,7 +396,7 @@
      "ts": "2026-10-21T10:01:52Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "A brief the owner filed (supervise the Obsidian launch agent) became warden item 1706. The implementer paused with a [product] question: add KeepAlive and accept a respawn after a human quits, or keep it unsupervised with a five-minute watchdog that reopens it only when down.",
    "agent_did": "Escalated a design choice that the repo's own AGENTS.md already decides: Obsidian is deliberately started without KeepAlive, or it respawns the instant a human quits it.",
    "owner_did": "Answered through Argo at 10:01:46Z, 30 min after the question (an owner:argo authorisation).",
@@ -425,7 +425,7 @@
      "ts": "2026-10-21T09:14:41Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The Claude usage menu-bar app on the MacBook showed 'unauthorized' with no weekly figure.",
    "agent_did": "Nothing proactive: the expired OAuth token made the usage fetcher write an error file, and no check paged on it.",
    "owner_did": "Noticed the menu bar himself, asked why, and ran /login (a browser OAuth step).",
@@ -460,7 +460,7 @@
      "ts": "2026-10-20T17:08:08Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "A Finder window on the lab log folder kept popping up on the MacBook.",
    "agent_did": "Every `make check` ran an API test that sent the 'reveal logs' request to a server built with the real macOS launcher, which opened Finder on the newest log.",
    "owner_did": "Mentioned it in passing ('super annoying'), then answered which window it was when asked.",
@@ -490,7 +490,7 @@
      "ts": "2026-10-20T16:57:48Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "A mini agent reported that its deliverables could not be copied to the MacBook because the MacBook was unreachable, and stopped there.",
    "agent_did": "Stopped with a note. The MacBook had been asleep with the lid closed, so the copy over the reverse SSH door timed out.",
    "owner_did": "Pasted the agent's report into a fresh MacBook session and asked what was going on, to fix the connection and move the files.",
@@ -519,7 +519,7 @@
      "ts": "2026-10-20T16:41:58Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The audit found 246 GiB in the mini's Trash, which Finder never empties on a headless machine.",
    "agent_did": "Measured it (media, VM data, game and app bundles) and asked for approval, flagged as irreversible.",
    "owner_did": "Approved emptying within 1 s in the native dialog.",
@@ -549,7 +549,7 @@
      "ts": "2026-10-20T16:38:18Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "WeatherOrb moves its archive to a HomeLab S3 bucket; the push key (put and read, no delete) had to reach the mini's secrets cache.",
    "agent_did": "Added the refs to the private refs file and queued a cache reseal.",
    "owner_did": "Approved the reseal: one biometric pass at the MacBook.",
@@ -583,7 +583,7 @@
      "ts": "2026-10-20T16:05:17Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The disk audit could not read the mini's protected folders (Trash, Mail, Messages, device backups): about 200 GiB unaccounted for.",
    "agent_did": "Asked for a read-only `du` over ssh from the MacBook. The first ask sat unanswered for 31 min and was superseded by a second.",
    "owner_did": "Approved the second ask at the MacBook.",
@@ -623,7 +623,7 @@
      "ts": "2026-10-20T16:31:07Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "After a homelab reboot Docker could start before Tailscale, so containers bound to the tailnet address failed. The fix is a systemd drop-in, which needs root.",
    "agent_did": "Queued the drop-in install (sudo through 1Password) at 16:04Z; the dialog went unanswered for 26 min.",
    "owner_did": "Typed that he was at the MacBook to approve at 16:31:07Z. The first run failed (exit 1, no output); the retry 82 s later succeeded.",
@@ -659,7 +659,7 @@
      "ts": "2026-10-20T16:25:36Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The Max 7-day window was close to its cap with a day left, while the shutterflow fleet and the WeatherOrb orchestrator were still spawning reviewers and waves.",
    "agent_did": "Kept orchestrating at full rate until told; then cut to finish-only, parked what needed another big round, and paused its watchers.",
    "owner_did": "Decided to spend only what is necessary until the limit resets the next day (shutterflow 16:24Z, WeatherOrb 16:25Z); an hour earlier he had told the shutterflow lead to be a bit careful.",
@@ -677,9 +677,9 @@
    "when": "2026-10-20T16:23:44Z",
    "signal_ts": null,
    "closure_ts": null,
-   "repo": "prometheus-scripts",
+   "repo": "work-repo-1",
    "repos": [
-    "prometheus-scripts"
+    "work-repo-1"
    ],
    "episode": null,
    "sources": [
@@ -689,8 +689,8 @@
      "ts": "2026-10-20T16:23:44Z"
     }
    ],
-   "iuroot": true,
-   "signal": "(IuRoot session: withheld)",
+   "workroot": true,
+   "signal": "(WorkRoot session: withheld)",
    "agent_did": "(withheld)",
    "owner_did": "(withheld)",
    "closure": "(withheld)",
@@ -718,7 +718,7 @@
      "ts": "2026-10-20T16:16:07Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "Verifying the new `hl` file wrapper: a Finder mount of the HomeLab bucket from the MacBook with the admin key.",
    "agent_did": "Queued the test through the present-human gate. Run headless, the mount died on macOS ('Operation not permitted'), because the Network Volumes grant needs a GUI session.",
    "owner_did": "Approved; the run failed within the second. The mount was then verified from a Terminal session with the grant.",
@@ -748,7 +748,7 @@
      "ts": "2026-10-20T15:48:28Z"
     }
    ],
-   "iuroot": false,
+   "workroot": false,
    "signal": "The mini's 926 GiB Data volume was at 66 GiB free, 16 GiB above the 50 GiB floor, with a 22 GB WeatherOrb round build about to start. Nobody owned a machine-wide disk budget; WeatherOrb's own plan freed 23 GB.",
    "agent_did": "Planned a local fix inside WeatherOrb (retire the test blends, about 23 GB).",
    "owner_did": "Said, with some force, that he wanted to know what was taking the disk, and told the orchestrator to spawn an agent that brings the data problem under control once and for all: audit the whole machine and move history to the HomeLab.",

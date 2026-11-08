@@ -16,7 +16,7 @@
   ],
   "items_total": 556,
   "items_without_repo": 117,
-  "iuroot_launchd_jobs_counted_not_named": 7,
+  "work_root_launchd_jobs_counted_not_named": 7,
   "kuma_docker_monitors_without_a_running_container": [],
   "kuma_homelab_private_monitors_counted_not_named": 22,
   "kuma_monitors_live_total": 120,
@@ -2045,7 +2045,7 @@
  ],
  "meta": {
   "as_of": "2026-10-22T08:00:00Z",
-  "note": "units are live at probe time; Kuma, HyperDX and policy read from repos at the recorded heads; homelab-private and IuRoot are counted, never named",
+  "note": "units are live at probe time; Kuma, HyperDX and policy read from repos at the recorded heads; homelab-private and WorkRoot are counted, never named",
   "probed_at": "2026-10-22T08:40:13Z",
   "script": "evidence/signals/signals.py"
  },
@@ -3777,7 +3777,7 @@
    "container": null,
    "host": "mini",
    "kuma_monitors": [],
-   "project": "IuRoot",
+   "project": "WorkRoot",
    "runtime": "launchd-group",
    "service": "7 launchd jobs (names withheld)"
   }

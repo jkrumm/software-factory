@@ -145,9 +145,9 @@ def tilde(path: str | None) -> str:
 
 
 def repo_of(project: str | None) -> str:
-    """Repo name only: first path component under SourceRoot/IuRoot (worktrees fold into their repo)."""
+    """Repo name only: first path component under SourceRoot/WorkRoot (worktrees fold into their repo)."""
     p = tilde(project)
-    for root in ("~/SourceRoot/", "~/IuRoot/"):
+    for root in ("~/SourceRoot/", "~/WorkRoot/"):
         if p.startswith(root):
             name = p[len(root):].split("/")[0]
             return name[:-3] if name.endswith("-wt") else name

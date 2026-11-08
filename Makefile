@@ -2,7 +2,7 @@
 .PHONY: help check test e2e fmt deploy rollback verify version rehearse
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens and artifact templates, e2e tsc, boundaries, retired words, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens and artifact templates, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -36,6 +36,8 @@ check:
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
 	@bun scripts/retired-words.ts
+	@echo "==> public hygiene (scripts/public-scan.ts)"
+	@bun scripts/public-scan.ts
 	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"
 	@bun apps/server/scripts/issue-diagram.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"

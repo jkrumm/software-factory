@@ -71,7 +71,7 @@
    }
   }
  },
- "note": "Candidates are heuristic tags over owner-typed messages, human-queue asks and warden owner touches. Newest first. IuRoot excerpts are withheld. Judgement lives in judgments.json.",
+ "note": "Candidates are heuristic tags over owner-typed messages, human-queue asks and warden owner touches. Newest first. WorkRoot excerpts are withheld. Judgement lives in judgments.json.",
  "candidates": [
   {
    "id": "hq:20261022T092400-30974",
@@ -110,7 +110,7 @@
    "closed_ts": null,
    "repo": "homelab-private",
    "excerpt_withheld": null,
-   "prev": "h ssh homelab 'crontab ~/crontab.backup-hdd-outage-20261021 && cd ~/homelab-private && make up && make redeploy-audiobookshelf && make health && make vpn-check' ``` `make up` clears the sentinel. Jel…",
+   "prev": "h ssh <server> 'crontab ~/crontab.backup-hdd-outage-20261021 && cd ~/homelab-private && make up && make redeploy-audiobookshelf && make health && make vpn-check' ``` `make up` clears the sentinel. Jel…",
    "kind": "typed",
    "gap_s": 53617,
    "n_chars": 671,
@@ -281,8 +281,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T19:48:03Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 11836,
@@ -291,7 +291,7 @@
     "short",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -349,8 +349,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T16:27:59Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 83,
@@ -358,7 +358,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -366,8 +366,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T16:26:07Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -2,
@@ -376,7 +376,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -384,8 +384,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T16:25:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 26,
@@ -394,7 +394,7 @@
     "short",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -593,8 +593,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T08:19:24Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 461,
@@ -604,7 +604,7 @@
     "after_question",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -612,8 +612,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T08:11:08Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 99,
@@ -621,7 +621,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -629,8 +629,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T08:09:15Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 518,
@@ -640,7 +640,7 @@
     "has_q",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -648,8 +648,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-21T08:00:22Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 285,
@@ -661,7 +661,7 @@
     "has_q",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -724,8 +724,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T17:01:02Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 763,
@@ -738,7 +738,7 @@
     "after_permission_ask",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -911,8 +911,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T16:23:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 5508,
@@ -924,7 +924,7 @@
     "has_q",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1510,8 +1510,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T12:28:31Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "ask",
    "gap_s": 477,
@@ -1520,7 +1520,7 @@
     "ask_user_question",
     "medium",
     "after_question",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1528,8 +1528,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T12:10:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 83160,
@@ -1539,7 +1539,7 @@
     "after_permission_ask",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1547,8 +1547,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:30:23Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 314,
@@ -1558,7 +1558,7 @@
     "kw:go",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1566,8 +1566,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:24:48Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 4,
@@ -1576,7 +1576,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1584,8 +1584,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:24:16Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 14,
@@ -1595,7 +1595,7 @@
     "after_permission_ask",
     "after_done_claim",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1603,8 +1603,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:23:27Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 18,
@@ -1612,7 +1612,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1620,8 +1620,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:21:57Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 8865,
@@ -1630,7 +1630,7 @@
     "short",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1638,8 +1638,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T11:20:30Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 9135,
@@ -1648,7 +1648,7 @@
     "short",
     "kw:go",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1656,8 +1656,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:48:46Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 0,
@@ -1668,7 +1668,7 @@
     "kw:neg_start",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1676,8 +1676,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:48:34Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 113,
@@ -1686,7 +1686,7 @@
     "short",
     "after_blocked",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1694,8 +1694,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:48:08Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 141,
@@ -1706,7 +1706,7 @@
     "has_q",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1714,8 +1714,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:44:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 34,
@@ -1726,7 +1726,7 @@
     "kw:why",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1734,8 +1734,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:41:13Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 75,
@@ -1743,7 +1743,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1751,8 +1751,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:35:37Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1504,
@@ -1761,7 +1761,7 @@
     "medium",
     "kw:neg",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1769,8 +1769,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-20T08:29:27Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 989,
@@ -1782,7 +1782,7 @@
     "has_q",
     "after_question",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1790,8 +1790,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T19:57:08Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 11905,
@@ -1802,7 +1802,7 @@
     "after_permission_ask",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1896,8 +1896,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T14:35:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 1,
@@ -1906,7 +1906,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -1914,8 +1914,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T14:33:52Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 14183,
@@ -1924,7 +1924,7 @@
     "medium",
     "kw:repeat",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2231,8 +2231,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T12:26:17Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 90,
@@ -2241,7 +2241,7 @@
     "short",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2249,8 +2249,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T12:24:36Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 656,
@@ -2261,7 +2261,7 @@
     "has_q",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2539,7 +2539,7 @@
    "ts": "2026-10-19T11:24:37Z",
    "closed_ts": null,
    "repo": "student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 6584,
@@ -2548,7 +2548,7 @@
     "short",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2556,8 +2556,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T10:35:24Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 798,
@@ -2569,7 +2569,7 @@
     "kw:frustrated",
     "has_q",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2616,8 +2616,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T09:22:24Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 21,
@@ -2626,7 +2626,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2634,8 +2634,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T09:20:36Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 406,
@@ -2645,7 +2645,7 @@
     "kw:neg",
     "kw:repeat",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2800,7 +2800,7 @@
    "ts": "2026-10-19T08:21:17Z",
    "closed_ts": null,
    "repo": "student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 32,
@@ -2809,7 +2809,7 @@
     "short",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2818,7 +2818,7 @@
    "ts": "2026-10-19T08:21:17Z",
    "closed_ts": null,
    "repo": "student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 3,
@@ -2828,7 +2828,7 @@
     "medium",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -2945,8 +2945,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-19T07:17:21Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 158784,
@@ -2957,7 +2957,7 @@
     "after_done_claim",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -5753,8 +5753,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-17T10:28:54Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1904,
@@ -5764,7 +5764,7 @@
     "kw:neg_start",
     "kw:frustrated",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -7236,8 +7236,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-16T17:41:24Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 16755,
@@ -7249,7 +7249,7 @@
     "after_permission_ask",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -7393,13 +7393,13 @@
    "source": "human-queue",
    "ts": "2026-10-16T12:59:53Z",
    "closed_ts": "2026-10-16T12:59:54Z",
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
     "reseal_cache",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -7408,11 +7408,11 @@
    "source": "human-queue",
    "ts": "2026-10-16T12:58:41Z",
    "closed_ts": "2026-10-16T12:58:41Z",
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -7438,12 +7438,12 @@
    "source": "human-queue",
    "ts": "2026-10-16T12:57:39Z",
    "closed_ts": "2026-10-16T12:57:40Z",
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:failed",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 1
   },
@@ -7452,12 +7452,12 @@
    "source": "human-queue",
    "ts": "2026-10-16T12:57:29Z",
    "closed_ts": "2026-10-16T12:57:30Z",
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:failed",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 1
   },
@@ -7466,12 +7466,12 @@
    "source": "human-queue",
    "ts": "2026-10-16T12:56:39Z",
    "closed_ts": "2026-10-16T12:56:40Z",
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -7480,8 +7480,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-16T12:56:23Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 2142,
@@ -7490,7 +7490,7 @@
     "short",
     "kw:go",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8004,8 +8004,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-16T09:51:04Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 600,
@@ -8017,7 +8017,7 @@
     "has_q",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8240,8 +8240,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-16T07:53:47Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 2176,
@@ -8250,7 +8250,7 @@
     "short",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8571,8 +8571,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T13:49:00Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -2,
@@ -8582,7 +8582,7 @@
     "short",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8641,8 +8641,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T12:42:11Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 258,
@@ -8653,7 +8653,7 @@
     "after_question",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8909,8 +8909,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T10:58:13Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 185,
@@ -8923,7 +8923,7 @@
     "after_permission_ask",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -8966,8 +8966,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T10:54:42Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 3453,
@@ -8976,7 +8976,7 @@
     "medium",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9100,8 +9100,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T09:56:00Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 3,
@@ -9110,7 +9110,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9136,8 +9136,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T09:35:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1217,
@@ -9146,7 +9146,7 @@
     "medium",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9154,8 +9154,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T09:15:05Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 10,
@@ -9164,7 +9164,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9172,8 +9172,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T09:13:21Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 3,
@@ -9182,7 +9182,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9190,8 +9190,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T09:13:15Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 819,
@@ -9202,7 +9202,7 @@
     "after_permission_ask",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9210,8 +9210,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:57:13Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 94,
@@ -9220,7 +9220,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9228,8 +9228,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:55:14Z",
    "closed_ts": null,
-   "repo": "prometheus-stack",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-4",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -1,
@@ -9238,7 +9238,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9246,8 +9246,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:54:50Z",
    "closed_ts": null,
-   "repo": "prometheus-stack",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-4",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 57430,
@@ -9258,7 +9258,7 @@
     "kw:why",
     "kw:repeat",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9283,8 +9283,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:48:05Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 131,
@@ -9296,7 +9296,7 @@
     "after_done_claim",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9321,8 +9321,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:45:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 106,
@@ -9331,7 +9331,7 @@
     "medium",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9339,8 +9339,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:45:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 16,
@@ -9350,7 +9350,7 @@
     "medium",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9358,8 +9358,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:45:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 99,
@@ -9370,7 +9370,7 @@
     "after_permission_ask",
     "after_done_claim",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9393,8 +9393,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:32:51Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -1,
@@ -9404,7 +9404,7 @@
     "maybe_agent",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9412,8 +9412,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:32:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 0,
@@ -9422,7 +9422,7 @@
     "medium",
     "kw:repeat",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9448,8 +9448,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:25:35Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 190,
@@ -9458,7 +9458,7 @@
     "queued",
     "medium",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9466,8 +9466,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:20:48Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 371,
@@ -9476,7 +9476,7 @@
     "short",
     "kw:go",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9535,8 +9535,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:13:07Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 196,
@@ -9545,7 +9545,7 @@
     "medium",
     "kw:go",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9553,8 +9553,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-15T08:02:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 49358,
@@ -9564,7 +9564,7 @@
     "kw:go",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9937,12 +9937,12 @@
    "source": "human-queue",
    "ts": "2026-10-14T15:52:50Z",
    "closed_ts": "2026-10-14T15:52:50Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -9951,8 +9951,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T15:51:13Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 25427,
@@ -9966,7 +9966,7 @@
     "has_q",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -9991,8 +9991,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T15:41:37Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 8466,
@@ -10002,7 +10002,7 @@
     "kw:neg",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10025,8 +10025,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T13:19:25Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1248,
@@ -10039,7 +10039,7 @@
     "after_done_claim",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10091,8 +10091,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T12:07:19Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 38,
@@ -10101,7 +10101,7 @@
     "short",
     "after_done_claim",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10109,8 +10109,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T12:06:26Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 52,
@@ -10118,7 +10118,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10126,8 +10126,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T12:05:13Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 12010,
@@ -10137,7 +10137,7 @@
     "kw:why",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10306,8 +10306,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T10:02:31Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1776,
@@ -10317,7 +10317,7 @@
     "kw:go",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10556,12 +10556,12 @@
    "source": "human-queue",
    "ts": "2026-10-14T07:40:59Z",
    "closed_ts": "2026-10-14T07:40:59Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -10570,12 +10570,12 @@
    "source": "human-queue",
    "ts": "2026-10-14T07:40:32Z",
    "closed_ts": "2026-10-14T07:40:32Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -10603,8 +10603,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T07:37:50Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 221,
@@ -10612,7 +10612,7 @@
    "tags": [
     "medium",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10620,8 +10620,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T07:31:11Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 64269,
@@ -10631,7 +10631,7 @@
     "kw:frustrated",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -10639,8 +10639,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-14T07:30:40Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 63007,
@@ -10651,7 +10651,7 @@
     "kw:go",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11365,8 +11365,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T13:39:56Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 0,
@@ -11376,7 +11376,7 @@
     "medium",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11384,8 +11384,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T13:39:33Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 417,
@@ -11396,7 +11396,7 @@
     "kw:repeat",
     "kw:frustrated",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11437,8 +11437,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T13:30:14Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 522,
@@ -11448,7 +11448,7 @@
     "kw:neg",
     "kw:frustrated",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11512,8 +11512,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:47:24Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 71,
@@ -11522,7 +11522,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11530,8 +11530,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:36:23Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -1,
@@ -11541,7 +11541,7 @@
     "short",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11549,8 +11549,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:35:05Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 0,
@@ -11561,7 +11561,7 @@
     "kw:broken",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11569,8 +11569,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:34:06Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -9,
@@ -11579,7 +11579,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11587,8 +11587,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:31:02Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 0,
@@ -11598,7 +11598,7 @@
     "medium",
     "kw:go",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11606,13 +11606,13 @@
    "source": "human-queue",
    "ts": "2026-10-13T12:30:33Z",
    "closed_ts": "2026-10-13T12:30:33Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
     "reseal_cache",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -11621,13 +11621,13 @@
    "source": "human-queue",
    "ts": "2026-10-13T12:29:13Z",
    "closed_ts": "2026-10-13T12:29:13Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
     "reseal_cache",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -11636,8 +11636,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:29:08Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 0,
@@ -11646,7 +11646,7 @@
     "queued",
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11654,8 +11654,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:28:06Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -7,
@@ -11665,7 +11665,7 @@
     "short",
     "kw:repeat",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -11673,8 +11673,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-13T12:27:47Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 30,
@@ -11682,7 +11682,7 @@
    "tags": [
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -12749,8 +12749,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-12T06:58:41Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 167051,
@@ -12762,7 +12762,7 @@
     "after_question",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13607,8 +13607,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-10T08:24:14Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 64542,
@@ -13618,7 +13618,7 @@
     "kw:go",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13626,8 +13626,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-10T08:18:34Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 390,
@@ -13638,7 +13638,7 @@
     "has_q",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13701,8 +13701,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-10T07:50:07Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 59519,
@@ -13717,7 +13717,7 @@
     "after_done_claim",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13801,8 +13801,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T14:19:39Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 240,
@@ -13811,7 +13811,7 @@
     "short",
     "kw:go",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13855,8 +13855,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T14:11:24Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 247,
@@ -13865,7 +13865,7 @@
     "medium",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13928,8 +13928,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T14:00:39Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 735,
@@ -13942,7 +13942,7 @@
     "after_question",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13966,8 +13966,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T13:48:02Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 150,
@@ -13980,7 +13980,7 @@
     "kw:go",
     "has_q",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -13988,8 +13988,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T13:45:10Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 116,
@@ -13997,7 +13997,7 @@
    "tags": [
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14005,8 +14005,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T13:41:00Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1117,
@@ -14016,7 +14016,7 @@
     "kw:go",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14077,8 +14077,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T12:36:54Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 916,
@@ -14092,7 +14092,7 @@
     "after_done_claim",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14100,8 +14100,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T12:35:09Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 777,
@@ -14113,7 +14113,7 @@
     "after_permission_ask",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14176,8 +14176,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T12:20:58Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 204,
@@ -14187,7 +14187,7 @@
     "kw:go",
     "has_q",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14247,8 +14247,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T12:13:54Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 3,
@@ -14258,7 +14258,7 @@
     "short",
     "kw:go",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14266,8 +14266,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T12:12:14Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 7051,
@@ -14279,7 +14279,7 @@
     "after_done_claim",
     "after_blocked",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14287,8 +14287,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T10:13:53Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 317,
@@ -14297,7 +14297,7 @@
     "short",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14305,8 +14305,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T10:05:53Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -3,
@@ -14315,7 +14315,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14323,8 +14323,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T10:05:52Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 22,
@@ -14333,7 +14333,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14341,8 +14341,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T10:03:44Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 13,
@@ -14351,7 +14351,7 @@
     "queued",
     "medium",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14359,8 +14359,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T10:03:03Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 430,
@@ -14369,7 +14369,7 @@
     "medium",
     "kw:repeat",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14377,8 +14377,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:53:58Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1969,
@@ -14388,7 +14388,7 @@
     "kw:neg",
     "after_permission_ask",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14396,8 +14396,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:53:35Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 35,
@@ -14405,7 +14405,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14413,8 +14413,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:52:15Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 756,
@@ -14425,7 +14425,7 @@
     "kw:repeat",
     "after_blocked",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14433,8 +14433,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:39:05Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 911,
@@ -14445,7 +14445,7 @@
     "has_q",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14453,8 +14453,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:21:15Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": null,
@@ -14464,7 +14464,7 @@
     "long",
     "kw:neg",
     "kw:why",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14472,8 +14472,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:20:50Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1030,
@@ -14483,7 +14483,7 @@
     "kw:neg",
     "kw:repeat",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14491,8 +14491,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:20:49Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 3051,
@@ -14502,7 +14502,7 @@
     "kw:neg",
     "kw:why",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14510,8 +14510,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:19:42Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 246,
@@ -14521,7 +14521,7 @@
     "kw:neg",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14529,8 +14529,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:15:11Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 663,
@@ -14540,7 +14540,7 @@
     "kw:neg",
     "after_done_claim",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14548,8 +14548,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:03:29Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1967,
@@ -14559,7 +14559,7 @@
     "kw:neg",
     "kw:repeat",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14567,8 +14567,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:03:29Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 2349,
@@ -14578,7 +14578,7 @@
     "kw:neg",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14586,8 +14586,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T09:02:50Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1782,
@@ -14596,7 +14596,7 @@
     "medium",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14621,12 +14621,12 @@
    "source": "human-queue",
    "ts": "2026-10-09T08:30:56Z",
    "closed_ts": "2026-10-09T08:30:58Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -14635,8 +14635,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T08:30:43Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": -5,
@@ -14646,7 +14646,7 @@
     "short",
     "has_q",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14654,8 +14654,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T08:30:05Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 67,
@@ -14664,7 +14664,7 @@
     "medium",
     "kw:neg",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14672,8 +14672,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T08:28:50Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 78,
@@ -14683,7 +14683,7 @@
     "kw:neg",
     "after_done_claim",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14691,8 +14691,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T08:19:23Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 123,
@@ -14704,7 +14704,7 @@
     "kw:go",
     "has_q",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14712,8 +14712,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-09T08:17:07Z",
    "closed_ts": null,
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 819,
@@ -14721,7 +14721,7 @@
    "tags": [
     "short",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -14792,12 +14792,12 @@
    "source": "human-queue",
    "ts": "2026-10-09T07:55:56Z",
    "closed_ts": "2026-10-09T07:55:57Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "retry",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -14806,11 +14806,11 @@
    "source": "human-queue",
    "ts": "2026-10-09T07:55:45Z",
    "closed_ts": "2026-10-09T07:55:45Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -14819,11 +14819,11 @@
    "source": "human-queue",
    "ts": "2026-10-09T07:49:58Z",
    "closed_ts": "2026-10-09T07:49:58Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -14832,12 +14832,12 @@
    "source": "human-queue",
    "ts": "2026-10-09T07:48:13Z",
    "closed_ts": "2026-10-09T07:48:13Z",
-   "repo": "epos.student-enrolment",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-3",
+   "excerpt_withheld": "workroot",
    "tags": [
     "status:done",
     "op_biometric",
-    "iuroot"
+    "workroot"
    ],
    "exit": 0
   },
@@ -15256,8 +15256,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-08T09:07:52Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 678,
@@ -15267,7 +15267,7 @@
     "has_q",
     "after_question",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15275,8 +15275,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-08T08:56:12Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 72,
@@ -15286,7 +15286,7 @@
     "has_q",
     "after_done_claim",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15311,8 +15311,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-08T08:33:16Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 124,
@@ -15323,7 +15323,7 @@
     "after_question",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15406,8 +15406,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-08T08:11:48Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "queued",
    "gap_s": 18,
@@ -15417,7 +15417,7 @@
     "medium",
     "kw:repeat",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15516,8 +15516,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-08T07:49:38Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 41218,
@@ -15525,7 +15525,7 @@
    "tags": [
     "medium",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15687,8 +15687,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-07T19:59:42Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 1390,
@@ -15698,7 +15698,7 @@
     "kw:go",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15797,8 +15797,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-07T19:35:35Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 21191,
@@ -15809,7 +15809,7 @@
     "kw:go",
     "has_q",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -15949,8 +15949,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-07T13:32:17Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 4526,
@@ -15960,7 +15960,7 @@
     "kw:go",
     "after_done_claim",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -16376,8 +16376,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-07T06:48:36Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 150,
@@ -16385,7 +16385,7 @@
    "tags": [
     "short",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -16531,8 +16531,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-06T19:59:44Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 398,
@@ -16540,7 +16540,7 @@
    "tags": [
     "short",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -16548,8 +16548,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-06T19:50:41Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 190,
@@ -16559,7 +16559,7 @@
     "kw:go",
     "after_permission_ask",
     "reply<15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -16567,8 +16567,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-06T19:47:00Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 35424,
@@ -16580,7 +16580,7 @@
     "has_q",
     "after_question",
     "gap>15m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -17185,8 +17185,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-06T09:26:41Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 88,
@@ -17195,7 +17195,7 @@
     "medium",
     "kw:go",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {
@@ -17270,8 +17270,8 @@
    "source": "transcript-mini",
    "ts": "2026-10-06T09:09:03Z",
    "closed_ts": null,
-   "repo": "prometheus-scripts",
-   "excerpt_withheld": "iuroot",
+   "repo": "work-repo-1",
+   "excerpt_withheld": "workroot",
    "prev": null,
    "kind": "typed",
    "gap_s": 102,
@@ -17279,7 +17279,7 @@
    "tags": [
     "short",
     "reply<2m",
-    "iuroot"
+    "workroot"
    ]
   },
   {

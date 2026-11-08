@@ -4,7 +4,7 @@
       "claude": 25
     },
     "by_root": {
-      "IuRoot": 4,
+      "WorkRoot": 4,
       "SourceRoot": 21
     },
     "by_status": {
@@ -217,13 +217,13 @@
         "events_since_state_change": 33,
         "group": "WORK",
         "panes": 1,
-        "repo": "epos.student-enrolment",
-        "root": "IuRoot",
+        "repo": "work-repo-3",
+        "root": "WorkRoot",
         "state_change_seq": 7972,
         "status": "done",
         "tab_id": "w3E:t1",
         "tab_label": "1",
-        "workspace": "epos.student-enrolment"
+        "workspace": "work-repo-3"
       },
       {
         "age_hours": 0.8,
@@ -259,13 +259,13 @@
         "events_since_state_change": 21,
         "group": "WORK",
         "panes": 1,
-        "repo": "prometheus-scripts",
-        "root": "IuRoot",
+        "repo": "work-repo-1",
+        "root": "WorkRoot",
         "state_change_seq": 7984,
         "status": "done",
         "tab_id": "wJ:t31",
         "tab_label": "2",
-        "workspace": "prometheus-scripts"
+        "workspace": "work-repo-1"
       },
       {
         "age_hours": 0.3,
@@ -273,13 +273,13 @@
         "events_since_state_change": 11,
         "group": "WORK",
         "panes": 1,
-        "repo": "prometheus-scripts",
-        "root": "IuRoot",
+        "repo": "work-repo-1",
+        "root": "WorkRoot",
         "state_change_seq": 7994,
         "status": "done",
         "tab_id": "wJ:t2Z",
         "tab_label": "<label withheld>",
-        "workspace": "prometheus-scripts"
+        "workspace": "work-repo-1"
       },
       {
         "age_hours": 0.3,
@@ -329,13 +329,13 @@
         "events_since_state_change": 1,
         "group": "OTHER",
         "panes": 1,
-        "repo": "prometheus-epx",
-        "root": "IuRoot",
+        "repo": "work-repo-5",
+        "root": "WorkRoot",
         "state_change_seq": 8004,
         "status": "done",
         "tab_id": "w3S:t1",
         "tab_label": "1",
-        "workspace": "prometheus-epx"
+        "workspace": "work-repo-5"
       },
       {
         "age_hours": 0.1,

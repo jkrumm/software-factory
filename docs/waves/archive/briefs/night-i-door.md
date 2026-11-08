@@ -44,7 +44,7 @@ Same shape as dotfiles' `kuma-door/` (read it). So: loopback bind, never a tailn
      Every alert the homelab has arrives here (Kuma attaches every provider to every monitor), so this is the common path, and it stays small.
   2. Routed, an Issue of this `(source, monitor)` that is not `closed`: the event is a `signal` inbox row (key `<source>:<monitor>:<event>`) on that Issue, with `regression: true` in its payload when `status` is down: Wave 1 moves a `watching` Issue only on that. 200.
   3. Routed, none open, `status` down: `createIssue` with `source: "alert"`, `source_key` `<source>:<monitor>:<event>`, `repo` from the route, `title`, `facts`. 201.
-     The IuRoot refusal of Wave 1 applies; the route is refused when it is set, too.
+     The WorkRoot refusal of Wave 1 applies; the route is refused when it is set, too.
   4. Routed, none open, `status` up: nothing but the unrouted-style counter on the route. 202.
 - A replayed event is one effect (the keys). Never a port inside the transaction.
 - `factory door route set <source> <monitor> <repo>|rm|list` and `factory door unrouted` on the token API (`PUT|DELETE|GET /door/routes`, `GET /door/unrouted`): the repo
@@ -59,7 +59,7 @@ no health route: the 401 is the health check. `make deploy` does not create toke
 ## Tests
 
 Through the public surface: the parsers on recorded payloads, a bad token, a body of 64 KiB + 1, a wrong method, loose mode on the tokens file; `/intake`'s four rules, a replay of each, the repo from a
-payload ignored (a payload naming a repo or path has no effect), an unrouted monitor filing nothing, an IuRoot route refused. No test touches a real tailnet.
+payload ignored (a payload naming a repo or path has no effect), an unrouted monitor filing nothing, an WorkRoot route refused. No test touches a real tailnet.
 
 **Gate:** `make check` green, `/review` with findings fixed, one more `/review` pass on the fix commits. **Wait for every review run in the foreground** (`agw run wait <runId>`):
 never end a turn while a background shell runs, the factory reads your idle prompt as finished and wakes the lead. Push the branch, open a PR (`gh pr create`, no attribution), don't merge or deploy.

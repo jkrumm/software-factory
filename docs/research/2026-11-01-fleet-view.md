@@ -15,7 +15,7 @@ Herdr board is the first consumer; Iris (IR), Argo (A2) and Hermes read the same
   "the one producer for Hermes, brain and Argo". The board (`dotfiles/config/herdr-app/mods/jk-board`) reads the
   factory plus a `grep` over `~/SourceRoot/*/docs/waves/PLAN.md`.
 - Plans outside that glob are invisible (the teamchat plan lives in
-  `prometheus-scripts/wip/waves-2026-10-22-teamchat/docs/waves/PLAN.md`); a session's plan has to come from its spawn.
+  `work-repo-1/wip/waves-2026-10-22-teamchat/docs/waves/PLAN.md`); a session's plan has to come from its spawn.
 - Raw wave headings run 10–15 words; nothing short exists to show.
 - 13 of 16 human-queue requests are older than 24 h, several provably satisfied (the classic Herdr.app shells are gone
   from the MacBook) or superseded. Four plans sit active but untouched for 4–9 days. The owner wants to decide what
@@ -134,8 +134,8 @@ fleet model has a second reading: **what happened since you last looked**.
 
 ## Open points for the lead
 
-- **Scope:** design §1 says IuRoot stays outside; the board needs IuRoot sessions (prometheus-epx is today's busiest).
-  Read-only visibility of IuRoot sessions and plans is the proposal, no IuRoot intake or spawns.
+- **Scope:** design §1 says WorkRoot stays outside; the board needs WorkRoot sessions (work-repo-5 is today's busiest).
+  Read-only visibility of WorkRoot sessions and plans is the proposal, no WorkRoot intake or spawns.
 - **Placement in the program:** before or inside A2/IR, since both want exactly this model. F2's `issue_inbox` is the
   natural later home for asks that become Issues.
 - **Board fixes that need no factory work** (dotfiles, can land first): the wave-heading parser drops

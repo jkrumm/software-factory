@@ -15,7 +15,7 @@ Read `AGENTS.md` first (Placement and sessions, Trust boundary, deterministic ke
 - **Input:** `~/.config/factory/spaces.json` (path setting `FACTORY_SPACES_FILE`, default under `$HOME` as `config.ts` builds the others),
   `{ "spaces": [{ "name": "<repo>", "path": "<absolute path>" }] }`, written by dotfiles `make setup` (not yours). Absent or invalid file:
   log once, do nothing (zod at the boundary).
-- **Trust boundary:** an entry whose `realpath` is not inside `FACTORY_REPO_ROOTS` is skipped (IuRoot repos are not ours to place a
+- **Trust boundary:** an entry whose `realpath` is not inside `FACTORY_REPO_ROOTS` is skipped (WorkRoot repos are not ours to place a
   shell into); so is a path that does not exist.
 
 ## The reconcile (`spaces.ts`)

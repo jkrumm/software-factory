@@ -2,7 +2,7 @@
 
 As of 2026-10-22T08:00:00Z. Mechanical part: `interventions.py` (candidates, `candidates.out.json`). Judgement: `judgments.json`. Rendered into `interventions.out.json` and this file by `interventions.py report`.
 
-**How to read.** *When* is the moment the owner acted (a typed message, an approval click, an answer in Argo), UTC, newest first. An intervention is one owner action needed to unblock, correct or decide; several sources describing the same action are one entry, and distinct actions in one episode stay distinct (the `episode` field links them). *Genuinely the owner's* applies the fixed rule: only product direction, spend, irreversible data loss and other people are the owner's, nothing else. Owner quotes are translated or short; IuRoot sessions show repo and class only. A candidate is a heuristic tag set, never a verdict: I judged newest first and stopped at twenty distinct owner actions. New tasks, design talk, status pings, personal chat and agents relaying agents are not interventions.
+**How to read.** *When* is the moment the owner acted (a typed message, an approval click, an answer in Argo), UTC, newest first. An intervention is one owner action needed to unblock, correct or decide; several sources describing the same action are one entry, and distinct actions in one episode stay distinct (the `episode` field links them). *Genuinely the owner's* applies the fixed rule: only product direction, spend, irreversible data loss and other people are the owner's, nothing else. Owner quotes are translated or short; WorkRoot sessions show repo and class only. A candidate is a heuristic tag set, never a verdict: I judged newest first and stopped at twenty distinct owner actions. New tasks, design talk, status pings, personal chat and agents relaying agents are not interventions.
 
 **Pool.** Window 2026-10-01T08:00:00Z to 2026-10-22T08:00:00Z (21 d). 1119 candidates: human-queue 72, transcript-macbook 280, transcript-mini 678, warden-needs_decision 86, warden-operation 3. I read all 89 candidates since 2026-10-20T11:00:00Z (human-queue 10, transcript-macbook 25, transcript-mini 52, warden-needs_decision 1, warden-operation 1) and a second pass over what the prefilter dropped. The harness records text that an orchestrator types into a worker pane (`rd say`) as owner-typed: 3181 of 5224 entries with the human marker in the window were agent-authored and are dropped before any candidate exists.
 
@@ -51,9 +51,9 @@ Reading the dates: after 2026-10-16 the owner stopped closing warden items by ha
 - **Class:** business decision. **Genuinely the owner's:** y.
 - **Ideal path** (genuinely owner, policy line): Genuinely the owner's: product direction and spend. The system's share is to hold the decision as project state (lifecycle: paused, with the reason) that every orchestrator reads, instead of one relayed message to one tab.
 
-### 5. 2026-10-21 19:48:03Z, prometheus-scripts (transcript-mini)
+### 5. 2026-10-21 19:48:03Z, work-repo-1 (transcript-mini)
 
-- **IuRoot session:** repo name and class only; the content is withheld by rule.
+- **WorkRoot session:** repo name and class only; the content is withheld by rule.
 - **Class:** business decision. **Genuinely the owner's:** y.
 - **Ideal path** (mechanism only): genuinely owner.
 
@@ -172,9 +172,9 @@ Reading the dates: after 2026-10-16 the owner stopped closing warden items by ha
 - **Class:** business decision. **Genuinely the owner's:** y.
 - **Ideal path** (genuinely owner, policy line): Spend is the owner's call, made once as a standing headroom policy (above 90 % of the 7-day window: finish in-flight work, park the rest, resume at the reset). With that line neither this message nor entry 8 exists.
 
-### 18. 2026-10-20 16:23:44Z, prometheus-scripts (transcript-mini)
+### 18. 2026-10-20 16:23:44Z, work-repo-1 (transcript-mini)
 
-- **IuRoot session:** repo name and class only; the content is withheld by rule.
+- **WorkRoot session:** repo name and class only; the content is withheld by rule.
 - **Class:** wrong output corrected. **Genuinely the owner's:** n.
 - **Ideal path** (mechanism only): verification evidence.
 
@@ -223,7 +223,7 @@ This share is among interventions, not items: the 0.1 % target is per warden ite
 | weatherorb | 5 |
 | shutterflow | 3 |
 | basalt-ui | 2 |
-| prometheus-scripts | 2 |
+| work-repo-1 | 2 |
 | argo | 1 |
 | tinycast-extensions | 1 |
 
@@ -250,7 +250,7 @@ This share is among interventions, not items: the 0.1 % target is per warden ite
 | 2 | 2026-10-22 07:17:32Z | weatherorb | agent stopped or asked needlessly | n |
 | 3 | 2026-10-22 07:15:11Z | homelab | infra needing a present human (biometric/TCC/GUI) | n |
 | 4 | 2026-10-21 22:13:29Z | basalt-ui | business decision | y |
-| 5 | 2026-10-21 19:48:03Z | prometheus-scripts | business decision | y |
+| 5 | 2026-10-21 19:48:03Z | work-repo-1 | business decision | y |
 | 6 | 2026-10-21 16:31:32Z | homelab | other | n |
 | 7 | 2026-10-21 16:29:14Z | homelab | missing capability/permission | n |
 | 8 | 2026-10-21 15:56:21Z | basalt-ui | agent stopped or asked needlessly | n |
@@ -263,7 +263,7 @@ This share is among interventions, not items: the 0.1 % target is per warden ite
 | 15 | 2026-10-20 16:36:47Z | dotfiles | infra needing a present human (biometric/TCC/GUI) | n |
 | 16 | 2026-10-20 16:31:07Z | homelab | missing capability/permission | n |
 | 17 | 2026-10-20 16:24:16Z | shutterflow | business decision | y |
-| 18 | 2026-10-20 16:23:44Z | prometheus-scripts | wrong output corrected | n |
+| 18 | 2026-10-20 16:23:44Z | work-repo-1 | wrong output corrected | n |
 | 19 | 2026-10-20 16:16:07Z | homelab | infra needing a present human (biometric/TCC/GUI) | n |
 | 20 | 2026-10-20 15:48:28Z | weatherorb | other | n |
 

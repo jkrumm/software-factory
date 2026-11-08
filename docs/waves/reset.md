@@ -35,7 +35,7 @@ The lead does this itself; no worker.
   the hook (`packages/cli/src/hook.ts`, zod-free) carries the field through the spool.
 - [x] A red verify is re-run once before it counts as a regression; the third regression of one Issue parks it.
 - [x] Tests per rule; live proof with a scratch Issue whose lead is killed once.
-**Left behind:** PR #38 (`3c9b5c0`..`c868256`) and the follow-up PR #39 (`afa38a9`), deployed `a2c4293f559a`, verify green, `covered` true. Proof: a killed lead restarts the Issue after a 10-minute grace with no note (Issue 63), a note finds it at once (Issue 62); attempt 2 carries the owner's note. The `background_tasks` field is real (Claude Code 2.1.318 Stop schema); finished entries do not count. Machine: an IuRoot test storm (load 558) took the server down twice; it recovered by itself (learnings).
+**Left behind:** PR #38 (`3c9b5c0`..`c868256`) and the follow-up PR #39 (`afa38a9`), deployed `a2c4293f559a`, verify green, `covered` true. Proof: a killed lead restarts the Issue after a 10-minute grace with no note (Issue 63), a note finds it at once (Issue 62); attempt 2 carries the owner's note. The `background_tasks` field is real (Claude Code 2.1.318 Stop schema); finished entries do not count. Machine: an WorkRoot test storm (load 558) took the server down twice; it recovered by itself (learnings).
 
 ## Wave 4 — The lead (row 5)            <!-- status: done -->
 - [x] `brief.ts`: the operating contract of design v3 §3 as the brief's fixed part, with the exact CLI syntax (`--phase`, `--question`),
@@ -65,7 +65,7 @@ The lead does this itself; no worker.
 - [x] hc-reap and finalize never touch a `plan:` tab or a tab without `factory.key`.
 - [x] Live proof: every listed space has its `plan` tab (`hc` labels; the app's order is `groups.json`'s); a second reconcile changes nothing.
 **Repos:** dotfiles
-**Left behind:** software-factory PR #44 (`ba7984a`, `ed17547`, deep, nit fixed, `covered`), deployed `ed175476713c`, verify green; dotfiles #62 (`241d7c8`, standard, clean, `covered`), `make deploy` done. Proof: 40 `plan:` login shells (`t13t`..`t153`), one per `spaces.json` entry incl. the 8 IuRoot ones (`FACTORY_REPO_ROOTS` defaults to both workspaces; the briefs were wrong to say IuRoot is skipped); the second pass changed nothing. Gaps: in a space that had tabs the plan tab is last, not first (no tab moves); the app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have folder `~/IuRoot`, so the reconcile seeded correct ones beside them and the sidebar shows both twice until the owner closes the old ones; the app was not connected at the proof, so the sidebar is not seen yet.
+**Left behind:** software-factory PR #44 (`ba7984a`, `ed17547`, deep, nit fixed, `covered`), deployed `ed175476713c`, verify green; dotfiles #62 (`241d7c8`, standard, clean, `covered`), `make deploy` done. Proof: 40 `plan:` login shells (`t13t`..`t153`), one per `spaces.json` entry incl. the 8 WorkRoot ones (`FACTORY_REPO_ROOTS` defaults to both workspaces; the briefs were wrong to say WorkRoot is skipped); the second pass changed nothing. Gaps: in a space that had tabs the plan tab is last, not first (no tab moves); the app's `agent-workflows` and `work-repo-26` spaces have folder `~/WorkRoot`, so the reconcile seeded correct ones beside them and the sidebar shows both twice until the owner closes the old ones; the app was not connected at the proof, so the sidebar is not seen yet.
 
 ## Wave 7 — `issue_facts` (row 12, the view)            <!-- status: done -->
 - [x] Migration: the view `factory.issue_facts` over issues, issue_events, evidence, decisions and sessions (design v3 §11);
@@ -86,7 +86,7 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 - [x] Live proof: `rd issue` files an Issue that a lead ships; `hc-reap --dry-run` lists the shell rule's closes.
 **Why expand:** six repos have a wave marked active; iris runs one on the dotfiles wave, worker and merge commands (the inventory of 2026-11-05).
 **Repos:** dotfiles
-**Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.athena-repo-sync`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
+**Left behind:** dotfiles `77049b2`..`9ab85cc` fast-forwarded to master (deep round 1: 1 important, the lane docs still said "two lanes", and 2 nits, the "never closed" wording and a `turn` of None; all fixed; light round 2 clean; `covered` true). `make -k check`: every target green but `architecture-check`, red on three mini launchd labels this wave did not add (`com.iu.work-repo-28`, `com.jkrumm.soloist-speaker`, `com.jkrumm.home-nacht`). `make deploy` exit 0. Proof: `rd issue weatherorb …` filed Issue 70 (the first row-7b Issue); hc-reap `--dry-run` closes nothing (no shell clock is 7 days old yet). The shell rule judges by an unchanged `turn` over 7 days of observations, not age: the first build closed by age, which would have closed the owner's daily shells.
 
 ## Wave 8b — the contract of row 7, as Issues            <!-- status: done -->
 - [x] The stale active waves (2026-11-05): basalt-expr-trial and -v1 archived (local-only repos, pages built 10-18); modelpick Wave 5 →
@@ -103,7 +103,7 @@ session. Row 7 removes the worker commands, so rows 7b, 8 and 9 are filed as fac
 
 ## Wave 9 — The machine budget (row 7b), as Issues            <!-- status: done -->
 - [x] Issues for (70, 71, 72, 86 and 152, all closed `done`): one fail-closed test slot for every check (`make check` via `factory slot run`, `agw check`, `xcodebuild`,
-  IuRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
+  WorkRoot); worker caps on test runners; a booted simulator shut down after its verify; production LaunchAgents niced.
 - [x] Filed and closed `done`: Issue 70 (weatherorb workers niced), 71 (software-factory: the slot waits on contention, open only on an outage), 72
   (agent-workflows: `agw check` inside the slot, capped test workers; `--after 71`). iris (`xcodebuild` in the slot, a simulator shut down
   after its verify) is Issue 86 (closed `done`, after iris's Issue 77).

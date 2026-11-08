@@ -27,7 +27,7 @@ the timestamp of the last entry in its Claude transcript (not the file's mtime: 
 transcripts without writing entries). Tabs whose agent has no resolvable transcript get
 `age_hours: null` and are counted as unknown, never as young.
 
-IuRoot: repo names, statuses and counts only; terminal titles (free text) are never written.
+WorkRoot: repo names, statuses and counts only; terminal titles (free text) are never written.
 
 Run
     python3 -I herdr_hygiene.py          -> herdr_hygiene.out.json, herdr_hygiene.out.md
@@ -77,8 +77,8 @@ STRUCTURED_LABEL_RX = re.compile(r"^(?:\d+|(?:wave|fan|mother|lead|orchestrator)
 
 
 def safe_label(label: str, roots: set[str]) -> str:
-    """IuRoot tab labels can carry work content: only structured labels (1, wave 3, fan x, mother...) are written for them."""
-    if "IuRoot" in roots and not STRUCTURED_LABEL_RX.match(label.strip()):
+    """WorkRoot tab labels can carry work content: only structured labels (1, wave 3, fan x, mother...) are written for them."""
+    if "WorkRoot" in roots and not STRUCTURED_LABEL_RX.match(label.strip()):
         return "<label withheld>"
     return redact(label)
 
@@ -90,7 +90,7 @@ def tilde(p: str | None) -> str:
 def repo_of(cwd: str | None) -> tuple[str, str]:
     """(root, repo) from a cwd: ~/SourceRoot/<repo>[/...] -> ("SourceRoot", repo); anything else -> ("other", "")."""
     c = tilde(cwd)
-    m = re.match(r"^~/(SourceRoot|IuRoot)(?:/([^/]+))?", c)
+    m = re.match(r"^~/(SourceRoot|WorkRoot)(?:/([^/]+))?", c)
     if not m:
         return "other", ""
     return m.group(1), m.group(2) or ""

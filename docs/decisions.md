@@ -128,8 +128,8 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   review in-session with `/review`, so the transport's refusals ("the reply holds no JSON object") end with it, not with a fix.
   (b) A new row 9b after the contract migration: one read API (Issues, leads, Claude Code sessions, herdr terminals, asks, health,
   one change stream), its spec signed by the owner before it is built (sign-off replaced by RS13); Argo, Iris, Hermes and the sidebar integrate only through it.
-  (c) The program runs as Issues from here; no program-lead rotations, the old plans are in `docs/waves/archive/`. (d) IuRoot repos get
-  no factory space or `plan:` tab (replaced by RS15); image-gateway (retired by I1), rollhook-action, ntfy-mac and prometheus-scripts leave the sidebar,
+  (c) The program runs as Issues from here; no program-lead rotations, the old plans are in `docs/waves/archive/`. (d) WorkRoot repos get
+  no factory space or `plan:` tab (replaced by RS15); image-gateway (retired by I1), rollhook-action, ntfy-mac and work-repo-1 leave the sidebar,
   tinycast-extensions gets no space on the mini (dotfiles `159d27c`). (e) basalt-ui is paused. (f) A1's VPS socket-proxy path over the
   tailnet is acceptable, built later when a surface needs it.
 - **RS12 The factory governs itself (owner, 2026-11-05 night).** A stalled Issue is the factory's to resolve, not the owner's: a deterministic
@@ -141,8 +141,8 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   get): short titles and summaries in precise plain words with no IDs as display text, and insights on tokens, times and tool calls. Cheap summaries through agw are
   fine, so row 8 keeps the digest code and row 9 its tables until row 9b reuses or removes them. Replaces RS11 (b)'s sign-off.
 - **RS14 The plan is a file the server reads (2026-11-06).** The rows of a plan that are not filed yet live in `docs/plan.yaml` per repo, and the server files each as an Issue when the rows it waits for are closed, instead of someone remembering to hand-file them. A row is done when its Issue is closed in any outcome (the meaning of `--after`: a stopped row releases what waits for it). "Stable" is no owner touch on any Issue (a note, retier, reopen, stop, or an answer that is not the default, the closing or the steward's) and at least one Issue closed in the last N days. No model is involved; an empty queue with an unfinished plan is a health line, a finished plan is one owner message. The `planning` loop does it (`docs/architecture.md`, "Loops and agw").
-- **RS15 Work repos get plan tabs (owner, 2026-11-06).** Replaces RS11 (d)'s "IuRoot repos get no factory space or `plan:` tab": leads run there now, so the WORK members of
-  dotfiles' `groups.json` get spaces and plan tabs like every other repo, and the `IuRoot` root gets one too, for cross-repo planning. A root is a plan tab only, never a lead's repo.
+- **RS15 Work repos get plan tabs (owner, 2026-11-06).** Replaces RS11 (d)'s "WorkRoot repos get no factory space or `plan:` tab": leads run there now, so the WORK members of
+  dotfiles' `groups.json` get spaces and plan tabs like every other repo, and the `WorkRoot` root gets one too, for cross-repo planning. A root is a plan tab only, never a lead's repo.
 
 - **RS16 The role table states what runs (owner, 2026-11-06).** `config/roles.json` now has Explore Haiku/high and verifier Haiku/high, matching `dotfiles/agents/{Explore,verifier}.md`, which is what a lead's subagents run. Measured: the Explore probe spent 5.2k tokens on Haiku against 11.6k on Opus; the verifier used 28M fresh tokens in 30 days, so a Sonnet seat there costs far more for a read-and-report job. Implementer stays Sonnet/high (the table governs `spawn create` and `rd --role`; a lead's `@implementer` runs Sonnet/medium from its agent file). The table governs terminals the factory spawns; in-session subagents take model and effort from the global agent files, the reviewer's seat from `agw review prepare`.
 

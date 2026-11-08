@@ -1,6 +1,6 @@
 # dora — the five metrics, where the data allows
 
-AS_OF `2026-10-22T08:00:00Z`, window 90 d. Definition keys `dora.*`. Script `dora.py`. SourceRoot repos only (IuRoot deploys run through GitLab CI, not queried).
+AS_OF `2026-10-22T08:00:00Z`, window 90 d. Definition keys `dora.*`. Script `dora.py`. SourceRoot repos only (WorkRoot deploys run through the work forge CI, not queried).
 
 ## Summary
 

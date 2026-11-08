@@ -17,11 +17,11 @@ import sys
 
 PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"/Users/(?:jkrumm|johannes\.krumm)\b"), "~"),
-    (re.compile(r"(~/IuRoot/[A-Za-z0-9._-]+)/[^\s'\"`)\]]+"), r"\1/…"),
+    (re.compile(r"(~/WorkRoot/[A-Za-z0-9._-]+)/[^\s'\"`)\]]+"), r"\1/…"),
     (re.compile(r"\b(?:sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AKIA|glpat-)[A-Za-z0-9_\-]{10,}"), "<token>"),
     (re.compile(r"\bBearer\s+[A-Za-z0-9._\-+/]{16,}", re.I), "<cred>"),
     (re.compile(r"\b(?:token|apikey|api_key|secret|password)\s*[:=]\s*[\"'][A-Za-z0-9._\-+/]{16,}[\"']", re.I), "<cred>"),  # quoted values only: identifiers are not secrets
-    (re.compile(r"(?i)\b(?:okta|epos)\b(?![._][a-z]|-(?:customers|data|orchestrator)-)"), "<work-stack>"),  # work-stack systems: IuRoot repo names only, never their content
+    (re.compile(r"(?i)\b(?:okta|epos)\b(?![._][a-z]|-(?:customers|data|orchestrator)-)"), "<work-stack>"),  # work-stack systems: WorkRoot repo names only, never their content
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "<email>"),
     (re.compile(r"\b(?!127\.0\.0\.1\b|0\.0\.0\.0\b)(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b"), "<ip>"),  # loopback is not an address leak
     (re.compile(r"\b(?:[0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b", re.I), "<ip6>"),

@@ -13,7 +13,10 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 ## Rules
 
 - **Public repo.** No secrets, hostnames, IPs, tailnet names, internal URLs or account e-mails in any tracked file.
-  Placeholders: `<your-domain>`, `<see-1password>`. Secrets resolve at runtime through `secrets-run`.
+  Placeholders: `<your-domain>`, `<see-1password>`. Secrets resolve at runtime through `secrets-run`. MIT licensed.
+  `scripts/public-scan.ts` (in `make check`) fails on an address, tailnet name, e-mail, secret, home path, ssh alias, account
+  or work-repo name in any tracked file; an exception is a line in `scripts/public-scan.allow` with its reason. Work repos
+  appear only as `WorkRoot` and `work-repo-N`.
 - **The factory never calls a model.** Every judgment (triage, the steward, the Judge, the queue) is an `agw` workflow
   called through `apps/server/src/adapters/agw/`. No model SDK in this repo.
 - **Dependencies point one way:** factory → agw, herdr-core, GitHub, the intake sources. Nothing here is imported by
@@ -109,7 +112,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 
 ## Validate and ship
 
-`make check` runs install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, the boundary script, the
+`make check` runs install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, the boundary script, the public-hygiene scan, the
 retired-word check, the Issue diagram and generated-CLI freshness checks, `bun test` and the scenarios (`tests/scenarios`:
 a real server and Postgres with fake `hc` and `agw`), then typechecks and builds the Console and runs its Playwright suite
 (`make e2e`, `tests/e2e`) against a seeded server; `make fmt` formats. The tests start a private Postgres cluster with

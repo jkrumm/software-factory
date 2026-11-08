@@ -12,10 +12,10 @@ The factory never reorders spaces: the sidebar order is `config/herdr-app/groups
 ## 1. `spaces.json` from `groups.json`
 
 A script renders `~/.config/factory/spaces.json` from `config/herdr-app/groups.json`: every group's `members` in order, each resolved to
-`~/SourceRoot/<name>` if that directory exists, else `~/IuRoot/<name>` if it exists, else skipped (the factory skips IuRoot paths itself;
+`~/SourceRoot/<name>` if that directory exists, else `~/WorkRoot/<name>` if it exists, else skipped (the factory skips WorkRoot paths itself;
 listing them is fine). Duplicates once. Written atomically (temp file + rename), mode 0644, the directory created; a run that would write
 the same bytes does not touch the file. `make setup` calls it as one `_setup-factory-spaces` step (the `_setup-*` pattern, Makefile:75-115).
-A hermetic test (temp HOME, a fixture groups.json, fake repo dirs): order kept, missing skipped, IuRoot fallback, idempotent; add it to
+A hermetic test (temp HOME, a fixture groups.json, fake repo dirs): order kept, missing skipped, WorkRoot fallback, idempotent; add it to
 `check`.
 
 ## 2. hc-reap never touches a plan tab or a keyless terminal

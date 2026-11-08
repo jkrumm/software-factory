@@ -70,7 +70,7 @@ evidence (a sha, a log line, a number); no narrative.
 
 ## Wave 3, parks end (row 4), 2026-11-05 00:30 — the spawn
 
-- **Under load the spawn fell back to hc-direct on the wrong account.** At load 68–124 (an IuRoot `athena-l2` vitest run,
+- **Under load the spawn fell back to hc-direct on the wrong account.** At load 68–124 (an WorkRoot `work-repo-24-l2` vitest run,
   not the reset's), `factory spawn create` timed out ("server unreachable … The operation timed out") and `rd fan` went
   hc-direct: pane t131 on `me`, at 95 % of its week (`picked=me reason=home`), outside the factory's wake. Killed after 26 s
   with no work, worktree removed, respawned through the factory on `iu` (t132). Change for row 7: `rd` retries the factory
@@ -98,12 +98,12 @@ evidence (a sha, a log line, a number); no narrative.
   01:00:06, attempt 2 admitted 01:00:15 (t136), its brief carried the note once under "Notes from the owner", and the lead
   ended it with `drop` ("no change"). Change: a follow-up worker in this wave (`briefs/reset-w3b-ended-lead.md`): the sweep files
   `lead_gone` for an ended lead spawn after a 10-minute grace, never within 10 minutes of a `runner_restarted`.
-- **An IuRoot test storm took the factory down twice.** ~120 vitest workers across `athena-a1..a7` worktrees drove the load to
+- **An WorkRoot test storm took the factory down twice.** ~120 vitest workers across `work-repo-24-a1..a7` worktrees drove the load to
   558 on 12 cores (00:35–00:58Z). The server lost its database lock ("the lock connection did not answer within 5000 ms;
   exiting"), and the launchd relaunch failed once on `secrets-run` ("only 0/2 refs of .env.tpl resolved; refusing to start");
   the next relaunch came up, its first tick ran 577 s (limit 240 s; `git did not answer in time` for 33 projects), then ticks
   succeeded from 00:57:42Z. It recovered without a hand. Change for row 10/RS7 and the machine: one test slot for every repo,
-  IuRoot included (today `slot run` is fail-open and other sessions do not take it); until then the reset cannot keep the
+  WorkRoot included (today `slot run` is fail-open and other sessions do not take it); until then the reset cannot keep the
   mini under 40 by its own discipline alone.
 - **A Haiku lead cannot wait in the foreground.** The proof asked attempt 2 to `sleep 300`; the harness guard blocked a bare
   sleep and the lead dropped the Issue instead. Proofs that need a live lead use a long real command, not a sleep.
@@ -186,20 +186,20 @@ evidence (a sha, a log line, a number); no narrative.
   (`finalize.ts` imported the plan-key rule from the hc adapter; moved to the `runner.ts` port), round 2 clean, `covered` true; `make
   check` green (1775 pass, 373 s); landed as a fast-forward **after Issue 66's hold ended** (closed `done` 04:08:40Z, first hold green),
   deployed `ed175476713c`, verify green. dotfiles PR #62 (`241d7c8`, standard, clean, `covered`), landed, `make deploy` (the setup step:
-  `unchanged … spaces.json (40 spaces)`); dotfiles `make verify` 62 passed, 2 failed, both not this wave's (`tcc`: an IuRoot LaunchAgent's
+  `unchanged … spaces.json (40 spaces)`); dotfiles `make verify` 62 passed, 2 failed, both not this wave's (`tcc`: an WorkRoot LaunchAgent's
   versioned python; `architecture map`: the known unmapped labels).
 - **The proof.** The first reconcile after the deploy started 40 `plan:` terminals, one per `spaces.json` entry, 0 skipped, 0 errors; every
   one a login shell (`zsh`, the core runs `/bin/zsh -l` for no argv, checked on a scratch core by the worker); 38 of 40 carry the
   `herdr.space` id of the repo's existing space or a seeded one where the repo had none. A second pass at +10 min started nothing (no
   `spaces` log line, the same 40 addresses `t13t`..`t153`). hc-reap `--dry-run` keeps every keyless owner terminal (10 of them) and never
   looks at a plan shell (it judges only agents).
-- **The brief was wrong about IuRoot.** Both briefs said the factory skips IuRoot paths; `FACTORY_REPO_ROOTS` defaults to
-  `~/SourceRoot:~/IuRoot`, so the 8 IuRoot entries got plan tabs too. Kept: a shell in the repo reads and sends nothing, and RS6 asks for a
-  plan tab in every listed space. The fleet's `FACTORY_VISIBLE_ROOTS` (IuRoot read-only for the digest and the reaper) is a different
+- **The brief was wrong about WorkRoot.** Both briefs said the factory skips WorkRoot paths; `FACTORY_REPO_ROOTS` defaults to
+  `~/SourceRoot:~/WorkRoot`, so the 8 WorkRoot entries got plan tabs too. Kept: a shell in the repo reads and sends nothing, and RS6 asks for a
+  plan tab in every listed space. The fleet's `FACTORY_VISIBLE_ROOTS` (WorkRoot read-only for the digest and the reaper) is a different
   rule; a plan shell is not touched by it.
-- **Two spaces are now doubled.** The app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have `folder: ~/IuRoot` and no name in
-  the app doc (they were opened from `~/IuRoot`), so keyed by real path the reconcile seeded `sp-agent-workflows-…` and
-  `sp-epos-ai-teamchat-athena-…` beside them. Correct by design v3 §8; the sidebar shows those two twice until the owner closes the old
+- **Two spaces are now doubled.** The app's `agent-workflows` and `work-repo-26` spaces have `folder: ~/WorkRoot` and no name in
+  the app doc (they were opened from `~/WorkRoot`), so keyed by real path the reconcile seeded `sp-agent-workflows-…` and
+  `sp-work-repo-27…` beside them. Correct by design v3 §8; the sidebar shows those two twice until the owner closes the old
   ones (their terminals: `t11p`, `t11q` and its review children; `t126`, `t133`). The factory does not edit the owner's spaces (a
   structural `doc.set`).
 - **The plan tab is not first in an existing space.** A new space starts with it; in a space with tabs it lands last. Moving tabs is the
@@ -239,7 +239,7 @@ evidence (a sha, a log line, a number); no narrative.
   Kuma push monitor has no other feed. 49 parked `lead_gone` before parks could end and had no way back but a stop; stopped and
   replaced by Issue 69 with the remainder.
 - **The plan tabs doubled the sidebar.** Every space that had an idle tab-"1" shell now has it beside its `plan` tab, and five
-  unnamed `~/IuRoot` spaces from opening the app there remain; the owner also wants fewer repos listed (`groups.json` trimmed, done by
+  unnamed `~/WorkRoot` spaces from opening the app there remain; the owner also wants fewer repos listed (`groups.json` trimmed, done by
   the owner's session). Change: none in the design; a listed repo's space is its `plan` tab plus the work.
 - **The mini's baseline is not idle.** At 08:04 load 35–51 with no check running: WeatherOrb's production LaunchAgents
   (`worker-round` with three processes ~200 % CPU, `worker-ingest` ~40 % since 01:31), a booted iPhone simulator (`PosterBoard`
@@ -288,4 +288,4 @@ evidence (a sha, a log line, a number); no narrative.
   - **A default can state a falsehood.** Issue 88's default was "Record and internal group created", with no record. The judge takes only do-nothing defaults.
   - **Claude Code's "Dangerous rm not ruled out" stops a bypass-mode lead** on shell heredocs with no `rm` in them, five times in one night until a person answers. Leads now edit with the Edit tool; a prompt older than 15 min is a health line.
   - **A fan-out ignores owner decisions it was not told about.** Row 13 filed an Issue for paused basalt-ui (stopped by hand). An audit should read `docs/decisions.md` first.
-  - **Load came from outside the factory too.** It reached 346 on 12 cores with IuRoot sessions outside the test slot and a simulator; the server stopped answering at 160. Admission now holds new leads under load; sessions outside the factory are still unbounded.
+  - **Load came from outside the factory too.** It reached 346 on 12 cores with WorkRoot sessions outside the test slot and a simulator; the server stopped answering at 160. Admission now holds new leads under load; sessions outside the factory are still unbounded.

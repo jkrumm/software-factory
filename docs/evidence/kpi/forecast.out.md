@@ -57,7 +57,7 @@ AS_OF 2026-10-22T08:00:00Z. `kpi/forecast.py`. Max in list USD and % of the week
 |basalt-ui|530|
 |weatherorb|378|
 |argo|354|
-|prometheus-scripts|86|
+|work-repo-1|86|
 |email-gateway|73|
 |warden|55|
 |agent-gateway|39|

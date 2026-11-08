@@ -14,7 +14,7 @@ Inputs:     human-queue snapshot  ~/.local/share/factory/snapshots/<AS_OF date>/
             warden.db snapshot    ~/.local/share/factory/snapshots/<AS_OF date>/warden.db
             transcripts           ~/.claude/projects/**/*.jsonl on this host (read live,
                                   filtered by AS_OF) and on the MacBook through
-                                  `ssh iumac 'python3 - scan-transcripts ...' < interventions.py`
+                                  `ssh macbook 'python3 - scan-transcripts ...' < interventions.py`
                                   (retried: the laptop sleeps; if it stays unreachable its
                                   candidates are carried over from the previous run)
             judgments.json        hand-judged selection (written by the analyst, read by `report`)
@@ -41,7 +41,7 @@ and dropped.
 
 Privacy (public repo): every free-text field passes lib/redact.py plus the extra patterns
 below; URLs keep only their host (GitHub excepted); the machines' own hostnames are scrubbed
-at source; an excerpt is withheld for IuRoot sessions, the personal vault, personal details
+at source; an excerpt is withheld for WorkRoot sessions, the personal vault, personal details
 (family words, plus whatever INTERVENTIONS_PERSONAL_TERMS lists: names and places, kept out of
 the repo) and candidates with no intervention signal at all.
 """
@@ -116,9 +116,9 @@ def home_path(p):
 
 
 def is_iu(cwd, branch=None):
-    """IuRoot content is never quoted (privacy rule); recognise it by cwd or ticket branch."""
+    """WorkRoot content is never quoted (privacy rule); recognise it by cwd or ticket branch."""
     c = cwd or ""
-    if "/IuRoot/" in c or c.endswith("/IuRoot") or "/.herdr/worktrees/" in c:  # herdr worktrees: IuRoot only so far
+    if "/WorkRoot/" in c or c.endswith("/WorkRoot") or "/.herdr/worktrees/" in c:  # herdr worktrees: WorkRoot only so far
         return True
     return bool(branch and re.match(r"(?:\w+/)?EP-\d+", branch))
 
@@ -127,7 +127,7 @@ def repo_of(cwd):
     p = home_path(cwd)
     if not p:
         return "?"
-    m = re.match(r"~/IuRoot/(.+)", p)
+    m = re.match(r"~/WorkRoot/(.+)", p)
     if m:
         parts = m.group(1).split("/")
         return parts[1] if parts[0] in ("worktrees", ".wt") and len(parts) > 1 else parts[0]
@@ -172,7 +172,7 @@ EXTRA = [
     (re.compile(r"/tmp/[A-Za-z0-9._-]+\.env\b"), "/tmp/<env-file>"),
 ]
 _HOST_RE = None  # compiled from the machines' own hostnames (never written down in the repo)
-ROLE_NAMES = {"mini", "iumac", "homelab", "vps", "localhost"}
+ROLE_NAMES = {"mini", "macbook", "homelab", "vps", "localhost"}
 
 
 def register_hostname(name):
@@ -564,7 +564,7 @@ def hq_candidates(snap, since, until):
         if re.search(r"(?i)\bgui\b|click|screen share|system settings|tcc|full disk", text):
             tags.append("gui")
         if iu:
-            tags.append("iuroot")
+            tags.append("workroot")
         stats[status] += 1
         out.append({
             "id": "hq:" + req["id"],
@@ -573,7 +573,7 @@ def hq_candidates(snap, since, until):
             "closed_ts": norm_ts(res["ran_at"]) if res and res.get("ran_at") else None,
             "repo": repo_of(req.get("cwd")),
             "excerpt": None if iu or PERSONAL_RE.search(text) else scrub(text),
-            "excerpt_withheld": "iuroot" if iu else ("personal-detail" if PERSONAL_RE.search(text) else None),
+            "excerpt_withheld": "workroot" if iu else ("personal-detail" if PERSONAL_RE.search(text) else None),
             "tags": tags,
             "exit": (res or {}).get("exit"),
         })
@@ -672,7 +672,7 @@ def run_macbook(since, until, attempts=4):
     """Run this very script on the MacBook (`python3 -` reads it from stdin), parse its JSON.
     The MacBook sleeps with the lid closed, so retry a few times before giving up."""
     src = open(os.path.abspath(__file__), "rb").read()
-    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "iumac",
+    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "macbook",
            "python3 - scan-transcripts --host macbook --since %s --until %s" % (iso(since), iso(until))]
     err = ""
     for k in range(attempts):
@@ -690,11 +690,11 @@ SIGNAL_TAG = re.compile(r"^(kw:|after_|queued$|ask_user_question$|first_prompt$)
 
 
 def withheld_reason(repo, tags, *texts):
-    """Why an excerpt is not written: IuRoot (rule), a personal-vault session, a personal detail
+    """Why an excerpt is not written: WorkRoot (rule), a personal-vault session, a personal detail
     in the text, or no intervention signal at all (a bare short reply tells the judge nothing
     and may be private chat)."""
-    if "iuroot" in tags:
-        return "iuroot"
+    if "workroot" in tags:
+        return "workroot"
     if repo in PERSONAL_REPOS:
         return "personal-session"
     if any(t and PERSONAL_RE.search(t) for t in texts):
@@ -710,7 +710,7 @@ def tx_candidates(res):
     for r in res["records"]:
         iu = r["iu"]
         repo = repo_of(r["cwd"])
-        why = withheld_reason(repo, r["tags"] + (["iuroot"] if iu else []), r["text"], r["prev_text"])
+        why = withheld_reason(repo, r["tags"] + (["workroot"] if iu else []), r["text"], r["prev_text"])
         out.append({
             "id": "tx:%s:%s:%s" % (r["host"], r["session"], r["uuid"]),
             "source": "transcript-" + r["host"],
@@ -723,7 +723,7 @@ def tx_candidates(res):
             "kind": r["kind"],
             "gap_s": r["gap_s"],
             "n_chars": r["n"],
-            "tags": r["tags"] + (["iuroot"] if iu else []),
+            "tags": r["tags"] + (["workroot"] if iu else []),
         })
     return out
 
@@ -768,7 +768,7 @@ def cmd_candidates(args):
         "by_day": dict(sorted(collections.Counter(c["ts"][:10] for c in cands).items(), reverse=True)),
         "stats": {"human_queue": hq_stats, "warden": wd_stats, "transcripts": tx_stats},
         "note": "Candidates are heuristic tags over owner-typed messages, human-queue asks and warden "
-                "owner touches. Newest first. IuRoot excerpts are withheld. Judgement lives in judgments.json.",
+                "owner touches. Newest first. WorkRoot excerpts are withheld. Judgement lives in judgments.json.",
         "candidates": cands,
     }
     os.makedirs(PRIVATE_DIR, exist_ok=True)
@@ -836,7 +836,7 @@ def cmd_context(args):
     if host == "mini":
         rows = context_rows(session, uuid, args.before, args.after)
     else:
-        cmd = ["ssh", "-o", "BatchMode=yes", "iumac", "python3 - context tx:mini:%s:%s --json --before %d --after %d" % (session, uuid, args.before, args.after)]
+        cmd = ["ssh", "-o", "BatchMode=yes", "macbook", "python3 - context tx:mini:%s:%s --json --before %d --after %d" % (session, uuid, args.before, args.after)]
         p = subprocess.run(cmd, input=open(os.path.abspath(__file__), "rb").read(), capture_output=True)
         rows = json.loads(p.stdout.decode("utf-8")) if p.returncode == 0 and p.stdout else None
     if not rows:
@@ -911,7 +911,7 @@ def cmd_report(args):
             "repos": it.get("repos") or [it["repo"]],
             "episode": it.get("episode"),
             "sources": [{"id": s["id"], "source": s["source"], "ts": s["ts"]} for s in srcs],
-            "iuroot": bool(it.get("iuroot")),
+            "workroot": bool(it.get("workroot")),
             "signal": rd(it["signal"]),
             "agent_did": rd(it["agent_did"]),
             "owner_did": rd(it["owner_did"]),
@@ -986,7 +986,7 @@ def render_md(doc, j):
     w("")
     w("As of %s. Mechanical part: `interventions.py` (candidates, `candidates.out.json`). Judgement: `judgments.json`. Rendered into `interventions.out.json` and this file by `interventions.py report`." % doc["as_of"])
     w("")
-    w("**How to read.** *When* is the moment the owner acted (a typed message, an approval click, an answer in Argo), UTC, newest first. An intervention is one owner action needed to unblock, correct or decide; several sources describing the same action are one entry, and distinct actions in one episode stay distinct (the `episode` field links them). *Genuinely the owner's* applies the fixed rule: only product direction, spend, irreversible data loss and other people are the owner's, nothing else. Owner quotes are translated or short; IuRoot sessions show repo and class only. A candidate is a heuristic tag set, never a verdict: I judged newest first and stopped at twenty distinct owner actions. New tasks, design talk, status pings, personal chat and agents relaying agents are not interventions.")
+    w("**How to read.** *When* is the moment the owner acted (a typed message, an approval click, an answer in Argo), UTC, newest first. An intervention is one owner action needed to unblock, correct or decide; several sources describing the same action are one entry, and distinct actions in one episode stay distinct (the `episode` field links them). *Genuinely the owner's* applies the fixed rule: only product direction, spend, irreversible data loss and other people are the owner's, nothing else. Owner quotes are translated or short; WorkRoot sessions show repo and class only. A candidate is a heuristic tag set, never a verdict: I judged newest first and stopped at twenty distinct owner actions. New tasks, design talk, status pings, personal chat and agents relaying agents are not interventions.")
     w("")
     w("**Pool.** Window %s to %s (%d d). %d candidates: %s. I read all %d candidates since %s (%s) and a second pass over what the prefilter dropped. The harness records text that an orchestrator types into a worker pane (`rd say`) as owner-typed: %d of %d entries with the human marker in the window were agent-authored and are dropped before any candidate exists." % (
         pool["window"]["from"], pool["window"]["to"], pool["window"]["days"], pool["candidates_total"],
@@ -1014,15 +1014,15 @@ def render_md(doc, j):
         w("")
         if i["episode"]:
             w("- **Episode:** %s" % i["episode"])
-        if i["iuroot"]:
-            w("- **IuRoot session:** repo name and class only; the content is withheld by rule.")
+        if i["workroot"]:
+            w("- **WorkRoot session:** repo name and class only; the content is withheld by rule.")
         else:
             w("- **Signal:** %s" % i["signal"])
             w("- **Agent/system did:** %s" % i["agent_did"])
             w("- **Owner had to:** %s" % i["owner_did"])
             w("- **Closure:** %s" % i["closure"])
         w("- **Class:** %s. **Genuinely the owner's:** %s." % (i["class"], i["genuinely_owner"]))
-        if i["iuroot"]:
+        if i["workroot"]:
             w("- **Ideal path** (mechanism only): %s." % ", ".join(i["mechanism"]))
         else:
             w("- **Ideal path** (%s): %s" % (", ".join(i["mechanism"]), i["ideal_path"]))
