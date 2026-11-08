@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { evaluate, masterRed, nextFree, type CiRun, type GuardPorts } from '../merge-guard.ts'
+import { SHARED_NUMBERS as MIGRATOR_SHARED } from '../../apps/server/src/adapters/postgres/migrate.ts'
+import {
+  evaluate,
+  masterRed,
+  nextFree,
+  SHARED_NUMBERS as GUARD_SHARED,
+  type CiRun,
+  type GuardPorts,
+} from '../merge-guard.ts'
 
 const GREEN: CiRun = { status: 'completed', conclusion: 'success', url: 'https://ci/green' }
 const RED: CiRun = { status: 'completed', conclusion: 'failure', url: 'https://ci/red' }
@@ -141,4 +149,8 @@ describe('master red', () => {
 test('the next free number is past master and the working tree', async () => {
   const dir = await leadAdding('one', '0009_far.sql')
   expect(nextFree(portsFor(dir, null))).toBe('0010')
+})
+
+test('the guard shares its shared migration numbers with the migrator', () => {
+  expect([...GUARD_SHARED].sort()).toEqual([...MIGRATOR_SHARED].sort())
 })

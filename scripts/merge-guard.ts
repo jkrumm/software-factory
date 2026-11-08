@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process'
 export const MIGRATIONS_PATH = 'apps/server/migrations'
 const MIGRATION_FILE = /^(\d{4})_[a-z0-9_]+\.sql$/
 /** Numbers two applied migrations already share (`SHARED_NUMBERS` in migrate.ts). */
-const SHARED_NUMBERS = new Set(['0993'])
+export const SHARED_NUMBERS = new Set(['0993'])
 
 export interface CiRun {
   status: string
