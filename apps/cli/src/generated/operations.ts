@@ -312,6 +312,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'text', flag: 'text', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'wake', flag: 'wake', kind: 'boolean', repeatable: false, required: false, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'via', flag: 'via', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: ['text'],
     responses: {
@@ -1568,6 +1569,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'text', flag: 'text', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'id', flag: 'id', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'via', flag: 'via', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: ['text'],
     responses: {

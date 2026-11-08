@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { TOUCH_EVENTS, type Window } from './kpis.ts'
+import { ownerTouch, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { plain } from './words.ts'
 
@@ -93,7 +93,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
   if (head === 'touch' && (TOUCH_EVENTS as readonly string[]).includes(tail)) {
     return issueIds(sql`
       SELECT issue_id FROM factory.issue_events
-      WHERE actor = 'owner' AND result = 'applied' AND kind = ${tail} AND at >= ${w.from} AND at < ${w.to}
+      WHERE ${ownerTouch(sql, [tail])} AND at >= ${w.from} AND at < ${w.to}
       ORDER BY at DESC`)
   }
   return null

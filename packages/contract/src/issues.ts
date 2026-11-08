@@ -37,9 +37,12 @@ export const CancelBody = z
   .meta({ id: 'CancelBody' })
 export type CancelBody = z.infer<typeof CancelBody>
 
+/** The orchestrator steering a lead on the owner's token: not an owner touch. */
+const Via = z.enum(['orchestrator'])
+
 /** `issue note`: the owner's words for the lead. With `wake`, a wait the owner may end is ended too. */
 export const NoteBody = z
-  .strictObject({ text: Text, wake: z.boolean().optional(), call: Call.optional() })
+  .strictObject({ text: Text, wake: z.boolean().optional(), call: Call.optional(), via: Via.optional() })
   .meta({ id: 'NoteBody' })
 export type NoteBody = z.infer<typeof NoteBody>
 
@@ -70,6 +73,6 @@ export type IssueAnswerBody = z.infer<typeof IssueAnswerBody>
 
 /** `session note`: a note typed to a lead by its session key. `id` is the legacy name of `call`. */
 export const SessionNoteBody = z
-  .strictObject({ text: Text, call: Call.optional(), id: Call.optional() })
+  .strictObject({ text: Text, call: Call.optional(), id: Call.optional(), via: Via.optional() })
   .meta({ id: 'SessionNoteBody' })
 export type SessionNoteBody = z.infer<typeof SessionNoteBody>

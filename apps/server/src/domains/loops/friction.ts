@@ -61,7 +61,7 @@ const STEERING: Record<string, Rule> = {
   'touch:noted': {
     min: 5,
     rate: 0.5,
-    why: 'owner notes on one in two closed Issues means the leads are not briefed well enough to work alone',
+    why: 'owner notes on one in two closed Issues (free-form `issue note` calls, not the orchestrator steering) means the leads are not briefed well enough to work alone',
   },
   'touch:cancelled': {
     min: 3,

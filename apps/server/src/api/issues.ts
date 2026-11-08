@@ -40,6 +40,7 @@ export interface IssueApi {
     text: string
     actor: 'owner' | 'factory'
     call?: string | undefined
+    via?: 'orchestrator' | undefined
   }): Promise<Result<NoteOutcome, SessionNoteError | PortError>>
 }
 
@@ -185,7 +186,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownIssue(params.id)
         return noteResponse(
-          await api.note({ issueId, text: body.text, actor: 'owner', wake: body.wake, call: body.call }),
+          await api.note({ issueId, text: body.text, actor: 'owner', wake: body.wake, call: body.call, via: body.via }),
         )
       },
       {
@@ -230,6 +231,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           text: body.text,
           actor: callerOf(request) === 'owner' ? 'owner' : 'factory',
           call: body.call ?? body.id,
+          via: body.via,
         })
         if (!sent.ok && sent.error.kind === 'no_session') {
           return Response.json(failure(`no session ${params.session}`, 'not_found'), { status: 404 })
