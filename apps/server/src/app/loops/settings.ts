@@ -54,7 +54,7 @@ export const DEFAULT_TICK_MS = 10_000
 const HYGIENE_MIN_TICK_MS = 15 * 60_000
 const hygieneTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, HYGIENE_MIN_TICK_MS))
 
-/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default. Throws one message naming every bad key. */
+/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes). Throws one message naming every bad key. */
 export function loadLoopSettings(env: Record<string, string | undefined>): LoopSettings {
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
