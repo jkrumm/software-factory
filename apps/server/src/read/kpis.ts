@@ -78,6 +78,42 @@ const queueWaits = (sql: SQL, w: Window) =>
     ) s ON true
     WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${w.from} AND a.at < ${w.to}`)
 
+type Usage = { cost: number | null; points: number | null }
+
+/**
+ * The last good reading of `usageOf` per window length, kept by the caller that serves requests. The window points come
+ * from a view of another component that recomputes every attribution on each read (seconds), so a request never waits on
+ * it twice in `ttlMs`: a stale reading is returned at once and refreshed in the background, and at most one read per
+ * length runs at a time. A reading with no cost (the schema is unreadable) is not kept.
+ */
+export type UsageCache = { read(days: number, compute: () => Promise<Usage>): Promise<Usage> }
+
+export function usageCache(options: { ttlMs: number; clock?: () => number }): UsageCache {
+  const clock = options.clock ?? Date.now
+  const kept = new Map<number, { at: number; value: Usage }>()
+  const running = new Map<number, Promise<Usage>>()
+  const refresh = (days: number, compute: () => Promise<Usage>) => {
+    const started =
+      running.get(days) ??
+      compute()
+        .then((value) => {
+          if (value.cost !== null) kept.set(days, { at: clock(), value })
+          return value
+        })
+        .finally(() => running.delete(days))
+    running.set(days, started)
+    return started
+  }
+  return {
+    async read(days, compute) {
+      const hit = kept.get(days)
+      if (!hit) return refresh(days, compute)
+      if (clock() - hit.at >= options.ttlMs) void refresh(days, compute).catch(() => {})
+      return hit.value
+    },
+  }
+}
+
 /**
  * Cost and window points of the Issues filed in the window, joined from the `usage` schema, which another component owns
  * in this database. A session is an Issue's when usage tagged it with the Issue's number, or when it is (or is a subagent
@@ -85,7 +121,7 @@ const queueWaits = (sql: SQL, w: Window) =>
  * points come from `usage.session_window_share`. Null when the schema, a table or a column is not there, or the factory's
  * database role may not read the schema.
  */
-async function usageOf(sql: SQL, w: Window): Promise<{ cost: number | null; points: number | null }> {
+async function usageOf(sql: SQL, w: Window): Promise<Usage> {
   try {
     // inside the try: `to_regclass` raises "permission denied for schema usage" when the factory's role has no USAGE on it
     const [found] = await sql`
@@ -93,19 +129,23 @@ async function usageOf(sql: SQL, w: Window): Promise<{ cost: number | null; poin
         to_regclass('usage.session_window_share') IS NOT NULL AS shares`
     const present = z.object({ records: z.boolean(), shares: z.boolean() }).parse(found)
     if (!present.records) return { cost: null, points: null }
+    // two branches, each on its own key: an OR across the join (or a correlated subquery per session) is a nested loop of
+    // every filed Issue against every usage session, minutes long once the role may read the schema
+    const filed = sql`
+      SELECT DISTINCT issue_id AS id FROM factory.issue_events
+      WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`
     const sessions = sql`
-      SELECT DISTINCT s.id AS session_id
-      FROM factory.issues i
-      JOIN usage.sessions s ON s.issue_id = substr(i.id, 7)
-        OR split_part(s.source_session_id, ':', 1) IN (
-          SELECT e.payload->>'claudeSessionId' FROM factory.lead_hook_events e
-          WHERE e.issue_id = i.id AND e.payload->>'claudeSessionId' IS NOT NULL)
-      WHERE i.id IN (
-        SELECT issue_id FROM factory.issue_events WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to})`
+      SELECT s.id AS session_id FROM usage.sessions s
+      WHERE s.issue_id IN (SELECT substr(f.id, 7) FROM filed f)
+      UNION
+      SELECT s.id FROM usage.sessions s
+      WHERE split_part(s.source_session_id, ':', 1) IN (
+        SELECT e.payload->>'claudeSessionId' FROM factory.lead_hook_events e
+        WHERE e.issue_id IN (SELECT f.id FROM filed f) AND e.payload->>'claudeSessionId' IS NOT NULL)`
     const cost = Cost.parse(
       (
         await sql`
-          WITH mine AS (${sessions})
+          WITH filed AS (${filed}), mine AS (${sessions})
           SELECT (SELECT coalesce(sum(r.cost_usd), 0)::float8 FROM usage.records_unique r WHERE r.session_id IN (SELECT session_id FROM mine)) AS cost,
             ${
               present.shares
@@ -125,7 +165,7 @@ const NONE = { kind: 'unset', min: null, max: null } as const
 const kpi = (k: Omit<Kpi, 'target'> & { target?: Kpi['target'] }): Kpi => ({ ...k, target: k.target ?? NONE })
 
 /** The table in `docs/product.md`, computed over the last `days` days from the event log and the checkpoint tables. */
-export async function readKpis(sql: SQL, options: { now: Date; days: number }): Promise<KpiModel> {
+export async function readKpis(sql: SQL, options: { now: Date; days: number; usage?: UsageCache }): Promise<KpiModel> {
   const w = windowOf(options.now, options.days)
   const issues = await issuesFiled(sql, w)
 
@@ -148,7 +188,7 @@ export async function readKpis(sql: SQL, options: { now: Date; days: number }): 
   const refusals = await refusalCount(sql, w)
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
-  const usage = await usageOf(sql, w)
+  const usage = options.usage ? await options.usage.read(options.days, () => usageOf(sql, w)) : await usageOf(sql, w)
 
   const kpis: Kpi[] = [
     kpi({

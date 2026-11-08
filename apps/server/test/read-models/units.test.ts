@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { StoredSignal } from '@software-factory/contract'
+import { usageCache } from '../../src/read/kpis.ts'
 import { isWorkRepo, needsModel, REDACTED_SUMMARY, REDACTED_TITLE, type ScopedNeed } from '../../src/read/needs.ts'
 import { redactSignals } from '../../src/read/signals.ts'
 import { per, percentile, windowOf } from '../../src/read/stats.ts'
@@ -110,4 +111,45 @@ test('redactSignals keeps ids, kinds, times and states and drops every word, the
     ['owner', 'agent', 'outside', 'machine'].map((trust) => [trust, REDACTED_TITLE, '', null, null, true]),
   )
   expect(out.map((s) => s.id)).toEqual(['signal_owner', 'signal_agent', 'signal_outside', 'signal_machine'])
+})
+
+test('usageCache: one slow read at a time, a stale reading served at once and refreshed behind, an unreadable schema never kept', async () => {
+  let clock = 0
+  const cache = usageCache({ ttlMs: 1000, clock: () => clock })
+  let calls = 0
+  let release: (() => void) | undefined
+  const slow = (cost: number | null) => async () => {
+    calls++
+    await new Promise<void>((resolve) => (release = resolve))
+    return { cost, points: 1 }
+  }
+
+  // concurrent first reads share one computation
+  const first = [cache.read(7, slow(10)), cache.read(7, slow(99))]
+  release?.()
+  expect(await Promise.all(first)).toEqual([
+    { cost: 10, points: 1 },
+    { cost: 10, points: 1 },
+  ])
+  expect(calls).toBe(1)
+
+  // fresh: served without computing
+  expect(await cache.read(7, slow(11))).toEqual({ cost: 10, points: 1 })
+  expect(calls).toBe(1)
+
+  // stale: the old reading answers now, the refresh runs behind it
+  clock = 1000
+  expect(await cache.read(7, slow(11))).toEqual({ cost: 10, points: 1 })
+  expect(calls).toBe(2)
+  release?.()
+  await Bun.sleep(0)
+  expect(await cache.read(7, slow(12))).toEqual({ cost: 11, points: 1 })
+
+  // another window length is its own reading, and a reading with no cost is not kept
+  const other = cache.read(1, slow(null))
+  release?.()
+  expect(await other).toEqual({ cost: null, points: 1 })
+  const retry = cache.read(1, slow(5))
+  release?.()
+  expect(await retry).toEqual({ cost: 5, points: 1 })
 })

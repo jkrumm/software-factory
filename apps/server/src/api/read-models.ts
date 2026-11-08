@@ -16,11 +16,14 @@ import type * as z from 'zod'
 import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFriction } from '../read/friction.ts'
-import { readKpis } from '../read/kpis.ts'
+import { readKpis, usageCache } from '../read/kpis.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { callerOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import type { Caller } from './policy.ts'
+
+/** How long a reading of the `usage` schema serves the KPIs before it is refreshed behind a request. */
+const USAGE_TTL_MS = 10 * 60_000
 
 /** What the read models read from: the database, and the reasons the capacity use case gives queued Issues. */
 export interface ReadModelDeps {
@@ -64,6 +67,7 @@ const noMachine = () =>
  */
 export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (request: Request) => Caller = callerOf) => {
   const now = () => (deps?.now ?? (() => new Date()))()
+  const usage = usageCache({ ttlMs: USAGE_TTL_MS })
   const days = (query: { days?: string | undefined }) => (query.days === undefined ? DEFAULT_DAYS : Number(query.days))
   return new Elysia({ prefix: '/v1' })
     .get(
@@ -137,7 +141,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/kpis',
       async ({ query }) => {
         if (!deps) return unavailable
-        return Response.json(KpiModel.parse(await readKpis(deps.sql, { now: now(), days: days(query) })))
+        return Response.json(KpiModel.parse(await readKpis(deps.sql, { now: now(), days: days(query), usage })))
       },
       {
         query: DaysQuery,
