@@ -15,7 +15,7 @@ Definition keys (evidence/DEFINITIONS.md)
                   (fix commits / all commits) is reported alongside for continuity only.
 
 Choices the definitions leave open (stated, not hidden)
-    * Repos: every directory directly under ~/SourceRoot and ~/IuRoot whose `.git` is a
+    * Repos: every directory directly under ~/SourceRoot and ~/WorkRoot whose `.git` is a
       directory. Linked worktrees (`.git` is a file) share their parent's history and are listed
       as skipped, never counted twice. The set of checkouts is live: a repo cloned after AS_OF is
       still analysed and flagged in `inventory.checkouts_created_after_as_of`.
@@ -35,11 +35,11 @@ Choices the definitions leave open (stated, not hidden)
 
 Inputs
     git (read-only `git log`, `git for-each-ref`, `git rev-list`) in ~/SourceRoot/* and
-    ~/IuRoot/*; ~/.local/share/factory/snapshots/<AS_OF date>/warden.db (SQLite, mode=ro).
+    ~/WorkRoot/*; ~/.local/share/factory/snapshots/<AS_OF date>/warden.db (SQLite, mode=ro).
 
-IuRoot rule
+WorkRoot rule
     Counts only. No subjects, paths, branch names, author identities or SHAs are written for
-    IuRoot repos; the inputs are read in memory and reduced to numbers.
+    WorkRoot repos; the inputs are read in memory and reduced to numbers.
 
 Run
     python3 -I git_delivery.py            (AS_OF=2026-10-22T08:00:00Z overrides the default)
@@ -73,15 +73,15 @@ SNAP = Path(os.environ.get("FACTORY_SNAPSHOTS", Path.home() / ".local/share/fact
 MIN_COMMITS_FOR_RANKING = 25
 REWRITTEN_GAP_S = 60
 
-ROOTS = [("SourceRoot", Path.home() / "SourceRoot"), ("IuRoot", Path.home() / "IuRoot")]
+ROOTS = [("SourceRoot", Path.home() / "SourceRoot"), ("WorkRoot", Path.home() / "WorkRoot")]
 
 # Identity facts. The owner commits under two names and several emails; agents commit as the
 # owner by design (agent-gateway's dispatch lane documents "there is no bot author here").
 OWNER_NAMES = {"jkrumm", "johannes krumm"}
 OWNER_EMAIL_RX = re.compile(r"^(?:\d+\+)?jkrumm@users\.noreply\.github\.com$|^jkrumm@|^johannes\.krumm@", re.I)
 AGENT_NAMES = {"hermes"}
-BOT_RX = re.compile(r"\[bot\]|(?:^|[-_ ])bot$|^dependabot|^renovate|github-actions|semantic-release|^gitlab|^ci$", re.I)
-WEB_COMMITTER_RX = re.compile(r"^GitHub$|^GitLab$", re.I)
+BOT_RX = re.compile(r"\[bot\]|(?:^|[-_ ])bot$|^dependabot|^renovate|github-actions|semantic-release|^the work forge|^ci$", re.I)
+WEB_COMMITTER_RX = re.compile(r"^GitHub$|^the work forge$", re.I)
 AGENT_BRANCH_RX = re.compile(r"^(?:origin/)?(?:dispatch|wave|warden|agw|fan|claude|codex|hermes|w\d+)(?:[/-]|$)", re.I)
 MERGE_BRANCH_RXS = [
     re.compile(r"^Merge (?:remote-tracking )?branch '([^']+)'"),
@@ -434,7 +434,7 @@ def pooled(recs: list[dict]) -> dict:
 
 
 def agent_share(recs: list[dict]) -> dict:
-    """Overall agent attribution, pooled over SourceRoot repos only (IuRoot stays per-repo counts)."""
+    """Overall agent attribution, pooled over SourceRoot repos only (WorkRoot stays per-repo counts)."""
     src = [r for r in recs if r["root"] == "SourceRoot"]
     total = sum(r["commits"] for r in src)
     tr = sum(r["agent_signals"]["claude_session_trailer"] for r in src)
@@ -463,7 +463,7 @@ def agent_share(recs: list[dict]) -> dict:
         in_period = {"first_day": days[0], "last_day": days[-1], "commits_in_period": n_in,
                      "with_trailer": tr, "share": ratio(tr, n_in)}
     return {
-        "scope": "SourceRoot repos pooled (IuRoot trailer counts stay per repo in repos[].agent_signals)",
+        "scope": "SourceRoot repos pooled (WorkRoot trailer counts stay per repo in repos[].agent_signals)",
         "commits": total,
         "detected_certain": {
             "claude_session_trailer": tr, "claude_session_trailer_share_of_90d": ratio(tr, total),
@@ -502,7 +502,7 @@ def write_md(out: dict, path: Path) -> None:
     L.append("")
     L.append("|scope|repos|commits|per week|owner|bot|agent identity|other human|fix proxy|rework share|reverts|")
     L.append("|-|-|-|-|-|-|-|-|-|-|-|")
-    for key in ("all", "SourceRoot", "IuRoot"):
+    for key in ("all", "SourceRoot", "WorkRoot"):
         p = out["pooled"][key]
         a = p["authors"]
         L.append(f"|{key}|{p['repos_with_commits']}/{p['repos']}|{p['commits']}|{p['commits_per_week']}|{a['owner']}|{a['bot']}|"
@@ -583,7 +583,7 @@ def write_md(out: dict, path: Path) -> None:
     L.append("## Repo inventory")
     L.append("")
     inv = out["inventory"]
-    L.append(f"Repos analysed: {inv['analysed']} ({inv['SourceRoot']} SourceRoot, {inv['IuRoot']} IuRoot). "
+    L.append(f"Repos analysed: {inv['analysed']} ({inv['SourceRoot']} SourceRoot, {inv['WorkRoot']} WorkRoot). "
              f"Linked worktrees skipped as duplicates of their parent: {', '.join(f'{w['dir']} (of {w['worktree_of']})' for w in out['skipped_worktrees']) or 'none'}. "
              f"Non-git directories: {', '.join(f'{x['root']}/{x['dir']}' for x in out['non_git_dirs']) or 'none'}. "
              f"Checkouts created after AS_OF (history still counted): {', '.join(inv['checkouts_created_after_as_of']) or 'none'}.")
@@ -648,13 +648,13 @@ def main() -> int:
         "weeks": weeks,
         "weekly_pooled": weekly_pooled,
         "inventory": {"analysed": len(ok), "SourceRoot": sum(1 for r in ok if r["root"] == "SourceRoot"),
-                      "IuRoot": sum(1 for r in ok if r["root"] == "IuRoot"),
+                      "WorkRoot": sum(1 for r in ok if r["root"] == "WorkRoot"),
                       "worktrees_skipped": len(worktrees), "non_git_dirs": len(non_git),
                       "checkouts_created_after_as_of": sorted(r["repo"] for r in ok if r["live"].get("checkout_created_after_as_of"))},
         "skipped_worktrees": worktrees,
         "non_git_dirs": non_git,
         "pooled": {"all": pooled(ok), "SourceRoot": pooled([r for r in ok if r["root"] == "SourceRoot"]),
-                   "IuRoot": pooled([r for r in ok if r["root"] == "IuRoot"])},
+                   "WorkRoot": pooled([r for r in ok if r["root"] == "WorkRoot"])},
         "rankings": rankings,
         "warden_revert_half": warden_half(),
         "agent_share": agent,
@@ -671,7 +671,7 @@ def main() -> int:
             "A merge-commit's branch name is parsed from the subject; branches deleted after a rebase-merge leave no trace in git, so branch-name detection undercounts.",
             "Not done here: after W39 no marker survives in git. Joining the Claude Code transcripts (a `git commit` tool result per commit, matched on author time and subject) would close the gap "
             "but means streaming ~15 GB of transcripts for the window, which is not a re-runnable stdlib step.",
-            "IuRoot repos are reduced to counts: no subjects, paths, branch names, identities or SHAs are written for them.",
+            "WorkRoot repos are reduced to counts: no subjects, paths, branch names, identities or SHAs are written for them.",
             "The set of checkouts is live, not frozen: a repo cloned after AS_OF is still analysed (its history predates AS_OF) and is flagged checkout_created_after_as_of.",
         ]],
     }

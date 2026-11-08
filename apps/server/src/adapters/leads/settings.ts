@@ -58,7 +58,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
   }
   const e = parsed.data
-  const roots = (e.FACTORY_REPO_ROOTS ?? `${e.HOME}/SourceRoot:${e.HOME}/IuRoot`).split(':')
+  const roots = (e.FACTORY_REPO_ROOTS ?? `${e.HOME}/SourceRoot`).split(':')
   if (roots.some((root) => !root.startsWith('/'))) {
     throw new Error(`FACTORY_REPO_ROOTS must be colon-separated absolute paths, got: ${e.FACTORY_REPO_ROOTS}`)
   }

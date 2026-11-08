@@ -117,12 +117,12 @@
       "when": "2026-10-21T19:48:03Z",
       "signal_ts": "2026-10-21T16:30:47Z",
       "closure_ts": "2026-10-21T19:48:09Z",
-      "repo": "prometheus-scripts",
-      "iuroot": true,
+      "repo": "work-repo-1",
+      "workroot": true,
       "sources": [
         "tx:mini:8637fcae:8e8d8d5b"
       ],
-      "signal": "(IuRoot session: withheld)",
+      "signal": "(WorkRoot session: withheld)",
       "agent_did": "(withheld)",
       "owner_did": "(withheld)",
       "closure": "(withheld)",
@@ -405,12 +405,12 @@
     {
       "n": 18,
       "when": "2026-10-20T16:23:44Z",
-      "repo": "prometheus-scripts",
-      "iuroot": true,
+      "repo": "work-repo-1",
+      "workroot": true,
       "sources": [
         "tx:mini:d492a74e:ca2c08f1"
       ],
-      "signal": "(IuRoot session: withheld)",
+      "signal": "(WorkRoot session: withheld)",
       "agent_did": "(withheld)",
       "owner_did": "(withheld)",
       "closure": "(withheld)",

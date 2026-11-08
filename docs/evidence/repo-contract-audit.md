@@ -2,7 +2,7 @@
 
 Every repo with a factory space under `~/SourceRoot` (`~/.config/factory/spaces.json`, 24 spaces) against the contract in
 `docs/design.md` §9: `project.yaml` v0 on the default branch, `make check`, `deploy` and `verify`, `make version` where the
-manifest's `deploy.mode` is `make`, and `make verify` exiting 0 on master today. IuRoot is out of scope.
+manifest's `deploy.mode` is `make`, and `make verify` exiting 0 on master today. WorkRoot is out of scope.
 
 **Method.** Manifest: `git cat-file` on `origin/master:project.yaml`, and `factory project list` for `manifestError`. Targets: a
 static read of each Makefile. Verify: `make verify` run once in each repo's main checkout on 2026-11-06 (all verify targets are

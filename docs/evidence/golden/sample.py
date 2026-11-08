@@ -23,7 +23,7 @@ dropped from the frame (counted in sample.out.json, never named).
 
 Inputs, all read-only: snapshot warden.db (events, triage_items, item_transitions,
 dispatches, operations) and agw-jobs.db (job_stats.error_head of failed dispatches); the
-git history of the repos under ~/SourceRoot (`git log --before AS_OF`). IuRoot is never read.
+git history of the repos under ~/SourceRoot (`git log --before AS_OF`). WorkRoot is never read.
 Every row is filtered to < AS_OF; every free-text field goes through lib/redact.py.
 
 Outputs, next to this script: sample.out.json (strata, totals, seed, weights) and

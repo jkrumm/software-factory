@@ -130,14 +130,14 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] dotfiles `ask-human.sh list --json` (`370ed24`..`94c0b98`).
 - [x] agw digest: agw PR #103 `f02f351`, live (a real call: "Shall I merge it now?" → asks, permission; Haiku on the iu credit pool, $0.00022).
 - [x] FV Wave 1 (PR #32, `b7813fd`): 2 h 51 wall, `worker` Sonnet on `me2` (context 70 %); the lead's two `/code-review high` found 11 + 9, the second round 7
-  IuRoot leaks through a redacted socket view, so `/fleet` became token-only. Live: 23 repos (2 IuRoot, visible), 19 asks (16 queue,
+  WorkRoot leaks through a redacted socket view, so `/fleet` became token-only. Live: 23 repos (2 WorkRoot, visible), 19 asks (16 queue,
   14 older than 24 h), 0 errors; the socket answers `fleet needs FACTORY_TOKEN`.
 - [x] FV Wave 2 (PR #33, `077bca9`): 3 h 14 wall, `worker` Sonnet on `me2` (context 68 %); the lead's three `/code-review high` found 10 + 8 + 8,
   most in the call's lifecycle (a paid run repeated every pass, a dead run blocking a day), simplified in the third round. Live: first
-  pass 2 calls, 128 items, $0.0043; 133 wave shorts; no IuRoot item in the cache (IuRoot shorts are the headings cut at 8 words).
+  pass 2 calls, 128 items, $0.0043; 133 wave shorts; no WorkRoot item in the cache (WorkRoot shorts are the headings cut at 8 words).
 - [x] FV Wave 3 (PR #34, `6b98d06`) with dotfiles `ask-human.sh resolve`: 3 h 23 wall, `worker` Sonnet on `me2` (context 80 %); the lead's
-  `/code-review high` found 9 + 5 (worst: a business-class request offered a one-click resolve; free text judged "done"; the IuRoot
-  spawn guard on a snapshot flag). Live: 26 asks tiered (21 yours, 3 hand_off, 2 one_click), a stale IuRoot plan marked by the
+  `/code-review high` found 9 + 5 (worst: a business-class request offered a one-click resolve; free text judged "done"; the WorkRoot
+  spawn guard on a snapshot flag). Live: 26 asks tiered (21 yours, 3 hand_off, 2 one_click), a stale WorkRoot plan marked by the
   automatic tier, one `later` act recorded and the ask hidden. `launch.sh` reads `~/.config/factory/env` (allowlisted keys).
 - [x] Board Wave 1 (dotfiles PR #60, `753af8b`): `worker` Sonnet on `iu`, 32 min; its three `/review` passes found one load blocker (a constant read before
   its declaration). Landed `--no-check`: the one red target is herdr-core's live version drift between the machines (0.1.15 vs 0.1.16). Live: reloaded on the
@@ -145,7 +145,7 @@ The same lead, continuing. Plan `docs/waves/fv.md`; agw `docs/waves/fv-digest.md
 - [x] FV Wave 4 (PR #35, `88886e5`): 4 h 30 wall, `worker` Sonnet on `me2` (context 85 %); the lead's four `/code-review high` found 8 + 10 + 9 + 8, the
   fix rounds twice built new bugs (a cursor pin on the oldest git read froze the cursor), so the fourth round was a simplification the lead read
   himself. Live: `/fleet` carries presence (away, no act yet), `fleet since` over 24 h: 5 needs you, 266 shipped, 1 recovered, 6 handled, 27 running,
-  spend per account; the headline paragraph ready in one pass with IuRoot as a count only ("87 items in a read-only area were counted only").
+  spend per account; the headline paragraph ready in one pass with WorkRoot as a count only ("87 items in a read-only area were counted only").
 - [x] FV Wave 5, `agw agents`: agw's mother decided 2026-11-02: a client of `/fleet` (`factory fleet --format json` under secrets-run), keeping only its
   recommendations and Max quota for Hermes, brain and Argo; its collectors go, agw's and dotfiles' `AGENTS.md` name the factory as the one producer in the
   same change (agw PLAN Wave 8, after its Wave 17). A2 and IR read `/fleet` (`docs/program.md` track notes, `100c286`).
@@ -211,4 +211,4 @@ Opus/high (spawned with `--role deep`: `lead` is Sonnet high since reset Wave 4)
 - [x] Learnings with evidence in `docs/strategy/2026-11-reset/learnings.md`; the plan adjusted in the same commit.
 - [x] Stop after `reset.md` Wave 7 (its "Stop for the owner"), with the state in the handoff; rotate earlier at about 60 % context.
 
-**Left behind:** reset Waves 6–7 done and live: software-factory #44 (spaces, `ed175476713c`) and #45 (`issue_facts`, `b7d749a7ed2c`), dotfiles #62; every range `covered`, every `make verify` green. Issue 64 and Issue 66 closed `done` (66 on its first hold), so the no-push-during-a-hold rule is retired. First KPI line: asks/issue 0.05, zero-touch 94 %, first-hold 81 %. **Stopped: `reset.md`'s "Stop for the owner"** — rows 7–9 (dotfiles `rd`, `/wave`, `wave-gate.py`, then the deletions) change the machinery this loop runs on and wait for the owner's read of the learnings; no next wave is spawned and none is `active`. Handoff `docs/waves/handoff/program.md` (incl. the two doubled spaces and the IuRoot plan tabs, the owner's).
+**Left behind:** reset Waves 6–7 done and live: software-factory #44 (spaces, `ed175476713c`) and #45 (`issue_facts`, `b7d749a7ed2c`), dotfiles #62; every range `covered`, every `make verify` green. Issue 64 and Issue 66 closed `done` (66 on its first hold), so the no-push-during-a-hold rule is retired. First KPI line: asks/issue 0.05, zero-touch 94 %, first-hold 81 %. **Stopped: `reset.md`'s "Stop for the owner"** — rows 7–9 (dotfiles `rd`, `/wave`, `wave-gate.py`, then the deletions) change the machinery this loop runs on and wait for the owner's read of the learnings; no next wave is spawned and none is `active`. Handoff `docs/waves/handoff/program.md` (incl. the two doubled spaces and the WorkRoot plan tabs, the owner's).

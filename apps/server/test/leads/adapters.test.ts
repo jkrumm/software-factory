@@ -242,7 +242,7 @@ describe('names and settings', () => {
     const settings = loadLeadSettings({ HOME: '/home/x' })
     expect(settings).toMatchObject({
       tickMs: 10_000,
-      repoRoots: ['/home/x/SourceRoot', '/home/x/IuRoot'],
+      repoRoots: ['/home/x/SourceRoot'],
       socket: '/home/x/.local/share/factory/hook.sock',
       spoolDir: '/home/x/.local/share/factory/spool',
       startBudgetMs: 1_800_000,

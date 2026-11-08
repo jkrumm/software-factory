@@ -15,7 +15,7 @@
       "rewritten_committer_date": 3534,
       "share": 0.4098
     },
-    "scope": "SourceRoot repos pooled (IuRoot trailer counts stay per repo in repos[].agent_signals)",
+    "scope": "SourceRoot repos pooled (WorkRoot trailer counts stay per repo in repos[].agent_signals)",
     "trailer_first_to_last_day": {
       "commits_in_period": 2585,
       "first_day": "2026-08-01",
@@ -117,11 +117,11 @@
   ],
   "history_read_from": "2026-07-14T08:00:00Z",
   "inventory": {
-    "IuRoot": 20,
+    "WorkRoot": 20,
     "SourceRoot": 33,
     "analysed": 53,
     "checkouts_created_after_as_of": [
-      "prometheus-epx"
+      "work-repo-5"
     ],
     "non_git_dirs": 6,
     "worktrees_skipped": 2
@@ -140,16 +140,16 @@
       "root": "SourceRoot"
     },
     {
-      "dir": "crm-bridge-retry-tool",
-      "root": "IuRoot"
+      "dir": "work-repo-6",
+      "root": "WorkRoot"
     },
     {
-      "dir": "epos.student-enrolment.struct-cache",
-      "root": "IuRoot"
+      "dir": "work-repo-7",
+      "root": "WorkRoot"
     },
     {
       "dir": "worktrees",
-      "root": "IuRoot"
+      "root": "WorkRoot"
     }
   ],
   "notes": [
@@ -159,11 +159,11 @@
     "Agent attribution cannot come from identity: agents commit as the owner by design (agent-gateway dispatch-git.ts: 'there is no bot author here'). The Claude-Session trailer is the only direct marker and exists only for part of the window; detection methods are listed in agent_share.",
     "A merge-commit's branch name is parsed from the subject; branches deleted after a rebase-merge leave no trace in git, so branch-name detection undercounts.",
     "Not done here: after W39 no marker survives in git. Joining the Claude Code transcripts (a `git commit` tool result per commit, matched on author time and subject) would close the gap but means streaming ~15 GB of transcripts for the window, which is not a re-runnable stdlib step.",
-    "IuRoot repos are reduced to counts: no subjects, paths, branch names, identities or SHAs are written for them.",
+    "WorkRoot repos are reduced to counts: no subjects, paths, branch names, identities or SHAs are written for them.",
     "The set of checkouts is live, not frozen: a repo cloned after AS_OF is still analysed (its history predates AS_OF) and is flagged checkout_created_after_as_of."
   ],
   "pooled": {
-    "IuRoot": {
+    "WorkRoot": {
       "authors": {
         "agent_identity": 0,
         "bot": 1,
@@ -293,12 +293,12 @@
       {
         "commits": 56,
         "fix_proxy_share": 0.2857,
-        "repo": "epos_fe.booking",
+        "repo": "work-repo-8",
         "revert_rate": 0.0179,
         "reverts": 1,
         "rework": 8,
         "rework_share": 0.1429,
-        "root": "IuRoot"
+        "root": "WorkRoot"
       },
       {
         "commits": 54,
@@ -313,12 +313,12 @@
       {
         "commits": 20,
         "fix_proxy_share": 0.4,
-        "repo": "epos.finance-bridge",
+        "repo": "work-repo-9",
         "revert_rate": 0.05,
         "reverts": 1,
         "rework": 6,
         "rework_share": 0.3,
-        "root": "IuRoot"
+        "root": "WorkRoot"
       },
       {
         "commits": 1884,
@@ -345,12 +345,12 @@
       {
         "commits": 56,
         "fix_proxy_share": 0.2857,
-        "repo": "epos_fe.booking",
+        "repo": "work-repo-8",
         "revert_rate": 0.0179,
         "reverts": 1,
         "rework": 8,
         "rework_share": 0.1429,
-        "root": "IuRoot"
+        "root": "WorkRoot"
       },
       {
         "commits": 269,
@@ -629,12 +629,12 @@
       {
         "commits": 140,
         "fix_proxy_share": 0.4643,
-        "repo": "epos.student-enrolment",
+        "repo": "work-repo-3",
         "revert_rate": 0.0,
         "reverts": 0,
         "rework": 39,
         "rework_share": 0.2786,
-        "root": "IuRoot"
+        "root": "WorkRoot"
       }
     ]
   },
@@ -681,7 +681,7 @@
       "owner_share": null,
       "ref": "origin/master",
       "ref_found_by": "origin/HEAD",
-      "repo": "cfn-kafka",
+      "repo": "work-repo-10",
       "revert": {
         "count": 0,
         "rate": null,
@@ -697,7 +697,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-05-18",
       "typed_share": null,
       "types": {},
@@ -746,7 +746,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos-customers-frontend",
+      "repo": "work-repo-11",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -762,7 +762,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-09",
       "typed_share": 1.0,
       "types": {
@@ -855,7 +855,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos-data-analytics",
+      "repo": "work-repo-12",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -871,7 +871,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-13",
       "typed_share": 1.0,
       "types": {
@@ -930,7 +930,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos-orchestrator-frontend",
+      "repo": "work-repo-13",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -946,7 +946,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.4444
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-13",
       "typed_share": 1.0,
       "types": {
@@ -1088,7 +1088,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.crm-bridge",
+      "repo": "work-repo-14",
       "revert": {
         "count": 0,
         "rate": null,
@@ -1104,7 +1104,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-07-06",
       "typed_share": null,
       "types": {},
@@ -1153,7 +1153,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.dam",
+      "repo": "work-repo-15",
       "revert": {
         "count": 0,
         "rate": null,
@@ -1169,7 +1169,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-05-19",
       "typed_share": null,
       "types": {},
@@ -1220,7 +1220,7 @@
       "owner_share": 0.0,
       "ref": "origin/master",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.exam",
+      "repo": "work-repo-16",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -1236,7 +1236,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.3333
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-08-26",
       "typed_share": 0.9722,
       "types": {
@@ -1335,7 +1335,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.finance-bridge",
+      "repo": "work-repo-9",
       "revert": {
         "count": 1,
         "rate": 0.05,
@@ -1351,7 +1351,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.6667
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-14",
       "typed_share": 0.7,
       "types": {
@@ -1441,7 +1441,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.iam",
+      "repo": "work-repo-17",
       "revert": {
         "count": 0,
         "rate": null,
@@ -1457,7 +1457,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-03-12",
       "typed_share": null,
       "types": {},
@@ -1506,7 +1506,7 @@
       "owner_share": 0.6143,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.student-enrolment",
+      "repo": "work-repo-3",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -1522,7 +1522,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.6
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-21",
       "typed_share": 0.9929,
       "types": {
@@ -1675,7 +1675,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos.study-progress",
+      "repo": "work-repo-18",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -1691,7 +1691,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.5
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-09-08",
       "typed_share": 0.9744,
       "types": {
@@ -1803,7 +1803,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos_fe.academic-profile",
+      "repo": "work-repo-19",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -1819,7 +1819,7 @@
         "share_excl_bot_commits": 0.1,
         "share_of_fix_or_revert": 0.375
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-06",
       "typed_share": 1.0,
       "types": {
@@ -1929,7 +1929,7 @@
       "owner_share": 0.0714,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos_fe.booking",
+      "repo": "work-repo-8",
       "revert": {
         "count": 1,
         "rate": 0.0179,
@@ -1945,7 +1945,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.4706
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-09-21",
       "typed_share": 0.9821,
       "types": {
@@ -2045,7 +2045,7 @@
       "owner_share": 0.0,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos_fe.customer-navigation",
+      "repo": "work-repo-20",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -2061,7 +2061,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-09-09",
       "typed_share": 1.0,
       "types": {
@@ -2121,7 +2121,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "epos_fe.spa-orchestrator",
+      "repo": "work-repo-21",
       "revert": {
         "count": 0,
         "rate": null,
@@ -2137,7 +2137,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-07-20",
       "typed_share": null,
       "types": {},
@@ -2186,7 +2186,7 @@
       "owner_share": 0.9674,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "prometheus-epx",
+      "repo": "work-repo-5",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -2202,7 +2202,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.8824
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-20",
       "typed_share": 0.9457,
       "types": {
@@ -2324,7 +2324,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "prometheus-feuer-agent",
+      "repo": "work-repo-22",
       "revert": {
         "count": 0,
         "rate": null,
@@ -2340,7 +2340,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-06-10",
       "typed_share": null,
       "types": {},
@@ -2389,7 +2389,7 @@
       "owner_share": 0.9674,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "prometheus-scripts",
+      "repo": "work-repo-1",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -2405,7 +2405,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.8824
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-20",
       "typed_share": 0.9457,
       "types": {
@@ -2525,7 +2525,7 @@
       "owner_share": 0.9423,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "prometheus-stack",
+      "repo": "work-repo-4",
       "revert": {
         "count": 0,
         "rate": 0.0,
@@ -2541,7 +2541,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": 0.875
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2026-10-15",
       "typed_share": 0.9038,
       "types": {
@@ -2653,7 +2653,7 @@
       "owner_share": null,
       "ref": "origin/main",
       "ref_found_by": "origin/HEAD",
-      "repo": "terraform-monitoring",
+      "repo": "work-repo-23",
       "revert": {
         "count": 0,
         "rate": null,
@@ -2669,7 +2669,7 @@
         "share_excl_bot_commits": null,
         "share_of_fix_or_revert": null
       },
-      "root": "IuRoot",
+      "root": "WorkRoot",
       "tip_date": "2025-12-03",
       "typed_share": null,
       "types": {},
@@ -7292,7 +7292,7 @@
       "revert": 0,
       "rework": 16,
       "rework_share": 0.1067,
-      "top_repo": "epos_fe.booking",
+      "top_repo": "work-repo-8",
       "top_repo_share": 0.24
     },
     "2026-W34": {

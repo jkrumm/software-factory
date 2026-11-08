@@ -789,7 +789,7 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <ul>
 <li><b>Storage:</b> blobs under <code>~/.local/share/factory/artifacts</code>, rows in the <code>factory</code> schema. Never in git, since this repo is public and a work repo's artifact must stay out of it.</li>
 <li><b>Safety:</b> agent HTML runs in a sandboxed iframe on its own origin with a strict CSP. Comment text is data for the lead, as an ask's answer is today. Plannotator's sandbox attributes were not verified, so this needs its own design.</li>
-<li><b>Visible repos:</b> an IuRoot artifact stays local, with no digest and no <code>agw</code> call, following <code>scopeOf</code>.</li>
+<li><b>Visible repos:</b> an WorkRoot artifact stays local, with no digest and no <code>agw</code> call, following <code>scopeOf</code>.</li>
 </ul>
 <h3>The question format</h3>
 <p>The cards in <a href="#decisions">the decisions section</a> are a working example. A lead writes a spec, zod validates it and names the failing element, and the page renders it. A question with no cost or no consequence is refused before it reaches you.</p>
@@ -894,7 +894,7 @@ const Verdict = z.enum(['looks_good', 'with_notes', 'changes', 'stale', 'read'])
 <div class="tablewrap"><table>
 <tr><th>Blocker</th><th>Fix</th></tr>
 <tr><td>No <code>LICENSE</code>, <code>"private": true</code></td><td>Your pick, <a href="#d7">decision 7</a></td></tr>
-<tr><td>Tracked files name work context: IuRoot in 88 files</td><td>Generalise to "visible roots" in code and docs</td></tr>
+<tr><td>Tracked files name work context: WorkRoot in 88 files</td><td>Generalise to "visible roots" in code and docs</td></tr>
 <tr><td>Evidence holds owner text and 71 terminal captures</td><td>Run <code>lib/redact.py</code>, or move evidence out before the launch. History needs a look too</td></tr>
 <tr><td>Internal voice: RS codes, "the mini", <code>com.jkrumm.*</code>, <code>~/SourceRoot</code></td><td>The docs sweep plus a config layer for labels and paths</td></tr>
 <tr><td>Nobody can run it: needs hc, agw, Postgres, Claude Code</td><td><code>make demo</code>: the Console on a recorded event stream using <code>fake-hc</code>. Screenshots in the README</td></tr>

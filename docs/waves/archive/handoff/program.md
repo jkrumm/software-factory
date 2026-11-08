@@ -24,11 +24,11 @@ deploy `make verify` all passed.
 
 ## The owner's (not asks; nothing waits on them)
 
-- **Two doubled spaces.** The app's `agent-workflows` and `epos-ai-teamchat-athena` spaces have folder `~/IuRoot` in the app doc, so the
+- **Two doubled spaces.** The app's `agent-workflows` and `work-repo-26` spaces have folder `~/WorkRoot` in the app doc, so the
   reconcile (keyed by real path) seeded correct ones beside them. Close the old ones in the app when convenient (their terminals: `t11p`,
   `t11q` with its review children; `t126`, `t133`). The factory does not edit your spaces.
-- **IuRoot spaces have plan tabs too.** `FACTORY_REPO_ROOTS` covers both workspaces; the plan shells there read and send nothing. If you
-  want none there, set `FACTORY_REPO_ROOTS` or drop the IuRoot members from what `factory-spaces.py` renders.
+- **WorkRoot spaces have plan tabs too.** `FACTORY_REPO_ROOTS` covers both workspaces; the plan shells there read and send nothing. If you
+  want none there, set `FACTORY_REPO_ROOTS` or drop the WorkRoot members from what `factory-spaces.py` renders.
 - **The sidebar is not seen yet:** the app was not connected at the proof. In a space that already had tabs, the plan tab sits last.
 - **Next rows** (7: dotfiles `rd` thin client, `/wave` → the lead's playbook, hc-reap trimmed, `wave-gate.py` gone; 8–9: the deletions)
   change the machinery this loop runs on. They start after your read of the learnings; a new program lead wave of `PLAN.md` runs them.
@@ -36,12 +36,12 @@ deploy `make verify` all passed.
 ## State at the stop
 
 - Open Issues: only 49 (homelab-private, parked `lead_gone` 44 h, a security decision; yours).
-- `factory status`: 0 asks, 7 health lines (2 expired notes to an IuRoot wave, 2 failed agw spawns of 2026-11-02, Issue 49, Issue 36's kept
+- `factory status`: 0 asks, 7 health lines (2 expired notes to an WorkRoot wave, 2 failed agw spawns of 2026-11-02, Issue 49, Issue 36's kept
   gameday worktree, review `rv_kmnj…` needing a human). The 5 human-queue entries on `/fleet` are unchanged from rotation 2.
 - Accounts at 04:50Z: `iu` 13 % week, `me` 95 % (resets 06:00Z), `me2` 79 %.
 - Worktrees `reset-w7-issue-facts` (software-factory) and `reset-w6-dotfiles` (dotfiles) are merged and kept as "fresh" by `rd fan --clean`;
   the next clean removes them.
-- dotfiles `make verify`: 2 red, neither the reset's (`tcc`: an IuRoot LaunchAgent's versioned python; `architecture map`: the known
+- dotfiles `make verify`: 2 red, neither the reset's (`tcc`: an WorkRoot LaunchAgent's versioned python; `architecture map`: the known
   unmapped launchd labels).
 
 ## How this loop ran (unchanged, it held)

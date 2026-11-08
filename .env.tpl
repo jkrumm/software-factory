@@ -3,7 +3,7 @@
 # the schema `factory` in the shared database (vps: make db-shared).
 FACTORY_DB_PASSWORD=op://mini/vps-dev/SHARED_FACTORY_DB_PASSWORD
 FACTORY_TOKEN=op://mini/software-factory/FACTORY_TOKEN
-# The surfaces' bearer (the Hermes agent): GET /v1/* only, IuRoot's text left out. Must differ from FACTORY_TOKEN.
+# The surfaces' bearer (the Hermes agent): GET /v1/* only, WorkRoot's text left out. Must differ from FACTORY_TOKEN.
 FACTORY_READ_TOKEN=op://mini/software-factory/FACTORY_READ_TOKEN
 # A lead session's bearer (its terminal gets it as FACTORY_TOKEN) and the alert door's: both must differ from every other token.
 FACTORY_AGENT_TOKEN=op://mini/software-factory/FACTORY_AGENT_TOKEN

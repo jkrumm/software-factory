@@ -31,7 +31,7 @@ diff --git a/skills/fleet/SKILL.md b/skills/fleet/SKILL.md
  - `<repo>`: the bare directory name under `~/SourceRoot/` (`ls ~/SourceRoot` to resolve a misheard name). A name that matches nothing: file nothing, say so.
 -- Run it **once**. No `--key` (a shared key would merge unrelated requests). stdout is JSON with the Issue `id` and `state`.
 +- Run it **once**. stdout is JSON with the signal's answer: `filed` (a new Issue, its `id`), `amended` (it joined an open Issue) or `held`.
- - A non-zero exit or a 422 (repo outside the factory's roots, e.g. IuRoot) is an error: state the cause in one clause. Do not substitute a GitHub issue, a tab or another lane.
+ - A non-zero exit or a 422 (repo outside the factory's roots, e.g. WorkRoot) is an error: state the cause in one clause. Do not substitute a GitHub issue, a tab or another lane.
 -- Reply: the repo, the Issue id, and "filed with the factory" — it is queued, not running; a lead starts in a worktree of that repo. Never say "started".
 +- Reply: the repo, the Issue id, and "filed with the factory" (or "added to Issue <id>" for `amended`) — it is queued, not running; a lead starts in a worktree of that repo. Never say "started".
  - Follow-up on a filed Issue: `factory read issue <id>`.

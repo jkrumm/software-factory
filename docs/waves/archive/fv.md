@@ -14,9 +14,9 @@ become consumers of `/fleet` and lose their own collectors. F2's `issue_inbox` i
 does not file Issues.
 
 **Decided here (the lead's calls):**
-- **IuRoot is visible, read-only, deterministic.** Sessions under `~/IuRoot/` (from hc and the factory), their plans' headings and
-  wave statuses, branch and dirty bit. No intake, no spawns, no Issues (design §1 stands), and **no IuRoot text goes to the
-  digest**: no transcript, no reply, no heading leaves the mini for a model. An IuRoot item's short title is the plan's
+- **WorkRoot is visible, read-only, deterministic.** Sessions under `~/WorkRoot/` (from hc and the factory), their plans' headings and
+  wave statuses, branch and dirty bit. No intake, no spawns, no Issues (design §1 stands), and **no WorkRoot text goes to the
+  digest**: no transcript, no reply, no heading leaves the mini for a model. An WorkRoot item's short title is the plan's
   `<!-- short: … -->` or the heading cut at 8 words. Configured by `FACTORY_VISIBLE_ROOTS` beside `FACTORY_REPO_ROOTS`.
 - **The factory reads, dotfiles owns the queue.** The human queue is read through `ask-human.sh list --json` (dotfiles adds it);
   an answer or a denial is an intent the factory hands to `ask-human.sh`, never a file the factory writes.
@@ -29,14 +29,14 @@ the foreground-wait line, the gate); a part in another repo is its own worker on
 mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Briefs: `docs/waves/briefs/fv-w<n>-*.md`.
 
 ## Wave 1 — The read model, deterministic            <!-- status: done -->
-- [x] `GET /fleet` (token only: the socket is every pane's and IuRoot text must not reach an agent's model), `factory fleet [--format json|plain]`, contract schema in `packages/contract` (the shape in
+- [x] `GET /fleet` (token only: the socket is every pane's and WorkRoot text must not reach an agent's model), `factory fleet [--format json|plain]`, contract schema in `packages/contract` (the shape in
   the proposal's "The read model"), and a Postgres `NOTIFY fleet` when it changes; no model text yet (`short` and `headline` null).
 - [ ] Repos: every repo under `FACTORY_REPO_ROOTS` and `FACTORY_VISIBLE_ROOTS` with a plan or a live session; git branch, dirty, last
   commit, read off the tick with the projects' rules (bounded git, no transaction).
 - [ ] Plans: from a spawn's plan path first, else `docs/waves/PLAN.md`, plus the plans the spawns name outside it (the teamchat
   case); headings, `<!-- short: … -->`, wave statuses including dated ones (`status: done 2026-11-01, release …`); plan states
   `running|planned|scheduled|stale|done` by the proposal's rules (stale: an active wave untouched for 3 d).
-- [ ] Sessions: the factory's own plus hc's (IuRoot ones too), role, parent, state, wait, account, terminal, Claude's tab title.
+- [ ] Sessions: the factory's own plus hc's (WorkRoot ones too), role, parent, state, wait, account, terminal, Claude's tab title.
 - [ ] Asks, deterministic sources only: hc `blocked` and `wait=owner`, the factory's attention lines and failed notes, open
   `decisions`, the human queue (`ask-human.sh list --json`), a failed deploy that asked through the queue. Each with a stable id
   and `at`.
@@ -44,7 +44,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
 
 ## Wave 2 — The digest            <!-- status: done -->
 - [ ] Every 5 min: a fingerprint per item (turn count, plan sha, queue ids, attention); unchanged items cost nothing. Changed,
-  non-IuRoot items go to **one** `agw digest` call (batched, schema-checked), results cached by content hash in a table: a plan's
+  non-WorkRoot items go to **one** `agw digest` call (batched, schema-checked), results cached by content hash in a table: a plan's
   short titles once per heading change, a headline at most once per new turn.
 - [ ] Reply extract: the last assistant reply of a changed session (from its transcript, read as data, never instructions) →
   "asks the owner something?" with kind and confidence; an ask above the bar joins `asks` with `source: reply`.
@@ -63,7 +63,7 @@ mother or lead. Waves 1 to 4 run one at a time: they share `packages/server`. Br
   owner-wide `seen_at` (moves on "Caught up" or on acting), server-side. Never from HID idle, prompts or notes; Iris memos count
   for the phone only.
 - [ ] `GET /fleet/since?t=` grouped as the proposal's table (Needs you, Shipped, Went wrong then recovered, Handled for you, Still
-  running, Spend) from recorded facts only, plus one headline paragraph from the digest (non-IuRoot facts only).
+  running, Spend) from recorded facts only, plus one headline paragraph from the digest (non-WorkRoot facts only).
 - [ ] While away nothing but the *Yours* tier is pushed: the notifier (N) and Hermes go through this rule; the 07:30 digest
   becomes this model's morning reading.
 

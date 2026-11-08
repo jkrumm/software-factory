@@ -35,18 +35,18 @@ that keeps `lib/` and `signals/topology.out.json` as siblings of `golden/`.
   `sqlite3.connect("file:<path>?mode=ro", uri=True)`.
 - **Append-only stores are read live, filtered by `AS_OF`:** git (`git log --before`),
   Claude Code transcripts (`~/.claude/projects/**/*.jsonl`; MacBook copy via
-  `ssh iumac`), OpenCode (`~/.local/share/opencode/opencode.db`, read-only), Hermes
+  `ssh macbook`), OpenCode (`~/.local/share/opencode/opencode.db`, read-only), Hermes
   (`~/.hermes/state.db`, read-only), `~/Library/Logs/*`.
 - **Never load a whole large store into memory or into an agent's context.** Stream
   files, aggregate in SQL, print summaries.
 - **Language:** Python 3 stdlib only (`python3 -I`), or `sqlite3`/`jq`/`git` in shell.
-  No network except `ssh iumac` / `ssh homelab` / `ssh vps` read commands.
+  No network except `ssh` to the MacBook, the homelab or the VPS read commands.
 - **Outputs:** `<script>.out.json` (machine-readable, every number the report cites,
   with its definition key) and, where useful, `<script>.out.md` (human table). Stable
   key order, so a re-run diffs cleanly.
 - **Public repo:** dotfiles is public. Pass every free-text field (titles, payload
   excerpts, notes, commands, owner messages) through `lib/redact.py:redact()` before
-  writing. No hostnames, IPs, tokens, internal URLs; `~` paths only; IuRoot repos by
+  writing. No hostnames, IPs, tokens, internal URLs; `~` paths only; WorkRoot repos by
   name only, never their content. Gate before commit:
   `python3 -I lib/redact.py --check $(git ls-files -mo --exclude-standard .)`.
 - **Header:** each script starts with a docstring naming the question it answers, the
@@ -62,3 +62,9 @@ that keeps `lib/` and `signals/topology.out.json` as siblings of `golden/`.
 | `interventions/` | the twenty latest owner interventions, raw signal to closure |
 | `lib/` | `redact.py`, the public-repo gate |
 | `f2-gate/` | do the two F2 gamedays pass live: a silent lead, a bug only production shows (`scripts/gameday/f2/`, a `report.md` per run) |
+
+## Names in the frozen outputs
+
+Work-repo names in the stored outputs and the golden set were replaced with `work-repo-N` and the work directory with
+`WorkRoot` when the repo went MIT (`scripts/public-scan.ts` holds the line). The scripts keep their logic, so they show the shape of the analysis;
+a re-run needs your own repos and paths.

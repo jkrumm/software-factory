@@ -2045,7 +2045,7 @@
  ],
  "meta": {
   "as_of": "2026-10-22T08:00:00Z",
-  "note": "units are live at probe time; Kuma, HyperDX and policy read from repos at the recorded heads; homelab-private and IuRoot are counted, never named",
+  "note": "units are live at probe time; Kuma, HyperDX and policy read from repos at the recorded heads; homelab-private and WorkRoot are counted, never named",
   "probed_at": "2026-10-22T08:40:13Z",
   "script": "evidence/signals/signals.py"
  },
@@ -3777,7 +3777,7 @@
    "container": null,
    "host": "mini",
    "kuma_monitors": [],
-   "project": "IuRoot",
+   "project": "WorkRoot",
    "runtime": "launchd-group",
    "service": "7 launchd jobs (names withheld)"
   }

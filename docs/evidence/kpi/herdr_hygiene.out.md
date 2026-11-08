@@ -56,15 +56,15 @@ Age buckets: 1-6h 6, 6-24h 1, <1h 11, >3d 2.
 |basalt-ui|fan w44-seam|done|basalt-ui|1.3|53|
 |weatherorb|orchestrator|done|weatherorb|1.0|42|
 |hermes-agent|1|done|hermes-agent|0.9|32|
-|epos.student-enrolment|1|done|epos.student-enrolment|0.9|33|
+|work-repo-3|1|done|work-repo-3|0.9|33|
 |basalt-ui|mother|done|basalt-ui|0.8|28|
 |agent-gateway|wave 12|done|agent-gateway|0.7|26|
-|prometheus-scripts|2|done|prometheus-scripts|0.6|21|
-|prometheus-scripts|<label withheld>|done|prometheus-scripts|0.3|11|
+|work-repo-1|2|done|work-repo-1|0.6|21|
+|work-repo-1|<label withheld>|done|work-repo-1|0.3|11|
 |basalt-ui|fan w44-eventlist|done|basalt-ui|0.3|4|
 |basalt-ui|fan w44-s5page|done|basalt-ui|0.3|12|
 |SourceRoot|2|done|-|0.2|2|
-|prometheus-epx|1|done|prometheus-epx|0.2|1|
+|work-repo-5|1|done|work-repo-5|0.2|1|
 |usage-tracker|wave 1|done|usage-tracker|0.1|0|
 
 ## claude --bg leftovers

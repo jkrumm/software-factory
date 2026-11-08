@@ -74,7 +74,7 @@ export function terminalName(key: string): string {
 /** The tab a key always gets, so a retry finds the same one. */
 export const tabId = (key: string): string => `tb-${sha(key)}`
 
-/** The space of a path nothing else names: the full root is hashed, so `~/SourceRoot/x` and `~/IuRoot/x` differ. */
+/** The space of a path nothing else names: the full root is hashed, so `~/SourceRoot/x` and `~/WorkRoot/x` differ. */
 const defaultSpaceId = (root: string): string => `sp-${basename(root)}-${sha(root)}`
 
 class BudgetSpent extends Error {

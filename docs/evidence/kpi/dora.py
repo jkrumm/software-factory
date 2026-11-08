@@ -41,7 +41,7 @@ Choices the definition leaves open (stated, not hidden)
 Inputs
     frozen ~/.local/share/factory/snapshots/<AS_OF date>/warden.db (SQLite mode=ro); git (read-only) in the
     SourceRoot repos via git_delivery.py; GitHub Actions via `gh`; the research-gateway deploy log.
-    IuRoot repos are out of scope: their deploys run through GitLab CI, which is not queried (counts-only rule).
+    WorkRoot repos are out of scope: their deploys run through the work forge CI, which is not queried (counts-only rule).
 
 Run
     python3 -I dora.py        (AS_OF=2026-10-22T08:00:00Z overrides; DORA_GH=0 skips GitHub)
@@ -680,7 +680,7 @@ def main() -> int:
         "repos_with_deploy_records_90d": sorted(repo_src),
         "repos_without_records_with_25_plus_commits_90d": [{"repo": r, "commits_90d": commits90[r]} for r in uncovered],
         "commit_share_in_repos_with_deploy_records": ratio(sum(commits90[r] for r in covered), sum(commits90.values())),
-        "iuroot": "out of scope: deploys run through GitLab CI, which is not queried (counts-only rule)",
+        "workroot": "out of scope: deploys run through the work forge CI, which is not queried (counts-only rule)",
         "sources_per_repo_90d": {r: dict(sorted(c.items())) for r, c in sorted(repo_src.items())},
         "service_to_repo_unmapped": {redact(k.split(":", 1)[1]): v for k, v in rh_info.items() if k.startswith("unmapped:")},
     }
@@ -742,7 +742,7 @@ def pc(x: float | None) -> str:
 
 
 def write_md(o: dict, path: Path) -> None:
-    L = ["# dora — the five metrics, where the data allows", "", f"AS_OF `{o['as_of']}`, window 90 d. Definition keys `dora.*`. Script `dora.py`. SourceRoot repos only (IuRoot deploys run through GitLab CI, not queried).", "",
+    L = ["# dora — the five metrics, where the data allows", "", f"AS_OF `{o['as_of']}`, window 90 d. Definition keys `dora.*`. Script `dora.py`. SourceRoot repos only (WorkRoot deploys run through the work forge CI, not queried).", "",
          "## Summary", "", "|metric|value|source|coverage|confidence|", "|-|-|-|-|-|"]
     for k, v in o["metrics"].items():
         L.append(f"|{k}|{v['headline']}|{v['source']}|{v['coverage']}|{v['confidence']}|")

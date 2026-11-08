@@ -129,7 +129,7 @@ Appended, never rewritten. Newest last. Owner answers go to `docs/decisions.md`,
   reseeded; both resolve on the mini. What failed first: a command run through `ask-human.sh --cmd` and `hc run` on the
   MacBook has no SSH agent, so `git pull` of dotfiles-private needs `SSH_AUTH_SOCK` set to the 1Password agent socket
   (as `opbackup-seed-auto.sh` does); and `op` there defaults to another account, so every `op` call names
-  `--account tkrumm`. A MacBook command for the owner carries both from the start.
+  `--account <account>`. A MacBook command for the owner carries both from the start.
 - **2026-11-07, package 9a integrated: the cutover is rehearsed.** On today's dump: 255 Issues, 1755 events all taken
   by the machine, 212 states match, 43 differ for one stated reason (an old stop became `cancelled`), 0 unexplained;
   a second import changes nothing; the old core boots on its restored schema. Live had no open Issue, so `working`,

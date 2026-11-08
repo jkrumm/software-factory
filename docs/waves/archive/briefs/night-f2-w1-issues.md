@@ -20,12 +20,12 @@ SF2, SF5, SF6 first. The steps are Wave 1 of `f2.md`; this brief adds what tonig
    (`request|alert`, open to more), `source_key` (unique per source: a repeated alert or a replayed `issue new --key` is
    one Issue, answered 200 with the stored row; a create on a closed Issue's key reopens nothing in this wave, it answers
    the row), `repo` (resolved and checked against `FACTORY_REPO_ROOTS` exactly like a spawn's; 422 otherwise) and `facts`
-   (JSON, ≤ 32 KiB, data, never instructions). An `alert` Issue in a repo under an IuRoot root is refused (422): decision 3.
+   (JSON, ≤ 32 KiB, data, never instructions). An `alert` Issue in a repo under an WorkRoot root is refused (422): decision 3.
 5. **`POST /issues`, `GET /issues[/:id]`** on the token API, and `POST /issues` plus the two reads on the socket (a pane
    files work like it spawns: SF11); `factory issue new|list|show` (`--repo`, `--title`, `--facts @file|-`, `--key`,
    `--source`); contract schemas in `packages/contract/src/issues.ts`, built and parsed through them.
 6. **Tests:** a golden test per path pinning its transitions and effects; the replay test crashes after every effect and
-   replays, zero duplicates; idempotent create by `source_key`; the IuRoot alert refusal.
+   replays, zero duplicates; idempotent create by `source_key`; the WorkRoot alert refusal.
 
 Update `docs/design.md` §4 and §12 to what was built and AGENTS.md by pointer lines only (C0 cut it to rules and pointers;
 keep it that way), in the same commits as the code.

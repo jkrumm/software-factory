@@ -262,7 +262,7 @@ describe('the server', () => {
     expect((await alert()).status).toBe(503)
     answer = async () => ({ status: 503, body: null })
     expect((await alert()).status).toBe(503)
-    answer = async () => ({ status: 422, body: { error: 'repo /Users/me/IuRoot/x is outside the allowed roots' } })
+    answer = async () => ({ status: 422, body: { error: 'repo /Users/me/WorkRoot/x is outside the allowed roots' } })
     const refused = await alert()
     expect(refused.status).toBe(422)
     expect(await refused.json()).toEqual({ error: 'the alert was refused' })
