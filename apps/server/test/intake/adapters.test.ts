@@ -32,7 +32,7 @@ describe('settings', () => {
       sourceRoot: '/home/x/SourceRoot',
       incidentWindowMs: 30 * 60_000,
       fingerprintWindowMs: 24 * 60 * 60_000,
-      github: { token: null, everyMs: 300_000 },
+      github: { token: null, everyMs: 300_000, backlog: false },
       beszel: { everyMs: 60_000 },
       settleEveryMs: 10_000,
     })

@@ -656,6 +656,31 @@ describe('quarantine and the loop guard', () => {
     })
   })
 
+  test("promoting a held issue of the backlog sweep keeps its subject's write-back off; another held issue's is on", async () => {
+    const stranger = (n: number, facts: Record<string, unknown>): Received => ({
+      signal: alertSignal({
+        source: 'github',
+        kind: 'request',
+        origin: 'github',
+        trust: 'outside',
+        repo: 'argo',
+        title: `Old stranger ${n}`,
+        fingerprint: `fp:old-stranger-${n}`,
+      }),
+      alert: { subject: `o/argo#${n}`, event: 'seen', status: 'event', facts },
+    })
+    const swept = done(await intake.receive(stranger(1, { backlog: true, writeback: false })))
+    const polled = done(await intake.receive(stranger(2, { writeback: false })))
+    done(await intake.promote(swept.signal as string, {}))
+    done(await intake.promote(polled.signal as string, {}))
+    const rows =
+      await db.sql`SELECT subject, writeback, admitted FROM factory.intake_subjects WHERE source = 'github' ORDER BY subject`
+    expect(rows).toEqual([
+      { subject: 'o/argo#1', writeback: false, admitted: null },
+      { subject: 'o/argo#2', writeback: true, admitted: 'label' },
+    ])
+  })
+
   test('a promoted signal cannot be dismissed', async () => {
     const held = done(await intake.receive(outside('Button is broken')))
     done(await intake.promote(held.signal as string, { repo: 'argo' }))

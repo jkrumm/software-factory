@@ -86,6 +86,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   text, link). It is a signal from `feedback:<app>`, trust `outside`, whose text opens with an `app/version/route` header;
   the repo is the door route `(feedback, <app>)` or none, and the fingerprint is the repo (or app) and the title, never the
   version or route, so one complaint from two builds is one.
+- **Backlog sweep.** With `FACTORY_GITHUB_BACKLOG=1` the GitHub poller's first pass after a start also reads every open issue
+  of each polled project (oldest first, pull requests out) and files it through `receive`: the label's and the author's as
+  `machine`, everyone else's `outside` (held). It carries `writeback: false` and no `admitted`, so nothing is ever written to
+  GitHub for it (promoting a held one keeps that); one `github backlog:` log line per issue says the outcome. A replay is idempotent (the subject and event keys), and a sweep
+  that could not read a repo whole runs again on the next pass. Unset it after the sweep.
 - **Who may file where.** `domains/intake/rules.ts` gates a signal: a work repo hears only the owner (NL18), an unknown
   repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's and Beszel's are routed.
 - **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
