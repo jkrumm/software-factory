@@ -15,7 +15,7 @@
 #
 # The old core's keys stay listed though the new core no longer reads them (FACTORY_PROBE_HOSTS, FACTORY_REAPER, FACTORY_REVIEW_*,
 # FACTORY_VISIBLE_ROOTS, FACTORY_DIGEST_*, FACTORY_ALERT_*, FACTORY_ASK_JUDGE, FACTORY_NOTIFY_TARGET, FACTORY_ALERTS_TOPIC,
-# FACTORY_CHECKPOINT_PASS_MS): an existing env file that sets them must still launch, and so must a rollback onto the old core.
+# FACTORY_CHECKPOINT_PASS_MS, FACTORY_CONSOLE_OWNER_LOGIN): an existing env file that sets them must still launch, and so must a rollback onto the old core.
 
 EF_ALLOWED=" \
   FACTORY_ACCOUNTS_FILE FACTORY_AGW_BIN FACTORY_ALERTS_TOPIC FACTORY_ALERT_LEADS FACTORY_ALERT_PAGE_AFTER FACTORY_ARCHIVE_DIR FACTORY_ASK_JUDGE \

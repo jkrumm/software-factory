@@ -35,8 +35,7 @@ LABEL="com.jkrumm.software-factory"
 PORT=7793
 DOOR_LABEL="com.jkrumm.factory-door"
 DOOR_PORT=8796
-# The Console's loopback listener (the server, FACTORY_CONSOLE_PORT); `tailscale serve` publishes it on the tailnet.
-CONSOLE_PORT=7794
+# The Console is the server's second loopback listener (FACTORY_CONSOLE_PORT, default 7795); dotfiles-private's serve row publishes it on the tailnet, not this script.
 DOOR_PLIST="$HOME/Library/LaunchAgents/$DOOR_LABEL.plist"
 # The door answers within a second or two when it can start at all.
 DOOR_WAIT_SECS="${DOOR_WAIT_SECS:-20}"
@@ -231,47 +230,6 @@ build_console() { # $1 sha
   [[ -f "$dir/apps/console/dist/index.html" ]] && return 0
   log "building the Console of ${1:0:12}"
   (cd "$dir" && bun run --cwd apps/console build)
-}
-
-# The Console's owner login and port from the settings file the launcher reads ("" login = not configured). Read through the
-# release's own allow-list loader, in a subshell: nothing is exported here.
-console_settings() { # $1 release dir -> stdout "<login>,<port>"
-  local file="${FACTORY_ENV_FILE:-$HOME/.config/factory/env}"
-  [[ -f "$1/scripts/env-file.sh" ]] || { echo ",$CONSOLE_PORT"; return 0; }
-  ( # shellcheck source=scripts/env-file.sh
-    source "$1/scripts/env-file.sh" && load_env_file "$file" 2>/dev/null || exit 0
-    echo "${FACTORY_CONSOLE_OWNER_LOGIN:-},${FACTORY_CONSOLE_PORT:-$CONSOLE_PORT}" )
-}
-
-# Publishes the Console's listener on the tailnet (`tailscale serve`, HTTPS on 443). Never fails the deploy: every refusal
-# of tailscale is a warning with its own words, and a different mapping already on 443 is left alone.
-publish_console() { # $1 release dir
-  local login port settings status out target
-  settings=$(console_settings "$1"); login="${settings%,*}"; port="${settings##*,}"
-  if [[ -z "$login" ]]; then
-    log "the Console is not configured (FACTORY_CONSOLE_OWNER_LOGIN is not in the settings file): nothing is published on the tailnet"
-    return 0
-  fi
-  target="http://127.0.0.1:${port:-$CONSOLE_PORT}"
-  if ! command -v tailscale >/dev/null 2>&1; then log "WARNING: tailscale is not on PATH: the Console is not published on the tailnet"; return 0; fi
-  # The mini runs the Homebrew daemon: the bare CLI looks for the app's local API and answers 404, so it is pointed at the socket.
-  local ts=(tailscale)
-  [[ -S /var/run/tailscaled.socket ]] && ts=(tailscale --socket=/var/run/tailscaled.socket)
-  # The tailnet name already serves other ports (the door, a dashboard): only a mapping on 443 is in the way.
-  if ! status=$("${ts[@]}" serve status --json 2>&1); then
-    log "WARNING: tailscale serve status failed: $status"; return 0
-  fi
-  if [[ "$status" == *"\"$target\""* ]]; then log "the Console is published on the tailnet already ($target)"; return 0; fi
-  if [[ "$status" == *':443"'* ]]; then
-    log "WARNING: tailscale serve already serves something else on 443; the Console is not published"
-    return 0
-  fi
-  if out=$("${ts[@]}" serve --bg --https=443 "$target" 2>&1); then
-    log "the Console is published on the tailnet: $target"
-  else
-    log "WARNING: tailscale serve failed, the Console is not published: $out"
-  fi
-  return 0
 }
 
 # Keeps the newest $KEEP_RELEASES completed releases plus the ones named in the arguments; removes older ones.
@@ -526,7 +484,7 @@ rollback() {
 
 main() {
   if [[ "${1:-}" == "rollback" ]]; then rollback; return; fi
-  local repo_url sha old prev="" release unload_secs tool console_login console_port settings
+  local repo_url sha old prev="" release unload_secs tool
 
   # --- preflight: everything that can refuse does so before anything is built, stopped or written
   for tool in git bun curl jq secrets-run launchctl plutil tar; do
@@ -564,12 +522,6 @@ main() {
     door_plan "$SELF_DIR/.." "$sha"
     act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
     act "wait up to ${DOOR_WAIT_SECS}s for an unauthenticated POST to 127.0.0.1:$DOOR_PORT/alert/kuma to answer 401; a door that does not start (no tokens file) is a warning, never a failed deploy"
-    settings=$(console_settings "$SELF_DIR/.."); console_login="${settings%,*}"; console_port="${settings##*,}"
-    if [[ -n "$console_login" ]]; then
-      act "tailscale serve status; unless it already lists http://127.0.0.1:${console_port:-$CONSOLE_PORT}: tailscale serve --bg --https=443 http://127.0.0.1:${console_port:-$CONSOLE_PORT} (any tailscale failure, or another mapping on 443, is a warning, never a failed deploy)"
-    else
-      log "the Console is not configured (FACTORY_CONSOLE_OWNER_LOGIN is not in the settings file): the tailnet publish step is skipped"
-    fi
     act "prune releases beyond the newest $KEEP_RELEASES"
     return 0
   fi
@@ -640,7 +592,6 @@ main() {
   ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
   deploy_door "$release" "$sha"
-  publish_console "$release"
   local pinned=() k
   [[ -f "$KEEP_FILE" ]] && while IFS= read -r k; do is_sha "$k" && pinned+=("$k"); done <"$KEEP_FILE"
   prune_releases "$sha" "$(read_sha "$PREV_FILE")" ${pinned[@]+"${pinned[@]}"}

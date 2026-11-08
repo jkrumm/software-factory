@@ -135,6 +135,8 @@ export async function startServer(
       FACTORY_DOOR_TOKEN: TOKENS.machine,
       FACTORY_SIGNAL_TOKEN: TOKENS.signal,
       FACTORY_READ_TOKEN: TOKENS.read,
+      // No Console build in this dir: the listener (a fixed port on the host) stays off unless a scenario asks for it.
+      FACTORY_CONSOLE_DIR: join(ROOT, 'tests', 'scenarios', '.no-console'),
       ...(options.clockOffsetMs
         ? { FACTORY_TEST_MODE: '1', FACTORY_TEST_CLOCK_OFFSET_MS: String(options.clockOffsetMs) }
         : {}),

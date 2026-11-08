@@ -1,18 +1,13 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename, extname, join, resolve, sep } from 'node:path'
 import { ErrorBody } from '@software-factory/contract'
 
 export interface ConsoleHandlerOptions {
-  /** the owner's tailnet login: the only caller the listener answers */
-  ownerLogin: string
   /** the Console build */
   dir: string
   /** answers `/health`, `/v1/*` and the five answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
 }
-
-const LOGIN_HEADER = 'tailscale-user-login'
 
 const CSP = [
   "default-src 'self'",
@@ -68,8 +63,6 @@ const TYPES: Record<string, string> = {
 }
 
 const NO_CACHE = /^(index\.html|frame\.html|sw\.js|registerSW\.js|manifest\.webmanifest|workbox-.*\.js)$/
-
-const digest = (text: string): Buffer => createHash('sha256').update(text.toLowerCase()).digest()
 
 const errorResponse = (status: number, error: string, code: string, headers?: Record<string, string>): Response =>
   Response.json(ErrorBody.parse({ error, code }), { status, headers })
@@ -143,8 +136,8 @@ async function boundedBody(request: Request): Promise<Uint8Array | null> {
 }
 
 /**
- * The tailnet proxy adds the login to any request from the node, so a page on another site could make the browser send
- * one: a write must come from the Console itself (a JSON body no form can send, and no cross-site fetch metadata).
+ * The listener has no per-request identity, so a page on another site could make the browser send a write: a write must
+ * come from the Console itself (a JSON body no form can send, and no cross-site fetch metadata).
  */
 function crossSite(request: Request): boolean {
   const site = request.headers.get('sec-fetch-site')
@@ -175,12 +168,11 @@ function fileOf(dir: string, rawPath: string): string | null {
 }
 
 /**
- * The Console listener's handler. Gates in a fixed order, for every path: the owner's login, a read method (or one of the
- * five answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
+ * every path: a read method (or one of the five answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
  * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes.
  */
 export function consoleHandler(options: ConsoleHandlerOptions): (request: Request) => Promise<Response> {
-  const owner = digest(options.ownerLogin)
   const indexFile = join(resolve(options.dir), 'index.html')
 
   const staticResponse = async (request: Request, rawPath: string): Promise<Response> => {
@@ -225,10 +217,6 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
   }
 
   return async (request) => {
-    const login = request.headers.get(LOGIN_HEADER)
-    if (login === null || !timingSafeEqual(digest(login), owner)) {
-      return errorResponse(403, 'this listener answers its owner only', 'forbidden')
-    }
     const rawPath = new URL(request.url).pathname
     if (isWrite(request, rawPath)) return write(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') {

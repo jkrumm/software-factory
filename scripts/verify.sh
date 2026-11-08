@@ -88,23 +88,41 @@ if [[ "$code" != "401" ]]; then
 fi
 ok "the door answers an unauthenticated POST /alert/kuma with 401"
 
-# 6. the Console's listener, when the settings file names an owner login: no login header is 403, the owner's is answered
-console_login="" console_port=7794
+# 6. the Console's listener: GET /health 200, GET / serves the app, POST /health 405; and, when a serve row publishes it on :8797, the tailnet name answers too
+console_port=7795
 if [[ -f "$ROOT/current/scripts/env-file.sh" ]]; then
   settings=$( # shellcheck source=scripts/env-file.sh
     source "$ROOT/current/scripts/env-file.sh" && load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" 2>/dev/null || exit 0
-    echo "${FACTORY_CONSOLE_OWNER_LOGIN:-},${FACTORY_CONSOLE_PORT:-7794}")
-  if [[ -n "$settings" ]]; then console_login="${settings%,*}"; console_port="${settings##*,}"; fi
+    echo "${FACTORY_CONSOLE_PORT:-7795}")
+  [[ -n "$settings" ]] && console_port="$settings"
 fi
-if [[ -z "$console_login" ]]; then
-  echo "verify: skipped: the Console is not configured (FACTORY_CONSOLE_OWNER_LOGIN is not in the settings file)"
+console_url="http://127.0.0.1:$console_port"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$console_url/health")
+[[ "$code" == "200" ]] || fail "the Console on $console_url answered $code to GET /health, expected 200"
+page=$(curl -s -w '\n%{http_code}' --max-time 5 "$console_url/")
+[[ "${page##*$'\n'}" == "200" ]] || fail "the Console on $console_url answered ${page##*$'\n'} to GET /, expected 200"
+[[ "$page" == *'<div id="root"'* ]] || fail "the Console on $console_url answered GET / without the app (no <div id=\"root\">)"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST "$console_url/health")
+[[ "$code" == "405" ]] || fail "the Console on $console_url answered $code to POST /health, expected 405"
+ok "the Console on $console_url answers 200 to GET /health, serves the app, and answers 405 to POST /health"
+
+# The tailnet side is dotfiles-private's serve row (:8797 -> loopback): checked only when that row is there.
+ts=(tailscale)
+[[ -S /var/run/tailscaled.socket ]] && ts=(tailscale --socket=/var/run/tailscaled.socket)
+if ! command -v tailscale >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  echo "verify: skipped: the Console's tailnet row is not checked (tailscale or jq is not on PATH)"
+elif ! serve_status=$("${ts[@]}" serve status --json 2>/dev/null) || [[ "$serve_status" != *"\"$console_url\""* ]]; then
+  echo "verify: skipped: no tailscale serve row publishes $console_url on :8797"
 else
-  console_url="http://127.0.0.1:${console_port:-7794}"
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$console_url/health")
-  [[ "$code" == "403" ]] || fail "the Console on $console_url answered $code to a request without the owner's login, expected 403"
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Tailscale-User-Login: $console_login" "$console_url/health")
-  [[ "$code" == "200" ]] || fail "the Console on $console_url answered $code to GET /health with the owner's login, expected 200"
-  ok "the Console on $console_url answers 403 without the owner's login and 200 with it"
+  dns=$("${ts[@]}" status --json 2>/dev/null | jq -r '.Self.DNSName // empty')
+  dns="${dns%.}"
+  if [[ -z "$dns" ]]; then
+    echo "verify: skipped: this node's tailnet name is unknown"
+  else
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$dns:8797/health")
+    [[ "$code" == "200" ]] || fail "the Console on https://$dns:8797 answered $code to GET /health, expected 200 (the serve row for $console_url)"
+    ok "the Console answers 200 to GET /health on https://$dns:8797"
+  fi
 fi
 
 echo "verify: all checks passed"
