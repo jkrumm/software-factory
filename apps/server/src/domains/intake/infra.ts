@@ -26,7 +26,7 @@ type Shapes = typeof shapes
 export type Thresholds = { [K in keyof Shapes]: { [F in keyof Shapes[K]]: number } }
 type Override = { [K in keyof Shapes]?: Partial<Thresholds[K]> }
 
-/** What the file says when it says nothing: the numbers of `docs/design.md` §8 "Beszel". */
+/** The numbers that stand when a host overrides none. */
 export const DEFAULT_THRESHOLDS: Thresholds = {
   memory: { pct: 92, sustainMin: 15, clearMin: 10 },
   swap: { usedGb: 8, sustainMin: 10, clearMin: 10 },

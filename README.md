@@ -223,5 +223,5 @@ a secrets shim and are not meant to be copied unchanged.
 
 Start with [`docs/product.md`](docs/product.md) (what it is and how we know it works), then
 [`docs/language.md`](docs/language.md), [`docs/architecture.md`](docs/architecture.md) and
-[`docs/decisions.md`](docs/decisions.md) (what was decided and why). [`docs/design.md`](docs/design.md) describes the
-behaviour of the running factory in detail; [`AGENTS.md`](AGENTS.md) holds the rules a contributing agent follows.
+[`docs/decisions.md`](docs/decisions.md) (what was decided and why). [`AGENTS.md`](AGENTS.md) holds the rules a
+contributing agent follows.

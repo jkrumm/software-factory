@@ -41,7 +41,7 @@ by the reset (RS1, RS4, RS11); the notes mark where.
 Carried from TDD v2.4 unchanged: principles 1–8 (`tdd/03-principles.md`), the lead owns an Issue from root
 cause to production evidence (§4), the brief carries the problem and never a diagnosis, the evidence table,
 facts stored and state derived (§6), one writer and one inbox per Issue with idempotency keys, no DBOS,
-leads in a worktree per attempt, the four business decision classes. F0 folds them into `docs/design.md`.
+leads in a worktree per attempt, the four business decision classes. F0 folded them into a design document that `docs/architecture.md` and `docs/language.md` replaced at the cutover.
 
 Changed from TDD v2.4: agent-gateway is gone (agw is the platform); the two-account picker is N accounts;
 Hermes is behind iris, not Slack; cards and push go to iris, not Argo web push (since Issue 150 the owner's line is ntfy, `NtfyNotifier`); the order is fleet first.
@@ -140,7 +140,7 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
   short spec and a working proof of concept, then continuous improvement. Its purpose is ongoing visualizations in the Herdr sidebar and Iris (Argo takes what it can
   get): short titles and summaries in precise plain words with no IDs as display text, and insights on tokens, times and tool calls. Cheap summaries through agw are
   fine, so row 8 keeps the digest code and row 9 its tables until row 9b reuses or removes them. Replaces RS11 (b)'s sign-off.
-- **RS14 The plan is a file the server reads (2026-11-06).** The rows of a plan that are not filed yet live in `docs/plan.yaml` per repo, and the server files each as an Issue when the rows it waits for are closed, instead of someone remembering to hand-file them. A row is done when its Issue is closed in any outcome (the meaning of `--after`: a stopped row releases what waits for it). "Stable" is no owner touch on any Issue (a note, retier, reopen, stop, or an answer that is not the default, the closing or the steward's) and at least one Issue closed in the last N days. No model is involved; an empty queue with an unfinished plan is a health line, a finished plan is one owner message. Design §4 "The plan files its next Issue".
+- **RS14 The plan is a file the server reads (2026-11-06).** The rows of a plan that are not filed yet live in `docs/plan.yaml` per repo, and the server files each as an Issue when the rows it waits for are closed, instead of someone remembering to hand-file them. A row is done when its Issue is closed in any outcome (the meaning of `--after`: a stopped row releases what waits for it). "Stable" is no owner touch on any Issue (a note, retier, reopen, stop, or an answer that is not the default, the closing or the steward's) and at least one Issue closed in the last N days. No model is involved; an empty queue with an unfinished plan is a health line, a finished plan is one owner message. The `planning` loop does it (`docs/architecture.md`, "Loops and agw").
 - **RS15 Work repos get plan tabs (owner, 2026-11-06).** Replaces RS11 (d)'s "IuRoot repos get no factory space or `plan:` tab": leads run there now, so the WORK members of
   dotfiles' `groups.json` get spaces and plan tabs like every other repo, and the `IuRoot` root gets one too, for cross-repo planning. A root is a plan tab only, never a lead's repo.
 
@@ -155,7 +155,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL3 Argo keeps personal dashboards and deep data:** personal API and software usage, health, finance. The factory's own pages and KPIs leave for the Console.
 - **NL4 The Console uses shadcn-style components on Base UI and Tailwind 4, with Basalt's colours, fonts, spacing and general feel.** Basalt learns from it afterwards, as its first real consumer on that stack.
 - **NL5 Factory first.** Routed alerts go to the door and page nobody directly; the factory's own watchers keep their direct page; an unsolved alert reaches the owner after 30 minutes. Issues 286, 287, 288.
-- **NL6 Memory is the limit on parallel leads, not a stable week.** Issues 289 (Iris's automatic builds) and 290 (admission reads memory) come first. The row's `stable_days` goes when the definition is signed.
+- **NL6 Memory is the limit on parallel leads, not a stable week.** Issues 289 (Iris's automatic builds) and 290 (admission reads memory) come first. The plan's stable-week condition goes when the definition is signed.
 - **NL7 MIT, public after Console v0.** The README starts now and improves continuously.
 - **NL8 A person reviews a concept rarely.** Holistic UX, product or architecture concepts only, three or four times in a project's life. A new screen, interaction or public text is not a reason. Never a merge.
 - **NL9 Fix forward.** No undo records, no restore machinery, no apply guards. A bad change gets a new change.

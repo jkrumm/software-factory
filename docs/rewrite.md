@@ -40,7 +40,7 @@ proves itself live with `FACTORY_REF`, and the factory resumes on it and builds 
 | 6 | **Checkpoints**: decisions with the required fields and worth-asking, the ledger, artifacts with revisions, annotations and verdicts, errands, the owner's line | 1 | Scenarios: a verdict arrives as the lead's next turn; a Decision is settled by policy, Judge, default and owner in turn |
 | 7 | **Loops and agw**: steward, judge, triage ticks; the `factory-steward`, `factory-ask` and `factory-triage` workflows in agent-workflows | 2, 6 | Scenarios with a fake agw; one live call of each workflow |
 | 8 | **API, read models, CLI parity**: every verb leads, `rd`, Hermes and the Herdr board use; the stream | 2 to 7 | Each client's calls run against the new server |
-| 9 | **Cutover, in windows** (below): rehearse on a copy; then live windows that start small, are watched, stop, improve and start again; the old code is deleted only when a window has held | 8 | A window held its criteria with every repo on `run`; the old code is deleted; `AGENTS.md` and `docs/design.md` describe the new core; the burn-in has started |
+| 9 | **Cutover, in windows** (below): rehearse on a copy; then live windows that start small, are watched, stop, improve and start again; the old code is deleted only when a window has held | 8 | A window held its criteria with every repo on `run`; the old code is deleted; `AGENTS.md` and `docs/architecture.md` describe the new core; the burn-in has started |
 
 Packages 2 to 6 run in parallel on separate worktrees once 1 is merged; they touch disjoint domain folders.
 

@@ -1,4 +1,4 @@
-# The factory's own manifest (docs/design.md §9). Read from the default branch by `factory project sync`.
+# The factory's own project description (docs/language.md, Project). Read from the default branch by `factory project sync`.
 apiVersion: factory/v2
 name: software-factory
 deploy:

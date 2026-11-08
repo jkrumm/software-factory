@@ -1,4 +1,4 @@
-# The factory's own plan (docs/design.md §4 "The plan files its next Issue"). Rows with `issue` adopt an Issue filed by hand;
+# The factory's own plan (docs/architecture.md, the planning loop files its next Issue). Rows with `issue` adopt an Issue filed by hand;
 # the others are filed by the server when their `after` rows are closed and their conditions hold.
 version: 1
 rows:
