@@ -226,6 +226,6 @@ export function parseFeedback(app: string, payload: unknown): FeedbackRequest {
     route: required('route', body.route, 256),
     title: required('title', body.title, MAX_TITLE_CHARS),
     text: cut(cleanText(body.text ?? ''), MAX_FEEDBACK_CHARS),
-    link: body.link ? cut(withoutUserinfo(body.link).replace(/#.*$/s, ''), MAX_LINK_CHARS) : null,
+    link: body.link ? cut(withoutUserinfo(cleanText(body.link)).replace(/#.*$/s, ''), MAX_LINK_CHARS) : null,
   }
 }

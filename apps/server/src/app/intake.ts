@@ -165,7 +165,7 @@ export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): R
     fingerprint: fingerprintOf(repo, cleanText(body.title)),
     title: cleanText(body.title).slice(0, MAX_TITLE_CHARS) || 'untitled',
     text: cleanText(body.text),
-    link: body.link ?? null,
+    link: body.link ? cleanText(body.link) : null,
     madeBy: null,
   })
 }
@@ -775,7 +775,7 @@ export function createIntake(deps: IntakeDeps) {
         fingerprint: fingerprintOf(repo ?? raw.app, title),
         title,
         text,
-        link: raw.link ?? null,
+        link: raw.link ? cleanText(raw.link) : null,
         madeBy: null,
       },
       alert: null,
