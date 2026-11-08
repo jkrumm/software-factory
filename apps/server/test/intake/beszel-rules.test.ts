@@ -151,32 +151,76 @@ describe('swap_growth', () => {
 })
 
 describe('disk filling fast', () => {
-  const filling = (fromEnd: number) => ({ diskUsedGb: 70 - fromEnd * 0.1, diskPct: 70 - fromEnd * 0.1 })
+  /** A 100 GB disk at 86% growing 10 GB over the 200 min window. */
+  const filling = (fromEnd: number) => ({ diskUsedGb: 86 - fromEnd * 0.05, diskPct: 86 - fromEnd * 0.05 })
+  /** The mini: 900 GB, 80% used, 180 GB free. `burst(fromEnd)` is the scratch write on top. */
+  const mini = (burst: (fromEnd: number) => number) => (fromEnd: number) => ({
+    diskUsedGb: 720 + burst(fromEnd),
+    diskPct: 80,
+    diskTotalGb: 900,
+  })
 
-  test('breach below the percent threshold when full in under 24 h', () => {
-    const f = find(series(120, filling), 'disk')
+  test('breach below the percent threshold when a steady fill is full in under 24 h', () => {
+    const f = find(series(200, filling), 'disk')
     expect(f.state).toBe('breach')
     expect(f.label).toBe('disk filling fast')
     expect(f.numbers.hoursToFull).toBeLessThan(24)
     expect(f.numbers.growthGbPerHour).toBeGreaterThan(0.5)
   })
 
-  test('slow growth, a nearly empty disk or a flat disk is no breach', () => {
+  test('the overnight pattern never breaches: a 3 to 15 GB rise freed within minutes at 80% used, 180 GB free', () => {
+    for (const gbRise of [3, 15]) {
+      for (const [lasting, freedAgo] of [
+        [8, 0], // still on the disk at evaluation
+        [8, 20], // freed 20 min ago
+        [8, 90], // freed long ago
+      ] as const) {
+        const burst = (e: number) => (e < freedAgo + lasting && e >= freedAgo ? gbRise : 0)
+        expect(find(series(200, mini(burst)), 'disk').state).not.toBe('breach')
+      }
+    }
+  })
+
+  test('below the free-space floor a burst at one end of the window is still no fill', () => {
+    // 500 GB disk at 86% (past the floor), +15 GB for the last 40 min: full in 12 h by the slope, but not sustained.
+    const tight = (e: number) => ({ diskUsedGb: 430 + (e < 40 ? 15 : 0), diskPct: 86, diskTotalGb: 500 })
+    expect(find(series(200, tight), 'disk').state).not.toBe('breach')
+  })
+
+  test('a swing that rose mid-window and was partly freed is no fill', () => {
+    const swung = (e: number) => ({
+      diskUsedGb: 430 + (e >= 70 && e < 130 ? 30 : e < 70 ? 10 : 0),
+      diskPct: 86,
+      diskTotalGb: 500,
+    })
+    expect(find(series(200, swung), 'disk').state).not.toBe('breach')
+  })
+
+  test('a disk past the level threshold still alerts on level', () => {
+    const f = find(
+      series(200, () => ({ diskUsedGb: 93, diskPct: 93, diskTotalGb: 100 })),
+      'disk',
+    )
+    expect(f.state).toBe('breach')
+    expect(f.label).toBe('disk above 90%')
+  })
+
+  test('slow growth, a disk above the free-space floor or a flat disk is no breach', () => {
     expect(
       find(
-        series(120, (e) => ({ diskUsedGb: 70 - e * 0.005, diskPct: 70 })),
+        series(200, (e) => ({ diskUsedGb: 70 - e * 0.005, diskPct: 86 })),
         'disk',
       ).state,
     ).toBe('clear')
     expect(
       find(
-        series(120, (e) => ({ diskUsedGb: 30 - e * 0.1, diskPct: 30 - e * 0.1 })),
+        series(200, (e) => ({ diskUsedGb: 60 - e * 0.1, diskPct: 60 - e * 0.1 })),
         'disk',
       ).state,
     ).toBe('clear')
     expect(
       find(
-        series(120, () => ({ diskUsedGb: 70, diskPct: 70 })),
+        series(200, () => ({ diskUsedGb: 70, diskPct: 70 })),
         'disk',
       ).state,
     ).toBe('clear')
