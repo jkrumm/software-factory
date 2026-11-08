@@ -47,8 +47,11 @@ export async function loadTriage(sql: SQL, issue: string): Promise<ReadTriageLin
 }
 
 /**
- * The owner's notes, full text (a signal's amendment is a `noted` of the factory's, and shows in `triage`). A note is typed to a running lead as a delivery whose key is the `note_lead` effect's
- * (`noted` event version); an Issue that was not working when it was noted has none, and the next brief carries it.
+ * The owner's notes, full text (a signal's amendment is a `noted` of the factory's, and shows in `triage`). A note is typed
+ * to a running lead as a delivery whose key is the `note_lead` effect's (`note_lead:<issue>:<version>`). A note taken while
+ * the Issue waits is carried by the `note_lead` of the event that ends the wait, so when no delivery has the note's own
+ * version, the first delivery at or after it stands for it. That is an approximation: two notes before one wake share the
+ * delivery. An Issue never working after the note has none, and the next brief carries it.
  */
 export async function loadNotes(sql: SQL, issue: string): Promise<ReadNoteLine[]> {
   const events: { at: Date; version: number; payload: unknown }[] = await sql`
@@ -58,8 +61,13 @@ export async function loadNotes(sql: SQL, issue: string): Promise<ReadNoteLine[]
   const deliveries: { key: string; attempt: number; typed_at: Date | null }[] = await sql`
     SELECT key, attempt, typed_at FROM factory.lead_deliveries WHERE issue_id = ${issue} AND kind = 'note'`
   const byKey = new Map(deliveries.map((d) => [d.key, d]))
+  const versioned = deliveries
+    .map((d) => ({ d, version: Number(d.key.slice(d.key.lastIndexOf(':') + 1)) }))
+    .filter((v) => Number.isInteger(v.version))
+    .sort((a, b) => a.version - b.version)
   return events.map((event) => {
-    const delivery = byKey.get(key('note_lead', issue, event.version))
+    const delivery =
+      byKey.get(key('note_lead', issue, event.version)) ?? versioned.find((v) => v.version >= event.version)?.d
     return {
       at: event.at.toISOString(),
       text: isRecord(event.payload) && typeof event.payload.text === 'string' ? event.payload.text : '',
@@ -142,7 +150,11 @@ export async function loadShipping(sql: SQL, issue: string): Promise<ReadShipLin
     JOIN factory.quality_watches w ON w.key = c.watch_key WHERE w.issue_id = ${issue} ORDER BY c.watch_key, c.n`
   const accepted = ships.filter((s) => s.result === 'accepted')
   return ships.map((ship) => {
-    const own = (kind: string) => proof.find((p) => p.source_key === ship.event_key && p.kind === kind)?.payload
+    // an event key is unique among accepted ships only: a refused one never reads another call's evidence
+    const own = (kind: string) =>
+      ship.result === 'accepted'
+        ? proof.find((p) => p.source_key === ship.event_key && p.kind === kind)?.payload
+        : undefined
     const commits = own('commits')
     const nextAt = accepted.find((s) => s.at > ship.at)?.at
     const watch =

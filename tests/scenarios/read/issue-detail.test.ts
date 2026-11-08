@@ -15,6 +15,7 @@ setDefaultTimeout(90_000)
 let lw: LeadsWorld
 let issue = ''
 let sha = ''
+let old = ''
 
 const body = (value: unknown): string[] => ['--body', JSON.stringify(value)]
 const json = async (args: string[]) =>
@@ -42,6 +43,8 @@ beforeAll(async () => {
   issue = first.issue
   expect((await signal('The login page still crashes on submit', 'from /session')).outcome).toBe('amended')
 
+  // a commit from before the lead starts: the first call of 'ship-1' is refused with it
+  old = await commit(lw, 'src/old.ts', 'export const old = 1\n', 'feat: old')
   await admitted(lw, issue)
   await tick(lw)
   await until('the lead to work', async () => (await detail()).state === 'working')
@@ -64,7 +67,10 @@ beforeAll(async () => {
       noAnswer: { consequence: 'console until answered' },
     }),
   ])
+  // a note taken while the Issue waits is typed with the note_lead of the answer that ends the wait
+  await lw.note(issue, 'keep the probe cheap')
   await must(lw, ['decision', 'answer', asked.decision.id, 'winston'])
+  await tick(lw)
   const submitted = await json([
     'artifact',
     'submit',
@@ -73,9 +79,10 @@ beforeAll(async () => {
   ])
   await must(lw, ['artifact', 'verdict', submitted.artifact.id, ...body({ verdict: 'looks_good' })])
   sha = await commit(lw, 'src/a.ts', 'export const a = 1\n', 'feat: a')
+  expect((await ship(lw.world, lw.server, issue, { call: 'ship-1', commits: [old] })).code).toBe(5)
   const shipped = await ship(lw.world, lw.server, issue, { call: 'ship-1', commits: [sha] })
   expect(shipped.code).toBe(0)
-  await until('the watch to pass', async () => (await detail()).shipping[0]?.watch?.answer === 'passed', 30_000)
+  await until('the watch to pass', async () => (await detail()).shipping[1]?.watch?.answer === 'passed', 30_000)
 })
 
 afterAll(async () => {
@@ -98,8 +105,16 @@ test('triage: the signal that filed the Issue, then the one that amended it', as
 test('notes: the full text, with the lead it was typed to', async () => {
   const { notes } = await detail()
   const mine = notes.find((n) => n.text === 'use the staging database, not production')
-  expect(notes).toHaveLength(1)
+  expect(notes).toHaveLength(2)
   expect(mine).toMatchObject({ session: expect.stringMatching(/^lead-\d+-1$/), delivered: true })
+})
+
+test('a note taken while the Issue waited is delivered by the note_lead of the event that ended the wait', async () => {
+  const { notes } = await detail()
+  expect(notes.find((n) => n.text === 'keep the probe cheap')).toMatchObject({
+    session: expect.stringMatching(/^lead-\d+-1$/),
+    delivered: true,
+  })
 })
 
 test('asks: the Decision with its id, recommendation, status and who settled it', async () => {
@@ -133,8 +148,16 @@ test('artifacts: the Spec with its revisions and the owner’s verdict', async (
 
 test('shipping: the accepted ship with its commits, review, and the watch that passed with its check', async () => {
   const { shipping, timeline } = await detail()
-  expect(shipping).toHaveLength(1)
-  const [one] = shipping
+  expect(shipping.map((s) => s.result)).toEqual(['refused', 'accepted'])
+  // the refused call shares its call id with the accepted one: it keeps what it reported and none of the other's evidence
+  expect(shipping[0]).toMatchObject({
+    detail: expect.stringContaining('older than this attempt'),
+    commits: [old],
+    review: { present: false, note: null },
+    watch: null,
+    checks: [],
+  })
+  const one = shipping[1]
   expect(one).toMatchObject({
     attempt: 1,
     result: 'accepted',
@@ -172,5 +195,5 @@ test('the read token gets the shape of a work repo’s Issue and none of its wor
   expect(red.notes.length).toBeGreaterThan(0)
   expect(red.asks[0]).toMatchObject({ status: 'answered', settledBy: 'owner' })
   expect(red.artifacts[0]).toMatchObject({ revisions: 1, verdict: 'looks_good' })
-  expect(red.shipping[0]).toMatchObject({ result: 'accepted', commits: [], watch: { answer: 'passed' } })
+  expect(red.shipping[1]).toMatchObject({ result: 'accepted', commits: [], watch: { answer: 'passed' } })
 })
