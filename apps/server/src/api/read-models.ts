@@ -3,6 +3,7 @@ import {
   DEFAULT_DAYS,
   ErrorBody,
   FindingClassesModel,
+  FixCommitsModel,
   FlowModel,
   FrictionModel,
   KpiModel,
@@ -17,6 +18,7 @@ import type * as z from 'zod'
 import { findingClasses } from '../app/loops/finding-classes.ts'
 import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
+import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readKpis } from '../read/kpis.ts'
 import { loopReads } from '../read/loops.ts'
@@ -180,6 +182,21 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.finding-classes',
           summary:
             'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
+        },
+      },
+    )
+    .get(
+      '/fix-commits',
+      async () => {
+        if (!deps) return unavailable
+        return Response.json(FixCommitsModel.parse(await readFixCommits(deps.sql, { now: now() })))
+      },
+      {
+        response: { 200: FixCommitsModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.fix-commits',
+          summary:
+            'fix commits of the projects by class over the last four weeks, the newest week first (week i is the 7 days ending i weeks ago), with what each class means',
         },
       },
     )

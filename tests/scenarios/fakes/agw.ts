@@ -16,6 +16,7 @@ process.exitCode =
         workflow === 'factory-triage' ||
         workflow === 'factory-queue' ||
         workflow === 'factory-hygiene' ||
+        workflow === 'factory-fix-classes' ||
         workflow === 'factory-screen' ||
         workflow === 'factory-errand'
       ? await loopsFake(args)

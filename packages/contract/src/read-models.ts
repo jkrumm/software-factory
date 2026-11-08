@@ -295,6 +295,33 @@ export const FindingClassesModel = z
   .meta({ id: 'FindingClassesModel' })
 export type FindingClassesModel = z.infer<typeof FindingClassesModel>
 
+// -- fix commits ---------------------------------------------------------------------------------------------------------
+
+export const FixWeek = z
+  .strictObject({
+    from: at,
+    to: at,
+    total: z.number().int().min(0),
+    /** every class key, 0 included */
+    byClass: z.record(z.string(), z.number().int().min(0)),
+  })
+  .meta({ id: 'FixWeek' })
+export type FixWeek = z.infer<typeof FixWeek>
+
+export const FixCommitsModel = z
+  .strictObject({
+    /** at least one fix commit is stored */
+    measured: z.boolean(),
+    /** the classes in the order they are shown, with what each means (`docs/product.md` "Fix classes") */
+    classes: z.array(z.strictObject({ key: z.string(), meaning: z.string() })),
+    /** four trailing 7-day windows, the newest first: week i is [now - 7(i+1) days, now - 7i days) */
+    weeks: z.array(FixWeek),
+    /** repos with a stored fix commit in those four weeks */
+    repos: z.number().int().min(0),
+  })
+  .meta({ id: 'FixCommitsModel' })
+export type FixCommitsModel = z.infer<typeof FixCommitsModel>
+
 // -- machine -------------------------------------------------------------------------------------------------------------
 
 /** The host's reading and the ceilings admission holds it to; a reading that failed is null. */

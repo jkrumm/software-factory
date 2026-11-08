@@ -236,5 +236,19 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         VALUES (${row.issue}, ${row.loop}, ${row.repo}, ${row.class}, ${row.key})
         ON CONFLICT (issue_id) DO NOTHING`
     },
+
+    async storedFixShas(repo) {
+      const rows: unknown[] = await tx`SELECT sha FROM factory.fix_commits WHERE repo = ${repo}`
+      return new Set(rows.map((row) => z.object({ sha: z.string() }).parse(row).sha))
+    },
+
+    async recordFixCommits(rows) {
+      for (const row of rows) {
+        await tx`
+          INSERT INTO factory.fix_commits (repo, sha, committed_at, subject, scope, class, by, reason)
+          VALUES (${row.repo}, ${row.sha}, ${row.committedAt}, ${row.subject}, ${row.scope}, ${row.class}, ${row.by}, ${row.reason})
+          ON CONFLICT (repo, sha) DO NOTHING`
+      }
+    },
   }
 }

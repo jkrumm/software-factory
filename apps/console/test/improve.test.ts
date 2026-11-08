@@ -1,7 +1,11 @@
 import { expect, test } from 'bun:test'
-import type { FindingClass, Kpi } from '@software-factory/contract'
+import type { FindingClass, FixCommitsModel, Kpi } from '@software-factory/contract'
 import {
   classWords,
+  fixClassRows,
+  fixWeekLabel,
+  fixWeeksOldestFirst,
+  fixWeekTotals,
   formatKpi,
   sampleWords,
   targetStatus,
@@ -84,4 +88,34 @@ test('classWords: a held class says when it is asked again, a probation class ho
   expect(classWords({ ...cls, status: 'probation' })).toBe(
     '3 of 4 dropped or cancelled, one Issue at a time until one closes done',
   )
+})
+
+const week = (to: string, total: number, byClass: Record<string, number>): FixCommitsModel['weeks'][number] => ({
+  from: '2026-01-01T00:00:00.000Z',
+  to,
+  total,
+  byClass,
+})
+
+test('fix commit weeks read oldest first, empty classes are left out and the totals follow the weeks', () => {
+  const model: Pick<FixCommitsModel, 'classes' | 'weeks'> = {
+    classes: [
+      { key: 'tests', meaning: 'a' },
+      { key: 'logic', meaning: 'b' },
+      { key: 'docs', meaning: 'c' },
+    ],
+    // the API sends the newest week first
+    weeks: [
+      week('2026-11-08T00:00:00.000Z', 3, { tests: 1, logic: 2, docs: 0 }),
+      week('2026-11-01T00:00:00.000Z', 0, { tests: 0, logic: 0, docs: 0 }),
+      week('2026-10-25T00:00:00.000Z', 1, { tests: 0, logic: 1, docs: 0 }),
+      week('2026-10-18T00:00:00.000Z', 0, {}),
+    ],
+  }
+  expect(fixWeeksOldestFirst(model).map(fixWeekLabel)).toEqual(['2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08'])
+  expect(fixClassRows(model)).toEqual([
+    { key: 'tests', meaning: 'a', counts: [0, 0, 0, 1], total: 1 },
+    { key: 'logic', meaning: 'b', counts: [0, 1, 0, 2], total: 3 },
+  ])
+  expect(fixWeekTotals(model)).toEqual([0, 1, 0, 3])
 })

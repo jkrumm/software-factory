@@ -1,0 +1,33 @@
+{
+  "note": "One fixture, two repos: software-factory's contract tests parse it with its adapter schemas, agent-workflows' host tests parse the same bytes with the workflow's. Keep the two copies identical.",
+  "input": {
+    "repo": "example-app",
+    "classes": [
+      { "key": "logic", "meaning": "wrong behaviour in the code's own logic" },
+      { "key": "concurrency", "meaning": "races, locks, ordering, timers, replay or idempotence" },
+      { "key": "other", "meaning": "none of the above" }
+    ],
+    "commits": [
+      {
+        "sha": "3f2a9c1d7e5b",
+        "subject": "fix(cart): total ignored the coupon on the second item",
+        "scope": "cart",
+        "body": "The discount was applied to the first line only.",
+        "files": ["src/cart/total.ts", "src/cart/total.test.ts"]
+      },
+      {
+        "sha": "b71e04a8c392",
+        "subject": "fix: a retried job ran twice",
+        "scope": null,
+        "body": "",
+        "files": ["src/jobs/runner.ts"]
+      }
+    ]
+  },
+  "output": {
+    "answers": [
+      { "sha": "3f2a9c1d7e5b", "class": "logic", "reason": "the discount arithmetic skipped a line" },
+      { "sha": "b71e04a8c392", "class": "concurrency", "reason": "a retry replayed a job that had run" }
+    ]
+  }
+}

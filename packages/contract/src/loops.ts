@@ -244,6 +244,55 @@ export const HygieneAnswer = z.object({
 })
 export type HygieneAnswer = z.infer<typeof HygieneAnswer>
 
+// ---- factory-fix-classes -------------------------------------------------------------------------------------------------
+
+/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the workflow answers with one of the keys. */
+export const FIX_CLASSES = [
+  { key: 'tests', meaning: 'the fix is in tests, scenarios or e2e only' },
+  { key: 'docs', meaning: 'the fix is in documentation only' },
+  { key: 'tooling', meaning: 'CI, dependencies, build, lint or scripts' },
+  { key: 'review', meaning: 'a follow-up to a finding of a review' },
+  { key: 'logic', meaning: "wrong behaviour in the code's own logic" },
+  {
+    key: 'contract',
+    meaning: 'a mismatch across a boundary: an API, a schema, types, a migration or the shape of a config',
+  },
+  { key: 'concurrency', meaning: 'races, locks, ordering, timers, replay or idempotence' },
+  { key: 'environment', meaning: 'deploy, host, process, paths, runtime or secrets' },
+  { key: 'other', meaning: 'none of the above' },
+] as const
+export type FixClassKey = (typeof FIX_CLASSES)[number]['key']
+export const FIX_CLASS_KEYS: readonly FixClassKey[] = FIX_CLASSES.map((c) => c.key)
+
+const Sha = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit sha in lowercase hex')
+
+export const FixClassesRequest = z.object({
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9._/-]+$/)
+    .min(1)
+    .max(200),
+  classes: z.array(z.object({ key: z.string().min(1).max(40), meaning: z.string().min(1).max(300) })).min(1),
+  commits: z
+    .array(
+      z.object({
+        sha: Sha,
+        subject: z.string().min(1).max(500),
+        scope: z.string().min(1).max(100).nullable(),
+        body: z.string().max(800),
+        files: z.array(z.string().min(1).max(300)).max(20),
+      }),
+    )
+    .min(1)
+    .max(40),
+})
+export type FixClassesRequest = z.infer<typeof FixClassesRequest>
+
+export const FixClassesAnswer = z.object({
+  answers: z.array(z.object({ sha: Sha, class: z.string().min(1).max(40), reason: Line })).max(40),
+})
+export type FixClassesAnswer = z.infer<typeof FixClassesAnswer>
+
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
 export const LOOP_NAMES = [
@@ -258,6 +307,7 @@ export const LOOP_NAMES = [
   'friction',
   'hygiene',
   'screen',
+  'fix-classes',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

@@ -3,6 +3,7 @@ import { agwAmend } from './adapters/agw/amend.ts'
 import { agwErrandScreen } from './adapters/agw/errand.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
+import { agwFixClasses } from './adapters/agw/fix-classes.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
 import { agwScreen } from './adapters/agw/screen.ts'
@@ -34,6 +35,7 @@ import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/ru
 import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
+import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
@@ -48,6 +50,7 @@ import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
+import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
@@ -398,6 +401,24 @@ async function main(): Promise<void> {
         if (!pass.ok) return pass
         said('screen', pass.value.problems)
         return ok(screenSummary(pass.value))
+      },
+    },
+    {
+      // Fix commits of every project's default branch, sorted by the rules and `factory-fix-classes`, stored for the Improve screen.
+      name: 'fix-classes',
+      intervalMs: loopSettings.intervalMs['fix-classes'],
+      onChange: false,
+      run: async () => {
+        const pass = await fixClassesPass({
+          uow,
+          clock: writes.clock,
+          reader: createFixCommitReader({ repos }),
+          workflow: agwFixClasses(agw),
+          repos: loopSettings.hygieneRepos,
+        })
+        if (!pass.ok) return pass
+        said('fix-classes', pass.value.problems)
+        return ok(fixClassesSummary(pass.value))
       },
     },
   ]

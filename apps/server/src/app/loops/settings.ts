@@ -18,6 +18,7 @@ const Env = z.object({
   FACTORY_LOOP_FRICTION_MS: ms.optional(),
   FACTORY_LOOP_HYGIENE_MS: ms.optional(),
   FACTORY_LOOP_SCREEN_MS: ms.optional(),
+  FACTORY_LOOP_FIX_CLASSES_MS: ms.optional(),
   /** only these projects (a comma list of names) are swept; unset is every project with a `project.yaml` */
   FACTORY_HYGIENE_REPOS: z.string().optional(),
   /** a project is swept again after this long */
@@ -63,7 +64,11 @@ const hygieneTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(t
 const SCREEN_MIN_TICK_MS = 10 * 60_000
 const screenTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, SCREEN_MIN_TICK_MS))
 
-/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes, screen: at least 10). Throws one message naming every bad key. */
+/** Fix commits are sorted once a day, unless the tick is off (0). */
+const FIX_CLASSES_TICK_MS = 6 * 3_600_000
+const fixClassesTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : FIX_CLASSES_TICK_MS)
+
+/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes, screen: at least 10, fix-classes: every 6 hours, so a restart never skips a day). Throws one message naming every bad key. */
 export function loadLoopSettings(env: Record<string, string | undefined>): LoopSettings {
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
@@ -87,12 +92,20 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     friction: e.FACTORY_LOOP_FRICTION_MS,
     hygiene: e.FACTORY_LOOP_HYGIENE_MS,
     screen: e.FACTORY_LOOP_SCREEN_MS,
+    'fix-classes': e.FACTORY_LOOP_FIX_CLASSES_MS,
   }
   return {
     intervalMs: Object.fromEntries(
       LOOP_NAMES.map((name) => [
         name,
-        own[name] ?? (name === 'hygiene' ? hygieneTickMs(tickMs) : name === 'screen' ? screenTickMs(tickMs) : tickMs),
+        own[name] ??
+          (name === 'hygiene'
+            ? hygieneTickMs(tickMs)
+            : name === 'screen'
+              ? screenTickMs(tickMs)
+              : name === 'fix-classes'
+                ? fixClassesTickMs(tickMs)
+                : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,

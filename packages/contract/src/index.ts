@@ -142,6 +142,11 @@ export {
   SettleBody,
 } from './planning.ts'
 export {
+  FIX_CLASS_KEYS,
+  FIX_CLASSES,
+  FixClassesAnswer,
+  type FixClassKey,
+  FixClassesRequest,
   JudgeInputWire,
   JudgeVerdictWire,
   LOOP_NAMES,

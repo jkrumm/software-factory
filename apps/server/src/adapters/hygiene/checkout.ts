@@ -15,7 +15,7 @@ export interface RepoLocator {
 }
 
 /** Origin's default branch, as the lead's worktrees find it. */
-async function originDefault(tools: Tools, repo: string): Promise<string | undefined> {
+export async function originDefault(tools: Tools, repo: string): Promise<string | undefined> {
   const head = await gitTry(tools, repo, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'])
   if (head?.trim()) return head.trim()
   for (const candidate of ['origin/master', 'origin/main']) {

@@ -53,7 +53,7 @@ const signal = async (repo: string, title: string, text = '') => {
   return SignalAck.parse(out.json)
 }
 
-test('every timer of packages 3 to 6 runs through the loop runner: eleven named loops, each with its interval', async () => {
+test('every timer of packages 3 to 6 runs through the loop runner: twelve named loops, each with its interval', async () => {
   const all = await loops(lab)
   expect(all.map((loop) => loop.name)).toEqual([
     'leads',
@@ -67,6 +67,7 @@ test('every timer of packages 3 to 6 runs through the loop runner: eleven named 
     'friction',
     'hygiene',
     'screen',
+    'fix-classes',
   ])
   expect(all.every((loop) => loop.intervalMs === 0 && loop.runs === 0)).toBe(true)
   const ran = await runLoop(lab, 'planning')
