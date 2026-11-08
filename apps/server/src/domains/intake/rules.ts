@@ -122,7 +122,7 @@ export function fence(text: string): string {
 }
 
 export interface Topology {
-  /** the host a repo's alerts sit on (`config/infra.json`'s hosts, a project's own) */
+  /** the host a repo's alerts sit on, from `config/infra.json`'s hosts; a project's own `host:` is the fallback in `groupOf` */
   hostOfRepo: ReadonlyMap<string, string>
   /** every host the Beszel source may name */
   hosts: ReadonlySet<string>
@@ -130,15 +130,17 @@ export interface Topology {
 
 /**
  * The incident an alert would belong to: alerts on one host or dependency join one root cause. Beszel names its system
- * in the subject; Kuma and HyperDX alert in the repo whose host it is. Null when the alert sits on no known host.
+ * in the subject; Kuma and HyperDX alert in the repo whose host it is: the infra table's host for the repo, else the host the project names (`ownHost`) when
+ * it is a known host. Null when the alert sits on no known host.
  */
-export function groupOf(topology: Topology, received: Received, repo: string): string | null {
+export function groupOf(topology: Topology, received: Received, repo: string, ownHost?: string | null): string | null {
   if (received.signal.kind !== 'alert' || !CORRELATED_SOURCES.includes(received.signal.source)) return null
   if (received.signal.source === 'beszel') {
     const system = received.alert?.subject.split(':')[0]?.toLowerCase()
     return system && topology.hosts.has(system) ? `host:${system}` : null
   }
-  const host = topology.hostOfRepo.get(repo)
+  const named = ownHost?.toLowerCase()
+  const host = topology.hostOfRepo.get(repo) ?? (named && topology.hosts.has(named) ? named : null)
   return host ? `host:${host}` : null
 }
 

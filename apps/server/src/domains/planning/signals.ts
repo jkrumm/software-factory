@@ -19,6 +19,8 @@ export interface RepoSignalsView {
   repo: string
   /** a repo without a `project.yaml` is a work repo and hears the owner only */
   work: boolean
+  /** the host named in its project.yaml */
+  host: string | null
   /** the automatic sources its `signals:` lists: `github`, `checks`, `launchd` */
   sources: string[]
   github: { label: string; author: string | null; since: string | null; checks: boolean } | null
@@ -38,6 +40,7 @@ export function signalsView(project: StoredProject): RepoSignalsView {
   return {
     repo: repoTextOf(project),
     work: project.source === 'defaults',
+    host: file.host ?? null,
     sources,
     github: github
       ? { label: github.label, author: github.author ?? null, since: github.since ?? null, checks: github.checks }

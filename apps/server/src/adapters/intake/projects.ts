@@ -24,6 +24,7 @@ const Heal = z.strictObject({
 const Project = z.strictObject({
   repo: z.string().min(1),
   work: z.boolean().default(false),
+  host: z.string().min(1).nullable().default(null),
   sources: z.array(z.string()).default([]),
   github: z
     .strictObject({

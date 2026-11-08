@@ -33,6 +33,7 @@ afterAll(async () => {
 const project = (repo: string, over: Partial<RepoSignals> = {}): RepoSignals => ({
   repo,
   work: false,
+  host: null,
   sources: [],
   github: null,
   launchd: [],

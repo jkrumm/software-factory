@@ -31,6 +31,7 @@ const signal = (over: Partial<Signal> = {}): Signal => ({
 const project = (over: Partial<RepoSignals> = {}): RepoSignals => ({
   repo: 'vps',
   work: false,
+  host: null,
   sources: [],
   github: null,
   launchd: [],
@@ -112,6 +113,14 @@ describe('correlation, origin and kind', () => {
     expect(groupOf(topology, received({ source: 'hyperdx' }), 'vps')).toBe('host:vps')
     expect(groupOf(topology, received({ source: 'kuma' }), 'argo')).toBeNull()
     expect(groupOf(topology, received({ source: 'checks' }), 'vps')).toBeNull()
+  })
+
+  test('a project naming its own known host joins that host; the infra table wins', () => {
+    expect(groupOf(topology, received({ source: 'kuma' }), 'argo', 'vps')).toBe('host:vps')
+    expect(groupOf(topology, received({ source: 'hyperdx' }), 'argo', 'VPS')).toBe('host:vps')
+    expect(groupOf(topology, received({ source: 'kuma' }), 'argo', 'nowhere')).toBeNull()
+    expect(groupOf(topology, received({ source: 'kuma' }), 'vps', 'homelab')).toBe('host:vps')
+    expect(groupOf(topology, received({ source: 'beszel' }, 'vps:memory'), 'argo', 'homelab')).toBe('host:vps')
   })
 
   test('origin is a word a person uses; an alert is an incident, a failing check a bug', () => {

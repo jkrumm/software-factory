@@ -363,7 +363,7 @@ export function createIntake(deps: IntakeDeps) {
       if (isOpen(issue)) return amendOpen(s, r, alert, issue, latest.id, latest.groupKey)
     }
 
-    const groupKey = groupOf(ctx.topology, r, signal.repo as string)
+    const groupKey = groupOf(ctx.topology, r, signal.repo as string, ctx.info.host)
     if (groupKey) {
       // Alerts on one host are serialized: two at once must see each other's incident, never open two.
       await s.intake.lock(`group:${groupKey}`)

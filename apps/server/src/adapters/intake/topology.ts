@@ -21,7 +21,7 @@ export async function loadInfra(path: string): Promise<Infra> {
 
 /**
  * Which host each repo's alerts sit on, from `config/infra.json`'s hosts: an alert routed to a host's repo is on that
- * host. A project that names its own host or dependency in `project.yaml` would add to this map.
+ * host. A project that names its own `host:` in `project.yaml` is read by `groupOf` on top of this map.
  */
 export function infraTopology(infra: Infra): IntakeTopology {
   const hostOfRepo = new Map<string, string>()

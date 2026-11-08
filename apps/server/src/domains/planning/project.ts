@@ -155,6 +155,8 @@ export const ProjectFile = z
   .strictObject({
     apiVersion: z.literal(PROJECT_API_VERSION),
     name: Slug,
+    /** the host the project's alerts sit on, a key of config/infra.json's hosts (e.g. `macmini`) */
+    host: Slug.optional(),
     deploy: Deploy.default(() => Deploy.parse({})),
     ship: z
       .array(ShipRule)
