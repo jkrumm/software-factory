@@ -51,6 +51,12 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **Trust boundary.** The owner's token can start Claude Code with `--dangerously-skip-permissions`: a spawn's repo must be
   inside `FACTORY_REPO_ROOTS` after `realpath` (`adapters/git/repos.ts`). The API is loopback only; the tailnet and the
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
+- **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener, published by `make deploy` with
+  `tailscale serve`. It answers 403 to anything without the owner's `Tailscale-User-Login` (`FACTORY_CONSOLE_OWNER_LOGIN`;
+  unset, the listener does not start), 405 to anything but GET and HEAD, forwards only `GET /health` and `GET /v1/*` to the API
+  (the owner token stays in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and
+  serves `apps/console/dist` otherwise. It can never start a session: keep every write off it. The Console (`apps/console`,
+  `README.md` there) holds no logic the API could hold, and `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
 - **Work repos hear only the owner** (NL18, no `project.yaml`), and the read token never sees their words
   (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).
 - **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts` and
@@ -92,7 +98,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 
 `make check` runs install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, the boundary script, the
 retired-word check, the Issue diagram and generated-CLI freshness checks, `bun test` and the scenarios (`tests/scenarios`:
-a real server and Postgres with fake `hc` and `agw`); `make fmt` formats. The tests start a private Postgres cluster with
+a real server and Postgres with fake `hc` and `agw`), then typechecks and builds the Console and runs its Playwright suite
+(`make e2e`, `tests/e2e`) against a seeded server; `make fmt` formats. The tests start a private Postgres cluster with
 `initdb` (on PATH, or `PG_BIN_DIR`); nothing touches a real database. `make test` goes through `factory slot run` when
 `factory` is installed: a lease on the host's test slots, a wait past 45 min exits 75 without running. `make deploy`,
 `make rollback` and `make verify` act on the mini only; `DRY_RUN=1` prints the plan, `FACTORY_REF=<branch>` proves a branch
