@@ -105,13 +105,14 @@ export async function settleIssue(
 }
 
 /**
- * Adds edges to an Issue that is settling, queued, working or watching: a later `after`, from the owner or the queue
- * loop. On a working or watching Issue the edge is what lets the steward see a claim deadlock (it holds the repo's claim
+ * Adds edges to an Issue that is settling or queued: a later `after`, from the owner or the queue loop (whose snapshot
+ * may be stale, so an Issue admitted meanwhile is refused). `running: true`, which only the owner's route passes, also
+ * takes a working or watching Issue: the edge is what lets the steward see a claim deadlock (it holds the repo's claim
  * while it is after an Issue that waits for one).
  */
 export async function addAfter(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[] },
+  input: { issue: IssueId; after: readonly IssueId[]; running?: boolean },
 ): Promise<Result<{ edges: number }, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
     await stores.capacity.lock()
@@ -124,11 +125,12 @@ export async function addAfter(
           : { kind: 'unknown_issue', issue: input.issue },
       )
     }
-    if (!['settling', 'queued', 'working', 'watching'].includes(open.state)) {
+    const takes = input.running ? ['settling', 'queued', 'working', 'watching'] : ['settling', 'queued']
+    if (!takes.includes(open.state)) {
       return err<PlanningError>({
         kind: 'wrong_state',
         issue: input.issue,
-        detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling, queued, working or watching Issue takes an edge`,
+        detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling or queued Issue takes an edge${input.running ? ', or a working or watching one from the owner' : ' (a working lead defers with its own verb)'}`,
       })
     }
     const edges = await addEdges(stores, deps, input.issue, input.after)

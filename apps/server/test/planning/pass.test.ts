@@ -228,11 +228,15 @@ describe('the chain', () => {
     expect(n).toBe(0)
   })
 
-  test('a working Issue takes an edge to a queued one: it is what shows a claim deadlock to the steward', async () => {
+  test('by default a working Issue takes no edge (the queue loop may hold a stale snapshot); the owner’s flag allows it', async () => {
     const a = await world.queued({ repo: 'x' })
     const b = await world.queued({ repo: 'x' })
     await world.send(a, 'admitted', 'admitted', {})
-    expect(value(await addAfter(world.deps, { issue: a, after: [b] }))).toEqual({ edges: 1 })
+    expect(await addAfter(world.deps, { issue: a, after: [b] })).toMatchObject({
+      ok: false,
+      error: { kind: 'wrong_state' },
+    })
+    expect(value(await addAfter(world.deps, { issue: a, after: [b], running: true }))).toEqual({ edges: 1 })
   })
 
   test('a waiting Issue takes no edge', async () => {
@@ -241,7 +245,7 @@ describe('the chain', () => {
     await world.send(a, 'admitted', 'admitted', {})
     await world.send(a, 'lead_started', 'lead_started', { attempt: 1, terminal: 't' })
     await world.send(a, 'errand_raised', 'errand_raised', { attempt: 1, errand: { id: 'e1', summary: 'x' } }, 'lead')
-    expect(await addAfter(world.deps, { issue: a, after: [b] })).toMatchObject({
+    expect(await addAfter(world.deps, { issue: a, after: [b], running: true })).toMatchObject({
       ok: false,
       error: { kind: 'wrong_state' },
     })

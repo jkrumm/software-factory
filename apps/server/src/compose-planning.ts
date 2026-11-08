@@ -95,7 +95,7 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
       sync: (options) => syncProjects(sync, options),
       pass: (options) => planningPass(sync, options),
       settle: (request) => settleIssue(writes, request),
-      after: (request) => addAfter(writes, request),
+      after: (request) => addAfter(writes, { ...request, running: true }),
       prio: (request) =>
         setPrio(writes, {
           issue: request.issue,
