@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
 import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
 import type { QueueAskRow } from '../../domains/loops/queue.ts'
+import { FINDING_KINDS } from '../../domains/loops/selfwatch-model.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 
 const Row = z.object({
@@ -50,6 +51,17 @@ const AskRow = z.object({
   after_shape: z.string().nullable(),
   detail: z.string().nullable(),
   finished_at: z.date().nullable(),
+})
+
+const SelfwatchRowSchema = z.object({
+  subject_key: z.string(),
+  kind: z.enum(FINDING_KINDS),
+  first_seen_at: z.date(),
+  last_seen_at: z.date(),
+  evidence_hash: z.string(),
+  last_filed_at: z.date(),
+  signal_id: z.string().nullable(),
+  cleared_at: z.date().nullable(),
 })
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
@@ -248,6 +260,46 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           INSERT INTO factory.fix_commits (repo, sha, committed_at, subject, scope, class, by, reason)
           VALUES (${row.repo}, ${row.sha}, ${row.committedAt}, ${row.subject}, ${row.scope}, ${row.class}, ${row.by}, ${row.reason})
           ON CONFLICT (repo, sha) DO NOTHING`
+      }
+    },
+
+    async selfwatchRows() {
+      const rows: unknown[] = await tx`SELECT * FROM factory.selfwatch_findings ORDER BY subject_key`
+      return rows.map((raw) => {
+        const row = SelfwatchRowSchema.parse(raw)
+        return {
+          subjectKey: row.subject_key,
+          kind: row.kind,
+          firstSeenAt: row.first_seen_at,
+          lastSeenAt: row.last_seen_at,
+          evidenceHash: row.evidence_hash,
+          lastFiledAt: row.last_filed_at,
+          signalId: row.signal_id,
+          clearedAt: row.cleared_at,
+        }
+      })
+    },
+
+    async applySelfwatch(change) {
+      for (const row of change.filed) {
+        await tx`
+          INSERT INTO factory.selfwatch_findings
+            (subject_key, kind, first_seen_at, last_seen_at, evidence_hash, last_filed_at, signal_id, cleared_at)
+          VALUES (${row.subjectKey}, ${row.kind}, ${row.firstSeenAt}, ${row.lastSeenAt}, ${row.evidenceHash}, ${row.lastFiledAt}, ${row.signalId}, NULL)
+          ON CONFLICT (subject_key) DO UPDATE SET
+            first_seen_at = EXCLUDED.first_seen_at, last_seen_at = EXCLUDED.last_seen_at,
+            evidence_hash = EXCLUDED.evidence_hash, last_filed_at = EXCLUDED.last_filed_at,
+            signal_id = EXCLUDED.signal_id, cleared_at = NULL`
+      }
+      if (change.touched.length > 0) {
+        await tx`
+          UPDATE factory.selfwatch_findings SET last_seen_at = ${change.at}
+          WHERE subject_key IN ${tx(change.touched)} AND cleared_at IS NULL`
+      }
+      if (change.cleared.length > 0) {
+        await tx`
+          UPDATE factory.selfwatch_findings SET cleared_at = ${change.at}
+          WHERE subject_key IN ${tx(change.cleared)} AND cleared_at IS NULL`
       }
     },
   }

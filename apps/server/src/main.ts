@@ -37,6 +37,10 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
+import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
+import { githubCiRuns } from './adapters/selfwatch/github.ts'
+import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
+import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
@@ -132,6 +136,8 @@ async function main(): Promise<void> {
   if (lapsed.ok && lapsed.value > 0)
     console.log(`loops: ${lapsed.value} agw call(s) of an earlier process will be taken up again`)
   const startedAt = new Date()
+  /** The one repo the self-watch loop watches: the factory itself. */
+  const SELFWATCH_REPO = 'software-factory'
   const leadSettings = loadLeadSettings(process.env)
   const loopSettings = loadLoopSettings(process.env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
@@ -149,10 +155,11 @@ async function main(): Promise<void> {
     uow,
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
   })
+  const intakeEnv = loadIntakeEnv(process.env)
   const intake = await composeIntake({
     sql,
     uow,
-    env: loadIntakeEnv(process.env),
+    env: intakeEnv,
     clock: systemClock,
     ids: systemIds,
     projects: planning.signals,
@@ -384,6 +391,35 @@ async function main(): Promise<void> {
       },
     },
     {
+      // Six deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
+      // regression of inert paths, a stale heartbeat), filed once per subject as signals on the factory's own repo.
+      name: 'selfwatch',
+      intervalMs: loopSettings.intervalMs.selfwatch,
+      onChange: false,
+      run: async () => {
+        const pass = await selfwatchPass({
+          uow,
+          clock: writes.clock,
+          repo: SELFWATCH_REPO,
+          branch: loopSettings.selfwatchBranch,
+          graceMs: loopSettings.selfwatchGraceMs,
+          idleLeadMs: loopSettings.idleLeadMs,
+          ci: githubCiRuns({
+            locate: (repo) => repos.locate(repo),
+            token: intakeEnv.github.token,
+            apiUrl: intakeEnv.github.apiUrl,
+          }),
+          migrations: gitMigrationFiles(repos),
+          sharedNumbers: SHARED_NUMBERS,
+          heartbeat: async () => (await readHealth()).heartbeat,
+          file: (body) => intake.api.file(body, 'agent'),
+        })
+        if (!pass.ok) return pass
+        said('selfwatch', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
+        return ok(selfwatchSummary(pass.value))
+      },
+    },
+    {
       // The Judge looks at held signals: promote, dismiss or leave with a recommendation. Interval only: a newly held signal waits for the next pass.
       name: 'screen',
       intervalMs: loopSettings.intervalMs.screen,
@@ -440,32 +476,38 @@ async function main(): Promise<void> {
       memoryCeilings: limits.memoryCeilings,
     }
   }
+  // The same health `GET /health` answers: the self-watch loop reads its heartbeat from here.
+  const readHealth = async () => {
+    const tickAt = runner.lastOkAt('leads')
+    const door = await intake
+      .doorLines(DOOR_LINES_RECENT_MS)
+      .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
+    return healthOf({
+      lines: door.map((text) => ({ source: 'door', text, since: null })),
+      loops: runner.view().map((loop) => ({
+        name: loop.name,
+        ok: loop.lastError === null,
+        lastOkAt: loop.lastOkAt,
+        lastError: loop.lastError,
+        intervalMs: loop.intervalMs,
+      })),
+      version: settings.version,
+      databaseFailure: await ping(sql),
+      tickAt: tickAt?.toISOString() ?? null,
+      queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null,
+      tickFailure: tickProblem({
+        tickMs: leadsTick,
+        now: new Date(),
+        startedAt,
+        tickAt,
+        ...(loopSettings.heartbeatStaleMs === null ? {} : { limitMs: loopSettings.heartbeatStaleMs }),
+      }),
+    })
+  }
   const app = createApp({
     tokens: settings.tokens,
     intake: intake.api,
-    health: {
-      read: async () => {
-        const tickAt = runner.lastOkAt('leads')
-        const door = await intake
-          .doorLines(DOOR_LINES_RECENT_MS)
-          .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
-        return healthOf({
-          lines: door.map((text) => ({ source: 'door', text, since: null })),
-          loops: runner.view().map((loop) => ({
-            name: loop.name,
-            ok: loop.lastError === null,
-            lastOkAt: loop.lastOkAt,
-            lastError: loop.lastError,
-            intervalMs: loop.intervalMs,
-          })),
-          version: settings.version,
-          databaseFailure: await ping(sql),
-          tickAt: tickAt?.toISOString() ?? null,
-          queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null,
-          tickFailure: tickProblem({ tickMs: leadsTick, now: new Date(), startedAt, tickAt }),
-        })
-      },
-    },
+    health: { read: readHealth },
     planning: planning.planning,
     issues: composeIssues({
       writes,

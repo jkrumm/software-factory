@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LOOP_NAMES, type LoopName } from '@software-factory/contract'
+import { DEFAULT_WAIT_GRACE_MS } from '../../domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
 
 const ms = z.coerce.number().int().min(0)
@@ -19,6 +20,13 @@ const Env = z.object({
   FACTORY_LOOP_HYGIENE_MS: ms.optional(),
   FACTORY_LOOP_SCREEN_MS: ms.optional(),
   FACTORY_LOOP_FIX_CLASSES_MS: ms.optional(),
+  FACTORY_LOOP_SELFWATCH_MS: ms.optional(),
+  /** a timer or dependency wait is overdue this long after its exit */
+  FACTORY_SELFWATCH_GRACE_MS: ms.optional(),
+  /** the age that makes the leads tick stale, in place of three intervals and a minute: a scenario's way to a stale heartbeat */
+  FACTORY_HEARTBEAT_STALE_MS: ms.optional(),
+  /** the branch whose CI the self-watch reads; unset is the repo's default branch */
+  FACTORY_SELFWATCH_BRANCH: z.string().trim().min(1).optional(),
   /** only these projects (a comma list of names) are swept; unset is every project with a `project.yaml` */
   FACTORY_HYGIENE_REPOS: z.string().optional(),
   /** a project is swept again after this long */
@@ -52,6 +60,9 @@ export interface LoopSettings {
   hygieneRepos: string[] | null
   hygieneEveryMs: number
   hygieneRetryMs: number
+  selfwatchGraceMs: number
+  selfwatchBranch: string | null
+  heartbeatStaleMs: number | null
 }
 
 export const DEFAULT_TICK_MS = 10_000
@@ -68,7 +79,11 @@ const screenTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(ti
 const FIX_CLASSES_TICK_MS = 6 * 3_600_000
 const fixClassesTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : FIX_CLASSES_TICK_MS)
 
-/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes, screen: at least 10, fix-classes: every 6 hours, so a restart never skips a day). Throws one message naming every bad key. */
+/** The self-watch reads GitHub and git: at most one pass in this long, unless the tick is off (0). */
+const SELFWATCH_MIN_TICK_MS = 5 * 60_000
+const selfwatchTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, SELFWATCH_MIN_TICK_MS))
+
+/** The loops' settings: one interval per loop, `FACTORY_TICK_MS` the default (hygiene: at least 15 minutes, screen: at least 10, fix-classes: every 6 hours, so a restart never skips a day, selfwatch: at least 5). Throws one message naming every bad key. */
 export function loadLoopSettings(env: Record<string, string | undefined>): LoopSettings {
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
@@ -93,6 +108,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     hygiene: e.FACTORY_LOOP_HYGIENE_MS,
     screen: e.FACTORY_LOOP_SCREEN_MS,
     'fix-classes': e.FACTORY_LOOP_FIX_CLASSES_MS,
+    selfwatch: e.FACTORY_LOOP_SELFWATCH_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -105,6 +121,8 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
               ? screenTickMs(tickMs)
               : name === 'fix-classes'
                 ? fixClassesTickMs(tickMs)
+                : name === 'selfwatch'
+                  ? selfwatchTickMs(tickMs)
                 : tickMs),
       ]),
     ) as Record<LoopName, number>,
@@ -118,5 +136,8 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     hygieneRepos: repos.length > 0 ? repos : null,
     hygieneEveryMs: e.FACTORY_HYGIENE_EVERY_MS ?? 7 * 24 * 3_600_000,
     hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? 6 * 3_600_000,
+    selfwatchGraceMs: e.FACTORY_SELFWATCH_GRACE_MS ?? DEFAULT_WAIT_GRACE_MS,
+    selfwatchBranch: e.FACTORY_SELFWATCH_BRANCH ?? null,
+    heartbeatStaleMs: e.FACTORY_HEARTBEAT_STALE_MS ?? null,
   }
 }

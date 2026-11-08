@@ -66,6 +66,7 @@ test('every timer of packages 3 to 6 runs through the loop runner: twelve named 
     'queue',
     'friction',
     'hygiene',
+    'selfwatch',
     'screen',
     'fix-classes',
   ])

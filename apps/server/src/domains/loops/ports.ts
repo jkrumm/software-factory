@@ -20,6 +20,7 @@ import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
+import type { CiRun, MigrationSnapshot, SelfwatchChange, SelfwatchRow, WaitFact } from './selfwatch-model.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
 /** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
@@ -115,6 +116,10 @@ export interface LoopStore {
   storedFixShas(repo: string): Promise<Set<string>>
   /** a repeat is a no-op */
   recordFixCommits(rows: readonly FixCommitRow[]): Promise<void>
+  /** every subject the self-watch loop remembers (`migrations/0998_selfwatch.sql`) */
+  selfwatchRows(): Promise<SelfwatchRow[]>
+  /** the pass's changes in one transaction: filed rows upserted whole, seen rows touched, absent rows cleared */
+  applySelfwatch(change: SelfwatchChange): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */
@@ -169,6 +174,8 @@ export interface LoopReads {
   allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: ClassIssue[] }[]>
   /** the repos with a live lead (Issues `working` or `watching`) and those Issues, ordered by repo and id */
   liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
+  /** the timer and dependency waits of the repo's Issues, with the times their exit is judged from (self-watch) */
+  openWaits(repo: string): Promise<WaitFact[]>
 }
 
 /** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */
@@ -204,4 +211,14 @@ export interface FixClassesWorkflow {
 /** The fix commits of one project's default branch, read from git (called outside any transaction). */
 export interface FixCommitReader {
   read(repo: string, since: Date): Promise<Result<FixCommit[], PortError>>
+}
+
+/** The newest completed workflow runs of a repo's branch (called outside any transaction). `branch` null is the repo's default branch. */
+export interface CiRuns {
+  latest(repo: string, branch: string | null): Promise<Result<{ branch: string; runs: CiRun[] }, PortError>>
+}
+
+/** The migration files of a repo at its default branch and on every ref (called outside any transaction). */
+export interface MigrationFiles {
+  read(repo: string): Promise<Result<MigrationSnapshot, PortError>>
 }

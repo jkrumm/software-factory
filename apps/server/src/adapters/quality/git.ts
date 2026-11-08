@@ -18,7 +18,7 @@ export class GitTimeout extends Error {}
 class CommitsRefused extends Error {}
 
 /** Git in a repo: no prompt, the server's secrets left out, a process timeout. A timeout throws; an exit code is the caller's. */
-async function gitIn(
+export async function gitIn(
   repo: string,
   args: string[],
   options: GitOptions & { timeoutMs?: number } = {},

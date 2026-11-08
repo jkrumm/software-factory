@@ -55,6 +55,18 @@ const ClassRow = z.object({
   outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
 })
 
+const WaitRowSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  reason: z.enum(['timer', 'dependency']),
+  wait: z.object({
+    since: z.number().int(),
+    until: z.string().optional(),
+    after: z.array(z.string()).optional(),
+  }),
+  since_at: z.date().nullable(),
+})
+
 const classRows = (rows: unknown[]) =>
   rows.map((raw) => {
     const row = ClassRow.parse(raw)
@@ -213,6 +225,40 @@ export function loopReads(tx: SQL): LoopReads {
           detail: row.detail ?? '',
         }
       })
+    },
+
+    async openWaits(repo) {
+      // The wait is what the Issue's last applied event made (as planning reads it); the Issues it is after, with their close.
+      const rows: unknown[] = await tx`
+        SELECT i.id, f.payload->>'title' AS title, i.wait_reason AS reason, e.wait,
+          (SELECT s.at FROM factory.issue_events s WHERE s.issue_id = i.id AND s.result = 'applied' AND s.version = (e.wait->>'since')::int LIMIT 1) AS since_at
+        FROM factory.issues i
+        JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+        JOIN LATERAL (
+          SELECT wait FROM factory.issue_events x
+          WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
+        ) e ON true
+        WHERE i.state = 'waiting' AND i.wait_reason IN ('timer', 'dependency') AND i.repo = ${repo}
+        ORDER BY i.id`
+      const waits = rows.map((raw) => WaitRowSchema.parse(raw))
+      const afters = [...new Set(waits.flatMap((w) => w.wait.after ?? []))]
+      const closed = new Map<string, Date>()
+      if (afters.length > 0) {
+        const closes: { id: string; closed_at: Date | null }[] = await tx`
+          SELECT i.id,
+            (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed' ORDER BY c.version DESC LIMIT 1) AS closed_at
+          FROM factory.issues i WHERE i.state = 'closed' AND i.id IN ${tx(afters)}`
+        for (const row of closes) if (row.closed_at) closed.set(row.id, row.closed_at)
+      }
+      return waits.map((w) => ({
+        issue: w.id,
+        title: w.title,
+        reason: w.reason,
+        since: w.wait.since,
+        sinceAt: w.since_at ?? new Date(0),
+        until: w.wait.until ?? null,
+        after: (w.wait.after ?? []).map((id) => ({ issue: id, closedAt: closed.get(id) ?? null })),
+      }))
     },
 
     async classIssues(loop) {

@@ -357,7 +357,7 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
   else if (acted.value === 'decision') pass.decisions++
 }
 
-interface Idle {
+export interface Idle {
   /** the facts as the workflow takes them: a working Issue with a quiet lead reads as an `unreported` stall */
   facts: StallFacts
   idle: IdleFacts
@@ -374,7 +374,7 @@ const isIdleStall = (record: AppliedRecord): boolean =>
  * A working Issue whose lead session went quiet: its turn ended, no tool runs, nothing was reported since the turn began
  * (`working` and mid-turn sessions are never read here). Null for every other Issue.
  */
-async function loadIdle(deps: StewardDeps, id: IssueId): Out<Idle | null> {
+export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out<Idle | null> {
   return deps.uow.run<Idle | null, never>(async ({ work, leads }) => {
     const history = await work.history(id)
     if (!history) return ok(null)
