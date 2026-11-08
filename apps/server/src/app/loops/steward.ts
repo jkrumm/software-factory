@@ -6,8 +6,13 @@ import type { ClaimHolder, LoopReads, LoopStore, StewardWorkflow } from '../../d
 import {
   checkAnswer,
   type Checked,
+  decideIdle,
   decideStall,
   fallbackDecision,
+  IDLE_NOTE,
+  IDLE_STALL,
+  idleNote,
+  type IdleFacts,
   MAX_ROUNDS,
   STEWARD_DETAIL,
   type StallCause,
@@ -15,14 +20,17 @@ import {
   stallRequest,
   type StewardRules,
 } from '../../domains/loops/stall.ts'
-import type { Seats, Windows } from '../../domains/leads/ports.ts'
+import { leadKey } from '../../domains/leads/names.ts'
+import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'
+import { deriveSession } from '../../domains/leads/session.ts'
+import { reportedSince } from '../../domains/leads/stop.ts'
 import type { Issue } from '../../domains/work/issue.ts'
 import { WAITS } from '../../domains/work/issue.ts'
 import type { AppliedRecord } from '../../domains/work/machine.ts'
 import { replay } from '../../domains/work/machine.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
-import { key } from '../../kernel/keys.ts'
+import { key, type Key } from '../../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
 import { askDecision, type CheckpointDeps } from '../checkpoints.ts'
@@ -32,7 +40,7 @@ import type { PlanningDeps } from '../planning-deps.ts'
 import { settleIssue } from '../planning-chain.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 
-export type StewardStores = { work: WorkStore; loops: LoopStore; loopReads: LoopReads }
+export type StewardStores = { work: WorkStore; loops: LoopStore; loopReads: LoopReads; leads: LeadStore }
 
 export interface StewardDeps extends WriteDeps {
   uow: UnitOfWork<StewardStores>
@@ -58,6 +66,8 @@ export interface StewardDeps extends WriteDeps {
 
 export interface StewardPass {
   looked: number
+  /** working Issues whose lead session was quiet */
+  quiet: number
   woken: number
   requeued: number
   asked: number
@@ -342,6 +352,155 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
   else if (acted.value === 'decision') pass.decisions++
 }
 
+interface Idle {
+  /** the facts as the workflow takes them: a working Issue with a quiet lead reads as an `unreported` stall */
+  facts: StallFacts
+  idle: IdleFacts
+}
+
+const isIdleNote = (record: AppliedRecord): boolean =>
+  record.kind === 'noted' && field(record.payload, 'text').startsWith(IDLE_NOTE)
+
+/** The stall a quiet lead's Decision is raised from; like a wake, it ends one idle episode and begins the next. */
+const isIdleStall = (record: AppliedRecord): boolean =>
+  record.kind === 'stalled' && field(record.payload, 'detail').startsWith(IDLE_STALL)
+
+/**
+ * A working Issue whose lead session went quiet: its turn ended, no tool runs, nothing was reported since the turn began
+ * (`working` and mid-turn sessions are never read here). Null for every other Issue.
+ */
+async function loadIdle(deps: StewardDeps, id: IssueId): Out<Idle | null> {
+  return deps.uow.run<Idle | null, never>(async ({ work, leads }) => {
+    const history = await work.history(id)
+    if (!history) return ok(null)
+    const issue = replay(id, history)
+    if (issue.state !== 'working') return ok(null)
+    const attempt = await leads.attempt(id, issue.attempt)
+    // A lead that never started or is gone is the leads loop's: it requeues, the steward only nudges a live terminal.
+    if (!attempt?.terminal || attempt.goneAt) return ok(null)
+    const view = deriveSession(await leads.hookFacts(leadKey(id, issue.attempt)))
+    if (!view.idleSince) return ok(null)
+    if (view.lastTurnAt && reportedSince(history, issue.attempt, view.lastTurnAt)) return ok(null)
+
+    const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
+    const wakes = history.filter((record) => record.version > lastAdmitted && isIdleNote(record))
+    const lastWake = wakes.at(-1)
+    const lastStall = history.findLast((record) => record.version > lastAdmitted && isIdleStall(record))
+    const last = history.findLast((record) => !isIdleNote(record))
+    const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
+    const quietSince = lastWake && lastWake.at > view.idleSince ? lastWake.at : view.idleSince
+    return ok({
+      idle: { idleSince: view.idleSince, quietSince, wakes: wakes.length, lastEvent },
+      facts: {
+        issue: id,
+        repo: issue.repo,
+        title: issue.title,
+        kind: issue.kind,
+        cause: 'unreported',
+        detail: `${IDLE_STALL} since ${view.idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
+        // the idle episode: the version of the last wake or idle stall, so a later episode is a new subject of the workflow
+        since: Math.max(lastWake?.version ?? 0, lastStall?.version ?? 0) || issue.version,
+        stalledAt: view.idleSince,
+        attempt: issue.attempt,
+        restarts: issue.restarts,
+        regressions: issue.regressions,
+        stewardWakes: wakes.length,
+        notes: [],
+        history: history.slice(-HISTORY_LINES).map(lineOf),
+        windowOpen: null,
+      },
+    })
+  })
+}
+
+/** One note by the steward on the working Issue, once per key; true when it was recorded. */
+async function noteIdle(deps: StewardDeps, facts: StallFacts, text: string, noteKey: Key): Out<boolean> {
+  return deps.uow.run(async ({ work }) => {
+    const noted = await recordIn(work, deps, {
+      issueId: facts.issue,
+      key: noteKey,
+      event: { kind: 'noted', payload: { text: scrub(text).slice(0, 4_000) }, actor: 'steward' },
+    })
+    if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
+    return ok(noted.value.result === 'applied')
+  })
+}
+
+/** A Decision is only raised from a stall: the quiet lead's Issue is stalled `unreported` first, as a second stop would. */
+async function stallIdle(deps: StewardDeps, facts: StallFacts): Out<boolean> {
+  return deps.uow.run(async ({ work }) => {
+    const stalled = await recordIn(work, deps, {
+      issueId: facts.issue,
+      key: key('unreported', 'idle', facts.issue, facts.attempt, facts.since),
+      event: {
+        kind: 'stalled',
+        payload: { attempt: facts.attempt, cause: 'unreported', detail: facts.detail.slice(0, 500) },
+        actor: 'factory',
+      },
+    })
+    if (!stalled.ok) return err(portError('refused', JSON.stringify(stalled.error)))
+    return ok(stalled.value.result === 'applied' || stalled.value.result === 'replayed')
+  })
+}
+
+/** A Decision is only raised from a stall: the quiet lead's Issue is stalled `unreported` first, as a second stop would. */
+async function raiseIdle(deps: StewardDeps, facts: StallFacts, form: unknown): Out<Acted> {
+  const stalled = await stallIdle(deps, facts)
+  if (!stalled.ok) return stalled
+  if (!stalled.value) return ok('nothing')
+  const raised = await raise(deps, facts, form)
+  return raised.ok ? ok(raised.value ? 'decision' : 'nothing') : raised
+}
+
+/** What the workflow's answer comes to for a quiet lead: a note typed to it, a Decision (after the stall), or nothing. */
+async function answerIdle(deps: StewardDeps, idle: Idle, checked: Checked, minutes: number): Out<Acted> {
+  if (checked.kind === 'decision') return raiseIdle(deps, idle.facts, checked.form)
+  if (checked.kind !== 'wake') return ok('nothing')
+  const { facts } = idle
+  const text = idleNote(minutes, idle.idle.lastEvent, checked.note ?? checked.reason)
+  const noted = await noteIdle(deps, facts, text, key('noted', 'steward', 'idle-ask', facts.issue, facts.since))
+  return noted.ok ? ok(noted.value ? 'woken' : 'nothing') : noted
+}
+
+function tally(pass: StewardPass, id: IssueId, acted: Result<Acted, PortError>): void {
+  if (!acted.ok) pass.problems.push(`${id}: ${acted.error.detail}`)
+  else if (acted.value === 'woken') pass.woken++
+  else if (acted.value === 'decision') pass.decisions++
+}
+
+/** The workflow is asked about a lead that stays quiet after its wakes; the answer is held to the same checks as a stall's. */
+async function askIdle(deps: StewardDeps, idle: Idle, minutes: number, pass: StewardPass): Promise<void> {
+  const asking = await ask(deps, idle.facts)
+  if (!asking.ok) return tally(pass, idle.facts.issue, asking)
+  if (asking.value.kind === 'wait') return
+  pass.asked++
+  const checked: Checked =
+    asking.value.kind === 'act'
+      ? asking.value.checked
+      : { kind: 'decision', form: fallbackDecision(idle.facts), reason: 'no usable answer' }
+  tally(pass, idle.facts.issue, await answerIdle(deps, idle, checked, minutes))
+}
+
+/** One working Issue: the lead gets a nudge naming the Issue's last event, `maxWakes` times; after that the workflow is asked. */
+async function nudgeIdle(deps: StewardDeps, id: IssueId, pass: StewardPass): Promise<void> {
+  const loaded = await loadIdle(deps, id)
+  if (!loaded.ok) return tally(pass, id, loaded)
+  const idle = loaded.value
+  if (!idle) return
+  pass.quiet++
+  const now = deps.clock.now()
+  const action = decideIdle(idle.idle, now, deps.rules)
+  if (action.kind === 'wake') {
+    const wakeKey = key('noted', 'steward', 'idle', id, idle.facts.attempt, idle.idle.wakes + 1)
+    const noted = await noteIdle(deps, idle.facts, action.detail, wakeKey)
+    return tally(pass, id, noted.ok ? ok(noted.value ? 'woken' : 'nothing') : noted)
+  }
+  if (action.kind === 'ask') {
+    const minutes = Math.max(0, Math.floor((now.getTime() - idle.idle.idleSince.getTime()) / 60_000))
+    await askIdle(deps, idle, minutes, pass)
+  }
+}
+
 /**
  * The checkout a watch needs could not be moved for `blockedChecks` checks in a row (package 5 reads and waits, it does
  * not tell): the lead hears it once per watch, as a note. The machine has no stall for a watching Issue, so a note is the
@@ -464,6 +623,7 @@ async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void
 export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   const pass: StewardPass = {
     looked: 0,
+    quiet: 0,
     woken: 0,
     requeued: 0,
     asked: 0,
@@ -476,6 +636,9 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   const stalled = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.stalled(STALL_LIMIT)))
   if (!stalled.ok) return stalled
   for (const id of stalled.value) await steward(deps, id, pass)
+  const working = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.working(STALL_LIMIT)))
+  if (working.ok) for (const id of working.value) await nudgeIdle(deps, id, pass)
+  else pass.problems.push(`working: ${working.error.detail}`)
   await settleOverdue(deps, pass)
   await noteBlockedCheckouts(deps, pass)
   await breakClaimDeadlocks(deps, pass)
@@ -484,4 +647,4 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
 }
 
 export const stewardSummary = (pass: StewardPass): string =>
-  `looked at ${pass.looked} stalled; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} stalled and ${pass.quiet} quiet; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

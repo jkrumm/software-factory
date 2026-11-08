@@ -24,6 +24,8 @@ export interface SessionView {
   /** when the turn before the latest began */
   previousTurnAt: Date | null
   lastEventAt: Date | null
+  /** when an `idle` or `compacted` session went quiet: its last turn ended, or it started with no turn since; null otherwise */
+  idleSince: Date | null
   /** a `limit_stop` with no turn after it: the account's window is spent */
   walled: boolean
   claudeSession: string | null
@@ -33,6 +35,12 @@ export interface SessionView {
 const text = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
 
 const inOrder = (a: HookFact, b: HookFact): number => a.at.getTime() - b.at.getTime() || a.seq - b.seq
+
+/** The end of the last turn, or the start of the session if no turn ended since: when a quiet session went quiet. */
+function quietSince(state: SessionState, current: readonly HookFact[]): Date | null {
+  if (state !== 'idle' && state !== 'compacted') return null
+  return current.findLast((fact) => fact.kind === 'turn_ended' || fact.kind === 'session_started')?.at ?? null
+}
 
 /**
  * First match wins, read from the latest `session_started` so a resumed or compacted session starts clean:
@@ -102,6 +110,7 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
     lastTurnAt: lastTurn?.at ?? null,
     previousTurnAt: previousTurn?.at ?? null,
     lastEventAt: last?.at ?? null,
+    idleSince: quietSince(state, current),
     walled,
     claudeSession: text(start?.payload.claudeSessionId),
     transcriptPath: text(start?.payload.transcriptPath),

@@ -7,7 +7,10 @@ import {
   checkAnswer,
   decideStall,
   DEFAULT_STEWARD_RULES,
+  decideIdle,
   fallbackDecision,
+  IDLE_NOTE,
+  type IdleFacts,
   type StallFacts,
   stallRequest,
 } from '../../src/domains/loops/stall.ts'
@@ -260,4 +263,40 @@ test('the settle request shows at most 40 open Issues, cleaned, and the Issue’
   expect(request.candidates).toHaveLength(40)
   expect(request.candidates[0]?.title).toBe('Issue 0 secret=[x]')
   expect(request.issue).toMatchObject({ id: 'issue_20', text: 'api_key=[x]' })
+})
+
+const idle = (over: Partial<IdleFacts> = {}): IdleFacts => ({
+  idleSince: new Date(NOW.getTime() - 30 * 60_000),
+  quietSince: new Date(NOW.getTime() - 30 * 60_000),
+  wakes: 0,
+  lastEvent: 'v7 regressed: the probe failed',
+  ...over,
+})
+
+test('a lead quiet for less than the threshold is left alone', () => {
+  const young = idle({
+    idleSince: new Date(NOW.getTime() - 5 * 60_000),
+    quietSince: new Date(NOW.getTime() - 5 * 60_000),
+  })
+  expect(decideIdle(young, NOW, rules)).toMatchObject({ kind: 'wait' })
+})
+
+test('a quiet lead is woken with a note naming the last event, twice per attempt, then the workflow is asked', () => {
+  const first = decideIdle(idle(), NOW, rules)
+  expect(first).toMatchObject({ kind: 'wake' })
+  if (first.kind !== 'wake') throw new Error('unreachable')
+  expect(first.detail).toStartWith(IDLE_NOTE)
+  expect(first.detail).toContain('30 minute(s)')
+  expect(first.detail).toContain('v7 regressed: the probe failed')
+  expect(first.detail).toContain('background tasks')
+  expect(decideIdle(idle({ wakes: 1 }), NOW, rules)).toMatchObject({ kind: 'wake' })
+  expect(decideIdle(idle({ wakes: 2 }), NOW, rules)).toEqual({ kind: 'ask' })
+})
+
+test('the next wake waits another threshold from the last one', () => {
+  const justWoken = idle({ wakes: 1, quietSince: new Date(NOW.getTime() - 60_000) })
+  expect(decideIdle(justWoken, NOW, rules)).toMatchObject({ kind: 'wait' })
+  expect(decideIdle(idle({ wakes: 2, quietSince: new Date(NOW.getTime() - 60_000) }), NOW, rules)).toMatchObject({
+    kind: 'wait',
+  })
 })
