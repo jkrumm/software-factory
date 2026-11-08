@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, type Migration, migrate } from '../src/adapters/postgres/migrate.ts'
 import { acquireProcessLock, PROCESS_LOCK_WAIT_MS } from '../src/adapters/postgres/process-lock.ts'
@@ -124,6 +127,18 @@ describe('acquireProcessLock', () => {
   test('the default wait is 45 s', () => {
     expect(PROCESS_LOCK_WAIT_MS).toBe(45_000)
   })
+})
+
+test('a migration that reuses another one’s number is refused, and the shipped files load', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'migrations-'))
+  try {
+    await writeFile(join(dir, '0001_a.sql'), 'SELECT 1')
+    await writeFile(join(dir, '0001_b.sql'), 'SELECT 1')
+    expect(await rejection(loadMigrations(dir))).toContain('0001_b.sql reuses the number of 0001_a.sql')
+  } finally {
+    await rm(dir, { recursive: true })
+  }
+  expect((await loadMigrations()).length).toBeGreaterThan(0)
 })
 
 test('ping is null while the database answers', async () => {

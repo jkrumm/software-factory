@@ -14,11 +14,23 @@ export interface Migration {
   text: string
 }
 
-/** The release's migrations in the order they apply; a file that is not named like one is an error, not skipped. */
+/**
+ * Numbers two applied migrations already share (two merges took the same one). The ledger keys on the name, so they
+ * stay; renaming either would read as "applied but missing". No number is added here: a new migration takes a free one.
+ */
+const SHARED_NUMBERS = new Set(['0993'])
+
+/** The release's migrations in the order they apply; a file that is not named like one, or reuses a number, is an error, not skipped. */
 export async function loadMigrations(dir: string = MIGRATIONS_DIR): Promise<Migration[]> {
   const names = (await readdir(dir)).filter((name) => name.endsWith('.sql')).sort()
   const misnamed = names.find((name) => !MIGRATION_NAME.test(name))
   if (misnamed) throw new Error(`migration ${misnamed} is not named NNNN_words.sql`)
+  const repeated = names.find((name, i) => {
+    const number = name.slice(0, 4)
+    return i > 0 && names[i - 1]?.startsWith(number) && !SHARED_NUMBERS.has(number)
+  })
+  if (repeated)
+    throw new Error(`migration ${repeated} reuses the number of ${names[names.indexOf(repeated) - 1]}: take a free one`)
   return Promise.all(names.map(async (name) => ({ name, text: await Bun.file(join(dir, name)).text() })))
 }
 

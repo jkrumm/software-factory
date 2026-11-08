@@ -92,6 +92,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   through its schema and the CLI parses with the same one (a body that does not parse is exit 9).
 - **One schema, `factory`,** in the shared database. Migrations (`apps/server/migrations/`, named `NNNN_words.sql`) are
   advisory-locked, qualify every name, are expand then contract, and are never edited once applied (a checksum refuses it).
+  A number is used once: `loadMigrations` refuses a repeat (only `0993` is shared, both files applied; the ledger keys on the name).
   `DATABASE_URL` comes from `secrets-run`, never a tracked file.
 - **Settings:** secrets in `.env.tpl` (server-only optional refs in `.env.server.tpl`, read by the launcher and the deploy's
   ref check only, never by a client; the door has `.env.door.tpl`); non-secret settings in `~/.config/factory/env`, which
