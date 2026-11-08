@@ -50,7 +50,7 @@ import { showQuality } from './app/quality-read.ts'
 import { reopenIssue } from './app/quality-reopen.ts'
 import { shipIssue } from './app/quality-ship.ts'
 import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watch.ts'
-import { loadCheckpointSettings } from './checkpoint-settings.ts'
+import { factoryDataDir, loadCheckpointSettings } from './checkpoint-settings.ts'
 import { composeLeads } from './compose-leads.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { err, ok, portError } from './kernel/result.ts'
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots)
-  const hygieneChecker = createHygieneChecker({ repos })
+  const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(process.env) })
   const projects = projectFileProjects({
     uow,
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),

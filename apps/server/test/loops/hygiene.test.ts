@@ -179,7 +179,7 @@ function world(names: string[], broken: Set<string>) {
     withCheckout: async (repo, _ref, use) =>
       broken.has(repo)
         ? err(portError('gone', 'fetch failed'))
-        : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef' })),
+        : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef', source: '/tmp/src' })),
     sweep: async (co) => {
       sweeps.push(co.ref)
       return { ref: co.ref, runs: [], findings: [], stale: [], slop: [] }

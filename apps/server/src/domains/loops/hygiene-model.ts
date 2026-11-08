@@ -55,10 +55,12 @@ export interface Checkout {
   path: string
   /** the full sha checked out */
   ref: string
+  /** the project's own checkout directory, which a red check is confirmed against */
+  source: string
 }
 
 /**
- * The I/O of a pass. `withCheckout` fetches, makes a detached worktree under the temp directory (at origin's default
+ * The I/O of a pass. `withCheckout` fetches, makes a detached worktree under the factory's data directory (at origin's default
  * branch when `ref` is null, at `ref` otherwise), calls `use`, and removes the worktree on every path. `sweep` runs every
  * probe in the checkout and never throws: a probe that cannot run is a `ProbeRun` of outcome `failed`.
  */

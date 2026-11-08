@@ -15,6 +15,15 @@ const TOP = 1
 const IGNORED = [
   /(^|\/)(bun\.lockb?|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|uv\.lock|poetry\.lock)$/,
   /\.md$/,
+  // generated files
+  /\.lock$/,
+  /(^|\/)go\.sum$/,
+  /(^|\/)drizzle\//,
+  /(^|\/)meta\/(_journal|\d+_snapshot)\.json$/,
+  /(^|\/)__generated__\//,
+  /\.gen\.tsx?$/,
+  /\.generated\./,
+  /\.snap$/,
   /(^|\/)(package\.json|manifest\.json|tsconfig[^/]*\.json|Makefile)$/,
   /^docs\//,
   /(^|\/)generated\//,
