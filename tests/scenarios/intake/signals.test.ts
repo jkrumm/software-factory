@@ -216,6 +216,7 @@ test('a probe is stored dismissed, never shown, files nothing, and a replay stor
   expect((await world.db.sql`SELECT 1 FROM factory.issues`).length).toBe(issuesBefore)
 }, 20000)
 
-test('writing signals called neither hc nor agw', async () => {
-  expect(await world.calls()).toEqual([])
+test('writing signals called no hc and no agw but the triage workflow, for a down alert beside open Issues', async () => {
+  const calls = (await world.calls()) as { tool: string; args: string[] }[]
+  expect(calls.filter((call) => call.tool === 'hc' || call.args[0] !== 'factory-triage')).toEqual([])
 }, 20000)

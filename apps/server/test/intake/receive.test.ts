@@ -8,7 +8,7 @@ import { postgresIntakeStore } from '../../src/adapters/intake/store.ts'
 import { postgresOpenIssues } from '../../src/read/open-issues.ts'
 import { createIntake, DEFAULT_INTAKE_SETTINGS, envelopeOfRequest, type Intake } from '../../src/app/intake.ts'
 import { recordIssueEvent } from '../../src/app/issues.ts'
-import type { Received, RepoSignals, Triaged } from '../../src/domains/intake/model.ts'
+import type { ClosedIssue, Received, RepoSignals, Triaged } from '../../src/domains/intake/model.ts'
 import type {
   IntakeTopology,
   ProjectSignals,
@@ -46,7 +46,8 @@ let projects: RepoSignals[]
 let runbooks: { repo: string }[]
 let runbookAnswer: () => Result<RunbookRun>
 let triageCalls: number
-let triageAnswer: () => Result<{ amend: IssueId | null }>
+let triageAnswer: () => Result<{ amend: IssueId | null; settled?: IssueId | null; reason?: string }>
+let triageSettled: ClosedIssue[]
 let intake: Intake
 let uow: ReturnType<typeof makeUow>
 let ids = sequentialIds()
@@ -68,8 +69,9 @@ const runbook: Runbook = {
   },
 }
 const triage: TriageWorkflow = {
-  amendOrNew: () => {
+  amendOrNew: ({ settled }) => {
     triageCalls++
+    triageSettled = [...settled]
     return Promise.resolve(triageAnswer())
   },
 }
@@ -89,6 +91,7 @@ beforeEach(async () => {
   runbooks = []
   runbookAnswer = () => ok({ ran: true, exit: 0, tail: 'restarted' })
   triageCalls = 0
+  triageSettled = []
   triageAnswer = () => err(portError('gone', 'no workflow'))
   uow = makeUow()
   ids = sequentialIds()
@@ -472,6 +475,59 @@ describe("a person's or an agent's signal", () => {
       issue: 'issue_1',
     })
     expect(triageCalls).toBe(2)
+  })
+
+  test('a request with no title overlap still reaches the workflow, whose amend answer amends the open Issue', async () => {
+    done(await intake.receive(owner('Login page crashes on submit')))
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const out = done(await intake.receive(owner('Sessions expire too early')))
+    expect(triageCalls).toBe(1)
+    expect(out).toMatchObject({ outcome: 'amended', detail: 'matched', issue: 'issue_1' })
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('an Issue closed in the last day is passed as settled; a settled answer drops the request and files nothing', async () => {
+    done(await intake.receive(owner('Login page crashes on submit')))
+    await send('issue_1' as IssueId, 'closed', {
+      kind: 'closed',
+      payload: { attempt: null, outcome: 'healed', reason: 'false alarm' },
+      actor: 'factory',
+    })
+    clock.advance(6 * 3_600_000)
+    triageAnswer = () => ok({ amend: null, settled: 'issue_1' as IssueId, reason: 'closed as a false alarm' })
+    const out = done(await intake.receive(owner('Sessions expire too early')))
+    expect(triageSettled).toMatchObject([{ id: 'issue_1', outcome: 'healed', reason: 'false alarm' }])
+    expect(out).toMatchObject({ outcome: 'dropped', detail: 'settled', issue: null })
+    expect(await issues()).toHaveLength(1)
+    const stored =
+      await db.sql`SELECT state, dismissed_reason, dismissed_by FROM factory.intake_signals WHERE id = ${out.signal}`
+    expect(stored[0]).toMatchObject({ state: 'dismissed', dismissed_by: 'judge' })
+    expect(String(stored[0]?.dismissed_reason)).toContain('already settled: issue_1')
+
+    // two days on, the closed Issue is no longer shown
+    clock.advance(48 * 3_600_000)
+    triageCalls = 0
+    done(await intake.receive(owner('Sessions expire much too early')))
+    expect(triageCalls).toBe(0)
+    expect(triageSettled).toMatchObject([{ id: 'issue_1' }])
+  })
+
+  test('a down alert for a subject whose Issue closed goes to the workflow and can be dropped as settled', async () => {
+    done(await intake.receive(down('kuma', 'api', 'e1')))
+    done(await intake.receive(up('kuma', 'api', 'e2')))
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'vps', state: 'closed', outcome: 'healed' }])
+    clock.advance(6 * 3_600_000)
+    triageAnswer = () => ok({ amend: null, settled: 'issue_1' as IssueId, reason: 'a false alarm' })
+    const out = done(await intake.receive(down('kuma', 'api', 'e3')))
+    expect(triageSettled).toMatchObject([{ id: 'issue_1' }])
+    expect(out).toMatchObject({ outcome: 'dropped', detail: 'settled' })
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('a down alert whose subject Issue is open does not call the workflow', async () => {
+    done(await intake.receive(down('kuma', 'api', 'e1')))
+    done(await intake.receive(down('kuma', 'api', 'e2')))
+    expect(triageCalls).toBe(0)
   })
 
   test('an agent files in its own repo; the owner may name any project; a work repo hears the owner only', async () => {

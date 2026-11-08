@@ -163,6 +163,7 @@ export {
   StewardDecision,
   StewardStall,
   type TriageCandidate,
+  type TriageSettled,
   TriageAnswer,
   TriageRequest,
 } from './loops.ts'

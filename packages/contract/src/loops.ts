@@ -103,11 +103,21 @@ const Candidate = z.object({
 })
 export type TriageCandidate = z.infer<typeof Candidate>
 
+/** An Issue of the repo closed in the last day, shown so a restated ask can be answered "already settled". */
+const SettledCandidate = z.object({
+  id: IssueId,
+  title: z.string().min(1).max(500),
+  outcome: z.string().min(1).max(40),
+  reason: z.string().max(300).nullable(),
+})
+export type TriageSettled = z.infer<typeof SettledCandidate>
+
 export const TriageRequest = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('amend'),
     repo: z.string().min(1),
     candidates: z.array(Candidate).max(40),
+    settled: z.array(SettledCandidate).max(20).default([]),
     signal: z.object({
       title: z.string().min(1).max(500),
       text: z.string().max(8_000),
@@ -133,6 +143,7 @@ export type TriageRequest = z.infer<typeof TriageRequest>
 
 export const TriageAnswer = z.object({
   amend: IssueId.nullable(),
+  settled: IssueId.nullable().optional(),
   after: z.array(IssueId).max(10),
   kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']).nullable(),
   size: z.enum(['small', 'medium', 'large']).nullable(),
