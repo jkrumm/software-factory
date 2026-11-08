@@ -15,5 +15,9 @@
     document.open()
     document.write(data.html + annotator)
     document.close()
+    // document.open() dropped frame.html's head, so the lock is added again for the artifact's own document.
+    const lock = document.createElement('meta')
+    lock.name = 'darkreader-lock'
+    document.head.appendChild(lock)
   })
 })()
