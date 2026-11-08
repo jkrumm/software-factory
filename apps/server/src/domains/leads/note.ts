@@ -27,7 +27,7 @@ function item(record: HistoryRecord): string | null {
     case 'errand_done': {
       const turnedAway = field(record, 'turnedAway')
       if (typeof turnedAway === 'string')
-        return `the Errand ${oneLine(field(record, 'errand'))} was turned away before it reached the owner: ${oneLine(turnedAway)}. Do it yourself, or raise it again if it needs a person's hands`
+        return `the Errand ${oneLine(field(record, 'errand'))} was turned away before it reached the owner: ${oneLine(turnedAway)}. Do it yourself, or raise it again with a different summary if it needs a person's hands (the same words are the same Errand)`
       return `the Errand ${oneLine(field(record, 'errand'))} is done`
     }
     case 'woken':

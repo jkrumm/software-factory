@@ -289,7 +289,7 @@ describe('errands', () => {
 
 describe('the Errand screen', () => {
   test('a command a token can run is turned away by rule', () => {
-    expect(screenByRule({ summary: 'Run the deploy', detail: null })).toMatchObject({ verdict: 'turn_away' })
+    expect(screenByRule({ summary: 'Run `make deploy`', detail: null })).toMatchObject({ verdict: 'turn_away' })
     expect(screenByRule({ summary: 'Deploy it', detail: 'Use `gh pr merge 12` for this' })).toMatchObject({
       verdict: 'turn_away',
     })
@@ -303,6 +303,8 @@ describe('the Errand screen', () => {
     expect(
       screenByRule({ summary: 'Run the deploy', detail: 'Tap the button in the portal after `make deploy`' }),
     ).toBeNull()
+    expect(screenByRule({ summary: 'Call the bank to lift the card block', detail: null })).toBeNull()
+    expect(screenByRule({ summary: 'Run the deploy', detail: null })).toBeNull()
     expect(screenByRule({ summary: 'Approve the App Store build', detail: null })).toBeNull()
     expect(screenByRule({ summary: 'Plug in the phone', detail: 'It is on the desk' })).toBeNull()
   })

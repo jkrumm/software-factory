@@ -60,9 +60,6 @@ const COMMAND_WORDS: readonly string[] = [
   'systemctl',
 ]
 
-/** A summary that starts with one of these asks for a command to be run. */
-const COMMAND_VERBS: readonly string[] = ['run', 'execute', 'call', 'invoke']
-
 /** Words that name a person's hands: a device, a portal, a physical step, a biometric. Any one keeps the Errand. */
 const HANDS_WORDS: readonly string[] = [
   'device',
@@ -134,13 +131,11 @@ function commandLines(text: string): string[] {
 export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason: string } | null {
   const text = `${input.summary}\n${input.detail ?? ''}`.toLowerCase()
   if (handsWord.test(text)) return null
-  const summary = input.summary.trim().toLowerCase()
-  const verb = COMMAND_VERBS.some((word) => summary === word || summary.startsWith(`${word} `))
   const named = commandLines(text).some((line) => {
     const first = line.split(/\s+/)[0] ?? ''
     return COMMAND_WORDS.includes(first)
   })
-  return verb || named ? { verdict: 'turn_away', reason: TURN_AWAY_BY_RULE } : null
+  return named ? { verdict: 'turn_away', reason: TURN_AWAY_BY_RULE } : null
 }
 
 export type ErrandScreenChecked =
