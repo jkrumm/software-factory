@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { rootedRepos } from '../../src/adapters/git/repos.ts'
@@ -109,7 +118,9 @@ describe('withCheckout', () => {
       expect(checkout.ref).toBe(git(work, ['rev-parse', 'HEAD']).trim())
       expect(git(checkout.path, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('HEAD')
       expect(readFileSync(join(checkout.path, 'a.txt'), 'utf8')).toBe('one\n')
-      expect(checkout.path.startsWith(join(tmpdir(), 'factory-hygiene'))).toBe(true)
+      // the canonical name: agw allows reads below a directory by it, and the temp directory is a link on macOS
+      expect(checkout.path).toBe(realpathSync(checkout.path))
+      expect(checkout.path.startsWith(join(realpathSync(tmpdir()), 'factory-hygiene'))).toBe(true)
       return 'used'
     })
     expect(result).toEqual({ ok: true, value: 'used' })
