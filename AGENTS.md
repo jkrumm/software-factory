@@ -53,9 +53,11 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener, published by `make deploy` with
   `tailscale serve`. It answers 403 to anything without the owner's `Tailscale-User-Login` (`FACTORY_CONSOLE_OWNER_LOGIN`;
-  unset, the listener does not start), 405 to anything but GET and HEAD, forwards only `GET /health` and `GET /v1/*` to the API
+  unset, the listener does not start), 405 to anything but GET and HEAD, forwards only `/health` and `/v1/*` to the API
   (the owner token stays in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and
-  serves `apps/console/dist` otherwise. It can never start a session: keep every write off it. The Console (`apps/console`,
+  serves `apps/console/dist` otherwise. It can never start a session: keep every write off it. Residual, accepted
+  (`docs/architecture.md` "Perimeter"): the header is the credential, so any process on the mini can forge it on
+  loopback and read what the owner reads, including what the read token is denied; the write side stays shut. The Console (`apps/console`,
   `README.md` there) holds no logic the API could hold, and `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
 - **Work repos hear only the owner** (NL18, no `project.yaml`), and the read token never sees their words
   (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).

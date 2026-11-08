@@ -6,7 +6,7 @@ sensitive:   [apps/server/migrations/**, apps/server/src/adapters/postgres/**, a
               apps/server/src/domains/quality/gate.ts, apps/server/src/domains/quality/watch.ts,
               apps/server/src/domains/work/machine.ts, apps/server/src/domains/work/table.ts, apps/server/src/domains/work/events.ts,
               apps/server/src/adapters/leads/spool.ts, apps/server/src/adapters/git/repos.ts,
-              apps/server/src/api/auth.ts, apps/server/src/api/policy.ts, packages/contract/src/spool.ts,
+              apps/server/src/api/auth.ts, apps/server/src/api/policy.ts, apps/server/src/api/console.ts, packages/contract/src/spool.ts,
               apps/cli/src/hook.ts, apps/door/src/**, config/roles.json,
               scripts/deploy.sh, scripts/launch*.sh, scripts/env-file.sh, .env.tpl, .env.server.tpl, deploy/*.plist.template,
               .github/**]

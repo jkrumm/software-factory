@@ -371,12 +371,11 @@ async function main(): Promise<void> {
     }),
     readModels: { sql, queueReasons },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
-  intake.start()
-  runner.start()
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 
   // The Console's listener: loopback too, published on the tailnet by `tailscale serve`. Only the owner's login passes, only
-  // reads, and the owner token is held by this closure alone. Without an owner login it does not start.
+  // reads, and the owner token is held by this closure alone. Without an owner login it does not start. It binds before
+  // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)
   const consoleServer = consoleSettings.ownerLogin
     ? Bun.serve({
@@ -396,6 +395,8 @@ async function main(): Promise<void> {
     : null
   if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
   else console.log('console not started: FACTORY_CONSOLE_OWNER_LOGIN is not set')
+  intake.start()
+  runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
   // waits for it, so the stop would never return and the process would keep the lock. The deadline ends the process
