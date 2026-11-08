@@ -1,5 +1,9 @@
 # The factory's own plan (docs/architecture.md, the planning loop files its next Issue). Rows with `issue` adopt an Issue filed by hand;
 # the others are filed by the server when their `after` rows are closed and their conditions hold.
+# A taste checkpoint (a row that asks the owner for a verdict on how something looks or feels) waits until there is enough
+# built to judge, never after the first screens: Console v0 went to him too thin ("everything is missing", 2026-11-08) and
+# the review moved to console-review. Place one `after` the last row that makes the thing whole, and let its `facts` name
+# what is still missing.
 version: 1
 rows:
   - key: intake
