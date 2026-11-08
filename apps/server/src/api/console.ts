@@ -8,7 +8,7 @@ export interface ConsoleHandlerOptions {
   ownerLogin: string
   /** the Console build */
   dir: string
-  /** answers `/health` and `/v1/*` from the API; the caller decides what credentials it carries */
+  /** answers `/health`, `/v1/*` and the five answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
 }
 
@@ -83,7 +83,7 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's five answer verbs: the only writes the listener forwards. Nothing here starts a session or files, cancels or reopens an Issue. */
+/** The owner's five answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal. */
 const WRITES = [
   /^\/v1\/decisions\/[^/]+\/answer$/,
   /^\/v1\/artifacts\/[^/]+\/verdict$/,

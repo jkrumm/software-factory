@@ -179,7 +179,8 @@ The API stays loopback; the tailnet and the owner's GitHub user are the perimete
 with `tailscale serve` and holds only its own token. Nothing that can start Claude Code is reachable from another node.
 The Console listener reads, and forwards exactly the owner's five answer verbs (a Decision's answer, an artifact's verdict
 and annotation, an Errand done, a held signal promoted), guarded against a cross-site page (JSON only, no cross-site fetch
-metadata, no foreign `origin`, 64 KiB); it starts no session and files, cancels and reopens no Issue.
+metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
+from a signal already held.
 
 ## Data
 
