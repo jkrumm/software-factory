@@ -37,7 +37,7 @@ function Rail({ count }: { count: number | null }) {
         <Link
           key={to}
           to={to}
-          className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[status=active]:bg-accent data-[status=active]:text-foreground data-[status=active]:shadow-[inset_3px_0_0_var(--color-primary)]"
+          className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[status=active]:bg-accent data-[status=active]:text-foreground"
         >
           <Icon className="size-5" />
           {label}
