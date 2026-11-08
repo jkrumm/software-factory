@@ -126,6 +126,14 @@ a real server and Postgres with fake `hc` and `agw`), then typechecks and builds
 `make rollback` and `make verify` act on the mini only; `DRY_RUN=1` prints the plan, `FACTORY_REF=<branch>` proves a branch
 live before it is merged. CI runs `make check` on `ubuntu-latest`.
 
+**Merging.** Parallel leads share one master, so before a lead merges its PR it rebases on the current `origin/master`,
+takes the next free migration number if it adds a migration (`make check` prints it; `scripts/merge-guard.ts
+--next-migration` too), re-runs `make check`, then runs `make merge-guard` and merges only on exit 0. The guard refuses,
+with the reason, a branch that does not contain `origin/master`, a new migration whose number master (or the branch)
+already uses, and a master whose last finished CI run is red or still running (a cancelled run was superseded and is
+skipped; an unreadable `gh` refuses too). `MERGE_GUARD_ARGS=--allow-red` is for the one change that fixes a red master.
+The lead's brief (`domains/leads/brief.ts`) states the same rule.
+
 Changes land through a pull request (`project.yaml` `ship:`), conventional commits, no AI attribution. Update this file in
 the same commit as the code it describes, and keep it to what lookup cannot reveal: a detail that is in the code or in
 `docs/architecture.md` is deleted here.

@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
-.PHONY: help check test e2e fmt deploy rollback verify version rehearse
+.PHONY: help check merge-guard test e2e fmt deploy rollback verify version rehearse
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens and artifact templates, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free and master's last CI run is green (MERGE_GUARD_ARGS=--allow-red only for the change that fixes a red master)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -42,6 +43,7 @@ check:
 	@bun apps/server/scripts/issue-diagram.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
+	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory e2e
 	@echo "==> check passed"
@@ -87,3 +89,7 @@ version:
 # A window on a copy of the live data: restore, rename, boot the new core, import, compare, scenarios, the way back, the next window.
 rehearse:
 	@bun scripts/rehearse.ts $(REHEARSE_ARGS)
+
+# A lead runs this right before it merges its pull request (AGENTS.md "Merging"): rebased, free migration number, green master.
+merge-guard:
+	@bun scripts/merge-guard.ts $(MERGE_GUARD_ARGS)
