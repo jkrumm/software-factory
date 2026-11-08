@@ -198,6 +198,22 @@ describe('following the leads', () => {
     expect(await followLeads(silent as never)).toBe(0)
   })
 
+  test('the tab of a lead whose Issue waits is named too; a lost terminal is not called gone then', async () => {
+    const issue = await running()
+    w.clock.at_(2)
+    await w.event(issue, 'defer', {
+      kind: 'deferred',
+      payload: { attempt: 1, until: new Date(BASE + 3_600_000).toISOString() },
+      actor: 'lead',
+    })
+    expect(await issueRow(issue)).toMatchObject({ state: 'waiting' })
+    await followLeads(w.deps)
+    expect(w.terminals.named).toHaveLength(1)
+
+    w.terminals.lose('lead-1-1')
+    expect(await followLeads(w.deps)).toBe(0)
+  })
+
   test('the tab of a lead that runs is named on a pass; a terminal without a tab name is never touched', async () => {
     await running()
     const [started] = w.terminals.started
