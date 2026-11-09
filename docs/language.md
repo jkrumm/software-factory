@@ -31,7 +31,7 @@ check, `docs/architecture.md`).
 | **Queue state** | `run` (admission decides), `pace` (one lead per project, spending toward the weekly pace), `drain` (no new lead), for the whole queue or one project. The more restrictive of the two applies | |
 | **Queue reason** | Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: `chain`, `line`, `finalizing`, `unknown_project`, `drain`, `load`, `memory`, `claim`, `window`, `cap` | Hold (the memory and load hold) |
 | **Claim** | A lead's place in its repo: `leads: N` plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over | |
-| **Owed** | Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for | |
+| **Owed** | Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. A note refused for a claim for `FACTORY_CLAIM_STALL_MS` while the repo has a place free is a steward stall | |
 | **Window** | An account's 5-hour or weekly reset | |
 | **Line** | Stop the line: while a repo's alert is unsolved, only its fix is admitted | |
 

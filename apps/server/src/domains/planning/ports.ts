@@ -42,7 +42,11 @@ export interface PlanningStore {
 }
 
 /** An open Issue before its repo is resolved to a project. */
-export type OpenIssueRow = Omit<OpenIssue, 'project'> & { repo: string }
+export type OpenIssueRow = Omit<OpenIssue, 'project'> & {
+  repo: string
+  /** when its newest applied event happened: for a lead working without a claim, the end of the wait that gave it up */
+  since: Date | null
+}
 
 /** An Issue that waits on others, as its events made it. */
 export interface DependencyWait {

@@ -45,6 +45,7 @@ const Env = z.object({
   FACTORY_SETTLE_TIMEOUT_MS: ms.optional(),
   /** a watch whose last N checks were all blocked is told to its lead */
   FACTORY_BLOCKED_CHECKS: z.coerce.number().int().min(1).optional(),
+  FACTORY_CLAIM_STALL_MS: z.coerce.number().int().min(1).optional(),
 })
 
 export interface LoopSettings {
@@ -57,6 +58,8 @@ export interface LoopSettings {
   queueGapMs: number
   settleTimeoutMs: number
   blockedChecks: number
+  /** a note refused for a claim this long while the repo has one free is a stall */
+  claimStallMs: number
   hygieneRepos: string[] | null
   hygieneEveryMs: number
   hygieneRetryMs: number
@@ -133,6 +136,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     queueGapMs: e.FACTORY_QUEUE_GAP_MS ?? 30 * 60_000,
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,
     blockedChecks: e.FACTORY_BLOCKED_CHECKS ?? 6,
+    claimStallMs: e.FACTORY_CLAIM_STALL_MS ?? 15 * 60_000,
     hygieneRepos: repos.length > 0 ? repos : null,
     hygieneEveryMs: e.FACTORY_HYGIENE_EVERY_MS ?? 7 * 24 * 3_600_000,
     hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? 6 * 3_600_000,

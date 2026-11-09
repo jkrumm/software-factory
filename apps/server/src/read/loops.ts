@@ -36,6 +36,8 @@ const QueueRowSchema = z.object({
 
 const Holder = z.object({ id: z.string(), state: z.enum(['working', 'watching']), blockers: z.array(z.string()) })
 
+const Refusal = z.object({ id: z.string(), repo: z.string(), since: z.date(), refusals: z.number().int() })
+
 const Blocked = z.object({
   issue_id: z.string(),
   watch: z.number().int(),
@@ -181,6 +183,22 @@ export function loopReads(tx: SQL): LoopReads {
         GROUP BY repo
         ORDER BY repo LIMIT ${limit}`
       return rows.map((row) => ({ repo: row.repo, issues: row.issues as IssueId[] }))
+    },
+
+    async claimRefusals(limit) {
+      // An open note whose newest run was a claim refusal: a success would have closed the effect.
+      const rows: unknown[] = await tx`
+        SELECT i.id, i.repo, min(r.at) AS since, count(*)::int AS refusals
+        FROM factory.issue_effects e
+        JOIN factory.issues i ON i.id = e.issue_id AND i.state <> 'closed'
+        JOIN factory.issue_effect_runs r ON r.effect_key = e.key AND NOT r.ok AND r.detail LIKE '%waits for a claim in %'
+        WHERE e.kind = 'note_lead' AND e.done_at IS NULL AND e.cancelled_at IS NULL
+        GROUP BY i.id, i.repo
+        ORDER BY min(r.at), i.id LIMIT ${limit}`
+      return rows.map((raw) => {
+        const row = Refusal.parse(raw)
+        return { issue: row.id as IssueId, repo: row.repo, since: row.since, refusals: row.refusals }
+      })
     },
 
     async claimHolders(queued, limit) {

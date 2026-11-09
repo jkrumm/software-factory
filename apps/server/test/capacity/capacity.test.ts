@@ -177,6 +177,67 @@ describe('claims in a repo', () => {
     )
   })
 
+  test('owed leads are ordered by the earliest wait end, then the Issue number; none counts itself or one behind it', () => {
+    const owedAt = (n: number, minute: number, urgent = false): Claimant => ({
+      issue: id(n),
+      urgent,
+      since: at(minute * 60_000),
+    })
+    // 494, 495, 496 woke in the order 495, 496, 494; one place is free
+    const owed = [owedAt(494, 45), owedAt(495, 0), owedAt(496, 30)]
+    const granted = (n: number, holders: Claimant[] = []) =>
+      claimRoom({ leads: 1, holders, owed, candidate: owed.find((o) => o.issue === id(n)) as Claimant }).granted
+    expect([494, 495, 496].filter((n) => granted(n))).toEqual([495])
+    // the first holds the place: the others wait, and the reason counts only those ahead of them
+    const held = [claimant(495)]
+    expect([494, 496].map((n) => granted(n, held))).toEqual([false, false])
+    const behind = claimRoom({
+      leads: 1,
+      holders: held,
+      owed: owed.filter((o) => o.issue !== id(495)),
+      candidate: owedAt(494, 45),
+    })
+    expect(behind.granted === false && behind.message).toContain('1 resumed lead(s) are served first')
+    // the same wait end: the lower Issue number first
+    const tied = [owedAt(7, 5), owedAt(3, 5)]
+    expect(claimRoom({ leads: 1, holders: [], owed: tied, candidate: tied[1] as Claimant }).granted).toBe(true)
+    expect(claimRoom({ leads: 1, holders: [], owed: tied, candidate: tied[0] as Claimant }).granted).toBe(false)
+    // a new lead is behind every owed lead
+    expect(claimRoom({ leads: 1, holders: [], owed, candidate: claimant(1) }).granted).toBe(false)
+  })
+
+  test('property: while a place is free for the owed leads, one of them is always granted, and never more than the places', () => {
+    let seed = 20_261_109
+    const random = (max: number) => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648
+      return seed % max
+    }
+    for (let round = 0; round < 500; round++) {
+      const leads = 1 + random(3)
+      const numbers = new Set<number>()
+      while (numbers.size < 1 + random(6) + 1) numbers.add(1 + random(40))
+      const [holderNumbers, owedNumbers] = [
+        [...numbers].slice(0, random(leads + 2)),
+        [...numbers].slice(random(leads + 2)),
+      ]
+      if (owedNumbers.length === 0) continue
+      const holders = holderNumbers.map((n) => claimant(n, random(5) === 0))
+      const owed: Claimant[] = owedNumbers.map((n) => ({
+        issue: id(n),
+        urgent: random(5) === 0,
+        since: random(4) === 0 ? null : at(random(6) * 60_000),
+      }))
+      const ordinary = holders.filter((h) => !h.urgent).length
+      const room = holders.length < leads + 1 && (ordinary < leads || owed.some((o) => o.urgent))
+      const winners = owed.filter((o) => claimRoom({ leads, holders, owed, candidate: o }).granted)
+      if (room) expect(winners.length).toBeGreaterThan(0)
+      expect(winners.length).toBeLessThanOrEqual(leads + 1 - holders.length)
+      // deterministic: the same inputs in another order grant the same Issues
+      const shuffled = [...owed].reverse()
+      expect(owed.filter((o) => claimRoom({ leads, holders, owed: shuffled, candidate: o }).granted)).toEqual(winners)
+    }
+  })
+
   test('which waits give the claim back: a person, a timer and a dependency; a stall keeps it', () => {
     for (const reason of ['decision', 'review', 'errand', 'timer', 'dependency'])
       expect(holdsClaim('waiting', reason)).toBe(false)

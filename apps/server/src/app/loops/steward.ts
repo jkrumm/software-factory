@@ -55,6 +55,10 @@ export interface StewardDeps extends WriteDeps {
   planning: PlanningDeps
   /** capacity's side: the Issues queued for lack of a claim in their repo (called outside any transaction) */
   claimQueued(): Promise<Result<{ issue: IssueId; repo: string }[], PortError>>
+  /** capacity's side: of these Issue repos, those whose project has an ordinary claim free right now (called outside any transaction) */
+  claimFree(repos: readonly string[]): Promise<Result<string[], PortError>>
+  /** a note refused for a claim this long while the repo has one free is a stall */
+  claimStallMs: number
   rules: StewardRules
   retryMs: number
   /** an Issue still settling this long after it was filed is settled with no edges */
@@ -80,6 +84,8 @@ export interface StewardPass {
   settled: number
   noted: number
   deferred: number
+  /** notes refused for a claim too long while the repo had one free */
+  claimStalls: number
   problems: string[]
 }
 
@@ -657,6 +663,42 @@ async function deferHolder(deps: StewardDeps, holder: ClaimHolder): Out<boolean>
   })
 }
 
+/**
+ * The claim livelock: a lead's note has been refused for a claim for longer than `claimStallMs` while its repo has an
+ * ordinary place free. A full repo is a rightful wait; a free place nobody takes is a stall of the order that serves
+ * resumed leads, so it is a problem line on the pass and one note on the Issue (once per run of refusals).
+ */
+async function noteClaimStalls(deps: StewardDeps, pass: StewardPass): Promise<void> {
+  const refused = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.claimRefusals(PASS_LIMIT)))
+  if (!refused.ok) {
+    pass.problems.push(`claim refusals: ${refused.error.detail}`)
+    return
+  }
+  const now = deps.clock.now().getTime()
+  const overdue = refused.value.filter((r) => now - r.since.getTime() >= deps.claimStallMs)
+  if (overdue.length === 0) return
+  const free = await deps.claimFree([...new Set(overdue.map((r) => r.repo))])
+  if (!free.ok) {
+    pass.problems.push(`claim free: ${free.error.detail}`)
+    return
+  }
+  for (const stall of overdue) {
+    if (!free.value.includes(stall.repo)) continue
+    pass.claimStalls++
+    pass.problems.push(
+      `Issue ${issueNumber(stall.issue)}: refused for a claim ${stall.refusals} times since ${stall.since.toISOString()} while ${stall.repo} has one free`,
+    )
+    const text = `A note to this lead has been refused for a claim ${stall.refusals} times since ${stall.since.toISOString()}, and ${stall.repo} has a claim free: a stall of the resume order, not a full repo.`
+    await noteOnce(
+      deps,
+      pass,
+      stall.issue,
+      key('noted', 'steward', 'claim-stall', stall.issue, stall.since.toISOString()),
+      text,
+    )
+  }
+}
+
 /** An Issue that stays `settling` after the timeout is settled with no edges: nothing waits forever for an answer. */
 async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void> {
   const overdue = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.settling(PASS_LIMIT)))
@@ -688,6 +730,7 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
     settled: 0,
     noted: 0,
     deferred: 0,
+    claimStalls: 0,
     problems: [],
   }
   const stalled = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.stalled(STALL_LIMIT)))
@@ -700,9 +743,10 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   await noteBlockedCheckouts(deps, pass)
   await noteMainCheckouts(deps, pass)
   await breakClaimDeadlocks(deps, pass)
+  await noteClaimStalls(deps, pass)
   if (pass.woken + pass.requeued + pass.decisions + pass.settled + pass.noted + pass.deferred > 0) deps.changed()
   return ok(pass)
 }
 
 export const stewardSummary = (pass: StewardPass): string =>
-  `looked at ${pass.looked} stalled and ${pass.quiet} quiet; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} stalled and ${pass.quiet} quiet; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}, claim stalls ${pass.claimStalls}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

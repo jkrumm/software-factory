@@ -132,7 +132,11 @@ export async function sweepClaims(stores: PlanningStores, snap: Snapshot): Promi
   return released
 }
 
-const claimantOf = (issue: IssueId, kind: string): Claimant => ({ issue, urgent: kind === 'incident' })
+const claimantOf = (issue: IssueId, kind: string, since: Date | null = null): Claimant => ({
+  issue,
+  urgent: kind === 'incident',
+  since,
+})
 
 /**
  * Every queued Issue in queue order with the reason it stays queued, or nothing when it may be admitted. Each Issue is
@@ -182,7 +186,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
       state: effectiveState(snap.states, project.name),
       leads: project.project.leads,
       holders: claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
-      owed: owed.filter((o) => o.project === project.name).map((o) => claimantOf(o.id, o.kind)),
+      owed: owed.filter((o) => o.project === project.name).map((o) => claimantOf(o.id, o.kind, o.since)),
       candidate: claimantOf(issue.id, issue.kind),
       load: host.load,
       loadCeiling: limits.loadCeiling,
@@ -337,6 +341,28 @@ export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: I
   return ok(viewed.value.filter((q) => q.reason?.kind === 'claim').map((q) => ({ issue: q.issue, repo: q.repo })))
 }
 
+/**
+ * Of the given Issue repos, those whose project has an ordinary place free right now: fewer ordinary claims held by a
+ * working lead than `leads` (a fix's extra place is not counted). The steward asks it to tell a refusal for a claim
+ * that is rightly full from one that livelocks.
+ */
+export async function claimFreeRepos(
+  deps: CapacityDeps,
+  repos: readonly string[],
+): Promise<Result<string[], PortError>> {
+  return deps.uow.run(async (stores) => {
+    const snap = await snapshotOf(stores, deps.clock.now())
+    const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
+    const free = repos.filter((repo) => {
+      const project = projectOf(snap.projects, repo)
+      if (!project) return false
+      const held = snap.claims.filter((c) => c.repo === project.repo && !c.urgent && holding.has(c.issue)).length
+      return held < project.project.leads
+    })
+    return ok(free)
+  })
+}
+
 /** Gives an Issue's claim back (finalize calls this from every exit path). True when it held one. Idempotent. */
 export async function releaseClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<boolean, PortError>> {
   return deps.uow.run(async ({ capacity }) => {
@@ -374,7 +400,7 @@ export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<R
         (i) =>
           i.project === project.name && holdsClaim(i.state, i.waitReason) && !snap.claims.some((s) => s.issue === i.id),
       )
-      .map((i) => claimantOf(i.id, i.kind))
+      .map((i) => claimantOf(i.id, i.kind, i.since))
     const room = claimRoom({
       leads: project.project.leads,
       holders: snap.claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
