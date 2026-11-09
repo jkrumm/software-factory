@@ -142,3 +142,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-09 14:15: the Issue page done (539, f67601e); the artifact page, the last screen, started (542) once the swap-out rate fell back to 0: the admission gate held it and released it on its own. Needs you has its PR open (188), Improve building.
 - 2026-11-09 14:45: Needs you merged and live (41f3b5e, the 'Since you were here' band, project-first cards), 537 verifying. Improve and the artifact page building; console-v1-review waits on those three.
 - 2026-11-09 15:15: Needs you done (537). The artifact page merged (ca183da, annotations can be edited and deleted), its deploy pending; Improve has PR 190 open. console-v1-review files when those two close.
+- 2026-11-09 15:45: all six Console v1 screens done (artifact page 542, Improve 541, 4a20c11 live). The chain moved on its own: console-v1-review filed and working (548). Nothing else open but 523 on the owner; memory back to normal.
