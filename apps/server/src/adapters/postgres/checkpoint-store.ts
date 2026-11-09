@@ -22,6 +22,7 @@ import {
   type Step,
   type VerdictRecord,
 } from '../../domains/checkpoints/ports.ts'
+import type { RecheckCandidate } from '../../domains/checkpoints/recheck.ts'
 import { type IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
@@ -248,6 +249,15 @@ const errandOf = (raw: unknown): ErrandRecord => {
     turnedAwayAt: row.turned_away_at,
   }
 }
+
+const RecheckRow = z.object({
+  kind: z.enum(['decision', 'errand']),
+  id: z.string(),
+  issue_id: z.string(),
+  reached_at: z.date(),
+  last_at: z.date().nullable(),
+  through_version: z.number().int().nullable(),
+})
 
 const pageStatus = (row: z.infer<typeof PageRow>): PageRecord['status'] =>
   row.sent_at ? 'sent' : row.cancelled_at ? 'cancelled' : row.error !== null ? 'failing' : 'pending'
@@ -572,6 +582,50 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         SET done_at = ${away.at}, turned_away_at = ${away.at}, done_note = ${away.reason},
             screen_note = ${away.reason}, screen_by = ${away.by}, screen_retry_at = NULL
         WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async recheckCandidates({ reachedBefore, limit }) {
+      const rows: unknown[] = await tx`
+        WITH reached AS (
+          SELECT 'decision' AS kind, d.id, d.issue_id, s.at AS reached_at
+          FROM factory.decisions d
+          JOIN factory.decision_steps s ON s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open'
+          WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL AND s.at <= ${reachedBefore}
+          UNION ALL
+          SELECT 'errand', e.id, e.issue_id, e.reached_owner_at
+          FROM factory.errands e
+          WHERE e.done_at IS NULL AND e.reached_owner_at <= ${reachedBefore}
+        )
+        SELECT r.kind, r.id, r.issue_id, r.reached_at, last.at AS last_at, last.through_version
+        FROM reached r
+        LEFT JOIN LATERAL (
+          SELECT c.at, c.through_version FROM factory.checkpoint_rechecks c
+          WHERE c.checkpoint_id = r.id ORDER BY c.through_version DESC LIMIT 1
+        ) last ON true
+        WHERE last.at IS NULL OR last.at <= ${reachedBefore}
+        ORDER BY r.reached_at, r.id LIMIT ${limit}`
+      return rows.map((raw): RecheckCandidate => {
+        const row = RecheckRow.parse(raw)
+        return {
+          kind: row.kind,
+          id: row.id,
+          issueId: row.issue_id as IssueId,
+          reachedAt: row.reached_at,
+          lastCheckedAt: row.last_at,
+          throughVersion: row.through_version,
+        }
+      })
+    },
+
+    async insertRecheck(recheck) {
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.checkpoint_rechecks
+          (checkpoint_id, kind, issue_id, through_version, outcome, by, reason, at)
+        VALUES (${recheck.checkpointId}, ${recheck.kind}, ${recheck.issueId}, ${recheck.throughVersion},
+                ${recheck.outcome}, ${recheck.by}, ${recheck.reason.slice(0, 300)}, ${recheck.at})
+        ON CONFLICT (checkpoint_id, through_version) DO NOTHING
+        RETURNING checkpoint_id`
       return rows.length === 1
     },
 

@@ -36,6 +36,8 @@ export interface SettleDeps extends CheckpointDeps {
   policies: StandingPolicies
   judge: JudgePort
   errandScreen: ErrandScreenPort
+  /** a checkpoint at the owner this long is looked at once more (`FACTORY_CHECKPOINT_RECHECK_MS`); 0 is off */
+  recheckAfterMs: number
 }
 
 /**

@@ -73,7 +73,7 @@ async function reachOwner(
 }
 
 /** The Errand is turned away: the wait ends and the lead hears why. */
-async function turnAway(
+export async function turnAway(
   stores: CheckpointStores,
   deps: SettleDeps,
   errand: ErrandRecord,

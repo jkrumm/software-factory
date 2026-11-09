@@ -18,6 +18,7 @@ import {
 } from './checkpoints.ts'
 import { type PageDeps, runCheckpointPass, sendDuePages } from './checkpoints-pages.ts'
 import { screenErrands } from './checkpoints-errands.ts'
+import { recheckOpen } from './checkpoints-recheck.ts'
 import { type SettleDeps, settleOpen } from './checkpoints-settle.ts'
 
 /** The checkpoints use cases bound to their dependencies: what the routes call. `main.ts` builds it once. */
@@ -41,6 +42,9 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     pass: () => runCheckpointPass(deps),
     /** the two halves of a pass, for timers of their own: a slow Judge call never holds the owner's line */
     settle: async () => {
+      // The second look first: it owns the reason for anything older than the threshold.
+      const rechecks = await recheckOpen(deps)
+      if (!rechecks.ok) return rechecks
       const decisions = await settleOpen(deps)
       const errands = await screenErrands(deps)
       return decisions.ok ? errands : decisions

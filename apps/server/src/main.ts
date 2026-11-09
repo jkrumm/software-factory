@@ -196,6 +196,7 @@ async function main(): Promise<void> {
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
     judge: agwJudge(agw),
     errandScreen: agwErrandScreen(agw),
+    recheckAfterMs: loopSettings.recheckAfterMs,
     policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
   })
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval
