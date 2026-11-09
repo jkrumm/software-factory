@@ -74,6 +74,41 @@ for (const variant of VARIANTS) {
       await expect(page.getByRole('dialog')).toBeVisible()
       await shot('palette')
     })
+
+    test('the header strip closed, each popover open, and the palette with a query', async ({ page, apiUrl }) => {
+      const shot = (name: string) =>
+        page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })
+      const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
+      const { issues } = await api<{ issues: { id: number; title: string }[] }>(apiUrl, '/v1/issues?state=all&limit=50')
+      const word = issues[0]?.title.split(/\s+/).find((w) => w.length > 3) ?? 'a'
+      await page.goto('/flow')
+      await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      await shot('strip')
+
+      const popups: [string, RegExp | string][] = [
+        ['strip-account', new RegExp(`^${accounts[0]?.account}, `)],
+        ['strip-host', 'Host: load, memory and swap'],
+        ['strip-live', /^Connection:/],
+      ]
+      for (const [name, label] of popups) {
+        await page.getByRole('button', { name: label }).click()
+        await expect(page.getByRole('dialog')).toBeVisible()
+        if (name === 'strip-host') {
+          await expect(page.getByRole('group', { name: /^Load,/ })).toBeVisible()
+          await page.getByRole('group', { name: /^Load,/ }).hover()
+        }
+        await shot(name)
+        await page.keyboard.press('Escape')
+        await expect(page.getByRole('dialog')).toBeHidden()
+      }
+
+      await page.keyboard.press('ControlOrMeta+K')
+      await expect(page.getByRole('dialog')).toBeVisible()
+      await page.getByRole('combobox').fill(word)
+      await expect(page.getByRole('option').first()).toBeVisible()
+      await shot('palette-query')
+    })
   })
 }
 
@@ -89,3 +124,21 @@ test.describe('demo', () => {
     await page.screenshot({ path: join(OUT, 'demo-issue.png'), animations: 'disabled' })
   })
 })
+
+/** Flow with the sidebar open, and collapsed at the primary viewport. */
+for (const variant of VARIANTS) {
+  test(`sidebar ${variant.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: variant.viewport, colorScheme: variant.colorScheme })
+    const page = await context.newPage()
+    const shot = (name: string) =>
+      page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })
+    await page.goto('/flow')
+    await page.waitForLoadState('networkidle')
+    await shot('sidebar-flow')
+    if (variant.name.startsWith('desktop-xl')) {
+      await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+      await shot('sidebar-flow-collapsed')
+    }
+    await context.close()
+  })
+}

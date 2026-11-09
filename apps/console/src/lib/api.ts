@@ -1,5 +1,6 @@
 import {
   ArtifactDetail,
+  ArtifactList,
   ArtifactReply,
   ChainModel,
   DecisionReply,
@@ -11,10 +12,12 @@ import {
   FindingClassesModel,
   FixCommitsModel,
   FrictionModel,
+  HostHistoryModel,
   KpiModel,
   MachineModel,
   NeedsModel,
   ReadAccountList,
+  ReadIssueCards,
   ReadIssueDetail,
   SignalAck,
   SignalDismissed,
@@ -82,6 +85,13 @@ export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/findin
 export const fetchFixCommits = (signal?: AbortSignal) => getJson('/v1/fix-commits', FixCommitsModel, signal)
 export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', ReadAccountList, signal)
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
+/** The host over the last 24 hours, its busiest processes, and the server's version and start time. */
+export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHistoryModel, signal)
+/** Every Issue card, open and closed, newest activity first: what the command palette searches. */
+export const fetchIssueCards = (signal?: AbortSignal) =>
+  getJson('/v1/issues?state=all&limit=500', ReadIssueCards, signal)
+/** The artifacts, newest first: what the command palette searches. */
+export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=200', ArtifactList, signal)
 
 /** Same-origin POST of a JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
 async function postJson<T>(path: string, body: unknown, schema: Schema<T>): Promise<T> {

@@ -22,11 +22,17 @@ const AGGREGATE_MAX_WAIT_MS = 10_000
 const STREAM_PATH = '/v1/stream'
 
 let live = false
+let lastEventAt: number | null = null
 const listeners = new Set<() => void>()
 
 function setLive(value: boolean) {
   if (live === value) return
   live = value
+  for (const listener of listeners) listener()
+}
+
+function markEvent() {
+  lastEventAt = Date.now()
   for (const listener of listeners) listener()
 }
 
@@ -37,6 +43,9 @@ const subscribe = (listener: () => void) => {
 
 /** True while the event stream is open; the queries poll while it is not. */
 export const useLive = (): boolean => useSyncExternalStore(subscribe, () => live)
+
+/** When the stream last delivered a frame (its greeting or a change), as epoch ms; null before the first. */
+export const useLastEventAt = (): number | null => useSyncExternalStore(subscribe, () => lastEventAt)
 
 /**
  * Keeps one `EventSource` on the change stream: the changes that arrive inside the debounce window invalidate, once, the
@@ -97,6 +106,7 @@ export function startLive(queryClient: QueryClient): () => void {
     es.addEventListener('hello', (event) => {
       greeted = true
       lastFrameAt = Date.now()
+      markEvent()
       checkForUpdate()
       delay = undefined
       cursor = event.lastEventId || cursor
@@ -112,6 +122,7 @@ export function startLive(queryClient: QueryClient): () => void {
       es.addEventListener(kind, (event) => {
         lastFrameAt = Date.now()
         cursor = event.lastEventId || cursor
+        markEvent()
         note(parseChange(event.data))
       })
     }

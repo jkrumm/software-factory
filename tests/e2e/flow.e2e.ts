@@ -52,6 +52,13 @@ async function expectCounts(page: Page, counts: Record<keyof typeof LABEL, numbe
     await expect(heading(page, key)).toHaveText(`${LABEL[key]} ${counts[key]}`)
 }
 
+/** A toggle of the sidebar's Flow section: `Projects` or `Origin`, by the start of its label (`All` clears). */
+const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
+  page
+    .getByRole('group', { name: group })
+    .getByRole('link', { name: new RegExp(`^${label}( \\d+)?$`) })
+    .click()
+
 /** A word from a number, letters only: intake's fingerprint drops digits, and titles that overlap are amended into one Issue. */
 const wordOf = (n: number): string =>
   n.toString(26).replace(/[0-9a-p]/g, (c) => String.fromCharCode(97 + parseInt(c, 26)))
@@ -94,17 +101,17 @@ test('the filters narrow every column, write the URL, and clearing restores the 
 
   await page.goto('/flow')
   await expectCounts(page, countsOf(flow))
-  await page.getByLabel('Project').selectOption('chat')
+  await pick(page, 'Projects', 'chat')
   await expect(page).toHaveURL(/[?&]project=chat/)
   await expectCounts(
     page,
     countsOf(flow, (i) => i.repo === 'chat'),
   )
-  await page.getByLabel('Project').selectOption('')
+  await pick(page, 'Projects', 'All')
   await expect(page).not.toHaveURL(/project=/)
   await expectCounts(page, countsOf(flow))
 
-  await page.getByLabel('Origin').selectOption('feedback')
+  await pick(page, 'Origin', 'Feedback')
   await expect(page).toHaveURL(/[?&]origin=feedback/)
   await expectCounts(
     page,
@@ -112,14 +119,14 @@ test('the filters narrow every column, write the URL, and clearing restores the 
   )
   await expect(region(page, 'settling').getByRole('listitem').first()).toContainText('Feedback')
 
-  await page.getByLabel('Project').selectOption('argo')
+  await pick(page, 'Projects', 'argo')
   await expect(page).toHaveURL(/project=argo/)
   await expectCounts(
     page,
     countsOf(flow, (i) => i.origin === 'feedback' && i.repo === 'argo'),
   )
-  await page.getByLabel('Origin').selectOption('')
-  await page.getByLabel('Project').selectOption('')
+  await pick(page, 'Origin', 'All')
+  await pick(page, 'Projects', 'All')
   await expect(page).not.toHaveURL(/origin=|project=/)
   await expectCounts(page, countsOf(flow))
 

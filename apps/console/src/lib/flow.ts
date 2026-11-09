@@ -42,6 +42,22 @@ export interface FlowCard {
 export interface FlowFilters {
   project?: string
   origin?: string
+  /** Chooses which column shows (`/flow?state=working`); it never filters rows, so `boardOf` ignores it. */
+  state?: ColumnKey
+}
+
+/** A `state` search value that names a column, or undefined. */
+export const columnKeyOf = (value: unknown): ColumnKey | undefined => COLUMN_KEYS.find((key) => key === value)
+
+/** The columns to show: only the chosen one with a `state`, else all of them. */
+export const visibleColumns = (state?: ColumnKey): readonly ColumnKey[] => (state ? [state] : COLUMN_KEYS)
+
+/** How many cards each project or origin has across every column, before any filter. */
+export function facetCounts(data: FlowModel, field: 'repo' | 'origin'): Record<string, number> {
+  const board = boardOf(data)
+  const counts: Record<string, number> = {}
+  for (const key of COLUMN_KEYS) for (const card of board[key]) counts[card[field]] = (counts[card[field]] ?? 0) + 1
+  return counts
 }
 
 export type Board = Record<ColumnKey, FlowCard[]>

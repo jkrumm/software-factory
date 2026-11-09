@@ -8,9 +8,39 @@ export interface MeterProps {
   value: number
   /** Text beside the bar ("Weekly window"). */
   label?: string
+  /** The accessible name when there is no visible label. */
+  name?: string
   /** The value as words; default the percentage. */
   valueText?: string
+  /** Whether the bar shows its value in a tooltip on hover and focus; off where the value is written beside it. */
+  tooltip?: boolean
+  /** Overrides the tone the value picks (`meterTone`): the strip warns at 90 %, not at 70. */
+  tone?: Tone
   className?: string
+}
+
+export interface MeterBarProps {
+  /** 0 to 1. */
+  value: number
+  tone: Tone
+  className?: string
+}
+
+/** The bar alone, for a place that carries its own label and name: a track at 18 % of the fill's colour. Decorative. */
+export function MeterBar({ value, tone, className }: MeterBarProps) {
+  const mark = TONE_MARK[tone]
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('h-1.5 w-full overflow-hidden rounded-full', className)}
+      style={{ background: mix(mark, 18) }}
+    >
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: mark }}
+      />
+    </div>
+  )
 }
 
 /** Accent below 70 %, warn from 70 %, bad from 90 %. */
@@ -21,18 +51,17 @@ export function meterTone(value: number): Tone {
 }
 
 /** A thin rounded bar, its track a lighter step of the fill's own hue. Shows its value on hover and focus. */
-export function Meter({ value, label, valueText, className }: MeterProps) {
+export function Meter({ value, label, name, valueText, tone, tooltip = true, className }: MeterProps) {
   const [shown, setShown] = useState(false)
   const clamped = Math.max(0, Math.min(1, value))
   const text = valueText ?? `${Math.round(clamped * 100)} %`
-  const mark = TONE_MARK[meterTone(clamped)]
   return (
     <div className={cn('flex items-center gap-3 text-[length:var(--vx-text-sm)]', className)}>
       {label ? <span className="w-28 shrink-0 text-muted-foreground">{label}</span> : null}
       <div
         role="meter"
         tabIndex={0}
-        aria-label={label ?? 'Meter'}
+        aria-label={label ?? name ?? 'Meter'}
         aria-valuemin={0}
         aria-valuemax={1}
         aria-valuenow={clamped}
@@ -43,12 +72,10 @@ export function Meter({ value, label, valueText, className }: MeterProps) {
         onFocus={() => setShown(true)}
         onBlur={() => setShown(false)}
       >
-        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: mix(mark, 18) }}>
-          <div className="h-full rounded-full" style={{ width: `${clamped * 100}%`, background: mark }} />
-        </div>
-        {shown ? (
+        <MeterBar value={clamped} tone={tone ?? meterTone(clamped)} />
+        {shown && tooltip ? (
           <ChartTooltip
-            row={{ value: text, label: label ?? 'Meter' }}
+            row={{ value: text, label: label ?? name ?? 'Meter' }}
             left={`clamp(24px, ${clamped * 100}%, calc(100% - 24px))`}
           />
         ) : null}

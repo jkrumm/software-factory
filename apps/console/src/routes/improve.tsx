@@ -8,6 +8,7 @@ import type {
 } from '@software-factory/contract'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { EmptyState, Page, PageHeader } from '@/components/page'
+import { SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
@@ -65,7 +66,7 @@ function StatusBadge({ kpi }: { kpi: Kpi }) {
 
 function WindowSwitch({ days }: { days: number }) {
   return (
-    <nav aria-label="Window" className="mb-6 flex gap-2">
+    <nav aria-label="Window" className="mb-6 flex gap-2 md:hidden">
       {WINDOW_DAYS.map((choice) => (
         <Link
           key={choice}
@@ -78,6 +79,21 @@ function WindowSwitch({ days }: { days: number }) {
         </Link>
       ))}
     </nav>
+  )
+}
+
+function WindowSection({ days }: { days: number }) {
+  return (
+    <SidebarSection title="Window">
+      {WINDOW_DAYS.map((choice) => (
+        <SidebarEntry
+          key={choice}
+          label={`${choice} days`}
+          current={choice === days}
+          render={(props) => <Link to="/improve" search={{ days: choice }} {...props} />}
+        />
+      ))}
+    </SidebarSection>
   )
 }
 
@@ -322,6 +338,7 @@ function Improve() {
       <Page>
         <PageHeader title="Improve" note={kpis.isPending ? 'Loading' : failureNote(kpis.error)} />
         <WindowSwitch days={days} />
+        <WindowSection days={days} />
       </Page>
     )
   }
@@ -330,6 +347,7 @@ function Improve() {
     <Page>
       <PageHeader title="Improve" note={`Last ${model.days} days, ${windowWords(model.window)}`} />
       <WindowSwitch days={days} />
+      <WindowSection days={days} />
       <div className="grid gap-8">
         <TargetsSection kpis={model.kpis} />
         <UsageSection kpis={model.kpis} />
