@@ -10,7 +10,7 @@ export interface Placed {
 /** Positions (top-left) from dagre, left to right: a blocker sits left of the node that waits for it. */
 export function layoutOf(nodes: ChainNode[], edges: ChainEdge[]): Map<string, Placed> {
   const graph = new Graph()
-  graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 96, marginx: 8, marginy: 8 })
+  graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 160, marginx: 8, marginy: 8 })
   graph.setDefaultEdgeLabel(() => ({}))
   for (const node of nodes) graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
   for (const edge of edges) graph.setEdge(edge.to, edge.from)

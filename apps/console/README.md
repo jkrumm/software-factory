@@ -77,11 +77,11 @@ filters are chips; below `md` each has a select.
 
 `/chain` draws the dependencies between Issues and plan rows across projects from `GET /v1/chain`: `@xyflow/react` for the
 canvas, `@dagrejs/dagre` for the layout (`src/lib/chain-layout.ts`, left to right, a blocker left of the node that waits for it),
-loaded as its own chunk so the other screens do not carry them. The page is `<Page full>`: a compact header, then the graph
+loaded as its own chunk so the other screens do not carry them. The route's `loader` imports that chunk and prefetches the chain, so the router fetches both on hover and focus of the sidebar link, and `main.tsx` preloads the route when the page is idle: a navigation from another screen paints the graph in about one frame (7 runs, median 25 ms against 335 ms when the chunk loaded on the click). The page is `<Page full>`: a compact header, then the graph
 fills the rest of the height and the full width on a canvas step (at least 28 rem high, 24 rem on a phone), and the schedule
-sits under it; the graph fits again whenever the canvas resizes (centred, never above 110 %; on a phone it starts at 90 % at the top left, so the graph is panned, with the zoom controls at the top right). An arrow runs from the blocker into the node that runs after
+sits under it; the graph fits again whenever the canvas resizes (centred, never above 140 %, so a graph of two cards fills the canvas; on a phone it starts at 90 % at the top left, so the graph is panned, with the zoom controls at the top right). An arrow runs from the blocker into the node that runs after
 it. A blocked edge is solid warn and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
-labelled `done`, and the two arrive on separate handles of the node; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
+labelled `done`, and the two arrive on separate handles of the node. An edge is one line (`Dependency` in `graph.tsx`): it turns early and carries its label on the final straight run, so the line runs through the label to the arrowhead; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
 plan row. A node is the kit `IssueCard` at a fixed 320 x 128 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
 link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
 with "Not filed yet" in the chip row, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
@@ -93,7 +93,7 @@ dependencies". xyflow's variables are pointed at the semantic tokens in `src/sty
 **Schedule** (`components/chain/schedule.tsx`, the logic in `scheduleOf` in `src/lib/chain.ts`): every plan row with a
 `notBefore` under the project filter, with or without an edge, as a marker on a time axis from now to the last date inside 120
 days (at least 7 days), day ticks up to 14 days and Monday ticks after, in mono, a "Now" mark at the left. Each row has a chip
-(title, project, date, "in 6 days"); a chip that would cover a later date's dot sits above that chip, so every dot's stem reaches its own chip; tick labels thin out to every nth when they would touch; a row whose date has passed and is still not filed
+(title, project, date, "in 6 days"); a chip that would cover a later date's dot sits above that chip, so every dot's stem reaches its own chip; tick labels thin out to every nth when they would touch, and the first one is left out when it would touch "Now"; a row whose date has passed and is still not filed
 is pinned at Now as "due"; a row past the horizon is in the "Later" cell at the right end with its date. The picture is
 `aria-hidden`; a visually hidden table lists the same rows for a screen reader. On a phone the band scrolls inside itself.
 `tests/e2e/chain.e2e.ts` compares the page with the API on a seeded chain across two projects (`seed-chain.ts`, whose plan dates

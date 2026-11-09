@@ -1,14 +1,10 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { lazy, Suspense } from 'react'
 import { Schedule } from '@/components/chain/schedule'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainCounts, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { failureNote } from '@/lib/api'
-import { useChain } from '@/lib/queries'
-
-// xyflow and dagre are their own chunk: the other screens do not carry them
-const ChainGraph = lazy(() => import('@/components/chain/graph'))
+import { chainQuery, queryClient, useChain } from '@/lib/queries'
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
 
@@ -17,6 +13,15 @@ export const Route = createFileRoute('/chain')({
   validateSearch: (search: Record<string, unknown>): ChainFilters => {
     const project = text(search.project)
     return project ? { project } : {}
+  },
+  /**
+   * xyflow and dagre are their own chunk, the other screens do not carry them. The loader fetches it (and the chain)
+   * ahead of the paint: the router runs it on hover and focus of the sidebar link, and `main.tsx` preloads the route
+   * when the page is idle, so the first paint finds the graph's code already evaluated.
+   */
+  loader: () => {
+    void queryClient.prefetchQuery(chainQuery)
+    return import('@/components/chain/graph')
   },
   component: Chain,
 })
@@ -28,6 +33,7 @@ function Chain() {
   const { data, error, isPending } = useChain()
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
+  const { default: ChainGraph } = Route.useLoaderData()
 
   if (!data)
     return (
@@ -102,9 +108,7 @@ function Chain() {
             : 'Issues and plan rows that wait for another show here, blocker to dependent.'}
         </EmptyState>
       ) : (
-        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading</p>}>
-          <ChainGraph view={view} resetKey={filters.project ?? ''} />
-        </Suspense>
+        <ChainGraph view={view} resetKey={filters.project ?? ''} />
       )}
       {scheduled.length > 0 ? <Schedule nodes={scheduled} /> : null}
     </Page>

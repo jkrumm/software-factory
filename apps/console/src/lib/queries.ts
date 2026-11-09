@@ -104,12 +104,14 @@ export function useFlow() {
 /** The answer's own timestamp changes on every request; the graph is rebuilt only when what it draws changes. */
 const withoutStamp = ({ at: _at, ...model }: ChainModel) => model
 
+/** The chain's options, shared by the hook and by the route's preload. */
+export const chainQuery = { queryKey: ['chain'], queryFn: ({ signal }: { signal: AbortSignal }) => fetchChain(signal) }
+
 /** The dependency chain across projects. */
 export function useChain() {
   const live = useLive()
   return useQuery({
-    queryKey: ['chain'],
-    queryFn: ({ signal }) => fetchChain(signal),
+    ...chainQuery,
     select: withoutStamp,
     refetchInterval: pollEvery(live),
   })
