@@ -1,6 +1,6 @@
 /*
  * The annotator, loaded into an HTML artifact's frame after the artifact is written. Plain JavaScript, no dependencies.
- * It posts the owner's selection out ({type:'factory.select', quote, path}, to `parent`, target origin '*' because the
+ * It posts the owner's selection out ({type:'factory.select', quote, path, rect:{top,bottom,left}} with the rect relative to the frame's viewport, to `parent`, target origin '*' because the
  * frame's origin is opaque), tells the parent it is ready ({type:'factory.ready'}), and paints what the page sends in
  * ({type:'factory.highlight', quotes:[...]} with the CSS Custom Highlight API; {type:'factory.scroll', quote} brings one
  * into view; {type:'factory.clear'} drops the selection, so the same passage can be chosen again), from `parent` only. It writes nothing and starts nothing: the Console writes only after the owner submits a
@@ -18,7 +18,7 @@
 
   const style = document.createElement('style')
   style.textContent =
-    '::highlight(factory){background-color:var(--factory-highlight,Mark);color:var(--factory-highlight-ink,MarkText)}'
+    '::highlight(factory),::highlight(factory-pending){background-color:var(--factory-highlight,Mark);color:var(--factory-highlight-ink,MarkText)}'
   document.head.appendChild(style)
 
   const norm = (s) => String(s).replace(/\s+/g, ' ').trim()
@@ -110,11 +110,16 @@
       lastKey = ''
       return
     }
-    const path = headingPath(sel.getRangeAt(0).startContainer)
+    const range = sel.getRangeAt(0)
+    const path = headingPath(range.startContainer)
     const key = `${quote}\n${path}`
     if (key === lastKey) return
     lastKey = key
-    parent.postMessage({ type: 'factory.select', quote, path }, '*')
+    // the comment box is open in the parent and has the focus: keep the passage painted without the real selection
+    if (window.CSS && CSS.highlights && typeof Highlight !== 'undefined')
+      CSS.highlights.set('factory-pending', new Highlight(range.cloneRange()))
+    const { top, bottom, left } = range.getBoundingClientRect()
+    parent.postMessage({ type: 'factory.select', quote, path, rect: { top, bottom, left } }, '*')
   }
   let timer
   const soon = () => {
@@ -132,6 +137,7 @@
     if (data.type === 'factory.highlight' && Array.isArray(data.quotes)) paint(data.quotes)
     if (data.type === 'factory.clear') {
       window.getSelection()?.removeAllRanges()
+      if (window.CSS && CSS.highlights) CSS.highlights.delete('factory-pending')
       lastKey = ''
     }
     if (data.type === 'factory.scroll' && typeof data.quote === 'string') {

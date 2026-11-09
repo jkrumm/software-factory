@@ -1,9 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { admitted, fileIssue, tick } from '../scenarios/flow.ts'
 import type { Lab } from '../scenarios/planning/lab.ts'
 import { api } from './seed.ts'
 
 /** one repo per lead these artifacts need: a project takes one lead at a time (the lab is started with them) */
-export const ARTIFACT_REPOS = ['ember', 'flint']
+export const ARTIFACT_REPOS = ['ember', 'flint', 'forge']
 
 export const SPEC_QUOTE = 'We keep the queue in Postgres because it is already running.'
 export const KEPT = 'The lock decides who takes the next row.'
@@ -36,6 +38,33 @@ const REVISED_MD = `# Queue storage
 ### Risk
 
 ${KEPT} A failed row is retried at once.
+`
+
+export const SHOT_SPEC_MD = `# Queue storage
+
+> **TLDR.** Keep the queue in Postgres: it is already running, it costs one table, and it can move later.
+
+## Decision
+
+Where the queue lives. Without an answer the lead keeps Postgres and files the move as a follow-up.
+
+## Options
+
+| Option | Cost | Reversible |
+|-|-|-|
+| Postgres | one table, no new service | yes |
+| Redis | one more service to run and watch | no |
+
+${SPEC_QUOTE} The cost is one more table, and a failed row is retried by the same worker that took it.
+
+## Risks
+
+- The lock decides who takes the next row; a slow worker holds it longer than a fast one.
+- A full table slows every other query on the same disk.
+
+## Proof
+
+The queue ran 2,000 rows through one worker in 11 seconds on the staging copy, with no row taken twice.
 `
 
 export const REPORT_HTML = `<!doctype html>
@@ -77,6 +106,19 @@ export interface SeededArtifacts {
   spec: string
   report: string
   revised: string
+  /** a Spec with no comment yet, for the screenshots (the tests give `spec` its verdict) */
+  shotSpec: string
+  /** a Report in the shared HTML template with four comments, one of them edited */
+  shotReport: string
+}
+
+/** The shared HTML template, filled in the way a lead would: the result first, a table, a picture, the risks. */
+const TEMPLATE = join(import.meta.dir, '..', '..', 'apps', 'console', 'templates', 'artifact.html')
+export const SHOT_REPORT_QUOTES = {
+  tldr: 'What is proposed, why, and what you are asked to decide, in three sentences at most.',
+  decision: 'The one thing that needs a yes, a no or a change.',
+  risk: 'What can go wrong and how it would show.',
+  proof: 'What was run and what it showed.',
 }
 
 /**
@@ -119,5 +161,34 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   await annotate(KEPT, 'Name the lock.')
   await annotate(DROPPED, 'Why a minute?')
   await api(url, `/v1/artifacts/${revised}/revisions`, { content: REVISED_MD, note: 'Retries are immediate now' })
-  return { spec, report, revised }
+
+  const shotSpecIssue = await lead('forge', 'Write the queue options spec')
+  const shotSpec = await submit(shotSpecIssue, {
+    kind: 'spec',
+    title: 'Queue storage, the options',
+    content: SHOT_SPEC_MD,
+  })
+  const onSpec = (quote: string, comment: string, path: string) =>
+    api(url, `/v1/artifacts/${shotSpec}/annotations`, { revision: 1, quote, path, comment })
+  await onSpec('A full table slows every other query on the same disk.', 'How full is full?', 'Queue storage > Risks')
+  await onSpec('with no row taken twice', 'Same run on production data?', 'Queue storage > Proof')
+  await onSpec('it can move later', 'Move to what, and when?', 'Queue storage')
+  const shotReport = await submit(reportIssue, {
+    kind: 'report',
+    title: 'The queue report, in the template',
+    contentFormat: 'html',
+    content: readFileSync(TEMPLATE, 'utf8'),
+  })
+  const note = (quote: string, comment: string, path: string) =>
+    api(url, `/v1/artifacts/${shotReport}/annotations`, { revision: 1, quote, path, comment })
+  await note(SHOT_REPORT_QUOTES.tldr, 'Three sentences is enough; keep it.', 'Title of the artifact')
+  await note(SHOT_REPORT_QUOTES.decision, 'Who answers this, and by when?', 'Title of the artifact > Decision')
+  await note(SHOT_REPORT_QUOTES.risk, 'Which risk would we not take?', 'Title of the artifact > Risks')
+  await note(SHOT_REPORT_QUOTES.proof, 'Add the command that was run.', 'Title of the artifact > Proof')
+  const stored = await api<{ annotations: { id: string; comment: string }[] }>(url, `/v1/artifacts/${shotReport}`)
+  const risky = stored.annotations.find((a) => a.comment === 'Which risk would we not take?')
+  if (!risky) throw new Error('the Report comment was not stored')
+  const edit = { comment: 'Which risk would we not take, and why?' }
+  await api(url, `/v1/artifacts/${shotReport}/annotations/${risky.id}`, edit, 'PATCH')
+  return { spec, report, revised, shotSpec, shotReport }
 }

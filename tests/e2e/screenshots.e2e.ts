@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { expect, test } from './fixtures.ts'
+import { SPEC_QUOTE } from './seed-artifacts.ts'
 import { api } from './seed.ts'
 
 const OUT = join(import.meta.dir, 'out', 'screenshots')
@@ -15,12 +16,11 @@ const SCREENS = [
   { name: 'kit', path: '/kit' },
 ] as const
 
-/** The artifact page: a Markdown Spec, an HTML Report, and a Report compared with its first revision. */
+/** The artifact page: a Report in the shared HTML template, a Report compared with its first revision. */
 function artifactScreens() {
-  const ids = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { spec: string; report: string; revised: string }
+  const ids = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { revised: string; shotReport: string }
   return [
-    { name: 'artifact', path: `/artifacts/${ids.spec}` },
-    { name: 'artifact-html', path: `/artifacts/${ids.report}` },
+    { name: 'artifact-report', path: `/artifacts/${ids.shotReport}` },
     { name: 'artifact-compare', path: `/artifacts/${ids.revised}?revision=2&compare=1` },
   ]
 }
@@ -60,6 +60,9 @@ for (const variant of VARIANTS) {
         await page.goto(path)
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
+        // the edit and delete actions show on hover: shoot the edited comment with them
+        if (name === 'artifact-report')
+          await page.getByRole('region', { name: 'On the text' }).getByRole('listitem').nth(2).hover()
         await shot(name)
         if (name === 'chain') {
           // The graph fills the viewport and the schedule sits under it: a shorter window scrolls inside the Shell, so shoot a tall one too.
@@ -89,6 +92,45 @@ for (const variant of VARIANTS) {
       await page.keyboard.press('ControlOrMeta+K')
       await expect(page.getByRole('dialog')).toBeVisible()
       await shot('palette')
+    })
+
+    test('the artifact page: a Spec with the comment box open on a selection', async ({ page }) => {
+      const { shotSpec } = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { shotSpec: string }
+      await page.goto(`/artifacts/${shotSpec}`)
+      await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      await page.screenshot({
+        path: join(OUT, `${variant.name}-artifact-spec-closed.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
+      await page.evaluate(`(() => {
+        const text = ${JSON.stringify(SPEC_QUOTE)}
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.data.indexOf(text)
+          if (at === -1) continue
+          const range = document.createRange()
+          range.setStart(node, at)
+          range.setEnd(node, at + text.length)
+          getSelection().removeAllRanges()
+          getSelection().addRange(range)
+          node.parentElement.scrollIntoView({ block: 'center' })
+          return
+        }
+      })()`)
+      const composer = page.getByRole('form', { name: 'Comment on the selection' })
+      await expect(composer).toBeVisible()
+      await composer.getByRole('textbox', { name: 'Comment' }).fill('Say why not Redis, and what a move would cost.')
+      await page.screenshot({
+        path: join(OUT, `${variant.name}-artifact-spec.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
+      const widths = (await page.evaluate(
+        '({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })',
+      )) as { scroll: number; client: number }
+      expect(widths.scroll).toBeLessThanOrEqual(widths.client)
     })
 
     test('the Issue page: every tab of the rich Issue, the working one and the chained one', async ({ page }) => {

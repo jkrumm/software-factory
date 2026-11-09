@@ -81,13 +81,13 @@
       }
       body {
         margin: 0;
-        padding: var(--vx-space-stack-xl) var(--vx-space-stack-lg);
+        padding: var(--vx-space-stack-xl) 32px;
         background: var(--vx-surface-bg);
         color: var(--vx-ink);
         font: 15px/1.65 var(--font-sans);
       }
       main {
-        max-width: var(--vx-prose-measure);
+        max-width: 88ch;
         margin: 0 auto;
       }
       h1,
@@ -128,7 +128,6 @@
       .callout {
         padding: var(--vx-space-stack-md) var(--vx-space-stack-lg);
         background: var(--vx-surface-panel);
-        border: 1px solid var(--vx-surface-border);
         border-radius: var(--vx-radius-card);
       }
       .callout > :first-child {
@@ -160,7 +159,7 @@
       }
       th,
       td {
-        border: 1px solid var(--vx-surface-border);
+        border-bottom: 1px solid var(--vx-surface-border);
         padding: 6px 10px;
         text-align: left;
         vertical-align: top;
@@ -183,7 +182,6 @@
         overflow-x: auto;
         padding: var(--vx-space-stack-md);
         background: var(--vx-surface-subtle);
-        border: 1px solid var(--vx-surface-border);
         border-radius: var(--vx-radius-ctrl);
       }
       pre code {
@@ -193,7 +191,6 @@
       figure {
         padding: var(--vx-space-stack-md);
         background: var(--vx-surface-panel);
-        border: 1px solid var(--vx-surface-border);
         border-radius: var(--vx-radius-card);
       }
       figure svg,

@@ -37,14 +37,23 @@ export function headingPath(before: readonly Heading[]): string {
 }
 
 /** What the annotator in an HTML artifact's frame posts out: the selected text and where it is, or that it is loaded. */
+const FrameRectShape = z.object({ top: z.number().finite(), bottom: z.number().finite(), left: z.number().finite() })
 const FrameSelect = z.object({
   type: z.literal('factory.select'),
   quote: z.string().min(1).max(MAX_QUOTE),
   path: z.string().max(MAX_PATH),
+  rect: FrameRectShape,
 })
 const FrameReady = z.object({ type: z.literal('factory.ready') })
 
-export type FrameMessage = { type: 'select'; quote: string; path: string } | { type: 'ready' }
+/** Where a selection sits: top, bottom and left edges, in the coordinates of the viewport the rect is relative to. */
+export interface SelectionRect {
+  top: number
+  bottom: number
+  left: number
+}
+
+export type FrameMessage = { type: 'select'; quote: string; path: string; rect: SelectionRect } | { type: 'ready' }
 
 /** The message a frame posted, or null for anything that is not exactly one. */
 export function parseFrameMessage(data: unknown): FrameMessage | null {
@@ -53,7 +62,22 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
   if (!parsed.success) return null
   const quote = normalizeQuote(parsed.data.quote)
   if (quote === '') return null
-  return { type: 'select', quote, path: parsed.data.path.trim() }
+  const { top, bottom, left } = parsed.data.rect
+  return { type: 'select', quote, path: parsed.data.path.trim(), rect: { top, bottom, left } }
+}
+
+/**
+ * Where the comment box opens in its column: level with the selection's top, kept on screen. `column` is the box's
+ * positioned parent, all in the same viewport coordinates as `selectionTop`.
+ */
+export function composerTop(
+  selectionTop: number,
+  column: { top: number; height: number },
+  boxHeight: number,
+  margin = 8,
+): number {
+  const lowest = Math.max(margin, column.height - boxHeight - margin)
+  return Math.min(Math.max(selectionTop - column.top, margin), lowest)
 }
 
 /** Text nodes of a rendered page in order, each with its block: two blocks are never glued without a space. */

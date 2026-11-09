@@ -82,14 +82,16 @@
 }
 
 /* Marked text in an artifact: the CSS Custom Highlight API, so the page's DOM is not touched. */
-::highlight(annotation) {
+::highlight(annotation),
+::highlight(annotation-pending) {
   background-color: color-mix(in srgb, var(--vx-accent) 30%, transparent);
 }
 
 /* The rendered Markdown of an artifact. */
 .artifact-prose {
-  @apply text-[15px] leading-7 wrap-break-word;
-  max-width: var(--vx-prose-measure);
+  @apply text-base leading-7 wrap-break-word;
+  max-width: 88ch;
+  margin-inline: auto;
 }
 .artifact-prose > :first-child {
   @apply mt-0;
@@ -127,13 +129,19 @@
   @apply text-primary underline underline-offset-4;
 }
 .artifact-prose blockquote {
-  @apply rounded-lg bg-muted px-3 py-2 text-muted-foreground;
+  @apply rounded-lg bg-muted px-4 py-3;
+}
+.artifact-prose blockquote > :first-child {
+  @apply mt-0;
+}
+.artifact-prose blockquote > :last-child {
+  @apply mb-0;
 }
 .artifact-prose code {
   @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em];
 }
 .artifact-prose pre {
-  @apply overflow-x-auto rounded-lg border bg-muted p-3;
+  @apply overflow-x-auto rounded-lg bg-muted p-3;
 }
 .artifact-prose pre code {
   @apply bg-transparent p-0;
@@ -143,7 +151,7 @@
 }
 .artifact-prose th,
 .artifact-prose td {
-  @apply border px-3 py-1.5 text-left align-top;
+  @apply border-b px-3 py-1.5 text-left align-top;
 }
 .artifact-prose th {
   @apply bg-muted font-semibold;

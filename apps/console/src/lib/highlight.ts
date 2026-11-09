@@ -1,4 +1,4 @@
-import { headingPath, indexText, locateQuote, normalizeQuote, type Heading } from './artifact.ts'
+import { headingPath, indexText, locateQuote, normalizeQuote, type Heading, type SelectionRect } from './artifact.ts'
 
 /** The DOM side of marking in the Console's own page (Markdown): selection to quote and path, quotes to highlights. */
 
@@ -44,8 +44,24 @@ export function scrollToQuote(root: Element, quote: string): void {
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
-/** The owner's current selection inside `root`: its quote and heading path, or null. */
-export function selectionIn(root: Element): { quote: string; path: string } | null {
+const PENDING = 'annotation-pending'
+
+/** Keeps a selection painted while the comment box has the focus (a focused field takes the real selection away). */
+export function paintPending(range: Range): void {
+  if (typeof Highlight !== 'undefined') CSS.highlights.set(PENDING, new Highlight(range))
+}
+
+export function clearPending(): void {
+  if (typeof Highlight !== 'undefined') CSS.highlights.delete(PENDING)
+}
+
+export const rectOf = (range: Range): SelectionRect => {
+  const { top, bottom, left } = range.getBoundingClientRect()
+  return { top, bottom, left }
+}
+
+/** The owner's current selection inside `root`: its quote, heading path, position and range, or null. */
+export function selectionIn(root: Element): { quote: string; path: string; rect: SelectionRect; range: Range } | null {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
   const range = selection.getRangeAt(0)
@@ -59,7 +75,8 @@ export function selectionIn(root: Element): { quote: string; path: string } | nu
       heading.compareDocumentPosition(range.startContainer) & Node.DOCUMENT_POSITION_FOLLOWING
     if (precedes) before.push({ level: Number(heading.tagName.charAt(1)), text: heading.textContent ?? '' })
   }
-  return { quote, path: headingPath(before) }
+  const kept = range.cloneRange()
+  return { quote, path: headingPath(before), rect: rectOf(kept), range: kept }
 }
 
 /** The words of a search: lower-cased, split on spaces, a leading `#` dropped ("#534" is the number 534). */
