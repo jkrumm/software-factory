@@ -1,8 +1,9 @@
-import { FactoryIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
+import { SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
@@ -141,18 +142,6 @@ export function SidebarEntry({
       </>
     ),
   })
-}
-
-/** The logo slot: swap the child for an `<img>` later. */
-function Logo() {
-  return (
-    <span
-      data-testid="sidebar-logo"
-      className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
-    >
-      <FactoryIcon weight="fill" className="size-4" aria-hidden />
-    </span>
-  )
 }
 
 function NavEntry({
