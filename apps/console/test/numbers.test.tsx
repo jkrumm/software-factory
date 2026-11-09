@@ -63,3 +63,14 @@ test('working time floors to whole minutes, so every place that shows it reads t
     expect(source).not.toMatch(/spanWords\([^)]*workingMs/)
   }
 })
+
+test('a card with no plot does not stretch to a taller neighbour', () => {
+  const bare = renderToStaticMarkup(
+    <StatCard icon={TimerIcon} title="Cycle median" subtitle="Last 7 days" value="3 h" />,
+  )
+  const plotted = renderToStaticMarkup(
+    <StatCard icon={TimerIcon} title="Turns" subtitle="Last 7 days" value="3" bars={[1, 2, 3]} />,
+  )
+  expect(bare.match(/<article class="[^"]*"/)?.[0]).toContain('self-start')
+  expect(plotted.match(/<article class="[^"]*"/)?.[0]).not.toContain('self-start')
+})

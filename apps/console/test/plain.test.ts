@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { aboutLine, artifactPreview, plainExcerpt, signalParts, sourceLabel } from '../src/lib/plain.ts'
+import { aboutLine, artifactPreview, plainExcerpt, plainLine, signalParts, sourceLabel } from '../src/lib/plain.ts'
 
 describe('signalParts', () => {
   test('splits ISO times out and drops env names, issue ids and the machine command', () => {
@@ -14,7 +14,7 @@ describe('signalParts', () => {
 
   test('reads the title the server wrote digits into', () => {
     expect(signalParts("Self-watch: lead lead- five three nine - one idle past the steward's threshold")).toEqual([
-      { kind: 'text', text: "Self-watch: the lead - one idle past the steward's threshold" },
+      { kind: 'text', text: "Self-watch: the lead idle past the steward's threshold" },
     ])
   })
 
@@ -93,5 +93,17 @@ describe('plainExcerpt', () => {
       '## Error\n\nIt said:\n\n```ts\nthrow new Error("x")\n```\n\n\n\n- see **this** and [the docs](http://x) `now`'
     expect(plainExcerpt(text)).toBe('Error\n\nIt said:\n\nthrow new Error("x")\n\nsee this and the docs now')
     expect(plainExcerpt(text)).not.toContain('```')
+  })
+})
+
+describe('plainLine', () => {
+  test('a timeline line has no spelled-out lead id and no ISO time', () => {
+    const line = plainLine(
+      "Self-watch: lead lead- five three nine - one idle since 2026-11-09T11:30:23.973Z past the steward's threshold",
+    )
+    expect(line).not.toContain('lead lead-')
+    expect(line).not.toMatch(/\d{4}-\d\d-\d\dT/)
+    expect(line).not.toContain('- one')
+    expect(line).toStartWith('Self-watch: the lead idle since ')
   })
 })
