@@ -88,7 +88,7 @@ function Kit() {
           The whole card is the link: hover it, tab to it, press the three dots that show on hover. The row is the dense
           variant for lists, hairlines between rows and no box.
         </Note>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] items-start gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
           {KIT_ISSUES.map((i) => (
             <IssueCard
               key={i.key}

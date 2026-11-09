@@ -71,8 +71,26 @@ export const KIT_ISSUES: KitIssue[] = [
     project: 'pearl',
     kind: 'docs',
     state: 'done',
-    reason: 'Done',
+    reason: 'Shipped and verified on the host',
     since: ago(4300),
+  },
+  {
+    key: 'runbook',
+    title: 'Write the restore runbook for the export store',
+    project: 'argo',
+    kind: 'docs',
+    state: 'working',
+    reason: null,
+    since: ago(95),
+  },
+  {
+    key: 'old-flags',
+    title: 'Remove the feature flags that shipped last quarter',
+    project: 'orion',
+    kind: 'chore',
+    state: 'queued',
+    reason: 'Queued behind Move the export job to the new queue: the chain is not done',
+    since: ago(30),
   },
 ]
 
@@ -112,7 +130,7 @@ export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omi
     delta: { value: -2, higherIsBetter: false },
     sub: 'Two need you, one waits for a time',
     series: { values: [6, 5, 5, 4, 5, 4, 3], labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
-    xLabels: ['Mon', 'Now', 'Sun'],
+    xLabels: ['Mon', 'Thu', 'Sun'],
     footer: [
       { label: 'Oldest', value: '3 h ago' },
       { label: 'On a person', value: '2' },
@@ -126,7 +144,7 @@ export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omi
     sub: 'Held back by the chain and the weekly pace',
     bars: [3, 5, 4, 8, 6, 9, 7],
     barLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    xLabels: ['Mon', 'Today', 'Sun'],
+    xLabels: ['Mon', 'Thu', 'Today'],
     footer: [
       { label: 'By the chain', value: '4' },
       { label: 'By the pace', value: '3' },
@@ -139,7 +157,7 @@ export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omi
     delta: { value: 4, higherIsBetter: true },
     sub: 'Issues closed as done',
     series: { values: [1, 2, 2, 4, 5, 7, 9, 12], labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Now'] },
-    xLabels: ['Mon', 'Now', 'Sun'],
+    xLabels: ['Mon', 'Thu', 'Now'],
     footer: [
       { label: 'Per day', value: '1.7' },
       { label: 'Healed', value: '2' },

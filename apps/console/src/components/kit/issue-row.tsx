@@ -25,13 +25,13 @@ export function IssueRow({
   return (
     <div
       className={cn(
-        'group relative flex min-h-9 items-center gap-3 px-3 py-1.5 text-[length:var(--vx-text-sm)] not-first:border-t',
+        'group relative flex min-h-9 flex-wrap items-center gap-3 px-3 py-1.5 text-[length:var(--vx-text-sm)] not-first:border-t',
         linked && cn(LINKED_CARD, 'has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-ring/50'),
         className,
       )}
     >
       <KindIcon className="size-4 shrink-0 text-muted-foreground" aria-label={kind} role="img" />
-      <span className="min-w-0 flex-1 line-clamp-2 font-medium min-[40rem]:line-clamp-1">
+      <span className="min-w-0 flex-1 font-medium min-[40rem]:line-clamp-1">
         <CardLink href={href} as={as}>
           {title}
         </CardLink>
@@ -46,6 +46,9 @@ export function IssueRow({
         {reason ? <ReasonLine state={state} reason={reason} className="[&>span]:truncate" /> : null}
       </div>
       <AgeColumn since={since} now={now} onMenu={onMenu} title={title} />
+      {reason ? (
+        <ReasonLine state={state} reason={reason} className="basis-full pl-7 text-xs min-[64rem]:hidden" />
+      ) : null}
     </div>
   )
 }

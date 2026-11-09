@@ -102,6 +102,11 @@ export function StatCard({
       <MiniBars values={bars} labels={barLabels} name={title} />
     ) : null
   const future = series?.futureFrom !== undefined
+  /** The x of the end-of-past dot as a fraction of the plotted width (Sparkline pads 8 px each side). */
+  const nowFraction =
+    series?.futureFrom !== undefined && series.futureFrom > 1 && series.values.length > 1
+      ? (Math.min(series.futureFrom, series.values.length) - 1) / (series.values.length - 1)
+      : null
   return (
     <article
       className={cn(
@@ -135,9 +140,14 @@ export function StatCard({
         {sub ? <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{sub}</p> : null}
         {picture}
         {xLabels ? (
-          <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+          <div className="relative flex h-4 justify-between text-xs text-muted-foreground tabular-nums">
             <span>{xLabels[0]}</span>
-            <span>{xLabels[1]}</span>
+            <span
+              className={cn(nowFraction !== null && 'absolute -translate-x-1/2')}
+              style={nowFraction === null ? undefined : { left: `calc(8px + ${nowFraction} * (100% - 16px))` }}
+            >
+              {xLabels[1]}
+            </span>
             <span className={cn(future && 'underline decoration-dashed decoration-1 underline-offset-4')}>
               {xLabels[2]}
             </span>
