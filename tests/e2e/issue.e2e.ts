@@ -179,13 +179,23 @@ test('the overview figures are the totals of the API, with a bar per attempt', a
   const issue = await detailOf(apiUrl, rich)
   await open(page, rich)
   const { insights } = issue
-  await expect(stat(page, 'Turns').locator('span.proportional-nums')).toHaveText(count(insights.turns))
-  await expect(stat(page, 'Tokens out').locator('span.proportional-nums')).toHaveText(count(insights.tokens.output))
-  await expect(stat(page, 'Tokens out')).toContainText(count(insights.tokens.input))
-  await expect(stat(page, 'Working time').locator('span.proportional-nums')).toHaveText(/^[\d.]+ (ms|s|min)$/)
+  await expect(stat(page, 'Turns').locator('span.tabular-nums')).toHaveText(count(insights.turns))
+  // turns ran but no token was counted: the card reads a dash with its reason, never a 0
+  const { input, output, cacheRead, cacheWrite } = insights.tokens
+  const tokensCounted = !insights.partial && !(insights.turns > 0 && !input && !output && !cacheRead && !cacheWrite)
+  if (tokensCounted) {
+    await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(count(output))
+    await expect(stat(page, 'Tokens out')).toContainText(count(input))
+  } else {
+    await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(/^–.*not counted tokens/)
+    await expect(stat(page, 'Cache read share').locator('span.tabular-nums').first()).toHaveText(/^–/)
+  }
+  await expect(stat(page, 'Working time').locator('span.tabular-nums')).toHaveText(/^[\d.]+ (ms|s|min)$/)
   for (const [title, pick] of [
     ['Turns', (s: ReadIssueDetail['sessions'][number]) => s.insights.turns],
-    ['Tokens out', (s: ReadIssueDetail['sessions'][number]) => s.insights.tokens.output],
+    ...(tokensCounted
+      ? [['Tokens out', (s: ReadIssueDetail['sessions'][number]) => s.insights.tokens.output] as const]
+      : []),
   ] as const) {
     const chart = stat(page, title).getByRole('group', { name: new RegExp(`^${title}: 2 values`) })
     await expect(chart).toBeVisible()
