@@ -11,7 +11,7 @@ import {
   Triage,
 } from '@/components/issue/sections'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { ApiError } from '@/lib/api'
+import { ApiError, failureNote } from '@/lib/api'
 import { useIssue } from '@/lib/queries'
 
 export const Route = createFileRoute('/issues/$id')({ component: IssuePage })
@@ -37,7 +37,7 @@ function IssuePage() {
       )
     return (
       <Page>
-        <PageHeader title="Issue" note={isPending ? 'Loading' : 'No data yet'} />
+        <PageHeader title="Issue" note={isPending ? 'Loading' : failureNote(error)} />
       </Page>
     )
   }

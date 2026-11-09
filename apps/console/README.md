@@ -20,7 +20,7 @@ state with cards). The layout switches with `matchMedia`, so only one of the two
 ## Chain
 
 `/chain` draws the dependencies between Issues and plan rows across projects from `GET /v1/chain`: `@xyflow/react` for the
-canvas, `@dagrejs/dagre` for the layout (`src/lib/chain.ts`, left to right, a blocker left of the node that waits for it),
+canvas, `@dagrejs/dagre` for the layout (`src/lib/chain-layout.ts`, left to right, a blocker left of the node that waits for it),
 loaded as its own chunk so the other screens do not carry them. An arrow runs from the blocker into the node that runs after
 it. A blocked edge is solid and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
 labelled `done`; each edge also has an accessible text ("A blocks B"). A node shows the title, the project and the state as
@@ -51,8 +51,31 @@ auth header and no base URL, and every response is parsed with the schema from `
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly six writes, the owner's answers (a Decision's answer, an
 artifact's verdict and comment, an Errand done, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
-`/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
-queries poll every 15 s and the chip says `Polling`.
+`/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
+queries poll every 15 s and the chip says `Polling`, and while it is open they still poll once a minute, because the
+stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection
+after the machine slept or the tab was hidden a while without a frame. The listener marks every API answer `no-store`,
+and the app fetches with `cache: 'no-store'`. A restored snapshot is a first paint only: restoring it refetches everything.
+
+## Staying current
+
+`src/lib/update.ts` owns the service worker registration. A long-lived tab or installed app asks for a new worker when it
+becomes visible, when it comes online, on every stream `hello`, every 10 minutes and when an answer does not match the
+contract (`ShapeError` in `src/lib/api.ts`: the server is newer than the bundle). Once the new worker has taken over, the
+page reloads, but only when nothing is being typed (no focused field, no draft in a textarea); otherwise it waits for the
+tab to hide or the field to lose focus. A screen with no data says what happened: "This Console is older than the server -
+updating" for a `ShapeError`, the status for any other answer.
+
+## Speed
+
+The stream does not invalidate everything. Changes that arrive within 250 ms of each other (at most 1 s after the first of a
+burst) invalidate, once, the lists and the pages they can alter; the aggregates on `/improve` (KPIs, friction, finding
+classes, fix commits) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
+first `hello` of a page joins the boot's requests (`cancelRefetch: false`) instead of cancelling and repeating them. Chunks:
+the entry holds the shell and the screens that are small; `@xyflow/react` and dagre (`/chain`), react-markdown
+(`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
+service worker. A list is virtualised only where it can grow to hundreds (the Flow columns); the others hold a handful of rows.
+Keys must not carry a timestamp that moves with each answer, or the row is rebuilt on every refetch.
 
 ## Tokens
 

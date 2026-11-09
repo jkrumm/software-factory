@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
+import { failureNote } from '@/lib/api'
 import { useChain } from '@/lib/queries'
 
 // xyflow and dagre are their own chunk: the other screens do not carry them
@@ -22,14 +23,14 @@ const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Chain() {
-  const { data, isPending } = useChain()
+  const { data, error, isPending } = useChain()
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   if (!data)
     return (
       <Page wide>
-        <PageHeader title="Chain" note={isPending ? 'Loading' : 'No data yet'} />
+        <PageHeader title="Chain" note={isPending ? 'Loading' : failureNote(error)} />
       </Page>
     )
 

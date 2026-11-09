@@ -178,6 +178,15 @@ function fileOf(dir: string, rawPath: string): string | null {
 export function consoleHandler(options: ConsoleHandlerOptions): (request: Request) => Promise<Response> {
   const indexFile = join(resolve(options.dir), 'index.html')
 
+  /** An API answer is never cached by the browser or a proxy; the stream keeps the cache-control it sets. */
+  const forward = async (request: Request): Promise<Response> => {
+    const response = await options.forward(request)
+    if (response.headers.has('cache-control')) return response
+    const headers = new Headers(response.headers)
+    headers.set('cache-control', 'no-store')
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+  }
+
   const staticResponse = async (request: Request, rawPath: string): Promise<Response> => {
     if (!(await isFile(indexFile))) return errorResponse(503, 'the Console is not built', 'unavailable')
     const file = fileOf(options.dir, rawPath)
@@ -219,9 +228,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     if (crossSite(request)) return errorResponse(403, 'a write comes from the Console itself', 'forbidden')
     const body = await boundedBody(request)
     if (body === null) return errorResponse(413, 'the body is over 64 KiB', 'payload_too_large')
-    return options.forward(
-      new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }),
-    )
+    return forward(new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }))
   }
 
   return async (request) => {
@@ -232,7 +239,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
         allow: 'GET, HEAD',
       })
     }
-    if (forwarded(rawPath)) return compressResponse(request, await options.forward(request))
+    if (forwarded(rawPath)) return compressResponse(request, await forward(request))
     return staticResponse(request, rawPath)
   }
 }

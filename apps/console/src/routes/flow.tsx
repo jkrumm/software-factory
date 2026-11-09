@@ -17,6 +17,7 @@ import {
 } from '@/lib/flow'
 import { useMediaQuery } from '@/lib/media'
 import { useNow } from '@/lib/now'
+import { failureNote } from '@/lib/api'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -36,7 +37,7 @@ const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Flow() {
-  const { data, isPending } = useFlow()
+  const { data, error, isPending } = useFlow()
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const now = useNow(30_000)
@@ -46,7 +47,7 @@ function Flow() {
   if (!data)
     return (
       <Page wide>
-        <PageHeader title="Flow" note={isPending ? 'Loading' : 'No data yet'} />
+        <PageHeader title="Flow" note={isPending ? 'Loading' : failureNote(error)} />
       </Page>
     )
 

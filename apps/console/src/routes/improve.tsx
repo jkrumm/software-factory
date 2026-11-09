@@ -29,6 +29,7 @@ import {
   windowOf,
   windowWords,
 } from '@/lib/improve'
+import { failureNote } from '@/lib/api'
 import { useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -272,7 +273,7 @@ function FixClassesSection({ model, pending }: { model: FixCommitsModel | undefi
                   Class
                 </th>
                 {fixWeeksOldestFirst(model).map((week) => (
-                  <th key={week.to} scope="col" className="px-4 py-2 text-right font-medium">
+                  <th key={fixWeekLabel(week)} scope="col" className="px-4 py-2 text-right font-medium">
                     {fixWeekLabel(week)}
                   </th>
                 ))}
@@ -319,7 +320,7 @@ function Improve() {
   if (!kpis.data) {
     return (
       <Page>
-        <PageHeader title="Improve" note={kpis.isPending ? 'Loading' : 'No data yet'} />
+        <PageHeader title="Improve" note={kpis.isPending ? 'Loading' : failureNote(kpis.error)} />
         <WindowSwitch days={days} />
       </Page>
     )

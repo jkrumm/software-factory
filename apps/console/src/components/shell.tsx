@@ -1,15 +1,29 @@
 import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay, useHotkey, useHotkeys } from '@tanstack/react-hotkeys'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { ConnectionChip } from '@/components/connection-chip'
-import { CommandPalette } from '@/components/palette'
 import { StatusStrip } from '@/components/status-strip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { NAV } from '@/lib/nav'
 import { useNeeds } from '@/lib/queries'
+
+// cmdk and its dialog load when the palette is first opened, not with the first paint
+const CommandPalette = lazy(() => import('@/components/palette').then((m) => ({ default: m.CommandPalette })))
+
+/** Mounts the palette on its first open, so cmdk is fetched then and not with the first paint. */
+function PaletteHost({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [mounted, setMounted] = useState(false)
+  if (open && !mounted) setMounted(true)
+  if (!mounted) return null
+  return (
+    <Suspense fallback={null}>
+      <CommandPalette open={open} onOpenChange={onOpenChange} />
+    </Suspense>
+  )
+}
 
 /** The open needs, summed over the kinds of the needs model; null until the model has loaded. */
 function useNeedsCount(): number | null {
@@ -122,7 +136,7 @@ export function Shell() {
           </main>
           <TabBar count={count} />
         </div>
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+        <PaletteHost open={paletteOpen} onOpenChange={setPaletteOpen} />
       </div>
     </TooltipProvider>
   )

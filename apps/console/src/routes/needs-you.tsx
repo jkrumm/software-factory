@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { NeedCard } from '@/components/needs/card'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { KIND_LABEL } from '@/lib/needs'
+import { failureNote } from '@/lib/api'
 import { useNeeds } from '@/lib/queries'
 
 export const Route = createFileRoute('/needs-you')({
@@ -14,7 +15,7 @@ export const Route = createFileRoute('/needs-you')({
 })
 
 function NeedsYou() {
-  const { data, isPending, dataUpdatedAt } = useNeeds()
+  const { data, error, isPending, dataUpdatedAt } = useNeeds()
   const { item: openId } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const [sent, setSent] = useState<string | null>(null)
@@ -33,7 +34,7 @@ function NeedsYou() {
   if (!data)
     return (
       <Page>
-        <PageHeader title="Needs you" note={isPending ? 'Loading' : 'No data yet'} />
+        <PageHeader title="Needs you" note={isPending ? 'Loading' : failureNote(error)} />
       </Page>
     )
 

@@ -3,16 +3,8 @@ import '@xyflow/react/dist/style.css'
 import { Link } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import type { ChainModel } from '@software-factory/contract'
-import {
-  type ChainView,
-  edgeText,
-  isBlocked,
-  issueNumber,
-  layoutOf,
-  NODE_HEIGHT,
-  NODE_WIDTH,
-  stateWord,
-} from '@/lib/chain'
+import { type ChainView, edgeText, isBlocked, issueNumber, NODE_HEIGHT, NODE_WIDTH, stateWord } from '@/lib/chain'
+import { layoutOf } from '@/lib/chain-layout'
 import { cn } from '@/lib/utils'
 
 type ChainNode = ChainModel['nodes'][number]

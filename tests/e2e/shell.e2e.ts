@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
+import { badge, chip } from './shell-support.ts'
 import { api, holdSignal, needsCount } from './seed.ts'
 
 const SCREENS = [
@@ -8,9 +8,6 @@ const SCREENS = [
   { label: 'Chain', path: '/chain', key: 'C' },
   { label: 'Improve', path: '/improve', key: 'I' },
 ] as const
-
-const chip = (page: Page) => page.getByRole('status').filter({ hasText: /Live|Polling|Offline/ })
-const badge = (page: Page) => page.getByRole('navigation', { name: 'Main' }).getByLabel(/\d+ waiting/)
 
 test('the root redirects to Needs you, the badge is the API count and no id leaks onto the page', async ({
   page,
