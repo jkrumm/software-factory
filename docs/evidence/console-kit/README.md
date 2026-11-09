@@ -43,3 +43,25 @@ is generated from `docs/language.md`.
 **Known gaps.** The IssueCard titles clamp early in a half-width grid because the age column takes its fixed width; fine
 for the kit, to be tuned on the Flow board. "Held signal" has no row in `docs/language.md`, so it has no InfoHint until
 the language table gets one.
+
+## Review rounds
+
+Three rounds of a fresh reviewer subagent (`basalt-design-reviewer`'s rubric, scored per component, P0 to P3), each given the
+round's shots beside the owner's references and the previous round's findings, never a target score. Limits: the Console
+has no `data-shot` anchors yet, so `basalt-ui shot` and its `metrics.json` were not run; every [measured] item was judged by
+eye, and hover, focus and tooltip states are not in the shots (the suite cannot shoot them). The shots above are the last
+round's.
+
+| Round | Score | Findings | What changed |
+|-|-|-|-|
+| 1 | 32 | 3 P1: Issue cards squeezed into half the width and clamped, rows truncating, no error state | Cards and rows full width in separate blocks, wrap on phone, error EmptyState with Retry, skeleton row in the row's shape, fixed Meter label column, footer values larger, InfoHint glyph and hit target larger |
+| 2 | 60 | 2 P1: the x-axis "Now" label away from its marker; phone rows clamped the title and dropped the reason | Middle label sits at the marker when the series runs into the future, a true mid-point otherwise; phone rows wrap and show the reason on a second line; the Done reason is a sentence; two more fixtures, cards stretch to equal height |
+| 3 | 75 | No P0, no P1. Six P2, seven P3 | Not changed, listed below |
+
+Open after round 3, not chased: a wait reason still ends in an ellipsis at 1280 (it carries a `title`, the row is dense by
+design); Issue card titles clamp to two lines in a 3-column grid at 1280; phone rows wrap to two or three lines (the price of
+showing title and reason); the light Lozenge tints for Waiting, Done and Healed read low; the error state keeps a glyph tile
+where `states.md` asks for a dot; Meter does not draw its 70 % and 90 % thresholds on the track; a StatCard has about five
+type sizes (the owner's anatomy, reference 03); the 1280 whole-page shots end before the EmptyState block. The reviewer also
+asked for fading area fills and sharper dark surface steps like the references; both are out by the brief (no gradients,
+Basalt's dark surface steps are fixed), so they stand as the known difference from the references.
