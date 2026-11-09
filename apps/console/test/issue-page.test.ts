@@ -72,7 +72,17 @@ const watch = (answer: 'passed' | 'regressed' | 'ended' | null): NonNullable<Shi
   answeredAt: answer === null ? null : '2026-01-01T00:01:00Z',
 })
 
-const node = (id: string, title: string): ChainNode => ({ id, kind: 'issue', repo: null, title, state: 'queued' })
+const node = (id: string, title: string): ChainNode => ({
+  id,
+  kind: 'issue',
+  repo: null,
+  title,
+  state: 'queued',
+  issueKind: 'feature',
+  since: null,
+  waitReason: null,
+  notBefore: null,
+})
 
 // local-time dates so the clock words are the same in any zone
 const at = (day: number, h: number, m: number, s = 0) => new Date(2026, 10, day, h, m, s)
