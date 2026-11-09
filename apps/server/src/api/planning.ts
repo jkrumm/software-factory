@@ -143,7 +143,8 @@ export const planningRoutes = (api?: PlanningApi) => {
         response: { 200: ProjectView, ...errorResponses(404, 503) },
         detail: {
           operationId: 'project.show',
-          summary: 'one project: its project.yaml in force and every plan row with its state',
+          summary:
+            'one project: its project.yaml in force and every plan row with its state (the plan format: docs/plan.md)',
         },
       },
     )

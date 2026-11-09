@@ -52,7 +52,7 @@ export const LANGUAGE = {
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. A note refused for a claim for FACTORY_CLAIM_STALL_MS while the repo has a place free is a steward stall',
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
-  plan: "A project's docs/plan.yaml: rows not yet filed. A row may target another repo",
+  plan: "A project's docs/plan.yaml: rows not yet filed (the format: docs/plan.md). A row may target another repo",
   probe:
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:

@@ -108,7 +108,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - Layers, the Issue machine, signals and triage, loops and agw, API and CLI, perimeter, what is not built yet:
   `docs/architecture.md`.
 - A word, an event, a wait and its exit: `docs/language.md`. Why a rule exists: `docs/decisions.md`. What is open:
-  `docs/program.md` and `docs/plan.yaml` (the server files its rows as Issues).
+  `docs/program.md` and `docs/plan.yaml` (the server files its rows as Issues). Writing a plan file: `docs/plan.md`.
 - Why a lead is briefed as it is: `apps/server/src/domains/leads/brief.ts`. What a reviewer treats as failure here:
   `REVIEW.md`.
 - The factory's client pieces (the Herdr glance mod, the Claude Code hook entries, `rd`'s contract, the Hermes `fleet`
