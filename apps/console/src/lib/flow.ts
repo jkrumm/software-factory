@@ -138,10 +138,13 @@ export function defaultTab(counts: Record<ColumnKey, number>): ColumnKey {
   return COLUMN_KEYS.find((key) => counts[key] > 0) ?? 'working'
 }
 
+/** The Issues in a column other than closed: the one "open" figure of the sidebar and the Flow page's note. */
+export const openCount = (counts: Record<ColumnKey, number>): number =>
+  FLOW_STATES.reduce((sum, state) => sum + counts[state], 0)
+
 /** "12 open, 3 closed in the last day" */
 export function boardNote(counts: Record<ColumnKey, number>): string {
-  const open = FLOW_STATES.reduce((sum, state) => sum + counts[state], 0)
-  return `${open} open, ${counts.closed} closed in the last day`
+  return `${openCount(counts)} open, ${counts.closed} closed in the last day`
 }
 
 /** The state each stat card counts, and the card's address: `/flow?state=<state>`. */

@@ -5,6 +5,7 @@ import { createContext, type ReactElement, type ReactNode, use, useCallback, use
 import { createPortal } from 'react-dom'
 import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { boardOf, countsOf, openCount } from '@/lib/flow'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -215,7 +216,7 @@ function NavEntry({
 export function Sidebar({ needs }: { needs: number | null }) {
   const { setSlot, collapsed, toggle } = useSidebar()
   const { data } = useFlow()
-  const working = data?.states.working.count ?? null
+  const open = data ? openCount(countsOf(boardOf(data))) : null
   const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar'
   return (
     <aside
@@ -235,8 +236,8 @@ export function Sidebar({ needs }: { needs: number | null }) {
             key={item.to}
             item={item}
             collapsed={collapsed}
-            count={item.to === '/needs-you' ? needs : item.to === '/flow' ? working : null}
-            countLabel={item.to === '/flow' ? 'working' : 'waiting'}
+            count={item.to === '/needs-you' ? needs : item.to === '/flow' ? open : null}
+            countLabel={item.to === '/flow' ? 'open' : 'waiting'}
             prominent={item.to === '/needs-you'}
           />
         ))}

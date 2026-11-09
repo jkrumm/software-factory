@@ -2,7 +2,7 @@ import type { NeedItem } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { Lozenge } from '@/components/kit'
-import { issueNumber, metaWords, projectOf, summaryLine } from '@/lib/needs'
+import { issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
 import { cn } from '@/lib/utils'
 import { BodyOf } from './bodies'
 
@@ -56,6 +56,7 @@ export function NeedCard({
   }, [open])
 
   const summary = summaryLine(item, issueTitle)
+  const meta = metaParts(item)
   return (
     <article
       ref={card}
@@ -86,9 +87,16 @@ export function NeedCard({
           </h3>
         </div>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <time className="relative z-10" dateTime={item.since} title={new Date(item.since).toLocaleString()}>
-            {metaWords(item)}
-          </time>
+          <span className="relative z-10">
+            {meta.lead}{' '}
+            <time
+              className="font-mono tabular-nums"
+              dateTime={item.since}
+              title={new Date(item.since).toLocaleString()}
+            >
+              {meta.age}
+            </time>
+          </span>
           {item.stale ? <Lozenge state="waiting">Stale</Lozenge> : null}
           {item.issue ? (
             <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>

@@ -7,13 +7,22 @@ import { MiniBars } from './mini-bars'
 import { Sparkline } from './sparkline'
 import { TONE_TEXT, TONE_TINT, type Tone } from './tone'
 
+/** A footer pair; a `null` value is a dash with `note` as its reason. */
+export interface FooterPair {
+  label: string
+  value: string | null
+  note?: string
+}
+
 export interface StatCardProps extends CardLinkProps {
   icon: Icon
   title: string
   /** Names the comparison: "Against the last 7 days". */
   subtitle: string
-  /** The large figure. */
-  value: string | number
+  /** The large figure; `null` is a value nobody counted, drawn as a dash with `valueNote` as the reason. */
+  value: string | number | null
+  /** Why the figure is a dash: its title, its screen-reader text, and the sub line when there is none. */
+  valueNote?: string
   /** The change against the comparison: a number (signed by the pill) or a ready string. */
   delta?: {
     value: number | string
@@ -35,12 +44,15 @@ export interface StatCardProps extends CardLinkProps {
   /** Start, now, end. The end one is dashed-underlined when the series runs into the future. */
   xLabels?: [string, string, string]
   /** Two key-value pairs on the shell surface. */
-  footer?: [{ label: string; value: string }, { label: string; value: string }]
+  footer?: [FooterPair, FooterPair]
   /** The ⋯ menu: a node, or a handler for a bare ⋯ button. Omitted: no button. */
   menu?: ReactNode
   onMenu?: () => void
   className?: string
 }
+
+/** The en dash an uncounted figure shows. */
+const DASH = '–'
 
 /** The tone of a delta: direction times `higherIsBetter`; neutral at 0, unknown or text. */
 export function deltaTone(delta: StatCardProps['delta']): Tone {
@@ -88,6 +100,7 @@ export function StatCard({
   title,
   subtitle,
   value,
+  valueNote,
   delta,
   sub,
   series,
@@ -111,6 +124,8 @@ export function StatCard({
     ) : bars ? (
       <MiniBars values={bars} labels={barLabels} name={title} />
     ) : null
+  const uncounted = value === null
+  const subLine = sub ?? (uncounted ? valueNote : undefined)
   const future = series?.futureFrom !== undefined
   /** The x of the end-of-past dot as a fraction of the plotted width (Sparkline pads 8 px each side). */
   const nowFraction =
@@ -145,12 +160,26 @@ export function StatCard({
       </header>
       <div className="flex flex-1 flex-col gap-2 rounded-lg bg-background px-4 py-3.5">
         <div className="flex items-center gap-3">
-          <span className="text-[length:var(--vx-text-display)] leading-none font-semibold tracking-tight proportional-nums">
-            {value}
+          <span
+            title={uncounted ? valueNote : undefined}
+            className="text-[length:var(--vx-text-display)] leading-none font-semibold tracking-tight tabular-nums"
+          >
+            {uncounted ? (
+              <>
+                <span aria-hidden="true">{DASH}</span>
+                {valueNote ? (
+                  <span className="sr-only">{valueNote}</span>
+                ) : (
+                  <span className="sr-only">Not counted</span>
+                )}
+              </>
+            ) : (
+              value
+            )}
           </span>
-          {delta ? <DeltaPill delta={delta} /> : null}
+          {delta && !uncounted ? <DeltaPill delta={delta} /> : null}
         </div>
-        {sub ? <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{sub}</p> : null}
+        {subLine ? <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{subLine}</p> : null}
         {picture}
         {xLabels ? (
           <div className="relative flex h-4 justify-between text-xs text-muted-foreground tabular-nums">
@@ -172,7 +201,19 @@ export function StatCard({
           {footer.map((pair) => (
             <div key={pair.label} className="flex min-w-0 items-baseline gap-2">
               <dt className="truncate text-muted-foreground">{pair.label}</dt>
-              <dd className="min-w-0 text-[length:var(--vx-text-md)] font-semibold tabular-nums">{pair.value}</dd>
+              <dd
+                title={pair.value === null ? pair.note : undefined}
+                className="min-w-0 text-[length:var(--vx-text-md)] font-semibold tabular-nums"
+              >
+                {pair.value === null ? (
+                  <>
+                    <span aria-hidden="true">{DASH}</span>
+                    <span className="sr-only">{pair.note ?? 'Not counted'}</span>
+                  </>
+                ) : (
+                  pair.value
+                )}
+              </dd>
             </div>
           ))}
         </dl>

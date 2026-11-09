@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { KindBadge } from '@/components/kit/kind-badge'
 import { Lozenge } from '@/components/kit/lozenge'
 import { PropertyList } from '@/components/kit/property-list'
+import { durationWords } from '@/components/kit/step-rail'
 import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { kindOf, lozengeStateOf, nextActions, regressionCount } from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
@@ -56,7 +57,7 @@ export function Header({ issue, now }: { issue: ReadIssueDetail; now: number }) 
             ? { label: 'Closed', value: <Ago iso={closedAt} now={now} className="font-mono text-xs" /> }
             : { label: 'Updated', value: <Ago iso={issue.updatedAt} now={now} className="font-mono text-xs" /> },
           { label: 'Elapsed', value: <span className="tabular-nums">{spanWords(insights.elapsedMs)}</span> },
-          { label: 'Working time', value: <span className="tabular-nums">{spanWords(insights.workingMs)}</span> },
+          { label: 'Working time', value: <span className="tabular-nums">{durationWords(insights.workingMs)}</span> },
           { label: 'Attempts', value: <span className="tabular-nums">{insights.attempts}</span> },
         ]}
       />

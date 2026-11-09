@@ -122,6 +122,28 @@ export function cacheShare(tokens: ReadIssueDetail['insights']['tokens']): numbe
   return total === 0 ? null : tokens.cacheRead / total
 }
 
+type Insights = ReadIssueDetail['insights']
+
+/** The reason a token figure is a dash. */
+export const TOKENS_NOT_COUNTED = 'The factory has not counted tokens for this Issue yet.'
+/** The reason a tool-call or subagent figure is a dash. */
+export const TOOL_CALLS_NOT_COUNTED = 'The factory has not counted tool calls and subagents for this Issue yet.'
+
+/** Whether the token figures are real: not when the counting is partial, nor when turns ran and every token field is 0. */
+export function tokensCounted(insights: Pick<Insights, 'partial' | 'turns'> & { tokens: Insights['tokens'] }): boolean {
+  if (insights.partial) return false
+  const { input, output, cacheRead, cacheWrite } = insights.tokens
+  return !(insights.turns > 0 && input === 0 && output === 0 && cacheRead === 0 && cacheWrite === 0)
+}
+
+/** Whether the tool-call and subagent figures are real: not when the counting is partial. */
+export const toolCallsCounted = (insights: Pick<Insights, 'partial'>): boolean => !insights.partial
+
+/** When the Issue's first triage line was filed: the Issue's creation; an amendment keeps its own time. */
+export function triageAt(issue: Pick<ReadIssueDetail, 'createdAt' | 'triage'>, index: number): string {
+  return index === 0 ? issue.createdAt : (issue.triage[index]?.at ?? issue.createdAt)
+}
+
 /** How often a ship's watch came back regressed: the timeline's lines or the ships' watches, whichever counts more. */
 export function regressionCount(issue: Pick<ReadIssueDetail, 'shipping' | 'timeline'>): number {
   const lines = issue.timeline.filter((line) => line.kind === 'regressed').length

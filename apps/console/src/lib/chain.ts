@@ -42,6 +42,23 @@ export function chainOf(data: Pick<ChainModel, 'nodes' | 'edges'>, filters: Chai
   }
 }
 
+/**
+ * The one source of the Chain's counts. Per project: the nodes the graph draws when that project is picked, and the
+ * nodes it leaves out because no edge joins them. `isolated` is the same count with no project picked.
+ */
+export function chainCounts(data: Pick<ChainModel, 'nodes' | 'edges'>): {
+  projects: Record<string, { drawn: number; isolated: number }>
+  isolated: number
+} {
+  const projects = Object.fromEntries(
+    projectsOf(data).map((repo) => {
+      const view = chainOf(data, { project: repo })
+      return [repo, { drawn: view.nodes.filter((node) => node.repo === repo).length, isolated: view.isolated }]
+    }),
+  )
+  return { projects, isolated: chainOf(data).isolated }
+}
+
 const STATE_WORD: Record<string, string> = {
   settling: 'Settling',
   queued: 'Queued',
@@ -68,7 +85,7 @@ export const edgeText = (edge: ChainEdge, byId: Map<string, ChainNode>): string 
 }
 
 export const isolatedNote = (count: number): string =>
-  `${count} ${count === 1 ? 'item has' : 'items have'} no dependencies`
+  `${count} more ${count === 1 ? 'item has' : 'items have'} no dependencies, so ${count === 1 ? 'it is' : 'they are'} not drawn`
 
 const isLozenge = (state: string): state is LozengeState => (LOZENGE_STATES as readonly string[]).includes(state)
 

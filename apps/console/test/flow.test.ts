@@ -8,6 +8,7 @@ import {
   defaultTab,
   facetCounts,
   type Origin,
+  openCount,
   originsOf,
   originWord,
   projectsOf,
@@ -202,4 +203,12 @@ test('the stat row: live counts, trend deltas, subs, footers and the 7-day sums'
     { label: 'Last day', value: '3' },
   ])
   expect(shipped?.labels).toHaveLength(7)
+})
+
+test('the sidebar count and the Flow note share one open count, which is not the working count', () => {
+  const counts = countsOf(boardOf(data))
+  const sidebar = openCount(counts)
+  expect(sidebar).toBe(4)
+  expect(boardNote(counts)).toBe(`${sidebar} open, 1 closed in the last day`)
+  expect(sidebar).not.toBe(counts.working)
 })

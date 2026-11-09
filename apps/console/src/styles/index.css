@@ -78,6 +78,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-variant-numeric: tabular-nums;
     overscroll-behavior: none;
   }
 }

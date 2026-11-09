@@ -7,14 +7,24 @@ import { Section } from '@/components/kit/section'
 import { StatCard } from '@/components/kit/stat-card'
 import { durationWords } from '@/components/kit/step-rail'
 import { countWords, originWords, SESSION_STATE_WORDS, triageKindWords, trustWords } from '@/lib/issue'
-import { attemptSeries, cacheShare, SESSION_TONES } from '@/lib/issue-page'
+import {
+  attemptSeries,
+  cacheShare,
+  SESSION_TONES,
+  TOKENS_NOT_COUNTED,
+  TOOL_CALLS_NOT_COUNTED,
+  tokensCounted,
+  toolCallsCounted,
+  triageAt,
+} from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
 import { Ago } from './ago'
 import { SourceLink } from './source-link'
 
 type Issue = ReadIssueDetail
 
-const percent = (share: number | null): string => (share === null ? 'None' : `${Math.round(share * 100)}%`)
+/** A share as a percent; null (no prompt tokens) is `null` so the card draws its dash, never a word. */
+const percent = (share: number | null): string | null => (share === null ? null : `${Math.round(share * 100)}%`)
 
 /** The first, middle and last attempt under the bars; the middle one only with room for three. */
 const attemptLabels = (n: number): [string, string, string] => [
@@ -28,12 +38,17 @@ function Figures({ issue }: { issue: Issue }) {
   const series = attemptSeries(sessions)
   const many = sessions.length >= 2
   const { tokens } = insights
-  const counted = (value: number): string => (insights.partial ? 'Not counted yet' : countWords(value))
+  const tokensOk = tokensCounted(insights)
+  const callsOk = toolCallsCounted(insights)
+  /** A token figure, or the dash when the factory has not counted tokens. */
+  const token = (value: number): string | null => (tokensOk ? countWords(value) : null)
+  const calls = (value: number): string | null => (callsOk ? countWords(value) : null)
+  const share = percent(cacheShare(tokens))
   const cacheShares = sessions.map((s) => Math.round((cacheShare(s.insights.tokens) ?? 0) * 100))
   const subtitle = many ? 'Per attempt' : 'This attempt'
   /** Bars per attempt with the attempts under them; one attempt has nothing to compare, so no chart. */
-  const chartOf = (name: string, values: number[], format: (value: number) => string) =>
-    many
+  const chartOf = (name: string, values: number[], format: (value: number) => string, counted = true) =>
+    many && counted
       ? {
           chart: <MiniBars values={values} labels={series.labels} name={name} format={format} />,
           xLabels: attemptLabels(sessions.length),
@@ -58,8 +73,8 @@ function Figures({ issue }: { issue: Issue }) {
         subtitle={subtitle}
         value={countWords(insights.turns)}
         footer={[
-          { label: 'Tool calls', value: counted(insights.toolCalls) },
-          { label: 'Subagents', value: counted(insights.subagents) },
+          { label: 'Tool calls', value: calls(insights.toolCalls), note: TOOL_CALLS_NOT_COUNTED },
+          { label: 'Subagents', value: calls(insights.subagents), note: TOOL_CALLS_NOT_COUNTED },
         ]}
         {...chartOf('Turns', series.turns, countWords)}
       />
@@ -67,27 +82,37 @@ function Figures({ issue }: { issue: Issue }) {
         icon={TextAlignLeftIcon}
         title="Tokens out"
         subtitle={subtitle}
-        value={countWords(tokens.output)}
+        value={token(tokens.output)}
+        valueNote={TOKENS_NOT_COUNTED}
         footer={[
-          { label: 'Tokens in', value: countWords(tokens.input) },
-          { label: 'Cache write', value: countWords(tokens.cacheWrite) },
+          { label: 'Tokens in', value: token(tokens.input), note: TOKENS_NOT_COUNTED },
+          { label: 'Cache write', value: token(tokens.cacheWrite), note: TOKENS_NOT_COUNTED },
         ]}
-        {...chartOf('Tokens out', series.tokensOut, countWords)}
+        {...chartOf('Tokens out', series.tokensOut, countWords, tokensOk)}
       />
       <StatCard
         icon={DatabaseIcon}
         title="Cache read share"
         subtitle={subtitle}
-        value={percent(cacheShare(tokens))}
+        value={tokensOk ? share : null}
+        valueNote={tokensOk ? 'No prompt tokens were counted.' : TOKENS_NOT_COUNTED}
         footer={[
-          { label: 'Cache read', value: countWords(tokens.cacheRead) },
-          { label: 'Prompt total', value: countWords(tokens.cacheRead + tokens.input + tokens.cacheWrite) },
+          { label: 'Cache read', value: token(tokens.cacheRead), note: TOKENS_NOT_COUNTED },
+          {
+            label: 'Prompt total',
+            value: token(tokens.cacheRead + tokens.input + tokens.cacheWrite),
+            note: TOKENS_NOT_COUNTED,
+          },
         ]}
-        {...chartOf('Cache read share', cacheShares, (value) => `${value}%`)}
+        {...chartOf('Cache read share', cacheShares, (value) => `${value}%`, tokensOk && share !== null)}
       />
     </div>
   )
 }
+
+/** A session's token figure, or null when that session's tokens are uncounted. */
+const tokensOf = (insights: Issue['sessions'][number]['insights'], value: number): string | null =>
+  tokensCounted(insights) ? countWords(value) : null
 
 function Attempts({ issue, now }: { issue: Issue; now: number }) {
   if (issue.sessions.length === 0)
@@ -113,13 +138,15 @@ function Attempts({ issue, now }: { issue: Issue; now: number }) {
           </div>
           <dl className="hidden shrink-0 grid-cols-3 gap-x-5 text-right sm:grid">
             {[
-              ['Working time', spanWords(session.insights.workingMs)],
-              ['Tokens in', countWords(session.insights.tokens.input)],
-              ['Tokens out', countWords(session.insights.tokens.output)],
-            ].map(([label, value]) => (
+              { label: 'Working time', value: durationWords(session.insights.workingMs) },
+              { label: 'Tokens in', value: tokensOf(session.insights, session.insights.tokens.input) },
+              { label: 'Tokens out', value: tokensOf(session.insights, session.insights.tokens.output) },
+            ].map(({ label, value }) => (
               <div key={label} className="min-w-20">
                 <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="font-mono text-xs tabular-nums">{value}</dd>
+                <dd className="font-mono text-xs tabular-nums" title={value === null ? TOKENS_NOT_COUNTED : undefined}>
+                  {value ?? '–'}
+                </dd>
               </div>
             ))}
           </dl>
@@ -165,7 +192,7 @@ function Triage({ issue, now }: { issue: Issue; now: number }) {
               {triageKindWords(line.kind)}, {trustWords(line.trust)}
             </span>
             {line.source ? <span className="font-mono text-xs text-muted-foreground">{line.source}</span> : null}
-            <Ago iso={line.at} now={now} className="font-mono text-xs text-muted-foreground" />
+            <Ago iso={triageAt(issue, index)} now={now} className="font-mono text-xs text-muted-foreground" />
           </div>
           {line.title ? <p className="max-w-[75ch] font-medium">{line.title}</p> : null}
           {line.text ? <SignalText text={line.text} /> : null}

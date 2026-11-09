@@ -140,6 +140,18 @@ function Kit() {
               { label: 'Busiest', value: 'logic' },
             ]}
           />
+          <StatCard
+            icon={WarningCircleIcon}
+            title="Tokens out"
+            subtitle="This attempt"
+            value={null}
+            valueNote="The factory has not counted tokens for this Issue yet."
+            chart={null}
+            footer={[
+              { label: 'Tokens in', value: null, note: 'The factory has not counted tokens for this Issue yet.' },
+              { label: 'Cache write', value: null, note: 'The factory has not counted tokens for this Issue yet.' },
+            ]}
+          />
         </div>
       </Section>
 
