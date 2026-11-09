@@ -72,3 +72,9 @@ test('a line longer than the budget is left out whole, never cut', () => {
   expect(got).toContain('end')
   expect(got).toMatch(/\[… 1 line cut\]/)
 })
+
+test('log lines in brackets around the list do not hide it', () => {
+  const noise = Array.from({ length: 8 }, (_, n) => `[INFO] step ${n} ok`).join('\n')
+  const list = JSON.stringify([{ name: 'a', ok: false, detail: 'broken' }])
+  expect(condense(`${noise}\n${list}\n[INFO] done`, 1_500)).toBe('1 of 1 checks failing:\na: broken')
+})

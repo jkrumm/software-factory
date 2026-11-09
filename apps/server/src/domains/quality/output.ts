@@ -10,6 +10,8 @@ const TAIL_SHARE = 0.4
 const CONTEXT = [0, 1, -1, 2, -2, 3, -3]
 /** How many places a JSON list may start and end in, in output a recipe printed around it. */
 const JSON_TRIES = 5
+/** What a `[… N lines cut]` marker may take of a check's share. */
+const MARKER_ROOM = 24
 
 interface Listed {
   name: string
@@ -43,7 +45,7 @@ function listOf(value: unknown): unknown[] | undefined {
 function failingChecks(lines: readonly string[]): { total: number; failing: Listed[] } | undefined {
   const starts: number[] = []
   lines.forEach((line, index) => {
-    if (starts.length < JSON_TRIES && /^[[{]/.test(line)) starts.push(index)
+    if (starts.length < JSON_TRIES && /^[[{]\s*(?:$|["[{\]}])/.test(line)) starts.push(index)
   })
   const ends: number[] = []
   for (let index = lines.length - 1; index >= 0 && ends.length < JSON_TRIES; index--)
@@ -84,7 +86,7 @@ function fromList(failing: readonly Listed[], total: number, max: number): strin
     let kept = 0
     for (const line of detail) {
       const cost = line.length + 3
-      if (used + cost > share) break
+      if (used + cost > share - MARKER_ROOM) break
       out.push(`  ${line}`)
       used += cost
       kept++
