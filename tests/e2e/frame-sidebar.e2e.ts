@@ -45,14 +45,14 @@ test('each entry navigates and shows its key on hover', async ({ page }) => {
   }
 })
 
-test('the counts are the API: waiting on Needs you, working on Flow', async ({ page, apiUrl }) => {
+test('the counts are the API: waiting on Needs you, open on Flow', async ({ page, apiUrl }) => {
   const needs = await needsCount(apiUrl)
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   await page.goto('/chain')
   await expect(nav(page).getByLabel(`${needs} waiting`)).toHaveText(String(needs))
-  const working = flow.states.working.count
-  if (working > 0) await expect(nav(page).getByLabel(`${working} working`)).toHaveText(String(working))
-  else await expect(nav(page).getByLabel(/\d+ working/)).toHaveCount(0)
+  const open = Object.values(flow.states).reduce((sum, state) => sum + state.count, 0)
+  if (open > 0) await expect(nav(page).getByLabel(`${open} open`)).toHaveText(String(open))
+  else await expect(nav(page).getByLabel(/\d+ open/)).toHaveCount(0)
 })
 
 test('it collapses to icons, keeps the choice across a reload and expands again', async ({ page }) => {
