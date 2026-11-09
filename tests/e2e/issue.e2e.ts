@@ -220,6 +220,13 @@ test('the overview figures are the totals of the API, with a bar per attempt', a
   await expect(triage.getByText('Amended by you')).toBeVisible()
   await expect(triage.getByText('The job fails silently when the disk is full.')).toBeVisible()
   await expect(triage.getByText('It also needs to report the last run time.')).toBeVisible()
+  // an agent's amendment is words: the time is relative with the absolute one on hover, no source label, env name or command
+  const steward = triage.getByRole('listitem').filter({ hasText: 'Amended by' }).last()
+  await expect(steward).toContainText('Agent in orion')
+  await expect(steward.locator('time[title]').first()).toBeVisible()
+  await expect(steward).toContainText('idle since')
+  const words = await triage.innerText()
+  expect(words).not.toMatch(/\d{4}-\d\d-\d\dT|agent:|FACTORY_STEWARD|Reproduce/)
   await noIds(page, idsOf(issue))
 })
 

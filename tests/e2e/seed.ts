@@ -80,14 +80,21 @@ export async function seed(lab: Lab): Promise<void> {
   await ask(store, form('Which cache store should argo use?', 'memory', ['redis']))
   // the pass tries policy and the Judge first; what neither settles is paged to the owner, which is when it waits on him
   await api(url, '/v1/checkpoints/pass', {})
-  const submit = (issue: string, title: string, content: string) =>
-    api(url, `/v1/issues/${issue}/artifacts`, { attempt: 1, kind: 'spec', title, content })
+  const submit = (issue: string, title: string, content: string, contentFormat?: 'html') =>
+    api(url, `/v1/issues/${issue}/artifacts`, { attempt: 1, kind: 'spec', title, content, contentFormat })
   await submit(
     queue,
     'The queue spec',
     '# Queue\n\nWe keep the queue in Postgres.\n\nOne advisory lock guards the pass.',
   )
-  await submit(cache, 'The cache spec', '# Cache\n\nWe cache reads for ten seconds.')
+  // an HTML Spec: the opened card shows its TLDR, never the source
+  await submit(
+    cache,
+    'The cache spec',
+    '<!doctype html><html><head><title>Cache</title><style>p{color:red}</style></head><body><h1>Cache</h1>' +
+      '<div class="callout"><div class="callout-title">TLDR</div><p>We cache reads for ten seconds.</p></div></body></html>',
+    'html',
+  )
   const raise = (issue: string, summary: string, detail: string) =>
     api(url, `/v1/issues/${issue}/errands`, { attempt: 1, summary, detail })
   await raise(

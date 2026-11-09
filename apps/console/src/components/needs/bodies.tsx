@@ -21,6 +21,7 @@ import {
   reversibleLozenge,
   VERDICTS,
 } from '@/lib/needs'
+import { artifactPreview, plainExcerpt } from '@/lib/plain'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
 import { useSettle } from '@/lib/settle'
 import { cn } from '@/lib/utils'
@@ -267,6 +268,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
   })
   if (!data) return <Loading />
   const remarks = [...data.annotations, ...data.unanchored]
+  const preview = artifactPreview(data.artifact.format, data.content)
   return (
     <div className="grid gap-4">
       <div className="grid gap-1">
@@ -282,9 +284,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
           Open the full page
         </Link>
       </div>
-      <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-sans text-sm whitespace-pre-wrap">
-        {data.content}
-      </pre>
+      {preview ? <p className="max-w-[75ch] text-sm text-muted-foreground">{preview}</p> : null}
       {remarks.length > 0 ? (
         <Labelled label="Comments">
           <ul className="grid gap-2">
@@ -431,7 +431,7 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
   return (
     <div className="grid gap-4">
       <Lead hint="held signal">Outside text the factory did not trust enough to turn into work</Lead>
-      <Prose>{item.summary}</Prose>
+      <Prose>{plainExcerpt(item.summary)}</Prose>
       <PropertyList
         items={[
           { label: 'Source', value: sourceWords(item) },
