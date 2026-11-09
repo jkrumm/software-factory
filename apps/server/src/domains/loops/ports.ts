@@ -157,8 +157,20 @@ export interface ClaimHolder {
   blockers: IssueId[]
 }
 
+/** A lead whose note is refused again and again because it waits for a claim in its repo. */
+export interface ClaimRefusal {
+  issue: IssueId
+  repo: string
+  /** the first refusal of the claim in the run of refusals the open note has met */
+  since: Date
+  /** how many times the note was refused for the claim */
+  refusals: number
+}
+
 /** Read-only SQL on other domains' tables (`docs/architecture.md`: cross-domain SQL lives in `read/`). */
 export interface LoopReads {
+  /** open `note_lead` effects whose runs were refused for a claim (`waits for a claim in`), oldest first */
+  claimRefusals(limit: number): Promise<ClaimRefusal[]>
   /** Issues waiting for a stall (`wall`, `unreported`, `blocked`, `lead_gone`, `regressed`), oldest first */
   stalled(limit: number): Promise<IssueId[]>
   /** Issues in `working`, oldest first: the steward reads each lead's session for one gone quiet */

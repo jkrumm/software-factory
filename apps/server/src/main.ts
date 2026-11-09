@@ -214,6 +214,8 @@ async function main(): Promise<void> {
     },
     planning: writes,
     claimQueued: planning.claimQueued,
+    claimFree: planning.claimFree,
+    claimStallMs: loopSettings.claimStallMs,
     rules: { ...DEFAULT_STEWARD_RULES, minStallMs: loopSettings.minStallMs, idleLeadMs: loopSettings.idleLeadMs },
     retryMs: loopSettings.retryMs,
     settleTimeoutMs: loopSettings.settleTimeoutMs,

@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { accountOf, admissionPass, queueView, releaseClaim, resumeClaim } from '../../src/app/capacity-admit.ts'
+import {
+  accountOf,
+  admissionPass,
+  claimFreeRepos,
+  queueView,
+  releaseClaim,
+  resumeClaim,
+} from '../../src/app/capacity-admit.ts'
 import { capacityForLeads } from '../../src/app/capacity-leads.ts'
 import { standingPolicies } from '../../src/app/planning-policies.ts'
+import { loopReads } from '../../src/read/loops.ts'
 import { queueMovedAt } from '../../src/read/queue.ts'
 import { setQueueState } from '../../src/app/capacity-queue.ts'
 import { setPrio } from '../../src/app/planning-chain.ts'
@@ -254,6 +262,83 @@ describe('claims and the claim on resume', () => {
     expect(reasons(result)[three]).toBe('claim')
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'held' })
+  })
+
+  test('three owed leads and one free claim: the earliest wait end takes it, the others take the following ones, a replay takes nothing twice', async () => {
+    const one = await world.queued({ repo: 'solo' })
+    const two = await world.queued({ repo: 'solo' })
+    const three = await world.queued({ repo: 'solo' })
+    const issues = [one, two, three]
+    // each lead is admitted in turn, asks the owner and so gives its claim back
+    for (const [index, issue] of issues.entries()) {
+      nextSample()
+      expect((await pass()).admitted.map((a) => a.issue)).toEqual([issue])
+      await world.send(issue, 'lead_started', 'lead_started', { attempt: 1, terminal: `t${index}` })
+      await world.send(
+        issue,
+        'asked',
+        'asked',
+        { attempt: 1, decision: { id: `d${index}`, summary: 'which?' } },
+        'lead',
+      )
+    }
+    nextSample()
+    await pass()
+    // answered in the order 3, 1, 2: that is the order the waits ended in, not the Issue numbers
+    for (const [index, issue] of [three, one, two].entries()) {
+      world.clock.advance(1_000)
+      const decision = `d${issues.indexOf(issue)}`
+      await world.send(issue, `answered-${index}`, 'answered', { decision, answer: 'the first' }, 'owner')
+    }
+    const claims = async () =>
+      (await world.db.sql`SELECT issue_id FROM factory.capacity_claims ORDER BY issue_id`).map(
+        (row: { issue_id: string }) => row.issue_id,
+      )
+
+    // no owed lead is refused while a claim is free for the first of them: the ones behind wait, the first takes it
+    for (const behind of [one, two]) expect(await resumeClaim(world.deps, behind)).toMatchObject({ ok: false })
+    expect(value(await resumeClaim(world.deps, three))).toEqual({ result: 'taken' })
+    expect(value(await resumeClaim(world.deps, three))).toEqual({ result: 'held' })
+    expect(await claims()).toEqual([three])
+    expect(await resumeClaim(world.deps, one)).toMatchObject({ ok: false })
+
+    // the claim frees when its lead is done: the next in order takes it, and only it
+    await world.send(three, 'cancelled-3', 'cancelled', { reason: 'x' }, 'owner')
+    expect(await resumeClaim(world.deps, two)).toMatchObject({ ok: false })
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
+    expect(await claims()).toEqual([one])
+    await world.send(one, 'cancelled-1', 'cancelled', { reason: 'x' }, 'owner')
+    expect(value(await resumeClaim(world.deps, two))).toEqual({ result: 'taken' })
+    expect(await claims()).toEqual([two])
+  })
+
+  test('the steward sees a note refused for a claim: the read, and the repos that have one free', async () => {
+    const one = await world.queued({ repo: 'solo' })
+    const two = await world.queued({ repo: 'solo' })
+    await pass()
+    await asked()
+    nextSample()
+    await pass()
+    await world.send(one, 'answered', 'answered', { decision: 'd1', answer: 'the first' }, 'owner')
+    // the repo's one place is Issue 2's
+    expect(value(await claimFreeRepos(world.deps, ['solo']))).toEqual([])
+    const [note] = await world.db
+      .sql`SELECT key FROM factory.issue_effects WHERE kind = 'note_lead' AND issue_id = ${one}`
+    for (const minute of [0, 5]) {
+      await world.db.sql`
+        INSERT INTO factory.issue_effect_runs (effect_key, at, ok, error_kind, detail)
+        VALUES (${note.key}, ${new Date(world.clock.now().getTime() + minute * 60_000)}, false, 'refused', 'Issue 1 waits for a claim in solo: the repo runs 1 of 1 leads (Issue 2)')`
+    }
+    const refused = await loopReads(world.db.sql).claimRefusals(10)
+    expect(refused).toMatchObject([{ issue: one, repo: 'solo', refusals: 2 }])
+    // a run of another kind after them (the lead was mid-turn) ends the run: the claim was taken
+    await world.db.sql`
+      INSERT INTO factory.issue_effect_runs (effect_key, at, ok, error_kind, detail)
+      VALUES (${note.key}, ${world.clock.now()}, false, 'refused', 'the lead is mid-turn')`
+    expect(await loopReads(world.db.sql).claimRefusals(10)).toEqual([])
+    // Issue 2 closes: the place is free, and the refusal is a stall
+    await world.send(two, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
+    expect(value(await claimFreeRepos(world.deps, ['solo']))).toEqual(['solo'])
   })
 
   test('the claim of a closed Issue goes back by the sweep or by finalize, idempotently', async () => {

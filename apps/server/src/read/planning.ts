@@ -12,6 +12,7 @@ const OpenRow = z.object({
   wait_reason: z.string().nullable(),
   kind: z.string(),
   finalizing: z.boolean(),
+  since: z.coerce.date().nullable(),
 })
 
 const WaitRow = z.object({
@@ -37,7 +38,8 @@ export function readIssues(tx: SQL): IssueReads {
           COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), (SELECT e.payload->>'kind' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'filed' LIMIT 1)) AS kind,
           EXISTS (
             SELECT 1 FROM factory.issue_effects f
-            WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL) AS finalizing
+            WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL) AS finalizing,
+          (SELECT x.at FROM factory.issue_events x WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state ORDER BY x.version DESC LIMIT 1) AS since
         FROM factory.issues i WHERE i.state <> 'closed' ORDER BY i.id`
       return rows.map((raw): OpenIssueRow => {
         const row = OpenRow.parse(raw)
@@ -48,6 +50,7 @@ export function readIssues(tx: SQL): IssueReads {
           waitReason: row.wait_reason,
           kind: row.kind,
           finalizing: row.finalizing,
+          since: row.since,
         }
       })
     },
