@@ -126,7 +126,9 @@ it does not.
 ## Done means
 
 1. Playwright's default viewport is 1800×1200; the screenshot suite shoots 1800×1200 dark and light, 1280×800 and
-   390×844 for every screen it touches, into the Issue's evidence.
+   390×844 for every screen it touches, into the Issue's evidence. `tests/e2e/phone-fit.e2e.ts` proves the phone: no
+   element of `main` ends past the viewport, against live-length content (a bare `grid` has an `auto` column that grows
+   to its widest child, so `index.css` gives every `.grid` a `minmax(0, 1fr)` column; a `grid-cols-*` still wins).
 2. The lead looks at each screenshot next to the owner's reference images (outside the repo, under `design-refs/console`
    in the factory's home directory) and this file, fixes what falls short, shoots again, and writes down what it compared.
 3. The rounds' verdicts (each round's findings P0 to P3 and what changed) are in the evidence; the last round is clean
