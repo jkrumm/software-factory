@@ -17,7 +17,7 @@ words are `docs/language.md`'s; what the Console may do is `AGENTS.md` "The Cons
 
 ## Direction
 
-Set here once, so no lead stops to ask for it (the `unslop` skill's five lines).
+Set here once, so no lead stops to ask for it.
 
 - **Product.** The place where one developer sees what needs him, what his agents are doing, and how well his factory works.
 - **Character.** Exact, watchful, unhurried.
@@ -29,12 +29,18 @@ Set here once, so no lead stops to ask for it (the `unslop` skill's five lines).
 
 ## How a screen is built
 
-Every Console screen goes through the `unslop` skill (`/unslop`): audit against its `references/signs.md` and write the
-audit into the Issue's evidence, take the direction above without stopping, fix in its nine passes, check against its
-checklist. Where it and the owner disagree, the owner wins:
+With basalt-ui's design loop, the one procedure for the owner's UIs: the `basalt-design` skill shipped in
+`node_modules/basalt-ui/agent/skills/basalt-design/`. Its method applies as written (a concept per screen before code,
+`data-shot` anchors with their states, `basalt-ui shot --dist dist` each round into a fresh `--out`, review by a subagent
+reading the boards plus `basalt-ui shot detect`, at least three rounds, at most five before showing the owner); its build
+laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's tokens). Its `references/anti-defaults.md`,
+`stat-tile.md` and `states.md` are read as they stand. The reviewer is not installed here: hand a subagent
+`node_modules/basalt-ui/agent/agents/basalt-design-reviewer.md` as its brief, with the round's out dir. Two additions:
 
-- StatCards carry a sparkline or bars and a footer (his reference 03), not only a number.
-- Working screens use the full 1800 px; unslop's cap of 1440 to 1600 applies to running prose only.
+- **Score against references, not in a vacuum.** The reviewer sees the round's shots beside the owner's reference images
+  and the previous round, ranks each screen against them, and is not told a target score.
+- **The owner's taste wins** where it differs: StatCards carry a sparkline or bars and a footer (his reference 03);
+  working screens use the full width at 1800×1200, which `shot` does not capture, so the Playwright screenshots stay.
 
 ## The target
 
@@ -120,5 +126,6 @@ it does not.
    390×844 for every screen it touches, into the Issue's evidence.
 2. The lead looks at each screenshot next to the owner's reference images (outside the repo, under `design-refs/console`
    in the factory's home directory) and this file, fixes what falls short, shoots again, and writes down what it compared.
-3. The `unslop` audit before and its checklist after are in the evidence, every sign closed or named.
+3. The rounds' verdicts (each round's findings P0 to P3 and what changed) are in the evidence; the last round is clean
+   in both passes.
 4. `make check` passes, including the Console's Playwright suite.
