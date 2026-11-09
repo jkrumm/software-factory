@@ -79,7 +79,7 @@ it does not.
 | StatCard | **Header**: an icon tile, a title, a subtitle naming the comparison ("against the last 7 days"), a ⋯ menu. **Body**: a large tabular figure, a delta pill (↗ +4, good or bad by `higherIsBetter`), one sub line, then a sparkline or bars with three x labels (start, now, end), dashed where it is a target or the future. **Footer**: two key-value pairs. Card and body are separate surface steps |
 | Lozenge | A state as text on a 12 % tint of its tone; the tone comes from an explicit map, never from the words |
 | KindBadge | The Issue's kind (feature, bug, incident, chore, docs) as an outline badge with its icon |
-| IssueCard / IssueRow | Kind icon, title (clamped), project chip, Lozenge, the wait or queue reason with its icon, age in a fixed right column in mono; the whole card is a link; ⋯ on hover |
+| IssueCard / IssueRow | Title (clamped), then a chip row: KindBadge, project chip, the origin as a muted word, and a Lozenge where no column already says the state (a Flow column card has none, Closed recently shows the outcome); the wait or queue reason with its icon; age in a fixed right column in mono; the whole card is a link; ⋯ on hover |
 | PropertyList | A definition list: a small label above its value, three columns from 40 rem; a missing value reads "None", muted |
 | Section / Fold | A section is a heading, a rule and space, never a box; a Fold is a full-width header button with a caret and a count |
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
