@@ -1,36 +1,34 @@
 #!/usr/bin/env bun
 /**
- * Renders the PWA icons (PNG) from the SVG marks in `public/icons/`. The PNGs are committed, so a build needs none of
- * this; run it after the marks change. macOS only: it uses Quick Look (`qlmanage`) and `sips`.
+ * Renders the PNG icons from the SVG marks in `public/icons/`. The PNGs are committed, so a build needs none of this; run
+ * it after the marks change. `mark.svg` (the favicon) and `glyph.svg` follow the colour scheme; a PNG cannot, so the PNGs
+ * come from the fixed dark sources: `app.svg` (the rounded tile, transparent corners), `apple-touch.svg` and
+ * `mark-maskable.svg` (full bleed: iOS and Android round them themselves).
  */
-import { mkdtemp, rename, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { chromium } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
 const dir = resolve(import.meta.dir, '../public/icons')
 const targets = [
-  { svg: 'mark.svg', size: 192, out: 'icon-192.png' },
-  { svg: 'mark.svg', size: 512, out: 'icon-512.png' },
+  { svg: 'app.svg', size: 192, out: 'icon-192.png' },
+  { svg: 'app.svg', size: 512, out: 'icon-512.png' },
+  { svg: 'apple-touch.svg', size: 180, out: 'apple-touch-icon.png' },
   { svg: 'mark-maskable.svg', size: 512, out: 'icon-maskable-512.png' },
 ] as const
 
-async function run(command: string[]): Promise<void> {
-  const proc = Bun.spawn(command, { stdout: 'ignore', stderr: 'pipe' })
-  const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
-  if (code !== 0) throw new Error(`${command.join(' ')} exited ${code}: ${stderr}`)
-}
-
-const work = await mkdtemp(join(tmpdir(), 'console-icons-'))
+const browser = await chromium.launch()
 try {
   for (const { svg, size, out } of targets) {
-    // Quick Look renders the SVG at 512 on its long side; sips scales that to the target size.
-    await run(['qlmanage', '-t', '-s', '512', '-o', work, join(dir, svg)])
-    const rendered = join(work, `${svg}.png`)
-    await run(['sips', '-z', String(size), String(size), rendered, '--out', join(work, out)])
-    await rename(join(work, out), join(dir, out))
-    await rm(rendered, { force: true })
+    const page = await browser.newPage({ viewport: { width: size, height: size } })
+    const data = (await readFile(join(dir, svg))).toString('base64')
+    await page.setContent(
+      `<body style="margin:0;background:transparent"><img src="data:image/svg+xml;base64,${data}" width="${size}" height="${size}" style="display:block"></body>`,
+    )
+    await page.screenshot({ path: join(dir, out), omitBackground: true })
+    await page.close()
     console.log(`public/icons/${out}`)
   }
 } finally {
-  await rm(work, { recursive: true, force: true })
+  await browser.close()
 }
