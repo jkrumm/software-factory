@@ -170,8 +170,6 @@ test('the series has one entry per session, oldest first', () => {
     workingMs: [10, 20],
     turns: [2, 5],
     tokensOut: [2, 0],
-    tokensIn: [1, 0],
-    cacheRead: [3, 0],
   })
   expect(attemptSeries([]).labels).toEqual([])
 })

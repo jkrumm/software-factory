@@ -5,7 +5,6 @@ import {
   countWords,
   deliveryWords,
   settledByWords,
-  standingWords,
   verdictWords,
   watchWords,
 } from '../src/lib/issue.ts'
@@ -44,10 +43,6 @@ test('an attempt is counted from the session list, and a key outside it has none
   expect(attemptOf(sessions, null)).toBeNull()
 })
 
-test('the standing line joins phase and wait', () => {
-  expect(standingWords({ state: 'waiting', phase: 'waiting for your answer', reason: 'decision' })).toBe(
-    'waiting for your answer · wait: decision',
-  )
-  expect(standingWords({ state: 'working', phase: null, reason: null })).toBe('')
+test('a count has its thousands separated', () => {
   expect(countWords(12345)).toBe('12,345')
 })

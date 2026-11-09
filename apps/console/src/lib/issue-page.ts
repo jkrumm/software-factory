@@ -1,5 +1,5 @@
 import type { ChainModel, ChainNode, ReadIssueDetail } from '@software-factory/contract'
-import { ISSUE_KINDS } from '@/components/kit/kind-badge'
+import { ISSUE_KINDS, type IssueKind } from '@/components/kit/kind-badge'
 import type { LozengeState } from '@/components/kit/lozenge'
 import type { Tone } from '@/components/kit/tone'
 import type { Step } from '@/components/kit/step-rail'
@@ -29,8 +29,6 @@ export function lozengeStateOf(issue: Pick<ReadIssueDetail, 'state' | 'outcome'>
   if (issue.state !== 'closed') return issue.state
   return OUTCOMES.find((outcome) => outcome === issue.outcome) ?? issue.state
 }
-
-export type IssueKind = (typeof ISSUE_KINDS)[number]
 
 /** The Issue's kind when it is one of the five known, else null. */
 export const kindOf = (kind: string | null): IssueKind | null => ISSUE_KINDS.find((known) => known === kind) ?? null
@@ -109,16 +107,12 @@ export function attemptSeries(sessions: ReadIssueDetail['sessions']): {
   workingMs: number[]
   turns: number[]
   tokensOut: number[]
-  tokensIn: number[]
-  cacheRead: number[]
 } {
   return {
     labels: sessions.map((_, index) => `Attempt ${index + 1}`),
     workingMs: sessions.map((s) => s.insights.workingMs),
     turns: sessions.map((s) => s.insights.turns),
     tokensOut: sessions.map((s) => s.insights.tokens.output),
-    tokensIn: sessions.map((s) => s.insights.tokens.input),
-    cacheRead: sessions.map((s) => s.insights.tokens.cacheRead),
   }
 }
 

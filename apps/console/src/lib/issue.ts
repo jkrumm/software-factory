@@ -99,11 +99,3 @@ export function attemptOf(sessions: readonly { id: string }[], key: string | nul
   const index = sessions.findIndex((session) => session.id === key)
   return index === -1 ? null : index + 1
 }
-
-/** The plain line beside the state badge: the phase and the wait; empty when the API names neither. */
-export function standingWords(issue: Pick<ReadIssueDetail, 'state' | 'phase' | 'reason'>): string {
-  const parts: string[] = []
-  if (issue.phase) parts.push(issue.phase)
-  if (issue.state === 'waiting' && issue.reason) parts.push(`wait: ${issue.reason.replaceAll('_', ' ')}`)
-  return parts.join(' · ')
-}
