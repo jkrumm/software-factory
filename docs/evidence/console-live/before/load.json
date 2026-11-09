@@ -1,0 +1,493 @@
+{
+ "needs-you": {
+  "finalUrl": "http://127.0.0.1:7795/needs-you",
+  "dom": 103,
+  "lcp": {
+   "t": 220,
+   "el": "SPAN.line-clamp-2 text-sm text-muted-foregrou",
+   "size": 30342
+  },
+  "fcp": 188,
+  "cls": 0.015640625514403293,
+  "ttfb": 2.3000000715255737,
+  "dcl": 122.90000009536743,
+  "load": 123.40000009536743,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 312052,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 18711,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "flow": {
+  "finalUrl": "http://127.0.0.1:7795/flow",
+  "dom": 310,
+  "lcp": {
+   "t": 160,
+   "el": "P.line-clamp-2 text-sm font-medium",
+   "size": 9477
+  },
+  "fcp": 108,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.399999976158142,
+  "dcl": 57.39999997615814,
+  "load": 57.700000047683716,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 312057,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/flow",
+   "/v1/stream",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/needs",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 18716,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "chain": {
+  "finalUrl": "http://127.0.0.1:7795/chain",
+  "dom": 314,
+  "lcp": {
+   "t": 372,
+   "el": "P.line-clamp-2 text-sm font-medium",
+   "size": 3656
+  },
+  "fcp": 108,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.2999999523162842,
+  "dcl": 57.199999928474426,
+  "load": 57.39999997615814,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 302857,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/graph-CWedy2DL.js",
+    55344
+   ]
+  ],
+  "totalBytes": 372140,
+  "requests": 19,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/chain",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/chain"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 302857,
+   "Stylesheet": 15098,
+   "Fetch": 20820,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "improve": {
+  "finalUrl": "http://127.0.0.1:7795/improve",
+  "dom": 559,
+  "lcp": {
+   "t": 304,
+   "el": "TH.px-4 py-2 text-left font-medium",
+   "size": 4883
+  },
+  "fcp": 108,
+  "cls": 0.015642954796810698,
+  "ttfb": 1.3000000715255737,
+  "dcl": 57.700000047683716,
+  "load": 58,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 320756,
+  "requests": 23,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/kpis?days=7",
+   "/v1/friction?days=7",
+   "/v1/finding-classes",
+   "/v1/fix-commits",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/kpis?days=7",
+   "/v1/friction?days=7",
+   "/v1/finding-classes",
+   "/v1/fix-commits"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 27415,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue": {
+  "finalUrl": "http://127.0.0.1:7795/issues/528",
+  "dom": 197,
+  "lcp": {
+   "t": 164,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 20512
+  },
+  "fcp": 108,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 58.89999997615814,
+  "load": 59.199999928474426,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 314514,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/528",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/issues/528"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 21173,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue-523": {
+  "finalUrl": "http://127.0.0.1:7795/issues/523",
+  "dom": 218,
+  "lcp": {
+   "t": 152,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 23008
+  },
+  "fcp": 104,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.100000023841858,
+  "dcl": 59.10000002384186,
+  "load": 59.39999997615814,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 314881,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/523",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/issues/523"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 21540,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "artifact": {
+  "finalUrl": "http://127.0.0.1:7795/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187",
+  "dom": 263,
+  "lcp": {
+   "t": 148,
+   "el": "P.",
+   "size": 65416
+  },
+  "fcp": 116,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.3000000715255737,
+  "dcl": 57.700000047683716,
+  "load": 58,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 296932,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-GyZxrd7K.js",
+    49419
+   ]
+  ],
+  "totalBytes": 337349,
+  "requests": 19,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 296932,
+   "Stylesheet": 12463,
+   "Fetch": 25885,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 0
+  }
+ },
+ "artifact-spec": {
+  "finalUrl": "http://127.0.0.1:7795/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 116,
+  "lcp": {
+   "t": 152,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 12064
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.2999999523162842,
+  "dcl": 55.699999928474426,
+  "load": 56,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 296932,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-GyZxrd7K.js",
+    49419
+   ]
+  ],
+  "totalBytes": 657079,
+  "requests": 19,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 296932,
+   "Stylesheet": 12463,
+   "Fetch": 345615,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 0
+  }
+ },
+ "checkpoint": {
+  "finalUrl": "http://127.0.0.1:7795/needs-you?item=artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 131,
+  "lcp": {
+   "t": 196,
+   "el": "PRE.max-h-96 overflow-auto rounded-lg border",
+   "size": 517700
+  },
+  "fcp": 108,
+  "cls": 0.043624586419753086,
+  "ttfb": 1.2000000476837158,
+  "dcl": 59,
+  "load": 59.39999997615814,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 247513,
+  "jsFiles": [
+   [
+    "/assets/index-D872EJPo.js",
+    245156
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 639630,
+  "requests": 18,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864",
+   "/v1/needs",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/flow",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 1402,
+   "Script": 247513,
+   "Stylesheet": 12463,
+   "Fetch": 345622,
+   "EventSource": 0,
+   "Other": 1334,
+   "Font": 31296
+  }
+ }
+}

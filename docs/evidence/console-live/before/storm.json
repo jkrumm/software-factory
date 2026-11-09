@@ -1,0 +1,150 @@
+{
+ "needs-you": {
+  "w10": {
+   "secs": 10,
+   "mutationRecords": 0,
+   "mutationBatches": 0,
+   "mutPerSec": 0,
+   "longtasks": [],
+   "v1Requests": 0,
+   "bursts": [],
+   "sseEvents": [
+    "hello"
+   ]
+  },
+  "w60": {
+   "secs": 60,
+   "mutationRecords": 4,
+   "mutationBatches": 4,
+   "mutPerSec": 0.07,
+   "longtasks": [],
+   "v1Requests": 8,
+   "bursts": [
+    {
+     "at": "12.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "27.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "42.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "57.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    }
+   ],
+   "sseEvents": [
+    "hello"
+   ]
+  },
+  "synthetic": [
+   {
+    "req": "/v1/needs /v1/flow",
+    "mut": 0,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/accounts /v1/machine /v1/flow",
+    "mut": 1,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/accounts /v1/machine /v1/flow",
+    "mut": 1,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/accounts /v1/machine /v1/flow",
+    "mut": 0,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/accounts /v1/machine /v1/flow",
+    "mut": 0,
+    "lt": []
+   }
+  ]
+ },
+ "flow": {
+  "w10": {
+   "secs": 10,
+   "mutationRecords": 0,
+   "mutationBatches": 0,
+   "mutPerSec": 0,
+   "longtasks": [],
+   "v1Requests": 0,
+   "bursts": [],
+   "sseEvents": [
+    "hello"
+   ]
+  },
+  "w60": {
+   "secs": 60,
+   "mutationRecords": 21,
+   "mutationBatches": 5,
+   "mutPerSec": 0.35,
+   "longtasks": [],
+   "v1Requests": 8,
+   "bursts": [
+    {
+     "at": "12.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "27.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "42.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    },
+    {
+     "at": "57.3",
+     "n": 2,
+     "urls": "/v1/accounts /v1/machine"
+    }
+   ],
+   "sseEvents": [
+    "hello"
+   ]
+  },
+  "synthetic": [
+   {
+    "req": "/v1/needs /v1/flow",
+    "mut": 0,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/flow /v1/accounts /v1/machine",
+    "mut": 1,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/flow /v1/accounts /v1/machine",
+    "mut": 0,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/flow /v1/accounts /v1/machine",
+    "mut": 1,
+    "lt": []
+   },
+   {
+    "req": "/v1/needs /v1/flow /v1/accounts /v1/machine",
+    "mut": 11,
+    "lt": []
+   }
+  ]
+ }
+}
