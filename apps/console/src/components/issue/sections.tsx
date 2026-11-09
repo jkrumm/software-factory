@@ -126,8 +126,10 @@ function Signal({ line, lead, now }: { line: Issue['triage'][number]; lead: stri
         {line.source ? <span>Source {line.source}</span> : null}
         <span>{agoWords(line.at, now)}</span>
       </Meta>
-      {line.title ? <blockquote className="border-l-2 pl-3 font-medium">{line.title}</blockquote> : null}
-      {line.text ? <blockquote className="border-l-2 pl-3 whitespace-pre-wrap">{line.text}</blockquote> : null}
+      {line.title ? <blockquote className="rounded-lg bg-muted px-3 py-2 font-medium">{line.title}</blockquote> : null}
+      {line.text ? (
+        <blockquote className="rounded-lg bg-muted px-3 py-2 whitespace-pre-wrap">{line.text}</blockquote>
+      ) : null}
       <SourceLink href={line.link}>Open the source</SourceLink>
     </Card>
   )

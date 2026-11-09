@@ -127,7 +127,7 @@
   @apply text-primary underline underline-offset-4;
 }
 .artifact-prose blockquote {
-  @apply border-l-2 pl-4 text-muted-foreground;
+  @apply rounded-lg bg-muted px-3 py-2 text-muted-foreground;
 }
 .artifact-prose code {
   @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em];

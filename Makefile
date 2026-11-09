@@ -2,7 +2,7 @@
 .PHONY: help check merge-guard test e2e fmt deploy rollback verify version rehearse
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens and artifact templates, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free and master's last CI run is green (MERGE_GUARD_ARGS=--allow-red only for the change that fixes a red master)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
@@ -31,6 +31,8 @@ check:
 	@bun run --cwd apps/console tokens:check
 	@echo "==> console artifact templates are current (scripts/templates.ts)"
 	@bun run --cwd apps/console templates:check
+	@echo "==> console InfoHint definitions are current (scripts/language.ts)"
+	@bun run --cwd apps/console language:check
 	@echo "==> typecheck e2e (tests/e2e)"
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
 	@echo "==> boundaries (scripts/boundaries.ts)"

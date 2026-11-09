@@ -11,6 +11,8 @@
     "tokens:check": "basalt-ui tokens:css --selector-attribute data-theme --only core --out src/styles/tokens.css --check",
     "templates": "bun scripts/templates.ts",
     "templates:check": "bun scripts/templates.ts --check",
+    "language": "bun scripts/language.ts",
+    "language:check": "bun scripts/language.ts --check",
     "test": "bun test"
   },
   "dependencies": {
