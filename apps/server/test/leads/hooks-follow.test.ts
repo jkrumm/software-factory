@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { SpoolLine } from '@software-factory/contract/spool'
-import { followLeads } from '../../src/app/leads-follow.ts'
+import { followLeads, NAME_TABS_BUDGET_MS } from '../../src/app/leads-follow.ts'
 import { appendFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { spoolFileName } from '@software-factory/contract/spool'
@@ -265,5 +265,44 @@ describe('following the leads', () => {
     )
     await followLeads(w.deps)
     expect(w.terminals.named).toEqual([])
+  })
+
+  test('the lookups run together, not one after the other', async () => {
+    for (let i = 0; i < 4; i++) await running()
+    const delay = 80
+    const slow = {
+      ...w.deps,
+      terminals: {
+        find: async (k: string) => {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return w.terminals.find(k)
+        },
+        nameTab: (input: { tab: string; name: string }) => w.terminals.nameTab(input),
+      },
+    }
+    const began = performance.now()
+    await followLeads(slow as never)
+    expect(performance.now() - began).toBeLessThan(delay * 3)
+  })
+
+  test('past the naming budget the tabs wait for the next pass; a lost lead is still found gone', async () => {
+    await running()
+    await running()
+    const lost = [...w.terminals.terminals.keys()][1] ?? ''
+    w.terminals.lose(lost)
+    const third = await running()
+    const slow = {
+      ...w.deps,
+      terminals: {
+        find: (k: string) => w.terminals.find(k),
+        nameTab: async (input: { tab: string; name: string }) => {
+          w.clock.advance(NAME_TABS_BUDGET_MS + 1)
+          return w.terminals.nameTab(input)
+        },
+      },
+    }
+    expect(await followLeads(slow as never)).toBe(1)
+    expect(w.terminals.named).toHaveLength(1)
+    expect(await issueRow(third)).toMatchObject({ state: 'working' })
   })
 })

@@ -6,6 +6,9 @@ import { ok } from '../kernel/result.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 import { leadGone } from './leads-start.ts'
 
+/** The most wall-clock a pass spends naming tabs; what is left retries next pass, and gone-detection is never cut. */
+export const NAME_TABS_BUDGET_MS = 15_000
+
 /**
  * Finds the leads whose terminal is gone: each started lead of a `working` Issue is looked up in herdr-core by its key,
  * and one with no running terminal, past the grace (from the later of its start and its last hook event), is a lead
@@ -31,14 +34,21 @@ export async function followLeads(deps: LeadDeps): Promise<number> {
     return ok(out)
   })
   if (!followed.ok) return 0
+  // The lookups only read, so they run together: serial, a loaded host's slow `hc` calls add up past the heartbeat's limit.
+  const lookups = await Promise.all(
+    followed.value.map(({ row }) => deps.terminals.find(leadKey(row.issueId, row.attempt))),
+  )
+  const namingStart = deps.clock.now().getTime()
   let lost = 0
-  for (const { row, since, title, working } of followed.value) {
+  for (const [index, { row, since, title, working }] of followed.value.entries()) {
     const name = leadKey(row.issueId, row.attempt)
-    const found = await deps.terminals.find(name)
-    if (!found.ok) continue
+    const found = lookups[index]
+    if (!found?.ok) continue
     // The label marks a tab the factory made; the name comes from the title, so a lead started before the label carried it is named too.
     for (const { live, tab, tabName: made } of found.value) {
-      if (live && tab && made) await deps.terminals.nameTab({ tab, name: tabName(title) })
+      if (!live || !tab || !made) continue
+      if (deps.clock.now().getTime() - namingStart >= NAME_TABS_BUDGET_MS) continue
+      await deps.terminals.nameTab({ tab, name: tabName(title) })
     }
     if (!working || found.value.some((terminal) => terminal.live)) continue
     const quiet = deps.clock.now().getTime() - Math.max(row.startedAt?.getTime() ?? 0, since?.getTime() ?? 0)
