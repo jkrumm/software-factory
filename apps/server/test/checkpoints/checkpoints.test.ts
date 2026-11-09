@@ -880,7 +880,7 @@ describe('artifacts', () => {
     expect(value(await remove(artifact.id))).toMatchObject({ result: 'replayed' })
     expect(errorOf(await remove('artifact_none' as ArtifactId))).toMatchObject({ kind: 'not_found', what: 'artifact' })
     const shown = value(await showArtifact(deps, { artifactId: artifact.id, revision: null }))
-    expect(shown.annotations.map((a) => a.id)).not.toContain(id)
+    expect(shown.annotations.map((a) => a.annotation.id)).not.toContain(id)
   })
 
   test('revising back to older content is a new revision; the latest content again is a replay', async () => {
