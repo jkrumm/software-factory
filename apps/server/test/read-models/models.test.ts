@@ -64,6 +64,10 @@ describe('the empty database', () => {
     const flow = FlowModel.parse(await readFlow(sql, { now: NOW }))
     expect(Object.values(flow.states).map((c) => c.count)).toEqual([0, 0, 0, 0, 0])
     expect(flow.closedRecently).toEqual([])
+    expect(flow.trend.at).toHaveLength(8)
+    expect(Object.values(flow.trend.states).flat()).toEqual(Array(40).fill(0))
+    expect(flow.trend.shipped).toEqual(Array(7).fill(0))
+    expect(flow.trend.shippedBefore).toBe(0)
     expect(flow.perProject).toEqual([])
     expect(flow.queueStates).toEqual({ global: 'run', projects: {} })
 
@@ -148,7 +152,7 @@ async function seed() {
   // issue_5: queued behind issue_2
   await issue('issue_5', 'app', 'queued', 2)
   await filed('issue_5', 'app', 'Second change', ago(4), 'feedback')
-  await event('issue_5', 2, 'settled', ago(3.9), { from: 'settling', to: 'queued' })
+  await event('issue_5', 2, 'settled', ago(3.9), { from: 'settling', to: 'queued', payload: { kind: 'bug' } })
   await sql`INSERT INTO factory.planning_edges (issue_id, after_issue, created_at) VALUES ('issue_5', 'issue_2', ${ago(3.9)})`
 
   // issue_6: working; its lead was lost once and admitted again
@@ -284,6 +288,7 @@ describe('the fixture', () => {
       repo: 'app',
       title: 'Second change',
       origin: 'feedback',
+      kind: 'bug',
       since: ago(3.9).toISOString(),
       queue: reason,
     })
@@ -296,6 +301,11 @@ describe('the fixture', () => {
     ])
     expect(flow.closedRecently.map((c) => [c.id, c.outcome])).toEqual([['issue_9', 'cancelled']])
     expect(flow.closedRecently[0]?.origin).toBe('infrastructure')
+    // the settled kind wins over the filed one; without a settled kind the filed one stands
+    expect(flow.closedRecently[0]?.kind).toBe('feature')
+    expect(flow.states.working.issues[0]?.kind).toBe('feature')
+    // kind is a shape: a work repo's Issue keeps it
+    expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.kind).toBe('feature')
     // origin is a shape: a work repo's Issue keeps it
     expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.origin).toBe('you')
     expect(flow.perProject).toEqual([
@@ -520,5 +530,48 @@ describe('the fixture', () => {
     expect(await readFrictionEvidence(sql, { now: NOW, days: 7 }, ['undelivered_note', 'signal_held:github'])).toEqual(
       {},
     )
+  })
+})
+
+describe('the flow trend', () => {
+  test('daily samples of the state counts and the shipped counts per window; the last sample is the live count', async () => {
+    await sql`TRUNCATE factory.issues CASCADE`
+    // t1: working since 2 days ago (queued before), still working
+    await issue('issue_1', 'app', 'working', 3)
+    await filed('issue_1', 'app', 'One', ago(24 * 5))
+    await event('issue_1', 2, 'settled', ago(24 * 5 - 1), { from: 'settling', to: 'queued' })
+    await event('issue_1', 3, 'admitted', ago(24 * 2), { from: 'queued', to: 'working' })
+    // t2: closed done 3 days ago
+    await issue('issue_2', 'app', 'closed', 4, undefined, 'done')
+    await filed('issue_2', 'app', 'Two', ago(24 * 6))
+    await event('issue_2', 2, 'settled', ago(24 * 6 - 1), { from: 'settling', to: 'queued' })
+    await event('issue_2', 3, 'admitted', ago(24 * 5), { from: 'queued', to: 'working' })
+    await event('issue_2', 4, 'closed', ago(24 * 3 + 1), { from: 'working', to: 'closed', outcome: 'done' })
+    // t3: healed 10 days ago, before the first sample; counts in shippedBefore only
+    await issue('issue_3', 'app', 'closed', 2, undefined, 'healed')
+    await filed('issue_3', 'app', 'Three', ago(24 * 11))
+    await event('issue_3', 2, 'closed', ago(24 * 10), { from: 'settling', to: 'closed', outcome: 'healed' })
+    // t4: filed 12 h ago, still settling
+    await issue('issue_4', 'app', 'settling', 1)
+    await filed('issue_4', 'app', 'Four', ago(12))
+
+    const flow = FlowModel.parse(await readFlow(sql, { now: NOW }))
+    const { trend } = flow
+    expect(trend.at.map((t) => Date.parse(t))).toEqual(
+      Array.from({ length: 8 }, (_, i) => NOW.getTime() - (7 - i) * 86_400_000),
+    )
+    expect(trend.at[7]).toBe(NOW.toISOString())
+    // samples at -7 d .. now: t2 is settling at -6 d, working at -5 d and -4 d, closed by -3 d; t1 settles at -5 d, queues, works from -2 d
+    expect(trend.states.settling).toEqual([0, 1, 1, 0, 0, 0, 0, 1])
+    expect(trend.states.queued).toEqual([0, 0, 0, 1, 1, 0, 0, 0])
+    expect(trend.states.working).toEqual([0, 0, 1, 1, 0, 1, 1, 1])
+    expect(trend.states.waiting).toEqual(Array(8).fill(0))
+    // t2 closed 3 d and 1 h ago: the window (-4 d, -3 d]
+    expect(trend.shipped).toEqual([0, 0, 0, 1, 0, 0, 0])
+    expect(trend.shippedBefore).toBe(1)
+    // the last sample is the live column counts
+    for (const state of Object.keys(trend.states) as (keyof typeof trend.states)[]) {
+      expect(trend.states[state][7]).toBe(flow.states[state].count)
+    }
   })
 })
