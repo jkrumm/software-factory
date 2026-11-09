@@ -61,7 +61,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       strategies: 'generateSW',
       injectRegister: false,
-      includeAssets: ['icons/mark.svg', 'icons/glyph.svg', 'icons/apple-touch-icon.png'],
+      includeAssets: ['icons/mark.svg', 'icons/favicon.ico', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Software Factory',
         short_name: 'Factory',
