@@ -1,0 +1,139 @@
+{
+ "needs-you": {
+  "palette": {
+   "n": 10,
+   "med": 10.4,
+   "max": 17.6,
+   "min": 3.5
+  },
+  "targets": 2,
+  "action": {
+   "n": 10,
+   "med": 31,
+   "max": 35.5,
+   "min": 25.7
+  },
+  "scroll": {
+   "scrollable": false,
+   "docH": 1200
+  },
+  "longtasksInInteraction": []
+ },
+ "flow": {
+  "palette": {
+   "n": 10,
+   "med": 15.8,
+   "max": 36.6,
+   "min": 3.2
+  },
+  "targets": 2,
+  "action": null,
+  "scroll": {
+   "scrollable": false,
+   "docH": 1200
+  },
+  "longtasksInInteraction": []
+ },
+ "chain": {
+  "palette": {
+   "n": 10,
+   "med": 15.9,
+   "max": 19.1,
+   "min": 4.2
+  },
+  "scroll": {
+   "scrollable": false,
+   "docH": 1200
+  },
+  "longtasksInInteraction": []
+ },
+ "improve": {
+  "palette": {
+   "n": 10,
+   "med": 11.1,
+   "max": 25.2,
+   "min": 4
+  },
+  "targets": 11,
+  "action": {
+   "n": 10,
+   "med": 30.9,
+   "max": 56.6,
+   "min": 27.9
+  },
+  "scroll": {
+   "scrollable": true,
+   "tag": "MAIN.min-h-0 flex-1 overflow-y-auto",
+   "scrollH": 4142,
+   "clientH": 1102,
+   "medFrame": 33.60000002384186,
+   "maxFrame": 37.89999997615814
+  },
+  "longtasksInInteraction": []
+ },
+ "issue": {
+  "palette": {
+   "n": 10,
+   "med": 14.1,
+   "max": 21.9,
+   "min": 3.3
+  },
+  "targets": 1,
+  "action": {
+   "n": 10,
+   "med": 33.4,
+   "max": 37.3,
+   "min": 27.9
+  },
+  "scroll": {
+   "scrollable": true,
+   "tag": "MAIN.min-h-0 flex-1 overflow-y-auto",
+   "scrollH": 1736,
+   "clientH": 1102,
+   "medFrame": 33.5,
+   "maxFrame": 41.39999997615814
+  },
+  "longtasksInInteraction": []
+ },
+ "issue-523": {
+  "palette": {
+   "n": 10,
+   "med": 14.2,
+   "max": 20,
+   "min": 3.7
+  },
+  "targets": 1,
+  "action": {
+   "n": 10,
+   "med": 31,
+   "max": 38.5,
+   "min": 27.6
+  },
+  "scroll": {
+   "scrollable": true,
+   "tag": "MAIN.min-h-0 flex-1 overflow-y-auto",
+   "scrollH": 1414,
+   "clientH": 1102,
+   "medFrame": 33.300000071525574,
+   "maxFrame": 39.800000071525574
+  },
+  "longtasksInInteraction": []
+ },
+ "artifact": {
+  "palette": {
+   "n": 10,
+   "med": 14,
+   "max": 21.5,
+   "min": 4.7
+  },
+  "scroll": {
+   "scrollable": true,
+   "tag": "MAIN.min-h-0 flex-1 overflow-y-auto",
+   "scrollH": 3398,
+   "clientH": 1102,
+   "medFrame": 33,
+   "maxFrame": 40.700000047683716
+  },
+  "longtasksInInteraction": []
+ }
+}

@@ -1,0 +1,555 @@
+{
+ "needs-you": {
+  "finalUrl": "http://127.0.0.1:7795/needs-you",
+  "dom": 106,
+  "lcp": {
+   "t": 232,
+   "el": "SPAN.line-clamp-2 text-sm text-muted-foregrou",
+   "size": 28675
+  },
+  "fcp": 216,
+  "cls": 0.01557983024691358,
+  "ttfb": 3.1999999284744263,
+  "dcl": 160.10000002384186,
+  "load": 160.29999995231628,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 299341,
+  "requests": 14,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 9423,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "flow": {
+  "finalUrl": "http://127.0.0.1:7795/flow",
+  "dom": 296,
+  "lcp": {
+   "t": 164,
+   "el": "P.line-clamp-2 text-sm font-medium",
+   "size": 10218
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.1999999284744263,
+  "dcl": 57.199999928474426,
+  "load": 58.199999928474426,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 299342,
+  "requests": 14,
+  "v1": [
+   "/v1/needs",
+   "/v1/flow",
+   "/v1/stream",
+   "/v1/accounts",
+   "/v1/machine"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 9424,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "chain": {
+  "finalUrl": "http://127.0.0.1:7795/chain",
+  "dom": 325,
+  "lcp": {
+   "t": 200,
+   "el": "SPAN.",
+   "size": 3072
+  },
+  "fcp": 116,
+  "cls": 0.015640625514403293,
+  "ttfb": 4.699999928474426,
+  "dcl": 60.199999928474426,
+  "load": 61.09999990463257,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 313945,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/graph-B_AquD30.js",
+    70308
+   ]
+  ],
+  "totalBytes": 373278,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/chain"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 313945,
+   "Stylesheet": 16015,
+   "Fetch": 10417,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "improve": {
+  "finalUrl": "http://127.0.0.1:7795/improve",
+  "dom": 562,
+  "lcp": {
+   "t": 288,
+   "el": "TH.px-4 py-2 text-left font-medium",
+   "size": 4883
+  },
+  "fcp": 116,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.399999976158142,
+  "dcl": 56.200000047683716,
+  "load": 56.60000002384186,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 303757,
+  "requests": 18,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/kpis?days=7",
+   "/v1/friction?days=7",
+   "/v1/finding-classes",
+   "/v1/fix-commits"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 13839,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue": {
+  "finalUrl": "http://127.0.0.1:7795/issues/528",
+  "dom": 236,
+  "lcp": {
+   "t": 184,
+   "el": "BLOCKQUOTE.rounded-lg bg-muted px-3 py-2 whitespace",
+   "size": 60040
+  },
+  "fcp": 104,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.3000000715255737,
+  "dcl": 55.40000009536743,
+  "load": 55.700000047683716,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 301694,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/528"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 11776,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue-523": {
+  "finalUrl": "http://127.0.0.1:7795/issues/523",
+  "dom": 221,
+  "lcp": {
+   "t": 176,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 23008
+  },
+  "fcp": 104,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.0999999046325684,
+  "dcl": 53.799999952316284,
+  "load": 54.09999990463257,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 300781,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/523"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 10863,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "artifact": {
+  "finalUrl": "http://127.0.0.1:7795/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187",
+  "dom": 267,
+  "lcp": {
+   "t": 172,
+   "el": "P.",
+   "size": 64480
+  },
+  "fcp": 124,
+  "cls": 0.01565100128600823,
+  "ttfb": 1.100000023841858,
+  "dcl": 55.699999928474426,
+  "load": 56,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 293118,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-DoyBIj5a.js",
+    49481
+   ]
+  ],
+  "totalBytes": 352434,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 293118,
+   "Stylesheet": 13380,
+   "Fetch": 13035,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "artifact-spec": {
+  "finalUrl": "http://127.0.0.1:7795/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 120,
+  "lcp": {
+   "t": 140,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 12064
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.1999999284744263,
+  "dcl": 56.39999997615814,
+  "load": 56.699999928474426,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 293118,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-DoyBIj5a.js",
+    49481
+   ]
+  ],
+  "totalBytes": 480998,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 293118,
+   "Stylesheet": 13380,
+   "Fetch": 172895,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 0
+  }
+ },
+ "checkpoint": {
+  "finalUrl": "http://127.0.0.1:7795/needs-you?item=artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 134,
+  "lcp": {
+   "t": 188,
+   "el": "PRE.max-h-96 overflow-auto rounded-lg border",
+   "size": 517700
+  },
+  "fcp": 112,
+  "cls": 0.043624586419753086,
+  "ttfb": 1.600000023841858,
+  "dcl": 61.39999997615814,
+  "load": 62.39999997615814,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 243637,
+  "jsFiles": [
+   [
+    "/assets/index-DoSCs041.js",
+    221922
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D5fM-ZKE.js",
+    5597
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 463497,
+  "requests": 16,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 938,
+   "Script": 243637,
+   "Stylesheet": 13380,
+   "Fetch": 172912,
+   "EventSource": 0,
+   "Other": 1334,
+   "Font": 31296
+  }
+ }
+}

@@ -1,0 +1,555 @@
+{
+ "needs-you": {
+  "finalUrl": "http://127.0.0.1:7796/needs-you",
+  "dom": 106,
+  "lcp": {
+   "t": 120,
+   "el": "SPAN.line-clamp-2 text-sm text-muted-foregrou",
+   "size": 30342
+  },
+  "fcp": 100,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.2000000476837158,
+  "dcl": 51.10000002384186,
+  "load": 51.5,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 270152,
+  "requests": 14,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 9402,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "flow": {
+  "finalUrl": "http://127.0.0.1:7796/flow",
+  "dom": 304,
+  "lcp": {
+   "t": 124,
+   "el": "P.line-clamp-2 text-sm font-medium",
+   "size": 9477
+  },
+  "fcp": 100,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 51.40000009536743,
+  "load": 51.700000047683716,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 270151,
+  "requests": 14,
+  "v1": [
+   "/v1/needs",
+   "/v1/flow",
+   "/v1/stream",
+   "/v1/accounts",
+   "/v1/machine"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 9401,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "chain": {
+  "finalUrl": "http://127.0.0.1:7796/chain",
+  "dom": 317,
+  "lcp": {
+   "t": 452,
+   "el": "P.line-clamp-2 text-sm font-medium",
+   "size": 3656
+  },
+  "fcp": 104,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 52.699999928474426,
+  "load": 53,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 285651,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/graph-DgGuDozZ.js",
+    70304
+   ]
+  ],
+  "totalBytes": 344128,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/chain"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 285651,
+   "Stylesheet": 15130,
+   "Fetch": 10439,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "improve": {
+  "finalUrl": "http://127.0.0.1:7796/improve",
+  "dom": 562,
+  "lcp": {
+   "t": 204,
+   "el": "TH.px-4 py-2 text-left font-medium",
+   "size": 4883
+  },
+  "fcp": 104,
+  "cls": 0.015642954796810698,
+  "ttfb": 1.2000000476837158,
+  "dcl": 52.5,
+  "load": 52.90000009536743,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 274640,
+  "requests": 18,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/kpis?days=7",
+   "/v1/friction?days=7",
+   "/v1/finding-classes",
+   "/v1/fix-commits"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 13890,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue": {
+  "finalUrl": "http://127.0.0.1:7796/issues/528",
+  "dom": 200,
+  "lcp": {
+   "t": 156,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 20512
+  },
+  "fcp": 104,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 53.10000002384186,
+  "load": 53.40000009536743,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 271440,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/528"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 10690,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "issue-523": {
+  "finalUrl": "http://127.0.0.1:7796/issues/523",
+  "dom": 221,
+  "lcp": {
+   "t": 156,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 23008
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1.100000023841858,
+  "dcl": 57.200000047683716,
+  "load": 57.60000002384186,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 271609,
+  "requests": 15,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/issues/523"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 10859,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 31296
+  }
+ },
+ "artifact": {
+  "finalUrl": "http://127.0.0.1:7796/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187",
+  "dom": 267,
+  "lcp": {
+   "t": 148,
+   "el": "P.",
+   "size": 65416
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 49.89999997615814,
+  "load": 50.800000071525574,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 264809,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-CE35eIB0.js",
+    49462
+   ]
+  ],
+  "totalBytes": 291947,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b8fe-7792-963f-249b5b1d8187"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 264809,
+   "Stylesheet": 12495,
+   "Fetch": 13031,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 0
+  }
+ },
+ "artifact-spec": {
+  "finalUrl": "http://127.0.0.1:7796/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 120,
+  "lcp": {
+   "t": 148,
+   "el": "H1.font-heading text-2xl font-semibold trac",
+   "size": 12064
+  },
+  "fcp": 112,
+  "cls": 0.015640625514403293,
+  "ttfb": 1,
+  "dcl": 51.700000047683716,
+  "load": 52,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 264809,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ],
+   [
+    "/assets/artifacts._id-CE35eIB0.js",
+    49462
+   ]
+  ],
+  "totalBytes": 451812,
+  "requests": 17,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 264809,
+   "Stylesheet": 12495,
+   "Fetch": 172896,
+   "EventSource": 0,
+   "Other": 667,
+   "Font": 0
+  }
+ },
+ "checkpoint": {
+  "finalUrl": "http://127.0.0.1:7796/needs-you?item=artifact_01a1bece-b962-7600-839d-108fddf09864",
+  "dom": 134,
+  "lcp": {
+   "t": 168,
+   "el": "PRE.max-h-96 overflow-auto rounded-lg border",
+   "size": 517700
+  },
+  "fcp": 104,
+  "cls": 0.04655278395061728,
+  "ttfb": 1.600000023841858,
+  "dcl": 54.5,
+  "load": 54.799999952316284,
+  "longtasks": 0,
+  "longest": 0,
+  "tbt": 0,
+  "tasks": [],
+  "jsBytes": 215347,
+  "jsFiles": [
+   [
+    "/assets/index-uXEPjPyT.js",
+    193883
+   ],
+   [
+    "/assets/utils-Cuxv3RGz.js",
+    12171
+   ],
+   [
+    "/assets/textarea-D2NQbcIi.js",
+    5346
+   ],
+   [
+    "/assets/react-dom-mc5NauIK.js",
+    1590
+   ],
+   [
+    "/assets/workbox-window.prod.es5-Bd17z0YL.js",
+    2357
+   ]
+  ],
+  "totalBytes": 434316,
+  "requests": 16,
+  "v1": [
+   "/v1/needs",
+   "/v1/stream",
+   "/v1/flow",
+   "/v1/accounts",
+   "/v1/machine",
+   "/v1/artifacts/artifact_01a1bece-b962-7600-839d-108fddf09864"
+  ],
+  "bytesByType": {
+   "Document": 945,
+   "Script": 215347,
+   "Stylesheet": 12495,
+   "Fetch": 172899,
+   "EventSource": 0,
+   "Other": 1334,
+   "Font": 31296
+  }
+ }
+}

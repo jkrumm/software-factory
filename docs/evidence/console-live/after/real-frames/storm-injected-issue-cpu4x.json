@@ -1,0 +1,180 @@
+{
+ "needs-you@1Hz": {
+  "eventsPerSec": 1,
+  "events": 10,
+  "winSecs": 11.5,
+  "requests": 20,
+  "byUrl": {
+   "/v1/needs": 10,
+   "/v1/flow": 10
+  },
+  "mutations": 0,
+  "mutPerSec": 0,
+  "longtasks": [],
+  "msTask": 133,
+  "msScript": 77,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 8.2,
+  "domAfter": 106
+ },
+ "needs-you@4Hz": {
+  "eventsPerSec": 4,
+  "events": 40,
+  "winSecs": 11.6,
+  "requests": 74,
+  "byUrl": {
+   "/v1/needs": 37,
+   "/v1/flow": 37
+  },
+  "mutations": 0,
+  "mutPerSec": 0,
+  "longtasks": [],
+  "msTask": 426,
+  "msScript": 239,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 10,
+  "domAfter": 106
+ },
+ "flow@1Hz": {
+  "eventsPerSec": 1,
+  "events": 10,
+  "winSecs": 11.5,
+  "requests": 20,
+  "byUrl": {
+   "/v1/needs": 10,
+   "/v1/flow": 10
+  },
+  "mutations": 0,
+  "mutPerSec": 0,
+  "longtasks": [],
+  "msTask": 160,
+  "msScript": 94,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 9.5,
+  "domAfter": 312
+ },
+ "flow@4Hz": {
+  "eventsPerSec": 4,
+  "events": 40,
+  "winSecs": 11.6,
+  "requests": 78,
+  "byUrl": {
+   "/v1/needs": 39,
+   "/v1/flow": 39
+  },
+  "mutations": 0,
+  "mutPerSec": 0,
+  "longtasks": [],
+  "msTask": 484,
+  "msScript": 285,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 13.6,
+  "domAfter": 312
+ },
+ "improve@1Hz": {
+  "eventsPerSec": 1,
+  "events": 10,
+  "winSecs": 11.5,
+  "requests": 24,
+  "byUrl": {
+   "/v1/needs": 10,
+   "/v1/flow": 10,
+   "/v1/kpis": 1,
+   "/v1/friction": 1,
+   "/v1/finding-classes": 1,
+   "/v1/fix-commits": 1
+  },
+  "mutations": 4,
+  "mutPerSec": 0.35,
+  "longtasks": [],
+  "msTask": 155,
+  "msScript": 87,
+  "msLayout": 1,
+  "msStyle": 0,
+  "layoutCount": 1,
+  "styleRecalc": 0,
+  "jsHeapMB": 9.1,
+  "domAfter": 562
+ },
+ "improve@4Hz": {
+  "eventsPerSec": 4,
+  "events": 40,
+  "winSecs": 11.6,
+  "requests": 82,
+  "byUrl": {
+   "/v1/needs": 39,
+   "/v1/flow": 39,
+   "/v1/kpis": 1,
+   "/v1/friction": 1,
+   "/v1/finding-classes": 1,
+   "/v1/fix-commits": 1
+  },
+  "mutations": 0,
+  "mutPerSec": 0,
+  "longtasks": [],
+  "msTask": 430,
+  "msScript": 237,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 12,
+  "domAfter": 562
+ },
+ "issue@1Hz": {
+  "eventsPerSec": 1,
+  "events": 10,
+  "winSecs": 11.5,
+  "requests": 30,
+  "byUrl": {
+   "/v1/needs": 10,
+   "/v1/flow": 10,
+   "/v1/issues/528": 10
+  },
+  "mutations": 1,
+  "mutPerSec": 0.09,
+  "longtasks": [],
+  "msTask": 167,
+  "msScript": 101,
+  "msLayout": 0,
+  "msStyle": 0,
+  "layoutCount": 0,
+  "styleRecalc": 0,
+  "jsHeapMB": 9.4,
+  "domAfter": 236
+ },
+ "issue@4Hz": {
+  "eventsPerSec": 4,
+  "events": 40,
+  "winSecs": 11.7,
+  "requests": 117,
+  "byUrl": {
+   "/v1/needs": 39,
+   "/v1/flow": 39,
+   "/v1/issues/528": 39
+  },
+  "mutations": 6,
+  "mutPerSec": 0.51,
+  "longtasks": [],
+  "msTask": 591,
+  "msScript": 340,
+  "msLayout": 2,
+  "msStyle": 0,
+  "layoutCount": 2,
+  "styleRecalc": 0,
+  "jsHeapMB": 11.7,
+  "domAfter": 236
+ }
+}
