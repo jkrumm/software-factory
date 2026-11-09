@@ -1,9 +1,11 @@
 import { expect, test } from 'bun:test'
 import type { FlowModel } from '@software-factory/contract'
 import {
+  boardColumns,
   boardNote,
   boardOf,
   columnKeyOf,
+  columnWeight,
   countsOf,
   defaultTab,
   facetCounts,
@@ -211,4 +213,18 @@ test('the sidebar count and the Flow note share one open count, which is not the
   expect(sidebar).toBe(4)
   expect(boardNote(counts)).toBe(`${sidebar} open, 1 closed in the last day`)
   expect(sidebar).not.toBe(counts.working)
+})
+
+test('columnWeight: empty columns are narrow, crowded ones wide, Closed recently the widest', () => {
+  expect(columnWeight('working', 0)).toBeLessThan(columnWeight('working', 1))
+  expect(columnWeight('waiting', 1)).toBeLessThan(columnWeight('waiting', 10))
+  expect(columnWeight('closed', 112)).toBeGreaterThan(columnWeight('waiting', 112))
+  expect(columnWeight('closed', 0)).toBe(columnWeight('working', 0))
+})
+
+test('boardColumns: one track per shown column, an empty one with the smaller minimum', () => {
+  const counts = { settling: 0, queued: 0, working: 1, waiting: 1, watching: 0, closed: 112 }
+  expect(boardColumns(['working', 'watching', 'closed'], counts)).toBe(
+    'minmax(15rem, 1fr) minmax(11rem, 0.6fr) minmax(15rem, 2fr)',
+  )
 })

@@ -4,6 +4,7 @@ import {
   changeTone,
   changeWords,
   chartTarget,
+  drawsHistory,
   classWords,
   comparisonWords,
   distanceWords,
@@ -44,6 +45,15 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   definition: '',
   history: history(0.3, 0.28, 0.4, 0.22, 0.2, 0.25),
   ...over,
+})
+
+test('drawsHistory: a target gives one reading a place, no target needs a trend of three, nothing measured draws nothing', () => {
+  const none = { kind: 'unset', min: null, max: null } as const
+  expect(drawsHistory(kpi({ history: history(null, null, null, null, null, 0.2) }))).toBe(true)
+  expect(drawsHistory(kpi({ history: history(null, null, null, null, null, null) }))).toBe(false)
+  expect(drawsHistory(kpi({ target: none, history: history(null, null, null, null, 0.1, 0.2) }))).toBe(false)
+  expect(drawsHistory(kpi({ target: none, history: history(null, null, null, 0.1, 0.2, 0.3) }))).toBe(true)
+  expect(drawsHistory(kpi({ measured: false }))).toBe(false)
 })
 
 test('windowOf takes 7, 30 or 90 and falls back to 7', () => {
@@ -154,8 +164,8 @@ test('distanceWords: the verdict in words, the reason when there is none', () =>
   expect(
     distanceWords(kpi({ unit: 'ms', value: 5 * 3_600_000, target: { kind: 'at_most', min: null, max: 3_600_000 } })),
   ).toBe('4.0 h above the target of at most 1.0 h')
-  expect(distanceWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBe('Trend only')
-  expect(distanceWords(kpi({ target: { kind: 'unset', min: null, max: null } }))).toBe('No target')
+  expect(distanceWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBeNull()
+  expect(distanceWords(kpi({ target: { kind: 'unset', min: null, max: null } }))).toBeNull()
   expect(distanceWords(kpi({ value: null }))).toBe('No data')
   expect(distanceWords(kpi({ value: null, measured: false }))).toBe('Not measured')
 })

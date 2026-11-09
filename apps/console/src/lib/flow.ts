@@ -15,6 +15,22 @@ export const COLUMN_LABEL: Record<ColumnKey, string> = {
   closed: 'Closed recently',
 }
 
+/**
+ * The share of the board a column takes, by what it holds: an empty column is narrow (it has a sentence to say, no
+ * titles to fit), a crowded one wider, and Closed recently the widest because it only grows.
+ */
+export function columnWeight(key: ColumnKey, count: number): number {
+  if (count === 0) return 0.6
+  const crowded = count >= 10
+  if (key === 'closed') return crowded ? 2 : 1.25
+  return crowded ? 1.4 : 1
+}
+
+/** `grid-template-columns` of the board: each column at least as wide as its cards can read, then its weight. */
+export function boardColumns(keys: readonly ColumnKey[], counts: Record<ColumnKey, number>): string {
+  return keys.map((key) => `minmax(${counts[key] === 0 ? 11 : 15}rem, ${columnWeight(key, counts[key])}fr)`).join(' ')
+}
+
 /** An Issue's origin as the word the owner reads. */
 export const ORIGIN_LABEL = {
   you: 'You',

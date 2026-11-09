@@ -166,17 +166,20 @@ export function ChartFrame({
       {row && active !== null && tooltip === 'inside' ? (
         <InsideTooltip row={row} x={anchorX(active, width)} width={width} />
       ) : null}
-      <table className="sr-only">
-        <caption>{summary}</caption>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <th scope="row">{r.label}</th>
-              <td>{r.lines?.length ? `${r.value}: ${r.lines.join(', ')}` : r.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* the clipping box is a div: a table ignores `overflow` and its wide rows would widen the Shell's `main` (a sideways scroll on a phone) */}
+      <div className="sr-only">
+        <table>
+          <caption>{summary}</caption>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <th scope="row">{r.label}</th>
+                <td>{r.lines?.length ? `${r.value}: ${r.lines.join(', ')}` : r.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

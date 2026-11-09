@@ -154,7 +154,7 @@ export function StatCard({
           <div className="flex items-center gap-0.5">
             <h3
               title={title}
-              className="min-w-0 truncate text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
+              className="min-w-0 line-clamp-2 text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
             >
               <CardLink href={href} as={as}>
                 {title}

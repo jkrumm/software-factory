@@ -46,7 +46,9 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-const Prose = ({ children }: { children: ReactNode }) => <p className="text-sm whitespace-pre-wrap">{children}</p>
+const Prose = ({ children }: { children: ReactNode }) => (
+  <p className="text-sm [overflow-wrap:anywhere] whitespace-pre-wrap">{children}</p>
+)
 
 const Problem = ({ words }: { words: string | null }) =>
   words ? (
@@ -293,7 +295,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
                 <p className="text-muted-foreground">
                   {remark.author === 'owner' ? 'You' : 'Lead'} on "{remark.quote}"
                 </p>
-                <p className="whitespace-pre-wrap">{remark.comment}</p>
+                <p className="[overflow-wrap:anywhere] whitespace-pre-wrap">{remark.comment}</p>
               </li>
             ))}
           </ul>
