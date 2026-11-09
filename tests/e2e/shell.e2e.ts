@@ -18,7 +18,7 @@ test('the root redirects to Needs you, the badge is the API count and no id leak
   await page.goto('/')
   await expect(page).toHaveURL(/\/needs-you$/)
   await expect(badge(page)).toHaveText(String(count))
-  await expect(page.getByText(`${count} waiting`, { exact: true })).toBeVisible()
+  await expect(page.getByText(`${count} need you`, { exact: true })).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 

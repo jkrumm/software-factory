@@ -77,6 +77,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   })
   process.env.E2E_CONTROL_URL = `http://127.0.0.1:${control.port}`
   process.env.E2E_API_URL = lab.server.url
+  process.env.E2E_DATABASE_URL = world.db.url
   process.env.E2E_CONSOLE_URL = consoleUrl
   process.env.E2E_WORLD_BIN = world.bin
   return async () => {
