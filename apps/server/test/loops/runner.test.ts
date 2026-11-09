@@ -330,8 +330,10 @@ test('a load that fails is logged and the loops are scheduled from boot', async 
   await runner.start()
   expect(logged.some((line) => line.includes('no table'))).toBe(true)
   await Bun.sleep(10)
+  expect(counts.runs).toBe(0)
+  await Bun.sleep(100)
   await runner.stop()
-  expect(counts.runs).toBe(1)
+  expect(counts.runs).toBeGreaterThanOrEqual(1)
 })
 
 test('view().lastPassAt is seeded from the record and moves with a pass', async () => {

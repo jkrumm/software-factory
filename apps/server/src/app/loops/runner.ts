@@ -136,8 +136,10 @@ export function createLoopRunner(input: {
   }
 
   let stopped = false
+  /** false when the record could not be read: no loop is then known to be due, so each waits one interval from now */
+  let recordRead = true
 
-  /** Seeds each loop's last pass from the record; a record that cannot be read leaves them unknown (scheduled from boot). */
+  /** Seeds each loop's last pass from the record; a record that cannot be read schedules every loop from boot. */
   async function loadPasses(passes: LoopPasses): Promise<void> {
     try {
       for (const [name, at] of await passes.load()) {
@@ -145,6 +147,7 @@ export function createLoopRunner(input: {
         if (state) state.lastPassAt = at
       }
     } catch (error) {
+      recordRead = false
       log(
         `loops: last passes not loaded, scheduling from boot: ${error instanceof Error ? error.message : String(error)}`,
       )
@@ -161,7 +164,11 @@ export function createLoopRunner(input: {
       state.timer = setInterval(tick, intervalMs)
       return
     }
-    const left = state.lastPassAt ? state.lastPassAt.getTime() + intervalMs - input.clock.now().getTime() : 0
+    const left = !recordRead
+      ? intervalMs
+      : state.lastPassAt
+        ? state.lastPassAt.getTime() + intervalMs - input.clock.now().getTime()
+        : 0
     state.timer = setTimeout(
       () => {
         tick()
