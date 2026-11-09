@@ -38,6 +38,9 @@ For `session note`, only a structured `not_found` answer falls back to `hc send`
 the note, so `rd` reports it and does not send the text a second time. A failed `issue new` is never retried through
 `hc`.
 
+`rd issue` forwards the factory's stderr and exit code verbatim, so a hint the factory prints reaches the `rd` user. The
+`--facts` shape is `factory issue schema`. `rd issue` has no `--text`; it forwards `--facts`, `--after` and `--key`.
+
 ## Exit codes
 
 `factory` exits with the table in `apps/cli/src/exit.ts` (0 ok, 2 usage, 3 auth, 4 not found, 5 conflict, 7 network,

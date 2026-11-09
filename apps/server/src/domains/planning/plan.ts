@@ -41,7 +41,7 @@ export const PlanRow = z
   .strictObject({
     key: PlanKey,
     title: z.string().trim().min(1).max(200).optional(),
-    /** what the filed Issue's lead reads: free-form (`why`, `what`, `change`, `acceptance`) */
+    /** what the filed Issue's lead reads: free-form; the conventional keys are `FACTS_KEYS` (packages/contract/src/filing.ts) */
     facts: z.record(z.string(), z.unknown()).optional(),
     /** what the Issue is; default `feature` */
     kind: z.enum(PLAN_KINDS).optional(),
