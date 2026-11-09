@@ -150,3 +150,4 @@ compaction, before acting. Updated on every start, integration and send-back.
 - 2026-11-09 18:45: 'Console v1: your verdict' is in Needs you (554 waits on it), confirmed in the needs read. 556 and 557 (the last small gaps) and 555 (selfwatch, branches) building.
 - 2026-11-09 19:15: 555 done (67d7300): selfwatch compares only refs that can still merge, and a closed Issue's lead branches are cleaned. 556's phone fix merged (22521b7), still verifying; 557 building; 554 and 523 wait on the owner.
 - 2026-11-09 19:45: 556 done (phone clipping, a0d3301 live). Only 557 (palette, Activity tab) still building; 554 and 523 wait on the owner.
+- 2026-11-09 20:15: 557 done (palette loads on idle, Activity text), so every Console gap from the review is closed and live on 40e05d1. The queue is empty: only 554 and 523 wait on the owner, and the burn-in reports wait for 2026-11-11 and 2026-11-15.
