@@ -105,6 +105,17 @@ and the history, oldest first. Every figure is the API's, only phrased; no id is
 and the Console never cancels an Issue or starts a session. An open Decision links to `/needs-you?item=<id>`, an artifact
 to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 
+## Kit
+
+`src/components/kit/` holds the Console's own components (StatCard, Lozenge, KindBadge, IssueCard and IssueRow,
+PropertyList, Section and Fold, StepRail, Meter, Sparkline and MiniBars, InfoHint, EmptyState, Skeleton), each on Basalt
+tokens alone, and `/kit` shows them together on fixtures (reachable by its address; it has no nav entry and makes no query).
+An InfoHint's text is the word's definition from `docs/language.md`: `scripts/language.ts` writes
+`src/lib/language.gen.ts` (`bun run --cwd apps/console language`) and `language:check` in `make check` fails when it is
+stale. tuffui's `stat-grid`, `agent-question` and `tool-approval-queue` were evaluated first: they are MIT, but they pull
+`motion`, a `theme.json` and their own surface, status-pill and rolling-number primitives, and do not use Base UI, so
+their anatomy was rebuilt on Basalt tokens instead of taking one.
+
 ## Colours are enforced
 
 `test/no-raw-colour.test.ts` fails on any colour literal in `src`, `index.html` and `vite.config.ts` except the generated

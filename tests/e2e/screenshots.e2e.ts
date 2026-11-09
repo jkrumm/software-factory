@@ -10,6 +10,7 @@ const SCREENS = [
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'improve-30', path: '/improve?days=30' },
+  { name: 'kit', path: '/kit' },
 ] as const
 
 /** The artifact page: a Markdown Spec, an HTML Report, and a Report compared with its first revision. */
@@ -32,9 +33,12 @@ function issueScreens() {
 }
 
 const VARIANTS = [
+  { name: 'desktop-xl-dark', viewport: { width: 1800, height: 1200 }, colorScheme: 'dark' },
+  { name: 'desktop-xl-light', viewport: { width: 1800, height: 1200 }, colorScheme: 'light' },
   { name: 'desktop-dark', viewport: { width: 1280, height: 800 }, colorScheme: 'dark' },
   { name: 'desktop-light', viewport: { width: 1280, height: 800 }, colorScheme: 'light' },
   { name: 'phone-dark', viewport: { width: 390, height: 844 }, colorScheme: 'dark' },
+  { name: 'phone-light', viewport: { width: 390, height: 844 }, colorScheme: 'light' },
 ] as const
 
 for (const variant of VARIANTS) {
@@ -49,6 +53,14 @@ for (const variant of VARIANTS) {
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
         await shot(name)
+        if (name === 'kit') {
+          // The Shell scrolls inside itself, so a full-page shot stops at the viewport: shoot the whole kit on a tall one.
+          const { width, height } = page.viewportSize() ?? variant.viewport
+          await page.setViewportSize({ width, height: width < 600 ? 7000 : 3600 })
+          await page.waitForLoadState('networkidle')
+          await shot('kit-tall')
+          await page.setViewportSize({ width, height })
+        }
       }
       // Needs you with one item open (the deep link of a page)
       const { items } = await api<{ items: { id: string; kind: string }[] }>(apiUrl, '/v1/needs')

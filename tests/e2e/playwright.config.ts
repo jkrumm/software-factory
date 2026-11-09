@@ -18,7 +18,7 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1800, height: 1200 },
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 })

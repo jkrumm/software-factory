@@ -67,7 +67,7 @@ export function Composer({
         if (comment.trim() !== '') write.mutate(undefined)
       }}
     >
-      <p className="line-clamp-3 border-l-2 pl-2 text-sm text-muted-foreground">{selected.quote}</p>
+      <p className="line-clamp-3 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{selected.quote}</p>
       <Textarea
         aria-label="Comment"
         autoFocus
@@ -93,7 +93,9 @@ function AnnotationItem({ annotation, onFocus }: { annotation: Annotation; onFoc
   const body = (
     <>
       {isGeneral ? null : (
-        <span className="line-clamp-2 border-l-2 pl-2 text-sm text-muted-foreground">{annotation.quote}</span>
+        <span className="line-clamp-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+          {annotation.quote}
+        </span>
       )}
       <span className="text-sm">{annotation.comment}</span>
       <span className="text-xs text-muted-foreground">
