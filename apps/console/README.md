@@ -188,7 +188,6 @@ whitespace folded to single spaces: the API anchors it on the artifact's readabl
 
 ## The Issue page
 
-<<<<<<< HEAD
 `/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and `GET /v1/chain`, nothing
 else. A header (kind, state, project chip, title, summary, the owner's next moves as links, the facts), then from `lg` up
 two columns: tabs on the left and an aside on the right (Properties; the Chain around this Issue, Waits on and Blocks); below
@@ -202,15 +201,6 @@ phrased; no id is on screen. A Needs you card and a Flow card link to it. It is 
 six answer verbs and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
 Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
 `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
-=======
-`/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and nothing else: the title and
-state, the facts (account, weekly quota, insights), how the Issue was filed and amended (`triage`), each attempt and its
-state, the owner's notes, the Decisions and artifacts with links to their own pages, shipping with its watch and checks,
-and the history, oldest first. Every figure is the API's, only phrased; no id is on screen. A Needs you card links to it
-(its Issue link). It is read-only on purpose: the listener forwards six answer verbs and none of them is a note or a cancel,
-and the Console never cancels an Issue or starts a session. An open Decision links to `/needs-you?item=<id>`, an artifact
-to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
->>>>>>> fbbf2f7 (feat(console): Needs you with a 'Since you were here' band, project-first cards, option cards and filters)
 
 ## Kit
 
