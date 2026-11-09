@@ -12,6 +12,8 @@ import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
+import { hostReader } from './adapters/planning/host.ts'
+import { hostWatch } from './adapters/planning/host-watch.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
@@ -36,6 +38,7 @@ import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
+import { hostPass, hostSummary } from './app/loops/host.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
 import { githubCiRuns } from './adapters/selfwatch/github.ts'
@@ -142,10 +145,17 @@ async function main(): Promise<void> {
   const loopSettings = loadLoopSettings(process.env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
   const agw = agwPort({ bin: settings.agwBin })
+  const planningEnv = planningSettings(process.env, { repoRoots: leadSettings.repoRoots })
+  // Its own reader: the swapout rate of a minute sample counts from the last sample, not from an admission's reading.
+  const hostSamples = hostWatch({
+    host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
+    sysctlBin: planningEnv.sysctlBin,
+    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+  })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const planning = composePlanning({
     writes,
-    settings: planningSettings(process.env, { repoRoots: leadSettings.repoRoots }),
+    settings: planningEnv,
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots)
@@ -460,6 +470,17 @@ async function main(): Promise<void> {
         return ok(fixClassesSummary(pass.value))
       },
     },
+    {
+      // One reading of the host a minute, kept 25 hours: the Console's Live popover draws it.
+      name: 'host',
+      intervalMs: loopSettings.intervalMs.host,
+      onChange: false,
+      run: async () => {
+        const pass = await hostPass({ uow, clock: writes.clock, sampler: hostSamples })
+        if (!pass.ok) return pass
+        return ok(hostSummary(pass.value))
+      },
+    },
   ]
   const runner: LoopRunner = createLoopRunner({
     loops: specs,
@@ -551,7 +572,12 @@ async function main(): Promise<void> {
       mainCheckouts: () => mainCheckoutLines.current(),
       queueReasons,
     }),
-    readModels: { sql, queueReasons, machine },
+    readModels: {
+      sql,
+      queueReasons,
+      machine,
+      host: { version: settings.version, startedAt, top: () => hostSamples.top() },
+    },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
 

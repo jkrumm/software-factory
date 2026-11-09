@@ -61,3 +61,46 @@ export function selectionIn(root: Element): { quote: string; path: string } | nu
   }
   return { quote, path: headingPath(before) }
 }
+
+/** The words of a search: lower-cased, split on spaces, a leading `#` dropped ("#534" is the number 534). */
+export function queryWords(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.replace(/^#/, ''))
+    .filter((word) => word !== '')
+}
+
+/**
+ * The [start, end) ranges of `text` where a word of `query` occurs, case-insensitively, merged where they touch or
+ * overlap and in order. Pure, for painting a match in a title.
+ */
+export function highlightRanges(text: string, query: string): [number, number][] {
+  const haystack = text.toLowerCase()
+  const found: [number, number][] = []
+  for (const word of new Set(queryWords(query))) {
+    for (let at = haystack.indexOf(word); at !== -1; at = haystack.indexOf(word, at + word.length))
+      found.push([at, at + word.length])
+  }
+  found.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const merged: [number, number][] = []
+  for (const [start, end] of found) {
+    const last = merged[merged.length - 1]
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end)
+    else merged.push([start, end])
+  }
+  return merged
+}
+
+/** `text` cut into runs, each marked as matched or not, from `highlightRanges`. */
+export function highlightRuns(text: string, query: string): { text: string; match: boolean }[] {
+  const runs: { text: string; match: boolean }[] = []
+  let from = 0
+  for (const [start, end] of highlightRanges(text, query)) {
+    if (start > from) runs.push({ text: text.slice(from, start), match: false })
+    runs.push({ text: text.slice(start, end), match: true })
+    from = end
+  }
+  if (from < text.length) runs.push({ text: text.slice(from), match: false })
+  return runs
+}

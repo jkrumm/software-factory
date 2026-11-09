@@ -1,122 +1,30 @@
-import { CaretDownIcon } from '@phosphor-icons/react'
-import { useState } from 'react'
-import { useAccounts, useFlow, useMachine } from '@/lib/queries'
-import { accountMeter, machineWords, resetWords } from '@/lib/strip'
-import { cn } from '@/lib/utils'
-
-function Meter({ label, pct, warn }: { label: string; pct: number | null; warn: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {label}
-      <span
-        role="meter"
-        aria-label={`${label}, this week`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct ?? undefined}
-        className="relative h-1.5 w-10 rounded-full bg-muted"
-      >
-        <span
-          className={cn('absolute inset-y-0 left-0 rounded-full', warn ? 'bg-warn' : 'bg-muted-foreground')}
-          style={{ width: `${pct ?? 0}%` }}
-        />
-      </span>
-      {pct === null ? 'no reading' : `${pct}%`}
-    </span>
-  )
-}
-
-/** Working, waiting and queued, as the Flow model counts them. */
-function Counts() {
-  const { data } = useFlow()
-  if (!data) return null
-  const { working, waiting, queued } = data.states
-  return (
-    <p className="flex gap-3" aria-label="Issues in flight">
-      <span>{working.count} working</span>
-      <span>{waiting.count} waiting</span>
-      <span>{queued.count} queued</span>
-    </p>
-  )
-}
+import type { ReactNode } from 'react'
+import { Accounts } from '@/components/strip/accounts'
+import { Counts } from '@/components/strip/counts'
+import { Host } from '@/components/strip/host'
+import { Live } from '@/components/strip/live'
 
 /**
- * The strip under the Console's title: the counts, each account's weekly quota and the mini's load and swap. The meters
- * open the detail: weekly reset and the 5-hour window, only where an account has one.
+ * The header strip. From 1280 px up it is one line: the counts, one meter per subscription, the host's load, memory and
+ * swap, then Live and `trailing` at the right end. Below, it is two: the counts with Live and `trailing` pinned to the
+ * first, and the meters on a second that scrolls sideways if it must (no wrap, no scrollbar). Each meter opens a
+ * popover with the detail.
  */
-export function StatusStrip() {
-  const [open, setOpen] = useState(false)
-  const accounts = useAccounts().data?.accounts
-  const machine = useMachine().data
-  const now = new Date()
-  const meters = accounts?.map((quota) => ({ quota, meter: accountMeter(quota, now) }))
-  const host = machine ? machineWords(machine) : null
-
+export function StatusStrip({ trailing }: { trailing?: ReactNode }) {
   return (
-    <div className="shrink-0 border-b text-xs tabular-nums text-muted-foreground">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 md:px-8">
-        <Counts />
-        {meters || host ? (
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls="strip-detail"
-            className="ml-auto inline-flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1 rounded-md text-left hover:text-foreground"
-            onClick={() => setOpen((value) => !value)}
-          >
-            {meters?.map(({ quota, meter }) => (
-              <Meter key={quota.account} label={quota.account} pct={meter.weeklyPct} warn={meter.warn} />
-            ))}
-            {host ? (
-              <span className={cn(host.warn && 'text-warn')}>
-                {host.load}, {host.swap}
-              </span>
-            ) : null}
-            <CaretDownIcon aria-hidden="true" className={cn('size-3 transition-transform', open && 'rotate-180')} />
-          </button>
-        ) : null}
+    <div
+      aria-label="Status"
+      className="flex min-w-0 flex-wrap items-center gap-x-2 py-1 md:py-0 min-[1280px]:flex-nowrap 2xl:gap-x-4"
+    >
+      <Counts />
+      <div className="no-scrollbar order-3 flex min-w-0 basis-full items-center gap-x-2 overflow-x-auto min-[1280px]:order-2 min-[1280px]:basis-auto min-[1280px]:overflow-visible 2xl:gap-x-4">
+        <Accounts />
+        <Host />
       </div>
-      {open ? (
-        <div id="strip-detail" className="border-t px-4 py-3 md:px-8">
-          {meters && meters.length > 0 ? (
-            <table className="w-full max-w-2xl text-left">
-              <thead>
-                <tr>
-                  <th className="pr-4 font-medium">Account</th>
-                  <th className="pr-4 font-medium">This week</th>
-                  <th className="pr-4 font-medium">Resets</th>
-                  <th className="font-medium">5-hour window</th>
-                </tr>
-              </thead>
-              <tbody>
-                {meters.map(({ quota, meter }) => (
-                  <tr key={quota.account}>
-                    <td className="pr-4">{quota.account}</td>
-                    <td className="pr-4">
-                      {meter.weeklyPct === null ? 'no reading' : `${meter.weeklyPct}%`}
-                      {meter.note ? `, ${meter.note}` : ''}
-                    </td>
-                    <td className="pr-4">{resetWords(quota.weeklyResetsAt, now)}</td>
-                    <td>
-                      {quota.fiveHourUsed === null
-                        ? 'none on this plan'
-                        : `${Math.round(quota.fiveHourUsed)}%, resets ${resetWords(quota.fiveHourResetsAt, now)}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p>No account has been read yet.</p>
-          )}
-          {machine && host ? (
-            <p className="mt-2">
-              Machine: {host.load}, {host.swap}
-              {machine.memory ? `, ${machine.memory.swapoutMbPer300s} MiB swapped out in 5 min` : ''}.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="order-2 ml-auto flex shrink-0 items-center gap-1 min-[1280px]:order-3">
+        <Live />
+        {trailing}
+      </div>
     </div>
   )
 }

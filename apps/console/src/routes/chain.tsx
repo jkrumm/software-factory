@@ -1,6 +1,7 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { EmptyState, Page, PageHeader } from '@/components/page'
+import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { failureNote } from '@/lib/api'
 import { useChain } from '@/lib/queries'
@@ -46,13 +47,46 @@ function Chain() {
   }
 
   const view = chainOf(data, filters)
+  const projects = [...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort()
+  const nodeCount = (repo: string) => data.nodes.filter((node) => node.repo === repo).length
   const waiting = view.edges.filter((edge) => !edge.closed).length
   const note = `${waiting} blocked, ${view.edges.length - waiting} done${view.isolated > 0 ? `. ${isolatedNote(view.isolated)}` : ''}`
 
   return (
     <Page wide>
       <PageHeader title="Chain" note={note} />
-      <div className="mb-4 flex flex-wrap gap-3">
+      <SidebarSection title="Projects">
+        <SidebarEntry
+          label="All"
+          pressed={!filters.project}
+          render={(props) => <Link to="/chain" search={{}} {...props} />}
+        />
+        {projects.map((repo) => (
+          <SidebarEntry
+            key={repo}
+            label={repo}
+            count={nodeCount(repo)}
+            pressed={filters.project === repo}
+            render={(props) => (
+              <Link to="/chain" search={filters.project === repo ? {} : { project: repo }} {...props} />
+            )}
+          />
+        ))}
+      </SidebarSection>
+      <ActiveFilters
+        chips={
+          filters.project
+            ? [
+                {
+                  key: 'project',
+                  label: `Project: ${filters.project}`,
+                  render: (props) => <Link to="/chain" search={{}} {...props} />,
+                },
+              ]
+            : []
+        }
+      />
+      <div className="mb-4 flex flex-wrap gap-3 md:hidden">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Project
           <select
@@ -61,7 +95,7 @@ function Chain() {
             onChange={(e) => void navigate({ search: { project: e.target.value || undefined }, replace: true })}
           >
             <option value="">All projects</option>
-            {[...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort().map((repo) => (
+            {projects.map((repo) => (
               <option key={repo} value={repo}>
                 {repo}
               </option>

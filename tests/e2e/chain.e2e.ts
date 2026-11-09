@@ -85,7 +85,10 @@ test('the project filter is in the URL and narrows the nodes to the project and 
   await page.goto('/chain')
   await expect(graph(page).getByTestId('chain-node').first()).toBeVisible()
   const all = await graph(page).getByTestId('chain-node').count()
-  await page.getByLabel('Project').selectOption('quartz')
+  await page
+    .getByRole('group', { name: 'Projects' })
+    .getByRole('link', { name: /^quartz/ })
+    .click()
   await expect(page).toHaveURL(/\/chain\?project=quartz$/)
   const quartz = new Set(chain.nodes.flatMap((n) => (n.repo === 'quartz' ? [n.id] : [])))
   const keep = new Set(chain.edges.flatMap((e) => (quartz.has(e.from) || quartz.has(e.to) ? [e.from, e.to] : [])))
@@ -96,7 +99,10 @@ test('the project filter is in the URL and narrows the nodes to the project and 
   await expect(node(page, 'Choose the export format')).toHaveCount(0)
 
   await page.goto('/chain?project=pearl')
-  await expect(page.getByLabel('Project')).toHaveValue('pearl')
+  await expect(page.getByRole('group', { name: 'Projects' }).getByRole('link', { name: /^pearl/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(node(page, 'Choose the export format')).toHaveCount(1)
   // the cross-project neighbour stays
   await expect(node(page, 'Add a retry to the export job')).toHaveCount(1)

@@ -1,22 +1,30 @@
-import { NEED_KINDS } from '@software-factory/contract'
+import { NEED_KINDS, type NeedItem } from '@software-factory/contract'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { NeedCard } from '@/components/needs/card'
 import { EmptyState, Page, PageHeader } from '@/components/page'
+import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { KIND_LABEL } from '@/lib/needs'
 import { failureNote } from '@/lib/api'
 import { useNeeds } from '@/lib/queries'
 
 export const Route = createFileRoute('/needs-you')({
-  /** `item` is the deep link of one item: `/needs-you?item=<key>`, also where `/checkpoints/<key>` lands. */
-  validateSearch: (search: Record<string, unknown>): { item?: string } =>
-    typeof search.item === 'string' && search.item !== '' ? { item: search.item } : {},
+  /** `item` is the deep link of one item: `/needs-you?item=<key>`, also where `/checkpoints/<key>` lands. `kind` shows one kind. */
+  validateSearch: (search: Record<string, unknown>): { item?: string; kind?: NeedItem['kind'] } => {
+    const kind = NEED_KINDS.find((k) => k === search.kind)
+    return {
+      ...(typeof search.item === 'string' && search.item !== '' ? { item: search.item } : {}),
+      ...(kind ? { kind } : {}),
+    }
+  },
   component: NeedsYou,
 })
 
 function NeedsYou() {
   const { data, error, isPending, dataUpdatedAt } = useNeeds()
-  const { item: openId } = Route.useSearch()
+  const { item: openId, kind: rawKind } = Route.useSearch()
+  // an unknown `kind` still reaches here from the raw URL (the root route validates nothing)
+  const only = NEED_KINDS.find((k) => k === rawKind)
   const navigate = useNavigate({ from: Route.fullPath })
   const [sent, setSent] = useState<string | null>(null)
   // a snapshot restored from storage may be older than the item: say it is settled only on data fetched since the page opened
@@ -24,11 +32,11 @@ function NeedsYou() {
 
   const select = (id: string | undefined) => {
     setSent(null)
-    void navigate({ search: id ? { item: id } : {}, replace: true })
+    void navigate({ search: { ...(id ? { item: id } : {}), ...(only ? { kind: only } : {}) }, replace: true })
   }
   const onSent = (message: string) => {
     setSent(message)
-    void navigate({ search: {}, replace: true })
+    void navigate({ search: only ? { kind: only } : {}, replace: true })
   }
 
   if (!data)
@@ -65,9 +73,44 @@ function NeedsYou() {
   return (
     <Page>
       <PageHeader title="Needs you" note={`${total} waiting`} />
+      <SidebarSection title="Kinds">
+        <SidebarEntry label="All" pressed={!only} render={(props) => <Link to="/needs-you" search={{}} {...props} />} />
+        {NEED_KINDS.map((kind) => (
+          <SidebarEntry
+            key={kind}
+            label={KIND_LABEL[kind]}
+            count={data.counts[kind]}
+            pressed={only === kind}
+            render={(props) => <Link to="/needs-you" search={only === kind ? {} : { kind }} {...props} />}
+          />
+        ))}
+      </SidebarSection>
+      <ActiveFilters
+        chips={
+          only
+            ? [
+                {
+                  key: 'kind',
+                  label: `Kind: ${KIND_LABEL[only]}`,
+                  render: (props) => <Link to="/needs-you" search={{}} {...props} />,
+                },
+              ]
+            : []
+        }
+      />
       {notice}
+      {only && data.counts[only] === 0 ? (
+        <EmptyState
+          title="Nothing of this kind waits."
+          action={
+            <Link to="/needs-you" search={{}} className="text-sm underline underline-offset-4">
+              Show everything that waits
+            </Link>
+          }
+        />
+      ) : null}
       <div className="grid gap-8">
-        {NEED_KINDS.map((kind) => {
+        {NEED_KINDS.filter((kind) => !only || kind === only).map((kind) => {
           const items = data.items.filter((i) => i.kind === kind)
           if (items.length === 0) return null
           return (

@@ -6,6 +6,7 @@ import {
   ShapeError,
   fetchAccounts,
   fetchArtifact,
+  fetchArtifacts,
   fetchChain,
   fetchDecision,
   fetchErrands,
@@ -13,7 +14,9 @@ import {
   fetchFindingClasses,
   fetchFixCommits,
   fetchFriction,
+  fetchHost,
   fetchIssue,
+  fetchIssueCards,
   fetchKpis,
   fetchMachine,
   fetchNeeds,
@@ -128,6 +131,38 @@ export function useMachine() {
     queryKey: ['machine'],
     queryFn: ({ signal }) => fetchMachine(signal),
     refetchInterval: pollEvery(false),
+  })
+}
+
+/** The host's last 24 hours and busiest processes. Polls every 30 s; a server without the route (404) just has no history. */
+export function useHost() {
+  return useQuery({
+    queryKey: ['host'],
+    queryFn: ({ signal }) => fetchHost(signal),
+    refetchInterval: 30_000,
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
+  })
+}
+
+/**
+ * What the command palette searches. It loads when the palette first opens (`enabled`) and refetches each time it opens,
+ * so the lists are as fresh as the stream's last invalidation.
+ */
+export function useIssueCards(enabled: boolean) {
+  return useQuery({
+    queryKey: ['issue-cards'],
+    enabled,
+    staleTime: 0,
+    queryFn: ({ signal }) => fetchIssueCards(signal),
+  })
+}
+
+export function usePaletteArtifacts(enabled: boolean) {
+  return useQuery({
+    queryKey: ['artifact-list'],
+    enabled,
+    staleTime: 0,
+    queryFn: ({ signal }) => fetchArtifacts(signal),
   })
 }
 

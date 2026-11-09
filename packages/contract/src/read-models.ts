@@ -339,3 +339,49 @@ export const MachineModel = z
   })
   .meta({ id: 'MachineModel' })
 export type MachineModel = z.infer<typeof MachineModel>
+
+/** One minute-sample of the host; a figure the host could not read at that minute is null. */
+export const HostSample = z
+  .strictObject({
+    at,
+    /** the 1-minute load average */
+    load: z.number().nullable(),
+    /** resident memory of all processes as a share of RAM, percent */
+    memoryUsedPct: z.number().nullable(),
+    /** swap in use as a share of RAM, percent */
+    swapUsedPct: z.number().nullable(),
+    /** swapped-out data in the last 300 s, MiB */
+    swapoutMbPer300s: z.number().nullable(),
+  })
+  .meta({ id: 'HostSample' })
+export type HostSample = z.infer<typeof HostSample>
+
+/** One process of the host's top list. */
+export const HostProcess = z
+  .strictObject({
+    pid: z.number().int(),
+    /** the executable's name, never its arguments */
+    command: z.string(),
+    /** share of one core, percent (above 100 on several cores) */
+    cpuPct: z.number(),
+    /** resident memory, MiB */
+    memoryMb: z.number(),
+  })
+  .meta({ id: 'HostProcess' })
+export type HostProcess = z.infer<typeof HostProcess>
+
+/**
+ * The host over the last 24 hours and its busiest processes, with the server's own version and start time (the Live
+ * popover's facts). `samples` are oldest first, one a minute; fewer when the history is younger than 24 hours.
+ */
+export const HostHistoryModel = z
+  .strictObject({
+    at,
+    version: z.string(),
+    startedAt: at,
+    samples: z.array(HostSample),
+    topByCpu: z.array(HostProcess),
+    topByMemory: z.array(HostProcess),
+  })
+  .meta({ id: 'HostHistoryModel' })
+export type HostHistoryModel = z.infer<typeof HostHistoryModel>

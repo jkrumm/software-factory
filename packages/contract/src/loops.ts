@@ -309,6 +309,7 @@ export const LOOP_NAMES = [
   'screen',
   'fix-classes',
   'selfwatch',
+  'host',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

@@ -216,6 +216,18 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           ${JSON.stringify(pass.filed)}::jsonb, ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
     },
 
+    async recordHostSample(at, sample) {
+      await tx`
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
+        VALUES (${at}, ${sample.load}, ${sample.memoryUsedPct}, ${sample.swapUsedPct}, ${sample.swapoutMbPer300s})
+        ON CONFLICT (at) DO NOTHING`
+    },
+
+    async pruneHostSamples(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.host_samples WHERE at < ${before} RETURNING at`
+      return rows.length
+    },
+
     async passes() {
       const rows: unknown[] = await tx`SELECT loop, last_pass_at FROM factory.loop_passes`
       return new Map(

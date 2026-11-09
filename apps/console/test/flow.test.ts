@@ -3,12 +3,15 @@ import type { FlowModel } from '@software-factory/contract'
 import {
   boardNote,
   boardOf,
+  columnKeyOf,
   countsOf,
   defaultTab,
+  facetCounts,
   type Origin,
   originsOf,
   originWord,
   projectsOf,
+  visibleColumns,
 } from '../src/lib/flow.ts'
 
 const SINCE = '2026-11-08T10:00:00.000Z'
@@ -91,4 +94,22 @@ test('the default tab is Working, else the first column with cards', () => {
 
 test('the note counts open and closed', () => {
   expect(boardNote(countsOf(boardOf(data)))).toBe('4 open, 1 closed in the last day')
+})
+
+test('a state value names a column or is dropped', () => {
+  expect(columnKeyOf('working')).toBe('working')
+  expect(columnKeyOf('closed')).toBe('closed')
+  expect(columnKeyOf('nope')).toBeUndefined()
+  expect(columnKeyOf(undefined)).toBeUndefined()
+})
+
+test('a state shows one column and leaves the rows alone', () => {
+  expect(visibleColumns('waiting')).toEqual(['waiting'])
+  expect(visibleColumns()).toHaveLength(6)
+  expect(countsOf(boardOf(data, { state: 'waiting' }))).toEqual(countsOf(boardOf(data)))
+})
+
+test('facet counts cover every column before any filter', () => {
+  expect(facetCounts(data, 'repo')).toEqual({ argo: 2, chat: 2, harbor: 1 })
+  expect(facetCounts(data, 'origin')).toEqual({ feedback: 1, you: 2, github: 1, factory: 1 })
 })

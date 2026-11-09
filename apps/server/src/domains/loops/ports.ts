@@ -62,7 +62,24 @@ export interface HygienePassRecord {
 }
 
 /** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction and hygiene passes. */
+/** One reading of the host as stored (`migrations/1002_host_samples.sql`); a figure that could not be read is null. */
+export interface HostSampleRecord {
+  load: number | null
+  memoryUsedPct: number | null
+  swapUsedPct: number | null
+  swapoutMbPer300s: number | null
+}
+
+/** Reads the host. It never fails: a figure it cannot read is null in the record. */
+export interface HostSampler {
+  sample(): Promise<HostSampleRecord>
+}
+
 export interface LoopStore {
+  /** one sample at `at`; a second one at the same instant is ignored */
+  recordHostSample(at: Date, sample: HostSampleRecord): Promise<void>
+  /** drops the samples older than `before`; how many */
+  pruneHostSamples(before: Date): Promise<number>
   /** the rounds of one subject, oldest first */
   calls(loop: CallLoop, issue: IssueId, subject: string): Promise<CallRow[]>
   /** false when the round is claimed already (another pass came first) */

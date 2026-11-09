@@ -6,6 +6,8 @@ import {
   FixCommitsModel,
   FlowModel,
   FrictionModel,
+  type HostProcess,
+  HostHistoryModel,
   KpiModel,
   MachineModel,
   NeedsModel,
@@ -20,6 +22,7 @@ import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
+import { readHostSamples } from '../read/host.ts'
 import { readKpis } from '../read/kpis.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
@@ -34,6 +37,12 @@ export interface ReadModelDeps {
   queueReasons?: () => Promise<QueueReasons | null>
   /** the host's load and memory with the admission ceilings; null when the capacity use case cannot read them */
   machine?: () => Promise<Omit<MachineModel, 'at'> | null>
+  /** the server's version and start time with the host's busiest processes; absent, `GET /v1/host` is 503 */
+  host?: {
+    version: string
+    startedAt: Date
+    top: () => Promise<{ topByCpu: HostProcess[]; topByMemory: HostProcess[] }>
+  }
   now?: () => Date
 }
 
@@ -59,6 +68,11 @@ const unavailable = Response.json(
 
 const noMachine = () =>
   Response.json(ErrorBody.parse({ error: 'the host cannot be read in this process', code: 'unavailable' }), {
+    status: 503,
+  })
+
+const noHost = () =>
+  Response.json(ErrorBody.parse({ error: 'the host history is not wired in this process', code: 'unavailable' }), {
     status: 503,
   })
 
@@ -120,6 +134,32 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.machine',
           summary:
             "the host's 1-minute load and swap use with the ceilings above which no new lead is admitted; a reading that failed is null",
+        },
+      },
+    )
+    .get(
+      '/host',
+      async () => {
+        if (!deps) return unavailable
+        if (!deps.host) return noHost()
+        const at = now()
+        const [samples, top] = await Promise.all([readHostSamples(deps.sql, at), deps.host.top()])
+        return Response.json(
+          HostHistoryModel.parse({
+            at: at.toISOString(),
+            version: deps.host.version,
+            startedAt: deps.host.startedAt.toISOString(),
+            samples,
+            ...top,
+          }),
+        )
+      },
+      {
+        response: { 200: HostHistoryModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.host',
+          summary:
+            "the host over the last 24 hours as one-minute samples (load, memory and swap use, a failed reading null), its top 8 processes by cpu and by resident memory, and the server's version and start time",
         },
       },
     )

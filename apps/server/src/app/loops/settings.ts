@@ -21,6 +21,7 @@ const Env = z.object({
   FACTORY_LOOP_SCREEN_MS: ms.optional(),
   FACTORY_LOOP_FIX_CLASSES_MS: ms.optional(),
   FACTORY_LOOP_SELFWATCH_MS: ms.optional(),
+  FACTORY_LOOP_HOST_MS: ms.optional(),
   /** a timer or dependency wait is overdue this long after its exit */
   FACTORY_SELFWATCH_GRACE_MS: ms.optional(),
   /** the age that makes the leads tick stale, in place of three intervals and a minute: a scenario's way to a stale heartbeat */
@@ -89,6 +90,10 @@ const screenTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(ti
 const FIX_CLASSES_TICK_MS = 6 * 3_600_000
 const fixClassesTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : FIX_CLASSES_TICK_MS)
 
+/** The host is sampled once a minute, unless the tick is off (0). */
+const HOST_TICK_MS = 60_000
+const hostTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : HOST_TICK_MS)
+
 /** The self-watch reads GitHub and git: at most one pass in this long, unless the tick is off (0). */
 const SELFWATCH_MIN_TICK_MS = 5 * 60_000
 const selfwatchTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(tickMs, SELFWATCH_MIN_TICK_MS))
@@ -119,6 +124,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     screen: e.FACTORY_LOOP_SCREEN_MS,
     'fix-classes': e.FACTORY_LOOP_FIX_CLASSES_MS,
     selfwatch: e.FACTORY_LOOP_SELFWATCH_MS,
+    host: e.FACTORY_LOOP_HOST_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -133,7 +139,9 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                 ? fixClassesTickMs(tickMs)
                 : name === 'selfwatch'
                   ? selfwatchTickMs(tickMs)
-                  : tickMs),
+                  : name === 'host'
+                    ? hostTickMs(tickMs)
+                    : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,
