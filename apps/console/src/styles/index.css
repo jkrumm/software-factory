@@ -152,6 +152,20 @@
   @apply my-6;
 }
 
+/* The chain's canvas and the schedule's band: a step off the page in light and dark, under the bg-card cards. */
+.chain-canvas {
+  --chain-canvas: color-mix(in srgb, var(--vx-ink) 9%, var(--vx-surface-bg));
+  background: var(--chain-canvas);
+}
+
+/* In dark the cards are a step lighter than the canvas, so they read raised. */
+:root[data-theme='dark'] .chain-canvas {
+  --chain-canvas: color-mix(in srgb, var(--vx-ink) 5%, var(--vx-surface-bg));
+}
+:root[data-theme='dark'] .chain-card {
+  background: var(--vx-surface-elevated);
+}
+
 /* xyflow's own variables, pointed at the semantic tokens: no colour literal of its stylesheet reaches the chain screen. */
 .react-flow.chain-graph {
   --xy-edge-stroke-default: var(--vx-faint);
@@ -178,5 +192,11 @@
   stroke-dasharray: 6 5;
 }
 .chain-graph .react-flow__edge-text {
-  font-size: 11px;
+  font-size: 12px;
+}
+/* the phone starts at 0.9 zoom: 13 px reads as 11 px or more */
+@media (max-width: 639px) {
+  .chain-graph .react-flow__edge-text {
+    font-size: 13px;
+  }
 }

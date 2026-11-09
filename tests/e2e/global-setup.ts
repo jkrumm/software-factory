@@ -8,7 +8,7 @@ import { startLab } from '../scenarios/planning/lab.ts'
 import { seedHost } from './seed-host.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
 import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
-import { CHAIN_PLAN, CHAIN_REPOS, seedChain } from './seed-chain.ts'
+import { CHAIN_REPOS, chainPlan, seedChain } from './seed-chain.ts'
 import { HISTORY_REPOS, seedHistory } from './seed-history.ts'
 
 const DIST = join(import.meta.dir, '..', '..', 'apps', 'console', 'dist')
@@ -47,7 +47,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         name,
         {
           project: `apiVersion: factory/v2\nname: ${name}\n`,
-          ...(CHAIN_REPOS.includes(name) ? { plan: CHAIN_PLAN } : {}),
+          ...(CHAIN_REPOS.includes(name) ? { plan: chainPlan() } : {}),
         },
       ]),
     ),

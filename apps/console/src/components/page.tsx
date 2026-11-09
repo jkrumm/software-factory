@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 
 export { EmptyState } from '@/components/kit/empty-state'
 
-export function PageHeader({ title, note }: { title: string; note?: string }) {
+/** `compact` puts the note on the title's line and tightens the space under it (a screen that fills the viewport). */
+export function PageHeader({ title, note, compact }: { title: string; note?: string; compact?: boolean }) {
   return (
-    <header className="mb-6 flex flex-col gap-1">
+    <header className={compact ? 'mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5' : 'mb-6 flex flex-col gap-1'}>
       <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
       {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}
     </header>
