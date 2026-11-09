@@ -15,6 +15,27 @@ words are `docs/language.md`'s; what the Console may do is `AGENTS.md` "The Cons
   deleted, the palette found commands but not Issues.
 - The page went stale: Needs you stayed empty until a hard reload.
 
+## Direction
+
+Set here once, so no lead stops to ask for it (the `unslop` skill's five lines).
+
+- **Product.** The place where one developer sees what needs him, what his agents are doing, and how well his factory works.
+- **Character.** Exact, watchful, unhurried.
+- **World.** A plant's control room on a night shift: instrument panels, status lamps, the shift log.
+- **Moments.** The StatCard row above Flow (live figures with their trend), the Chain graph, and Improve's KPIs against
+  their targets. Colour lives there; the chrome stays graphite.
+- **Signature.** The status lamp: a small dot lit only for something live (a working lead, an open stream, a host under
+  load), steady, never pulsing.
+
+## How a screen is built
+
+Every Console screen goes through the `unslop` skill (`/unslop`): audit against its `references/signs.md` and write the
+audit into the Issue's evidence, take the direction above without stopping, fix in its nine passes, check against its
+checklist. Where it and the owner disagree, the owner wins:
+
+- StatCards carry a sparkline or bars and a footer (his reference 03), not only a number.
+- Working screens use the full 1800 px; unslop's cap of 1440 to 1600 applies to running prose only.
+
 ## The target
 
 | | |
@@ -99,4 +120,5 @@ it does not.
    390×844 for every screen it touches, into the Issue's evidence.
 2. The lead looks at each screenshot next to the owner's reference images (outside the repo, under `design-refs/console`
    in the factory's home directory) and this file, fixes what falls short, shoots again, and writes down what it compared.
-3. `make check` passes, including the Console's Playwright suite.
+3. The `unslop` audit before and its checklist after are in the evidence, every sign closed or named.
+4. `make check` passes, including the Console's Playwright suite.
