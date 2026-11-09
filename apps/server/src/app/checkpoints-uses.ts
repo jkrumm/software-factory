@@ -1,6 +1,8 @@
 import type { CheckpointResult } from './checkpoints.ts'
 import {
   annotateArtifact,
+  deleteAnnotation,
+  editAnnotation,
   answerDecision,
   askDecision,
   finishErrand,
@@ -32,6 +34,8 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     submit: (input: Parameters<typeof submitArtifact>[1]) => submitArtifact(deps, input),
     revise: (input: Parameters<typeof reviseArtifact>[1]) => reviseArtifact(deps, input),
     annotate: (input: Parameters<typeof annotateArtifact>[1]) => annotateArtifact(deps, input),
+    editAnnotation: (input: Parameters<typeof editAnnotation>[1]) => editAnnotation(deps, input),
+    deleteAnnotation: (input: Parameters<typeof deleteAnnotation>[1]) => deleteAnnotation(deps, input),
     verdict: (input: Parameters<typeof giveVerdict>[1]) => giveVerdict(deps, input),
     artifact: (input: Parameters<typeof showArtifact>[1]) => showArtifact(deps, input),
     artifacts: (filter: Parameters<typeof listArtifacts>[1]) => listArtifacts(deps, filter),

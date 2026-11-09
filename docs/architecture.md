@@ -299,8 +299,8 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 - **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
   (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is
   optional, all differ, and a caller whose token is unset does not exist. The orchestrator, the owner's delegate agent, is on
-  every owner row except the six that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's
-  verdict and annotations, an Errand done, a held signal's promote and dismiss). Its events carry the actor `orchestrator` and a Decision it answers is settled by
+  every owner row except the eight that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's
+  verdict and annotations with their edit and delete, an Errand done, a held signal's promote and dismiss). Its events carry the actor `orchestrator` and a Decision it answers is settled by
   `orchestrator`, so the owner-touch counts (`read/kpis.ts` `ownerTouch`) read the owner alone and its steering is the friction
   group `orchestrator_steer` (`steer:*`). A lead hears its note exactly as the owner's. Rows from before the token (the owner's
   actor with `via: orchestrator`) count as steering too.
@@ -316,10 +316,10 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the six answer
-verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus six owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's six answer verbs (a Decision's answer, an artifact's verdict
-and annotation, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only, no cross-site fetch
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the eight answer
+verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus eight owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
+another node. The Console listener reads, and forwards exactly the owner's eight answer verbs (a Decision's answer, an artifact's verdict,
+annotation and its edit and delete, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
 from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
 served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
@@ -345,7 +345,7 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the six answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
+  it is read-only apart from the eight answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow board, the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.

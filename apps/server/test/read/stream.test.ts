@@ -242,6 +242,10 @@ describe('triggers', () => {
       INSERT INTO factory.intake_signals (id, source, kind, origin, trust, fingerprint, title, text, received_at, state)
       VALUES ('signal_1', 'feedback:app', 'feedback', 'feedback', 'outside', 'f', 't', 'x', now(), 'held')`
     await sql`UPDATE factory.intake_signals SET state = 'promoted', issue_id = 'issue_1' WHERE id = 'signal_1'`
+    // the same comment again writes nothing
+    await sql`UPDATE factory.annotations SET comment = 'c', edited_at = now() WHERE id = 'annotation_1'`
+    await sql`UPDATE factory.annotations SET comment = 'd', edited_at = now() WHERE id = 'annotation_1'`
+    await sql`DELETE FROM factory.annotations WHERE id = 'annotation_1'`
     // an update that changes neither state nor a done column writes nothing
     await sql`UPDATE factory.decisions SET worth_asking = true WHERE id = 'decision_1'`
 
@@ -259,6 +263,8 @@ describe('triggers', () => {
       'errand:done',
       'signal:held',
       'signal:promoted',
+      'artifact:annotation_edited',
+      'artifact:annotation_deleted',
     ])
     expect(changes[0]).toMatchObject({ issue: 1, ref: 'issue_1', detail: { to: 'settling', result: 'applied' } })
     expect(changes[1]?.detail).toEqual({ session: 'lead-1-1', attempt: 1 })

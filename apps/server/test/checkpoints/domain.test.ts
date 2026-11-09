@@ -3,6 +3,7 @@ import {
   anchorOf,
   readableText,
   readAnnotation,
+  readComment,
   readSubmission,
   renderDecisionForm,
 } from '../../src/domains/checkpoints/artifact.ts'
@@ -222,6 +223,13 @@ describe('artifacts', () => {
     const read = readAnnotation({ path: '' })
     expect(!read.ok && read.error.fields).toEqual(expect.arrayContaining(['quote', 'comment']))
     expect(readAnnotation({ quote: 'a', comment: 'b' })).toMatchObject({ ok: true, value: { path: null } })
+  })
+
+  test('an edited comment is trimmed, not empty and not over the cap', () => {
+    expect(readComment({ comment: '  fixed  ' })).toEqual({ ok: true, value: 'fixed' })
+    for (const raw of [{}, { comment: '   ' }, { comment: 'x'.repeat(100_000) }, null]) {
+      expect(readComment(raw).ok).toBe(false)
+    }
   })
 
   test('a Markdown quote is found through the marks that do not show', () => {

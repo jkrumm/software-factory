@@ -9,6 +9,7 @@ import {
   DecisionList,
   DecisionReply,
   DecisionView,
+  EditAnnotationBody,
   ErrandBody,
   ErrandDoneBody,
   ErrandList,
@@ -105,6 +106,7 @@ const annotationView = (a: AnnotationRecord) => ({
   comment: a.comment,
   author: a.author,
   at: iso(a.at),
+  editedAt: a.editedAt ? iso(a.editedAt) : null,
 })
 
 const errandView = (e: ErrandRecord) => ({
@@ -172,6 +174,7 @@ const RESPONSES = (ok: z.ZodType, ...codes: ErrorStatus[]) => ({
 })
 
 const Id = z.object({ id: z.string() })
+const AnnotationIds = z.object({ id: z.string(), annotationId: z.string() })
 const unknownId = (what: string, id: string): Response => failure(404, `no ${what} ${id}`, 'not_found')
 
 /**
@@ -435,6 +438,60 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         body: AnnotateBody,
         response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
         detail: { operationId: 'artifact.annotate', summary: 'a comment anchored by a quote and a path' },
+      },
+    )
+    .patch(
+      '/artifacts/:id/annotations/:annotationId',
+      async ({ params, body }) => {
+        const id = idOf('artifact', params.id) ?? idOf('decision', params.id)
+        if (!id) return unknownId('artifact', params.id)
+        const result = await uses.editAnnotation({
+          artifactId: id as string as ArtifactId,
+          annotationId: params.annotationId,
+          raw: body,
+        })
+        if (!result.ok) return failed(result.error)
+        const { artifact, revisions, issue } = result.value
+        return Response.json(
+          ArtifactReply.parse({
+            result: result.value.result,
+            artifact: summaryOf(artifact, revisions),
+            verdict: null,
+            issue,
+          }),
+        )
+      },
+      {
+        params: AnnotationIds,
+        body: EditAnnotationBody,
+        response: RESPONSES(ArtifactReply, 400, 404, 422, 503),
+        detail: { operationId: 'artifact.annotation-edit', summary: "the owner changes an annotation's comment" },
+      },
+    )
+    .delete(
+      '/artifacts/:id/annotations/:annotationId',
+      async ({ params }) => {
+        const id = idOf('artifact', params.id) ?? idOf('decision', params.id)
+        if (!id) return unknownId('artifact', params.id)
+        const result = await uses.deleteAnnotation({
+          artifactId: id as string as ArtifactId,
+          annotationId: params.annotationId,
+        })
+        if (!result.ok) return failed(result.error)
+        const { artifact, revisions, issue } = result.value
+        return Response.json(
+          ArtifactReply.parse({
+            result: result.value.result,
+            artifact: summaryOf(artifact, revisions),
+            verdict: null,
+            issue,
+          }),
+        )
+      },
+      {
+        params: AnnotationIds,
+        response: RESPONSES(ArtifactReply, 400, 404, 503),
+        detail: { operationId: 'artifact.annotation-delete', summary: 'the owner deletes an annotation' },
       },
     )
     .post(

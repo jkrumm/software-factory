@@ -89,7 +89,7 @@ check, `docs/architecture.md`).
 | **Touch** | The owner acting on an Issue. **Avoidable touch**: one the factory should have settled | Zero-touch |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
 | **Surface** | Console, Herdr, Iris, Argo, ntfy | |
-| **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar six routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
+| **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
 | **Flow** | The read model of Issues by state over time; **Chain** is its graph | |
 | **Change** | One row of the change stream: a kind, ids and states, never words. Its **cursor** (`<txid>.<seq>`) resumes the stream without losing or doubling a change | |
 
