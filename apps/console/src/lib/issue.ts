@@ -1,10 +1,4 @@
-import type {
-  ReadAskLine,
-  ReadCheckLine,
-  ReadIssueDetail,
-  ReadNoteLine,
-  ReadWatchLine,
-} from '@software-factory/contract'
+import type { ReadAskLine, ReadIssueDetail, ReadNoteLine, ReadWatchLine } from '@software-factory/contract'
 import { ageWords } from './age.ts'
 import { VERDICT_WORDS } from './artifact.ts'
 import { spanWords } from './needs.ts'
@@ -55,8 +49,6 @@ const SETTLED_BY_WORDS: Record<string, string> = {
   default: 'by the default, no one answered in time',
 }
 
-const SHIP_CHECK_WORDS: Record<string, string> = { green: 'Passed', red: 'Failed', blocked: 'Blocked' }
-
 const KIND_WORDS: Record<string, string> = {
   alert: 'an alert',
   request: 'a request',
@@ -70,7 +62,6 @@ export const originWords = (origin: string): string => word(ORIGIN_WORDS, origin
 export const trustWords = (trust: string): string => word(TRUST_WORDS, trust)
 export const triageKindWords = (kind: string): string => word(KIND_WORDS, kind)
 export const settledByWords = (by: string | null): string => (by === null ? '' : word(SETTLED_BY_WORDS, by))
-export const checkWords = (result: ReadCheckLine['result']): string => word(SHIP_CHECK_WORDS, result)
 
 /** A latest verdict, in the artifact page's words; "No verdict yet" while none. */
 export const verdictWords = (verdict: string | null): string =>
@@ -107,12 +98,4 @@ export function attemptOf(sessions: readonly { id: string }[], key: string | nul
   if (key === null) return null
   const index = sessions.findIndex((session) => session.id === key)
   return index === -1 ? null : index + 1
-}
-
-/** The plain line beside the state badge: the phase and the wait; empty when the API names neither. */
-export function standingWords(issue: Pick<ReadIssueDetail, 'state' | 'phase' | 'reason'>): string {
-  const parts: string[] = []
-  if (issue.phase) parts.push(issue.phase)
-  if (issue.state === 'waiting' && issue.reason) parts.push(`wait: ${issue.reason.replaceAll('_', ' ')}`)
-  return parts.join(' · ')
 }
