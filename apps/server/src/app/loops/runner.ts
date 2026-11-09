@@ -58,7 +58,7 @@ interface State {
   lastSummary: string | null
 }
 
-/** When each loop's pass last ended, kept across restarts (`migrations/0999_loop_passes.sql`). */
+/** When each loop's pass last ended, kept across restarts (`migrations/1000_loop_passes.sql`). */
 export interface LoopPasses {
   load(): Promise<ReadonlyMap<LoopName, Date>>
   record(name: LoopName, at: Date): Promise<void>
