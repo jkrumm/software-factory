@@ -59,7 +59,7 @@ check, `docs/architecture.md`).
 | **Artifact** | What a lead hands to a person. One model, four kinds: | Document |
 | Concept | A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's `DESIGN.md` | |
 | Spec | A larger plan to review | |
-| Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it | Ask (noun), question, decision card |
+| Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review | Ask (noun), question, decision card |
 | Report | For information, never waits. A spike is a Report with a verdict | |
 | **Errand** | Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then `factory-errand`) passes it | Hands-only asks, the separate human queue |
 | **Turn away** | An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason | |
@@ -105,10 +105,10 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `lead_started` | The attempt's lead runs in its terminal | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
-| `asked` | A Decision is raised and the Issue waits for its answer | lead, steward (from a stall only) |
-| `answered` | A Decision got its answer | owner, judge, factory |
+| `asked` | A Decision is raised and the Issue waits for its answer; during a review wait the lead's ask is added to that wait (same `since`, same `told`) | lead, steward (from a stall only) |
+| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item | owner, judge, factory |
 | `submitted` | A Concept or Spec is handed over for review | lead |
-| `verdict_given` | The owner's Verdict on it | owner |
+| `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note | owner |
 | `errand_raised` | The lead needs the owner's hands | lead |
 | `errand_done` | The owner did the Errand, or the screen turned it away (`turnedAway`: the reason) | owner, judge, factory |
 | `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only) |
@@ -162,7 +162,7 @@ stateDiagram-v2
   working --> watching: shipped
   working --> closed: cancelled, closed
   waiting --> queued: woken (lead_gone)
-  waiting --> working: answered (decision), verdict_given (review), errand_done (errand), woken (timer, dependency, wall, unreported, blocked, regressed)
+  waiting --> working: answered (decision, review), verdict_given (review), errand_done (errand), woken (timer, dependency, wall, unreported, blocked, regressed)
   waiting --> watching: woken (dependency), shipped (timer)
   waiting --> closed: cancelled, closed (timer)
   watching --> working: regressed
@@ -182,7 +182,7 @@ stateDiagram-v2
 | `lead_gone` | no person | yes | woken by the steward: a new attempt |
 | `regressed` | no person | yes | woken by the steward, or turned into a Decision |
 | `decision` | a person | no | answered by standing policy, the Judge, a default, or the owner |
-| `review` | a person | no | verdict given on the Concept or Spec by the owner |
+| `review` | a person | no | verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered |
 | `errand` | a person | no | errand done by the owner's hands |
 
 Outcomes of `closed`: `done`, `dropped`, `healed`, `cancelled`.

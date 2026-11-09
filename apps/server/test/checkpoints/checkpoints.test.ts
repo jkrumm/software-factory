@@ -834,6 +834,99 @@ describe('artifacts', () => {
   })
 })
 
+describe('a Decision raised during a review', () => {
+  const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nWe keep the queue in Postgres.' }
+
+  async function reviewed() {
+    const issueId = await workingIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    return { issueId, artifactId: artifact.id }
+  }
+  const verdictOf = (artifactId: ArtifactId) =>
+    giveVerdict(deps, { artifactId, verdict: 'looks_good', note: null, revision: null }).then(value)
+
+  test('is taken, linked to the artifact, replayed, amended and judged like any other', async () => {
+    const { issueId, artifactId } = await reviewed()
+    const asked = await ask(issueId)
+    expect(asked).toMatchObject({
+      result: 'applied',
+      issue: { state: 'waiting', waitReason: 'review' },
+      decision: { artifactId },
+    })
+    expect(await ask(issueId)).toMatchObject({ result: 'replayed', decision: { id: asked.decision.id } })
+    expect(await ask(issueId, { recommendation: 'winston' })).toMatchObject({
+      result: 'amended',
+      decision: { id: asked.decision.id, artifactId, form: { recommendation: 'winston' } },
+    })
+    expect(await rows('decisions')).toBe(1)
+
+    judgeAnswer = () => ok({ verdict: 'answer', answer: 'pino', reason: 'the plan decided', source: 'plan' })
+    expect(value(await settleDecision(deps, asked.decision.id))).toMatchObject({
+      status: 'answered',
+      settledBy: 'judge',
+    })
+    // The verdict is still due, so the Issue waits.
+    expect(await eventsOf(issueId)).toEqual([
+      'filed',
+      'settled',
+      'admitted',
+      'lead_started',
+      'submitted',
+      'asked',
+      'noted',
+      'answered',
+    ])
+    expect(await effectsOf(issueId, 'note_lead')).toBe(0)
+    const given = await verdictOf(artifactId)
+    expect(given.issue).toMatchObject({ state: 'working' })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+  })
+
+  test('the verdict first: the Issue waits for the owner on the Decision, then resumes once', async () => {
+    const { issueId, artifactId } = await reviewed()
+    const { decision } = await ask(issueId)
+    const given = await verdictOf(artifactId)
+    expect(given.issue).toMatchObject({ state: 'waiting', waitReason: 'review' })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(0)
+
+    value(await settleDecision(deps, decision.id))
+    const needs = await readNeeds(db.sql, clock.now())
+    // The review is done with; only the Decision is left, and it names its artifact.
+    expect(needs.items.map((item) => [item.kind, item.id, item.artifact])).toEqual([
+      ['decision', decision.id, artifactId],
+    ])
+    const answered = value(await answerDecision(deps, { decisionId: decision.id, answer: 'winston' }))
+    expect(answered.issue).toMatchObject({ state: 'working' })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+    expect((await eventsOf(issueId)).filter((kind) => kind === 'answered' || kind === 'verdict_given')).toEqual([
+      'verdict_given',
+      'answered',
+    ])
+  })
+
+  test('Needs lists the review and its Decision together until the verdict is given', async () => {
+    const { issueId, artifactId } = await reviewed()
+    const { decision } = await ask(issueId)
+    value(await settleDecision(deps, decision.id))
+    const before = await readNeeds(db.sql, clock.now())
+    expect(before.items.map((item) => [item.kind, item.id, item.artifact]).sort()).toEqual(
+      [
+        ['decision', decision.id, artifactId],
+        ['review', artifactId, null],
+      ].sort(),
+    )
+    await verdictOf(artifactId)
+    expect((await readNeeds(db.sql, clock.now())).items.map((item) => item.kind)).toEqual(['decision'])
+  })
+
+  test('a Decision whose review wait ends by cancel is withdrawn', async () => {
+    const { issueId } = await reviewed()
+    const { decision } = await ask(issueId)
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'no longer wanted' }, actor: 'owner' })
+    expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'withdrawn' })
+  })
+})
+
 describe('errands', () => {
   const APPROVE = { summary: 'Approve the App Store build' }
   const raise = async (issueId: IssueId, raw: Record<string, unknown> = APPROVE) =>

@@ -250,6 +250,7 @@ describe('the fixture', () => {
       ageMs: 30 * 3_600_000,
       defaultAt: ago(30 - 48).toISOString(),
       link: { type: 'decision', id: 'decision_1' },
+      artifact: null,
     })
     expect(decision?.title).toBe('Which logger for an Issue?')
     expect(review).toMatchObject({ issue: 'issue_3', stale: false, since: ago(3).toISOString(), defaultAt: null })

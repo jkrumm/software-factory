@@ -3,7 +3,15 @@ import { ACTORS } from '../../src/kernel/events.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import { type AnyIssueEvent, PAYLOADS } from '../../src/domains/work/events.ts'
 import { candidates, filedIssue } from '../../src/domains/work/explore.ts'
-import { type Issue, type State, STATES, WAIT_REASONS, WAITS, type WaitReason } from '../../src/domains/work/issue.ts'
+import {
+  type Issue,
+  type State,
+  STATES,
+  WAIT_REASONS,
+  WAITS,
+  type Wait,
+  type WaitReason,
+} from '../../src/domains/work/issue.ts'
 import { type AppliedRecord, apply, replay } from '../../src/domains/work/machine.ts'
 import { TABLE } from '../../src/domains/work/table.ts'
 
@@ -141,9 +149,16 @@ function checkShape(issue: Issue, now: Date, fail: (what: string) => never): voi
   const { wait } = issue
   if (!wait) return
   const exits = candidates(issue, now).filter((event) => event.kind !== 'cancelled')
+  // A review wait with Decisions open has no single leaving event: it ends with the verdict and the last answer.
+  const outstanding = (w: Wait | null): number =>
+    w?.reason === 'review' ? (w.verdictGiven ? 0 : 1) + (w.decisions?.length ?? 0) : 1
   const leaves = (event: AnyIssueEvent) => {
     const decided = apply(issue, event, { now })
-    return decided.result === 'applied' && decided.transition.to !== 'waiting'
+    if (decided.result !== 'applied') return false
+    return (
+      decided.transition.to !== 'waiting' ||
+      (wait.reason === 'review' && outstanding(decided.transition.wait) < outstanding(wait))
+    )
   }
   if (WAITS[wait.reason].exit === 'machine') {
     // The lead's own verbs leave a timer wait too, but the lead is not the machine: the clock or the steward must.

@@ -5,6 +5,7 @@ import {
   MAX_REGRESSIONS,
   MAX_RESTARTS,
   type Outcome,
+  outstandingDecisions,
   REOPEN_WINDOW_MS,
   type State,
   WAITS,
@@ -21,11 +22,11 @@ export interface Ctx<K extends EventKind = EventKind> {
 
 /**
  * One `(state, event)` cell's answer: move (to the same state, too: the event is recorded), refuse (the verb's error,
- * named), or ignore (why this changes nothing). A move to `waiting` names its wait, or keeps the current one when the
- * Issue already waits; a move to `closed` names its outcome.
+ * named), or ignore (why this changes nothing). A move to `waiting` names its wait, keeps the current one when the
+ * Issue already waits, or `update`s it in place (same `since`, same `told`); a move to `closed` names its outcome.
  */
 export type Cell =
-  | { to: 'waiting'; wait?: WaitSpec; effects: Effect[] }
+  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }
   | { to: 'closed'; outcome: Outcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
@@ -205,6 +206,42 @@ function endsCheckpoint(ctx: { issue: Issue }, reason: WaitReason, id: string): 
   return resume(ctx.issue)
 }
 
+/** A review wait takes the lead's `asked` for a Decision about the artifact; the steward's ask is for a stall only. */
+const askDuringReview = byLead((ctx: Ctx<'asked'>): Cell => {
+  const { wait } = ctx.issue
+  if (wait?.reason !== 'review') return refuse('it does not wait for a review')
+  const { decision } = ctx.event.payload
+  const decisions = [...(wait.decisions ?? []).filter((open) => open.id !== decision.id), decision]
+  return { to: 'waiting', update: { ...wait, decisions }, effects: [] }
+})
+const askedWhileWaiting = (ctx: Ctx<'asked'>): Cell =>
+  ctx.issue.wait?.reason === 'review' && ctx.event.actor !== 'steward'
+    ? askDuringReview(ctx)
+    : askedBy(fromTimer(ask))(ctx)
+
+/** An answer ends a Decision wait, or settles one of the Decisions a review wait holds: the wait ends with the last item. */
+const answerWhileWaiting = (ctx: Ctx<'answered'>): Cell => {
+  const { wait } = ctx.issue
+  const id = ctx.event.payload.decision
+  if (wait?.reason !== 'review' || !wait.decisions?.some((open) => open.id === id)) {
+    return endsCheckpoint(ctx, 'decision', id)
+  }
+  const decisions = wait.decisions.filter((open) => open.id !== id)
+  if (wait.verdictGiven && decisions.length === 0) return resume(ctx.issue)
+  return { to: 'waiting', update: { ...wait, decisions }, effects: [] }
+}
+
+/** A verdict ends a review wait, unless Decisions raised about the artifact are still open: then it waits for them. */
+const verdictWhileWaiting = (ctx: Ctx<'verdict_given'>): Cell => {
+  const { wait } = ctx.issue
+  const artifact = ctx.event.payload.artifact
+  if (wait?.reason !== 'review' || wait.holds.id !== artifact || !outstandingDecisions(wait)) {
+    return endsCheckpoint(ctx, 'review', artifact)
+  }
+  if (wait.verdictGiven) return ignore(`the verdict on ${artifact} is given; its Decisions are still open`)
+  return { to: 'waiting', update: { ...wait, verdictGiven: true }, effects: [] }
+}
+
 const wake = (ctx: Ctx<'woken'>): Cell => {
   const { issue } = ctx
   const { wait } = issue
@@ -331,10 +368,10 @@ export const TABLE: Table = {
     lead_gone: said('waiting: the wait ends first, and its note finds the lead gone'),
     // Recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief reads it otherwise.
     noted: () => ({ to: 'waiting', effects: [] }),
-    asked: askedBy(fromTimer(ask)),
-    answered: (ctx) => endsCheckpoint(ctx, 'decision', ctx.event.payload.decision),
+    asked: askedWhileWaiting,
+    answered: answerWhileWaiting,
     submitted: fromTimer(submit),
-    verdict_given: (ctx) => endsCheckpoint(ctx, 'review', ctx.event.payload.artifact),
+    verdict_given: verdictWhileWaiting,
     errand_raised: fromTimer(raiseErrand),
     errand_done: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
     deferred: fromTimer(deferredBy(defer)),

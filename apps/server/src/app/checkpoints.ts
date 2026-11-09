@@ -86,12 +86,18 @@ export async function issueOf(work: WorkStore, id: IssueId): Promise<Issue | nul
   return history ? replay(id, history) : null
 }
 
-/** Whether the Issue waits right now for this checkpoint to be settled. */
-export const waitingOn = (issue: Issue, reason: 'decision' | 'review' | 'errand', checkpoint: string): boolean =>
-  issue.state === 'waiting' &&
-  issue.wait?.reason === reason &&
-  'holds' in issue.wait &&
-  issue.wait.holds.id === checkpoint
+/**
+ * Whether the Issue waits right now for this checkpoint to be settled. A Decision the lead raised about an artifact under
+ * review is waited for too: the review wait lists it.
+ */
+export const waitingOn = (issue: Issue, reason: 'decision' | 'review' | 'errand', checkpoint: string): boolean => {
+  const { wait } = issue
+  if (issue.state !== 'waiting' || !wait) return false
+  if (reason === 'decision' && wait.reason === 'review') {
+    return wait.decisions?.some((open) => open.id === checkpoint) ?? false
+  }
+  return wait.reason === reason && 'holds' in wait && wait.holds.id === checkpoint
+}
 
 /** An event the machine must apply: anything else (refused, ignored, replayed) is the caller's error, and rolls back. */
 export function applied(recorded: Result<Recorded, IssueWriteError>, what: string): Result<Recorded, CheckpointError> {
@@ -186,6 +192,9 @@ export async function askDecision(
     if (existing) return ok<Asked>({ result: 'replayed', decision: existing, issue: moveOf(issue) })
 
     const id = deps.ids.next('decision')
+    // A Decision raised while the Issue waits for a review is about the artifact under review.
+    const underReview =
+      issue.state === 'waiting' && issue.wait?.reason === 'review' ? (issue.wait.holds.id as ArtifactId) : null
     const event: IssueEvent<'asked'> = {
       kind: 'asked',
       payload: { attempt: input.attempt, decision: { id, summary: form.question.slice(0, 200) } },
@@ -210,6 +219,7 @@ export async function askDecision(
       form,
       askedAt: at,
       askedBy: by,
+      artifactId: underReview,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const artifact = artifactOfDecision(id)

@@ -67,8 +67,13 @@ from that table.
 - **One writer.** `app/` stores the event, the new state (`UPDATE … WHERE id = $1 AND version = $2`) and the effects in an
   outbox in one transaction, then the outbox runs the effects (`app/outbox.ts`): claimed with a lease, retried with a
   doubling delay. A late event that names an old attempt, watch, wait or checkpoint is ignored or refused by the table.
+- **A review wait takes Decisions.** While an Issue waits for the verdict on a Concept or Spec, the lead may raise and amend
+  Decisions about it (`wait.decisions`, each linked by `decisions.artifact_id`; the steward's ask stays stall-only). The wait
+  keeps its `since` and `told`, and ends when the verdict is given and every such Decision is settled, in either order
+  (`verdictGiven` marks a verdict that came first): one `note_lead` then covers the verdict and the answers. Needs lists
+  the Decision with its `artifact`, and the review item only until the verdict is given.
 - **Model test** (`apps/server/test/work/model.test.ts`): a seeded generator plays random event sequences and checks
-  invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds; a
+  invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds (a review wait with Decisions open leaves in steps: the verdict and each answer); a
   closed Issue reopens only by its verb, within 30 days.
 - No XState, no workflow engine. Events in Postgres plus a row version are the whole mechanism (NL11).
 

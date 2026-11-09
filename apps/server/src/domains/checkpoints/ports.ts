@@ -47,6 +47,8 @@ export interface DecisionRecord {
   form: DecisionForm
   askedAt: Date
   askedBy: 'lead' | 'steward'
+  /** the artifact under review when the lead raised it during that review; null otherwise */
+  artifactId: ArtifactId | null
   answer: string | null
   settledBy: Settler | null
   /** what backs the answer: the policy rule's reason, the Judge's source, the default, "the owner" */
