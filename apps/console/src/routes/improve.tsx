@@ -263,8 +263,8 @@ function FrictionGroup({
       <ul aria-label={title} className="divide-y text-sm">
         {rows.map((row) => (
           <li key={row.key} className="flex items-baseline justify-between gap-4 py-1.5">
-            <span>{row.label}</span>
-            <span className="flex gap-4 tabular-nums">
+            <span className="min-w-0 [overflow-wrap:anywhere]">{row.label}</span>
+            <span className="flex shrink-0 gap-4 tabular-nums">
               <span aria-label="Count">{row.count}</span>
               <span aria-label="Per Issue closed" className="w-12 text-right text-muted-foreground">
                 {perIssueWords(row.perIssue)}
