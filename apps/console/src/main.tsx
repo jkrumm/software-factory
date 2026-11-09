@@ -21,6 +21,11 @@ if (!root) throw new Error('index.html has no #root')
 void queryClient.prefetchQuery(needsQuery)
 if (location.pathname === '/flow') void queryClient.prefetchQuery(flowQuery)
 
+// the Chain's code and data wait until the page is idle, so a `g c` or a tap finds them loaded
+const whenIdle = (run: () => void) =>
+  'requestIdleCallback' in window ? window.requestIdleCallback(run, { timeout: 4000 }) : setTimeout(run, 1500)
+whenIdle(() => void router.preloadRoute({ to: '/chain' }))
+
 const SNAPSHOT_EXCLUDED = new Set(['artifact', 'issue', 'since'])
 
 createRoot(root).render(

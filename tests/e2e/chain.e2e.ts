@@ -258,3 +258,98 @@ test('a project without a dependency says so', async ({ page }) => {
   await page.goto('/chain?project=atlas')
   await expect(page.getByText('No dependencies', { exact: true })).toBeVisible()
 })
+
+test('an edge is one line with its label on it, and the line runs on to the arrowhead', async ({ page }) => {
+  await page.goto('/chain')
+  await expect(graph(page).getByTestId('chain-node').first()).toBeVisible()
+  const edges = graph(page).locator('.react-flow__edge')
+  const count = await edges.count()
+  expect(count).toBeGreaterThanOrEqual(5)
+  for (let i = 0; i < count; i++) {
+    const edge = edges.nth(i)
+    const line = await edge.locator('.react-flow__edge-path').boundingBox()
+    const label = await edge.locator('.react-flow__edge-textbg').boundingBox()
+    if (!line || !label) throw new Error(`edge ${i} has no line or no label`)
+    // the label sits inside the line's span, with line left before it and line (and the arrowhead) after it
+    expect(label.x - line.x).toBeGreaterThanOrEqual(24)
+    expect(line.x + line.width - (label.x + label.width)).toBeGreaterThanOrEqual(16)
+    // and on its last straight run: the label's centre is on the line's lower or upper end, not floating beside it
+    const centre = label.y + label.height / 2
+    const atEnd = Math.min(Math.abs(centre - line.y), Math.abs(centre - (line.y + line.height)))
+    // (the label's box is a few px lower than its text, so the bound is a third of its height)
+    expect(atEnd).toBeLessThanOrEqual(label.height / 3)
+  }
+})
+
+test('a small graph is enlarged to fill the canvas, not left floating in it', async ({ page }) => {
+  await page.goto('/chain?project=quartz')
+  const first = graph(page).getByTestId('chain-node').first()
+  await expect(first).toBeVisible()
+  const box = await first.boundingBox()
+  const region = await graph(page).boundingBox()
+  if (!box || !region) throw new Error('no box')
+  // a card is 320 px at zoom 1: the old ceiling was 1.1
+  await expect.poll(async () => (await first.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(320 * 1.25)
+  expect(box.x).toBeGreaterThanOrEqual(region.x)
+})
+
+test('the schedule axis labels do not touch each other or Now', async ({ page }) => {
+  await page.goto('/chain')
+  const axis = schedule(page).locator('div[aria-hidden="true"] > div.font-mono')
+  await expect(axis.first()).toBeVisible()
+  const boxes = (
+    await Promise.all(
+      (await axis.all()).map(async (label) => ({ text: await label.innerText(), box: await label.boundingBox() })),
+    )
+  ).filter((label) => label.box !== null && label.text !== '')
+  expect(boxes.some((label) => label.text === 'Now')).toBe(true)
+  const sorted = boxes.toSorted((a, b) => (a.box?.x ?? 0) - (b.box?.x ?? 0))
+  for (const [i, label] of sorted.entries()) {
+    const next = sorted[i + 1]
+    if (!next?.box || !label.box) continue
+    expect(next.box.x - (label.box.x + label.box.width), `${label.text} and ${next.text}`).toBeGreaterThanOrEqual(4)
+  }
+})
+
+test('Needs you to Chain: the graph chunk is fetched before the click, and the first paint is quick', async ({
+  page,
+}) => {
+  const RUNS = 7
+  const times: number[] = []
+  for (let run = 0; run < RUNS; run++) {
+    const loaded: string[] = []
+    const chainData = page.waitForResponse((response) => response.url().includes('/v1/chain'))
+    await page.goto('/needs-you')
+    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+    // the idle preload has run: the chain's data came without anybody asking for the screen
+    await chainData
+    await page.waitForLoadState('networkidle')
+    page.on('request', (request) => {
+      if (request.url().endsWith('.js')) loaded.push(request.url())
+    })
+    const ms = await page.evaluate<number>(`(async () => {
+      const link = [...document.querySelectorAll('nav[aria-label="Main"] a')].find((a) => a.textContent.includes('Chain'))
+      const t0 = performance.now()
+      link.click()
+      for (;;) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        const card = document.querySelector('[data-testid="chain-node"]')
+        const wrapper = card && card.closest('.react-flow__node')
+        if (wrapper && getComputedStyle(wrapper).visibility === 'visible') return performance.now() - t0
+        if (performance.now() - t0 > 5000) return -1
+      }
+    })()`)
+    expect(ms).toBeGreaterThan(0)
+    expect(loaded, 'no script is fetched by the click').toEqual([])
+    times.push(ms)
+    page.removeAllListeners('request')
+  }
+  const median = times.toSorted((a, b) => a - b)[Math.floor(RUNS / 2)] ?? 0
+  test.info().annotations.push({
+    type: 'needs-you-to-chain',
+    description: `median ${median.toFixed(0)} ms over ${RUNS} runs: ${times.map((t) => t.toFixed(0)).join(', ')}`,
+  })
+  console.log(
+    `Needs you -> Chain: median ${median.toFixed(0)} ms over ${RUNS} runs (${times.map((t) => t.toFixed(0)).join(', ')})`,
+  )
+})

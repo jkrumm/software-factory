@@ -1,5 +1,7 @@
 import {
+  BaseEdge,
   Controls,
+  getSmoothStepPath,
   Handle,
   MarkerType,
   Position,
@@ -7,6 +9,7 @@ import {
   useReactFlow,
   useStore,
   type Edge,
+  type EdgeProps,
   type ReactFlowInstance,
   type Node,
   type NodeProps,
@@ -90,9 +93,66 @@ function Card({ data }: NodeProps<CardNode>) {
 
 const NODE_TYPES = { chain: Card }
 
+type DependencyEdge = Edge<{ blocked: boolean }, 'dependency'>
+
+/** Where an edge turns, as a share of the gap between the two nodes: the long straight run after it is where the label sits. */
+const TURN = { blocked: 0.3, done: 0.18 }
+/** Room the arrowhead takes at the end of the run (px). */
+const ARROW = 10
+
+/**
+ * A smoothstep edge that turns early and carries its label on the final straight run, so the line runs unbroken
+ * into the label and out to the arrowhead.
+ */
+function Dependency({
+  data,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  label,
+  labelStyle,
+  labelShowBg,
+  labelBgStyle,
+  labelBgPadding,
+  labelBgBorderRadius,
+}: EdgeProps<DependencyEdge>) {
+  const turn = data?.blocked ? TURN.blocked : TURN.done
+  const [path] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    stepPosition: turn,
+  })
+  const turnX = sourceX + (targetX - sourceX) * turn
+  return (
+    <BaseEdge
+      path={path}
+      markerEnd={markerEnd}
+      labelX={(turnX + targetX - ARROW) / 2}
+      labelY={targetY}
+      label={label}
+      labelStyle={labelStyle}
+      labelShowBg={labelShowBg}
+      labelBgStyle={labelBgStyle}
+      labelBgPadding={labelBgPadding}
+      labelBgBorderRadius={labelBgBorderRadius}
+    />
+  )
+}
+
+const EDGE_TYPES = { dependency: Dependency }
+
 /** Room around the graph (px), the most a small graph is enlarged, and the least a phone shrinks it before the graph is panned instead. */
 const PAD = 24
-const MAX_FIT_ZOOM = 1.1
+const CONTROLS_PAD = 56
+const MAX_FIT_ZOOM = 1.4
 const PHONE_WIDTH = 640
 const PHONE_FLOOR_ZOOM = 0.9
 const FIT = { padding: 0.15, maxZoom: MAX_FIT_ZOOM }
@@ -104,16 +164,19 @@ interface Bounds {
   h: number
 }
 
-/** Centres the graph at the largest zoom that shows it whole (never above 1.1); on a phone it stays legible and starts at the top left. */
+/** Centres the graph at the largest zoom that shows it whole (never above 1.4: a graph of two cards fills the canvas instead of floating in it); on a phone it stays legible and starts at the top left. */
 function fitTo(setViewport: ReactFlowInstance['setViewport'], size: { width: number; height: number }, b: Bounds) {
   if (size.width === 0 || size.height === 0) return
-  const whole = Math.min(MAX_FIT_ZOOM, (size.width - 2 * PAD) / b.w, (size.height - 2 * PAD) / b.h)
+  // the zoom controls sit at the bottom left from `md` up: the graph is centred in what is left of the width after a gutter for them
+  const left = size.width < PHONE_WIDTH ? PAD : CONTROLS_PAD
+  const room = size.width - left - PAD
+  const whole = Math.min(MAX_FIT_ZOOM, room / b.w, (size.height - 2 * PAD) / b.h)
   if (size.width < PHONE_WIDTH && whole < PHONE_FLOOR_ZOOM) {
     void setViewport({ x: PAD - b.x * PHONE_FLOOR_ZOOM, y: PAD - b.y * PHONE_FLOOR_ZOOM, zoom: PHONE_FLOOR_ZOOM })
     return
   }
   void setViewport({
-    x: (size.width - b.w * whole) / 2 - b.x * whole,
+    x: left + (room - b.w * whole) / 2 - b.x * whole,
     y: (size.height - b.h * whole) / 2 - b.y * whole,
     zoom: whole,
   })
@@ -189,7 +252,7 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
       ariaRole: 'group',
       ariaLabel: `${node.title}, ${node.repo ?? 'no project'}, ${stateWord(node.state)}`,
     }))
-    const edges: Edge[] = view.edges.map((edge) => {
+    const edges: DependencyEdge[] = view.edges.map((edge) => {
       const blocked = isBlocked(edge)
       const text = edgeText(edge, byId)
       return {
@@ -197,8 +260,8 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
         source: edge.to,
         target: edge.from,
         targetHandle: blocked ? 'blocked' : 'done',
-        type: 'smoothstep',
-        pathOptions: { stepPosition: blocked ? 0.62 : 0.38 },
+        type: 'dependency',
+        data: { blocked },
         label: blocked ? 'blocks' : 'done',
         labelShowBg: true,
         labelBgPadding: [6, 3],
@@ -229,9 +292,10 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
           fitViewOptions={FIT}
           minZoom={0.2}
-          maxZoom={1.5}
+          maxZoom={2}
           nodesDraggable={false}
           nodesConnectable={false}
           nodesFocusable={false}

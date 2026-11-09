@@ -11,6 +11,9 @@ const AXIS_REM = 2.5
 /** the stem between the dot and the lowest chip */
 const STEM_REM = 0.75
 const REM_PX = 16
+/** A mono label at 12 px is about 8 px a character; "Now" is the one label that is always there. */
+const CHAR_PX = 8
+const NOW_LABEL_PX = 3 * CHAR_PX
 
 /** Secondary text on the band: one step stronger than the muted token, at 12 px. */
 const TEXT2 = 'text-xs text-[color:var(--vx-ink2)]'
@@ -96,8 +99,11 @@ export function Schedule({ nodes }: { nodes: ChainNode[] }) {
     (least, tick, i) => (i === 0 ? least : Math.min(least, tick.position - (schedule.ticks[i - 1]?.position ?? 0))),
     1,
   )
-  const labelPx = (schedule.ticks[0]?.label.length ?? 6) * 8 + 16
+  const labelPx = (schedule.ticks[0]?.label.length ?? 6) * CHAR_PX + 16
   const every = width > 0 && closest > 0 ? Math.max(1, Math.ceil(labelPx / (closest * width))) : 1
+  // the first tick can sit a day from Now: its label is left out when the two would touch
+  const clearOfNow = (tick: { position: number; label: string }): boolean =>
+    width === 0 || tick.position * width >= (NOW_LABEL_PX + tick.label.length * CHAR_PX) / 2 + 8
 
   return (
     <section role="region" aria-label="Schedule" className="mt-6 flex min-w-0 shrink-0 flex-col gap-2">
@@ -138,7 +144,7 @@ export function Schedule({ nodes }: { nodes: ChainNode[] }) {
                 Now
               </div>
               {schedule.ticks.map((tick, i) =>
-                i % every !== 0 ? null : (
+                i % every !== 0 || !clearOfNow(tick) ? null : (
                   <div
                     key={`label-${tick.at}`}
                     className={cn('absolute font-mono whitespace-nowrap tabular-nums', TEXT2)}
