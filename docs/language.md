@@ -42,7 +42,7 @@ check, `docs/architecture.md`).
 |-|-|-|
 | **Lead** | The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify | Mother, worker |
 | **Attempt** | Lead number *n* of an Issue | |
-| **Session state** | What a lead's session is, derived from its hook events: `starting` (no hook yet), `working`, `idle`, `compacted`, `walled` (its account hit a limit), `gone` | |
+| **Session state** | What a lead's session is, derived from its hook events: `starting` (no hook yet), `working` (a turn is running), `idle` (its last turn ended), `compacted` (its context was just compacted, no turn since), `walled` (its account hit a limit), `gone` (its session ended or its terminal is gone) | |
 | **Delivery** | What was typed into a lead: its brief, or a note. Keyed, so a replay types nothing twice | |
 | **Defer** | The lead's verb for a wait it can name: until a time, or until other Issues close (`factory issue defer`). The event is `deferred` | The old verb `wait` |
 | **Steward** | The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment | "Never a model" |
@@ -86,8 +86,18 @@ check, `docs/architecture.md`).
 | **Verify** | The check that ends the watch: `make verify`, probes | |
 | **Wait** | A pause with a named exit | |
 | **Stall** | A wait with a machine cause, the steward's to end | Park |
-| **Touch** | The owner acting on an Issue. **Avoidable touch**: one the factory should have settled | Zero-touch |
+| **Touch** | The owner acting on an Issue | Zero-touch |
+| **Avoidable touch** | A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
+| **Refusal** | An Issue event the state machine refused, or a ship the gate refused. Counted as friction | |
+| **Regressed** | A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall | |
+| **First verification pass** | A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI | |
+| **Fix commit** | A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week | |
+| **Cycle** | The time from an Issue filed to closed | |
+| **Queue wait** | The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it | |
+| **Window point** | A point of the five-hour Max window that an Issue's sessions used, per Issue | |
+| **Cost** | Dollars the usage schema priced for an Issue's sessions, joined at read, never copied | |
+| **Stale** | A Needs you item that has waited more than 24 hours | |
 | **Surface** | Console, Herdr, Iris, Argo, ntfy | |
 | **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
 | **Flow** | The read model of Issues by state over time; **Chain** is its graph | |

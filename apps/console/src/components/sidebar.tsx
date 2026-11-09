@@ -3,6 +3,7 @@ import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { InfoHint, type InfoWord } from '@/components/kit'
 import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { boardOf, countsOf, openCount } from '@/lib/flow'
@@ -115,12 +116,15 @@ export function SidebarEntry({
   count,
   pressed,
   current,
+  hint,
   render,
 }: {
   label: string
   count?: number
   pressed?: boolean
   current?: boolean
+  /** A domain word to define: its InfoHint sits beside the row, never inside the toggle. */
+  hint?: InfoWord
   render: (props: {
     className: string
     'aria-pressed'?: boolean
@@ -128,7 +132,7 @@ export function SidebarEntry({
     children: ReactNode
   }) => ReactElement
 }) {
-  return render({
+  const row = render({
     className: ENTRY,
     ...(pressed === undefined ? {} : { 'aria-pressed': pressed }),
     ...(current ? { 'aria-current': 'page' as const } : {}),
@@ -143,6 +147,13 @@ export function SidebarEntry({
       </>
     ),
   })
+  if (!hint) return row
+  return (
+    <div className="flex items-center gap-0.5">
+      <div className="flex min-w-0 flex-1">{row}</div>
+      <InfoHint word={hint} />
+    </div>
+  )
 }
 
 function NavEntry({

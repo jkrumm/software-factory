@@ -17,8 +17,8 @@ const TARGET = join(root, 'src/lib/language.gen.ts')
 const WIDTH = 120
 const SHORT_KEY = 4
 
-/** Rows whose Means cell lists words of their own, each as `` `word` (what it is) ``: the states and the outcomes. */
-const LISTS = new Set(['state', 'outcome'])
+/** Rows whose Means cell lists words of their own, each as `` `word` (what it is) ``: the states, the outcomes and the session states. */
+const LISTS = new Set(['state', 'outcome', 'session state'])
 
 const plain = (markdown: string): string =>
   markdown

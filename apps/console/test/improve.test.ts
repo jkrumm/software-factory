@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { FindingClass, FixCommitsModel, Kpi } from '@software-factory/contract'
+import { KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
 import {
   changeTone,
   changeWords,
@@ -13,9 +13,12 @@ import {
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
+  FRICTION_GROUP_HINT,
+  FRICTION_GROUP_LABEL,
   historyLabels,
   historyXLabels,
   kpiChange,
+  KPI_HINT,
   kpiFooter,
   lineTone,
   sampleWords,
@@ -24,6 +27,7 @@ import {
   windowOf,
   windowWords,
 } from '../src/lib/improve.ts'
+import { LANGUAGE } from '../src/lib/language.gen.ts'
 
 const point = (value: number | null, n = 4) => ({ value, n })
 const history = (...values: (number | null)[]) => values.map((v) => point(v))
@@ -277,4 +281,20 @@ test('fixCard: the newest week against the one before, fewer is better, classes 
   expect(fixCard({ classes: model.classes, weeks: [week('2026-11-08T00:00:00.000Z', 2, {})] }).change.text).toBe(
     'no earlier data',
   )
+})
+
+test('every KPI and the avoidable-touch and refusal friction groups carry a defined InfoHint word', () => {
+  expect(Object.keys(KPI_HINT).toSorted()).toEqual([...KPI_KEYS].toSorted())
+  for (const word of Object.values(KPI_HINT)) expect(LANGUAGE[word].length).toBeGreaterThan(10)
+  for (const [group, word] of Object.entries(FRICTION_GROUP_HINT)) {
+    expect(group in FRICTION_GROUP_LABEL).toBe(true)
+    expect(LANGUAGE[word].length).toBeGreaterThan(10)
+  }
+})
+
+test('the footer hints the watches of the first verification passes, and no other sample', () => {
+  const footer = (key: Kpi['key']) =>
+    kpiFooter({ key, n: 3, measured: true, target: { kind: 'trend', min: null, max: null }, unit: 'share' })
+  expect(footer('first_verification_passes')[1]).toMatchObject({ value: '3 watches', hint: 'watch' })
+  expect(footer('asks')[1].hint).toBeUndefined()
 })

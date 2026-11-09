@@ -1,7 +1,7 @@
 import type { NeedItem } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
-import { Lozenge } from '@/components/kit'
+import { InfoHint, Lozenge } from '@/components/kit'
 import { issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
 import { cn } from '@/lib/utils'
 import { BodyOf } from './bodies'
@@ -29,26 +29,32 @@ export function ProjectChip({ item }: { item: Pick<NeedItem, 'repo'> }) {
 }
 
 /**
- * One thing that waits on the owner, expandable in place. The project leads, then the title; closed, the whole card is
- * the click target (the title button is stretched over it, the links stay above). Opening it (a click or the deep link)
+ * One thing that waits on the owner, expandable in place. The project leads, then the title, a link to the item's deep
+ * link (`?item=<id>`; open, the same page without it, so a click closes the card, and the router marks it
+ * `aria-current="page"`). Closed, the whole card is the click
+ * target (the title link is stretched over it, the other links stay above). Opening it (a click or the deep link)
  * scrolls it into view and puts focus on its title. The ids stay in the DOM keys, never on screen.
  */
 export function NeedCard({
   item,
   issueTitle,
   open,
-  onToggle,
+  search,
+  onVisit,
   onSent,
 }: {
   item: NeedItem
   /** the Issue's title where the Issue is known */
   issueTitle: string | null
   open: boolean
-  onToggle: () => void
+  /** the search of the title link: the page's filters, plus `item` while the card is closed */
+  search: { item?: string; kind?: NeedItem['kind']; project?: string }
+  /** the title link was followed */
+  onVisit: () => void
   onSent: (message: string) => void
 }) {
   const card = useRef<HTMLElement>(null)
-  const header = useRef<HTMLButtonElement>(null)
+  const header = useRef<HTMLAnchorElement>(null)
   useEffect(() => {
     if (!open) return
     card.current?.scrollIntoView({ block: 'start' })
@@ -63,7 +69,7 @@ export function NeedCard({
       data-open={open}
       className={cn(
         'relative scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors',
-        !open && 'has-[h3>button:hover]:bg-accent',
+        !open && 'has-[h3>a:hover]:bg-accent',
       )}
     >
       <div className="grid gap-1.5 px-4 py-3">
@@ -72,18 +78,19 @@ export function NeedCard({
             <ProjectChip item={item} />
           </span>
           <h3 className="min-w-0 flex-1 text-[15px] font-medium">
-            <button
+            <Link
               ref={header}
-              type="button"
-              aria-expanded={open}
-              onClick={onToggle}
+              to="/needs-you"
+              search={search}
+              replace
+              onClick={onVisit}
               className={cn(
                 'cursor-pointer rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
                 !open && 'after:absolute after:inset-0 after:rounded-xl',
               )}
             >
               {item.title}
-            </button>
+            </Link>
           </h3>
         </div>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -97,7 +104,12 @@ export function NeedCard({
               {meta.age}
             </time>
           </span>
-          {item.stale ? <Lozenge state="waiting">Stale</Lozenge> : null}
+          {item.stale ? (
+            <span className="relative z-10 inline-flex items-center gap-0.5">
+              <Lozenge state="waiting">Stale</Lozenge>
+              <InfoHint word="stale" className="-my-1" />
+            </span>
+          ) : null}
           {item.issue ? (
             <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>
               {issueTitle ?? 'Open Issue'}

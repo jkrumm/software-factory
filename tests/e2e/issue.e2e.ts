@@ -3,6 +3,7 @@ import type { ReadIssueDetail } from '@software-factory/contract'
 import { expect, test } from './fixtures.ts'
 import type { SeededChain } from './seed-chain.ts'
 import type { SeededHistory } from './seed-history.ts'
+import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 
 /**
@@ -95,6 +96,21 @@ test('the header shows title, kind, state, project, regressions and the facts', 
   await expect(page.getByText(`Regressed ${regressions}×`)).toBeVisible()
   expect(await figure(fact(page, 'Attempts'))).toBe(issue.insights.attempts)
   await noIds(page, idsOf(issue))
+})
+
+test('a Gone attempt carries an InfoHint with the generated text', async ({ page }) => {
+  const { working } = seeded()
+  // no seeded session has ended: the answer is read through with the live attempt marked dead
+  await page.route(`**/v1/issues/${numberOf(working)}`, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.json()) as { sessions: { state: string }[] }
+    for (const session of body.sessions) session.state = 'dead'
+    await route.fulfill({ response, json: body })
+  })
+  await open(page, working)
+  const row = section(page, 'Attempts').getByRole('listitem').first()
+  await expect(row.getByText('Gone', { exact: true })).toBeVisible()
+  await expectHint(row, 'gone')
 })
 
 test('the working Issue has no regression badge and shows its live attempt', async ({ page, apiUrl }) => {

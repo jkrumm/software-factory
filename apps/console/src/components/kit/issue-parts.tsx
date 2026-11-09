@@ -1,7 +1,7 @@
 import { CheckCircleIcon, ClockIcon, HourglassIcon, type Icon, QueueIcon } from '@phosphor-icons/react'
 import { ageWords } from '@/lib/age'
 import { cn } from '@/lib/utils'
-import type { CardLinkProps } from './card-link'
+import type { CardLinkProps, LinkRender } from './card-link'
 import type { IssueKind } from './kind-badge'
 import type { LozengeState } from './lozenge'
 import { MenuButton } from './menu-button'
@@ -11,6 +11,8 @@ export interface IssueViewProps extends CardLinkProps {
   title: string
   /** The project (repo) as a chip. */
   project: string
+  /** Renders the project chip as a link (a router link, like `as`). Omitted: plain text. */
+  projectAs?: LinkRender
   kind: IssueKind
   state: LozengeState
   /** The wait or queue reason, or a closed Issue's outcome; none: no line. */
@@ -66,12 +68,21 @@ export function ReasonLine({
   )
 }
 
-export function ProjectChip({ project }: { project: string }) {
-  return (
-    <span className="inline-flex h-5 shrink-0 items-center rounded-md bg-muted px-1.5 text-xs text-muted-foreground">
-      {project}
-    </span>
-  )
+const CHIP = 'inline-flex h-5 shrink-0 items-center rounded-md bg-muted px-1.5 text-xs text-muted-foreground'
+
+/**
+ * The project as a chip. With `as` (a router link, as for a card) it is a link that sits above the card's stretched
+ * link; without, plain text.
+ */
+export function ProjectChip({ project, as }: { project: string; as?: LinkRender }) {
+  if (!as) return <span className={CHIP}>{project}</span>
+  return as({
+    className: cn(
+      CHIP,
+      'relative z-10 outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+    ),
+    children: project,
+  })
 }
 
 /** The fixed right column: the age in mono, swapped for the ⋯ button on hover or focus. The absolute time is the title. */
