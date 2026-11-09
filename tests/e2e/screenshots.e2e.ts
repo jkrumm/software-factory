@@ -25,12 +25,18 @@ function artifactScreens() {
   ]
 }
 
-/** The Issue page: the seeded Issue with a rich history, and the one that is working. */
+/** The Issue page: each tab of the Issue with a rich history, the one that is working, and one in the middle of the chain. */
 function issueScreens() {
   const ids = JSON.parse(process.env.E2E_HISTORY ?? '{}') as { rich: string; working: string }
+  const chain = JSON.parse(process.env.E2E_CHAIN ?? '{}') as { middle: string }
+  const path = (ref: string, tab?: string) => `/issues/${ref.replace('issue_', '')}${tab ? `?tab=${tab}` : ''}`
   return [
-    { name: 'issue', path: `/issues/${ids.rich.replace('issue_', '')}` },
-    { name: 'issue-working', path: `/issues/${ids.working.replace('issue_', '')}` },
+    { name: 'issue-overview', path: path(ids.rich) },
+    { name: 'issue-activity', path: path(ids.rich, 'activity') },
+    { name: 'issue-evidence', path: path(ids.rich, 'evidence') },
+    { name: 'issue-checkpoints', path: path(ids.rich, 'checkpoints') },
+    { name: 'issue-working', path: path(ids.working) },
+    { name: 'issue-chain', path: path(chain.middle) },
   ]
 }
 
@@ -121,19 +127,6 @@ for (const variant of VARIANTS) {
     })
   })
 }
-
-/** The README's demo: the Issue page tall enough to show the whole history, signal to passed watch. */
-test.describe('demo', () => {
-  test.use({ viewport: { width: 1280, height: 2150 }, colorScheme: 'dark' })
-
-  test('the Issue with a rich history, whole', async ({ page }) => {
-    const ids = JSON.parse(process.env.E2E_HISTORY ?? '{}') as { rich: string }
-    await page.goto(`/issues/${ids.rich.replace('issue_', '')}`)
-    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
-    await page.waitForLoadState('networkidle')
-    await page.screenshot({ path: join(OUT, 'demo-issue.png'), animations: 'disabled' })
-  })
-})
 
 /** Flow with the sidebar open, and collapsed at the primary viewport. */
 for (const variant of VARIANTS) {

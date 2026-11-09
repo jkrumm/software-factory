@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test'
 import {
   attemptOf,
   askStatusWords,
-  checkWords,
   countWords,
   deliveryWords,
   settledByWords,
@@ -36,7 +35,6 @@ test('verdicts, statuses and settlers have plain words, and an unknown one is no
   expect(askStatusWords('withdrawn')).toBe('Withdrawn')
   expect(settledByWords('owner')).toBe('by you')
   expect(settledByWords(null)).toBe('')
-  expect(checkWords('green')).toBe('Passed')
 })
 
 test('an attempt is counted from the session list, and a key outside it has none', () => {

@@ -21,6 +21,7 @@ their keys).
 
 ## Flow
 
+<<<<<<< HEAD
 `/flow` fills the content area (no width cap). From the top: the header, a stat row, then the board of every Issue by state:
 Settling, Queued, Working, Waiting, Watching and Closed recently (the last 24 hours), from `GET /v1/flow`, refreshed by the
 stream like every other screen.
@@ -45,6 +46,18 @@ row; every column is its own virtualised list (`@tanstack/react-virtual`): only 
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
 leave. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
 with a "Show all states" link (it never filters rows); on a phone it picks the tab.
+=======
+`/flow` is the board of every Issue by state: Settling, Queued, Working, Waiting, Watching and Closed recently (the last
+24 hours), from `GET /v1/flow`, refreshed by the stream like every other screen. A card carries the title, the project,
+the origin as a word, the reason (a wait's reason, the queue's message, or a closed Issue's outcome) and its age; never an
+id. The title is a stretched link to the Issue's page. The project and origin filters live in the URL (`/flow?project=argo&origin=feedback`), so a
+filtered view is linkable, and each column header counts what the filters leave. `?state=working|waiting|queued|settling|watching|closed`
+shows only that column, full width as a grid of cards, with a "Show all states" link (it never filters rows; the strip's
+counts link to it); on a phone it picks the tab. Every column is a virtualised list
+(`@tanstack/react-virtual`): only the visible cards are in the DOM. From the `lg` breakpoint (1024px) the columns sit side
+by side in a horizontally scrolling board; below it the board is one list with a tab per state (Working first, or the first
+state with cards). The layout switches with `matchMedia`, so only one of the two is ever rendered.
+>>>>>>> d08559d (feat(console): the Issue page - tabs, activity rail, evidence, checkpoints, chain around it)
 
 ## Chain
 
@@ -161,13 +174,19 @@ whitespace folded to single spaces: the API anchors it on the artifact's readabl
 
 ## The Issue page
 
-`/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and nothing else: the title and
-state, the facts (account, weekly quota, insights), how the Issue was filed and amended (`triage`), each attempt and its
-state, the owner's notes, the Decisions and artifacts with links to their own pages, shipping with its watch and checks,
-and the history, oldest first. Every figure is the API's, only phrased; no id is on screen. A Needs you card links to it
-(Open Issue). It is read-only on purpose: the listener forwards six answer verbs and none of them is a note or a cancel,
-and the Console never cancels an Issue or starts a session. An open Decision links to `/needs-you?item=<id>`, an artifact
-to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
+`/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and `GET /v1/chain`, nothing
+else. A header (kind, state, project chip, title, summary, the owner's next moves as links, the facts), then from `lg` up
+two columns: tabs on the left and an aside on the right (Properties; the Chain around this Issue, Waits on and Blocks); below
+`lg` the aside stacks under the tabs. The tab is the URL's `?tab=activity|evidence|checkpoints` (the overview is the bare
+address; history is replaced, not pushed). Overview: what it is, a StatCard row (working time, turns, tokens out, cache read
+share; bars per attempt from two attempts), the attempts, and how it was filed and amended (`triage`). Activity: the event
+log in words as a StepRail per attempt. Evidence: each ship with its commits, review, acceptance, watch and verify runs, then
+the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.
+The pure model (tabs, groups, series, chain links, tones) is `src/lib/issue-page.ts`. Every figure is the API's, only
+phrased; no id is on screen. A Needs you card and a Flow card link to it. It is read-only on purpose: the listener forwards
+six answer verbs and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
+Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
+`tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 
 ## Kit
 

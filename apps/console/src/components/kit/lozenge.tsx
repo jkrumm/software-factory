@@ -31,16 +31,32 @@ export const LOZENGE_TONES: Record<LozengeState, Tone> = {
   cancelled: 'neutral',
 }
 
-export interface LozengeProps {
-  state: LozengeState
-  /** The words shown; default the state with a capital. */
-  children?: string
+interface LozengeBase {
   className?: string
 }
 
+export type LozengeProps = LozengeBase &
+  (
+    | {
+        state: LozengeState
+        /** The words shown; default the state with a capital. */
+        children?: string
+        tone?: undefined
+      }
+    | {
+        state?: undefined
+        /** An explicit tone, for a state that is not an Issue's (a session's, a ship's): the words are then required. */
+        tone: Tone
+        children: string
+      }
+  )
+
 /** A state as text on a 12 % tint of its tone. */
-export function Lozenge({ state, children, className }: LozengeProps) {
-  const tone = LOZENGE_TONES[state]
+export function Lozenge(props: LozengeProps) {
+  const { className } = props
+  const tone = props.tone === undefined ? LOZENGE_TONES[props.state] : props.tone
+  const words =
+    props.children ?? (props.tone === undefined ? `${props.state.charAt(0).toUpperCase()}${props.state.slice(1)}` : '')
   return (
     <span
       data-tone={tone}
@@ -51,7 +67,7 @@ export function Lozenge({ state, children, className }: LozengeProps) {
         className,
       )}
     >
-      {children ?? `${state.charAt(0).toUpperCase()}${state.slice(1)}`}
+      {words}
     </span>
   )
 }
