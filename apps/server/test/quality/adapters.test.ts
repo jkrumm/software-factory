@@ -57,6 +57,25 @@ test('a red make verify carries its exit and its last output', async () => {
   expect(only).toMatchObject({ name: 'make verify', ok: false, detail: expect.stringContaining('exit 2') })
 })
 
+test('a red make verify with long output keeps the error and the end, and a watchdog list keeps the red check', async () => {
+  const plain = await fresh(
+    "verify:\n\t@seq 1 300 | sed 's/^/passing line /'; echo 'src/x.ts: error TS1: boom'; seq 301 600 | sed 's/^/passing line /'; exit 2\n",
+  )
+  const [one] = checks(await verify(plain, { makeVerify: true }))
+  expect(one?.detail).toContain('error TS1: boom')
+  expect(one?.detail).toContain('passing line 600')
+  expect(one?.detail).toMatch(/\[… \d+ lines cut\]/)
+  expect((one?.detail.length ?? 0) < 1_700).toBe(true)
+
+  const json = JSON.stringify([
+    { name: 'quiet', ok: true, detail: 'q'.repeat(2_000) },
+    { name: 'round_integrity', ok: false, detail: 'no blend row' },
+  ])
+  const list = await fresh(`verify:\n\t@printf '%s\\n' '${json}'; exit 1\n`)
+  const [red] = checks(await verify(list, { makeVerify: true }))
+  expect(red?.detail).toBe('exit 2: 1 of 2 checks failing:\nround_integrity: no blend row')
+})
+
 test('the deployed version must hold where the work landed', async () => {
   const repo = await fresh()
   const before = await repo.git('rev-parse', 'HEAD')

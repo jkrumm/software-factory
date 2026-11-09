@@ -1,3 +1,5 @@
+import { condense } from './output.ts'
+
 /** One check of verify: pass or fail, never averaged. `detail` is data, whatever the check printed. */
 export interface Check {
   name: string
@@ -78,11 +80,14 @@ export function stepOf(before: readonly Ran[], checks: readonly Check[]): Step {
   return { kind: 'regress', detail: regressionDetail(checks) }
 }
 
-const MAX_DETAIL = 600
+const MAX_DETAIL = 1_800
 
-/** What the lead reads of a regression: which checks failed and how. */
+/**
+ * What the lead reads of a regression: each failed check, by name, with the failing part of what it printed. The budget
+ * is shared between them and every cut falls on a line boundary and is marked (`condense`).
+ */
 export function regressionDetail(checks: readonly Check[]): string {
   const failed = checks.filter((check) => !check.ok)
-  const text = `${failed.map((check) => check.name).join(', ')} failed: ${failed.map((check) => check.detail).join(' / ')}`
-  return text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL)}…` : text
+  const share = Math.floor(MAX_DETAIL / Math.max(1, failed.length))
+  return failed.map((check) => `${check.name} failed: ${condense(check.detail, share)}`).join('\n')
 }
