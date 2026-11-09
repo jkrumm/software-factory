@@ -18,6 +18,7 @@ import {
   triageAt,
 } from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
+import { aboutLine, type SignalPart, signalParts, sourceLabel } from '@/lib/plain'
 import { Ago } from './ago'
 import { SourceLink } from './source-link'
 
@@ -156,13 +157,27 @@ function Attempts({ issue, now }: { issue: Issue; now: number }) {
   )
 }
 
-/** A signal's title and text as plain text; a long text is clamped to four lines until asked for. */
-function SignalText({ text }: { text: string }) {
+/** A signal's words with its times as "5 min ago" (the absolute time on hover). */
+function Parts({ parts, now }: { parts: SignalPart[]; now: number }) {
+  return parts.map((part, index) =>
+    part.kind === 'time' ? (
+      <Ago key={`${index}|${part.iso}`} iso={part.iso} now={now} />
+    ) : (
+      <span key={`${index}|${part.text}`}>{part.text}</span>
+    ),
+  )
+}
+
+/** A signal's text; a long one is clamped to four lines until asked for. */
+function SignalText({ parts, now }: { parts: SignalPart[]; now: number }) {
   const [all, setAll] = useState(false)
-  const long = text.length > 280 || text.split('\n').length > 4
+  const plain = parts.map((part) => (part.kind === 'text' ? part.text : '10 min ago')).join('')
+  const long = plain.length > 280 || plain.split('\n').length > 4
   return (
     <div className="flex max-w-[75ch] flex-col items-start gap-1">
-      <p className={all || !long ? 'whitespace-pre-wrap' : 'line-clamp-4 whitespace-pre-wrap'}>{text}</p>
+      <p className={all || !long ? 'whitespace-pre-wrap' : 'line-clamp-4 whitespace-pre-wrap'}>
+        <Parts parts={parts} now={now} />
+      </p>
       {long ? (
         <button
           type="button"
@@ -182,30 +197,39 @@ function Triage({ issue, now }: { issue: Issue; now: number }) {
     return <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">Filed directly, not from a signal.</p>
   return (
     <ol className="flex flex-col text-[length:var(--vx-text-sm)]">
-      {issue.triage.map((line, index) => (
-        <li key={`${line.at}|${line.title}|${line.text}`} className="flex flex-col gap-1 py-3 not-first:border-t">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-medium">
-              {index === 0 ? 'Filed by' : 'Amended by'} {originWords(line.origin).toLowerCase()}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {triageKindWords(line.kind)}, {trustWords(line.trust)}
-            </span>
-            {line.source ? <span className="font-mono text-xs text-muted-foreground">{line.source}</span> : null}
-            <Ago iso={triageAt(issue, index)} now={now} className="font-mono text-xs text-muted-foreground" />
-          </div>
-          {line.title ? <p className="max-w-[75ch] font-medium">{line.title}</p> : null}
-          {line.text ? <SignalText text={line.text} /> : null}
-          <SourceLink href={line.link}>Open the source</SourceLink>
-        </li>
-      ))}
+      {issue.triage.map((line, index) => {
+        const source = sourceLabel(line.source)
+        const title = signalParts(line.title)
+        const text = signalParts(line.text)
+        return (
+          <li key={`${line.at}|${line.title}|${line.text}`} className="flex flex-col gap-1 py-3 not-first:border-t">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium">
+                {index === 0 ? 'Filed by' : 'Amended by'} {originWords(line.origin).toLowerCase()}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {triageKindWords(line.kind)}, {trustWords(line.trust)}
+              </span>
+              {source ? <span className="text-xs text-muted-foreground">{source}</span> : null}
+              <Ago iso={triageAt(issue, index)} now={now} className="font-mono text-xs text-muted-foreground" />
+            </div>
+            {title.length > 0 ? (
+              <p className="max-w-[75ch] font-medium">
+                <Parts parts={title} now={now} />
+              </p>
+            ) : null}
+            {text.length > 0 ? <SignalText parts={text} now={now} /> : null}
+            <SourceLink href={line.link}>Open the source</SourceLink>
+          </li>
+        )
+      })}
     </ol>
   )
 }
 
 export function Overview({ issue, now }: { issue: Issue; now: number }) {
-  // the summary is in the header, and an `about` that only repeats the title says nothing
-  const about = issue.about && issue.about !== issue.title && issue.about !== issue.filedTitle ? issue.about : null
+  // the summary is in the header; an `about` that repeats the title or is a cut fragment says nothing
+  const about = aboutLine(issue.about, issue.title, issue.filedTitle)
   return (
     <div className="flex flex-col gap-8">
       {about ? (

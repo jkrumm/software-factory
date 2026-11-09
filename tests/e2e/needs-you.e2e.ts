@@ -175,6 +175,22 @@ test('a held signal dismissed with a reason leaves Needs you and stays on record
   })
 })
 
+test('a held signal with a markdown fence shows no fence', async ({ page, apiUrl }) => {
+  await api(apiUrl, '/signals', {
+    from: 'feedback:fencedapp',
+    title: 'The export crashes',
+    text: 'It said:\n```ts\nthrow new Error("boom")\n```\nafter I clicked.',
+  })
+  const held = await needNamed(apiUrl, 'The export crashes')
+  await open(page, held.title)
+  const signal = card(page, held.title)
+  await expect(signal.getByText('throw new Error("boom")')).toBeVisible()
+  expect(await signal.innerText()).not.toContain('```')
+  await signal.getByLabel('Reason').fill('Test signal')
+  await signal.getByRole('button', { name: 'Dismiss' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Dismissed' })).toBeVisible()
+})
+
 test('an Errand done, a held signal promoted and a verdict each move the API state', async ({ page, apiUrl }) => {
   // Errand
   const errand = await needNamed(apiUrl, 'Plug in the test phone')
@@ -207,6 +223,9 @@ test('an Errand done, a held signal promoted and a verdict each move the API sta
   const review = await needNamed(apiUrl, 'The cache spec')
   await open(page, 'The cache spec')
   const spec = card(page, 'The cache spec')
+  await expect(spec.getByText('We cache reads for ten seconds.')).toBeVisible()
+  await expect(spec.getByRole('link', { name: 'Open the full page' })).toBeVisible()
+  expect(await spec.innerText()).not.toContain('<!doctype')
   await expect(spec.getByRole('button', { name: 'With notes' })).toBeDisabled()
   await expect(spec.getByRole('button', { name: 'Changes' })).toBeDisabled()
   await spec.getByLabel('Note for the verdict').fill('Fine as it is')

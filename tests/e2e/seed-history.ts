@@ -37,6 +37,12 @@ export async function seedHistory(lab: Lab): Promise<SeededHistory> {
   const rich = (await signal('Add a health probe to the export job', 'The job fails silently when the disk is full.'))
     .issue
   await signal('Add a health probe to the export job', 'It also needs to report the last run time.')
+  // the steward's wording: an ISO time, an env name and a command line, filed by an agent
+  await api(url, '/signals', {
+    from: 'agent:orion',
+    title: 'Add a health probe to the export job',
+    text: 'The export job has been idle since 2026-11-09T11:30:23.973Z (FACTORY_STEWARD_IDLE_MS). Reproduce: factory issue show issue_1',
+  })
   await admitted(lab, rich)
   await tick(lab)
 

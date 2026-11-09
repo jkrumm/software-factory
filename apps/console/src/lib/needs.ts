@@ -1,5 +1,6 @@
 import type { NeedItem, NeedKind } from '@software-factory/contract'
 import type { LozengeState } from '../components/kit/lozenge.tsx'
+import { plainExcerpt } from './plain.ts'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -66,7 +67,7 @@ export function summaryLine(item: Pick<NeedItem, 'title' | 'summary'>, issueTitl
   const summary = item.summary.trim().toLowerCase()
   if (summary === '' || summary === item.title.trim().toLowerCase()) return null
   if (summary === issueTitle?.trim().toLowerCase()) return null
-  return item.summary
+  return plainExcerpt(item.summary) || null
 }
 
 /** The Issue page's route parameter of an item's `issue_<n>`: the number. */
