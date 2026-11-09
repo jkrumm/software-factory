@@ -305,7 +305,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   group `orchestrator_steer` (`steer:*`). A lead hears its note exactly as the owner's. Rows from before the token (the owner's
   actor with `via: orchestrator`) count as steering too.
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
-- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, fix commits, kpis and
+- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, fix commits, kpis, host, since (the Console's "since you were here" band: `read/since.ts` counts what the event log, Decisions, Errands, signals and incidents say after a start; only the owner's read moves the one-row `console_visit` marker, `app/visit.ts`: a read 30 minutes after the last starts a new visit at the old `seen_at`, the first looks back 24 h) and
   the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
   `GET /health` carries the heartbeat.
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the

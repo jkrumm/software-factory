@@ -29,6 +29,7 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
       title: hide ? REDACTED_TITLE : item.title,
       summary: hide ? REDACTED_SUMMARY : item.summary,
       judge: hide ? null : item.judge,
+      sourceLink: hide ? null : item.sourceLink,
       redacted: hide,
     }
   })
@@ -45,6 +46,18 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
   }
 }
 
+/** A held signal's source in a person's word: the origin's, or what the tool watches; never the tool's own name. */
+export function sourceWords(source: string, origin: string): string {
+  if (source === 'kuma') return 'an uptime check'
+  if (source === 'beszel') return 'the server monitor'
+  if (source === 'launchd') return 'a background job'
+  if (source === 'hyperdx') return 'the application'
+  if (source === 'github' || source === 'checks') return 'GitHub'
+  if (source.startsWith('feedback')) return 'feedback'
+  if (source.startsWith('owner')) return 'you'
+  return origin
+}
+
 const DecisionRow = z.object({
   id: z.string(),
   issue_id: z.string(),
@@ -55,6 +68,7 @@ const DecisionRow = z.object({
   asked_at: z.date(),
   no_answer: z.object({ default: z.string().nullable().optional(), waitMinutes: z.number().nullable().optional() }),
   judge: z.string().nullable(),
+  origin: z.string().nullable(),
 })
 
 const ReviewRow = z.object({
@@ -65,6 +79,7 @@ const ReviewRow = z.object({
   kind: z.string().nullable(),
   summary: z.string().nullable(),
   at: z.date(),
+  origin: z.string().nullable(),
 })
 
 const ErrandRow = z.object({
@@ -75,6 +90,7 @@ const ErrandRow = z.object({
   detail: z.string().nullable(),
   raised_at: z.date(),
   screen_note: z.string().nullable(),
+  origin: z.string().nullable(),
 })
 
 const SignalRow = z.object({
@@ -85,6 +101,9 @@ const SignalRow = z.object({
   received_at: z.date(),
   issue_id: z.string().nullable(),
   screen_note: z.string().nullable(),
+  origin: z.string(),
+  source: z.string(),
+  link: z.string().nullable(),
 })
 
 /**
@@ -96,14 +115,16 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
 
   const decisions: unknown[] = await sql`
     SELECT d.id, d.issue_id, d.repo, d.question, d.artifact_id, d.recommendation, d.asked_at, d.no_answer,
-      (SELECT j.detail FROM factory.decision_steps j WHERE j.decision_id = d.id AND j.step = 'judge') AS judge
+      (SELECT j.detail FROM factory.decision_steps j WHERE j.decision_id = d.id AND j.step = 'judge') AS judge,
+      (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = d.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.decisions d
     WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL
       AND EXISTS (SELECT 1 FROM factory.decision_steps s WHERE s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open')
     ORDER BY d.asked_at DESC, d.id DESC`
   const reviews: unknown[] = await sql`
     SELECT i.id AS issue_id, i.repo, e.wait->'holds'->>'id' AS artifact_id, a.title, a.kind,
-      e.wait->'holds'->>'summary' AS summary, e.at
+      e.wait->'holds'->>'summary' AS summary, e.at,
+      (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.issues i
     JOIN LATERAL (
       SELECT x.wait, x.at FROM factory.issue_events x
@@ -113,12 +134,13 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
     WHERE i.state = 'waiting' AND i.wait_reason = 'review' AND e.wait->>'verdictGiven' IS NULL
     ORDER BY e.at DESC, i.id DESC`
   const errands: unknown[] = await sql`
-    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note
+    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note,
+      (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = r.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.errands r JOIN factory.issues i ON i.id = r.issue_id
     WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND i.state <> 'closed'
     ORDER BY r.raised_at DESC, r.id DESC`
   const signals: unknown[] = await sql`
-    SELECT id, repo, title, text, received_at, issue_id, screen_note
+    SELECT id, repo, title, text, received_at, issue_id, screen_note, origin, source, link
     FROM factory.intake_signals WHERE state = 'held'
     ORDER BY received_at DESC, id DESC`
 
@@ -144,6 +166,9 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         judge: row.judge === null ? null : plain(row.judge, 200),
         link: { type: 'decision', id: row.id },
         artifact: row.artifact_id,
+        origin: row.origin,
+        source: null,
+        sourceLink: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -162,6 +187,9 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         judge: null,
         link: { type: 'artifact', id: row.artifact_id },
         artifact: null,
+        origin: row.origin,
+        source: null,
+        sourceLink: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -179,6 +207,9 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'errand', id: row.id },
         artifact: null,
+        origin: row.origin,
+        source: null,
+        sourceLink: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -196,6 +227,9 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'signal', id: row.id },
         artifact: null,
+        origin: row.origin,
+        source: sourceWords(row.source, row.origin),
+        sourceLink: row.link,
         work: isWorkRepo(row.repo, open),
       }
     }),

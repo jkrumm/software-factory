@@ -60,6 +60,9 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   judge: null,
   link: { type: 'decision', id },
   artifact: null,
+  origin: null,
+  source: null,
+  sourceLink: null,
   work,
 })
 

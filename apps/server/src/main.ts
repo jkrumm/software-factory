@@ -15,6 +15,7 @@ import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts
 import { hostReader } from './adapters/planning/host.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
+import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
 import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
@@ -127,6 +128,7 @@ async function main(): Promise<void> {
     intake: postgresIntakeStore(tx),
     loops: postgresLoopStore(tx),
     loopReads: loopReads(tx),
+    visits: postgresVisitStore(tx),
   }))
   // A test moves this clock to reach a date a real one would take 30 days to (settings refuse it outside test mode).
   const clock: Clock =
@@ -576,6 +578,7 @@ async function main(): Promise<void> {
       sql,
       queueReasons,
       machine,
+      visits: uow,
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
