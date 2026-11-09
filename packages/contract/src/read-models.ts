@@ -222,6 +222,17 @@ export const KpiTarget = z
   })
   .meta({ id: 'KpiTarget' })
 
+/** How many consecutive windows of `days` days a Kpi's `history` holds, the current one last. */
+export const HISTORY_WINDOWS = 6
+
+export const KpiPoint = z
+  .strictObject({
+    /** null when nothing was counted (`n` is 0) or the number is not measured in that window */
+    value: z.number().nullable(),
+    n: z.number().int(),
+  })
+  .meta({ id: 'KpiPoint' })
+
 export const Kpi = z
   .strictObject({
     key: z.enum(KPI_KEYS),
@@ -238,6 +249,8 @@ export const Kpi = z
     measured: z.boolean(),
     /** exactly what was counted */
     definition: z.string(),
+    /** `HISTORY_WINDOWS` points, oldest first, one per window of `KpiModel.windows`; the last is `value` and `n` */
+    history: z.array(KpiPoint).length(HISTORY_WINDOWS),
   })
   .meta({ id: 'Kpi' })
 export type Kpi = z.infer<typeof Kpi>
@@ -247,6 +260,8 @@ export const KpiModel = z
     at,
     days: z.number().int(),
     window: z.strictObject({ from: at, to: at }),
+    /** the consecutive windows behind every `history`, oldest first; the last is `window` */
+    windows: z.array(z.strictObject({ from: at, to: at })).length(HISTORY_WINDOWS),
     kpis: z.array(Kpi),
   })
   .meta({ id: 'KpiModel' })

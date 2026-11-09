@@ -1,18 +1,32 @@
 import { expect, test } from 'bun:test'
 import type { FindingClass, FixCommitsModel, Kpi } from '@software-factory/contract'
 import {
+  changeTone,
+  changeWords,
+  chartTarget,
   classWords,
+  comparisonWords,
+  distanceWords,
+  fixCard,
   fixClassRows,
   fixWeekLabel,
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
+  historyLabels,
+  historyXLabels,
+  kpiChange,
+  kpiFooter,
+  lineTone,
   sampleWords,
   targetStatus,
   targetWords,
   windowOf,
   windowWords,
 } from '../src/lib/improve.ts'
+
+const point = (value: number | null, n = 4) => ({ value, n })
+const history = (...values: (number | null)[]) => values.map((v) => point(v))
 
 const kpi = (over: Partial<Kpi>): Kpi => ({
   key: 'avoidable_touches',
@@ -24,6 +38,7 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   target: { kind: 'between', min: 0.05, max: 0.07 },
   measured: true,
   definition: '',
+  history: history(0.3, 0.28, 0.4, 0.22, 0.2, 0.25),
   ...over,
 })
 
@@ -118,4 +133,148 @@ test('fix commit weeks read oldest first, empty classes are left out and the tot
     { key: 'logic', meaning: 'b', counts: [0, 1, 0, 2], total: 3 },
   ])
   expect(fixWeekTotals(model)).toEqual([0, 1, 0, 3])
+})
+
+const AT_LEAST: Kpi['target'] = { kind: 'at_least', min: 0.9, max: null }
+const AT_MOST: Kpi['target'] = { kind: 'at_most', min: null, max: 0.25 }
+
+test('distanceWords: the verdict in words, the reason when there is none', () => {
+  expect(distanceWords(kpi({ value: 0.26 }))).toBe('0.19 above the target of 0.05 to 0.07')
+  expect(distanceWords(kpi({ value: 0.01 }))).toBe('0.04 below the target of 0.05 to 0.07')
+  expect(distanceWords(kpi({ value: 0.06 }))).toBe('Met: 0.05 to 0.07')
+  expect(distanceWords(kpi({ unit: 'share', value: 0.8, target: AT_LEAST }))).toBe(
+    '10 pts below the target of at least 90%',
+  )
+  expect(distanceWords(kpi({ unit: 'share', value: 0.95, target: AT_LEAST }))).toBe('Met: at least 90%')
+  expect(distanceWords(kpi({ value: 0.4, target: AT_MOST }))).toBe('0.15 above the target of at most 0.25')
+  expect(
+    distanceWords(kpi({ unit: 'ms', value: 5 * 3_600_000, target: { kind: 'at_most', min: null, max: 3_600_000 } })),
+  ).toBe('4.0 h above the target of at most 1.0 h')
+  expect(distanceWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBe('Trend only')
+  expect(distanceWords(kpi({ target: { kind: 'unset', min: null, max: null } }))).toBe('No target')
+  expect(distanceWords(kpi({ value: null }))).toBe('No data')
+  expect(distanceWords(kpi({ value: null, measured: false }))).toBe('Not measured')
+})
+
+test('changeWords: a signed size in the unit, never NaN, a missing side says so', () => {
+  expect(changeWords('per_issue', 0.25, 0.22)).toEqual({ text: '+0.03', direction: 1, difference: expect.any(Number) })
+  expect(changeWords('per_issue', 0.2, 0.25).text).toBe('-0.05')
+  expect(changeWords('share', 0.95, 0.9).text).toBe('+5 pts')
+  expect(changeWords('ms', 10 * 60_000, 25 * 60_000).text).toBe('-15 min')
+  expect(changeWords('usd', 1.5, 1).text).toBe('+$0.50')
+  expect(changeWords('per_issue', 0.25, 0.25)).toMatchObject({ text: 'No change', direction: 0 })
+  expect(changeWords('per_issue', 0.2500001, 0.25).text).toBe('No change')
+  expect(changeWords('per_issue', 0.25, null)).toEqual({ text: 'no earlier data', direction: 0, difference: null })
+  expect(changeWords('per_issue', null, 0.25).text).toBe('no earlier data')
+})
+
+test('changeTone follows the target, not the sign', () => {
+  expect(changeTone(AT_LEAST, 0.8, 0.85)).toBe('good')
+  expect(changeTone(AT_LEAST, 0.85, 0.8)).toBe('bad')
+  expect(changeTone(AT_MOST, 0.3, 0.2)).toBe('good')
+  expect(changeTone(AT_MOST, 0.2, 0.3)).toBe('bad')
+  // inside the target, a wobble below the bound is not a change of verdict
+  expect(changeTone(AT_MOST, 0.1, 0.2)).toBe('neutral')
+  const range = { kind: 'between', min: 0.05, max: 0.07 } as const
+  expect(changeTone(range, 0.3, 0.2)).toBe('good')
+  expect(changeTone(range, 0.01, 0.04)).toBe('good')
+  expect(changeTone(range, 0.06, 0.2)).toBe('bad')
+  expect(changeTone(range, 0.06, 0.065)).toBe('neutral')
+  expect(changeTone({ kind: 'trend', min: null, max: null }, 1, 2)).toBe('neutral')
+  expect(changeTone({ kind: 'unset', min: null, max: null }, 2, 1)).toBe('neutral')
+})
+
+test('kpiChange compares with the window before and judges it by the target', () => {
+  expect(kpiChange(kpi({ value: 0.25 }))).toMatchObject({ text: '+0.05', direction: 1, tone: 'bad' })
+  expect(kpiChange(kpi({ value: 0.2, history: history(0.1, 0.1, 0.1, 0.1, 0.3, 0.2) }))).toMatchObject({
+    text: '-0.10',
+    tone: 'good',
+  })
+  expect(kpiChange(kpi({ history: history(null, null, null, null, null, 0.25) }))).toMatchObject({
+    text: 'no earlier data',
+    tone: 'neutral',
+  })
+  expect(kpiChange(kpi({ history: [] }))).toMatchObject({ text: 'no earlier data', tone: 'neutral' })
+  expect(kpiChange(kpi({ value: null, history: history(1, 1, 1, 1, 1, null) })).text).toBe('no earlier data')
+})
+
+test('the chart draws the target as the kind says, and the line tone is the verdict', () => {
+  expect(chartTarget({ kind: 'between', min: 0.05, max: 0.07 })).toEqual({ min: 0.05, max: 0.07 })
+  expect(chartTarget(AT_LEAST)).toBe(0.9)
+  expect(chartTarget(AT_MOST)).toBe(0.25)
+  expect(chartTarget({ kind: 'trend', min: null, max: null })).toBeUndefined()
+  expect(chartTarget({ kind: 'unset', min: null, max: null })).toBeUndefined()
+  expect(chartTarget({ kind: 'at_most', min: null, max: null })).toBeUndefined()
+  expect(lineTone(kpi({ value: 0.06 }))).toBe('good')
+  expect(lineTone(kpi({ value: 0.3 }))).toBe('bad')
+  expect(lineTone(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBe('neutral')
+  expect(lineTone(kpi({ value: null }))).toBe('neutral')
+  expect(lineTone(kpi({ measured: false }))).toBe('neutral')
+})
+
+test('history labels, x labels, subtitle and footer', () => {
+  const windows = [
+    { from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' },
+    { from: '2026-10-12T00:00:00.000Z', to: '2026-10-19T00:00:00.000Z' },
+    { from: '2026-10-19T00:00:00.000Z', to: '2026-10-26T00:00:00.000Z' },
+    { from: '2026-10-26T00:00:00.000Z', to: '2026-11-02T00:00:00.000Z' },
+    { from: '2026-11-02T00:00:00.000Z', to: '2026-11-09T00:00:00.000Z' },
+  ]
+  const labels = historyLabels(kpi({ key: 'asks', history: [point(1, 1), point(null, 0)] }), windows)
+  expect(labels).toEqual(['Oct 5 to Oct 12, 1 Issue', 'Oct 12 to Oct 19, 0 Issues'])
+  expect(historyXLabels(7, windows)).toEqual(['Oct 5', '7-day windows', 'Nov 9'])
+  expect(historyXLabels(7, [])).toEqual(['', '7-day windows', ''])
+  expect(comparisonWords(30)).toBe('Last 30 days against the 30 before')
+  expect(kpiFooter(kpi({ n: 4 }))).toEqual([
+    { label: 'Target', value: '0.05 to 0.07' },
+    { label: 'Counted', value: '4 Issues' },
+  ])
+  expect(kpiFooter(kpi({ measured: false }))[1]).toEqual({
+    label: 'Counted',
+    value: 'The usage schema is not joined here',
+  })
+})
+
+test('fixCard: the newest week against the one before, fewer is better, classes keep their slot', () => {
+  const model: Pick<FixCommitsModel, 'classes' | 'weeks'> = {
+    classes: [
+      { key: 'tests', meaning: 'a' },
+      { key: 'logic', meaning: 'b' },
+      { key: 'docs', meaning: 'c' },
+    ],
+    weeks: [
+      week('2026-11-08T00:00:00.000Z', 3, { tests: 1, logic: 2 }),
+      week('2026-11-01T00:00:00.000Z', 1, { logic: 1 }),
+      week('2026-10-25T00:00:00.000Z', 0, {}),
+      week('2026-10-18T00:00:00.000Z', 2, { tests: 1, logic: 1 }),
+    ],
+  }
+  const card = fixCard(model)
+  expect(card.latest).toBe(3)
+  expect(card.change).toEqual({ text: '+2', direction: 1, difference: 2 })
+  expect(card.tone).toBe('bad')
+  expect(card.total).toBe(6)
+  expect(card.busiest).toEqual({ key: 'logic', total: 4 })
+  expect(card.classes.map((c) => [c.key, c.slot, c.total])).toEqual([
+    ['tests', 0, 2],
+    ['logic', 1, 4],
+    ['docs', 2, 0],
+  ])
+  expect(card.weeks.map((w) => [w.label, w.counts])).toEqual([
+    ['2026-10-18', [1, 1, 0]],
+    ['2026-10-25', [0, 0, 0]],
+    ['2026-11-01', [0, 1, 0]],
+    ['2026-11-08', [1, 2, 0]],
+  ])
+  const [newest, before, ...older] = model.weeks
+  const falling = fixCard({ ...model, weeks: [before ?? week('', 0, {}), newest ?? week('', 0, {}), ...older] })
+  expect(falling.change.text).toBe('-2')
+  expect(falling.tone).toBe('good')
+  const none = fixCard({ classes: model.classes, weeks: model.weeks.map((w) => week(w.to, 0, {})) })
+  expect(none.busiest).toBeNull()
+  expect(none.change).toMatchObject({ text: 'No change', direction: 0 })
+  expect(none.tone).toBe('neutral')
+  expect(fixCard({ classes: model.classes, weeks: [week('2026-11-08T00:00:00.000Z', 2, {})] }).change.text).toBe(
+    'no earlier data',
+  )
 })

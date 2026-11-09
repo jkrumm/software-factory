@@ -72,6 +72,14 @@ for (const variant of VARIANTS) {
           await shot('chain-tall')
           await page.setViewportSize({ width, height })
         }
+        if (name === 'improve' || name === 'improve-30') {
+          // The cards fill the viewport and Friction sits under them: shoot a tall one too.
+          const { width, height } = page.viewportSize() ?? variant.viewport
+          await page.setViewportSize({ width, height: width < 600 ? 4200 : 2200 })
+          await page.waitForLoadState('networkidle')
+          await shot(`${name}-tall`)
+          await page.setViewportSize({ width, height })
+        }
         if (name === 'kit') {
           // The Shell scrolls inside itself, so a full-page shot stops at the viewport: shoot the whole kit on a tall one.
           const { width, height } = page.viewportSize() ?? variant.viewport

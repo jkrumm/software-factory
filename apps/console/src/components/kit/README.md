@@ -10,6 +10,14 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   focus (arrow keys, Home, End), and the numbers as an accessible name plus a visually hidden table. Their colours are the
   semantic tones (accent, good, warn, bad, the quiet line), not a categorical palette, so the `dataviz` skill's palette
   validator does not apply: each chart holds one series and carries no legend.
+- **`Sparkline`** takes `(number | null)[]` (a `null` breaks the line, never a zero; the tooltip says `emptyText`) and a `target`
+  that is a number (one dashed line) or `{min, max}` (two dashed lines and a faint band). **`StackedBars`** stacks one
+  segment per series in the series' fixed order, a 2 px surface gap between them, with a legend of totals, a tooltip per bar
+  that lists the series (`ChartRow.lines`) and the hidden table. Its series colours are `--vx-series-1` to `-9` from
+  `src/styles/series.css` (the dataviz skill's palette, validated in dark and light; slot 9 is the quiet "Other"): a series
+  keeps its `slot` whatever else is shown. `no-raw-colour.test.ts` lets that one file hold literals.
+- **StatCard `delta`** may carry `tone` and `direction` when the sign does not say which way is good (a KPI's tone comes from
+  its target). **`MenuPopover`** is the ⋯ button that opens a popover of words (Improve's "What is counted").
 - **A card that is a link** puts the link on its title, stretched over the card, so a button inside (the three dots)
   never nests in an `<a>`. `href` makes an `<a>`; `as` takes a router link: `as={(p) => <Link to="/flow" {...p} />}`.
 - **InfoHint** reads `src/lib/language.gen.ts`, generated from `docs/language.md` by `scripts/language.ts`.

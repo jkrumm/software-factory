@@ -99,6 +99,24 @@ is pinned at Now as "due"; a row past the horizon is in the "Later" cell at the 
 `tests/e2e/chain.e2e.ts` compares the page with the API on a seeded chain across two projects (`seed-chain.ts`, whose plan dates
 are computed from the seed time).
 
+## Improve
+
+`/improve` fills the content area (`Page fluid`). One grid of kit `StatCard`s, one per KPI of `docs/product.md`, in the Console's own order
+(the headline measures first: first verification passes, avoidable touches, asks, worth asking, refusals, queue wait p90 and p50, cycle p50, window
+points, cost), then the fix-commit card, which spans two columns where the grid has them. A KPI card's header is an icon,
+the label and "Last 7 days against the 7 before"; its figure is `formatKpi`; its pill is the change against
+`history[length - 2]` in the unit's words, toned by the target (higher is better for `at_least`, lower for `at_most`, toward
+the range for `between`, neutral for a trend or no target); its sub line is the distance to the target in words; its
+chart is the six windows of `Kpi.history` as a `Sparkline` with the target dashed (two lines for a range), the line broken
+at a window with nothing counted and toned good, bad or quiet by the current verdict; its footer is Target and Counted. A KPI
+the API does not measure (cost and window points while the usage schema is not joined) shows "Not measured", no chart, and
+says why in the footer. The ⋯ menu opens "What is counted", the KPI's `definition`. The fix-commit card shows the newest
+week's total with the change against the week before (fewer is better), `StackedBars` by week (oldest left) with the legend
+of class totals, and "Total in the shown weeks" and "Busiest class"; the table of weeks by class sits under a Fold. Friction
+and the held finding classes follow. Every number comes from `/v1/kpis` and `/v1/fix-commits`; the page only subtracts. The
+words and the arithmetic are `src/lib/improve.ts`, unit-tested in `test/improve.test.ts`; `tests/e2e/improve.e2e.ts` compares
+every card with the API at 7 and 30 days.
+
 ## Build
 
 ```
@@ -205,7 +223,7 @@ Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, wher
 ## Kit
 
 `src/components/kit/` holds the Console's own components (StatCard, Lozenge, KindBadge, IssueCard and IssueRow,
-PropertyList, Section and Fold, StepRail, Meter and MeterBar, Sparkline, MiniBars and TimeChart (`kit/time-chart.tsx`, a time axis with a reference line), InfoHint, EmptyState, Skeleton), each on Basalt
+PropertyList, Section and Fold, StepRail, Meter and MeterBar, Sparkline, MiniBars, StackedBars and TimeChart (`kit/time-chart.tsx`, a time axis with a reference line), InfoHint, EmptyState, Skeleton), each on Basalt
 tokens alone, and `/kit` shows them together on fixtures (reachable by its address; it has no nav entry and makes no query).
 An InfoHint's text is the word's definition from `docs/language.md`: `scripts/language.ts` writes
 `src/lib/language.gen.ts` (`bun run --cwd apps/console language`) and `language:check` in `make check` fails when it is
@@ -216,7 +234,7 @@ their anatomy was rebuilt on Basalt tokens instead of taking one.
 ## Colours are enforced
 
 `test/no-raw-colour.test.ts` fails on any colour literal in `src`, `index.html` and `vite.config.ts` except the generated
-`tokens.css` and `routeTree.gen.ts`: hex, colour functions, `color-mix` with a literal argument, named colours used as
+`tokens.css` and `routeTree.gen.ts` and `series.css` (the chart palette, validated with the dataviz skill's script): hex, colour functions, `color-mix` with a literal argument, named colours used as
 values, and Tailwind palette utilities (`bg-red-500`, `border-white`, `bg-[#123]`). The rule is `test/raw-colour.ts`, with
 its own passing and failing samples in `test/raw-colour.test.ts`. Use a semantic class (`bg-card`, `text-muted-foreground`)
 or add a token to the bridge.

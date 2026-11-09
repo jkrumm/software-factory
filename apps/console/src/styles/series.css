@@ -1,0 +1,30 @@
+/*
+ * The categorical series colours of the charts (the dataviz skill's reference palette, in its fixed order). Chart colour
+ * follows the entity, never its rank: slot 1 is blue wherever it appears. Slot 9 is the quiet "Other", never a ninth hue.
+ * Validated with the skill's validate_palette.js: dark on the page surface (#27272a), light on its (#f2f2f5):
+ * every hard gate passes adjacent; light slots 2, 3, 4 and 5 sit under 3:1 there, so every chart that uses them carries a
+ * legend with totals and a table (the relief rule).
+ */
+:root,
+:root[data-theme='dark'] {
+  --vx-series-1: #3987e5;
+  --vx-series-2: #d95926;
+  --vx-series-3: #199e70;
+  --vx-series-4: #c98500;
+  --vx-series-5: #d55181;
+  --vx-series-6: #008300;
+  --vx-series-7: #9085e9;
+  --vx-series-8: #e66767;
+  --vx-series-9: var(--vx-line2);
+}
+:root[data-theme='light'] {
+  --vx-series-1: #2a78d6;
+  --vx-series-2: #eb6834;
+  --vx-series-3: #1baf7a;
+  --vx-series-4: #eda100;
+  --vx-series-5: #e87ba4;
+  --vx-series-6: #008300;
+  --vx-series-7: #6250d6;
+  --vx-series-8: #e34948;
+  --vx-series-9: var(--vx-line2);
+}

@@ -4,7 +4,8 @@ import { join, relative } from 'node:path'
 import { rawColours } from './raw-colour.ts'
 
 const root = join(import.meta.dir, '..')
-const GENERATED = new Set(['src/styles/tokens.css', 'src/routeTree.gen.ts'])
+/** The generated files and the validated chart palette (`series.css`, the one place a series colour is written). */
+const GENERATED = new Set(['src/styles/tokens.css', 'src/styles/series.css', 'src/routeTree.gen.ts'])
 const SOURCE = /\.(ts|tsx|css)$/
 
 function sources(dir: string): string[] {

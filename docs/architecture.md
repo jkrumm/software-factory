@@ -329,6 +329,7 @@ served under its own CSP (scripts, no network, sandboxed), not the page's, whose
 One database, schema `factory`; migrations apply under an advisory lock and a checksum. The cutover imported Issues,
 events, decisions and evidence from the old schema (`apps/server/scripts/import/`, `docs/rewrite/cutover-runbook.md`), so
 the KPIs keep their history. Usage and cost come from the `usage` schema by join, never copied.
+`GET /v1/kpis?days=N` also returns each KPI's `history` (six consecutive windows of N days, oldest first, the last the current one; usage KPIs only for the last two) and the `windows` behind it.
 
 ## Tests
 

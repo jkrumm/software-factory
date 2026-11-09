@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { Kpi, KpiModel } from '@software-factory/contract'
+import { HISTORY_WINDOWS, type Kpi, type KpiModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 
@@ -247,14 +247,20 @@ async function usageOf(
 
 const NONE = { kind: 'unset', min: null, max: null } as const
 
-const kpi = (k: Omit<Kpi, 'target'> & { target?: Kpi['target'] }): Kpi => ({ ...k, target: k.target ?? NONE })
+const kpi = (k: Omit<Kpi, 'target' | 'history'> & { target?: Kpi['target'] }): Omit<Kpi, 'history'> => ({
+  ...k,
+  target: k.target ?? NONE,
+})
 
-/** The table in `docs/product.md`, computed over the last `days` days from the event log and the checkpoint tables. */
-export async function readKpis(
+type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache }
+
+/** The KPIs of one window. Without `usage`, cost and window points are left unmeasured and the usage schema is not read. */
+async function kpisOf(
   sql: SQL,
-  options: { now: Date; days: number; usageTimeoutMs?: number; pointsCache?: PointsCache },
-): Promise<KpiModel> {
-  const w = windowOf(options.now, options.days)
+  w: Window,
+  options: KpiOptions,
+  { usage: withUsage }: { usage: boolean },
+): Promise<Array<Omit<Kpi, 'history'>>> {
   const issues = await issuesFiled(sql, w)
 
   const touches = await avoidableTouches(sql, w)
@@ -276,13 +282,15 @@ export async function readKpis(
   const refusals = await refusalCount(sql, w)
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
-  const usage = await usageOf(sql, w, {
-    now: options.now,
-    timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
-    cache: options.pointsCache ?? sharedPoints,
-  })
+  const usage = withUsage
+    ? await usageOf(sql, w, {
+        now: options.now,
+        timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
+        cache: options.pointsCache ?? sharedPoints,
+      })
+    : { cost: null, points: null }
 
-  const kpis: Kpi[] = [
+  return [
     kpi({
       key: 'avoidable_touches',
       label: 'Avoidable touches per Issue',
@@ -391,7 +399,7 @@ export async function readKpis(
       label: 'Window points per Issue',
       value: usage.points === null ? null : per(usage.points, issues),
       unit: 'points',
-      n: issues,
+      n: withUsage ? issues : 0,
       count: null,
       target: { kind: 'trend', min: null, max: null },
       measured: usage.points !== null,
@@ -403,17 +411,72 @@ export async function readKpis(
       label: 'Cost per Issue',
       value: usage.cost === null ? null : per(usage.cost, issues),
       unit: 'usd',
-      n: issues,
+      n: withUsage ? issues : 0,
       count: null,
       measured: usage.cost !== null,
       definition:
         "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. Null while the usage schema is not there.",
     }),
   ]
+}
+
+/**
+ * Windows read at once. A window holds one pool connection at a time (a usage read takes its own transaction, after the
+ * plain reads), and the shared pool has 8, so 3 leaves the rest for other requests.
+ */
+const WINDOW_CONCURRENCY = 3
+
+/** `fn` over `items` with at most `limit` running at once; results in item order. */
+async function mapBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i] as T, i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+/** Windows older than this many back (0 is the current one) skip the usage schema: its figures are expensive. */
+const USAGE_WINDOWS = 2
+
+/**
+ * The table in `docs/product.md`, computed over the last `days` days from the event log and the checkpoint tables, with the
+ * same figures over the `HISTORY_WINDOWS - 1` windows of `days` days before it (usage only for the one before).
+ */
+export async function readKpis(
+  sql: SQL,
+  options: { now: Date; days: number; usageTimeoutMs?: number; pointsCache?: PointsCache },
+): Promise<KpiModel> {
+  const step = options.days * 24 * 3_600_000
+  // oldest first; window k ends where window k + 1 starts, the last is exactly `windowOf(now, days)`
+  const windows = Array.from({ length: HISTORY_WINDOWS }, (_, i) =>
+    windowOf(new Date(options.now.getTime() - (HISTORY_WINDOWS - 1 - i) * step), options.days),
+  )
+  const lists = await mapBounded(windows, WINDOW_CONCURRENCY, (w, i) =>
+    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS }),
+  )
+  const current = lists[HISTORY_WINDOWS - 1] ?? []
+  const kpis: Kpi[] = current.map((k) => ({
+    ...k,
+    history: lists.map((list) => {
+      const point = list.find((x) => x.key === k.key)
+      return { value: point?.value ?? null, n: point?.n ?? 0 }
+    }),
+  }))
+  const last = windows[HISTORY_WINDOWS - 1] ?? windowOf(options.now, options.days)
   return {
     at: options.now.toISOString(),
     days: options.days,
-    window: { from: w.from.toISOString(), to: w.to.toISOString() },
+    window: { from: last.from.toISOString(), to: last.to.toISOString() },
+    windows: windows.map((w) => ({ from: w.from.toISOString(), to: w.to.toISOString() })),
     kpis,
   }
 }
