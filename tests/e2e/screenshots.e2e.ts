@@ -56,7 +56,7 @@ for (const variant of VARIANTS) {
     test('the screens, the artifact page and the open palette', async ({ page, apiUrl }) => {
       const shot = (name: string) =>
         page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), fullPage: true, animations: 'disabled' })
-      for (const { name, path } of [...SCREENS, ...artifactScreens(), ...issueScreens()]) {
+      for (const { name, path } of [...SCREENS, ...artifactScreens()]) {
         await page.goto(path)
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
@@ -89,6 +89,19 @@ for (const variant of VARIANTS) {
       await page.keyboard.press('ControlOrMeta+K')
       await expect(page.getByRole('dialog')).toBeVisible()
       await shot('palette')
+    })
+
+    test('the Issue page: every tab of the rich Issue, the working one and the chained one', async ({ page }) => {
+      for (const { name, path } of issueScreens()) {
+        await page.goto(path)
+        await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+        await page.waitForLoadState('networkidle')
+        await page.screenshot({
+          path: join(OUT, `${variant.name}-${name}.png`),
+          fullPage: true,
+          animations: 'disabled',
+        })
+      }
     })
 
     test('the header strip closed, each popover open, and the palette with a query', async ({ page, apiUrl }) => {
