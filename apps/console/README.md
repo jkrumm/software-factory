@@ -20,7 +20,7 @@ state with cards). The layout switches with `matchMedia`, so only one of the two
 ## Chain
 
 `/chain` draws the dependencies between Issues and plan rows across projects from `GET /v1/chain`: `@xyflow/react` for the
-canvas, `@dagrejs/dagre` for the layout (`src/lib/chain.ts`, left to right, a blocker left of the node that waits for it),
+canvas, `@dagrejs/dagre` for the layout (`src/lib/chain-layout.ts`, left to right, a blocker left of the node that waits for it),
 loaded as its own chunk so the other screens do not carry them. An arrow runs from the blocker into the node that runs after
 it. A blocked edge is solid and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
 labelled `done`; each edge also has an accessible text ("A blocks B"). A node shows the title, the project and the state as

@@ -147,7 +147,8 @@ export function startLive(queryClient: QueryClient): () => void {
     const now = Date.now()
     const slept = sleptBetween(lastTick, now)
     lastTick = now
-    if (slept && live) replaceNow()
+    // a hidden tab's timers are throttled to about a minute: that gap is not a sleep, and `onVisible` covers the return
+    if (slept && live && document.visibilityState === 'visible') replaceNow()
   }, WATCHDOG_TICK_MS)
 
   open()
