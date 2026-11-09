@@ -6,26 +6,46 @@ import type {
   KpiKey,
   KpiModel,
 } from '@software-factory/contract'
+import {
+  ChatCircleDotsIcon,
+  CurrencyDollarIcon,
+  GaugeIcon,
+  HandPointingIcon,
+  HourglassIcon,
+  type Icon,
+  ProhibitIcon,
+  ScalesIcon,
+  SealCheckIcon,
+  TimerIcon,
+  WrenchIcon,
+} from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { Fold, MenuPopover, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
-import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
+  chartTarget,
   classWords,
+  comparisonWords,
   DEFAULT_WINDOW,
+  distanceWords,
   FRICTION_GROUP_LABEL,
+  fixCard,
   fixClassRows,
   fixWeekLabel,
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
+  formatValue,
+  historyLabels,
+  historyValues,
+  historyXLabels,
+  kpiChange,
+  kpiFooter,
+  lineTone,
   perIssueWords,
-  sampleWords,
-  STATUS_LABEL,
-  targetStatus,
-  targetWords,
-  type TargetStatus,
+  shortDate,
   WINDOW_DAYS,
   windowOf,
   windowWords,
@@ -41,28 +61,37 @@ export const Route = createFileRoute('/improve')({
   component: Improve,
 })
 
-const HEADLINE: readonly KpiKey[] = [
+/** The KPIs in the Console's own order, the headline measures first (not the table order of `docs/product.md`); the fix-commit card follows them (its data is `/v1/fix-commits`). */
+const CARD_ORDER: readonly KpiKey[] = [
   'first_verification_passes',
   'avoidable_touches',
   'asks',
-  'queue_wait_p90',
+  'worth_asking',
   'refusals',
+  'queue_wait_p90',
+  'queue_wait_p50',
+  'cycle_p50',
+  'window_points',
+  'cost',
 ]
-const USAGE: readonly KpiKey[] = ['window_points', 'cost']
 
-const STATUS_CLASS: Record<TargetStatus, string> = {
-  met: 'bg-good/15 text-good',
-  missed: 'bg-destructive/10 text-destructive dark:bg-destructive/20',
-  trend: 'bg-muted text-muted-foreground',
-  no_target: 'bg-muted text-muted-foreground',
-  no_data: 'bg-muted text-muted-foreground',
-  not_measured: 'bg-muted text-muted-foreground',
+const KPI_ICON: Record<KpiKey, Icon> = {
+  first_verification_passes: SealCheckIcon,
+  avoidable_touches: HandPointingIcon,
+  asks: ChatCircleDotsIcon,
+  worth_asking: ScalesIcon,
+  refusals: ProhibitIcon,
+  queue_wait_p90: HourglassIcon,
+  queue_wait_p50: HourglassIcon,
+  cycle_p50: TimerIcon,
+  window_points: GaugeIcon,
+  cost: CurrencyDollarIcon,
+  fix_commits: WrenchIcon,
 }
 
-function StatusBadge({ kpi }: { kpi: Kpi }) {
-  const status = targetStatus(kpi)
-  return <Badge className={STATUS_CLASS[status]}>{STATUS_LABEL[status]}</Badge>
-}
+/** A surface card that is not a StatCard: a panel step with the faint card shadow, no border. */
+const PANEL = 'rounded-xl bg-card'
+const PANEL_SHADOW = { boxShadow: 'var(--vx-shadow-card)' }
 
 function WindowSwitch({ days }: { days: number }) {
   const collapsed = useSidebarCollapsed()
@@ -98,88 +127,114 @@ function WindowSection({ days }: { days: number }) {
   )
 }
 
-function HeadlineCard({ kpi }: { kpi: Kpi }) {
+function KpiCard({ kpi, model }: { kpi: Kpi; model: KpiModel }) {
+  const change = kpiChange(kpi)
+  const known = kpi.measured && kpi.history.some((point) => point.value !== null)
   return (
-    <li className="flex flex-col gap-1 rounded-xl border bg-card px-4 py-3">
-      <span className="text-sm text-muted-foreground">{kpi.label}</span>
-      <span className="font-heading text-2xl font-semibold tabular-nums">{formatKpi(kpi)}</span>
-      <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <StatusBadge kpi={kpi} />
-        {targetWords(kpi)}
-      </span>
-    </li>
+    <StatCard
+      icon={KPI_ICON[kpi.key]}
+      title={kpi.label}
+      subtitle={comparisonWords(model.days)}
+      value={formatKpi(kpi)}
+      delta={kpi.measured ? { value: change.text, direction: change.direction, tone: change.tone } : undefined}
+      sub={kpi.measured ? distanceWords(kpi) : undefined}
+      chart={
+        known ? (
+          <Sparkline
+            values={historyValues(kpi)}
+            labels={historyLabels(kpi, model.windows)}
+            target={chartTarget(kpi.target)}
+            tone={lineTone(kpi)}
+            name={kpi.label}
+            format={(value) => formatValue(kpi.unit, value)}
+          />
+        ) : null
+      }
+      xLabels={known ? historyXLabels(model.days, model.windows) : undefined}
+      footer={kpiFooter(kpi)}
+      menu={
+        <MenuPopover label={`${kpi.label}: what is counted`} title="What is counted">
+          {kpi.definition}
+        </MenuPopover>
+      }
+    />
   )
 }
 
-type KpiList = KpiModel['kpis']
+const CHART_HEIGHT = 88
 
-const pick = (kpis: KpiList, keys: readonly KpiKey[]) => keys.flatMap((key) => kpis.filter((k) => k.key === key))
-
-function TargetsSection({ kpis }: { kpis: KpiList }) {
+function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
+  const common = {
+    icon: WrenchIcon,
+    title: 'Fix commits per week',
+    subtitle: 'This week against the one before',
+    className: '@3xl:col-span-2',
+  }
+  if (!model || !model.measured) {
+    return (
+      <StatCard
+        {...common}
+        value={model || !pending ? 'No data' : 'Loading'}
+        sub={model ? 'No fix commits stored yet' : undefined}
+        chart={model ? null : <Skeleton height={CHART_HEIGHT} />}
+        footer={[
+          { label: 'Target', value: 'falling' },
+          { label: 'Counted', value: model || !pending ? 'No fix commits' : 'Loading' },
+        ]}
+      />
+    )
+  }
+  const card = fixCard(model)
+  const first = card.weeks[0]
+  const last = card.weeks.at(-1)
   return (
-    <section aria-labelledby="improve-targets" className="grid gap-3">
-      <h2 id="improve-targets" className="text-sm font-medium text-muted-foreground">
-        Targets
-      </h2>
-      <ul aria-label="Headline" className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        {pick(kpis, HEADLINE).map((kpi) => (
-          <HeadlineCard key={kpi.key} kpi={kpi} />
+    <StatCard
+      {...common}
+      value={card.latest}
+      delta={{ value: card.change.text, direction: card.change.direction, tone: card.tone }}
+      sub="Falling is the target"
+      chart={
+        <StackedBars
+          name="Fix commits per week by class"
+          unit="fix commits"
+          height={CHART_HEIGHT}
+          series={card.classes.map((c) => ({ key: c.key, label: c.key, slot: c.slot + 1 }))}
+          bars={card.weeks.map((w) => ({ label: `Week to ${w.label}`, values: w.counts }))}
+        />
+      }
+      xLabels={first && last ? [shortDate(first.label), 'Weeks ending', shortDate(last.label)] : undefined}
+      footer={[
+        { label: 'Total in the shown weeks', value: String(card.total) },
+        { label: 'Busiest class', value: card.busiest ? `${card.busiest.key} (${card.busiest.total})` : 'None' },
+      ]}
+      menu={
+        <MenuPopover label="Fix commits: what is counted" title="What is counted">
+          Commits on a project's default branch whose subject is a conventional fix, sorted into a class by the
+          fix-classes loop; each week is seven days ending on the date shown, the newest on the right.
+        </MenuPopover>
+      }
+    />
+  )
+}
+
+function CardGrid({
+  model,
+  fixes,
+  fixesPending,
+}: {
+  model: KpiModel
+  fixes: FixCommitsModel | undefined
+  fixesPending: boolean
+}) {
+  return (
+    <div className="@container">
+      <div aria-label="Key figures" role="group" className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-4">
+        {CARD_ORDER.flatMap((key) => model.kpis.filter((kpi) => kpi.key === key)).map((kpi) => (
+          <KpiCard key={kpi.key} kpi={kpi} model={model} />
         ))}
-      </ul>
-      <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-muted-foreground">
-            <tr>
-              {['Measure', 'Value', 'Target', 'Status', 'Counted'].map((name) => (
-                <th key={name} scope="col" className="px-4 py-2 font-medium">
-                  {name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {kpis.map((kpi) => (
-              <tr key={kpi.key} className="border-t align-top">
-                <th scope="row" className="px-4 py-2 text-left font-medium">
-                  {kpi.label}
-                  <details className="mt-1 font-normal text-muted-foreground">
-                    <summary className="cursor-pointer text-xs">What is counted</summary>
-                    <p className="mt-1 max-w-prose text-xs">{kpi.definition}</p>
-                  </details>
-                </th>
-                <td className="px-4 py-2 tabular-nums">{formatKpi(kpi)}</td>
-                <td className="px-4 py-2 text-muted-foreground">{targetWords(kpi)}</td>
-                <td className="px-4 py-2">
-                  <StatusBadge kpi={kpi} />
-                </td>
-                <td className="px-4 py-2 text-muted-foreground tabular-nums">{sampleWords(kpi)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <FixCard model={fixes} pending={fixesPending} />
       </div>
-    </section>
-  )
-}
-
-function UsageSection({ kpis }: { kpis: KpiList }) {
-  return (
-    <section aria-labelledby="improve-usage" className="grid gap-3">
-      <h2 id="improve-usage" className="text-sm font-medium text-muted-foreground">
-        Usage
-      </h2>
-      <ul className="grid grid-cols-2 gap-3">
-        {pick(kpis, USAGE).map((kpi) => (
-          <li key={kpi.key} className="flex flex-col gap-1 rounded-xl border bg-card px-4 py-3">
-            <span className="text-sm text-muted-foreground">{kpi.label}</span>
-            <span className="font-heading text-2xl font-semibold tabular-nums">{formatKpi(kpi)}</span>
-            <span className="text-xs text-muted-foreground">
-              {kpi.measured ? sampleWords(kpi) : 'Not measured: the usage schema is not joined here'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    </div>
   )
 }
 
@@ -194,7 +249,7 @@ function FrictionGroup({
   if (rows.length === 0) return null
   const title = FRICTION_GROUP_LABEL[group]
   return (
-    <div className="rounded-xl border bg-card px-4 py-3">
+    <div className={cn(PANEL, 'px-4 py-3')} style={PANEL_SHADOW}>
       <h3 className="mb-1 text-sm font-medium">{title}</h3>
       <ul aria-label={title} className="divide-y text-sm">
         {rows.map((row) => (
@@ -253,7 +308,7 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
       {quiet.length === 0 ? (
         <p className="text-sm text-muted-foreground">{model ? 'No finding class is held.' : 'Loading'}</p>
       ) : (
-        <ul aria-label="Held finding classes" className="divide-y rounded-xl border bg-card px-4 text-sm">
+        <ul aria-label="Held finding classes" className={cn(PANEL, 'divide-y px-4 text-sm')} style={PANEL_SHADOW}>
           {quiet.map((c) => (
             <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
               <span>
@@ -269,19 +324,13 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
   )
 }
 
-function FixClassesSection({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
-  const rows = model ? fixClassRows(model) : []
+function FixClassesSection({ model }: { model: FixCommitsModel | undefined }) {
+  if (!model || !model.measured) return null
+  const rows = fixClassRows(model)
   return (
-    <section aria-labelledby="improve-fix-commits" className="grid gap-3">
-      <h2 id="improve-fix-commits" className="text-sm font-medium text-muted-foreground">
-        Fix commits by class
-      </h2>
-      {!model || !model.measured ? (
-        <p className="text-sm text-muted-foreground">
-          {model ? 'No fix commits stored yet.' : pending ? 'Loading' : 'No data yet'}
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
+    <section aria-label="Fix commits by class">
+      <Fold title="Fix commits by class" count={fixWeekTotals(model).reduce((a, b) => a + b, 0)}>
+        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
           <table className="w-full text-sm">
             <caption className="sr-only">Fix commits per class, by the week ending on the date shown</caption>
             <thead className="text-left text-xs text-muted-foreground">
@@ -322,7 +371,7 @@ function FixClassesSection({ model, pending }: { model: FixCommitsModel | undefi
             </tbody>
           </table>
         </div>
-      )}
+      </Fold>
     </section>
   )
 }
@@ -336,7 +385,7 @@ function Improve() {
 
   if (!kpis.data) {
     return (
-      <Page>
+      <Page fluid>
         <PageHeader title="Improve" note={kpis.isPending ? 'Loading' : failureNote(kpis.error)} />
         <WindowSwitch days={days} />
         <WindowSection days={days} />
@@ -345,16 +394,19 @@ function Improve() {
   }
   const model = kpis.data
   return (
-    <Page>
+    <Page fluid>
       <PageHeader title="Improve" note={`Last ${model.days} days, ${windowWords(model.window)}`} />
       <WindowSwitch days={days} />
       <WindowSection days={days} />
       <div className="grid gap-8">
-        <TargetsSection kpis={model.kpis} />
-        <UsageSection kpis={model.kpis} />
-        <FrictionSection model={friction.data} pending={friction.isPending} />
-        <FixClassesSection model={fixes.data} pending={fixes.isPending} />
-        <FindingClassesSection model={classes.data} />
+        <CardGrid model={model} fixes={fixes.data} fixesPending={fixes.isPending} />
+        <div className="grid items-start gap-8 xl:grid-cols-2">
+          <FrictionSection model={friction.data} pending={friction.isPending} />
+          <div className="grid gap-8">
+            <FindingClassesSection model={classes.data} />
+            <FixClassesSection model={fixes.data} />
+          </div>
+        </div>
       </div>
     </Page>
   )

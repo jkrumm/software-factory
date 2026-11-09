@@ -1,68 +1,131 @@
 import {
+  comparisonWords,
+  distanceWords,
+  fixCard,
   fixClassRows,
   fixWeekLabel,
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
+  historyLabels,
+  kpiChange,
+  kpiFooter,
   perIssueWords,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
-import type { Page } from '@playwright/test'
+import type { Kpi, KpiModel } from '@software-factory/contract'
+import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { api } from './seed.ts'
 
-interface Kpi {
-  key: string
-  label: string
-  value: number | null
-  unit: 'per_issue' | 'share' | 'ms' | 'usd' | 'points'
-  measured: boolean
-}
-interface KpiModel {
-  days: number
-  window: { from: string; to: string }
-  kpis: Kpi[]
-}
 interface FrictionModel {
   counts: { key: string; label: string; count: number; perIssue: number | null }[]
 }
+type FixModel = Parameters<typeof fixClassRows>[0] & { measured: boolean }
 
-const HEADLINE = ['first_verification_passes', 'avoidable_touches', 'asks', 'queue_wait_p90', 'refusals']
+/** The cards in the Console's own order, the headline measures first; the fix-commit card follows. */
+const CARD_ORDER = [
+  'first_verification_passes',
+  'avoidable_touches',
+  'asks',
+  'worth_asking',
+  'refusals',
+  'queue_wait_p90',
+  'queue_wait_p50',
+  'cycle_p50',
+  'window_points',
+  'cost',
+]
+const FIX_TITLE = 'Fix commits per week'
 
-/** Each headline card shows what `formatKpi` makes of the API's value. */
-async function expectHeadline(page: Page, kpis: KpiModel) {
-  const cards = page.getByRole('list', { name: 'Headline' })
-  for (const key of HEADLINE) {
-    const kpi = kpis.kpis.find((k) => k.key === key)
+const cardOf = (page: Page, title: string): Locator =>
+  page.getByRole('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+
+const cardKpis = (model: KpiModel): Kpi[] =>
+  CARD_ORDER.map((key) => {
+    const kpi = model.kpis.find((k) => k.key === key)
     if (!kpi) throw new Error(`${key} is not in the API answer`)
-    const card = cards.getByRole('listitem').filter({ hasText: kpi.label })
+    return kpi
+  })
+
+/** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
+async function expectCards(page: Page, model: KpiModel) {
+  expect(model.kpis).toHaveLength(11)
+  expect(model.windows).toHaveLength(6)
+  for (const kpi of cardKpis(model)) {
+    const card = cardOf(page, kpi.label)
+    await expect(card, kpi.key).toHaveCount(1)
     await expect(card.getByText(formatKpi(kpi), { exact: true }).first()).toBeVisible()
+    await expect(card.getByText(comparisonWords(model.days), { exact: true })).toBeVisible()
+    const [target, counted] = kpiFooter(kpi)
+    await expect(card.locator('dd').nth(0)).toHaveText(target.value)
+    await expect(card.locator('dd').nth(1)).toHaveText(counted.value)
+
+    const chart = card.getByRole('group', { name: new RegExp(`^${kpi.label}:`) })
+    if (!kpi.measured) {
+      expect(formatKpi(kpi)).toBe('Not measured')
+      await expect(card.locator('[data-tone]')).toHaveCount(0)
+      await expect(chart).toHaveCount(0)
+      continue
+    }
+    await expect(card.getByText(distanceWords(kpi), { exact: true }).first()).toBeVisible()
+    const change = kpiChange(kpi)
+    await expect(card.locator('[data-tone]')).toHaveText(change.text)
+    await expect(card.locator('[data-tone]')).toHaveAttribute('data-tone', change.tone)
+    if (kpi.history.some((point) => point.value !== null)) await expect(chart.locator('tbody tr')).toHaveCount(6)
   }
 }
 
 const read = (apiUrl: string, days: number) =>
   Promise.all([api<KpiModel>(apiUrl, `/v1/kpis?days=${days}`), api<FrictionModel>(apiUrl, `/v1/friction?days=${days}`)])
 
-test('the headline numbers, the table and each friction count are what the API says', async ({ page, apiUrl }) => {
+test('one card per KPI in the order the Console shows, each the figures the API says, then the fix-commit card', async ({
+  page,
+  apiUrl,
+}) => {
   const [kpis, friction] = await read(apiUrl, 7)
   await page.goto('/improve')
-  await expect(page.getByRole('heading', { name: 'Improve' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Improve', level: 1 })).toBeVisible()
   await expect(page.getByText(`Last 7 days, ${windowWords(kpis.window)}`, { exact: true })).toBeVisible()
 
-  await expectHeadline(page, kpis)
-
-  const table = page.getByRole('region', { name: 'Targets' }).getByRole('table')
-  expect(kpis.kpis).toHaveLength(11)
-  for (const kpi of kpis.kpis) {
-    const row = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: kpi.label }) })
-    await expect(row).toHaveCount(1)
-    await expect(row.getByRole('cell').first()).toHaveText(formatKpi(kpi))
-  }
+  const grid = page.getByRole('group', { name: 'Key figures' })
+  await expect(grid.getByRole('heading')).toHaveText([...cardKpis(kpis).map((k) => k.label), FIX_TITLE])
+  await expectCards(page, kpis)
 
   for (const count of friction.counts) {
     const row = page.getByRole('listitem').filter({ hasText: count.label })
     await expect(row.getByLabel('Count')).toHaveText(String(count.count))
     await expect(row.getByLabel('Per Issue closed')).toHaveText(perIssueWords(count.perIssue))
+  }
+})
+
+test('the KPIs with a history draw it: a tooltip per point names its window and what was counted', async ({
+  page,
+  apiUrl,
+}) => {
+  const [kpis] = await read(apiUrl, 7)
+  const withHistory = cardKpis(kpis).filter((k) => k.measured && k.history.filter((p) => p.value !== null).length > 1)
+  expect(withHistory.length, 'the seed gives some KPI a real history').toBeGreaterThanOrEqual(3)
+  await page.goto('/improve')
+  for (const kpi of withHistory.slice(0, 3)) {
+    const chart = cardOf(page, kpi.label).getByRole('group', { name: new RegExp(`^${kpi.label}:`) })
+    await chart.focus()
+    const last = kpi.history.map((p) => p.value !== null).lastIndexOf(true)
+    await expect(chart.getByRole('status')).toContainText(historyLabels(kpi, kpis.windows)[last] ?? '')
+  }
+})
+
+test('the definition of what is counted is one keyboard press away on every card', async ({ page, apiUrl }) => {
+  const [kpis] = await read(apiUrl, 7)
+  await page.goto('/improve')
+  for (const kpi of [kpis.kpis[0], kpis.kpis.find((k) => k.key === 'cost')]) {
+    if (!kpi) throw new Error('a KPI is missing')
+    const button = cardOf(page, kpi.label).getByRole('button', { name: `${kpi.label}: what is counted` })
+    await button.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(kpi.definition, { exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByText(kpi.definition, { exact: true })).toHaveCount(0)
   }
 })
 
@@ -74,24 +137,25 @@ test('the window switch sets the URL, the note and the numbers', async ({ page, 
   await expect(page).toHaveURL(/\/improve\?days=30$/)
   await expect(page.getByRole('link', { name: '30 days' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText(`Last 30 days, ${windowWords(kpis.window)}`, { exact: true })).toBeVisible()
-  await expectHeadline(page, kpis)
+  await expectCards(page, kpis)
   await page.goto('/improve?days=12')
-  await expect(page.getByText(/^Last 7 days/)).toBeVisible()
+  await expect(page.getByText(/^Last 7 days, /)).toBeVisible()
 })
 
-test('usage reads Not measured where the API says so, and no id leaks onto the page', async ({ page, apiUrl }) => {
+test('a KPI the API does not measure says Not measured and why, and no id leaks onto the page', async ({
+  page,
+  apiUrl,
+}) => {
   const [kpis] = await read(apiUrl, 7)
   await page.goto('/improve')
-  const usage = page.getByRole('region', { name: 'Usage' })
   for (const key of ['cost', 'window_points']) {
     const kpi = kpis.kpis.find((k) => k.key === key)
     if (!kpi) throw new Error(`${key} is not in the API answer`)
-    await expect(
-      usage.getByRole('listitem').filter({ hasText: kpi.label }).getByText(formatKpi(kpi), { exact: true }),
-    ).toBeVisible()
-    if (!kpi.measured) expect(formatKpi(kpi)).toBe('Not measured')
+    const card = cardOf(page, kpi.label)
+    await expect(card.getByText(formatKpi(kpi), { exact: true }).first()).toBeVisible()
+    if (kpi.measured) continue
+    await expect(card.getByText('The usage schema is not joined here', { exact: true })).toBeVisible()
   }
-  await expect(usage.getByText('Not measured: the usage schema is not joined here').first()).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 
@@ -115,14 +179,46 @@ test('held finding classes read what the API says: a line when none is held, els
   }
 })
 
+test('the fix-commit card reads the API: the newest week, the change, the legend and the busiest class', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<FixModel>(apiUrl, '/v1/fix-commits')
+  expect(model.measured).toBe(true)
+  const card = fixCard(model)
+  await page.goto('/improve')
+  const article = cardOf(page, FIX_TITLE)
+  await expect(article.getByText(String(card.latest), { exact: true }).first()).toBeVisible()
+  await expect(article.locator('[data-tone]')).toHaveText(card.change.text)
+  await expect(article.locator('[data-tone]')).toHaveAttribute('data-tone', card.tone)
+  await expect(article.locator('dd').nth(0)).toHaveText(String(card.total))
+  await expect(article.locator('dd').nth(1)).toHaveText(
+    card.busiest ? `${card.busiest.key} (${card.busiest.total})` : 'None',
+  )
+
+  const legend = article.getByRole('list', { name: /legend/ })
+  const present = card.classes.filter((c) => c.total > 0)
+  await expect(legend.getByRole('listitem')).toHaveCount(present.length)
+  for (const c of present)
+    await expect(legend.getByRole('listitem').filter({ hasText: c.key })).toContainText(String(c.total))
+
+  const chart = article.getByRole('group', { name: /^Fix commits per week by class/ })
+  await expect(chart.locator('tbody tr')).toHaveCount(card.weeks.length)
+  await chart.focus()
+  const newest = card.weeks.at(-1)
+  await expect(chart.getByRole('status')).toContainText(`Week to ${newest?.label}`)
+})
+
 test('fix commits by class read what the API says, the weeks oldest first, with a total row', async ({
   page,
   apiUrl,
 }) => {
-  const model = await api<Parameters<typeof fixClassRows>[0] & { measured: boolean }>(apiUrl, '/v1/fix-commits')
+  const model = await api<FixModel>(apiUrl, '/v1/fix-commits')
   expect(model.measured).toBe(true)
   await page.goto('/improve')
-  const table = page.getByRole('region', { name: 'Fix commits by class' }).getByRole('table')
+  const region = page.getByRole('region', { name: 'Fix commits by class' })
+  await region.getByRole('button', { name: /Fix commits by class/ }).click()
+  const table = region.getByRole('table')
   const head = table.getByRole('columnheader')
   await expect(head).toHaveText(['Class', ...fixWeeksOldestFirst(model).map(fixWeekLabel)])
   for (const row of fixClassRows(model)) {

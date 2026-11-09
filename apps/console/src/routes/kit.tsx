@@ -23,12 +23,17 @@ import {
   PropertyList,
   Section,
   Skeleton,
+  Sparkline,
+  StackedBars,
   StatCard,
   StepRail,
 } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import {
+  KIT_FIX_BARS,
+  KIT_FIX_SERIES,
   KIT_ISSUES,
+  KIT_KPI_HISTORY,
   KIT_ORIGIN,
   KIT_METERS,
   KIT_NOW,
@@ -88,6 +93,53 @@ function Kit() {
           <StatCard icon={HourglassIcon} {...KIT_STATS.waiting} onMenu={() => undefined} />
           <StatCard icon={QueueIcon} {...KIT_STATS.queued} onMenu={() => undefined} />
           <StatCard icon={CheckCircleIcon} {...KIT_STATS.shipped} onMenu={() => undefined} />
+        </div>
+      </Section>
+
+      <Section title="Stacked bars and the gap line">
+        <Note>
+          Improve's charts. The line breaks at a window with nothing counted instead of dropping to zero, and a target
+          range is two dashed lines with a faint band. The stacked bars hold one segment per class in a fixed order,
+          each class always the same colour, with the legend and totals beside them.
+        </Note>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-4">
+          <StatCard
+            icon={WarningCircleIcon}
+            title="Avoidable touches"
+            subtitle="Last 7 days against the 7 before"
+            value="0.06"
+            delta={{ value: '-0.03', direction: -1, tone: 'good' }}
+            sub="Met: 0.05 to 0.07"
+            chart={
+              <Sparkline
+                values={KIT_KPI_HISTORY}
+                target={{ min: 0.05, max: 0.07 }}
+                tone="good"
+                name="Avoidable touches"
+                format={(v) => v.toFixed(2)}
+              />
+            }
+            xLabels={['Oct 1', '7-day windows', 'Nov 9']}
+            footer={[
+              { label: 'Target', value: '0.05 to 0.07' },
+              { label: 'Counted', value: '9 Issues' },
+            ]}
+          />
+          <StatCard
+            icon={WarningCircleIcon}
+            title="Fix commits per week"
+            subtitle="This week against the one before"
+            value={4}
+            delta={{ value: '-1', direction: -1, tone: 'good' }}
+            sub="Falling is the target"
+            chart={
+              <StackedBars series={KIT_FIX_SERIES} bars={KIT_FIX_BARS} unit="fix commits" name="Fix commits per week" />
+            }
+            footer={[
+              { label: 'Total', value: '23' },
+              { label: 'Busiest', value: 'logic' },
+            ]}
+          />
         </div>
       </Section>
 

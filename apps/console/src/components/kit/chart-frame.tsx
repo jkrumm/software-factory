@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 export interface ChartRow {
   label: string
   value: string
+  /** More lines under the label in the tooltip (a stacked bar's classes) and after the value in the hidden table. */
+  lines?: string[]
 }
 
 /** Value first and strong, label second. React text nodes only. */
@@ -45,6 +47,11 @@ export function ChartTooltip({
         {row.value}
       </div>
       <div style={{ color: 'var(--vx-tooltip-muted)' }}>{row.label}</div>
+      {row.lines?.map((line) => (
+        <div key={line} className="tabular-nums" style={{ color: 'var(--vx-tooltip-text)' }}>
+          {line}
+        </div>
+      ))}
     </div>
   )
 }
@@ -165,7 +172,7 @@ export function ChartFrame({
           {rows.map((r, i) => (
             <tr key={i}>
               <th scope="row">{r.label}</th>
-              <td>{r.value}</td>
+              <td>{r.lines?.length ? `${r.value}: ${r.lines.join(', ')}` : r.value}</td>
             </tr>
           ))}
         </tbody>

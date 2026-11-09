@@ -4,6 +4,7 @@
 @import '@fontsource-variable/nunito-sans/wght.css';
 @import '@fontsource-variable/jetbrains-mono/wght.css';
 @import './tokens.css';
+@import './series.css';
 
 /* The theme is the `data-theme` attribute main.tsx sets before first render. */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));

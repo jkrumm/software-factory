@@ -15,7 +15,14 @@ export interface StatCardProps extends CardLinkProps {
   /** The large figure. */
   value: string | number
   /** The change against the comparison: a number (signed by the pill) or a ready string. */
-  delta?: { value: number | string; higherIsBetter?: boolean }
+  delta?: {
+    value: number | string
+    higherIsBetter?: boolean
+    /** Overrides the tone read from the sign (a KPI's tone comes from its target). */
+    tone?: Tone
+    /** Overrides the arrow read from the sign: 1 up, -1 down, 0 flat. */
+    direction?: -1 | 0 | 1
+  }
   /** One line under the figure. */
   sub?: string
   /** A line chart from props. */
@@ -37,6 +44,7 @@ export interface StatCardProps extends CardLinkProps {
 
 /** The tone of a delta: direction times `higherIsBetter`; neutral at 0, unknown or text. */
 export function deltaTone(delta: StatCardProps['delta']): Tone {
+  if (delta?.tone) return delta.tone
   if (!delta || typeof delta.value === 'string') {
     const sign = typeof delta?.value === 'string' ? Math.sign(Number.parseFloat(delta.value)) : 0
     return toneOf(sign, delta?.higherIsBetter)
@@ -52,7 +60,9 @@ function toneOf(sign: number, higherIsBetter = true): Tone {
 function DeltaPill({ delta }: { delta: NonNullable<StatCardProps['delta']> }) {
   const tone = deltaTone(delta)
   const text = typeof delta.value === 'number' ? `${delta.value > 0 ? '+' : ''}${delta.value}` : delta.value
-  const sign = typeof delta.value === 'number' ? Math.sign(delta.value) : Math.sign(Number.parseFloat(delta.value))
+  const sign =
+    delta.direction ??
+    (typeof delta.value === 'number' ? Math.sign(delta.value) : Math.sign(Number.parseFloat(delta.value)))
   const Arrow = sign > 0 ? ArrowUpRightIcon : sign < 0 ? ArrowDownRightIcon : MinusIcon
   return (
     <span
@@ -121,7 +131,10 @@ export function StatCard({
           <CardIcon className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight">
+          <h3
+            title={title}
+            className="truncate text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
+          >
             <CardLink href={href} as={as}>
               {title}
             </CardLink>
@@ -130,7 +143,7 @@ export function StatCard({
         </div>
         {menu ?? (onMenu ? <MenuButton onClick={onMenu} label={`${title} options`} /> : null)}
       </header>
-      <div className="flex flex-col gap-2 rounded-lg bg-background px-4 py-3.5">
+      <div className="flex flex-1 flex-col gap-2 rounded-lg bg-background px-4 py-3.5">
         <div className="flex items-center gap-3">
           <span className="text-[length:var(--vx-text-display)] leading-none font-semibold tracking-tight proportional-nums">
             {value}
@@ -159,7 +172,7 @@ export function StatCard({
           {footer.map((pair) => (
             <div key={pair.label} className="flex min-w-0 items-baseline gap-2">
               <dt className="truncate text-muted-foreground">{pair.label}</dt>
-              <dd className="truncate text-[length:var(--vx-text-md)] font-semibold tabular-nums">{pair.value}</dd>
+              <dd className="min-w-0 text-[length:var(--vx-text-md)] font-semibold tabular-nums">{pair.value}</dd>
             </div>
           ))}
         </dl>

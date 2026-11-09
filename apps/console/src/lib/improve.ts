@@ -1,4 +1,5 @@
 import type { FindingClass, FixCommitsModel, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
+import type { Tone } from '../components/kit/tone'
 
 export const WINDOW_DAYS = [7, 30, 90] as const
 export type WindowDays = (typeof WINDOW_DAYS)[number]
@@ -14,7 +15,7 @@ const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
-function formatValue(unit: Kpi['unit'], value: number): string {
+export function formatValue(unit: Kpi['unit'], value: number): string {
   switch (unit) {
     case 'per_issue':
       return value.toFixed(2)
@@ -66,15 +67,6 @@ export function targetStatus(kpi: Pick<Kpi, 'value' | 'measured' | 'target'>): T
   const met = meets(kpi.target, kpi.value)
   if (met === null) return 'no_target'
   return met ? 'met' : 'missed'
-}
-
-export const STATUS_LABEL: Record<TargetStatus, string> = {
-  met: 'Met',
-  missed: 'Missed',
-  trend: 'Trend',
-  no_target: 'No target',
-  no_data: 'No data',
-  not_measured: 'Not measured',
 }
 
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
@@ -155,3 +147,188 @@ export function fixClassRows(model: Pick<FixCommitsModel, 'classes' | 'weeks'>):
 /** The total row: fix commits per week, the oldest first. */
 export const fixWeekTotals = (model: Pick<FixCommitsModel, 'weeks'>): number[] =>
   [...model.weeks].reverse().map((w) => w.total)
+
+// ---- the KPI cards: distance to the target, change against the window before, the history as a chart ---------------------
+
+/** A size without a sign, in the unit's words: a share differs in points, everything else reads like the figure. */
+function sizeWords(unit: Kpi['unit'], size: number): string {
+  return unit === 'share' ? `${Math.round(size * 100)} pts` : formatValue(unit, size)
+}
+
+/** How far `kpi` is from its target, in words; the verdict first when it is met, the missing reason when it has none. */
+export function distanceWords(kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target'>): string {
+  if (!kpi.measured) return 'Not measured'
+  if (kpi.value === null) return 'No data'
+  const { kind, min, max } = kpi.target
+  if (kind === 'trend') return 'Trend only'
+  const met = meets(kpi.target, kpi.value)
+  if (met === null) return 'No target'
+  if (met) return `Met: ${targetWords(kpi)}`
+  const outside = kind === 'at_least' || (kind === 'between' && min !== null && kpi.value < min) ? 'below' : 'above'
+  const edge = outside === 'below' ? min : max
+  return `${sizeWords(kpi.unit, Math.abs(kpi.value - (edge ?? 0)))} ${outside} the target of ${targetWords(kpi)}`
+}
+
+export interface Change {
+  /** "+0.04", "-3 min", "No change", "no earlier data" */
+  text: string
+  /** the arrow: 1 up, -1 down, 0 flat or unknown */
+  direction: -1 | 0 | 1
+  /** the difference, null when either side has no reading */
+  difference: number | null
+}
+
+/** The change of a reading against the one before it; never NaN, a missing side says so. */
+export function changeWords(unit: Kpi['unit'], current: number | null, previous: number | null): Change {
+  if (current === null || previous === null) return { text: 'no earlier data', direction: 0, difference: null }
+  const difference = current - previous
+  const size = sizeWords(unit, Math.abs(difference))
+  if (difference === 0 || size === sizeWords(unit, 0)) return { text: 'No change', direction: 0, difference }
+  const direction = difference > 0 ? 1 : -1
+  return { text: `${direction > 0 ? '+' : '-'}${size}`, direction, difference }
+}
+
+/** A KPI's change against the window before it (the history's second to last reading); the tone is the target's, not the sign's. */
+export function kpiChange(kpi: Pick<Kpi, 'value' | 'unit' | 'target' | 'history'>): Change & { tone: Tone } {
+  const previous = kpi.history.at(-2)?.value ?? null
+  const change = changeWords(kpi.unit, kpi.value, previous)
+  if (change.difference === null || kpi.value === null || previous === null) return { ...change, tone: 'neutral' }
+  return { ...change, tone: changeTone(kpi.target, previous, kpi.value) }
+}
+
+/**
+ * Whether moving from `previous` to `current` is toward the target: at_least higher is better, at_most lower is better,
+ * between nearer to the range; a trend or an unset target judges nothing.
+ */
+export function changeTone(target: Kpi['target'], previous: number, current: number): Tone {
+  const { kind, min, max } = target
+  if (current === previous) return 'neutral'
+  const toward = (distance: (v: number) => number): Tone =>
+    distance(current) < distance(previous) ? 'good' : distance(current) > distance(previous) ? 'bad' : 'neutral'
+  if (kind === 'at_least' && min !== null) return toward((v) => Math.max(0, min - v))
+  if (kind === 'at_most' && max !== null) return toward((v) => Math.max(0, v - max))
+  if (kind === 'between' && min !== null && max !== null) return toward((v) => Math.max(0, min - v, v - max))
+  return 'neutral'
+}
+
+/** The tone of the line: the target's verdict on the current reading; no verdict, the quiet line. */
+export function lineTone(kpi: Pick<Kpi, 'value' | 'measured' | 'target'>): Tone {
+  const status = targetStatus(kpi)
+  return status === 'met' ? 'good' : status === 'missed' ? 'bad' : 'neutral'
+}
+
+/** The target as the chart draws it: one dashed line, two for a range, none for a trend or an unset target. */
+export function chartTarget(target: Kpi['target']): number | { min: number; max: number } | undefined {
+  const { kind, min, max } = target
+  if (kind === 'at_least' && min !== null) return min
+  if (kind === 'at_most' && max !== null) return max
+  if (kind === 'between' && min !== null && max !== null) return { min, max }
+  return undefined
+}
+
+/** The history's readings for the chart, oldest first; a window with nothing counted stays a gap (`null`). */
+export const historyValues = (kpi: Pick<Kpi, 'history' | 'measured'>): (number | null)[] =>
+  kpi.history.map((point) => point.value)
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "Nov 9" from an ISO time (UTC, as the API says it). */
+export function shortDate(iso: string): string {
+  const month = MONTHS[Number(iso.slice(5, 7)) - 1] ?? ''
+  return `${month} ${Number(iso.slice(8, 10))}`
+}
+
+/** Each history point's tooltip line: the window it covers and what was counted in it. */
+export function historyLabels(
+  kpi: Pick<Kpi, 'key' | 'history'>,
+  windows: readonly { from: string; to: string }[],
+): string[] {
+  return kpi.history.map((point, i) => {
+    const window = windows[i]
+    const range = window ? `${shortDate(window.from)} to ${shortDate(window.to)}` : `Window ${i + 1}`
+    return `${range}, ${sampleWords({ key: kpi.key, n: point.n })}`
+  })
+}
+
+/** The three x labels of the history chart: where it starts, how long a point is, where it ends. */
+export function historyXLabels(
+  days: number,
+  windows: readonly { from: string; to: string }[],
+): [string, string, string] {
+  const first = windows[0]
+  const last = windows.at(-1)
+  return [first ? shortDate(first.from) : '', `${days}-day windows`, last ? shortDate(last.to) : '']
+}
+
+/** The subtitle: names the comparison. */
+export const comparisonWords = (days: number): string => `Last ${days} days against the ${days} before`
+
+/** The footer pairs of a KPI card. */
+export function kpiFooter(
+  kpi: Pick<Kpi, 'key' | 'n' | 'measured' | 'target' | 'unit'>,
+): [{ label: string; value: string }, { label: string; value: string }] {
+  return [
+    { label: 'Target', value: targetWords(kpi) },
+    { label: 'Counted', value: kpi.measured ? sampleWords(kpi) : 'The usage schema is not joined here' },
+  ]
+}
+
+// ---- the fix-commit card -----------------------------------------------------------------------------------------------
+
+export interface FixCard {
+  /** the newest week's fix commits */
+  latest: number
+  change: Change
+  /** fewer is better: a rise is bad, a fall good */
+  tone: Tone
+  /** every class in the API's order with its slot (the colour follows the class, not its rank), its total and weekly counts */
+  classes: { key: string; meaning: string; slot: number; total: number; counts: number[] }[]
+  /** the weeks, oldest first, each with a count per class (same order as `classes`) */
+  weeks: { label: string; total: number; counts: number[] }[]
+  /** fix commits in the shown weeks */
+  total: number
+  /** the class with the most fix commits, null when there are none */
+  busiest: { key: string; total: number } | null
+}
+
+/** The change of a whole count against the week before; fewer fix commits is better, so a rise is bad. */
+function countChange(latest: number, previous: number | null): Change {
+  if (previous === null) return { text: 'no earlier data', direction: 0, difference: null }
+  const difference = latest - previous
+  if (difference === 0) return { text: 'No change', direction: 0, difference }
+  return {
+    text: `${difference > 0 ? '+' : '-'}${Math.abs(difference)}`,
+    direction: difference > 0 ? 1 : -1,
+    difference,
+  }
+}
+
+/** The fix-commit card's figures, all from the API's weeks; the page adds only the difference to the week before. */
+export function fixCard(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixCard {
+  const weeks = fixWeeksOldestFirst(model)
+  const classes = model.classes.map((c, slot) => {
+    const counts = weeks.map((w) => w.byClass[c.key] ?? 0)
+    return { key: c.key, meaning: c.meaning, slot, total: counts.reduce((a, b) => a + b, 0), counts }
+  })
+  const totals = weeks.map((w) => w.total)
+  const latest = totals.at(-1) ?? 0
+  const previous = totals.length > 1 ? (totals.at(-2) ?? null) : null
+  const change = countChange(latest, previous)
+  const busiest = classes.reduce<FixCard['busiest']>(
+    (best, c) => (c.total > (best?.total ?? 0) ? { key: c.key, total: c.total } : best),
+    null,
+  )
+  return {
+    latest,
+    change,
+    tone: change.difference === null || change.difference === 0 ? 'neutral' : change.difference > 0 ? 'bad' : 'good',
+    classes,
+    weeks: weeks.map((w, i) => ({
+      label: fixWeekLabel(w),
+      total: w.total,
+      counts: classes.map((c) => c.counts[i] ?? 0),
+    })),
+    total: totals.reduce((a, b) => a + b, 0),
+    busiest,
+  }
+}

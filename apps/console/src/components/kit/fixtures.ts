@@ -206,3 +206,26 @@ export const KIT_METERS = [
   { label: 'Memory', value: 0.78 },
   { label: 'Swap', value: 0.94 },
 ]
+
+/** Fix commits by class and week for the stacked bars: nine classes in a fixed order, one of them "other" (the quiet slot). */
+export const KIT_FIX_SERIES = [
+  { key: 'tests', label: 'tests', slot: 1 },
+  { key: 'docs', label: 'docs', slot: 2 },
+  { key: 'tooling', label: 'tooling', slot: 3 },
+  { key: 'review', label: 'review', slot: 4 },
+  { key: 'logic', label: 'logic', slot: 5 },
+  { key: 'contract', label: 'contract', slot: 6 },
+  { key: 'concurrency', label: 'concurrency', slot: 7 },
+  { key: 'environment', label: 'environment', slot: 8 },
+  { key: 'other', label: 'other', slot: 9 },
+]
+
+export const KIT_FIX_BARS = [
+  { label: 'Week to 2026-10-19', values: [1, 0, 2, 0, 3, 0, 0, 1, 0] },
+  { label: 'Week to 2026-10-26', values: [2, 1, 1, 1, 2, 0, 1, 0, 1] },
+  { label: 'Week to 2026-11-02', values: [0, 0, 3, 0, 1, 1, 0, 0, 0] },
+  { label: 'Week to 2026-11-09', values: [1, 0, 1, 0, 0, 0, 2, 0, 0] },
+]
+
+/** Six windows of a KPI with a gap in the middle and a target range, as the Improve cards draw them. */
+export const KIT_KPI_HISTORY: (number | null)[] = [0.31, 0.24, null, 0.12, 0.09, 0.06]

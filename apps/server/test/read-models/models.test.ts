@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { ChainModel, FlowModel, FrictionModel, KpiModel, NeedsModel } from '@software-factory/contract'
+import { ChainModel, FlowModel, FrictionModel, HISTORY_WINDOWS, KpiModel, NeedsModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -372,6 +372,80 @@ describe('the fixture', () => {
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const narrow = KpiModel.parse(await readKpis(sql, { now: later, days: 1 }))
     expect(narrow.kpis.find((k) => k.key === 'worth_asking')).toMatchObject({ n: 0, value: null })
+  })
+
+  test('kpis: the history holds the windows before, each the same figures over its own window', async () => {
+    // two Issues filed in the window before the current 7 days (hours 168 to 336 ago); cleaned up after
+    await issue('issue_91', 'app', 'working', 3)
+    await filed('issue_91', 'app', 'Earlier one', ago(200))
+    await event('issue_91', 2, 'settled', ago(199.9), { from: 'settling', to: 'queued' })
+    await event('issue_91', 3, 'admitted', ago(198), { from: 'queued', to: 'working' })
+    await event('issue_91', 4, 'noted', ago(190), { actor: 'owner', key: 'noted:issue_91:owner:call_p' })
+    await event('issue_91', null, 'closed', ago(180), { result: 'refused', detail: 'not working', actor: 'lead' })
+    await issue('issue_92', 'app', 'working', 3)
+    await filed('issue_92', 'app', 'Earlier two', ago(250))
+    await event('issue_92', 2, 'settled', ago(249.9), { from: 'settling', to: 'queued' })
+    await event('issue_92', 3, 'admitted', ago(247), { from: 'queued', to: 'working' })
+    await issue('issue_93', 'app', 'working', 3)
+    // one Issue 30 days back (the second window of six): the windows that skip usage must still report n 0 for cost and points
+    await issue('issue_94', 'app', 'working', 1)
+    await filed('issue_94', 'app', 'Long ago', ago(720))
+    await sql`INSERT INTO factory.decisions
+      (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, answer, settled_by, answered_at, worth_asking)
+      VALUES ('decision_p', 'key_decision_p', 'issue_91', 'app', 1, 'Which?', 'Use pino', 'checked', '[]'::jsonb,
+        '{"consequence":"x","default":null,"waitMinutes":null}'::jsonb, ${ago(220)}, 'pino', 'owner', ${ago(215)}, true)`
+    await sql`INSERT INTO factory.quality_watches (key, issue_id, attempt, watch, started_at, window_ms, answer, answered_at) VALUES
+      ('watch_p1', 'issue_91', 1, 1, ${ago(201)}, 1000, 'passed', ${ago(200)}),
+      ('watch_p2', 'issue_92', 1, 1, ${ago(191)}, 1000, 'regressed', ${ago(190)}),
+      ('watch_p3', 'issue_93', 1, 1, ${ago(186)}, 1000, 'passed', ${ago(185)})`
+    try {
+      const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
+      const by = Object.fromEntries(model.kpis.map((k) => [k.key, k]))
+      const week = 7 * 24 * 3_600_000
+
+      // the windows are contiguous, half-open, and the last is the current window
+      expect(model.windows).toHaveLength(HISTORY_WINDOWS)
+      expect(model.windows.at(-1)).toEqual(model.window)
+      for (const [i, w] of model.windows.entries()) {
+        expect(Date.parse(w.to) - Date.parse(w.from)).toBe(week)
+        if (i > 0) expect(w.from).toBe(model.windows[i - 1]?.to ?? '')
+      }
+
+      for (const kpi of model.kpis) {
+        expect(kpi.history).toHaveLength(HISTORY_WINDOWS)
+        expect(kpi.history.at(-1)).toEqual({ value: kpi.value, n: kpi.n })
+      }
+      for (const key of ['cost', 'window_points', 'fix_commits']) {
+        expect(by[key]?.history.slice(0, 4)).toEqual(Array(4).fill({ value: null, n: 0 }))
+      }
+      // the Issue 30 days back counts in asks (its real n) but not in cost or points, which that window does not read
+      expect(by.asks?.history.slice(0, 4).map((p) => p.n)).toEqual([0, 1, 0, 0])
+
+      // the window before: two Issues filed, one owner note, one refusal, one Decision raised and answered by the owner,
+      // three first watches with two passes, admissions after waits of 2 h and 3 h
+      const before = (key: string) => by[key]?.history.at(-2)
+      expect(before('avoidable_touches')).toEqual({ value: 1 / 2, n: 2 })
+      expect(before('asks')).toEqual({ value: 1 / 2, n: 2 })
+      expect(before('refusals')).toEqual({ value: 1 / 2, n: 2 })
+      expect(before('first_verification_passes')).toEqual({ value: 2 / 3, n: 3 })
+      expect(before('queue_wait_p50')).toEqual({ value: 2.5 * 3_600_000, n: 2 })
+      expect(before('cycle_p50')).toEqual({ value: null, n: 0 })
+      // the current window is unchanged by them
+      expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3 })
+      expect(by.queue_wait_p50).toMatchObject({ n: 7, value: 3_600_000 })
+
+      // the same window read directly gives the same figures as the history entry
+      const shifted = KpiModel.parse(await readKpis(sql, { now: new Date(NOW.getTime() - week), days: 7 }))
+      for (const key of ['avoidable_touches', 'asks', 'refusals', 'first_verification_passes', 'queue_wait_p50']) {
+        const direct = shifted.kpis.find((k) => k.key === key)
+        expect(before(key)).toEqual({ value: direct?.value ?? null, n: direct?.n ?? -1 })
+      }
+    } finally {
+      await sql`DELETE FROM factory.quality_watches WHERE key LIKE 'watch_p%'`
+      await sql`DELETE FROM factory.decisions WHERE id = 'decision_p'`
+      await sql`DELETE FROM factory.issue_events WHERE issue_id IN ('issue_91', 'issue_92', 'issue_93', 'issue_94')`
+      await sql`DELETE FROM factory.issues WHERE id IN ('issue_91', 'issue_92', 'issue_93', 'issue_94')`
+    }
   })
 
   test('kpis: cost and window points join the usage schema, never copy it; a missing view leaves points unmeasured', async () => {
