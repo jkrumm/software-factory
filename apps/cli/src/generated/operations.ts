@@ -24,6 +24,7 @@ import {
   FlowModel,
   FrictionModel,
   Health,
+  HostHistoryModel,
   KpiModel,
   LeadSession,
   LeadVerbAnswer,
@@ -1196,6 +1197,21 @@ export const OPERATIONS: readonly Operation[] = [
     responses: { 200: ReadHealthList, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
+    operationId: 'read.host',
+    command: ['read', 'host'],
+    method: 'GET',
+    path: '/v1/host',
+    summary:
+      "the host over the last 24 hours as one-minute samples (load, memory and swap use, a failed reading null), its top 8 processes by cpu and by resident memory, and the server's version and start time",
+    pathParams: [],
+    queryParams: [],
+    body: false,
+    queryFlags: [],
+    bodyFields: [],
+    args: [],
+    responses: { 200: HostHistoryModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
+  },
+  {
     operationId: 'issue.list',
     command: ['issue', 'list'],
     method: 'GET',
@@ -1478,7 +1494,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/loops/{name}/run',
     summary:
-      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch); a pass already running is waited for, not started again',
+      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host); a pass already running is waited for, not started again',
     pathParams: ['name'],
     queryParams: [],
     body: false,

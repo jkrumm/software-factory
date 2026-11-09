@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { freePort, startServer, startWorld, type ServerProcess } from '../scenarios/harness.ts'
 import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
+import { seedHost } from './seed-host.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
 import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
 import { CHAIN_PLAN, CHAIN_REPOS, seedChain } from './seed-chain.ts'
@@ -56,6 +57,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_ARTIFACTS = JSON.stringify(await seedArtifacts(lab))
   process.env.E2E_HISTORY = JSON.stringify(await seedHistory(lab))
   process.env.E2E_CHAIN = JSON.stringify(await seedChain(lab))
+  await seedHost(world.db.sql)
   await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   // the same environment the lab used, so the restarted server keeps the Console port and the repos
