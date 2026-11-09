@@ -41,7 +41,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes
   (`apps/cli/src/exit.ts`), never prompts. Commands are generated from the OpenAPI document
   (`apps/cli/src/generated/operations.ts`, never edited by hand; `make check` fails when it is stale); `hook`, `slot`,
-  `deploy-lock`, `follow` and `role` are hand-written. `rd --role` depends on `factory role get <role> --format json`
+  `deploy-lock`, `follow`, `role` and `issue schema` (the filing contract, offline) are hand-written. `rd --role` depends on `factory role get <role> --format json`
   printing exactly `{"role","tier","effort"}`; unknown is exit 4. A role is a tier (`haiku|sonnet|opus`, never a model id)
   and an effort, in `config/roles.json`, changed only on measured data. The table governs the terminals the factory spawns
   (the lead, `rd --role`). A lead's in-session subagents take model and effort from the global agent files in dotfiles

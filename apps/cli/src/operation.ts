@@ -2,6 +2,7 @@ import { send } from '@software-factory/client'
 import { ErrorBody, Health } from '@software-factory/contract'
 import type * as z from 'zod'
 import { FactoryError, kindForStatus, usage } from './exit.ts'
+import { OPERATION_EXTENSIONS } from './filing.ts'
 import { type Format, plain, render } from './output.ts'
 
 export type FieldKind = 'string' | 'number' | 'integer' | 'boolean' | 'json'
@@ -53,6 +54,18 @@ export interface Operation {
   /** the contract schema of every answer it declares, by status */
   responses: Readonly<Record<number, z.ZodType>>
 }
+
+/** What one command says beyond its generated contract (the table is `OPERATION_EXTENSIONS`). */
+export interface OperationExtension {
+  /** appended to `<command> --help` */
+  help?: string
+  /** json body fields that must be an object, by name, with the hint a value that is not one gets */
+  jsonObjectFields?: Readonly<Record<string, string>>
+  /** the hint of a failing answer, by status; wins over the default */
+  statusHints?: Readonly<Record<number, string>>
+}
+
+export const extensionOf = (op: Operation): OperationExtension | undefined => OPERATION_EXTENSIONS[op.operationId]
 
 export const DEFAULT_URL = 'http://127.0.0.1:7793'
 
@@ -112,13 +125,19 @@ function scalarOf(op: Operation, field: BodyField, label: Label, text: string): 
       if (text === 'true' || text === 'false') return text === 'true'
       throw bad('true or false')
     case 'json': {
+      const objectHint = extensionOf(op)?.jsonObjectFields?.[field.name]
       try {
         const value: unknown = JSON.parse(text)
+        if (objectHint !== undefined && !isObject(value)) {
+          const got = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
+          throw usage(`${commandOf(op)}: ${label} must be a JSON object, got ${got}`, objectHint)
+        }
         // An untyped property keeps plain text as text (`--title 123` is "123"); only an object or array is JSON.
         return field.untyped && !(isObject(value) || Array.isArray(value)) ? text : value
-      } catch {
+      } catch (error) {
+        if (error instanceof FactoryError) throw error
         if (field.untyped) return text
-        throw usage(`${commandOf(op)}: ${label} is not JSON`)
+        throw usage(`${commandOf(op)}: ${label} is not JSON`, objectHint)
       }
     }
   }
@@ -263,12 +282,15 @@ export async function runOperation(op: Operation, invocation: Invocation, io: Io
     throw new FactoryError(kind, `${path} answered ${answer.status}`, { details: { status: answer.status } })
   }
   const error = ErrorBody.safeParse(answer.json)
+  const hint =
+    extensionOf(op)?.statusHints?.[answer.status] ??
+    (answer.status === 401 ? 'set FACTORY_TOKEN (FACTORY_READ_TOKEN reads only)' : undefined)
   throw new FactoryError(
     kind,
     error.success ? error.data.error : `HTTP ${answer.status}${answer.text ? `: ${answer.text.slice(0, 200)}` : ''}`,
     {
       code: error.success ? error.data.code : null,
-      ...(answer.status === 401 ? { hint: 'set FACTORY_TOKEN (FACTORY_READ_TOKEN reads only)' } : {}),
+      ...(hint ? { hint } : {}),
       details: { status: answer.status, ...(error.success ? error.data.details : {}) },
     },
   )

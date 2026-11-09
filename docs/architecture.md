@@ -12,7 +12,7 @@ What is not built yet is the last section.
 apps/
   server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
   door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
-  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, follow and role verbs
+  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, follow, role and issue schema verbs
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
@@ -293,7 +293,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   table in `api/policy.ts`; a walk of the OpenAPI document fails the tests on a route without a row.
 - **The CLI is generated** from the OpenAPI document (`apps/cli/scripts/generate.ts`), one command per operation, keeping
   agw's contract: `--format json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot,
-  deploy-lock, follow and role verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
+  deploy-lock, follow, role and issue schema verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
   the way to the same thing (`apps/cli/src/retired.ts`).
 - **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
   (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is

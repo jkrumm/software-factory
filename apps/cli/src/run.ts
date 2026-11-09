@@ -4,9 +4,10 @@ import pkg from '../package.json' with { type: 'json' }
 import { deployLockVerb } from './deploy-lock.ts'
 import { doorTokenVerb } from './door.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
+import { filingContract, filingGuide } from './filing.ts'
 import { followVerb } from './follow.ts'
 import { OPERATIONS } from './generated/operations.ts'
-import { type BodyField, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
+import { type BodyField, extensionOf, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
 import { type Format, render } from './output.ts'
 import { retiredHint } from './retired.ts'
 import { DEFAULT_ROLES_FILE, loadRoleTable } from './roles.ts'
@@ -54,6 +55,7 @@ const HAND_WRITTEN: readonly [string, string][] = [
     'door token new <source> [--rotate]',
     "a fresh token for a source in the door's tokens file, printed once (offline)",
   ],
+  ['issue schema', 'the Issue-filing contract: facts keys, example, flags, which path to use (offline)'],
   ['hook <event>', 'the Claude Code hook (reads FACTORY_SESSION; never fails the session)'],
 ]
 
@@ -151,6 +153,7 @@ function commandHelp(op: Operation): string {
     ...(op.body ? ['--body <json>  the whole body as JSON; a flag overrides its key'] : []),
     '--format json|plain',
   ]
+  const extra = extensionOf(op)?.help
   const notes = op.bodyFields.some((field) => field.kind === 'string' || field.kind === 'json')
     ? ["A string or JSON value: '-' reads stdin, '@path' a file ('@@x' is the text '@x').", '']
     : []
@@ -163,6 +166,7 @@ function commandHelp(op: Operation): string {
     ...flags.map((f) => `  ${f}`),
     '',
     ...notes,
+    ...(extra ? [extra, ''] : []),
   ].join('\n')
 }
 
@@ -242,6 +246,23 @@ function expandAlias(argv: readonly string[], words: readonly { value: string; i
   return [...argv]
 }
 
+/** `factory issue schema`: the filing contract, plain by default (it is read by people), JSON with `--format json`. */
+function issueSchemaVerb(argv: readonly string[], io: Io): number {
+  let values: { format?: string }
+  try {
+    values = parseArgs({
+      args: [...argv],
+      options: { format: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+      allowPositionals: false,
+    }).values
+  } catch (error) {
+    throw usage(error instanceof Error ? error.message : String(error), `${BIN} issue schema [--format json|plain]`)
+  }
+  const format = formatOf(values.format ?? 'plain')
+  io.out(render(format, filingContract(), filingGuide()))
+  return EXIT.ok
+}
+
 /** Runs one invocation and returns its exit code. Nothing asks anything. `operations` is the generated table (a test passes its own). */
 export async function run(argv: string[], io: Io, operations: readonly Operation[] = OPERATIONS): Promise<number> {
   try {
@@ -249,6 +270,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)
     if (argv[0] === 'follow') return await followVerb(argv.slice(1), io)
+    if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)
     if (argv[0] === 'door' && argv[1] === 'token') return doorTokenVerb(argv.slice(2), io)
     // Stage 1 finds the command; flags it does not know are left for stage 2, which knows the command's own.
     const tokens = parseArgs({ args: argv, options: FIRST_STAGE, allowPositionals: true, strict: false, tokens: true })

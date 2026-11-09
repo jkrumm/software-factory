@@ -5,7 +5,9 @@ import { QualityIssue } from './quality.ts'
 export const IssueRefInput = z.string().regex(/^(issue_)?[1-9][0-9]*$/, 'an Issue is issue_<n> or <n>')
 
 const Call = z.string().trim().min(1).max(128)
-const Text = z.string().trim().min(1).max(20_000)
+/** the longest `text` an Issue is filed with */
+export const NEW_ISSUE_TEXT_MAX = 20_000
+const Text = z.string().trim().min(1).max(NEW_ISSUE_TEXT_MAX)
 
 /**
  * `issue new`: the owner files an Issue. `repo` is an absolute path inside a configured source root or a repo's directory

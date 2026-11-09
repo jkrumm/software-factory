@@ -5,12 +5,14 @@ export {
   CancelBody,
   IssueAnswerBody,
   IssueRefInput,
+  NEW_ISSUE_TEXT_MAX,
   NewIssueAnswer,
   NewIssueBody,
   NoteAnswer,
   NoteBody,
   SessionNoteBody,
 } from './issues.ts'
+export * from './filing.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
