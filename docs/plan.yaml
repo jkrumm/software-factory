@@ -296,3 +296,83 @@ rows:
       why: "The owner asked for a morning report of where the factory stands in its new tooling, and for an example Spec and questions so he can try the review tooling on something real."
       change: "1. A Report artifact: what the definition (docs/product.md, NL1 to NL25) promised and what is built, the KPIs since the cutover (factory read kpis, friction), what the loops did overnight, what failed and was fixed, open risks, and what needs him; short, in his words, no ids where a title says more. 2. A Spec artifact for a real next step that needs his taste: which of the Console's components and patterns move into basalt-ui (NL4: Basalt learns from the Console as its first consumer on Base UI and Tailwind 4) - list each candidate with a screenshot, its API, and the cost; 3. two or three Decisions on that Spec through the factory's Decision verb, each with recommendation, what was checked, cost per option and the consequence of no answer, so they reach Needs you only through the Judge."
       acceptance: "The Report and the Spec are in Needs you; the Decisions are complete and judged; the Issue waits on the Spec's verdict."
+
+  # Console v1: the owner's review of 2026-11-09 ("far away from great UI", every screen built without care).
+  # The brief is apps/console/DESIGN.md; every row below is built and reviewed against it at 1800x1200.
+  - key: console-live
+    kind: bug
+    title: "The Console stays current without a reload, and stops lagging"
+    facts:
+      why: "The owner, 2026-11-09: Needs you showed nothing until a hard reload, and earlier 'all UIs are hugely lagging'. A view that goes stale or slow is not a place for decisions."
+      where: "apps/console/src/lib/live.ts (the event stream and invalidation), lib/queries.ts, the persisted query cache and the PWA's service worker, the dev door in front of the Console listener."
+      change: "Find why the page stayed empty (a persisted snapshot over live data, the service worker serving an old shell, the stream buffered or dropped behind the door, a query that does not refetch on reconnect) and fix the cause. Then take a performance trace of every screen at 1800x1200 with live data and fix the top causes of slow interaction (render storms on invalidation, unvirtualised lists, heavy code on the first route)."
+      acceptance: "Playwright: after a stream drop and a server restart, a new checkpoint appears without a reload; a persisted snapshot never hides a live answer. The traces before and after, with interaction times, in the Issue's evidence."
+  - key: console-kit
+    title: "Console v1: the component kit and the 1800x1200 baseline"
+    facts:
+      why: "Every v1 screen is built from the same pieces; v0 built each screen's pieces ad hoc and at 1280x800 (apps/console/DESIGN.md 'What v0 got wrong')."
+      change: "Build the components of apps/console/DESIGN.md 'Components' in apps/console/src/components/kit/ (StatCard, Lozenge, KindBadge, IssueCard and IssueRow, PropertyList, Section and Fold, StepRail, Meter, Sparkline, MiniBars, InfoHint generated from docs/language.md, EmptyState, Skeleton), each on Basalt tokens with a clean props API, all shown on a /kit route with real-shaped data. Evaluate tuffui's MIT stat-grid, agent-question and tool-approval-queue first (shadcn registry; take one only if it works on Base UI). Load the dataviz skill before the charts. Make 1800x1200 Playwright's default viewport and add it, dark and light, to the screenshot suite. Remove the coloured left bars and boxed-in-box padding wherever they are."
+      acceptance: "The /kit route shows every component in dark and light at 1800x1200 (screenshots in evidence, compared against the owner's reference images under design-refs/console and DESIGN.md, the comparison written down); no raw colour; make check passes."
+  - key: console-frame
+    after: [console-kit]
+    title: "Console v1: the frame - sidebar, header strip, palette"
+    facts:
+      why: "The owner, 2026-11-09: the header strip should be one line on desktop, its counts should open Flow, the subscription and load popovers are badly formatted and should be charts with the top processes, Live deserves a popover, the sidebar wants a logo and a page-specific section, and the palette cannot find Issues."
+      change: "Build apps/console/DESIGN.md 'The frame': the sidebar (logo slot, the wordmark Factory, compact nav with counts and keys, a slot each page fills with its own section, collapsible); the header strip in one line from 1280 (counts linking to Flow filtered, a meter per subscription with a formatted popover, host meters for load, memory and swap with a popover of the last 24 h as charts and the top processes, Live with its popover); the palette finding Issues by title or number, projects, artifacts and commands with their keys. Host history and top processes come from a read the server adds (what it already samples, or a timed ps), never from the browser."
+      acceptance: "Playwright for each link and popover; screenshots at 1800x1200 dark and light, 1280x800 and 390x844 in evidence, compared against DESIGN.md and the reference images."
+  - key: console-needs-you-v1
+    after: [console-frame]
+    title: "Console v1: Needs you, with 'Since you were here'"
+    facts:
+      why: "The owner, 2026-11-09: the project should come before the title, a Decision could look like an agent question, an Errand is a word he did not know, a held signal does not say where or when it came from, there are no filters, and nothing tells him what happened while he was away (a morning, a day out)."
+      change: "Build apps/console/DESIGN.md 'The screens: Needs you'. The 'Since you were here' band reads one server read of what changed since the owner's last visit (shipped with verification, failed or dropped, settled by the Judge, turned away by the screen, new Issues by origin, incidents), the last visit kept by the server when the owner's Console reads Needs you. Decisions as option cards with the recommendation and its reason; Errands and held signals with what they are, the source and its link, and when; kinds and projects as filters in the sidebar section."
+      acceptance: "Playwright on a seeded history: the band counts match the event log since the visit; a deep link still opens an item; screenshots at 1800x1200, 1280x800 and 390x844 in evidence, compared against DESIGN.md."
+  - key: console-flow-v1
+    after: [console-frame]
+    title: "Console v1: Flow fills the screen and every card opens its Issue"
+    facts:
+      why: "The owner, 2026-11-09: Flow should fill the whole UI, the cards are designed without care (a kind should be a badge), a card cannot be clicked, what Watching means is unexplained, projects and origins belong in the sidebar, not a dropdown."
+      change: "Build apps/console/DESIGN.md 'The screens: Flow': a StatCard row, the board across the full width with IssueCards that open the Issue page, column headers with counts and InfoHints, projects with counts and origins as toggles in the sidebar section."
+      acceptance: "Playwright: a card opens its Issue, a project filter from the sidebar and from the header strip's counts; screenshots at 1800x1200 dark and light, 1280x800 and 390x844 in evidence, compared against DESIGN.md and the reference images."
+  - key: console-issue-v1
+    after: [console-frame]
+    title: "Console v1: the Issue page, readable at a glance"
+    facts:
+      why: "The owner, 2026-11-09: he could not reach an Issue page at all, and once there it was hard to read; the facts should render far better, with tabs and charts over time."
+      change: "Build apps/console/DESIGN.md 'The screens: Issue': header, PropertyList of the facts, tabs (overview, activity as a StepRail of the event log in words, evidence, checkpoints), a right panel with properties and the chain around the Issue. Every route that shows an Issue links here."
+      acceptance: "Playwright on a seeded Issue with attempts, a regression and checkpoints; screenshots at 1800x1200 and 390x844 in evidence, compared against DESIGN.md."
+  - key: console-chain-v1
+    after: [console-frame]
+    title: "Console v1: the Chain fills the screen and shows when scheduled work runs"
+    facts:
+      why: "The owner, 2026-11-09: the Chain looks good but should fill the interface, and rows that wait on a time (the burn-in reports) need a view of when they run."
+      change: "Build apps/console/DESIGN.md 'The screens: Chain': the graph across the full viewport, nodes as IssueCards that open their Issue, blocked edges visible, and rows with not_before on a time axis with their date."
+      acceptance: "Playwright on a seeded chain with a scheduled row; screenshots at 1800x1200 dark and light in evidence."
+  - key: console-improve-v1
+    after: [console-frame]
+    title: "Console v1: Improve as StatCards against their targets"
+    facts:
+      why: "The owner, 2026-11-09: Improve is the best of v0 but should show how far each KPI is from its target as a small chart, in stat cards with a header and footer around the figure."
+      change: "Build apps/console/DESIGN.md 'The screens: Improve': a StatCard per KPI of docs/product.md with its target dashed and the distance to it, the 7-day window against the one before, fix classes as stacked bars by week. Load the dataviz skill first."
+      acceptance: "The figures match SQL over the event log for the same window (the existing test); screenshots at 1800x1200 dark and light in evidence, compared against the StatCard reference image."
+  - key: console-artifact-v1
+    after: [console-frame]
+    title: "Console v1: the artifact page uses the screen, and annotations can be edited and deleted"
+    facts:
+      why: "The owner, 2026-11-09: a Report sits small inside a padded box, the templates use the generated-looking left bar, selecting a passage does not open a comment box, and an annotation cannot be edited or deleted."
+      change: "Build apps/console/DESIGN.md 'The screens: Artifact': the document across the page with comments in a side panel, a selection opening the comment box beside it, the shared Markdown and HTML templates by DESIGN.md's rules. Editing and deleting an annotation are two new owner verbs: their API routes with policy rows, the Console listener's write list, and AGENTS.md 'The Console listener' in the same commit; the lead hears an edit or a deletion like an annotation."
+      acceptance: "Playwright: select, comment, edit, delete, and the lead hears each; policy tests for the new routes; screenshots at 1800x1200 of a Report and a Spec in evidence."
+  - key: needs-you-recheck
+    title: "Checkpoints are checked again before the owner reads them late"
+    facts:
+      why: "The owner, 2026-11-09, expected the factory to move his queue while he is away: check what is still needed and settle what it can, so he returns to what only he can answer. Today a checkpoint only leaves Needs you when its lead withdraws it or its Issue closes."
+      change: "A checkpoint open longer than a threshold (6 h, a setting) is checked once more, deterministic first: a Decision or Errand whose Issue moved past it (closed, its wait ended, a newer Decision on the same question) is withdrawn with the reason; the rest goes to the Judge again with the events since it was raised, which may settle it, and what the Judge settles is told to the lead. Nothing is checked twice without a new event."
+      acceptance: "Scenarios: a stale Decision is withdrawn, one is settled by the Judge with the newer evidence, one stays; each appears in Needs you's 'Since you were here'."
+  - key: console-v1-review
+    kind: chore
+    after: [console-live, console-needs-you-v1, console-flow-v1, console-issue-v1, console-chain-v1, console-improve-v1, console-artifact-v1]
+    title: "Console v1: the owner's review"
+    facts:
+      why: "The owner reviews when there is real work to judge; v1 is that."
+      change: "Check every point of the owner's review of 2026-11-09 (apps/console/DESIGN.md 'What v0 got wrong') against the live Console; write a Report artifact with screenshots of every screen at 1800x1200 dark and light and on the phone, the measured interaction times, what is still not built, and at most three questions worth his time; ask for his verdict through the artifact page."
+      acceptance: "The owner's verdict is recorded; his comments become signals on this repo."
