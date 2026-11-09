@@ -235,7 +235,9 @@ back, and the page believes only its own frame's well-formed messages. Templates
 A loop is a named tick (`app/loops/runner.ts`) with a trigger (an interval, or a kick when something changed), a budget
 and single-flight passes. Its deterministic part runs in the server; its judgment is a dedicated agw workflow with its
 own prompt, tools and skills (`agent-workflows`), called through the agw port with a 30-minute hang guard. A call is
-recorded in `loop_calls` under its key, so the next boot takes it up again.
+recorded in `loop_calls` under its key, so the next boot takes it up again. The clock runs from the loop's last pass, not from
+boot (`loop_passes`, written at the end of every pass): the first pass after a restart comes when the interval since the
+last one is up, at once if it never ran, so a 6-hour loop still passes on a server that restarts on every deploy.
 
 | Loop | Deterministic | agw workflow |
 |-|-|-|

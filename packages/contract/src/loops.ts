@@ -325,6 +325,8 @@ export const LoopView = z
     kicks: z.number().int().min(0),
     droppedKicks: z.number().int().min(0),
     lastStartedAt: z.iso.datetime({ offset: true }).nullable(),
+    /** when the newest pass ended, ok or failed; kept across restarts, the loop is scheduled from it */
+    lastPassAt: z.iso.datetime({ offset: true }).nullable(),
     lastOkAt: z.iso.datetime({ offset: true }).nullable(),
     /** why the last pass failed, while the newest pass is a failure */
     lastError: z.string().nullable(),
