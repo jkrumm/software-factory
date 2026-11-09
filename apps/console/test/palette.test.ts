@@ -1,4 +1,6 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { highlightRanges, highlightRuns, queryWords } from '../src/lib/highlight.ts'
 import {
   type CommandEntry,
@@ -133,4 +135,21 @@ test('an empty query shows every command and the five most recently active open 
   expect(found.projects).toEqual([])
   expect(found.artifacts).toEqual([])
   expect(found.moreIssues).toBe(0)
+})
+
+describe('the palette loads before it is opened', () => {
+  const shell = readFileSync(join(import.meta.dir, '../src/components/shell.tsx'), 'utf8')
+
+  test('its chunk is fetched on idle and on hover or focus of the search button, and it mounts closed once loaded', () => {
+    expect(shell).toContain('requestIdleCallback(preload')
+    expect(shell).toContain('onPointerEnter={preload}')
+    expect(shell).toContain('onFocus={preload}')
+    expect(shell).toContain('(open || preloaded) && !mounted')
+  })
+
+  test('its data loads on mount, not on the first open', () => {
+    const palette = readFileSync(join(import.meta.dir, '../src/components/palette.tsx'), 'utf8')
+    expect(palette).toContain('useIssueCards(true)')
+    expect(palette).toContain('usePaletteArtifacts(true)')
+  })
 })

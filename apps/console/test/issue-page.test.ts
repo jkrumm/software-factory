@@ -309,3 +309,13 @@ test('the first triage line is the filing at the Issue creation, an amendment ke
   expect(triageAt(issue, 0)).toBe('2026-11-08T10:00:00.000Z')
   expect(triageAt(issue, 1)).toBe('2026-11-08T12:00:00.000Z')
 })
+
+test('an activity label is run through the plain words', () => {
+  const groups = activityGroups({
+    timeline: [line(at(9, 10, 0), 'noted', 'Self-watch: lead lead- five three nine - one idle')],
+    sessions: [],
+    now: 0,
+    closed: true,
+  })
+  expect(groups[0]?.steps[0]?.label).toBe('Self-watch: the lead idle')
+})

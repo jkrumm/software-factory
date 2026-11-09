@@ -253,9 +253,12 @@ test('the activity is one row per event, oldest first, under its attempt', async
   const rows = panel(page).getByRole('listitem')
   await expect(rows).toHaveCount(issue.timeline.length)
   const texts = await rows.allInnerTexts()
-  for (const [i, line] of issue.timeline.entries()) expect(texts[i]).toContain(line.text)
-  await expect(rows.first()).toContainText(issue.timeline[0]?.text ?? '')
-  await expect(rows.last()).toContainText(issue.timeline.at(-1)?.text ?? '')
+  // a line reads in plain words: what precedes its first ISO time is shown as written, the time and env names are not
+  const head = (text: string) => text.split(/\s*\d{4}-\d\d-\d\dT/)[0] ?? text
+  for (const [i, line] of issue.timeline.entries()) expect(texts[i]).toContain(head(line.text))
+  expect(texts.join('\n')).not.toMatch(/\d{4}-\d\d-\d\dT|lead lead-|FACTORY_STEWARD/)
+  await expect(rows.first()).toContainText(head(issue.timeline[0]?.text ?? ''))
+  await expect(rows.last()).toContainText(head(issue.timeline.at(-1)?.text ?? ''))
 
   const headings = await panel(page).getByRole('heading', { level: 3 }).allInnerTexts()
   expect(headings.filter((h) => /^Attempt \d+$/.test(h))).toEqual(['Attempt 1', 'Attempt 2'])

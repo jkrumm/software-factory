@@ -141,6 +141,8 @@ export function StatCard({
     <article
       className={cn(
         'group relative flex min-w-0 flex-col gap-1 rounded-xl bg-card p-1 text-card-foreground',
+        // nothing to plot: the card is as tall as its figure and footer, not as its taller neighbour in a grid row
+        picture === null && !xLabels && 'self-start',
         linked && cn(LINKED_CARD, 'has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-ring/50'),
         className,
       )}

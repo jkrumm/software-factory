@@ -4,6 +4,7 @@ import type { LozengeState } from '@/components/kit/lozenge'
 import type { Tone } from '@/components/kit/tone'
 import type { Step } from '@/components/kit/step-rail'
 import { attemptOf } from './issue.ts'
+import { plainLine } from './plain.ts'
 
 /** The pure data of the Issue page's tabs and charts: shapes the API's detail for the screen, adds no figure of its own. */
 
@@ -86,14 +87,15 @@ export function activityGroups(input: {
     const end = next ? Date.parse(next.at) : input.closed ? null : input.now
     const date = new Date(at)
     const failed = FAILED_KINDS.has(line.kind)
+    const label = plainLine(line.text)
     const step: ActivityStep = {
       id: `${index}-${line.kind}`,
       kind: line.kind,
-      label: line.text,
+      label,
       at: clockWords(date, previousDate),
       durationMs: end === null ? undefined : Math.max(0, end - at),
       failed: failed || undefined,
-      detail: failed ? detailOf(line.text) : undefined,
+      detail: failed ? detailOf(label) : undefined,
     }
     groups.at(-1)?.steps.push(step)
     previousDate = date

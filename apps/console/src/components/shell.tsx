@@ -1,7 +1,7 @@
 import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay, useHotkey, useHotkeys } from '@tanstack/react-hotkeys'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Sidebar, SidebarProvider } from '@/components/sidebar'
 import { StatusStrip } from '@/components/status-strip'
 import { Badge } from '@/components/ui/badge'
@@ -10,19 +10,43 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { NAV } from '@/lib/nav'
 import { useNeeds } from '@/lib/queries'
 
-// cmdk and its dialog load when the palette is first opened, not with the first paint
-const CommandPalette = lazy(() => import('@/components/palette').then((m) => ({ default: m.CommandPalette })))
+const loadPalette = () => import('@/components/palette').then((m) => ({ default: m.CommandPalette }))
+// cmdk and its dialog are a chunk of their own; it is fetched on idle after the first paint (or on hover), not with it
+const CommandPalette = lazy(loadPalette)
 
-/** Mounts the palette on its first open, so cmdk is fetched then and not with the first paint. */
-function PaletteHost({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/** Mounts the palette once it is wanted: its chunk is loaded (idle, hover) or it was opened. Mounted closed it already holds its data. */
+function PaletteHost({
+  open,
+  preloaded,
+  onOpenChange,
+}: {
+  open: boolean
+  preloaded: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const [mounted, setMounted] = useState(false)
-  if (open && !mounted) setMounted(true)
+  if ((open || preloaded) && !mounted) setMounted(true)
   if (!mounted) return null
   return (
     <Suspense fallback={null}>
       <CommandPalette open={open} onOpenChange={onOpenChange} />
     </Suspense>
   )
+}
+
+/** Fetches the palette chunk when the browser is idle after the first paint; `preload` does it at once (hover, focus). */
+function usePalettePreload(): { preloaded: boolean; preload: () => void } {
+  const [preloaded, setPreloaded] = useState(false)
+  const preload = () => void loadPalette().then(() => setPreloaded(true))
+  useEffect(() => {
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(preload, { timeout: 2000 })
+      return () => cancelIdleCallback(id)
+    }
+    const id = setTimeout(preload, 200)
+    return () => clearTimeout(id)
+  }, [])
+  return { preloaded, preload }
 }
 
 /** The open needs, summed over the kinds of the needs model; null until the model has loaded. */
@@ -62,6 +86,7 @@ export function Shell() {
   const navigate = useNavigate()
   const count = useNeedsCount()
   const format = useFormatForDisplay()
+  const { preloaded, preload } = usePalettePreload()
 
   useHotkey('Mod+K', () => setPaletteOpen((open) => !open))
   useHotkeys(
@@ -87,6 +112,8 @@ export function Shell() {
                             size="icon"
                             className="size-11 shrink-0 md:size-8"
                             aria-label="Open command palette"
+                            onPointerEnter={preload}
+                            onFocus={preload}
                             onClick={() => setPaletteOpen(true)}
                           />
                         }
@@ -104,7 +131,7 @@ export function Shell() {
             </main>
             <TabBar count={count} />
           </div>
-          <PaletteHost open={paletteOpen} onOpenChange={setPaletteOpen} />
+          <PaletteHost open={paletteOpen} preloaded={preloaded} onOpenChange={setPaletteOpen} />
         </div>
       </SidebarProvider>
     </TooltipProvider>

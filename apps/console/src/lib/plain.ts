@@ -12,7 +12,7 @@ const DIGIT_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine'
 /** A signal's text without its machine parts; the spaces on both ends are kept so a time part can sit next to it. */
 function cleanText(text: string): string {
   return text
-    .replace(new RegExp(`\\blead lead-(?:\\s+(?:${DIGIT_WORD}))+`, 'gi'), 'the lead')
+    .replace(new RegExp(`\\blead lead-(?:\\s+(?:-\\s+)?(?:${DIGIT_WORD}))+`, 'gi'), 'the lead')
     .replace(new RegExp(`\\s*\\(\\s*${ENV_NAME.source}\\s*\\)`, 'g'), '')
     .replace(new RegExp(`\\s*${ENV_NAME.source}`, 'g'), '')
     .replace(/\blead-\d+-\d+\b/g, 'the lead')
@@ -38,6 +38,17 @@ export function signalParts(text: string): SignalPart[] {
   const last = parts.at(-1)
   if (last?.kind === 'text') last.text = last.text.trimEnd()
   return parts.filter((part) => part.kind === 'time' || part.text !== '')
+}
+
+/** One timeline line as a single string: machine parts removed, an ISO time as its clock time ("14:02"). */
+export function plainLine(text: string): string {
+  return signalParts(text)
+    .map((part) =>
+      part.kind === 'text'
+        ? part.text
+        : new Date(part.iso).toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+    )
+    .join('')
 }
 
 /** The source of a signal in words: `agent:argo` is "Agent in argo", `owner:hermes` is "hermes". */
