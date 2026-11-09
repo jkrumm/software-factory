@@ -298,6 +298,13 @@ export const PassReply = z
     errands: z.array(
       z.object({ errand: z.string(), outcome: z.enum(['held', 'reached_owner', 'turned_away', 'dropped']) }),
     ),
+    rechecks: z.array(
+      z.object({
+        checkpoint: z.string(),
+        kind: z.enum(['decision', 'errand']),
+        outcome: z.enum(['withdrawn', 'settled', 'kept']),
+      }),
+    ),
     pages: z.object({
       sent: z.array(z.string()),
       failed: z.array(z.object({ key: z.string(), error: z.string() })),

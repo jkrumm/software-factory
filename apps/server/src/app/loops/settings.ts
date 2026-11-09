@@ -46,6 +46,8 @@ const Env = z.object({
   /** a watch whose last N checks were all blocked is told to its lead */
   FACTORY_BLOCKED_CHECKS: z.coerce.number().int().min(1).optional(),
   FACTORY_CLAIM_STALL_MS: z.coerce.number().int().min(1).optional(),
+  /** a checkpoint in front of the owner this long is checked once more (and again after this long, once the Issue has a new event); 0 is off */
+  FACTORY_CHECKPOINT_RECHECK_MS: ms.optional(),
 })
 
 export interface LoopSettings {
@@ -60,6 +62,8 @@ export interface LoopSettings {
   blockedChecks: number
   /** a note refused for a claim this long while the repo has one free is a stall */
   claimStallMs: number
+  /** a checkpoint at the owner this long is looked at again; 0 is off */
+  recheckAfterMs: number
   hygieneRepos: string[] | null
   hygieneEveryMs: number
   hygieneRetryMs: number
@@ -69,6 +73,9 @@ export interface LoopSettings {
 }
 
 export const DEFAULT_TICK_MS = 10_000
+
+/** A checkpoint in front of the owner this long is checked once more. */
+export const DEFAULT_RECHECK_MS = 6 * 3_600_000
 
 /** One sweep runs `make check` over a project: at most one in this long, unless the tick is off (0). */
 const HYGIENE_MIN_TICK_MS = 15 * 60_000
@@ -137,6 +144,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,
     blockedChecks: e.FACTORY_BLOCKED_CHECKS ?? 6,
     claimStallMs: e.FACTORY_CLAIM_STALL_MS ?? 15 * 60_000,
+    recheckAfterMs: e.FACTORY_CHECKPOINT_RECHECK_MS ?? DEFAULT_RECHECK_MS,
     hygieneRepos: repos.length > 0 ? repos : null,
     hygieneEveryMs: e.FACTORY_HYGIENE_EVERY_MS ?? 7 * 24 * 3_600_000,
     hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? 6 * 3_600_000,

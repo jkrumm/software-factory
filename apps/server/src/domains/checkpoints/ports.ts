@@ -15,6 +15,7 @@ import type {
 } from './decision.ts'
 import type { ErrandId } from './errand.ts'
 import type { Page } from './page.ts'
+import type { Recheck, RecheckCandidate } from './recheck.ts'
 
 /** A step on a Decision's way to an answer. `open`: it reached the owner. */
 export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open'] as const
@@ -219,6 +220,14 @@ export interface CheckpointStore {
     reached: { at: Date; by: 'rule' | 'judge' | 'failed'; note: string; tries: number },
   ): Promise<boolean>
   turnAwayErrand(id: ErrandId, away: { at: Date; by: 'rule' | 'judge'; reason: string }): Promise<boolean>
+
+  /**
+   * The checkpoints at the owner since `reachedBefore` or earlier: open Decisions whose `owner` step is `open`, open Errands
+   * that reached him, oldest first, each with its last recheck; one rechecked since `reachedBefore` is left out.
+   */
+  recheckCandidates(input: { reachedBefore: Date; limit: number }): Promise<RecheckCandidate[]>
+  /** false when the checkpoint has a recheck at that version already */
+  insertRecheck(recheck: Recheck): Promise<boolean>
 
   /** false when the page's key is stored already */
   planPage(page: Page, at: Date): Promise<boolean>

@@ -215,7 +215,28 @@ the raise, but the owner is not paged and the Errand is not in Needs or the huma
 is set. A turn-away ends the Issue's errand wait with `errand_done` (actor `factory` for a rule, `judge` for the workflow,
 payload `turnedAway`: the reason), sets the Errand done with the reason as its note, and the lead hears it as its next turn.
 A failed or refused call is tried again after the Judge's 5-minute backoff, three tries in all (`errands.screen_tries`);
-after the third the Errand reaches the owner unscreened (`screen_by` `failed`). A Concept or Spec is a
+after the third the Errand reaches the owner unscreened (`screen_by` `failed`).
+
+**The recheck.** A Decision or Errand that has been in front of the owner longer than `FACTORY_CHECKPOINT_RECHECK_MS`
+(6 h; 0 is off) is looked at once more, by `recheckOpen` (`app/checkpoints-recheck.ts`), which the `settle` loop and
+`checkpoint pass` run before the settle steps and the screen, so the second look owns the reason for anything past the
+threshold. A Decision is at the owner when its `owner` step is `open`, an Errand when `reached_owner_at` is set. It is
+due when the threshold has passed since it reached him or was last looked at, and the Issue has an applied event beyond
+the version the last look saw (for the first look, the version when it reached him, read from the log's times), so
+nothing is checked twice without news. Deterministic first: an Issue that is closed, or no longer waits for it, withdraws
+the Decision or finishes the Errand with the reason (`withdrawalReason`, which also names a newer Decision on the same
+question; a checkpoint the Issue still waits for is never withdrawn). Otherwise the Judge looks again with the Issue's
+events since it was raised (`factory-ask` for a Decision, `factory-errand` for an Errand): an `answer` that passes
+`guardVerdict`, or a turn-away, settles it through the usual paths (`answerIn` and its note, `turnAway`), so the lead
+hears it and the owner can overrule it with a note. The events travel inside fields the workflows already read, because an
+unknown field is dropped: appended to `checked` for the Judge, to `detail` for the screen, scrubbed, as data. Every look
+is a row in `checkpoint_rechecks` (`outcome` `withdrawn`, `settled` or `kept`; `by` `factory` or `judge`; `reason`;
+`through_version`; at most one per checkpoint and version) and one `rechecked` change on the stream (kind `decision` or
+`errand`, detail the id and the outcome), which the "Since you were here" band reads. A failed call is recorded as
+`kept`, so a dead Judge is not asked again every tick. Call keys: `factory-ask:recheck:<decision>:<version>` and
+`factory-errand:recheck:<errand>:<version>`.
+
+A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
 
@@ -244,7 +265,7 @@ last one is up, at once if it never ran, so a 6-hour loop still passes on a serv
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
 | `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
 | `watch` | verify and probes | none |
-| `settle`, `send` | Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
+| `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is one note to each live lead (once per branch state and clean/dirty) and a `main-checkout` health line, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new-or-already-settled (open and last-day closed Issues), likely `after` edges |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |

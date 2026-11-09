@@ -117,6 +117,7 @@ beforeEach(async () => {
     policies,
     judge,
     errandScreen,
+    recheckAfterMs: 0,
     notifier,
   }
 })
