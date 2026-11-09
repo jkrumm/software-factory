@@ -4,6 +4,7 @@ import type {
   HygieneAnswer,
   HygieneFinding,
   HygieneRequest,
+  LoopName,
   QueueAnswer,
   QueueRequest,
   StewardAnswer,
@@ -100,6 +101,10 @@ export interface LoopStore {
   /** when the newest friction pass ran; null before the first */
   lastFrictionPassAt(): Promise<Date | null>
   recordFrictionPass(pass: FrictionPassRecord): Promise<void>
+  /** when each loop's pass last ended (`migrations/1000_loop_passes.sql`) */
+  passes(): Promise<Map<LoopName, Date>>
+  /** never moves a loop's time backwards */
+  recordPass(name: LoopName, at: Date): Promise<void>
   /** the newest hygiene pass of each repo */
   hygienePasses(): Promise<HygienePassRecord[]>
   /** the newest hygiene pass of one repo; null before the first */

@@ -5,8 +5,8 @@ import { type Lab, startLab } from '../planning/lab.ts'
 import { blocked, callsOf, loops, runLoop, script, state } from './support.ts'
 
 /**
- * The loop guard and the pending path, against the real server with the steward's clock on (an hour, so it never fires
- * by itself in a test) and the fake agw answering "still running" until `agw run wait` is asked, as the real CLI does when its
+ * The loop guard and the pending path, against the real server with the steward's clock on (an hour: it passes once at boot, the lab
+ * has no recorded pass, and then never by itself in a test) and the fake agw answering "still running" until `agw run wait` is asked, as the real CLI does when its
  * wait budget is spent.
  */
 let lab: Lab
@@ -36,6 +36,12 @@ afterAll(async () => {
 })
 
 test('a loop’s own note never fires that loop again; a pending run is waited for through agw run wait', async () => {
+  let boot = (await loops(lab)).find((loop) => loop.name === 'steward')
+  for (let tries = 0; tries < 50 && (!boot || boot.runs < 1 || boot.running); tries++) {
+    await Bun.sleep(100)
+    boot = (await loops(lab)).find((loop) => loop.name === 'steward')
+  }
+  const bootRuns = boot?.runs ?? 0
   const issue = await blocked(lab, 'app', 'guard test: needs a nudge', 'stuck on something unclear')
   const ran = await runLoop(lab, 'steward')
   expect(ran.error).toBeNull()
@@ -49,6 +55,6 @@ test('a loop’s own note never fires that loop again; a pending run is waited f
   // the pass changed an Issue and told the runner; the steward was the maker, so its kick was dropped, not run
   await Bun.sleep(300)
   const steward = (await loops(lab)).find((loop) => loop.name === 'steward')
-  expect(steward).toMatchObject({ intervalMs: 3_600_000, runs: 1, kicks: 0, droppedKicks: 1 })
+  expect(steward).toMatchObject({ intervalMs: 3_600_000, runs: bootRuns + 1, kicks: 0, droppedKicks: 1 })
   expect(await callsOf(lab, 'factory-steward')).toHaveLength(1)
 })

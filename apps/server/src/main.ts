@@ -458,7 +458,21 @@ async function main(): Promise<void> {
       },
     },
   ]
-  const runner: LoopRunner = createLoopRunner({ loops: specs, clock: systemClock })
+  const runner: LoopRunner = createLoopRunner({
+    loops: specs,
+    clock: systemClock,
+    passes: {
+      load: async () => {
+        const passes = await uow.run(async ({ loops }) => ok(await loops.passes()))
+        if (!passes.ok) throw new Error(`${passes.error.kind}: ${passes.error.detail}`)
+        return passes.value
+      },
+      record: async (name, at) => {
+        const recorded = await uow.run(async ({ loops }) => ok(await loops.recordPass(name, at)))
+        if (!recorded.ok) throw new Error(`${recorded.error.kind}: ${recorded.error.detail}`)
+      },
+    },
+  })
   const leadsTick = loopSettings.intervalMs.leads
 
   const queueReasons = async () => {
@@ -488,6 +502,7 @@ async function main(): Promise<void> {
         name: loop.name,
         ok: loop.lastError === null,
         lastOkAt: loop.lastOkAt,
+        lastPassAt: loop.lastPassAt,
         lastError: loop.lastError,
         intervalMs: loop.intervalMs,
       })),
@@ -561,7 +576,7 @@ async function main(): Promise<void> {
   if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
   else console.log(`console not started: ${join(consoleSettings.dir, 'index.html')} is not built`)
   intake.start()
-  runner.start()
+  await runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
   // waits for it, so the stop would never return and the process would keep the lock. The deadline ends the process

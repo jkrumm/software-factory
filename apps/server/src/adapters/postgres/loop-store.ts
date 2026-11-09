@@ -1,3 +1,4 @@
+import { LOOP_NAMES } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
@@ -213,6 +214,22 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         INSERT INTO factory.friction_passes (id, at, window_from, window_to, issues, filed, over_budget, failed)
         VALUES (${pass.id}, ${pass.at}, ${pass.windowFrom}, ${pass.windowTo}, ${pass.issues},
           ${JSON.stringify(pass.filed)}::jsonb, ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
+    },
+
+    async passes() {
+      const rows: unknown[] = await tx`SELECT loop, last_pass_at FROM factory.loop_passes`
+      return new Map(
+        rows.map((raw) => {
+          const row = z.object({ loop: z.enum(LOOP_NAMES), last_pass_at: z.date() }).parse(raw)
+          return [row.loop, row.last_pass_at]
+        }),
+      )
+    },
+
+    async recordPass(name, at) {
+      await tx`
+        INSERT INTO factory.loop_passes (loop, last_pass_at) VALUES (${name}, ${at})
+        ON CONFLICT (loop) DO UPDATE SET last_pass_at = GREATEST(factory.loop_passes.last_pass_at, EXCLUDED.last_pass_at)`
     },
 
     async hygienePasses() {

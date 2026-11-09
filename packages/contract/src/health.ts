@@ -27,6 +27,7 @@ export const HealthLoop = z
     name: z.string(),
     ok: z.boolean(),
     lastOkAt: z.iso.datetime({ offset: true }).nullable(),
+    lastPassAt: z.iso.datetime({ offset: true }).nullable().optional(),
     lastError: z.string().nullable(),
     intervalMs: z.number().int().min(0),
   })
