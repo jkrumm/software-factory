@@ -66,9 +66,8 @@ auth header and no base URL, and every response is parsed with the schema from `
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly six writes, the owner's answers (a Decision's answer, an
 artifact's verdict and comment, an Errand done, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
-<<<<<<< HEAD
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
-queries poll every 15 s and the chip says `Polling`, and while it is open they still poll once a minute, because the
+queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection
 after the machine slept or the tab was hidden a while without a frame. The listener marks every API answer `no-store`,
 and the app fetches with `cache: 'no-store'`. A restored snapshot is a first paint only: restoring it refetches everything.
@@ -92,10 +91,6 @@ the entry holds the shell and the screens that are small; `@xyflow/react` and da
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
 service worker. A list is virtualised only where it can grow to hundreds (the Flow columns); the others hold a handful of rows.
 Keys must not carry a timestamp that moves with each answer, or the row is rebuilt on every refetch.
-=======
-`/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
-queries poll every 15 s and the strip's Live says `Polling`.
->>>>>>> d32a7e3 (fix(console): round 2 of the frame review - legends, popover sizing, phone strip, collapsed sidebar, evidence)
 
 ## Tokens
 
