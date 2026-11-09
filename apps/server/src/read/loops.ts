@@ -139,6 +139,12 @@ export function loopReads(tx: SQL): LoopReads {
       })
     },
 
+    async openIssueIds(repo) {
+      const rows: { id: string }[] =
+        await tx`SELECT i.id FROM factory.issues i WHERE i.repo = ${repo} AND i.state <> 'closed' ORDER BY i.id`
+      return rows.map((row) => row.id as IssueId)
+    },
+
     async openIssues(repo, excluding, limit) {
       const rows: unknown[] = await tx`
         SELECT i.id, i.state, e.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), e.payload->>'kind') AS kind

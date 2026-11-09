@@ -28,6 +28,7 @@ import type { QualityStore } from '../../domains/quality/store.ts'
 import { replay } from '../../domains/work/machine.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
+import { issueNumber } from '../../kernel/ids.ts'
 import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
@@ -141,7 +142,9 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     gathered.notes.push(`ci not read: ${ci.error.detail}`)
   }
 
-  const files = await deps.migrations.read(deps.repo)
+  const open = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.openIssueIds(deps.repo)))
+  if (!open.ok) return open
+  const files = await deps.migrations.read(deps.repo, { openIssues: open.value.map(issueNumber) })
   if (files.ok) gathered.findings.push(...migrationFindings(files.value, deps.sharedNumbers))
   else {
     gathered.unread.add('migration_clash')

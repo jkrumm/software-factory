@@ -186,6 +186,7 @@ async function main(): Promise<void> {
     settings: leadSettings,
     capacity: planning.leads,
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
+    github: intakeEnv.github,
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()

@@ -60,6 +60,8 @@ export interface CiRun {
 export interface MigrationSnapshot {
   base: string[]
   refs: { ref: string; added: string[] }[]
+  /** refs in scope that went uncompared, past the per-pass limit */
+  unchecked: string[]
 }
 
 /** A timer or dependency wait of an Issue, with the facts its exit is judged from. */

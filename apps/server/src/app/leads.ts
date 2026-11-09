@@ -8,7 +8,9 @@ import type {
   Transcripts,
   Windows,
   Worktrees,
+  LeadBranches,
 } from '../domains/leads/ports.ts'
+import type { QualityStore } from '../domains/quality/store.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay, type AppliedRecord } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -18,8 +20,8 @@ import type { IssueWriteError } from './issues.ts'
 import type { IdSource, IssueId } from '../kernel/ids.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
-/** The stores the leads' use cases write in one transaction: the Issue's events and the lead's own tables. */
-export type LeadsUow = UnitOfWork<{ work: WorkStore; leads: LeadStore }>
+/** The stores the leads' use cases use in one transaction: the Issue's events, the lead's own tables, and (read only) what the Issue shipped. */
+export type LeadsUow = UnitOfWork<{ work: WorkStore; leads: LeadStore; quality: QualityStore }>
 
 /** Everything the leads' use cases need; `main.ts` composes it, the scenarios and tests bring fakes of the ports. */
 export interface LeadDeps {
@@ -28,6 +30,7 @@ export interface LeadDeps {
   ids: IdSource
   terminals: Terminals
   worktrees: Worktrees
+  branches: LeadBranches
   repos: Repos
   roles: Roles
   /** capacity's: the account, the claim, the window (package 3) */

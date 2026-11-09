@@ -1,4 +1,4 @@
-import { type Effect, finalize, noteLead, startLead, startWatch } from './effects.ts'
+import { type Effect, finalize, finalizeClosed, noteLead, startLead, startWatch } from './effects.ts'
 import type { EventKind, IssueEvent } from './events.ts'
 import {
   type Issue,
@@ -41,8 +41,8 @@ const said = (why: string) => (): Cell => ({ ignore: why })
 const refused = (why: string) => (): Cell => ({ refuse: why })
 
 const next = (issue: Issue): number => issue.version + 1
-/** A close finalizes the attempt there is; an Issue never admitted has none. */
-const closing = (issue: Issue): Effect[] => (issue.attempt > 0 ? [finalize(issue.id, issue.attempt)] : [])
+/** A close finalizes the attempt there is, and cleans the Issue's branches; an Issue never admitted has none. */
+const closing = (issue: Issue): Effect[] => (issue.attempt > 0 ? [finalizeClosed(issue.id, issue.attempt)] : [])
 /**
  * Back to work: the lead hears what ended its wait, and every note recorded while it waited (a note to a waiting lead
  * plans nothing, since a wait may have no lead to type to, and an effect that cannot run holds back the Issue's next).

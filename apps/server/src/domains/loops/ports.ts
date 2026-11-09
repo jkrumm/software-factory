@@ -194,6 +194,8 @@ export interface LoopReads {
   working(limit: number): Promise<IssueId[]>
   /** Issues still settling, oldest first */
   settling(limit: number): Promise<SettlingRow[]>
+  /** the ids of the repo's Issues that are not closed, oldest first */
+  openIssueIds(repo: string): Promise<IssueId[]>
   /** the Issues of the repo that are not closed, other than `excluding` */
   openIssues(repo: string, excluding: IssueId, limit: number): Promise<TriageCandidate[]>
   /** every open Issue that is not settling, with its priority and open blockers, for the queue loop */
@@ -252,7 +254,10 @@ export interface CiRuns {
   latest(repo: string, branch: string | null): Promise<Result<{ branch: string; runs: CiRun[] }, PortError>>
 }
 
-/** The migration files of a repo at its default branch and on every ref (called outside any transaction). */
+/**
+ * The migration files of a repo at its default branch and on the refs that can still merge: every branch that is not a
+ * lead's and the lead branches of the `scope` Issues (called outside any transaction).
+ */
 export interface MigrationFiles {
-  read(repo: string): Promise<Result<MigrationSnapshot, PortError>>
+  read(repo: string, scope: { openIssues: readonly number[] }): Promise<Result<MigrationSnapshot, PortError>>
 }

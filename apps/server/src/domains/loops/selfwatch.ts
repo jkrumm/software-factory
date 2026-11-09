@@ -107,7 +107,27 @@ export function migrationFindings(snapshot: MigrationSnapshot, shared: ReadonlyS
         'git ls-tree --name-only origin/master apps/server/migrations/; git diff --name-only --diff-filter=A origin/master...<ref>',
     })
   }
+  if (snapshot.unchecked.length > 0) found.push(uncheckedFinding(snapshot.unchecked))
   return found
+}
+
+function uncheckedFinding(unchecked: string[]): Finding {
+  const names = [...unchecked].sort(byText)
+  return {
+    kind: 'migration_clash',
+    subject: 'refs-unchecked',
+    // no digits in the title: intake's fingerprint drops them, and the count moves from pass to pass
+    title: `Self-watch: migration check skipped ${names.length} refs over its limit`,
+    facts: ['refs over the comparison limit were not compared with origin/master'],
+    // the count and the names move from pass to pass: context is never hashed
+    context: [
+      `${names.length} refs were not compared`,
+      ...names.slice(0, MAX_LISTED).map((name) => `unchecked: ${name}`),
+      'A clash on one of these refs goes unseen until the refs are fewer than the limit.',
+    ],
+    reproduce:
+      'git for-each-ref refs/heads/ refs/remotes/origin/; git diff --name-only --diff-filter=A origin/master...<ref> -- apps/server/migrations/',
+  }
 }
 
 // ---- 3. wait_overdue ------------------------------------------------------------------------------------------------------

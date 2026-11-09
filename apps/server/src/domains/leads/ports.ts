@@ -69,6 +69,29 @@ export interface Worktrees {
   remove(input: { repo: string; branch: string }): Promise<Result<WorktreeRemoval>>
 }
 
+/** How the Issue ended, as far as its branches care: a dropped or cancelled one has no work worth keeping. */
+export type BranchClosure = 'dropped' | 'cancelled' | 'other'
+
+export interface BranchCleaning {
+  /** the `factory/<n>-<attempt>` branches gone, local and on the remote */
+  deleted: string[]
+  kept: { branch: string; why: string }[]
+}
+
+/**
+ * The branches a closed Issue's leads left, `factory/<issue>-*` and no other number. A branch goes when the Issue was
+ * dropped or cancelled, or its work is on the remote default (by ancestry, an empty merge, a shipped commit or a merged
+ * pull request); any failure on a branch keeps it and says why. Deleting twice is the same as once.
+ */
+export interface LeadBranches {
+  clean(input: {
+    repo: string
+    issue: number
+    closed: BranchClosure
+    shipped: readonly string[]
+  }): Promise<Result<BranchCleaning>>
+}
+
 /** The trust boundary: a repo is a directory strictly inside an allowed root, after `realpath`. */
 export interface Repos {
   locate(repo: string): Promise<Result<string>>

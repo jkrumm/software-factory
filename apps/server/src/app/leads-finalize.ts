@@ -1,33 +1,77 @@
 import { leadBranch, leadKey } from '../domains/leads/names.ts'
-import type { FinalizeStep } from '../domains/leads/ports.ts'
+import type { BranchClosure, FinalizeStep } from '../domains/leads/ports.ts'
+import type { QualityStore } from '../domains/quality/store.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
-import type { IssueId } from '../kernel/ids.ts'
+import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 
+interface Closing {
+  closed: BranchClosure
+  shipped: string[]
+}
+
+/** The commits every attempt shipped, as quality recorded them: what a squash-merged branch is recognised by. */
+async function shippedCommits(quality: QualityStore, issue: IssueId, attempts: number): Promise<string[]> {
+  const shipped = new Set<string>()
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    for (const sha of (await quality.lastShip(issue, attempt))?.commits?.commits ?? []) shipped.add(sha)
+  }
+  return [...shipped]
+}
+
 type FinalizeEffect = EffectOf<'finalize'> & { issueId: IssueId }
 
+/** The branch cleaning alone, for a close whose attempt was finalized while the Issue was open. */
+async function cleanClosed(
+  deps: LeadDeps,
+  issue: IssueId,
+  repo: string,
+  closing: Closing,
+): Promise<Result<void, PortError>> {
+  const located = await deps.repos.locate(repo)
+  if (!located.ok) return located.error.kind === 'refused' ? ok(undefined) : located
+  const cleaned = await deps.branches.clean({ repo: located.value, issue: issueNumber(issue), ...closing })
+  return cleaned.ok ? ok(undefined) : cleaned
+}
+
 /**
- * `finalize`, once per attempt, in this order: the repo claim goes back (through capacity's port), so nothing below can
+ * `finalize`, once per attempt (and once more when a close plans its own, `closed`), in this order: the repo claim goes back (through capacity's port), so nothing below can
  * keep the next Issue waiting; the lead's terminals are closed, so nothing writes after them; its transcripts are
- * archived; its worktree and branch are removed when clean and on the base, otherwise kept and said so. Each step is a
+ * archived; its worktree and branch are removed when clean and on the base, otherwise kept and said so; and when the
+ * Issue is closed, the branches of all its leads are cleaned off the remote default's side (`LeadBranches`). Each step is a
  * fact stored when it is done, so a crash between two steps replays to one of each, and a finalize that is done is a no-op.
+ * The exception is the close's: an attempt a restart already finalized while the Issue was open skips every step, and
+ * only cleans the branches (idempotent), failing so the outbox retries when it cannot.
  */
 export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Promise<Result<void, PortError>> {
   const { issueId: issue } = effect
   const { attempt } = effect.payload
   const name = leadKey(issue, attempt)
 
-  const read = await deps.uow.run(async ({ work, leads }) => {
+  const read = await deps.uow.run(async ({ work, leads, quality }) => {
     const finalization = await leads.finalization(issue, attempt)
     const loaded = await loadIssue(work, issue)
     const row = await leads.attempt(issue, attempt)
     const facts = await leads.hookFacts(name)
-    return ok({ finalization, repo: loaded?.issue.repo ?? null, row, facts })
+    const closing: Closing | null =
+      loaded?.issue.state === 'closed'
+        ? {
+            closed:
+              loaded.issue.outcome === 'dropped' || loaded.issue.outcome === 'cancelled'
+                ? loaded.issue.outcome
+                : 'other',
+            shipped: await shippedCommits(quality, issue, loaded.issue.attempt),
+          }
+        : null
+    return ok({ finalization, repo: loaded?.issue.repo ?? null, row, facts, closing })
   })
   if (!read.ok) return read
-  const { finalization, repo, row, facts } = read.value
-  if (finalization?.doneAt) return ok(undefined)
+  const { finalization, repo, row, facts, closing } = read.value
+  if (finalization?.doneAt) {
+    if (!effect.payload.closed || closing === null || repo === null) return ok(undefined)
+    return cleanClosed(deps, issue, repo, closing)
+  }
   const done = (step: FinalizeStep) => finalization?.steps[step] !== undefined
 
   const mark = async (
@@ -74,19 +118,31 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
   }
 
   if (!done('worktree')) {
-    if (repo === null || row?.worktreePath == null) {
-      // No worktree was ever made for this attempt: nothing to take away.
+    if (repo === null || (row?.worktreePath == null && closing === null)) {
+      // No worktree was ever made for this attempt, and no branches to clean: nothing to take away.
       const marked = await mark('worktree')
       if (!marked.ok) return marked
     } else {
       const located = await deps.repos.locate(repo)
       if (!located.ok && located.error.kind !== 'refused') return located
-      const removal = located.ok
-        ? await deps.worktrees.remove({ repo: located.value, branch: leadBranch(issue, attempt) })
-        : ok({ kept: `the repo ${repo} cannot be found: ${located.error.detail}`, path: row.worktreePath })
-      if (!removal.ok) return removal
-      const kept = 'kept' in removal.value ? removal.value : null
-      const marked = await mark('worktree', { kept: kept?.kept ?? null, path: kept?.path ?? null })
+      const notes: string[] = []
+      let path: string | null = null
+      if (row?.worktreePath != null) {
+        const removal = located.ok
+          ? await deps.worktrees.remove({ repo: located.value, branch: leadBranch(issue, attempt) })
+          : ok({ kept: `the repo ${repo} cannot be found: ${located.error.detail}`, path: row.worktreePath })
+        if (!removal.ok) return removal
+        if ('kept' in removal.value) {
+          notes.push(removal.value.kept)
+          path = removal.value.path
+        }
+      }
+      if (closing !== null && located.ok) {
+        const cleaned = await deps.branches.clean({ repo: located.value, issue: issueNumber(issue), ...closing })
+        if (cleaned.ok) notes.push(...cleaned.value.kept.map((k) => `branch ${k.branch} kept: ${k.why}`))
+        else notes.push(`branches not cleaned: ${cleaned.error.detail}`)
+      }
+      const marked = await mark('worktree', { kept: notes.join('; ') || null, path })
       if (!marked.ok) return marked
     }
   }

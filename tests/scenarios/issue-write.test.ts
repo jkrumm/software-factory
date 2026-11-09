@@ -57,7 +57,7 @@ test('filed, settled, admitted, closed by its lead: closed, with its log and its
   // Nothing ran the outbox: the effects wait, in their order, undone.
   expect(effects).toEqual([
     { key: `start_lead:${issueId}:1`, kind: 'start_lead', done_at: null },
-    { key: `finalize:${issueId}:1`, kind: 'finalize', done_at: null },
+    { key: `finalize:${issueId}:1:closed`, kind: 'finalize', done_at: null },
   ])
 })
 

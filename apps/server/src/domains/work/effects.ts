@@ -16,8 +16,11 @@ export interface EffectPayloads {
   note_lead: { attempt: number; from: number; version: number }
   /** begin the watch after a ship: its window, then verify */
   start_watch: { attempt: number; watch: number }
-  /** end the attempt: its terminals, transcripts, worktree and claim */
-  finalize: { attempt: number }
+  /**
+   * end the attempt: its terminals, transcripts, worktree and claim; `closed` marks the one a close plans, which also
+   * cleans the Issue's branches
+   */
+  finalize: { attempt: number; closed?: 1 }
 }
 
 export type EffectKind = keyof EffectPayloads
@@ -47,11 +50,24 @@ export const startWatch = (issue: IssueId, attempt: number, watch: number): Effe
   payload: { attempt, watch },
 })
 
-/** One per attempt: a second close of the same attempt plans the same key, which is a no-op. */
+/**
+ * A restart's end of the attempt, with an Issue that stays open: one per attempt, so a second plan of the same attempt
+ * is a no-op. It never cleans branches.
+ */
 export const finalize = (issue: IssueId, attempt: number): Effect => ({
   kind: 'finalize',
   key: key('finalize', issue, attempt),
   payload: { attempt },
+})
+
+/**
+ * A close's end of the attempt: one per attempt under its own key, so a restart's finalize of the same attempt, done
+ * while the Issue was open, does not swallow it. It also cleans the Issue's branches.
+ */
+export const finalizeClosed = (issue: IssueId, attempt: number): Effect => ({
+  kind: 'finalize',
+  key: key('finalize', issue, attempt, 'closed'),
+  payload: { attempt, closed: 1 },
 })
 
 /** How long the outbox waits before it runs a failed effect again: 30 s, doubling, at most 5 min. */

@@ -16,6 +16,14 @@ export function issueId(n: number): IssueId {
 /** The number in an Issue id, for "Issue 286" and pane names. */
 export const issueNumber = (id: IssueId): number => Number(id.slice('issue_'.length))
 
+const LEAD_BRANCH = /^factory\/([1-9][0-9]*)-[1-9][0-9]*$/
+
+/** The Issue number a lead's branch name carries; null for any other name. */
+export function leadBranchIssue(branch: string): number | null {
+  const match = LEAD_BRANCH.exec(branch)
+  return match?.[1] ? Number(match[1]) : null
+}
+
 /** Where new ids come from (events and the like; an Issue's number comes from the work store), a port so a test can make them in order. An id is `<kind>_<unique part>`. */
 export interface IdSource {
   next<K extends string>(kind: K): Id<K>

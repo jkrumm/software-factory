@@ -298,6 +298,41 @@ test('two clashing numbers are two subjects, two signals, not collapsed into one
   expect((await rowOf('migration_clash:0995'))?.cleared_at).not.toBeNull()
 })
 
+test('migration_clash: 210 stale lead branches of closed Issues do not blind the check; an open Issue branch still clashes', async () => {
+  const sha = await git(checkout(), 'rev-parse', 'refs/remotes/origin/master')
+  const stale = Array.from({ length: 210 }, (_, i) => `create refs/heads/factory/${5000 + i}-1 ${sha}`)
+  const updated = Bun.spawn(['git', '-C', checkout(), 'update-ref', '--stdin'], {
+    stdin: new Blob([`${stale.join('\n')}\n`]),
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  expect(await updated.exited).toBe(0)
+  expect((await git(checkout(), 'for-each-ref', 'refs/heads/')).split('\n').length).toBeGreaterThan(200)
+
+  const open = await working(lab, REPO, 'the Issue whose branch clashes')
+  const number = open.replace(/^issue_/, '')
+  await withBranch(`factory/${number}-9`, { [`${MIGRATIONS}/0997_c.sql`]: '-- c' })
+  const before = (await signalsOf('migration_clash')).length
+
+  const summary = await pass()
+  expect(summary).not.toContain('migrations not read')
+  const filed = (await signalsOf('migration_clash')).slice(before)
+  expect(filed).toHaveLength(1)
+  expect(filed[0]?.text).toContain(`0997_c.sql on factory/${number}-9`)
+  expect(await rowOf('migration_clash:refs-unchecked')).toBeUndefined()
+
+  await git(checkout(), 'branch', '-q', '-D', `factory/${number}-9`)
+  await must(lab, ['issue', 'cancel', open, '--reason', 'done'])
+  const doomed = Array.from({ length: 210 }, (_, i) => `delete refs/heads/factory/${5000 + i}-1`)
+  const removed = Bun.spawn(['git', '-C', checkout(), 'update-ref', '--stdin'], {
+    stdin: new Blob([`${doomed.join('\n')}\n`]),
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  expect(await removed.exited).toBe(0)
+  await pass()
+})
+
 test('wait_overdue: a timer and a dependency wait past their exit and grace are filed; one before its exit is not', async () => {
   const soon = await working(lab, REPO, 'sleeps a short while')
   const later = await working(lab, REPO, 'sleeps for an hour')

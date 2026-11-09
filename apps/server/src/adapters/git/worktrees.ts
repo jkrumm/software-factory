@@ -20,6 +20,27 @@ class Failed extends Error {
   }
 }
 
+/** git in a repo, giving its trimmed output, or nothing when it fails. */
+export type GitProbe = (repo: string, ...args: string[]) => Promise<string | undefined>
+
+/** `origin/<default>` of the repo, as the last fetch left it. */
+export async function originDefaultOf(gitIn: GitProbe, repo: string): Promise<string | undefined> {
+  const head = await gitIn(repo, 'symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD')
+  if (head) return head
+  for (const candidate of ['origin/master', 'origin/main']) {
+    if (await gitIn(repo, 'rev-parse', '-q', '--verify', candidate)) return candidate
+  }
+  return undefined
+}
+
+/** Whether everything the ref holds is on the base: no commit ahead, or a merge that changes nothing. A missing ref holds nothing. */
+export async function refOnBase(gitIn: GitProbe, repo: string, ref: string, base: string): Promise<boolean> {
+  if (!(await gitIn(repo, 'rev-parse', '-q', '--verify', ref))) return true
+  if ((await gitIn(repo, 'rev-list', '--count', ref, '--not', base)) === '0') return true
+  const merged = await gitIn(repo, 'merge-tree', '--write-tree', base, ref)
+  return merged !== undefined && merged === (await gitIn(repo, 'rev-parse', `${base}^{tree}`))
+}
+
 export interface GitWorktreesOptions {
   git?: string
   wtp?: string
@@ -48,14 +69,7 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     return result.stdout.trim()
   }
 
-  async function originDefault(repo: string): Promise<string | undefined> {
-    const head = await gitIn(repo, 'symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD')
-    if (head) return head
-    for (const candidate of ['origin/master', 'origin/main']) {
-      if (await gitIn(repo, 'rev-parse', '-q', '--verify', candidate)) return candidate
-    }
-    return undefined
-  }
+  const originDefault = (repo: string) => originDefaultOf(gitIn, repo)
 
   /** The path `git worktree list --porcelain` gives for a branch, if any worktree has it checked out. */
   async function listed(repo: string, branch: string): Promise<string | undefined> {
@@ -137,14 +151,7 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     }
   }
 
-  /** Whether everything the branch holds is on the base: no commit ahead, or a merge that changes nothing. */
-  async function onBase(repo: string, branch: string, base: string): Promise<boolean> {
-    const ref = `refs/heads/${branch}`
-    if (!(await gitIn(repo, 'rev-parse', '-q', '--verify', ref))) return true
-    if ((await gitIn(repo, 'rev-list', '--count', ref, '--not', base)) === '0') return true
-    const merged = await gitIn(repo, 'merge-tree', '--write-tree', base, ref)
-    return merged !== undefined && merged === (await gitIn(repo, 'rev-parse', `${base}^{tree}`))
-  }
+  const onBase = (repo: string, branch: string, base: string) => refOnBase(gitIn, repo, `refs/heads/${branch}`, base)
 
   async function remove(input: { repo: string; branch: string }): Promise<WorktreeRemoval> {
     const { repo, branch } = input

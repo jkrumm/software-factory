@@ -39,7 +39,7 @@ describe('the paths', () => {
       ev('watch_passed', { watch: 1 }, 'factory'),
     ])
     expect(issue).toMatchObject({ state: 'closed', outcome: 'done', version: 6, attempt: 1, watch: 1 })
-    expect(effects).toEqual(['start_lead:issue_7:1', 'start_watch:issue_7:1', 'finalize:issue_7:1'])
+    expect(effects).toEqual(['start_lead:issue_7:1', 'start_watch:issue_7:1', 'finalize:issue_7:1:closed'])
   })
 
   test('a lead gone twice starts the next attempt; the third time is a stall the steward restarts', () => {
