@@ -1,14 +1,19 @@
 import { cn } from '@/lib/utils'
 import { CardLink, isLinked, LINKED_CARD } from './card-link'
 import { AgeColumn, type IssueViewProps, ProjectChip, ReasonLine } from './issue-parts'
-import { KIND_ICON } from './kind-badge'
+import { KindBadge } from './kind-badge'
 import { Lozenge } from './lozenge'
 
-export type IssueCardProps = IssueViewProps
+export interface IssueCardProps extends IssueViewProps {
+  /** The origin as its word, muted in the chip row. Omitted: none. */
+  origin?: string
+  /** Leave the Lozenge out where the surrounding column already names the state. Default true. */
+  showState?: boolean
+}
 
 /**
- * One Issue as a card: kind icon, clamped title, project chip, Lozenge, the reason with its icon, the age in a fixed
- * right column. With `href` or `as` the whole card is the link (the title carries it, stretched over the card).
+ * One Issue as a card: clamped title, then a chip row (KindBadge, project, the Lozenge unless `showState` is false, the
+ * origin word), the reason with its icon, the age right-aligned in mono. With `href` or `as` the whole card is the link (the title carries it, stretched over the card).
  */
 export function IssueCard({
   title,
@@ -18,12 +23,13 @@ export function IssueCard({
   reason,
   since,
   now,
+  origin,
+  showState = true,
   onMenu,
   href,
   as,
   className,
 }: IssueCardProps) {
-  const KindIcon = KIND_ICON[kind]
   const linked = isLinked({ href, as })
   return (
     <article
@@ -35,19 +41,20 @@ export function IssueCard({
       style={{ boxShadow: 'var(--vx-shadow-card)' }}
     >
       <div className="flex items-start gap-2">
-        <KindIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label={kind} role="img" />
         <h3 className="line-clamp-2 min-w-0 flex-1 text-[length:var(--vx-text-md)] leading-snug font-medium">
           <CardLink href={href} as={as}>
             {title}
           </CardLink>
         </h3>
-        <AgeColumn since={since} now={now} onMenu={onMenu} title={title} />
+        <AgeColumn since={since} now={now} onMenu={onMenu} title={title} className="w-20" />
       </div>
-      <div className="flex flex-wrap items-center gap-2 pl-6">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <KindBadge kind={kind} />
         <ProjectChip project={project} />
-        <Lozenge state={state} />
+        {showState ? <Lozenge state={state} /> : null}
+        {origin ? <span className="text-xs text-muted-foreground">{origin}</span> : null}
       </div>
-      {reason ? <ReasonLine state={state} reason={reason} className="pl-6" /> : null}
+      {reason ? <ReasonLine state={state} reason={reason} /> : null}
     </article>
   )
 }

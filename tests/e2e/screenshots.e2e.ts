@@ -7,6 +7,8 @@ const OUT = join(import.meta.dir, 'out', 'screenshots')
 const SCREENS = [
   { name: 'needs-you', path: '/needs-you' },
   { name: 'flow', path: '/flow' },
+  { name: 'flow-working', path: '/flow?state=working' },
+  { name: 'flow-project', path: '/flow?project=argo' },
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'improve-30', path: '/improve?days=30' },

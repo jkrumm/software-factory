@@ -94,6 +94,18 @@ export const KIT_ISSUES: KitIssue[] = [
   },
 ]
 
+/** The origin word of a fixture Issue, for the cards that show one. */
+export const KIT_ORIGIN: Record<string, string> = {
+  'export-time': 'You',
+  'login-crash': 'Application',
+  database: 'You',
+  'export-queue': 'GitHub',
+  'host-down': 'Infrastructure',
+  'export-schema': 'Factory',
+  runbook: 'Feedback',
+  'old-flags': 'You',
+}
+
 export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omit<StatCardProps, 'icon'>> = {
   working: {
     title: 'Working',

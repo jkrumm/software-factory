@@ -62,6 +62,7 @@ export const LANGUAGE = {
     'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, unknown_project, drain, load, memory, claim, window, cap',
   'queue state':
     'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
+  queued: 'State: ready, held back by capacity or a chain',
   report: 'For information, never waits. A spike is a Report with a verdict',
   review:
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
@@ -83,7 +84,7 @@ export const LANGUAGE = {
   spec: 'A larger plan to review',
   stall: "A wait with a machine cause, the steward's to end",
   state:
-    'Where an Issue is: settling (triage is not done), queued, working (a lead runs), waiting (a named wait), watching (the watch is on), closed. The only field a person reads to know what an Issue is doing',
+    'Where an Issue is: settling (triage is not done), queued (ready, held back by capacity or a chain), working (a lead runs), waiting (a named wait), watching (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), closed. The only field a person reads to know what an Issue is doing',
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
@@ -99,7 +100,8 @@ export const LANGUAGE = {
   wait: 'A pause with a named exit',
   waiting: 'State: a named wait',
   watch: 'The window after a ship',
-  watching: 'State: the watch is on',
+  watching:
+    'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass',
   window: "An account's 5-hour or weekly reset",
   'work repo': 'A repo no project.yaml describes. The read token never sees its words',
   working: 'State: a lead runs',

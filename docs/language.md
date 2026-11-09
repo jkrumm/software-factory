@@ -20,7 +20,7 @@ check, `docs/architecture.md`).
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
 | **Work repo** | A repo no `project.yaml` describes. The read token never sees its words | |
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |
-| **State** | Where an Issue is: `settling` (triage is not done), `queued`, `working` (a lead runs), `waiting` (a named wait), `watching` (the watch is on), `closed`. The only field a person reads to know what an Issue is doing | Phase, as a field |
+| **State** | Where an Issue is: `settling` (triage is not done), `queued` (ready, held back by capacity or a chain), `working` (a lead runs), `waiting` (a named wait), `watching` (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), `closed`. The only field a person reads to know what an Issue is doing | Phase, as a field |
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
 | **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way | |
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue | |

@@ -68,9 +68,10 @@ export function AgeColumn({
   now,
   onMenu,
   title,
-}: Pick<IssueViewProps, 'since' | 'now' | 'onMenu'> & { title: string }) {
+  className,
+}: Pick<IssueViewProps, 'since' | 'now' | 'onMenu'> & { title: string; className?: string }) {
   return (
-    <div className="relative flex h-6 w-24 shrink-0 items-center justify-end">
+    <div className={cn('relative flex h-6 w-24 shrink-0 items-center justify-end', className)}>
       <time
         dateTime={since}
         title={new Date(since).toLocaleString()}

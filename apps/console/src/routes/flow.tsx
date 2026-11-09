@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import type { FlowModel } from '@software-factory/contract'
-import { useState } from 'react'
+import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@phosphor-icons/react'
+import { type ReactNode, useState } from 'react'
 import { FlowCardView } from '@/components/flow/card'
 import { FlowList } from '@/components/flow/list'
+import { InfoHint, type InfoWord, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import {
@@ -19,6 +21,8 @@ import {
   originsOf,
   originWord,
   projectsOf,
+  type FlowStat,
+  statsOf,
   visibleColumns,
 } from '@/lib/flow'
 import { useMediaQuery } from '@/lib/media'
@@ -84,6 +88,59 @@ function FlowSidebar({ data, filters }: { data: FlowModel; filters: FlowFilters 
   )
 }
 
+const STAT_ICON = {
+  working: RocketLaunchIcon,
+  waiting: HourglassIcon,
+  queued: QueueIcon,
+  settling: QueueIcon,
+  watching: QueueIcon,
+  shipped: CheckCircleIcon,
+} as const
+
+/** The four stat cards: factory-wide, each opens the column it counts. */
+function StatRow({ data, now }: { data: FlowModel; now: number }) {
+  return (
+    <div
+      aria-label="Totals"
+      role="group"
+      className="-mx-4 mb-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 xl:grid-cols-4"
+    >
+      {statsOf(data, now).map((stat: FlowStat) => (
+        <StatCard
+          key={stat.key}
+          className="w-72 shrink-0 snap-start lg:w-auto"
+          icon={STAT_ICON[stat.key]}
+          title={stat.title}
+          subtitle={stat.subtitle}
+          value={stat.value}
+          delta={{ value: stat.delta, higherIsBetter: stat.higherIsBetter }}
+          sub={stat.sub}
+          series={stat.series ? { values: stat.series, labels: stat.labels } : undefined}
+          bars={stat.bars}
+          barLabels={stat.bars ? stat.labels : undefined}
+          xLabels={stat.xLabels}
+          footer={stat.footer}
+          as={(props) => <Link to="/flow" search={{ state: stat.state }} {...props} />}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** A column's label and count as the h2 (nothing else inside it), the word's InfoHint beside it, a hairline under. */
+function ColumnHeader({ column, count, children }: { column: ColumnKey; count: number; children?: ReactNode }) {
+  const word: InfoWord = column === 'closed' ? 'outcome' : column
+  return (
+    <div className="flex items-center gap-1 border-b pb-1.5">
+      <h2 id={`flow-${column}`} className="text-sm font-medium text-muted-foreground">
+        {COLUMN_LABEL[column]} <span className="tabular-nums">{count}</span>
+      </h2>
+      <InfoHint word={word} />
+      {children}
+    </div>
+  )
+}
+
 const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
@@ -122,8 +179,9 @@ function Flow() {
   const columns = visibleColumns(filters.state)
 
   return (
-    <Page wide>
+    <Page full>
       <PageHeader title="Flow" note={boardNote(counts)} />
+      <StatRow data={data} now={now} />
       <FlowSidebar data={data} filters={filters} />
       <ActiveFilters
         chips={(['project', 'origin'] as const).flatMap((name) => {
@@ -167,49 +225,49 @@ function Flow() {
         </label>
       </div>
       {wide && filters.state ? (
-        <section aria-labelledby={`flow-${filters.state}`} className="grid gap-3">
-          <div className="flex items-baseline gap-3">
-            <h2 id={`flow-${filters.state}`} className="text-sm font-medium text-muted-foreground">
-              {COLUMN_LABEL[filters.state]} <span className="tabular-nums">{counts[filters.state]}</span>
-            </h2>
+        <section aria-labelledby={`flow-${filters.state}`} className="flex min-h-0 flex-1 flex-col gap-3">
+          <ColumnHeader column={filters.state} count={counts[filters.state]}>
             <Link
               to="/flow"
               search={{ ...filters, state: undefined }}
-              className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              className="ml-3 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
             >
               Show all states
             </Link>
-          </div>
+          </ColumnHeader>
           {board[filters.state].length === 0 ? (
             <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here</p>
           ) : (
-            <ul
-              aria-labelledby={`flow-${filters.state}`}
-              className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] items-start gap-3"
-            >
-              {board[filters.state].map((card) => (
-                <li key={card.key}>
-                  <FlowCardView card={card} now={now} />
-                </li>
-              ))}
-            </ul>
+            <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+              <ul
+                aria-labelledby={`flow-${filters.state}`}
+                className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] items-start gap-3"
+              >
+                {board[filters.state].map((card) => (
+                  <li key={card.key}>
+                    <FlowCardView card={card} now={now} showState={filters.state === 'closed'} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       ) : wide ? (
-        <div className="flex items-start gap-4 overflow-x-auto pb-2">
-          {columns.map((key) => (
-            <section key={key} aria-labelledby={`flow-${key}`} className="flex w-72 shrink-0 flex-col gap-2">
-              <h2 id={`flow-${key}`} className="text-sm font-medium text-muted-foreground">
-                {COLUMN_LABEL[key]} <span className="tabular-nums">{counts[key]}</span>
-              </h2>
-              <FlowList
-                cards={board[key]}
-                now={now}
-                labelledBy={`flow-${key}`}
-                className="max-h-[calc(100dvh-14rem)]"
-              />
-            </section>
-          ))}
+        <div className="-mx-1 min-h-[28rem] flex-1 overflow-x-auto px-1">
+          <div className="grid h-full grid-flow-col auto-cols-[minmax(15rem,1fr)] gap-4">
+            {columns.map((key) => (
+              <section key={key} aria-labelledby={`flow-${key}`} className="flex min-h-0 min-w-0 flex-col gap-2">
+                <ColumnHeader column={key} count={counts[key]} />
+                <FlowList
+                  cards={board[key]}
+                  now={now}
+                  labelledBy={`flow-${key}`}
+                  showState={key === 'closed'}
+                  className="min-h-0 flex-1"
+                />
+              </section>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -240,6 +298,7 @@ function Flow() {
               cards={board[tab]}
               now={now}
               labelledBy={`flow-tab-${tab}`}
+              showState={tab === 'closed'}
               className="max-h-[calc(100dvh-18rem)]"
             />
           </div>

@@ -62,6 +62,8 @@ export type NeedsModel = z.infer<typeof NeedsModel>
 export const FLOW_STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 export type FlowState = (typeof FLOW_STATES)[number]
 
+export const FLOW_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
+
 export const FlowIssue = z
   .strictObject({
     id: IssueRef,
@@ -69,6 +71,8 @@ export const FlowIssue = z
     title: z.string(),
     /** where it came from: a shape, so a work repo's Issue shows it too */
     origin: z.enum(SIGNAL_ORIGINS),
+    /** the settled kind, else the filed one: a shape, so a work repo's Issue shows it too */
+    kind: z.enum(FLOW_KINDS),
     /** when it entered the state it is in */
     since: at,
     /** the wait of a `waiting` Issue */
@@ -90,6 +94,7 @@ export const FlowClosed = z
     repo: z.string(),
     title: z.string(),
     origin: z.enum(SIGNAL_ORIGINS),
+    kind: z.enum(FLOW_KINDS),
     outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
     closedAt: at,
   })
@@ -98,6 +103,27 @@ export const FlowClosed = z
 export const FlowProject = z
   .strictObject({ repo: z.string(), open: z.number().int(), working: z.number().int(), queued: z.number().int() })
   .meta({ id: 'FlowProject' })
+
+const flowStateCounts = z.array(z.number().int()).length(8)
+
+export const FlowTrend = z
+  .strictObject({
+    /** 8 samples, oldest first, 24 h apart, the last one is `at` of the model */
+    at: z.array(at).length(8),
+    /** per state, how many Issues were in it at each sample */
+    states: z.strictObject({
+      settling: flowStateCounts,
+      queued: flowStateCounts,
+      working: flowStateCounts,
+      waiting: flowStateCounts,
+      watching: flowStateCounts,
+    }),
+    /** Issues closed done or healed in each daily window (at[i], at[i+1]], oldest first */
+    shipped: z.array(z.number().int()).length(7),
+    /** the same count over the 7 days before at[0] */
+    shippedBefore: z.number().int(),
+  })
+  .meta({ id: 'FlowTrend' })
 
 export const FlowModel = z
   .strictObject({
@@ -113,6 +139,8 @@ export const FlowModel = z
     closedRecently: z.array(FlowClosed),
     perProject: z.array(FlowProject),
     queueStates: QueueStatesView,
+    /** the last 7 days in daily samples; counts only */
+    trend: FlowTrend,
   })
   .meta({ id: 'FlowModel' })
 export type FlowModel = z.infer<typeof FlowModel>
