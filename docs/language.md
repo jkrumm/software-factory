@@ -8,7 +8,7 @@ check, `docs/architecture.md`).
 
 | Word | Means | Retires |
 |-|-|-|
-| **Signal** | Anything that arrives and may become work. Has a kind, an origin and a trust level (below) | Request as a concept of its own |
+| **Signal** | Anything that arrives and may become work. Has a kind, an origin and a trust level | Request as a concept of its own |
 | **Triage** | Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped | Classify and dedup, as words a person meets |
 | **Incident** | One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue | An Issue per alert |
 | **Amend** | Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note | |
@@ -22,7 +22,7 @@ check, `docs/architecture.md`).
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |
 | **State** | Where an Issue is: `settling` (triage is not done), `queued`, `working` (a lead runs), `waiting` (a named wait), `watching` (the watch is on), `closed`. The only field a person reads to know what an Issue is doing | Phase, as a field |
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
-| **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way (the table below) | |
+| **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way | |
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue | |
 | **Origin** | Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory | Tool names on screen (never "HyperDX", "Beszel") |
 | **Project** | A repo the factory knows, described by its `project.yaml`. `signals:` says which automatic sources it listens to; a work repo listens to the owner only. `host:` names the host its alerts sit on (a key of `config/infra.json`'s hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's | Manifest |
@@ -56,7 +56,7 @@ check, `docs/architecture.md`).
 | Word | Means | Retires |
 |-|-|-|
 | **Checkpoint** | Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge | Taste gate |
-| **Artifact** | What a lead hands to a person. One model, four kinds: | Document |
+| **Artifact** | What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report | Document |
 | Concept | A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's `DESIGN.md` | |
 | Spec | A larger plan to review | |
 | Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review | Ask (noun), question, decision card |

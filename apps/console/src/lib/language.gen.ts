@@ -3,7 +3,7 @@ export const LANGUAGE = {
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
-  artifact: 'What a lead hands to a person. One model, four kinds:',
+  artifact: 'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
   caller:
@@ -32,7 +32,7 @@ export const LANGUAGE = {
   errand:
     "Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then factory-errand) passes it",
   event:
-    'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way (the table below)',
+    'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way',
   flow: 'The read model of Issues by state over time; Chain is its graph',
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
@@ -79,7 +79,7 @@ export const LANGUAGE = {
   ship: 'Land and deploy',
   'ship refused':
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
-  signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level (below)',
+  signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   spec: 'A larger plan to review',
   stall: "A wait with a machine cause, the steward's to end",
   state:
