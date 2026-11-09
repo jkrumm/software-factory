@@ -63,6 +63,12 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* A bare `grid` has one `auto` column, and `auto` grows to the widest child's min-content (a nowrap row, a
+     truncated link), so the grid, and every card in it, ends past a phone's right edge. `minmax(0, 1fr)` lets the
+     column shrink to the container; any `grid-cols-*` or inline template still wins (utilities sit above base). */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   /* Tailwind 4's preflight leaves buttons on the default arrow; anything the owner can press shows a pointer. */
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']),
