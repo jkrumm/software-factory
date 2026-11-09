@@ -59,6 +59,7 @@ import {
   SignalAck,
   SignalDismissed,
   SignalList,
+  SinceModel,
 } from '@software-factory/contract'
 import type { Operation } from '../operation.ts'
 
@@ -1654,5 +1655,20 @@ export const OPERATIONS: readonly Operation[] = [
       500: ErrorBody,
       503: ErrorBody,
     },
+  },
+  {
+    operationId: 'read.since',
+    command: ['read', 'since'],
+    method: 'GET',
+    path: '/v1/since',
+    summary:
+      "what happened since the owner was last here: shipped with verification, regressed, dropped, settled by the Judge, screened off, filed by origin and incidents opened, each counted once with the newest 8. The owner's read moves the visit marker (a new visit after 30 quiet minutes); every other caller reads from the stored start and writes nothing",
+    pathParams: [],
+    queryParams: [],
+    body: false,
+    queryFlags: [],
+    bodyFields: [],
+    args: [],
+    responses: { 200: SinceModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
 ]

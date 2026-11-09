@@ -1,4 +1,5 @@
-import type { NeedItem } from '@software-factory/contract'
+import type { NeedItem, NeedKind } from '@software-factory/contract'
+import type { LozengeState } from '../components/kit/lozenge.tsx'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -17,19 +18,72 @@ export function spanWords(ms: number): string {
 /** How long an item has waited: "Waiting 2 hours". */
 export const waitingWords = (ageMs: number): string => `Waiting ${spanWords(ageMs)}`
 
-/** When the factory takes the default, relative to `now`: "Default taken in 40 minutes", or "Default taken at the next pass" once due. */
-export function defaultWords(defaultAt: string, now: number): string {
+/** When the factory takes the default, relative to `now`: "in 40 minutes", or "at the next pass" once due. */
+export function defaultWhen(defaultAt: string, now: number): string {
   const left = Date.parse(defaultAt) - now
-  return left <= 0 ? 'Default taken at the next pass' : `Default taken in ${spanWords(left)}`
+  return left <= 0 ? 'at the next pass' : `in ${spanWords(left)}`
+}
+
+/** The default on its option's card, the time first: "In 7 hours, if nobody answers: The lead waits." */
+export function defaultLine(consequence: string, defaultAt: string, now: number): string {
+  const when = defaultWhen(defaultAt, now)
+  return `${when.charAt(0).toUpperCase()}${when.slice(1)}, if nobody answers: ${consequence}`
+}
+
+/** "Default taken in 40 minutes", or "Default taken at the next pass" once due. */
+export const defaultWords = (defaultAt: string, now: number): string => `Default taken ${defaultWhen(defaultAt, now)}`
+
+/** An age as one phrase everywhere: "3 hours ago", or "just now" under a minute. */
+export function agoWords(ms: number): string {
+  const span = spanWords(Math.max(0, ms))
+  return span === 'under a minute' ? 'just now' : `${span} ago`
+}
+
+/** How long an item has been there, in the verb of its kind: "Waiting 2 hours", "Raised 2 hours ago", "Received just now". */
+export function metaWords(item: Pick<NeedItem, 'kind' | 'ageMs'>): string {
+  if (item.kind === 'errand') return `Raised ${agoWords(item.ageMs)}`
+  if (item.kind === 'held_signal') return `Received ${agoWords(item.ageMs)}`
+  return waitingWords(item.ageMs)
 }
 
 /** Where an item comes from, as a word: the repo, or "App feedback" for outside text that names none. */
 export const originOf = (item: Pick<NeedItem, 'repo'>): string => item.repo ?? 'App feedback'
 
+/** The project filter's value and the chip's word: the repo, or "App feedback" for an item that names none. */
+export const projectOf = originOf
+
+/** The collapsed card's summary line, or null when it only repeats the title or the Issue's title. */
+export function summaryLine(item: Pick<NeedItem, 'title' | 'summary'>, issueTitle: string | null): string | null {
+  const summary = item.summary.trim().toLowerCase()
+  if (summary === '' || summary === item.title.trim().toLowerCase()) return null
+  if (summary === issueTitle?.trim().toLowerCase()) return null
+  return item.summary
+}
+
 /** The Issue page's route parameter of an item's `issue_<n>`: the number. */
 export const issueNumber = (ref: string): string => ref.replace(/^issue_/, '')
 
-export const reversibleWords = (reversible: boolean): string => (reversible ? 'reversible' : 'not reversible')
+/** What a Decision is, in one line for the card that opens it. */
+export function decisionParts(
+  project: string,
+  issueTitle: string | null,
+): { before: string; issue: string | null; after: string } {
+  const after = ': the lead hears your answer as a note and carries on'
+  const before = `A decision for you from the lead of ${project}`
+  return issueTitle ? { before: `${before}, Issue `, issue: issueTitle, after } : { before, issue: null, after }
+}
+
+/** Whether the question is the card's title already (the title is the question, cut and without ids). */
+export function repeatsTitle(question: string, title: string): boolean {
+  const cut = norm(title)
+    .replace(/(…|\.\.\.)$/, '')
+    .trim()
+  return cut !== '' && norm(question).startsWith(cut)
+}
+
+/** The page note: everything that waits on the owner, or how much of it the filters show. */
+export const needsNote = (shown: number, total: number, filtered: boolean): string =>
+  filtered ? `Showing ${shown} of ${total}` : `${total} need you`
 
 export const KIND_LABEL = {
   decision: 'Decisions',
@@ -57,4 +111,66 @@ export function errorWords(status: number | null, detail: string | null): string
   if (status === 409) return 'Already settled elsewhere'
   if (status === null) return 'Could not reach the factory'
   return detail ?? 'The factory refused this'
+}
+
+/** A Lozenge for an option's reversibility, from an explicit map: reversible is good, not reversible is a warning. */
+export const reversibleLozenge = (reversible: boolean): { state: LozengeState; words: string } =>
+  reversible ? { state: 'done', words: 'Reversible' } : { state: 'waiting', words: 'Not reversible' }
+
+const norm = (text: string): string => text.trim().toLowerCase()
+
+/** The option a sentence names (its label, ignoring case and spaces), or -1: a recommendation may be a sentence of its own. */
+export function optionIndex(options: readonly { label: string }[], sentence: string | null): number {
+  if (sentence === null || norm(sentence) === '') return -1
+  return options.findIndex((option) => norm(option.label) === norm(sentence))
+}
+
+/** An external link the Console may open: only http and https. */
+export function httpLink(link: string | null): string | null {
+  if (link === null) return null
+  try {
+    const url = new URL(link)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
+export interface NeedFilters {
+  kind?: NeedKind
+  project?: string
+}
+
+/**
+ * The items the filters leave, in order. The deep-linked item (`keepId`) stays even when the filters would hide it, so a
+ * link to an item always opens it.
+ */
+export function visibleNeeds(items: readonly NeedItem[], filters: NeedFilters, keepId?: string): NeedItem[] {
+  return items.filter(
+    (item) =>
+      item.id === keepId ||
+      ((!filters.kind || item.kind === filters.kind) && (!filters.project || projectOf(item) === filters.project)),
+  )
+}
+
+/** How many items of each kind, under the project filter alone. */
+export function kindCounts(items: readonly NeedItem[], project?: string): Record<NeedKind, number> {
+  const counts: Record<NeedKind, number> = { decision: 0, review: 0, errand: 0, held_signal: 0 }
+  for (const item of items) if (!project || projectOf(item) === project) counts[item.kind] += 1
+  return counts
+}
+
+/** How many items each project has, under the kind filter alone. */
+export function projectCounts(items: readonly NeedItem[], kind?: NeedKind): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items)
+    if (!kind || item.kind === kind) counts[projectOf(item)] = (counts[projectOf(item)] ?? 0) + 1
+  return counts
+}
+
+/** Every project that has an item, sorted; a filter on one that has none is still listed so it can be removed. */
+export function projectsOfNeeds(items: readonly NeedItem[], keep?: string): string[] {
+  const projects = new Set(items.map(projectOf))
+  if (keep) projects.add(keep)
+  return [...projects].sort((a, b) => a.localeCompare(b))
 }

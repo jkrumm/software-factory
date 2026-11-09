@@ -13,6 +13,7 @@ check, `docs/architecture.md`).
 | **Incident** | One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue | An Issue per alert |
 | **Amend** | Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note | |
 | **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo`, `probe`, `settled` (the workflow found an Issue closed in the last day already settles it) | |
+| **Held signal** | Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it | |
 | **Promote** | A held signal becomes work: the owner's or the Judge's call | |
 | **Dismiss** | A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
 | **Screen** | The Judge looks at a held signal (the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |

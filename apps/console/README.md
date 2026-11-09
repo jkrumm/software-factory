@@ -7,7 +7,7 @@ a sidebar, a one-line header strip, the command palette, and the screens (Needs 
 **Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the four screens with their
 keys (`g n`, `g f`, `g c`, `g i`) and counts, then the page's own section. A page fills that section with
 `<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): Flow's projects and origins,
-Needs you's kinds (`?kind=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
+Needs you's kinds and projects (`?kind=`, `?project=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
 select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the
 section is hidden, so a page shows its active filters as removable chips (`ActiveFilters`) and Improve keeps its window switch.
 
@@ -45,6 +45,33 @@ row; every column is its own virtualised list (`@tanstack/react-virtual`): only 
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
 leave. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
 with a "Show all states" link (it never filters rows); on a phone it picks the tab.
+
+## Needs you
+
+`/needs-you` opens with the **Since you were here** band, then the checkpoints. The band is `GET /v1/since`: one figure and
+label per category (Shipped and verified, Regressed, Dropped, Settled by the Judge, Turned away, New Issues
+with its by-origin words, Incidents), a quiet figure when a category is empty, the newest three items of each as links to
+the Issue page (an item with no Issue is plain text) and a Fold for the rest the server sent. When every count is zero it is
+one line ("Nothing changed since 09:12"). The categories, labels, tones and words are pure logic in `src/lib/since.ts`.
+**The visit marker** lives on the server: the owner's read of `/v1/since` is what moves it (a new visit starts after 30
+quiet minutes; inside a visit every read returns the same band), so only this screen calls it, the query (`['since']`)
+never polls, is never refetched by the stream (an open tab would keep the visit alive) and never enters the persisted snapshot, and it loads when the screen opens and when the window gets focus, and only while the tab is on screen (a hidden tab that reloads after a deploy waits until it is shown). A
+loading band is a skeleton of its height, and an error leaves the band out while the checkpoints show.
+
+The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every
+card leads with its project, a chip that opens `/flow?project=<repo>` (the word "App feedback" when it names none), then the
+title, the age in the verb of its kind (waiting, raised, received; the absolute time on hover), a Stale lozenge, and the
+Issue's title as a link. Closed, the whole card opens it (the title button is stretched over the card, the links sit above it).
+Opened, a Decision says what it is, shows the Judge's note when it passed it on, and lays its options out as cards with the
+reversible lozenge, the cost, the reason on the recommended one and the default-if-nobody-answers on the option that is the
+default; a recommendation that is a sentence matching no option is a block above the cards with a "Take the recommendation"
+button. An Errand says what it is, then its summary, Issue, project, when it was raised and the screen's note. A held signal
+says what it is, its source in a person's word and origin, a link to the source (only `http(s)`, `target=_blank`), when it was
+received and the screen's note, then Promote and Dismiss.
+
+`?kind=` and `?project=` filter the list (both in the URL; `?item=` stays the deep link, and the deep-linked item shows even
+when the filters would hide it). The sidebar has Kinds and Projects, each count reflecting the other filter; collapsed, the
+filters are chips; below `md` each has a select.
 
 ## Chain
 

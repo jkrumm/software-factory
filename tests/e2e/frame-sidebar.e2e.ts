@@ -176,7 +176,7 @@ test('Needs you: a kind in the sidebar shows only that kind, a second click show
   await link.click()
   await expect(page).toHaveURL(new RegExp(`kind=${kind}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')
-  const headings = page.locator('main h2')
+  const headings = page.locator('main section[aria-labelledby^="needs-"] h2')
   await expect(headings).toHaveCount(1)
   await expect(headings).toContainText(KIND_WORD[kind])
 

@@ -36,6 +36,12 @@ export const NeedItem = z
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal']), id: z.string() }),
     /** the artifact under review a Decision was raised about; null for everything else */
     artifact: z.string().nullable(),
+    /** where it came from, in the words of `SIGNAL_ORIGINS`: a held signal's own origin, else the Issue's; null when unknown */
+    origin: z.string().nullable(),
+    /** a held signal's source in a person's word (never a tool name); null for everything else */
+    source: z.string().nullable(),
+    /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
+    sourceLink: z.string().nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
     redacted: z.boolean(),
   })
@@ -421,3 +427,64 @@ export const HostHistoryModel = z
   })
   .meta({ id: 'HostHistoryModel' })
 export type HostHistoryModel = z.infer<typeof HostHistoryModel>
+
+// -- since you were here ---------------------------------------------------------------------------------------------------
+
+export const SinceItem = z
+  .strictObject({
+    /** null for a dismissed signal that never became an Issue */
+    issue: IssueRef.nullable(),
+    title: z.string(),
+    repo: z.string().nullable(),
+    at,
+  })
+  .meta({ id: 'SinceItem' })
+export type SinceItem = z.infer<typeof SinceItem>
+
+export const SinceCategory = z
+  .strictObject({
+    /** every Issue (or signal) of the category since `since`, counted once */
+    count: z.number().int(),
+    /** the newest 8 */
+    items: z.array(SinceItem),
+  })
+  .meta({ id: 'SinceCategory' })
+export type SinceCategory = z.infer<typeof SinceCategory>
+
+export const SinceFiled = z
+  .strictObject({
+    count: z.number().int(),
+    byOrigin: z.array(z.strictObject({ origin: z.enum(SIGNAL_ORIGINS), count: z.number().int() })),
+    items: z.array(SinceItem),
+  })
+  .meta({ id: 'SinceFiled' })
+export type SinceFiled = z.infer<typeof SinceFiled>
+
+/**
+ * What happened since the owner was last here (`GET /v1/since`). The owner's read moves the visit marker: the first call
+ * looks back 24 hours, a call within 30 minutes of the last keeps `since`, a later one starts at the last call. Every
+ * other caller reads relative to the stored `since` and writes nothing.
+ */
+export const SinceModel = z
+  .strictObject({
+    at,
+    /** where the band begins */
+    since: at,
+    categories: z.strictObject({
+      /** applied `watch_passed`: shipped with verification */
+      shipped: SinceCategory,
+      /** applied `regressed` */
+      failed: SinceCategory,
+      /** closed as dropped */
+      dropped: SinceCategory,
+      /** Decisions the Judge settled */
+      judge: SinceCategory,
+      /** signals the Judge turned away and Errands screened off */
+      screen: SinceCategory,
+      filed: SinceFiled,
+      /** incidents opened */
+      incidents: SinceCategory,
+    }),
+  })
+  .meta({ id: 'SinceModel' })
+export type SinceModel = z.infer<typeof SinceModel>

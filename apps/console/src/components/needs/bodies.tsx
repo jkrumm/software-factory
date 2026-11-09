@@ -1,17 +1,35 @@
 import type { NeedItem } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
+import { InfoHint, Lozenge, PropertyList } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { annotateArtifact, answerDecision, finishErrand, dismissSignal, giveVerdict, promoteSignal } from '@/lib/api'
-import { ARTIFACT_KIND_LABEL, defaultWords, reversibleWords, VERDICTS } from '@/lib/needs'
+import { originWord } from '@/lib/flow'
+import {
+  agoWords,
+  ARTIFACT_KIND_LABEL,
+  decisionParts,
+  repeatsTitle,
+  defaultLine,
+  defaultWords,
+  httpLink,
+  issueNumber,
+  optionIndex,
+  projectOf,
+  reversibleLozenge,
+  VERDICTS,
+} from '@/lib/needs'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
 import { useSettle } from '@/lib/settle'
+import { cn } from '@/lib/utils'
 
 /** What every body gets: the item, and what to say once the lead (or the factory) has the answer. */
 export interface BodyProps {
   item: NeedItem
+  /** the Issue's title where the Issue is known */
+  issueTitle: string | null
   onSent: (message: string) => void
 }
 
@@ -36,9 +54,55 @@ const Problem = ({ words }: { words: string | null }) =>
     </p>
   ) : null
 
+/** The one line that says what this kind of thing is, with the word's definition beside it. */
+const Lead = ({ hint, children }: { hint: 'decision' | 'errand' | 'held signal'; children: ReactNode }) => (
+  <p className="flex items-center gap-0.5 text-sm text-muted-foreground">
+    <span>{children}</span>
+    <InfoHint word={hint} />
+  </p>
+)
+
+const LINK = 'w-fit text-primary underline underline-offset-4'
+
+/** The Issue link, or null so a PropertyList reads "None" (an element would always count as a value). */
+const issueLink = (item: NeedItem, issueTitle: string | null): ReactNode =>
+  item.issue ? (
+    <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={LINK}>
+      {issueTitle ?? 'Open Issue'}
+    </Link>
+  ) : null
+
+const projectLink = (item: NeedItem): ReactNode =>
+  item.repo === null ? (
+    projectOf(item)
+  ) : (
+    <Link to="/flow" search={{ project: item.repo }} className={LINK}>
+      {item.repo}
+    </Link>
+  )
+
+/** A time as "2 hours ago" with the absolute time on hover. */
+const When = ({ item }: Pick<BodyProps, 'item'>) => (
+  <time dateTime={item.since} title={new Date(item.since).toLocaleString()}>
+    {agoWords(item.ageMs)}
+  </time>
+)
+
+/** What the screen (the Judge's look at an Errand or a held signal) said about it. */
+const ScreenNote = ({ note }: { note: string | null }) =>
+  note ? (
+    <section className="grid gap-1">
+      <h4 className="flex items-center gap-0.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        What the screen said
+        <InfoHint word="screen" />
+      </h4>
+      <Prose>{note}</Prose>
+    </section>
+  ) : null
+
 const Loading = () => <p className="text-sm text-muted-foreground">Loading</p>
 
-function DecisionBody({ item, onSent }: BodyProps) {
+function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useDecision(item.id)
   const [text, setText] = useState('')
   const settle = useSettle<string>({
@@ -50,73 +114,127 @@ function DecisionBody({ item, onSent }: BodyProps) {
   if (!data) return <Loading />
   const open = data.status === 'open'
   const answerWith = (answer: string) => settle.send(answer)
+  const recommended = optionIndex(data.options, data.recommendation)
+  const defaultOption = data.defaultAt && data.noAnswer.default ? optionIndex(data.options, data.noAnswer.default) : -1
+  const now = Date.now()
+  const narration = decisionParts(projectOf(item), issueTitle)
   return (
-    <div className="grid gap-4">
-      {item.artifact ? <p className="text-sm text-muted-foreground">Raised about its artifact under review.</p> : null}
-      <p className="font-heading text-base font-semibold">{data.question}</p>
-      <div className="grid gap-1 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Recommendation</span>
-        <p className="text-base font-semibold">{data.recommendation}</p>
-      </div>
-      <Labelled label="What was checked">
-        <Prose>{data.checked}</Prose>
-      </Labelled>
-      <Labelled label="Options">
-        <ul className="grid gap-2">
-          {data.options.map((option) => (
-            <li key={option.label} className="rounded-lg border px-3 py-2 text-sm">
-              <span className="font-medium">{option.label}</span>
-              <span className="text-muted-foreground"> - {reversibleWords(option.reversible)}</span>
-              <p className="text-muted-foreground">{option.cost}</p>
-            </li>
-          ))}
-        </ul>
-      </Labelled>
-      <Labelled label="With no answer">
-        <Prose>{data.noAnswer.consequence}</Prose>
-        {data.defaultAt && data.noAnswer.default ? (
-          <p className="text-sm text-muted-foreground">
-            {defaultWords(data.defaultAt, Date.now())}: {data.noAnswer.default}
-          </p>
+    <div className="grid gap-5">
+      <div className="grid gap-1">
+        <Lead hint="decision">
+          {narration.before}
+          {narration.issue && item.issue ? (
+            <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={LINK}>
+              {narration.issue}
+            </Link>
+          ) : null}
+          {narration.after}
+        </Lead>
+        {item.judge ? (
+          <>
+            <p className="flex items-center gap-0.5 text-sm text-muted-foreground">
+              <span>The Judge looked at this first and passed it on</span>
+              <InfoHint word="judge" />
+            </p>
+            <Prose>{item.judge}</Prose>
+          </>
         ) : null}
-      </Labelled>
-      {open ? (
-        <div className="grid gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={settle.disabled} onClick={() => answerWith(data.recommendation)}>
-              Take the recommendation
-            </Button>
-            {data.options.map((option) => (
-              <Button
-                key={option.label}
-                variant="outline"
-                disabled={settle.disabled}
-                onClick={() => answerWith(option.label)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-          <form
-            className="grid gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (text.trim()) answerWith(text.trim())
-            }}
-          >
-            <Textarea
-              aria-label="Your own answer"
-              placeholder="Or answer in your own words"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-            />
+        {item.artifact ? (
+          <p className="text-sm text-muted-foreground">Raised about its artifact under review.</p>
+        ) : null}
+      </div>
+      {repeatsTitle(data.question, item.title) ? null : (
+        <p className="font-heading text-lg font-semibold">{data.question}</p>
+      )}
+      {recommended === -1 && data.recommendation.trim() ? (
+        <div className="grid gap-2 rounded-xl bg-muted/50 px-4 py-3">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Recommendation</span>
+          <p className="text-base font-semibold">{data.recommendation}</p>
+          {data.checked ? <Prose>{data.checked}</Prose> : null}
+          {open ? (
             <div>
-              <Button type="submit" variant="secondary" disabled={settle.disabled || !text.trim()}>
-                Send answer
+              <Button disabled={settle.disabled} onClick={() => answerWith(data.recommendation)}>
+                Take the recommendation
               </Button>
             </div>
-          </form>
+          ) : null}
         </div>
+      ) : null}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3">
+        {data.options.map((option, index) => {
+          const isRecommended = index === recommended
+          const lozenge = reversibleLozenge(option.reversible)
+          return (
+            <li
+              key={option.label}
+              data-recommended={isRecommended}
+              className={cn(
+                'flex flex-col gap-3 rounded-xl p-4',
+                isRecommended ? 'bg-primary/8 ring-1 ring-primary/40' : 'bg-muted/40',
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                {isRecommended ? <Lozenge state="working">Recommended</Lozenge> : null}
+                <Lozenge state={lozenge.state}>{lozenge.words}</Lozenge>
+              </div>
+              <p className="text-base font-semibold">{option.label}</p>
+              <p className="text-sm text-muted-foreground">{option.cost}</p>
+              {isRecommended && data.checked ? (
+                <p className="text-sm">
+                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Reason </span>
+                  {data.checked}
+                </p>
+              ) : null}
+              {index === defaultOption && data.defaultAt ? (
+                <p className="text-sm text-muted-foreground">
+                  {defaultLine(data.noAnswer.consequence, data.defaultAt, now)}
+                </p>
+              ) : null}
+              {open ? (
+                <div className="mt-auto pt-1">
+                  <Button
+                    variant={isRecommended ? 'default' : 'outline'}
+                    disabled={settle.disabled}
+                    onClick={() => answerWith(option.label)}
+                  >
+                    {isRecommended ? 'Take the recommendation' : `Choose ${option.label}`}
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+      {defaultOption === -1 ? (
+        <Labelled label="With no answer">
+          <Prose>{data.noAnswer.consequence}</Prose>
+          {data.defaultAt && data.noAnswer.default ? (
+            <p className="text-sm text-muted-foreground">
+              {defaultWords(data.defaultAt, now)}: {data.noAnswer.default}
+            </p>
+          ) : null}
+        </Labelled>
+      ) : null}
+      {open ? (
+        <form
+          className="grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (text.trim()) answerWith(text.trim())
+          }}
+        >
+          <Textarea
+            aria-label="Your own answer"
+            placeholder="Or answer in your own words"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+          <div>
+            <Button type="submit" variant="secondary" disabled={settle.disabled || !text.trim()}>
+              Send answer
+            </Button>
+          </div>
+        </form>
       ) : (
         <p className="text-sm text-muted-foreground">{SETTLED}</p>
       )}
@@ -240,7 +358,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
   )
 }
 
-function ErrandBody({ item, onSent }: BodyProps) {
+function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useErrands()
   const [note, setNote] = useState('')
   const settle = useSettle<void>({
@@ -252,12 +370,23 @@ function ErrandBody({ item, onSent }: BodyProps) {
   const errand = data?.errands.find((entry) => entry.id === item.id)
   return (
     <div className="grid gap-4">
-      <Prose>{errand?.summary ?? item.summary}</Prose>
+      <Lead hint="errand">
+        Something only your hands can do - a device, a portal, a physical step. The lead cannot do it and waits.
+      </Lead>
+      <Prose>{errand?.summary ?? item.title}</Prose>
       {errand?.detail ? (
         <Labelled label="Detail">
           <Prose>{errand.detail}</Prose>
         </Labelled>
       ) : null}
+      <PropertyList
+        items={[
+          { label: 'Issue', value: issueLink(item, issueTitle) },
+          { label: 'Project', value: projectLink(item) },
+          { label: 'Raised', value: <When item={item} /> },
+        ]}
+      />
+      <ScreenNote note={item.judge} />
       <form
         className="grid gap-2"
         onSubmit={(event) => {
@@ -282,7 +411,7 @@ function ErrandBody({ item, onSent }: BodyProps) {
   )
 }
 
-function HeldSignalBody({ item, onSent }: BodyProps) {
+function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
   const [repo, setRepo] = useState('')
   const settle = useSettle<void>({
     send: () => promoteSignal(item.id, item.repo ?? repo.trim()),
@@ -298,10 +427,28 @@ function HeldSignalBody({ item, onSent }: BodyProps) {
     onConflict: () => onSent(SETTLED),
   })
   const needsRepo = item.repo === null
+  const link = httpLink(item.sourceLink)
   return (
     <div className="grid gap-4">
+      <Lead hint="held signal">Outside text the factory did not trust enough to turn into work</Lead>
       <Prose>{item.summary}</Prose>
-      {item.judge ? <p className="text-sm text-muted-foreground">Judge: {item.judge}</p> : null}
+      <PropertyList
+        items={[
+          { label: 'Source', value: sourceWords(item) },
+          {
+            label: 'Link to the source',
+            value: link ? (
+              <a href={link} target="_blank" rel="noopener noreferrer" className={LINK}>
+                Open the source
+              </a>
+            ) : null,
+          },
+          { label: 'Project', value: projectLink(item) },
+          { label: 'Received', value: <When item={item} /> },
+          { label: 'Issue', value: issueLink(item, issueTitle) },
+        ]}
+      />
+      <ScreenNote note={item.judge} />
       <form
         className="grid gap-2"
         onSubmit={(event) => {
@@ -347,6 +494,14 @@ function HeldSignalBody({ item, onSent }: BodyProps) {
       <Problem words={dismissal.error} />
     </div>
   )
+}
+
+/** "an uptime check, Infrastructure": the source in a person's word and the origin as Flow words it. */
+function sourceWords(item: NeedItem): string {
+  const origin = item.origin ? originWord(item.origin) : null
+  if (!item.source) return origin ?? 'Unknown'
+  if (!origin || origin.toLowerCase() === item.source.toLowerCase()) return item.source
+  return `${item.source}, ${origin}`
 }
 
 export function BodyOf(props: BodyProps) {

@@ -69,13 +69,13 @@ test('the list groups what waits and the open cards show everything the owner de
 
   await open(page, 'Which logging library')
   const decision = card(page, 'Which logging library')
-  await expect(decision.getByText('Recommendation', { exact: true })).toBeVisible()
+  await expect(decision.getByText('Recommended', { exact: true })).toBeVisible()
   await expect(decision.getByText('pino', { exact: true }).first()).toBeVisible()
   await expect(decision.getByText('one dependency, fast to swap later')).toBeVisible()
   await expect(decision.getByText('heavier, with more moving parts')).toBeVisible()
-  await expect(decision.getByText(/- not reversible/)).toBeVisible()
+  await expect(decision.getByText('Not reversible', { exact: true })).toBeVisible()
   await expect(decision.getByText('The lead logs to the console until someone answers.')).toBeVisible()
-  await expect(decision.getByText(/Default taken in \d+ hours?: pino/)).toBeVisible()
+  await expect(decision.getByText(/In \d+ hours?, if nobody answers:/)).toBeVisible()
   await everything()
 
   await open(page, 'The queue spec')

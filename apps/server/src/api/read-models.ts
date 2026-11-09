@@ -10,6 +10,7 @@ import {
   HostHistoryModel,
   KpiModel,
   MachineModel,
+  SinceModel,
   NeedsModel,
   ChainModel,
   type QueueReason as QueueReasonSchema,
@@ -17,6 +18,8 @@ import {
 import type { SQL } from 'bun'
 import { Elysia } from 'elysia'
 import type * as z from 'zod'
+import type { UnitOfWork } from '../app/unit-of-work.ts'
+import { registerVisit, type VisitStore } from '../app/visit.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
 import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
@@ -26,6 +29,7 @@ import { readHostSamples } from '../read/host.ts'
 import { readKpis } from '../read/kpis.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
+import { readSince, storedSince } from '../read/since.ts'
 import { callerOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import type { Caller } from './policy.ts'
@@ -43,6 +47,8 @@ export interface ReadModelDeps {
     startedAt: Date
     top: () => Promise<{ topByCpu: HostProcess[]; topByMemory: HostProcess[] }>
   }
+  /** the owner's visit marker; absent, `GET /v1/since` moves nothing and reads from the stored start */
+  visits?: UnitOfWork<{ visits: VisitStore }>
   now?: () => Date
 }
 
@@ -160,6 +166,31 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.host',
           summary:
             "the host over the last 24 hours as one-minute samples (load, memory and swap use, a failed reading null), its top 8 processes by cpu and by resident memory, and the server's version and start time",
+        },
+      },
+    )
+    .get(
+      '/since',
+      async ({ request }) => {
+        if (!deps) return unavailable
+        const at = now()
+        const who = caller(request)
+        if (who === 'owner' && deps.visits) {
+          const visit = await registerVisit(deps.visits, at)
+          if (!visit.ok) throw new Error(`the visit marker could not be stored: ${visit.error.detail}`)
+          return Response.json(
+            SinceModel.parse(await readSince(deps.sql, { now: at, since: visit.value, redact: false })),
+          )
+        }
+        const since = await storedSince(deps.sql, at)
+        return Response.json(SinceModel.parse(await readSince(deps.sql, { now: at, since, redact: who === 'read' })))
+      },
+      {
+        response: { 200: SinceModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.since',
+          summary:
+            "what happened since the owner was last here: shipped with verification, regressed, dropped, settled by the Judge, screened off, filed by origin and incidents opened, each counted once with the newest 8. The owner's read moves the visit marker (a new visit after 30 quiet minutes); every other caller reads from the stored start and writes nothing",
         },
       },
     )

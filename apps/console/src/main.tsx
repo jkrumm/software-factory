@@ -21,7 +21,7 @@ if (!root) throw new Error('index.html has no #root')
 void queryClient.prefetchQuery(needsQuery)
 if (location.pathname === '/flow') void queryClient.prefetchQuery(flowQuery)
 
-const SNAPSHOT_EXCLUDED = new Set(['artifact', 'issue'])
+const SNAPSHOT_EXCLUDED = new Set(['artifact', 'issue', 'since'])
 
 createRoot(root).render(
   <StrictMode>
@@ -31,7 +31,7 @@ createRoot(root).render(
         persister,
         maxAge: SNAPSHOT_MAX_AGE_MS,
         buster: __BUILD_ID__,
-        // an artifact's text can be a megabyte and an Issue's detail carries its whole timeline, notes and signal text: both stay out of the snapshot
+        // an artifact's text can be a megabyte and an Issue's detail carries its whole timeline, notes and signal text: both stay out of the snapshot, and so does the since band (reading it moves the server's visit marker)
         dehydrateOptions: {
           shouldDehydrateQuery: (query) =>
             defaultShouldDehydrateQuery(query) && !SNAPSHOT_EXCLUDED.has(String(query.queryKey[0])),

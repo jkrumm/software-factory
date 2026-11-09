@@ -42,7 +42,9 @@ test('a reload waits while a field has focus or a textarea holds a draft', () =>
 describe('affected', () => {
   const keys = {
     needs: ['needs'],
+    since: ['since'],
     flow: ['flow'],
+    cards: ['issue-cards'],
     chain: ['chain'],
     errands: ['errands'],
     kpis: ['kpis', 7],
@@ -66,6 +68,7 @@ describe('affected', () => {
   test('an Issue event alters the lists, the aggregates and its own page, not another Issue', () => {
     const names = hits({ kind: 'issue', ref: 'issue_12' })
     expect(names).toContain('needs')
+    expect(names).not.toContain('since')
     expect(names).toContain('flow')
     expect(names).toContain('chain')
     expect(names).toContain('kpis')
@@ -74,10 +77,21 @@ describe('affected', () => {
     expect(names).not.toContain('errands')
   })
 
+  test('the Issue titles are refetched by an Issue change, not by a hook event', () => {
+    expect(hits({ kind: 'issue', ref: 'issue_12' })).toContain('cards')
+    expect(hits({ kind: 'session', ref: 'issue_12' })).not.toContain('cards')
+  })
+
+  test('the band is never refetched by the stream: a read moves the visit marker', () => {
+    expect(hits(null)).not.toContain('since')
+    expect(hits({ kind: 'signal', ref: 'signal_1' })).not.toContain('since')
+  })
+
   test('a session event leaves needs, flow and chain alone', () => {
     const names = hits({ kind: 'session', ref: 'issue_13' })
     expect(names).toEqual(expect.arrayContaining(['issue13', 'kpis', 'friction']))
     expect(names).not.toContain('needs')
+    expect(names).not.toContain('since')
     expect(names).not.toContain('flow')
     expect(names).not.toContain('chain')
     expect(names).not.toContain('issue12')
@@ -111,11 +125,12 @@ describe('affected', () => {
       const names = hits(change)
       expect(names).not.toContain('accounts')
       expect(names).not.toContain('machine')
+      expect(names).not.toContain('since')
     }
   })
 
   test('a change that did not parse or has an unknown kind alters everything else', () => {
-    const all = Object.keys(keys).filter((name) => name !== 'accounts' && name !== 'machine')
+    const all = Object.keys(keys).filter((name) => !['accounts', 'machine', 'since'].includes(name))
     expect(hits(null).sort()).toEqual([...all].sort())
     expect(hits({ kind: 'banana', ref: null }).sort()).toEqual([...all].sort())
   })

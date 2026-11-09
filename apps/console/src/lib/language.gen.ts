@@ -37,6 +37,8 @@ export const LANGUAGE = {
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
   healed: 'Outcome: an incident that went away before a lead started',
+  'held signal':
+    'Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it',
   incident:
     'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",

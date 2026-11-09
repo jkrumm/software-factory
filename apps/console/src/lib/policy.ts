@@ -36,8 +36,12 @@ export interface Change {
 type Key = readonly unknown[]
 export type KeyPredicate = (key: Key) => boolean
 
-/** The strip's readings: not in the stream, so a change never invalidates them (they poll). */
-const POLLED_ONLY = new Set(['accounts', 'machine'])
+/**
+ * Never invalidated by a change: the strip's readings (not in the stream, they poll) and the "Since you were here" band,
+ * whose every read moves the server's visit marker, so a tab left open must not keep the visit alive. The band loads
+ * when the screen opens and when the window gets focus.
+ */
+const POLLED_ONLY = new Set(['accounts', 'machine', 'since'])
 /** Slower-moving figures over windows of history: they refetch on the longer debounce. */
 const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits'])
 /** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and held signals. Hook events (`session`) are not among them. */
@@ -86,6 +90,7 @@ const issueAffected: RootRule = (change, key) => {
 const BY_ROOT: Record<string, RootRule> = {
   needs: listsAffected,
   flow: listsAffected,
+  'issue-cards': (change) => change.kind === 'issue' || !isKnownKind(change.kind),
   chain: listsAffected,
   errands: errandsAffected,
   issue: issueAffected,

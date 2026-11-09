@@ -78,7 +78,7 @@ const ENTRY = `${ROW} aria-pressed:font-semibold aria-pressed:text-foreground ar
 /** Whether the sidebar is collapsed to icons. */
 export const useSidebarCollapsed = (): boolean => useSidebar().collapsed
 
-interface FilterChip {
+export interface FilterChip {
   key: string
   label: string
   /** returns the link that clears this filter */
