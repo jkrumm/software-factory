@@ -65,7 +65,7 @@ const REFUSAL =
   'A ship was refused: ship refused: factory/414-1 holds work that is not on origin/master: merge it before the next ship'
 
 const liveShaped = async (page: Page) => {
-  const rewrite = (url: string, change: (body: Record<string, unknown>) => void) =>
+  const rewrite = (url: string | RegExp, change: (body: Record<string, unknown>) => void) =>
     page.route(url, async (route) => {
       const response = await route.fetch()
       const body = (await response.json()) as Record<string, unknown>
@@ -96,6 +96,10 @@ const liveShaped = async (page: Page) => {
       item.issue = 'issue_1'
       item.repo = 'software-factory'
     }
+  })
+  await rewrite(/\/v1\/issues\/\d+(\?.*)?$/, (body) => {
+    body.title = LONG_ISSUE
+    body.filedTitle = LONG_ISSUE
   })
   await rewrite('**/v1/issues?*', (body) => {
     const issues = (body.issues ?? []) as Record<string, unknown>[]
