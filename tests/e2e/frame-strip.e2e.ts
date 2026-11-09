@@ -71,8 +71,8 @@ test.describe('the meters and their popovers', () => {
     const { accounts } = await world(apiUrl)
     await page.goto('/needs-you')
     const trigger = page.getByRole('button', { name: new RegExp(`^${accounts[0]}, `) })
+    // Keyboard focus opens the popover by itself (StripPopover); an Enter after it would toggle it shut again.
     await trigger.focus()
-    await page.keyboard.press('Enter')
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toBeHidden()
