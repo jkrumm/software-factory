@@ -7,10 +7,11 @@ import {
   type EffectKind,
   type EffectOf,
   finalize,
+  finalizeClosed,
   startLead as startEffect,
 } from '../../src/domains/work/effects.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
-import { ok, portError } from '../../src/kernel/result.ts'
+import { err, ok, portError } from '../../src/kernel/result.ts'
 import { startWorld, type World } from './world.ts'
 
 let w: World
@@ -197,5 +198,57 @@ describe('finalize', () => {
     expect((await finalizeLead(w.deps, asEffect(finalize(issue, 1), 'finalize', issue))).ok).toBe(true)
     expect(w.claims.released).toEqual([{ issue, attempt: 1 }])
     expect(w.worktrees.removed).toHaveLength(0)
+  })
+
+  test('a restart of an open Issue removes the worktree and cleans no branches', async () => {
+    const { effect } = await closedLead()
+    expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
+    expect(w.worktrees.removed).toHaveLength(1)
+    expect(w.branches.cleaned).toHaveLength(0)
+  })
+
+  test('a closed Issue has its branches cleaned, with the commits it shipped; what is kept is recorded', async () => {
+    const { issue, effect } = await closedLead()
+    await w.db.sql`
+      INSERT INTO factory.quality_ships (id, issue_id, attempt, event_key, at, result, reported)
+      VALUES ('s-1', ${issue}, 1, 'ship-1', now(), 'accepted', '[]')`
+    await w.db.sql`
+      INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
+      VALUES ('e-1', ${issue}, 1, 'ship-1', 'commits', now(),
+              '{"commits":["abc1234"],"landedAt":null,"mergedAt":null,"deploys":true,"paths":[]}')`
+    await w.event(issue, 'cancel', { kind: 'cancelled', payload: { reason: 'stop' }, actor: 'owner' })
+    w.branches.answer = ok({
+      deleted: [],
+      kept: [{ branch: 'factory/1-1', why: 'its commits are not on origin/master' }],
+    })
+    expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
+    expect(w.branches.cleaned).toEqual([
+      { repo: '/roots/example', issue: 1, closed: 'cancelled', shipped: ['abc1234'] },
+    ])
+    const [row] = await w.db.sql`SELECT worktree_kept FROM factory.lead_finalizations WHERE issue_id = ${issue}`
+    expect(row?.worktree_kept).toBe('branch factory/1-1 kept: its commits are not on origin/master')
+
+    expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
+    expect(w.branches.cleaned).toHaveLength(1)
+  })
+
+  test('a close cleans the branches even when a restart already finalized the attempt, and again on a repeat', async () => {
+    const { issue, effect } = await closedLead()
+    expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
+    expect(w.branches.cleaned).toHaveLength(0)
+
+    await w.event(issue, 'cancel', { kind: 'cancelled', payload: { reason: 'stop' }, actor: 'owner' })
+    const closing = asEffect(finalizeClosed(issue, 1), 'finalize', issue)
+    expect(closing.key).not.toBe(effect.key)
+    expect((await finalizeLead(w.deps, closing)).ok).toBe(true)
+    expect(w.branches.cleaned).toMatchObject([{ repo: '/roots/example', issue: 1, closed: 'cancelled' }])
+    expect(w.claims.released).toHaveLength(1)
+    expect(w.worktrees.removed).toHaveLength(1)
+
+    expect((await finalizeLead(w.deps, closing)).ok).toBe(true)
+    expect(w.branches.cleaned).toHaveLength(2)
+
+    w.branches.answer = err(portError('gone', 'the remote is down'))
+    expect((await finalizeLead(w.deps, closing)).ok).toBe(false)
   })
 })

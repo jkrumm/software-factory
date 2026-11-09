@@ -2,6 +2,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
+import { postgresQualityStore } from '../../src/adapters/quality/store.ts'
 import { postgresLeadStore } from '../../src/adapters/leads/store.ts'
 import { fileIn, recordIn } from '../../src/app/issues.ts'
 import type { LeadDeps, LeadsUow } from '../../src/app/leads.ts'
@@ -14,6 +15,9 @@ import type {
   TerminalInfo,
   Terminals,
   Transcripts,
+  BranchCleaning,
+  BranchClosure,
+  LeadBranches,
   Windows,
   WorktreeRemoval,
   Worktrees,
@@ -128,12 +132,26 @@ export class FakeWorktrees implements Worktrees {
   }
 }
 
+export class FakeBranches implements LeadBranches {
+  cleaned: { repo: string; issue: number; closed: BranchClosure; shipped: readonly string[] }[] = []
+  answer: Result<BranchCleaning> = ok({ deleted: [], kept: [] })
+  async clean(input: { repo: string; issue: number; closed: BranchClosure; shipped: readonly string[] }) {
+    this.cleaned.push(input)
+    return this.answer
+  }
+  reset() {
+    this.cleaned = []
+    this.answer = ok({ deleted: [], kept: [] })
+  }
+}
+
 export interface World {
   db: TestCluster
   deps: LeadDeps
   clock: MovingClock
   terminals: FakeTerminals
   worktrees: FakeWorktrees
+  branches: FakeBranches
   claims: {
     released: { issue: IssueId; attempt: number }[]
     resumed: { issue: IssueId; attempt: number }[]
@@ -157,11 +175,13 @@ export async function startWorld(): Promise<World> {
   const clock = new MovingClock()
   const terminals = new FakeTerminals()
   const worktrees = new FakeWorktrees()
+  const branches = new FakeBranches()
   const world: World = {
     db,
     clock,
     terminals,
     worktrees,
+    branches,
     claims: {
       released: [],
       resumed: [],
@@ -202,6 +222,7 @@ export async function startWorld(): Promise<World> {
   const uow: LeadsUow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     leads: postgresLeadStore(tx),
+    quality: postgresQualityStore(tx),
   }))
   const repos: Repos = {
     locate: async (repo) => (world.repoError ? err(world.repoError) : ok(`/roots/${repo}`)),
@@ -217,6 +238,7 @@ export async function startWorld(): Promise<World> {
     ids: sequentialIds(),
     terminals,
     worktrees,
+    branches,
     repos,
     roles,
     seats,
@@ -259,6 +281,7 @@ export async function startWorld(): Promise<World> {
     await db.sql`ALTER SEQUENCE factory.issue_numbers RESTART`
     terminals.reset()
     worktrees.reset()
+    branches.reset()
     world.claims.released = []
     world.claims.error = null
     world.claims.resumed = []

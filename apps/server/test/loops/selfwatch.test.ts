@@ -78,6 +78,7 @@ test('migration_clash: one number on two names, from the base and from any ref, 
         { ref: 'origin/factory/2-1', added: ['0997_two.sql', '0001_a.sql'] },
         { ref: 'factory/3-1', added: ['0997_one.sql'] },
       ],
+      unchecked: [],
     },
     new Set(['0993']),
   )
@@ -96,10 +97,30 @@ test('migration_clash: the same file on many refs is no clash', () => {
           { ref: 'a', added: ['0998_same.sql'] },
           { ref: 'b', added: ['0998_same.sql'] },
         ],
+        unchecked: [],
       },
       new Set(),
     ),
   ).toEqual([])
+})
+
+test('migration_clash: refs past the limit are one finding of their own, absent when none went unchecked', () => {
+  const none = migrationFindings({ base: [], refs: [], unchecked: [] }, new Set())
+  expect(none).toEqual([])
+
+  const unchecked = ['zeta', 'factory/9-1', 'alpha', 'origin/beta']
+  const [found, ...more] = migrationFindings({ base: [], refs: [], unchecked }, new Set())
+  expect(more).toEqual([])
+  expect(found?.kind).toBe('migration_clash')
+  expect(found?.subject).toBe('refs-unchecked')
+  expect(found?.title).toBe('Self-watch: migration check skipped 4 refs over its limit')
+  expect(found?.facts).toEqual(['refs over the comparison limit were not compared with origin/master'])
+  expect(found?.context[0]).toContain('4 refs')
+  expect(found?.context.join('\n')).toContain('unchecked: alpha')
+  expect(found?.reproduce).toContain('git for-each-ref')
+  // the count moves between passes, the fingerprint does not
+  const [fewer] = migrationFindings({ base: [], refs: [], unchecked: unchecked.slice(1) }, new Set())
+  expect(fingerprintOf(null, `${fewer?.title}`)).toBe(fingerprintOf(null, `${found?.title}`))
 })
 
 const timer = (until: Date) => ({
@@ -184,7 +205,7 @@ test('heartbeat_stale: a class per reason, never while ok', () => {
 
 test('a signal text is at most eight lines', () => {
   const [found] = migrationFindings(
-    { base: Array.from({ length: 12 }, (_, i) => `0997_${i}.sql`), refs: [] },
+    { base: Array.from({ length: 12 }, (_, i) => `0997_${i}.sql`), refs: [], unchecked: [] },
     new Set(),
   )
   expect(signalText(found as Finding, 'software-factory').split('\n').length).toBeLessThanOrEqual(8)
@@ -266,6 +287,7 @@ test('titles of different subjects have different fingerprints, and one subject 
       {
         base: [],
         refs: [{ ref: 'a', added: ['0997_alpha.sql', '0997_beta.sql', '0998_gamma.sql', '0998_delta.sql'] }],
+        unchecked: [],
       },
       new Set(),
     ),

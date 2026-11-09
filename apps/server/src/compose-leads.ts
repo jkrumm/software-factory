@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import type { TickAnswer } from '@software-factory/contract'
+import { gitBranches } from './adapters/git/branches.ts'
 import { gitWorktrees } from './adapters/git/worktrees.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
 import { HcTerminals, claudeProjectsDirs } from './adapters/hc/terminals.ts'
@@ -40,6 +41,8 @@ export function composeLeads(input: {
   capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
   /** quality's port: opens the Watch after a ship. The one outbox runs it with the leads' ports. */
   startWatch: EffectPorts['start_watch']
+  /** `FACTORY_GITHUB_TOKEN` and API base: with no token a merged pull request is not asked about */
+  github: { token: string | null; apiUrl: string }
 }): LeadsComposition {
   const { settings: s } = input
   if (!s.agentToken)
@@ -61,6 +64,7 @@ export function composeLeads(input: {
       ...(s.apiUrl ? { apiUrl: s.apiUrl } : {}),
     }),
     worktrees: gitWorktrees(),
+    branches: gitBranches(input.github),
     repos: rootedRepos(s.repoRoots),
     roles: fileRoles(s.rolesFile),
     seats: input.capacity.seats,
