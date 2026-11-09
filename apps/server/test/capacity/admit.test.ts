@@ -331,6 +331,11 @@ describe('claims and the claim on resume', () => {
     }
     const refused = await loopReads(world.db.sql).claimRefusals(10)
     expect(refused).toMatchObject([{ issue: one, repo: 'solo', refusals: 2 }])
+    // a run of another kind after them (the lead was mid-turn) ends the run: the claim was taken
+    await world.db.sql`
+      INSERT INTO factory.issue_effect_runs (effect_key, at, ok, error_kind, detail)
+      VALUES (${note.key}, ${world.clock.now()}, false, 'refused', 'the lead is mid-turn')`
+    expect(await loopReads(world.db.sql).claimRefusals(10)).toEqual([])
     // Issue 2 closes: the place is free, and the refusal is a stall
     await world.send(two, 'cancelled', 'cancelled', { reason: 'x' }, 'owner')
     expect(value(await claimFreeRepos(world.deps, ['solo']))).toEqual(['solo'])
