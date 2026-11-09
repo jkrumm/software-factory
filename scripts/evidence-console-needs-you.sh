@@ -8,4 +8,4 @@ to="$root/docs/evidence/console-needs-you"
 [ -d "$from" ] || { echo "no screenshots in $from: run make e2e first" >&2; exit 1; }
 mkdir -p "$to"
 cp "$from"/*.png "$to"/
-ls "$to"/*.png | wc -l | xargs echo "screenshots in docs/evidence/console-needs-you:"
+find "$to" -name '*.png' | wc -l | xargs echo "screenshots in docs/evidence/console-needs-you:"
