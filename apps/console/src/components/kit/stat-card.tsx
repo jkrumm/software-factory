@@ -125,7 +125,7 @@ export function StatCard({
         </div>
         {menu ?? (onMenu ? <MenuButton onClick={onMenu} label={`${title} options`} /> : null)}
       </header>
-      <div className="flex flex-col gap-3 rounded-lg bg-background px-4 py-3.5">
+      <div className="flex flex-col gap-2 rounded-lg bg-background px-4 py-3.5">
         <div className="flex items-center gap-3">
           <span className="text-[length:var(--vx-text-display)] leading-none font-semibold tracking-tight proportional-nums">
             {value}
@@ -149,7 +149,7 @@ export function StatCard({
           {footer.map((pair) => (
             <div key={pair.label} className="flex min-w-0 items-baseline gap-2">
               <dt className="truncate text-muted-foreground">{pair.label}</dt>
-              <dd className="truncate font-medium tabular-nums">{pair.value}</dd>
+              <dd className="truncate text-[length:var(--vx-text-md)] font-semibold tabular-nums">{pair.value}</dd>
             </div>
           ))}
         </dl>

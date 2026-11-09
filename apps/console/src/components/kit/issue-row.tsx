@@ -31,7 +31,7 @@ export function IssueRow({
       )}
     >
       <KindIcon className="size-4 shrink-0 text-muted-foreground" aria-label={kind} role="img" />
-      <span className="min-w-0 flex-1 truncate font-medium">
+      <span className="min-w-0 flex-1 line-clamp-2 font-medium min-[40rem]:line-clamp-1">
         <CardLink href={href} as={as}>
           {title}
         </CardLink>
@@ -42,7 +42,7 @@ export function IssueRow({
       <span className="shrink-0 min-[40rem]:w-24">
         <Lozenge state={state} />
       </span>
-      <div className="hidden w-80 shrink-0 min-[64rem]:block">
+      <div className="hidden shrink-0 min-[64rem]:block min-[64rem]:w-80 min-[90rem]:w-[28rem]">
         {reason ? <ReasonLine state={state} reason={reason} className="[&>span]:truncate" /> : null}
       </div>
       <AgeColumn since={since} now={now} onMenu={onMenu} title={title} />

@@ -23,11 +23,11 @@ export function InfoHint({ word, className }: InfoHintProps) {
         delay={150}
         aria-label={`What ${title} means`}
         className={cn(
-          'inline-grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:text-foreground',
+          'inline-grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:text-foreground',
           className,
         )}
       >
-        <InfoIcon className="size-3.5" aria-hidden="true" />
+        <InfoIcon className="size-4" aria-hidden="true" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner sideOffset={6} className="isolate z-50">

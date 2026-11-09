@@ -47,7 +47,9 @@ export function ReasonLine({ state, reason, className }: { state: LozengeState; 
       )}
     >
       <ReasonIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0">{reason}</span>
+      <span className="min-w-0" title={reason}>
+        {reason}
+      </span>
     </p>
   )
 }

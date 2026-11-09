@@ -1,5 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon, TrayIcon } from '@phosphor-icons/react'
+import {
+  CheckCircleIcon,
+  HourglassIcon,
+  QueueIcon,
+  RocketLaunchIcon,
+  TrayIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react'
 import { useState } from 'react'
 import {
   EmptyState,
@@ -19,6 +26,7 @@ import {
   StatCard,
   StepRail,
 } from '@/components/kit'
+import { Button } from '@/components/ui/button'
 import { KIT_ISSUES, KIT_METERS, KIT_NOW, KIT_PROPERTIES, KIT_STATS, KIT_STEPS } from '@/components/kit/fixtures'
 
 /** The component kit on fixtures: reachable by URL only (no nav entry, no palette command), no queries. */
@@ -80,22 +88,26 @@ function Kit() {
           The whole card is the link: hover it, tab to it, press the three dots that show on hover. The row is the dense
           variant for lists, hairlines between rows and no box.
         </Note>
-        <div className="grid grid-cols-1 gap-6 min-[1500px]:grid-cols-[3fr_2fr]">
-          <div className="grid grid-cols-1 content-start gap-4 md:grid-cols-2">
-            {KIT_ISSUES.map((i) => (
-              <IssueCard
-                key={i.key}
-                {...view(i)}
-                as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
-                href={i.key === 'export-time' ? undefined : `#${i.key}`}
-                onMenu={() => undefined}
-              />
-            ))}
-          </div>
-          <div className="flex flex-col content-start">
-            {KIT_ISSUES.map((i) => (
-              <IssueRow key={i.key} {...view(i)} href={`#${i.key}`} onMenu={() => undefined} />
-            ))}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] items-start gap-3">
+          {KIT_ISSUES.map((i) => (
+            <IssueCard
+              key={i.key}
+              {...view(i)}
+              as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
+              href={i.key === 'export-time' ? undefined : `#${i.key}`}
+              onMenu={() => undefined}
+            />
+          ))}
+        </div>
+        <div className="mt-8 flex w-full flex-col">
+          {KIT_ISSUES.map((i) => (
+            <IssueRow key={i.key} {...view(i)} href={`#${i.key}`} onMenu={() => undefined} />
+          ))}
+          <div aria-hidden="true" className="flex min-h-9 items-center gap-3 border-t px-3 py-1.5">
+            <Skeleton height={16} width={16} rounded="rounded-sm" className="shrink-0" />
+            <Skeleton height={14} width="30%" />
+            <Skeleton height={14} width="10%" className="ml-auto" />
+            <Skeleton height={14} width={64} className="shrink-0" />
           </div>
         </div>
       </Section>
@@ -182,6 +194,18 @@ function Kit() {
             <Skeleton height={14} />
             <Skeleton height={56} rounded="rounded-xl" />
           </div>
+          <EmptyState
+            className="mt-4"
+            icon={WarningCircleIcon}
+            title="Could not load Flow"
+            action={
+              <Button variant="outline" onClick={() => undefined}>
+                Retry
+              </Button>
+            }
+          >
+            The server did not answer in time.
+          </EmptyState>
         </Section>
       </div>
     </div>

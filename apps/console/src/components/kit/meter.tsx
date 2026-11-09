@@ -28,7 +28,7 @@ export function Meter({ value, label, valueText, className }: MeterProps) {
   const mark = TONE_MARK[meterTone(clamped)]
   return (
     <div className={cn('flex items-center gap-3 text-[length:var(--vx-text-sm)]', className)}>
-      {label ? <span className="shrink-0 text-muted-foreground">{label}</span> : null}
+      {label ? <span className="w-28 shrink-0 text-muted-foreground">{label}</span> : null}
       <div
         role="meter"
         tabIndex={0}
