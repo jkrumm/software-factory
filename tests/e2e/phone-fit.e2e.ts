@@ -62,7 +62,7 @@ const settle = async (page: Page) => {
 const LONG_TITLE = 'What Basalt takes from the Console, and what the Console takes back from Basalt in return'
 const LONG_ISSUE = 'Console: phone clipping still live on Improve and Needs you and every other screen of the phone'
 const REFUSAL =
-  'A ship was refused: ship refused: factory/414-1 holds work that is not on origin/master: merge it before the next ship'
+  'A ship was refused: ship refused: commit bded2057c0d4a2e6ac1b1b2b2b3d3c1d0e0a0f0f is not in origin/master, merge it'
 
 const liveShaped = async (page: Page) => {
   const rewrite = (url: string | RegExp, change: (body: Record<string, unknown>) => void) =>
