@@ -50,15 +50,27 @@ with a "Show all states" link (it never filters rows); on a phone it picks the t
 
 `/chain` draws the dependencies between Issues and plan rows across projects from `GET /v1/chain`: `@xyflow/react` for the
 canvas, `@dagrejs/dagre` for the layout (`src/lib/chain-layout.ts`, left to right, a blocker left of the node that waits for it),
-loaded as its own chunk so the other screens do not carry them. An arrow runs from the blocker into the node that runs after
-it. A blocked edge is solid and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
-labelled `done`; each edge also has an accessible text ("A blocks B"). A node shows the title, the project and the state as
-a word; a plan row is dashed and says "Not filed yet" and does not link, an Issue links to `/issues/<n>`. No id is on the
-page. Nodes with no edge at all are not drawn: the header counts them ("N items have no dependencies"). `?project=argo`
-keeps that project's nodes and every node an edge joins them to, so an edge across projects stays readable. With no edge
-the page says "No dependencies". The canvas pans and zooms inside its box (Controls zoom and fit; no minimap), so a phone
-never scrolls sideways. xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
-`tests/e2e/chain.e2e.ts` compares the page with the API on a seeded chain across two projects (`seed-chain.ts`).
+loaded as its own chunk so the other screens do not carry them. The page is `<Page full>`: a compact header, then the graph
+fills the rest of the height and the full width on a canvas step (at least 28 rem high, 24 rem on a phone), and the schedule
+sits under it; the graph fits again whenever the canvas resizes (centred, never above 110 %; on a phone it starts at 90 % at the top left, so the graph is panned, with the zoom controls at the top right). An arrow runs from the blocker into the node that runs after
+it. A blocked edge is solid warn and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
+labelled `done`, and the two arrive on separate handles of the node; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
+plan row. A node is the kit `IssueCard` at a fixed 320 x 128 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
+link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
+with "Not filed yet" in the chip row, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
+date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). No id is on the page. Nodes with no edge
+and no date are not drawn: the header counts them ("N items have no dependencies"). `?project=argo` keeps that project's nodes
+and every node an edge joins them to, so an edge across projects stays readable. With no edge the graph part says "No
+dependencies". xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
+
+**Schedule** (`components/chain/schedule.tsx`, the logic in `scheduleOf` in `src/lib/chain.ts`): every plan row with a
+`notBefore` under the project filter, with or without an edge, as a marker on a time axis from now to the last date inside 120
+days (at least 7 days), day ticks up to 14 days and Monday ticks after, in mono, a "Now" mark at the left. Each row has a chip
+(title, project, date, "in 6 days"); a chip that would cover a later date's dot sits above that chip, so every dot's stem reaches its own chip; tick labels thin out to every nth when they would touch; a row whose date has passed and is still not filed
+is pinned at Now as "due"; a row past the horizon is in the "Later" cell at the right end with its date. The picture is
+`aria-hidden`; a visually hidden table lists the same rows for a screen reader. On a phone the band scrolls inside itself.
+`tests/e2e/chain.e2e.ts` compares the page with the API on a seeded chain across two projects (`seed-chain.ts`, whose plan dates
+are computed from the seed time).
 
 ## Build
 

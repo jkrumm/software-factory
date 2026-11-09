@@ -4,8 +4,20 @@ import type { Lab } from '../scenarios/planning/lab.ts'
 /** the repo whose plan holds the two rows not yet filed; the Issues of the chain live in `orion` and `pearl` (seed-history) */
 export const CHAIN_REPOS = ['quartz']
 
-/** Row `first` waits for a date far away, so it is never filed; `second` is a row of `orion` that waits for it. */
-export const CHAIN_PLAN = `version: 1
+const DAY = 86_400_000
+
+/** A date `days` from now at 09:00 UTC, as the plan file writes it. */
+const at = (now: number, days: number): string => {
+  const date = new Date(now + days * DAY)
+  date.setUTCHours(9, 0, 0, 0)
+  return `${date.toISOString().slice(0, 19)}Z`
+}
+
+/**
+ * Row `first` waits for a date far away, so it is never filed; `second` is a row of `orion` that waits for it. The burn-in
+ * shape sits in the schedule: report 1 in two days, report 2 nine days out after report 1, report 3 in forty days.
+ */
+export const chainPlan = (now: number = Date.now()): string => `version: 1
 rows:
   - key: first
     title: Draft the export schema
@@ -16,6 +28,19 @@ rows:
     facts: { why: it needs the first, acceptance: it stays unfiled }
     repo: orion
     after: [first]
+  - key: burn-in-1
+    title: Burn-in report, week 1
+    facts: { why: the first report of the burn-in, acceptance: it stays unfiled }
+    not_before: ${at(now, 2)}
+  - key: burn-in-2
+    title: Burn-in report, week 2
+    facts: { why: the second report follows the first, acceptance: it stays unfiled }
+    not_before: ${at(now, 9)}
+    after: [burn-in-1]
+  - key: burn-in-3
+    title: Burn-in report, week 6
+    facts: { why: the last report of the burn-in, acceptance: it stays unfiled }
+    not_before: ${at(now, 40)}
 `
 
 export interface SeededChain {

@@ -37,8 +37,20 @@ const REASON_ICON: Record<LozengeState, Icon> = {
   cancelled: CheckCircleIcon,
 }
 
-export function ReasonLine({ state, reason, className }: { state: LozengeState; reason: string; className?: string }) {
-  const ReasonIcon = REASON_ICON[state]
+export function ReasonLine({
+  state,
+  reason,
+  icon,
+  title,
+  className,
+}: {
+  state: LozengeState
+  reason: string
+  icon?: Icon
+  title?: string
+  className?: string
+}) {
+  const ReasonIcon = icon ?? REASON_ICON[state]
   return (
     <p
       className={cn(
@@ -47,7 +59,7 @@ export function ReasonLine({ state, reason, className }: { state: LozengeState; 
       )}
     >
       <ReasonIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0" title={reason}>
+      <span className="min-w-0" title={title ?? reason}>
         {reason}
       </span>
     </p>

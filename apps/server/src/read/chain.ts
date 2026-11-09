@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { FLOW_KINDS } from '@software-factory/contract'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
@@ -10,7 +11,19 @@ const IssueRow = z.object({
   repo: z.string(),
   state: z.string(),
   title: z.string(),
+  wait_reason: z.string().nullable(),
+  kind: z.string().nullable(),
+  since: z.date().nullable(),
 })
+
+const kindOf = (kind: string | null | undefined): ChainNode['issueKind'] =>
+  FLOW_KINDS.find((known) => known === kind) ?? 'chore'
+
+/** The instant of a `not_before` value, in UTC where it names no offset. Same rule as `notBeforeMs` in the planning domain; read/ may import only types from a domain (scripts/boundaries.ts), so the rule is repeated here. */
+function notBeforeMs(value: string): number {
+  const hasOffset = /(Z|[+-]\d{2}:\d{2})$/.test(value)
+  return Date.parse(value.includes('T') && !hasOffset ? `${value}Z` : value)
+}
 
 const EdgeRow = z.object({ issue_id: z.string(), after_issue: z.string(), satisfied_at: z.date().nullable() })
 const WaitRow = z.object({ id: z.string(), after: z.array(z.string()) })
@@ -22,6 +35,7 @@ const Plan = z.object({
     z.object({
       key: z.string(),
       title: z.string().optional(),
+      kind: z.string().optional(),
       repo: z.string().optional(),
       after: z.array(z.string()).optional(),
       not_before: z.string().optional(),
@@ -52,9 +66,15 @@ export async function readChain(
   const titleOf = (repo: string, title: string): string => (hidden(repo) ? REDACTED_TITLE : plain(title, 120))
   const parse = <T extends z.ZodType>(schema: T, rows: unknown[]): z.output<T>[] => rows.map((raw) => schema.parse(raw))
   const openRows: unknown[] = await sql`
-    SELECT i.id, i.repo, i.state, f.payload->>'title' AS title
+    SELECT i.id, i.repo, i.state, i.wait_reason, f.payload->>'title' AS title,
+      COALESCE((SELECT k.payload->>'kind' FROM factory.issue_events k WHERE k.issue_id = i.id AND k.kind = 'settled' AND k.result = 'applied' ORDER BY k.version DESC LIMIT 1), f.payload->>'kind') AS kind, COALESCE(s.at, f.at) AS since
     FROM factory.issues i
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+    LEFT JOIN LATERAL (
+      SELECT x.at FROM factory.issue_events x
+      WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state
+      ORDER BY x.version DESC LIMIT 1
+    ) s ON true
     WHERE i.state <> 'closed' ORDER BY i.id`
   const storedRows: unknown[] = await sql`
     SELECT e.issue_id, e.after_issue, e.satisfied_at
@@ -122,9 +142,15 @@ export async function readChain(
     missing.length === 0
       ? []
       : await sql`
-          SELECT i.id, i.repo, i.state, COALESCE(f.payload->>'title', i.id) AS title
+          SELECT i.id, i.repo, i.state, i.wait_reason, COALESCE(f.payload->>'title', i.id) AS title,
+            COALESCE((SELECT k.payload->>'kind' FROM factory.issue_events k WHERE k.issue_id = i.id AND k.kind = 'settled' AND k.result = 'applied' ORDER BY k.version DESC LIMIT 1), f.payload->>'kind') AS kind, COALESCE(s.at, f.at) AS since
           FROM factory.issues i
           LEFT JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+          LEFT JOIN LATERAL (
+      SELECT x.at FROM factory.issue_events x
+      WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state
+      ORDER BY x.version DESC LIMIT 1
+    ) s ON true
           WHERE i.id IN ${sql(missing)}`
   const closed = parse(IssueRow, closedRows)
   for (const row of closed) issues.set(row.id, row)
@@ -147,17 +173,25 @@ export async function readChain(
       repo: repoOf(row.repo),
       title: titleOf(row.repo, row.title),
       state: row.state,
+      issueKind: kindOf(row.kind),
+      since: row.since?.toISOString() ?? null,
+      waitReason: row.wait_reason,
+      notBefore: null,
     }))
   const rowNodes = unfiled.map(({ project, row }): ChainNode => {
     const waiting =
       unique.some((edge) => edge.from === rowId(project, row.key) && !edge.closed) ||
-      (row.not_before !== undefined && Date.parse(row.not_before) > now.getTime())
+      (row.not_before !== undefined && notBeforeMs(row.not_before) > now.getTime())
     return {
       id: rowId(project, row.key),
       kind: 'row',
       repo: repoOf(row.repo ?? project),
       title: titleOf(row.repo ?? project, row.title ?? row.key),
       state: waiting ? 'waiting' : 'filable',
+      issueKind: kindOf(row.kind ?? 'feature'),
+      since: null,
+      waitReason: null,
+      notBefore: row.not_before === undefined ? null : new Date(notBeforeMs(row.not_before)).toISOString(),
     }
   })
 

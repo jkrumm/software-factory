@@ -91,8 +91,8 @@ async function seed() {
     ('app', '/src/app', 'file', '{}'::jsonb, ${json({
       version: 1,
       rows: [
-        { key: 'docs', title: 'Docs sweep', facts: {}, after: ['other'] },
-        { key: 'other', title: 'Other', facts: {} },
+        { key: 'docs', title: 'Docs sweep', facts: {}, kind: 'docs', after: ['other'] },
+        { key: 'other', title: 'Other', facts: {}, not_before: '2020-01-02T03:04:05' },
         { key: 'filed-one', title: 'Filed one', facts: {} },
         { key: 'ship', title: 'Ship it', facts: {}, after: ['filed-one'] },
       ],
@@ -338,6 +338,17 @@ describe('the fixture', () => {
       'row:app:ship>issue_1:true',
     ])
     expect(chain.blocking).toEqual({ issue_5: ['issue_2'] })
+    const byId = (id: string) => chain.nodes.find((n) => n.id === id)
+    expect(byId('row:app:other')).toMatchObject({
+      issueKind: 'feature',
+      since: null,
+      waitReason: null,
+      notBefore: '2020-01-02T03:04:05.000Z',
+    })
+    expect(byId('row:app:docs')).toMatchObject({ issueKind: 'docs', notBefore: null })
+    expect(byId('issue_2')).toMatchObject({ waitReason: 'decision', notBefore: null, since: expect.any(String) })
+    expect(byId('issue_5')).toMatchObject({ issueKind: 'bug', since: ago(3.9).toISOString(), waitReason: null })
+    expect(byId('issue_1')?.issueKind).toBe('feature')
   })
 
   test('kpis over 7 days: each definition’s count, with the usage schema absent', async () => {

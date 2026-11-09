@@ -156,6 +156,14 @@ export const ChainNode = z
     title: z.string(),
     /** an Issue's state, or a row's: `filable` or `waiting` */
     state: z.string(),
+    /** an Issue's settled kind, else its filed one (`chore` when unknown); a row's `kind` (default `feature`) */
+    issueKind: z.enum(FLOW_KINDS),
+    /** when the Issue entered the state it is in; null for a row */
+    since: z.string().nullable(),
+    /** the wait of a `waiting` Issue; null for a row */
+    waitReason: z.string().nullable(),
+    /** a row's `not_before` as a full ISO instant, past or future; null for an Issue and for a row without one */
+    notBefore: z.string().nullable(),
   })
   .meta({ id: 'ChainNode' })
 export type ChainNode = z.infer<typeof ChainNode>

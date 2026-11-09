@@ -113,8 +113,11 @@ it does not.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain
   around it.
-- **Chain**: the graph fills the viewport; nodes are IssueCards that open their Issue; blocked edges stand out; rows that
-  wait on a time sit on a time axis with their date.
+- **Chain**: the graph fills the viewport on a canvas step, nodes are 320 x 128 IssueCards (an Issue opens its page; a plan
+  row is the same card on a dashed outline, "Not filed yet", with its "Not before" date); a blocked edge is solid warn and
+  labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). Under it a schedule puts every
+  row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",
+  after a break mark on the axis).
 - **Improve**: one StatCard per KPI of `docs/product.md` with its target as a dashed line and the distance to it, the
   last 7-day window against the one before; fix classes as stacked bars by week.
 - **Artifact**: the document fills the page with its comments in a side panel; selecting a passage opens the comment

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
+import { Schedule } from '@/components/chain/schedule'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
@@ -35,26 +36,16 @@ function Chain() {
       </Page>
     )
 
-  if (data.edges.length === 0) {
-    return (
-      <Page wide>
-        <PageHeader title="Chain" />
-        <EmptyState title="No dependencies">
-          Issues and plan rows that wait for another show here, blocker to dependent.
-        </EmptyState>
-      </Page>
-    )
-  }
-
   const view = chainOf(data, filters)
   const projects = [...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort()
   const nodeCount = (repo: string) => data.nodes.filter((node) => node.repo === repo).length
   const waiting = view.edges.filter((edge) => !edge.closed).length
+  const scheduled = data.nodes.filter((node) => node.notBefore && (!filters.project || node.repo === filters.project))
   const note = `${waiting} blocked, ${view.edges.length - waiting} done${view.isolated > 0 ? `. ${isolatedNote(view.isolated)}` : ''}`
 
   return (
-    <Page wide>
-      <PageHeader title="Chain" note={note} />
+    <Page full>
+      <PageHeader title="Chain" note={note} compact />
       <SidebarSection title="Projects">
         <SidebarEntry
           label="All"
@@ -105,13 +96,16 @@ function Chain() {
       </div>
       {view.edges.length === 0 ? (
         <EmptyState title="No dependencies">
-          {filters.project} has no Issue or plan row that waits or is waited for.
+          {filters.project
+            ? `${filters.project} has no Issue or plan row that waits or is waited for.`
+            : 'Issues and plan rows that wait for another show here, blocker to dependent.'}
         </EmptyState>
       ) : (
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading</p>}>
           <ChainGraph view={view} resetKey={filters.project ?? ''} />
         </Suspense>
       )}
+      {scheduled.length > 0 ? <Schedule nodes={scheduled} /> : null}
     </Page>
   )
 }
