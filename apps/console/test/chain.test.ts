@@ -1,15 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { ChainEdge, ChainModel } from '@software-factory/contract'
-import {
-  chainOf,
-  edgeText,
-  isBlocked,
-  isolatedNote,
-  issueNumber,
-  layoutOf,
-  projectsOf,
-  stateWord,
-} from '../src/lib/chain.ts'
+import { chainOf, edgeText, isBlocked, isolatedNote, issueNumber, projectsOf, stateWord } from '../src/lib/chain.ts'
+import { layoutOf } from '../src/lib/chain-layout.ts'
 
 const node = (id: string, repo: string, title = id, kind: 'issue' | 'row' = 'issue', state = 'queued') => ({
   id,

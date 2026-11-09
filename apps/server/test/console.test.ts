@@ -37,7 +37,7 @@ beforeAll(async () => {
       if (path === '/v1/big') return Response.json(JSON.parse(BIG_JSON))
       if (path === '/v1/stream-big') {
         return new Response(`event: hello\ndata: ${'x'.repeat(2000)}\n\n`, {
-          headers: { 'content-type': 'text/event-stream' },
+          headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
         })
       }
       return new Response('api', { status: 200 })
@@ -250,6 +250,15 @@ describe('compression', () => {
     expect(response.headers.get('vary')).toBeNull()
     expect(response.headers.get('content-type')).toBe('text/event-stream')
     expect(await response.text()).toContain('event: hello')
+  })
+
+  test('an API answer is no-store, and the stream keeps its own cache-control', async () => {
+    expect((await call('/v1/needs')).headers.get('cache-control')).toBe('no-store')
+    expect((await call('/health')).headers.get('cache-control')).toBe('no-store')
+    expect((await call('/v1/big', { headers: { 'accept-encoding': 'gzip' } })).headers.get('cache-control')).toBe(
+      'no-store',
+    )
+    expect((await call('/v1/stream-big')).headers.get('cache-control')).toBe('no-cache')
   })
 })
 

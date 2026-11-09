@@ -9,23 +9,37 @@ export const realScheduler: Scheduler = {
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 }
 
-/** A trailing debounce: a burst of `call()`s runs `run` once, `ms` after the last one. */
-export function trailingDebounce(run: () => void, ms: number, scheduler: Scheduler = realScheduler) {
-  let handle: unknown
+/**
+ * A trailing debounce: a burst of `call()`s runs `run` once, `ms` after the last one. With `maxWaitMs`, a burst that never
+ * pauses for `ms` still runs once `maxWaitMs` after its first call, so a steady stream cannot starve `run`.
+ */
+export function trailingDebounce(
+  run: () => void,
+  ms: number,
+  scheduler: Scheduler = realScheduler,
+  maxWaitMs?: number,
+) {
+  let trailing: unknown
+  let ceiling: unknown
   let pending = false
+  const clear = () => {
+    scheduler.clear(trailing)
+    scheduler.clear(ceiling)
+    pending = false
+  }
+  const fire = () => {
+    clear()
+    run()
+  }
   return {
     call() {
-      if (pending) scheduler.clear(handle)
+      if (pending) scheduler.clear(trailing)
+      else if (maxWaitMs !== undefined) ceiling = scheduler.set(fire, maxWaitMs)
       pending = true
-      handle = scheduler.set(() => {
-        pending = false
-        run()
-      }, ms)
+      trailing = scheduler.set(fire, ms)
     },
     cancel() {
-      if (!pending) return
-      scheduler.clear(handle)
-      pending = false
+      if (pending) clear()
     },
   }
 }

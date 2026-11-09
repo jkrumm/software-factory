@@ -1,17 +1,17 @@
 import { RouterProvider } from '@tanstack/react-router'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { defaultShouldDehydrateQuery } from '@tanstack/react-query'
-import { registerSW } from 'virtual:pwa-register'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { startLive } from '@/lib/live'
 import { flowQuery, needsQuery, persister, queryClient, SNAPSHOT_MAX_AGE_MS } from '@/lib/queries'
 import { initTheme } from '@/lib/theme'
+import { startUpdates } from '@/lib/update'
 import { router } from './router'
 import './styles/index.css'
 
 initTheme()
-registerSW({ immediate: true })
+startUpdates()
 startLive(queryClient)
 
 const root = document.getElementById('root')
@@ -37,6 +37,8 @@ createRoot(root).render(
             defaultShouldDehydrateQuery(query) && !SNAPSHOT_EXCLUDED.has(String(query.queryKey[0])),
         },
       }}
+      // the snapshot is a first paint, not an answer: restoring refetches everything, and hydrate keeps the newer dataUpdatedAt, so an answer already fetched is never replaced by it
+      onSuccess={() => void queryClient.invalidateQueries(undefined, { cancelRefetch: false })}
     >
       <RouterProvider router={router} />
     </PersistQueryClientProvider>

@@ -10,10 +10,11 @@ function fromEnv(name: string): string {
 
 /**
  * `baseURL` and `consoleUrl` are the Console listener itself (no header is needed: the perimeter is the tailnet ACL);
- * `apiUrl` is the main port, where the tests read the truth and file new things.
+ * `apiUrl` is the main port of the server running now, where the tests read the truth and file new things.
  */
 export const test = base.extend<{ apiUrl: string; consoleUrl: string }>({
   baseURL: async ({}, use) => use(fromEnv('E2E_CONSOLE_URL')),
   consoleUrl: async ({}, use) => use(fromEnv('E2E_CONSOLE_URL')),
-  apiUrl: async ({}, use) => use(fromEnv('E2E_API_URL')),
+  // asked per test: shell-live restarts the server, which comes back on another port
+  apiUrl: async ({}, use) => use(await (await fetch(`${fromEnv('E2E_CONTROL_URL')}/api-url`)).text()),
 })

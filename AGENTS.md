@@ -61,7 +61,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener (`FACTORY_CONSOLE_PORT`, default 7795; 7794 is the agw gateway's), published on the tailnet by
   dotfiles-private's serve row on :8797 (not by `make deploy`) and started whenever the Console is built. It answers 405 to
   anything but `GET`/`HEAD` (bar the six verbs below), forwards only `/health` and `/v1/*` to the API (the owner token stays
-  in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped), and serves
+  in the closure; the client's `authorization`, `cookie` and `tailscale-*` headers are dropped; an answer with no `cache-control` of its own gets `no-store`), and serves
   `apps/console/dist` otherwise. The one writes it forwards are the owner's six answer verbs and nothing else (405):
   `decisions/:id/answer`, `artifacts/:id/verdict`, `artifacts/:id/annotations`, `errands/:id/done` and
   `POST /signals/:id/promote` and `POST /signals/:id/dismiss`, each needing `content-type: application/json` (415), no cross-site `sec-fetch-site` and no

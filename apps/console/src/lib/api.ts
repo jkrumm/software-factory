@@ -34,15 +34,42 @@ export class ApiError extends Error {
   }
 }
 
+/** An answer that does not match the schema this bundle was built with: usually the server was deployed after this page loaded. */
+export class ShapeError extends Error {
+  constructor(
+    readonly path: string,
+    detail: string,
+  ) {
+    super(`${path} does not match the contract: ${detail}`)
+    this.name = 'ShapeError'
+  }
+}
+
 interface Schema<T> {
   parse(data: unknown): T
 }
 
+function parseShape<T>(path: string, schema: Schema<T>, data: unknown): T {
+  try {
+    return schema.parse(data)
+  } catch (error) {
+    throw new ShapeError(path, error instanceof Error ? error.message : String(error))
+  }
+}
+
+/** What a page says in place of its data when the query has none and is not loading. */
+export function failureNote(error: Error | null): string {
+  if (error instanceof ShapeError) return 'This Console is older than the server - updating'
+  if (error instanceof ApiError) return `The server answered ${error.status}`
+  if (error) return 'The server cannot be reached'
+  return 'No data yet'
+}
+
 /** Same-origin GET of a `/v1` path, parsed with the contract's schema: the server's listener adds the credential. */
 async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal, headers: { accept: 'application/json' } })
+  const response = await fetch(path, { signal, cache: 'no-store', headers: { accept: 'application/json' } })
   if (!response.ok) throw new ApiError(response.status, path)
-  return schema.parse(await response.json())
+  return parseShape(path, schema, await response.json())
 }
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
