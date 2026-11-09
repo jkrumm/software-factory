@@ -95,13 +95,13 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
     ])
     if (listing.exitCode !== 0) return err(portError('gone', `git for-each-ref failed in ${repo}`))
     const own = new RegExp(`^(refs/heads/|refs/remotes/origin/)(factory/${escaped(String(issue))}-\\d+)$`)
-    const refs = new Map<string, { local: boolean; remote: boolean }>()
+    const refs = new Map<string, { head: boolean; origin: boolean }>()
     for (const line of listing.stdout.split('\n')) {
       const match = own.exec(line.trim())
       const [, where, name] = match ?? []
       if (!where || !name) continue
-      const seen = refs.get(name) ?? { local: false, remote: false }
-      refs.set(name, where === 'refs/heads/' ? { ...seen, local: true } : { ...seen, remote: true })
+      const seen = refs.get(name) ?? { head: false, origin: false }
+      refs.set(name, where === 'refs/heads/' ? { ...seen, head: true } : { ...seen, origin: true })
     }
 
     const base = await originDefaultOf(git, repo)
@@ -127,8 +127,8 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
         continue
       }
       const tips = [
-        copies.local ? `refs/heads/${name}` : null,
-        copies.remote ? `refs/remotes/origin/${name}` : null,
+        copies.head ? `refs/heads/${name}` : null,
+        copies.origin ? `refs/remotes/origin/${name}` : null,
       ].filter((ref): ref is string => ref !== null)
       const settled =
         closed === 'dropped' ||
@@ -140,11 +140,11 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
         keep(NOT_MERGED)
         continue
       }
-      if (copies.local && (await git(repo, 'branch', '-D', name)) === undefined) {
+      if (copies.head && (await git(repo, 'branch', '-D', name)) === undefined) {
         keep('git branch -D failed')
         continue
       }
-      if (copies.remote) {
+      if (copies.origin) {
         const pushed = await raw(repo, ['push', 'origin', '--delete', name], PUSH_TIMEOUT_MS)
         if (pushed.exitCode !== 0) {
           keep('git push origin --delete failed')
