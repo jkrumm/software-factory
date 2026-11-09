@@ -1,3 +1,5 @@
+import { ReadChange } from '@software-factory/contract'
+
 /** How often a query refetches while the stream is not open. */
 export const POLL_MS = 15_000
 /** While the stream is open a missed change still shows within this long: its keepalive is an SSE comment, invisible to `EventSource`. */
@@ -113,3 +115,17 @@ export const affectedByAny =
 /** The stream went quiet while the tab was hidden for longer than a sleep gap: the socket is likely dead. */
 export const silentWhileHidden = (hiddenAt: number | null, lastFrameAt: number, now: number): boolean =>
   hiddenAt !== null && lastFrameAt < hiddenAt && now - hiddenAt > SLEEP_GAP_MS
+
+/** The `data:` of a change frame carries no cursor: the frame's `id:` line is the cursor. */
+const ChangeData = ReadChange.omit({ cursor: true })
+
+/** The change a frame carries; null (alters everything) when its data does not parse. */
+export function parseChange(data: unknown): Change | null {
+  if (typeof data !== 'string') return null
+  try {
+    const parsed = ChangeData.safeParse(JSON.parse(data))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
+  }
+}

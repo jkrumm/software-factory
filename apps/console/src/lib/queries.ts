@@ -133,18 +133,20 @@ export function useMachine() {
 
 /** The detail of one item that waits: the same invalidation as the lists, so an answer elsewhere shows at once. */
 export function useDecision(id: string) {
+  const live = useLive()
   return useQuery({
     queryKey: ['decision', id],
     queryFn: ({ signal }) => fetchDecision(id, signal),
-    refetchInterval: pollEvery(false),
+    refetchInterval: pollEvery(live),
   })
 }
 
 export function useErrands() {
+  const live = useLive()
   return useQuery({
     queryKey: ['errands'],
     queryFn: ({ signal }) => fetchErrands(signal),
-    refetchInterval: pollEvery(false),
+    refetchInterval: pollEvery(live),
   })
 }
 

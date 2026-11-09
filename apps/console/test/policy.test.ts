@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test'
+import type { ReadChange } from '@software-factory/contract'
+import { encodeFrame } from '../../server/src/read/stream.ts'
 import {
   affected,
   affectedByAny,
   isAggregate,
+  parseChange,
   issueNumber,
   LIVE_SAFETY_MS,
   POLL_MS,
@@ -148,4 +151,40 @@ test('a hidden tab is silent when no frame came since it hid and it stayed hidde
   expect(silentWhileHidden(1_000, 2_000, 100_000)).toBe(false)
   expect(silentWhileHidden(1_000, 500, 40_000)).toBe(false)
   expect(silentWhileHidden(1_000, 500, 100_000)).toBe(true)
+})
+
+describe('parseChange', () => {
+  const change: ReadChange = {
+    cursor: '12.34',
+    kind: 'decision',
+    issue: 12,
+    ref: 'issue_12',
+    subject: 'answered',
+    detail: { decision: 'dec_a' },
+    at: '2026-11-09T08:00:00.000Z',
+  }
+  const dataOf = (frame: string): string =>
+    frame
+      .split('\n')
+      .find((line) => line.startsWith('data: '))
+      ?.slice(6) ?? ''
+
+  test("reads the data line of the server's own change frame, which has no cursor", () => {
+    const data = dataOf(encodeFrame({ type: 'change', change }))
+    expect(data).not.toContain('cursor')
+    expect(parseChange(data)).toMatchObject({
+      kind: 'decision',
+      issue: 12,
+      ref: 'issue_12',
+      subject: 'answered',
+      detail: { decision: 'dec_a' },
+      at: change.at,
+    })
+  })
+
+  test('a frame that does not parse is null', () => {
+    expect(parseChange('{}')).toBeNull()
+    expect(parseChange('not json')).toBeNull()
+    expect(parseChange(undefined)).toBeNull()
+  })
 })

@@ -1,8 +1,16 @@
-import { CHANGE_KINDS, ReadChange } from '@software-factory/contract'
+import { CHANGE_KINDS } from '@software-factory/contract'
 import type { QueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { nextBackoff, trailingDebounce } from './debounce.ts'
-import { affectedByAny, isAggregate, silentWhileHidden, sleptBetween, WATCHDOG_TICK_MS, type Change } from './policy.ts'
+import {
+  affectedByAny,
+  isAggregate,
+  parseChange,
+  silentWhileHidden,
+  sleptBetween,
+  WATCHDOG_TICK_MS,
+  type Change,
+} from './policy.ts'
 import { checkForUpdate } from './update.ts'
 
 const INVALIDATE_DEBOUNCE_MS = 250
@@ -29,17 +37,6 @@ const subscribe = (listener: () => void) => {
 
 /** True while the event stream is open; the queries poll while it is not. */
 export const useLive = (): boolean => useSyncExternalStore(subscribe, () => live)
-
-/** The change a frame carries; null (alters everything) when it does not parse. */
-function changeOf(data: unknown): Change | null {
-  if (typeof data !== 'string') return null
-  try {
-    const parsed = ReadChange.safeParse(JSON.parse(data))
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * Keeps one `EventSource` on the change stream: the changes that arrive inside the debounce window invalidate, once, the
@@ -115,7 +112,7 @@ export function startLive(queryClient: QueryClient): () => void {
       es.addEventListener(kind, (event) => {
         lastFrameAt = Date.now()
         cursor = event.lastEventId || cursor
-        note(changeOf(event.data))
+        note(parseChange(event.data))
       })
     }
     es.onerror = () => {
