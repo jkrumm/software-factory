@@ -55,11 +55,16 @@ test('green passes; a red is retried three times and the fourth red regresses, n
   expect(stepOf(reds(MAX_RETRIES), [green])).toEqual({ kind: 'pass' })
 })
 
-test('a regression detail is cut, not dropped', () => {
-  const long: Check = { name: 'probe', ok: false, detail: 'x'.repeat(2_000) }
-  const detail = regressionDetail([long])
-  expect(detail.length).toBeLessThan(700)
-  expect(detail.endsWith('…')).toBe(true)
+test('a regression detail names every failed check and is cut at line boundaries, marked, never inside a line', () => {
+  const output = Array.from({ length: 200 }, (_, n) => `line ${n} of the output`).join('\n')
+  const long: Check = { name: 'make verify', ok: false, detail: `exit 1: ${output}` }
+  const other: Check = { name: 'probe', ok: false, detail: 'HTTP 503, expected 200' }
+  const detail = regressionDetail([green, long, other])
+  expect(detail.length).toBeLessThanOrEqual(1_900)
+  expect(detail).toContain('make verify failed: ')
+  expect(detail).toContain('probe failed: HTTP 503, expected 200')
+  expect(detail).toMatch(/\[… \d+ lines cut\]/)
+  expect(detail).toContain('line 199 of the output')
 })
 
 test('docs, text, licences and tests are inert; everything else deploys', () => {

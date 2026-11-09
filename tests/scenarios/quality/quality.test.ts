@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { tick } from '../flow.ts'
 import type { LeadsWorld } from '../leads/support.ts'
 import {
   commit,
@@ -363,6 +364,49 @@ describe('the watch reads the project file', () => {
       const watch = (await show(bare.lw.world, bare.lw.server, id)).watches[0]
       expect(watch).toMatchObject({ answer: 'passed', windowMs: 1_500 })
       expect(watch?.checks[0]?.checks.map((c) => c.name)).toEqual(['deployed version', 'make verify'])
+    },
+    LONG,
+  )
+})
+
+/** What a watchdog prints: many passing checks, the first one long, and one red among them. */
+const WATCHDOG = JSON.stringify(
+  [
+    { name: 'otel_export_down:worker-ingest', ok: true, detail: `fingerprint ${'ab12'.repeat(120)}` },
+    ...Array.from({ length: 12 }, (_, n) => ({
+      name: `probe_${n}`,
+      ok: true,
+      detail: `p50 ${n} ms, nothing to report`,
+    })),
+    { name: 'round_integrity:blend', ok: false, detail: 'round 41 has no blend row' },
+  ],
+  null,
+  2,
+)
+
+describe('a regression names the failing check', () => {
+  const it = lab(200, { makefile: 'verify:\n\t@cat checks.json; exit 1\nversion:\n\t@git rev-parse HEAD\n' })
+
+  test(
+    'a watchdog’s JSON list reaches the lead as the failing check’s name and detail, not as a cut tail',
+    async () => {
+      await scriptReview(it.lw.world, 'covered')
+      const id = await workingIssue(it.lw, 'watchdog')
+      await commit(it.lw, 'checks.json', `${WATCHDOG}\n`, 'chore: watchdog output')
+      const sha = await commit(it.lw, 'src/w.ts', 'export const w = 1\n', 'feat: w')
+      const lead = () =>
+        it.lw.terminals().find((t) => t.labels['factory.key'] === `lead-${id.slice('issue_'.length)}-1`)
+      const before = lead()?.sent.length ?? 0
+      expect((await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })).code).toBe(0)
+
+      await until('the regression', async () => (await stateOf(it.lw.world, id)) === 'working')
+      await tick(it.lw)
+      const heard = await until('the note', async () => {
+        const text = (lead()?.sent ?? []).slice(before).join('\n')
+        return text.includes('regressed') ? text : undefined
+      })
+      expect(heard).toContain('round_integrity:blend: round 41 has no blend row')
+      expect(heard).not.toContain('otel_export_down')
     },
     LONG,
   )

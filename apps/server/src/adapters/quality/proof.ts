@@ -1,4 +1,5 @@
 import type { Proof, ProofInput } from '../../domains/quality/ports.ts'
+import { condense } from '../../domains/quality/output.ts'
 import { type Check, NO_VERSION_TARGET } from '../../domains/quality/watch.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { type CheckoutSync, deployedHolds, syncCheckout } from './git.ts'
@@ -7,7 +8,7 @@ import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProce
 const MAKE_TIMEOUT_MS = 10 * 60_000
 const VERSION_TIMEOUT_MS = 30_000
 const PROBE_TIMEOUT_MS = 15_000
-/** What of a check's output is kept: the end, where a failure says what failed. */
+/** What of a check's output is kept: the failing part (`condense`), and for `make version` the end of a short output. */
 const MAX_DETAIL_CHARS = 1_500
 
 const tail = (text: string): string => (text.length > MAX_DETAIL_CHARS ? `…${text.slice(-MAX_DETAIL_CHARS)}` : text)
@@ -126,7 +127,11 @@ export class MakeAndProbes implements Proof {
       })
       if (done.exitCode === EXIT_TIMEOUT)
         return { name, ok: false, detail: `did not finish in ${MAKE_TIMEOUT_MS / 1000} s` }
-      return { name, ok: done.exitCode === 0, detail: `exit ${done.exitCode}: ${tail(done.stdout.trim())}` }
+      return {
+        name,
+        ok: done.exitCode === 0,
+        detail: `exit ${done.exitCode}: ${condense(done.stdout.trim(), MAX_DETAIL_CHARS)}`,
+      }
     } catch (error) {
       if (error instanceof CannotExecute) return { name, ok: false, detail: error.message }
       throw error
