@@ -12,6 +12,7 @@ import {
   httpLink,
   issueNumber,
   kindCounts,
+  metaParts,
   metaWords,
   optionIndex,
   originOf,
@@ -68,6 +69,12 @@ test('defaultWhen and metaWords phrase the timing per kind', () => {
   expect(metaWords({ kind: 'decision', ageMs: 2 * 60 * MIN })).toBe('Waiting 2 hours')
   expect(metaWords({ kind: 'errand', ageMs: 2 * 60 * MIN })).toBe('Raised 2 hours ago')
   expect(metaWords({ kind: 'held_signal', ageMs: 5 * MIN })).toBe('Received 5 minutes ago')
+})
+
+test('metaParts splits the lead word from the age that metaWords joins', () => {
+  expect(metaParts({ kind: 'decision', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Waiting', age: '2 hours' })
+  expect(metaParts({ kind: 'errand', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Raised', age: '2 hours ago' })
+  expect(metaParts({ kind: 'held_signal', ageMs: 5 * MIN })).toEqual({ lead: 'Received', age: '5 minutes ago' })
 })
 
 test('a recommendation names an option by its label, ignoring case and spaces, or it is a sentence of its own', () => {

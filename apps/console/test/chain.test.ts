@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { ChainEdge, ChainModel } from '@software-factory/contract'
 import {
+  chainCounts,
   chainOf,
   dateWords,
   edgeText,
@@ -65,8 +66,8 @@ test('nodes without an edge are counted, not drawn', () => {
   const view = chainOf(model)
   expect(view.nodes.map((n) => n.id).sort()).toEqual(['issue_1', 'issue_2', 'issue_3', 'issue_9'])
   expect(view.isolated).toBe(2)
-  expect(isolatedNote(1)).toBe('1 item has no dependencies')
-  expect(isolatedNote(2)).toBe('2 items have no dependencies')
+  expect(isolatedNote(1)).toBe('1 more item has no dependencies, so it is not drawn')
+  expect(isolatedNote(2)).toBe('2 more items have no dependencies, so they are not drawn')
 })
 
 test('a project keeps its nodes and the nodes an edge joins them to', () => {
@@ -218,4 +219,25 @@ test('a waiting Issue is worded by its wait reason; a dependency wait names the 
   ]) {
     expect(reasonOf(waiting(reason), 'Waits for A')).toEqual({ text: reason, icon: 'state' })
   }
+})
+
+test('the sidebar count, the drawn nodes and the isolated note come from one function', () => {
+  const withSolo: ChainModel = { ...model, nodes: [...model.nodes, node('issue_6', 'argo', 'Alone')] }
+  const counts = chainCounts(withSolo)
+  for (const repo of projectsOf(withSolo)) {
+    const drawn = chainOf(withSolo, { project: repo }).nodes.filter((n) => n.repo === repo).length
+    expect(counts.projects[repo]?.drawn).toBe(drawn)
+    const total = withSolo.nodes.filter((n) => n.repo === repo && !n.notBefore).length
+    expect((counts.projects[repo]?.drawn ?? 0) + (counts.projects[repo]?.isolated ?? 0)).toBe(total)
+  }
+  expect(counts.projects.argo).toEqual({ drawn: 2, isolated: 1 })
+  expect(counts.isolated).toBe(chainOf(withSolo).isolated)
+})
+
+test('a scheduled node is neither drawn nor counted as isolated', () => {
+  const scheduled: ChainModel = {
+    ...model,
+    nodes: [...model.nodes, { ...node('issue_7', 'argo', 'Later'), notBefore: '2026-12-01T00:00:00.000Z' }],
+  }
+  expect(chainCounts(scheduled).projects.argo).toEqual({ drawn: 2, isolated: 0 })
 })

@@ -40,10 +40,19 @@ export function agoWords(ms: number): string {
 }
 
 /** How long an item has been there, in the verb of its kind: "Waiting 2 hours", "Raised 2 hours ago", "Received just now". */
+export function metaParts(item: Pick<NeedItem, 'kind' | 'ageMs'>): {
+  lead: 'Waiting' | 'Raised' | 'Received'
+  age: string
+} {
+  if (item.kind === 'errand') return { lead: 'Raised', age: agoWords(item.ageMs) }
+  if (item.kind === 'held_signal') return { lead: 'Received', age: agoWords(item.ageMs) }
+  return { lead: 'Waiting', age: spanWords(item.ageMs) }
+}
+
+/** `metaParts` as one phrase. */
 export function metaWords(item: Pick<NeedItem, 'kind' | 'ageMs'>): string {
-  if (item.kind === 'errand') return `Raised ${agoWords(item.ageMs)}`
-  if (item.kind === 'held_signal') return `Received ${agoWords(item.ageMs)}`
-  return waitingWords(item.ageMs)
+  const { lead, age } = metaParts(item)
+  return `${lead} ${age}`
 }
 
 /** Where an item comes from, as a word: the repo, or "App feedback" for outside text that names none. */

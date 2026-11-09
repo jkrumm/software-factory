@@ -48,7 +48,7 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 |-|-|
 | Primary viewport | 1800×1200, dark and light. 1280×800 must not break. Phone 390×844 |
 | Width | Working screens (Flow, Chain, the Issue page, an artifact) fill the content area. Only running prose caps at about 75ch, with side panels using the rest |
-| Density | 13 px in rows and cards, 15 px titles, 4 px spacing scale; tabular figures for every number |
+| Density | 13 px in rows and cards, 15 px titles, 4 px spacing scale; tabular figures for every number (set once on `body`); an uncounted value reads as a dash with its reason, never 0 or None |
 | Depth | Surface steps (canvas, paper, panel) and one faint shadow scale, never borders for depth; hairlines only between rows |
 | Type | Nunito Sans, JetBrains Mono for ids and times; headings semibold with tight tracking |
 | Motion | Short, on state change only, honours reduced motion; numbers may roll when they change |

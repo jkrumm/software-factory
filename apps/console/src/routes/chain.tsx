@@ -3,7 +3,7 @@ import { lazy, Suspense } from 'react'
 import { Schedule } from '@/components/chain/schedule'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
-import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
+import { type ChainFilters, chainCounts, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { failureNote } from '@/lib/api'
 import { useChain } from '@/lib/queries'
 
@@ -38,10 +38,11 @@ function Chain() {
 
   const view = chainOf(data, filters)
   const projects = [...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort()
-  const nodeCount = (repo: string) => data.nodes.filter((node) => node.repo === repo).length
+  const counts = chainCounts(data)
   const waiting = view.edges.filter((edge) => !edge.closed).length
   const scheduled = data.nodes.filter((node) => node.notBefore && (!filters.project || node.repo === filters.project))
-  const note = `${waiting} blocked, ${view.edges.length - waiting} done${view.isolated > 0 ? `. ${isolatedNote(view.isolated)}` : ''}`
+  const isolated = filters.project ? (counts.projects[filters.project]?.isolated ?? 0) : counts.isolated
+  const note = `${waiting} blocked, ${view.edges.length - waiting} done${isolated > 0 ? `. ${isolatedNote(isolated)}` : ''}`
 
   return (
     <Page full>
@@ -56,7 +57,7 @@ function Chain() {
           <SidebarEntry
             key={repo}
             label={repo}
-            count={nodeCount(repo)}
+            count={counts.projects[repo]?.drawn ?? 0}
             pressed={filters.project === repo}
             render={(props) => (
               <Link to="/chain" search={filters.project === repo ? {} : { project: repo }} {...props} />

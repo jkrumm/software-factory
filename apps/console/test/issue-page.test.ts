@@ -18,6 +18,9 @@ import {
   TAB_LABEL,
   tabCounts,
   tabOf,
+  tokensCounted,
+  toolCallsCounted,
+  triageAt,
 } from '../src/lib/issue-page.ts'
 
 type Line = ReadIssueDetail['timeline'][number]
@@ -282,4 +285,27 @@ test('only a green verify run passed', () => {
   expect(checkPassed('red')).toBe(false)
   expect(checkPassed('blocked')).toBe(false)
   expect(checkPassed('whatever')).toBe(false)
+})
+
+const ZERO_TOKENS = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+
+test('tokens are uncounted while partial, or all zero after turns ran; a fresh Issue has an honest zero', () => {
+  expect(tokensCounted({ partial: true, turns: 3, tokens: { ...ZERO_TOKENS, output: 5 } })).toBe(false)
+  expect(tokensCounted({ partial: false, turns: 27, tokens: ZERO_TOKENS })).toBe(false)
+  expect(tokensCounted({ partial: false, turns: 0, tokens: ZERO_TOKENS })).toBe(true)
+  expect(tokensCounted({ partial: false, turns: 27, tokens: { ...ZERO_TOKENS, cacheWrite: 1 } })).toBe(true)
+})
+
+test('tool calls and subagents are uncounted exactly while partial', () => {
+  expect(toolCallsCounted({ partial: true })).toBe(false)
+  expect(toolCallsCounted({ partial: false })).toBe(true)
+})
+
+test('the first triage line is the filing at the Issue creation, an amendment keeps its own time', () => {
+  const issue = {
+    createdAt: '2026-11-08T10:00:00.000Z',
+    triage: [{ at: '2026-11-08T11:00:00.000Z' }, { at: '2026-11-08T12:00:00.000Z' }],
+  } as Pick<ReadIssueDetail, 'createdAt' | 'triage'>
+  expect(triageAt(issue, 0)).toBe('2026-11-08T10:00:00.000Z')
+  expect(triageAt(issue, 1)).toBe('2026-11-08T12:00:00.000Z')
 })

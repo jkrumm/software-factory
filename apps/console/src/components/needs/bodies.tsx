@@ -83,7 +83,7 @@ const projectLink = (item: NeedItem): ReactNode =>
 
 /** A time as "2 hours ago" with the absolute time on hover. */
 const When = ({ item }: Pick<BodyProps, 'item'>) => (
-  <time dateTime={item.since} title={new Date(item.since).toLocaleString()}>
+  <time className="font-mono tabular-nums" dateTime={item.since} title={new Date(item.since).toLocaleString()}>
     {agoWords(item.ageMs)}
   </time>
 )

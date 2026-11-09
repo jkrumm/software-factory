@@ -19,11 +19,11 @@ export interface StepRailProps {
   className?: string
 }
 
-/** "850 ms", "4.2 s", "3 min" */
+/** "850 ms", "4.2 s", "3 min": minutes are floored, so a working time reads the same everywhere. */
 export function durationWords(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`
-  return `${Math.round(ms / 60_000)} min`
+  return `${Math.floor(ms / 60_000)} min`
 }
 
 /** One row per step: icon, words, a duration bar scaled to the longest, time on the right. A failure is in the destructive text colour with its line. */

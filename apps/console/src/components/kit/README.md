@@ -16,6 +16,9 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   that lists the series (`ChartRow.lines`) and the hidden table. Its series colours are `--vx-series-1` to `-9` from
   `src/styles/series.css` (the dataviz skill's palette, validated in dark and light; slot 9 is the quiet "Other"): a series
   keeps its `slot` whatever else is shown. `no-raw-colour.test.ts` lets that one file hold literals.
+- **StatCard `value: null`** is a figure nobody counted: an en dash in the figure, `valueNote` as its title, its screen-reader
+  text and the sub line when there is no `sub`, and no delta pill. A footer pair takes `value: null` and `note` the same
+  way. A zero is only ever a counted zero.
 - **StatCard `delta`** may carry `tone` and `direction` when the sign does not say which way is good (a KPI's tone comes from
   its target). **`MenuPopover`** is the ⋯ button that opens a popover of words (Improve's "What is counted").
 - **A card that is a link** puts the link on its title, stretched over the card, so a button inside (the three dots)

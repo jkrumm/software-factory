@@ -86,7 +86,7 @@ plan row. A node is the kit `IssueCard` at a fixed 320 x 128 (`NODE_WIDTH`, `NOD
 link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
 with "Not filed yet" in the chip row, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
 date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). No id is on the page. Nodes with no edge
-and no date are not drawn: the header counts them ("N items have no dependencies"). `?project=argo` keeps that project's nodes
+and no date are not drawn: the header counts them ("N more items have no dependencies, so they are not drawn"), and the sidebar's per-project count is the nodes the graph draws for that project (`chainCounts` in `src/lib/chain.ts`, one source for both). `?project=argo` keeps that project's nodes
 and every node an edge joins them to, so an edge across projects stays readable. With no edge the graph part says "No
 dependencies". xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
 
