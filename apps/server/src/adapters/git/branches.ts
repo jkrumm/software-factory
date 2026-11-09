@@ -119,7 +119,7 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
       ).some(Boolean)
 
     const result: BranchCleaning = { deleted: [], kept: [] }
-    for (const [name, where] of [...refs].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [name, copies] of [...refs].sort(([a], [b]) => a.localeCompare(b))) {
       const keep = (why: string) => result.kept.push({ branch: name, why })
       const tree = trees.get(name)
       if (tree) {
@@ -127,8 +127,8 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
         continue
       }
       const tips = [
-        where.local ? `refs/heads/${name}` : null,
-        where.remote ? `refs/remotes/origin/${name}` : null,
+        copies.local ? `refs/heads/${name}` : null,
+        copies.remote ? `refs/remotes/origin/${name}` : null,
       ].filter((ref): ref is string => ref !== null)
       const settled =
         closed === 'dropped' ||
@@ -140,11 +140,11 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
         keep(NOT_MERGED)
         continue
       }
-      if (where.local && (await git(repo, 'branch', '-D', name)) === undefined) {
+      if (copies.local && (await git(repo, 'branch', '-D', name)) === undefined) {
         keep('git branch -D failed')
         continue
       }
-      if (where.remote) {
+      if (copies.remote) {
         const pushed = await raw(repo, ['push', 'origin', '--delete', name], PUSH_TIMEOUT_MS)
         if (pushed.exitCode !== 0) {
           keep('git push origin --delete failed')
