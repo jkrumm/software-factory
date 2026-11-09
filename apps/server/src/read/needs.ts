@@ -50,6 +50,7 @@ const DecisionRow = z.object({
   issue_id: z.string(),
   repo: z.string(),
   question: z.string(),
+  artifact_id: z.string().nullable(),
   recommendation: z.string(),
   asked_at: z.date(),
   no_answer: z.object({ default: z.string().nullable().optional(), waitMinutes: z.number().nullable().optional() }),
@@ -94,7 +95,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
 
   const decisions: unknown[] = await sql`
-    SELECT d.id, d.issue_id, d.repo, d.question, d.recommendation, d.asked_at, d.no_answer,
+    SELECT d.id, d.issue_id, d.repo, d.question, d.artifact_id, d.recommendation, d.asked_at, d.no_answer,
       (SELECT j.detail FROM factory.decision_steps j WHERE j.decision_id = d.id AND j.step = 'judge') AS judge
     FROM factory.decisions d
     WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL
@@ -109,7 +110,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
       WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
     ) e ON true
     LEFT JOIN factory.artifacts a ON a.id = e.wait->'holds'->>'id'
-    WHERE i.state = 'waiting' AND i.wait_reason = 'review'
+    WHERE i.state = 'waiting' AND i.wait_reason = 'review' AND e.wait->>'verdictGiven' IS NULL
     ORDER BY e.at DESC, i.id DESC`
   const errands: unknown[] = await sql`
     SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note
@@ -142,6 +143,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         defaultAt: typeof wait === 'number' ? new Date(row.asked_at.getTime() + wait * 60_000).toISOString() : null,
         judge: row.judge === null ? null : plain(row.judge, 200),
         link: { type: 'decision', id: row.id },
+        artifact: row.artifact_id,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -159,6 +161,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         defaultAt: null,
         judge: null,
         link: { type: 'artifact', id: row.artifact_id },
+        artifact: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -175,6 +178,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         defaultAt: null,
         judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'errand', id: row.id },
+        artifact: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -191,6 +195,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         defaultAt: null,
         judge: row.screen_note === null ? null : plain(row.screen_note, 300),
         link: { type: 'signal', id: row.id },
+        artifact: null,
         work: isWorkRepo(row.repo, open),
       }
     }),

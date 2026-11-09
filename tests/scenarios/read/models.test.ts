@@ -67,6 +67,7 @@ test('needs: the owner reads everything that waits, the read token gets the work
     title: 'Which logging library should argo use?',
     stale: false,
     link: { type: 'decision', id: 'decision_scn' },
+    artifact: null,
     redacted: false,
   })
   expect(item(owner, 'decision_scn').defaultAt).not.toBeNull()

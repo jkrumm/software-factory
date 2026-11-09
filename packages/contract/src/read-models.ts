@@ -34,6 +34,8 @@ export const NeedItem = z
     /** the Judge's reason for passing a Decision on, plain and cut; null for everything else and for a work-repo item the caller may not read */
     judge: z.string().nullable(),
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal']), id: z.string() }),
+    /** the artifact under review a Decision was raised about; null for everything else */
+    artifact: z.string().nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
     redacted: z.boolean(),
   })

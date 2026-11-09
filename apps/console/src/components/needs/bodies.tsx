@@ -52,6 +52,7 @@ function DecisionBody({ item, onSent }: BodyProps) {
   const answerWith = (answer: string) => settle.send(answer)
   return (
     <div className="grid gap-4">
+      {item.artifact ? <p className="text-sm text-muted-foreground">Raised about its artifact under review.</p> : null}
       <p className="font-heading text-base font-semibold">{data.question}</p>
       <div className="grid gap-1 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
         <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Recommendation</span>

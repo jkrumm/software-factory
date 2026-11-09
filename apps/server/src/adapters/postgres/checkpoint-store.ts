@@ -45,6 +45,7 @@ const DecisionRow = z.object({
   no_answer: NoAnswer,
   asked_at: z.date(),
   asked_by: z.enum(['lead', 'steward']),
+  artifact_id: z.string().nullable(),
   answer: z.string().nullable(),
   settled_by: z.enum(SETTLERS).nullable(),
   source: z.string().nullable(),
@@ -162,6 +163,7 @@ const decisionOf = (raw: unknown, steps: Step[]): DecisionRecord => {
     },
     askedAt: row.asked_at,
     askedBy: row.asked_by,
+    artifactId: row.artifact_id as ArtifactId | null,
     answer: row.answer,
     settledBy: row.settled_by,
     source: row.source,
@@ -277,9 +279,9 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async insertDecision(d) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.decisions
-          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, asked_by)
+          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, asked_by, artifact_id)
         VALUES (${d.id}, ${d.key}, ${d.issueId}, ${d.repo}, ${d.attempt}, ${d.form.question}, ${d.form.recommendation},
-                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt}, ${d.askedBy})
+                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt}, ${d.askedBy}, ${d.artifactId})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1

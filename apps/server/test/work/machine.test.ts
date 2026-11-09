@@ -127,6 +127,88 @@ describe('the paths', () => {
     )
   })
 
+  describe('a Decision raised during a review wait', () => {
+    const artifact = { id: 'artifact_1', summary: 'The spec' }
+    const decision = { id: 'decision_1', summary: 'Postgres or SQLite?' }
+    const other = { id: 'decision_2', summary: 'Queue or cron?' }
+    const verdict = ev('verdict_given', { artifact: 'artifact_1', verdict: 'looks_good' }, 'owner')
+    const answer = (id: string, actor: Actor = 'owner') => ev('answered', { decision: id, answer: 'yes' }, actor)
+    const reviewing = () =>
+      drive([...settledAndWorking, ev('submitted', { attempt: 1, artifact }, 'lead')], filedIssue(ID)).issue
+    const asking = () => drive([ev('asked', { attempt: 1, decision }, 'lead')], reviewing())
+
+    test('is taken, listed, and keeps the wait as it began', () => {
+      const { issue } = asking()
+      expect(issue.state).toBe('waiting')
+      expect(issue.wait).toEqual({ reason: 'review', holds: artifact, decisions: [decision], since: 4, told: 4 })
+      const again = drive(
+        [ev('asked', { attempt: 1, decision: other }, 'lead'), ev('asked', { attempt: 1, decision }, 'lead')],
+        issue,
+      )
+      expect(again.issue.wait).toMatchObject({ decisions: [other, decision], since: 4, told: 4 })
+    })
+
+    test('is refused to the steward and to another attempt', () => {
+      const review = reviewing()
+      expect(detail(apply(review, ev('asked', { attempt: 1, decision }, 'steward'), { now: NOW }))).toBe(
+        'refused: the steward asks only of a stall: the lead asks for itself',
+      )
+      expect(detail(apply(review, ev('asked', { attempt: 2, decision }, 'lead'), { now: NOW }))).toBe(
+        'refused: asked was filed for attempt 2; the Issue is on attempt 1',
+      )
+    })
+
+    test('answered first, the wait stays until the verdict', () => {
+      const answered = drive([answer('decision_1')], asking().issue)
+      expect(answered.issue.state).toBe('waiting')
+      expect(answered.issue.wait).toMatchObject({ reason: 'review', decisions: [], since: 4, told: 4 })
+      const done = drive([verdict], answered.issue)
+      expect(done.issue.state).toBe('working')
+      expect(done.effects).toEqual(['note_lead:issue_7:7'])
+    })
+
+    test('verdict first, the wait stays until the last answer', () => {
+      const { issue } = drive([ev('asked', { attempt: 1, decision: other }, 'lead')], asking().issue)
+      const given = drive([verdict], issue)
+      expect(given.issue.wait).toMatchObject({ verdictGiven: true, decisions: [decision, other] })
+      expect(detail(apply(given.issue, verdict, { now: NOW }))).toContain('ignored')
+      const first = drive([answer('decision_2', 'judge')], given.issue)
+      expect(first.issue.state).toBe('waiting')
+      const done = drive([answer('decision_1')], first.issue)
+      expect(done.issue.state).toBe('working')
+      expect(done.effects).toEqual(['note_lead:issue_7:9'])
+    })
+
+    test('an answer for another Decision changes nothing, and a note is carried to the end', () => {
+      const { issue } = drive([ev('noted', { text: 'also the logs' }, 'owner')], asking().issue)
+      expect(detail(apply(issue, answer('decision_9'), { now: NOW }))).toContain('ignored')
+      const done = apply(drive([verdict], issue).issue, answer('decision_1'), { now: NOW })
+      expect(done.result === 'applied' && done.effects[0]?.payload).toEqual({ attempt: 1, from: 5, version: 8 })
+    })
+
+    test('without Decisions the verdict ends the wait at once', () => {
+      expect(drive([verdict], reviewing()).issue.state).toBe('working')
+    })
+
+    test('a timed wait still asks as before; an errand and a stall still refuse', () => {
+      const timed = drive(
+        [ev('deferred', { attempt: 1, until: '2026-03-01T13:00:00Z' }, 'lead')],
+        drive(settledAndWorking).issue,
+      )
+      expect(drive([ev('asked', { attempt: 1, decision }, 'lead')], timed.issue).issue.wait).toMatchObject({
+        reason: 'decision',
+        holds: decision,
+      })
+      const errand = drive([
+        ...settledAndWorking,
+        ev('errand_raised', { attempt: 1, errand: { id: 'errand_1', summary: 'plug it in' } }, 'lead'),
+      ])
+      expect(detail(apply(errand.issue, ev('asked', { attempt: 1, decision }, 'lead'), { now: NOW }))).toBe(
+        'refused: it waits for errand: asked is taken only from a timed wait',
+      )
+    })
+  })
+
   test('a late wake for an earlier wait changes nothing', () => {
     const { issue } = drive([
       ...settledAndWorking,

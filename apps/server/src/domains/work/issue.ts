@@ -39,7 +39,11 @@ export const WAITS = {
   lead_gone: { exit: 'machine', stall: true, ends: 'woken by the steward: a new attempt' },
   regressed: { exit: 'machine', stall: true, ends: 'woken by the steward, or turned into a Decision' },
   decision: { exit: 'person', stall: false, ends: 'answered by standing policy, the Judge, a default, or the owner' },
-  review: { exit: 'person', stall: false, ends: 'verdict given on the Concept or Spec by the owner' },
+  review: {
+    exit: 'person',
+    stall: false,
+    ends: 'verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered',
+  },
   errand: { exit: 'person', stall: false, ends: "errand done by the owner's hands" },
 } as const satisfies Record<string, { exit: 'machine' | 'person'; stall: boolean; ends: string }>
 
@@ -54,7 +58,12 @@ export type WaitSpec =
   /** `watching`: the steward deferred a shipped Issue, so the wake goes back to the watch, not to the lead's work */
   | { reason: 'dependency'; after: IssueId[]; watching?: true }
   | { reason: StallCause; detail: string }
-  | { reason: PersonReason; holds: Checkpoint }
+  | { reason: Exclude<PersonReason, 'review'>; holds: Checkpoint }
+  /**
+   * `holds` is the artifact. The lead may raise Decisions about it while it is reviewed: `decisions` are the ones still
+   * open, `verdictGiven` is set once the verdict came first. The wait ends when the verdict is given and none is open.
+   */
+  | { reason: 'review'; holds: Checkpoint; decisions?: Checkpoint[]; verdictGiven?: true }
 
 /**
  * A wait as the Issue has it. `since` is the version that began it, which a wake must name. `told` is the last version
@@ -62,6 +71,10 @@ export type WaitSpec =
  * verb from a timed wait began this one, what the timed wait had. What ends the wait tells the lead everything after.
  */
 export type Wait = WaitSpec & { since: number; told: number }
+
+/** Whether a review wait still has Decisions raised about its artifact open. */
+export const outstandingDecisions = (wait: Wait): boolean =>
+  wait.reason === 'review' && (wait.decisions?.length ?? 0) > 0
 
 /** The Issue as its events made it. Counts live here, derived on load; none is a column. */
 export interface Issue {

@@ -22,6 +22,7 @@ export function candidates(issue: Issue, now: Date): AnyIssueEvent[] {
   const stale = attempt + 1
   const { watch } = issue
   const holds = issue.wait && 'holds' in issue.wait ? issue.wait.holds.id : 'none'
+  const reviewed = issue.wait?.reason === 'review' ? (issue.wait.decisions ?? []) : []
   const since = issue.wait?.since ?? issue.version
   const checkpoint = (kind: string) => ({
     id: `${kind}_${issue.version}`,
@@ -45,6 +46,10 @@ export function candidates(issue: Issue, now: Date): AnyIssueEvent[] {
     e('answered', { decision: holds, answer: 'yes' }, 'owner'),
     e('answered', { decision: holds, answer: 'yes' }, 'judge'),
     e('answered', { decision: 'decision_other', answer: 'no' }, 'owner'),
+    ...reviewed.flatMap((open) => [
+      e('answered', { decision: open.id, answer: 'yes' }, 'owner'),
+      e('answered', { decision: open.id, answer: 'yes' }, 'judge'),
+    ]),
     e('submitted', { attempt, artifact: checkpoint('artifact') }, 'lead'),
     e('verdict_given', { artifact: holds, verdict: 'with_notes' }, 'owner'),
     e('verdict_given', { artifact: 'artifact_other', verdict: 'changes' }, 'owner'),
@@ -104,6 +109,8 @@ const shapeOf = (issue: Issue): string =>
     issue.state,
     issue.wait?.reason ?? null,
     issue.wait !== null && 'watching' in issue.wait,
+    issue.wait?.reason === 'review' && (issue.wait.decisions?.length ?? 0) > 0,
+    issue.wait?.reason === 'review' && issue.wait.verdictGiven === true,
     Math.min(issue.attempt, 1),
     Math.min(issue.watch, 1),
     Math.min(issue.restarts, MAX_RESTARTS + 1),
