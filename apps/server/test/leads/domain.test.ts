@@ -66,6 +66,49 @@ describe('session state, derived from the hook events', () => {
     ],
   ] as const)('%s is %s', (_name, facts, state) => expect(deriveSession(facts).state).toBe(state))
 
+  test('a compaction mid-turn does not begin a new life', () => {
+    const view = deriveSession([
+      fact('session_started', 0),
+      fact('turn_started', 1),
+      fact('limit_stop', 2),
+      fact('session_started', 3, { source: 'compact', claudeSessionId: 'c', transcriptPath: '/x/c.jsonl' }),
+    ])
+    expect(view).toMatchObject({
+      state: 'working',
+      turns: 1,
+      walled: true,
+      turnStartedAt: new Date(T0 + 1000),
+      idleSince: null,
+      claudeSession: 'c',
+    })
+    const ended = deriveSession([
+      ...[fact('session_started', 0), fact('turn_started', 1)],
+      fact('session_started', 2, { source: 'compact' }),
+      fact('turn_ended', 5),
+    ])
+    expect(ended).toMatchObject({ state: 'idle', idleSince: new Date(T0 + 5000) })
+  })
+
+  test('a compaction after an ended turn is compacted, quiet since the compaction', () => {
+    const view = deriveSession([
+      fact('session_started', 0),
+      fact('turn_started', 1),
+      fact('turn_ended', 2),
+      fact('session_started', 3, { source: 'compact' }),
+    ])
+    expect(view).toMatchObject({ state: 'compacted', idleSince: new Date(T0 + 3000) })
+  })
+
+  test.each(['startup', 'clear'])('a %s start after an ended session begins fresh', (source) => {
+    const view = deriveSession([
+      fact('session_started', 0),
+      fact('turn_started', 1),
+      fact('session_ended', 2),
+      fact('session_started', 3, { source }),
+    ])
+    expect(view).toMatchObject({ state: 'idle', idleSince: new Date(T0 + 3000), turns: 1 })
+  })
+
   test('events are ordered by time, then arrival', () => {
     const started = (n: number) => ({ ...fact('turn_started', 5), seq: n })
     const ended = (n: number) => ({ ...fact('turn_ended', 5), seq: n })

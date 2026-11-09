@@ -118,6 +118,30 @@ describe('the spool replay', () => {
     expect(seen).toEqual(['lead-1-1:session_started:0'])
   })
 
+  test('a poison line is skipped and counted; the lines around it are stored and the offset moves on', async () => {
+    const dir = dirOf()
+    const seen: string[] = []
+    const replayer = new SpoolReplayer({
+      dir,
+      now: () => new Date(),
+      sink: async (lines) => {
+        for (const l of lines) {
+          if (l.kind === 'turn_ended') throw Object.assign(new Error('unicode'), { errno: '22P05' })
+          seen.push(l.key)
+        }
+      },
+    })
+    const file = join(dir, spoolFileName('lead-1-1'))
+    append(dir, 'lead-1-1', 'session_started')
+    append(dir, 'lead-1-1', 'turn_ended')
+    appendFileSync(file, '{"key":"x","session":"lead-1-1","kind":"turn_started","at":"nope"}\n')
+    append(dir, 'lead-1-1', 'prompt_idle')
+    const first = await replayer.replay()
+    expect(first.rejected).toBe(2)
+    expect(seen).toEqual(['lead-1-1:session_started:0', 'lead-1-1:prompt_idle:1'])
+    expect(await replayer.replay()).toMatchObject({ lines: 0, rejected: 0 })
+  })
+
   test('a quiet, read, large file is rotated and the numbering carries on from its sums', async () => {
     const dir = dirOf()
     const replayer = new SpoolReplayer({

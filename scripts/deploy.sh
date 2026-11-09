@@ -30,6 +30,8 @@
 # (pinned to the same sha), so the orchestration that runs matches the code being deployed.
 
 set -u
+# A failing stage must fail its pipeline (the `git archive | tar` export); the two launchctl|awk probes below tolerate it.
+set -o pipefail
 
 LABEL="com.jkrumm.software-factory"
 PORT=7793
@@ -116,7 +118,7 @@ door_plan() { # $1 release dir, $2 sha: the one line that says which door starts
 }
 # The launcher the loaded door job runs ("" = not loaded).
 door_runs_from() {
-  launchctl print "gui/$(id -u)/$DOOR_LABEL" 2>/dev/null | awk '/arguments = \{/ { f = 1; next } f && /launch-door\.sh/ { print $1; exit }'
+  launchctl print "gui/$(id -u)/$DOOR_LABEL" 2>/dev/null | awk '/arguments = \{/ { f = 1; next } f && /launch-door\.sh/ { print $1; exit }' || true
 }
 
 tail_logs() {
@@ -140,7 +142,7 @@ unload_wait_secs() { # $1 plist or template
 # shutdown, holding the database lock.
 service_pids() {
   local root child
-  root=$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }')
+  root=$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }' || true)
   [[ -n "$root" ]] || return 0
   echo "$root"
   for child in $(pgrep -P "$root" 2>/dev/null); do

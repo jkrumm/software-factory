@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, type Migration, migrate } from '../src/adapters/postgres/migrate.ts'
 import { acquireProcessLock, PROCESS_LOCK_WAIT_MS } from '../src/adapters/postgres/process-lock.ts'
-import { ping } from '../src/adapters/postgres/connection.ts'
+import { connect, ping } from '../src/adapters/postgres/connection.ts'
 import { LOCKS } from '../src/adapters/postgres/locks.ts'
 
 let db: TestCluster
@@ -143,4 +143,38 @@ test('a migration that reuses another one’s number is refused, and the shipped
 
 test('ping is null while the database answers', async () => {
   expect(await ping(db.sql)).toBeNull()
+})
+
+describe('connect session timeouts', () => {
+  test('a statement past statement_timeout fails', async () => {
+    const sql = connect(db.url, { statementMs: 300 })
+    try {
+      expect(await rejection(sql`SELECT pg_sleep(3)`)).toContain('statement timeout')
+    } finally {
+      await sql.close()
+    }
+  })
+
+  test('a lock wait past lock_timeout fails', async () => {
+    const sql = connect(db.url, { statementMs: 10_000, lockMs: 300 })
+    const holder = await db.sql.reserve()
+    try {
+      await holder`SELECT pg_advisory_lock(7093999)`
+      expect(await rejection(sql`SELECT pg_advisory_lock(7093999)`)).toContain('lock timeout')
+    } finally {
+      await holder`SELECT pg_advisory_unlock(7093999)`
+      await holder.release()
+      await sql.close()
+    }
+  })
+
+  test('migrate is exempt from the statement timeout', async () => {
+    await db.sql`DROP SCHEMA IF EXISTS factory CASCADE`
+    const sql = connect(db.url, { statementMs: 200 })
+    try {
+      await migrate(sql, [m('0001_slow.sql', 'SELECT pg_sleep(0.6); CREATE TABLE factory.slow (id int)')])
+    } finally {
+      await sql.close()
+    }
+  })
 })

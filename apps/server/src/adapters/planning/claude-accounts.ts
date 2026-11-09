@@ -4,7 +4,11 @@ import type { AccountSource } from '../../domains/capacity/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { CannotStart, runProcess } from './process.ts'
 
-const epoch = z.number().nullable()
+const MAX_EPOCH_S = 4_102_444_800 // 2100-01-01
+const MAX_AGE_S = 7 * 24 * 3600
+const epoch = z.number().int().positive().max(MAX_EPOCH_S).nullable()
+// utilisation in percent; the source does not document a clamp at 100, so only nonsense is refused
+const percent = z.number().min(0).max(1000).nullable()
 
 /**
  * One account of `claude-account usage --json`: the picker prints a row for every account of the registry
@@ -15,11 +19,11 @@ const UsageRow = z.looseObject({
   id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
   enabled: z.boolean(),
   auth_ok: z.boolean(),
-  five_hour: z.number().nullable(),
-  seven_day: z.number().nullable(),
+  five_hour: percent,
+  seven_day: percent,
   five_hour_resets_at: epoch,
   seven_day_resets_at: epoch,
-  age_s: z.number().nullable(),
+  age_s: z.number().min(0).max(MAX_AGE_S).nullable(),
   exhausted_until: epoch,
 })
 const Usage = z.looseObject({ accounts: z.array(z.unknown()) })

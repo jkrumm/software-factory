@@ -46,8 +46,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   and an effort, in `config/roles.json`, changed only on measured data. The table governs the terminals the factory spawns
   (the lead, `rd --role`). A lead's in-session subagents take model and effort from the global agent files in dotfiles
   (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`.
-- **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; `~/.bunfig.toml` enforces a 3-day
-  release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect (NL11).
+- **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; the repo's `bunfig.toml` (and `~/.bunfig.toml`) sets
+  `exact` and a 3-day release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect (NL11).
 - **The orchestrator has its own principal:** token `FACTORY_ORCHESTRATOR_TOKEN` (optional, in `FACTORY_TOKEN` of its
   terminal), caller and actor `orchestrator`. It has the owner's rights bar six owner-only routes (worth-asking, verdict,
   annotations, Errand done, promote and dismiss of a held signal), and every owner-touch count reads the owner alone; its steering is the friction group

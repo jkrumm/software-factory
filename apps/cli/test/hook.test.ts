@@ -168,6 +168,17 @@ describe('the payload becomes the §3 event', () => {
     const event = toEvent('notification', { notification_type: 'permission_prompt', message: 'x'.repeat(5000) })
     expect(JSON.stringify(event).length).toBeLessThan(700)
   })
+
+  test('a cut through an emoji or a NUL never reaches the payload', () => {
+    const message = `${'a'.repeat(499)}\u{1F600}tail`
+    const event = toEvent('notification', { notification_type: 'permission_prompt', message })
+    const out = String(event?.payload?.message)
+    expect(out.isWellFormed()).toBe(true)
+    expect(out).toBe('a'.repeat(499))
+    const nul = toEvent('notification', { notification_type: 'permission_prompt', message: 'a\0b\0' })
+    expect(nul?.payload).toEqual({ message: 'ab' })
+    expect(toEvent('session-end', { reason: '\0' })?.payload).toBeUndefined()
+  })
 })
 
 describe('factory hook', () => {
@@ -238,6 +249,15 @@ describe('factory hook', () => {
     await fire('stop', {}, { FACTORY_SOCKET: join(dir, 'nobody-listens.sock') })
     expect(performance.now() - started).toBeLessThan(250)
     expect(lines('s')).toHaveLength(1)
+  })
+
+  test('a spool that cannot be written still lets the post go out', async () => {
+    const blocker = join(dir, 'not-a-dir')
+    writeFileSync(blocker, 'x')
+    await fire('stop', {}, { FACTORY_SPOOL_DIR: blocker })
+    expect(received).toHaveLength(1)
+    expect(received[0]).toMatchObject({ session: 's', kind: 'turn_ended' })
+    expect(await hookMain(['stop'], env({ FACTORY_SPOOL_DIR: blocker }), async () => '{}')).toBe(0)
   })
 
   test('a server that does not answer is given 300 ms and the event is in the spool', async () => {

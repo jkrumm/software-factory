@@ -19,6 +19,11 @@ const MAX_RUN_LIMIT_MS = 24 * 3_600_000
 const GRACE_POLL_MS = 50
 /** How often a waiter asks again (`FACTORY_SLOT_POLL_MS`). */
 const DEFAULT_SLOT_POLL_MS = 1_000
+/** The server lets a waiter lapse after 15 s, so the poll stays well inside that. */
+const MIN_SLOT_POLL_MS = 100
+const MAX_SLOT_POLL_MS = 5_000
+/** The server refuses a longer slot name (`SlotBody`). */
+const MAX_SLOT_NAME = 200
 /** The lease is renewed this often while the command runs; the server lets it lapse after 30 s. */
 const RENEW_MS = 10_000
 
@@ -127,11 +132,14 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const token = tokenOf(io.env)
-  const name = input.name ?? program
+  const name = (input.name ?? program).slice(0, MAX_SLOT_NAME)
   const id = `${process.pid}-${crypto.randomUUID()}`
   const waitMs = number(io.env.FACTORY_SLOT_WAIT_MS, DEFAULT_SLOT_WAIT_MS)
   const open = io.env.FACTORY_SLOT_OPEN === '1'
-  const pollMs = number(io.env.FACTORY_SLOT_POLL_MS, DEFAULT_SLOT_POLL_MS)
+  const pollMs = Math.min(
+    MAX_SLOT_POLL_MS,
+    Math.max(MIN_SLOT_POLL_MS, number(io.env.FACTORY_SLOT_POLL_MS, DEFAULT_SLOT_POLL_MS)),
+  )
   const path = `/slots/${encodeURIComponent(id)}`
   const envLimit = limitOf(io.env.FACTORY_SLOT_RUN_MS)
   const graceMs = number(io.env.FACTORY_SLOT_KILL_GRACE_MS, DEFAULT_KILL_GRACE_MS)

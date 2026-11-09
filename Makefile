@@ -22,7 +22,7 @@ check:
 	@echo "==> lint (oxlint --type-aware)"
 	@bunx --no-install oxlint -c .oxlintrc.json --type-aware apps packages tests scripts
 	@echo "==> shellcheck"
-	@shellcheck scripts/*.sh scripts/gameday/*.sh
+	@shellcheck $$(git ls-files "scripts/*.sh")
 	@echo "==> typecheck (tsc --noEmit)"
 	@bunx --no-install tsc --noEmit
 	@echo "==> typecheck console (apps/console)"

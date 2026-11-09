@@ -122,3 +122,32 @@ test('a command that does not exist exits 127; a missing command is a usage erro
   expect((await lab.cli(['slot', 'run', '--name'], env)).code).toBe(2)
   expect(await slotRows()).toEqual([])
 })
+
+test('a name past the server cap is truncated, the default (the program path) and an explicit one alike', async () => {
+  const longName = 'n'.repeat(300)
+  const explicit = lab.cli(['slot', 'run', '--name', longName, '--', 'sleep', '1'], env)
+  let held: Awaited<ReturnType<typeof slotRows>> = []
+  for (let i = 0; i < 40 && held.length === 0; i++) {
+    await Bun.sleep(50)
+    held = await slotRows()
+  }
+  expect(held.map((r: { name: string }) => r.name.length)).toEqual([200])
+  expect((await explicit).code).toBe(0)
+
+  const dir = join(lab.root, 'd'.repeat(250))
+  await Bun.write(join(dir, 'prog.sh'), '#!/bin/sh\nexit 0\n')
+  await Bun.$`chmod +x ${join(dir, 'prog.sh')}`
+  expect((await lab.cli(['slot', 'run', '--', join(dir, 'prog.sh')], env)).code).toBe(0)
+})
+
+test('a huge FACTORY_SLOT_POLL_MS is clamped so a waiter asks again before the server lets it lapse', async () => {
+  const holder = lab.cli(['slot', 'run', '--name', 'holder', '--', 'sleep', '1'], env)
+  for (let i = 0; i < 40 && (await slotRows()).length === 0; i++) await Bun.sleep(50)
+  const started = Date.now()
+  const waited = await lab.cli(['slot', 'run', '--name', 'patient', '--', 'true'], {
+    FACTORY_SLOT_POLL_MS: '600000',
+  })
+  expect(waited.code).toBe(0)
+  expect(Date.now() - started).toBeLessThan(15_000)
+  await holder
+}, 20_000)

@@ -46,6 +46,8 @@ const checksum = (text: string): string => new Bun.CryptoHasher('sha256').update
  */
 export async function migrate(sql: SQL, migrations: Migration[]): Promise<string[]> {
   return sql.begin(async (tx) => {
+    // A migration may legitimately run past the pool's session limits; they come back with the transaction's end.
+    await tx`SELECT set_config('statement_timeout', '0', true), set_config('lock_timeout', '0', true)`
     await tx`SELECT pg_advisory_xact_lock(${LOCKS.migration})`
     // CREATE SCHEMA IF NOT EXISTS still demands CREATE on the database, which the schema's owner role need not have.
     const [schema] = await tx`SELECT 1 FROM pg_namespace WHERE nspname = ${SCHEMA}`

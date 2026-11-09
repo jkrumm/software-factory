@@ -1,6 +1,15 @@
 import * as z from 'zod'
 import { EVENT_KINDS } from './spool.ts'
 
+/** Whether every string in a value, keys included, is one jsonb can store: no NUL, no lone surrogate. */
+function storable(value: unknown): boolean {
+  if (typeof value === 'string') return !value.includes('\0') && value.isWellFormed()
+  if (Array.isArray(value)) return value.every(storable)
+  if (typeof value === 'object' && value !== null)
+    return Object.entries(value).every(([key, item]) => storable(key) && storable(item))
+  return true
+}
+
 /** The hook's line as the socket takes it (`POST /events`): the spool's shape, checked with zod on the server side only. */
 export const HookEventBody = z
   .object({
@@ -10,6 +19,7 @@ export const HookEventBody = z
     at: z.iso.datetime({ offset: true }),
     payload: z.record(z.string(), z.unknown()).optional(),
   })
+  .refine(storable, 'a NUL or a lone surrogate cannot be stored')
   .meta({ id: 'HookEventBody' })
 export type HookEventBody = z.infer<typeof HookEventBody>
 

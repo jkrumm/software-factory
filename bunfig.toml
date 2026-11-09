@@ -1,0 +1,4 @@
+[install]
+# Exact pins, and no package version published less than 3 days ago (seconds). Never exclude a package from the cooldown.
+exact = true
+minimumReleaseAge = 259200
