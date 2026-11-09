@@ -48,15 +48,40 @@ export const queryClient = new QueryClient({
 
 export const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'console-snapshot' })
 
+/** Resolves when the tab is on screen (at once when it already is): a hidden tab that reloads must not read the band. */
+function untilVisible(signal: AbortSignal): Promise<void> {
+  if (document.visibilityState === 'visible') return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const onChange = () => {
+      if (document.visibilityState !== 'visible') return
+      cleanup()
+      resolve()
+    }
+    const onAbort = () => {
+      cleanup()
+      reject(signal.reason)
+    }
+    const cleanup = () => {
+      document.removeEventListener('visibilitychange', onChange)
+      signal.removeEventListener('abort', onAbort)
+    }
+    document.addEventListener('visibilitychange', onChange)
+    signal.addEventListener('abort', onAbort)
+  })
+}
+
 /**
  * The "Since you were here" band. Reading it moves the server's visit marker, so only the Needs-you screen mounts this.
- * It does not poll and the stream's changes never refetch it (a tab left open would keep the visit alive for ever): it loads when the screen opens and when the window gets focus.
+ * It does not poll and the stream's changes never refetch it (a tab left open would keep the visit alive for ever): it loads when the screen opens and when the window gets focus, and only while the tab is on screen (a hidden tab that reloads after a deploy waits).
  * A refetch inside the visit returns the same band. Never persisted (`SNAPSHOT_EXCLUDED` in `main.tsx`).
  */
 export function useSince() {
   return useQuery({
     queryKey: ['since'],
-    queryFn: ({ signal }) => fetchSince(signal),
+    queryFn: async ({ signal }) => {
+      await untilVisible(signal)
+      return fetchSince(signal)
+    },
     refetchOnWindowFocus: true,
   })
 }

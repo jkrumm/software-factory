@@ -90,6 +90,7 @@ const issueAffected: RootRule = (change, key) => {
 const BY_ROOT: Record<string, RootRule> = {
   needs: listsAffected,
   flow: listsAffected,
+  'issue-cards': (change) => change.kind === 'issue' || !isKnownKind(change.kind),
   chain: listsAffected,
   errands: errandsAffected,
   issue: issueAffected,

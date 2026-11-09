@@ -44,6 +44,7 @@ describe('affected', () => {
     needs: ['needs'],
     since: ['since'],
     flow: ['flow'],
+    cards: ['issue-cards'],
     chain: ['chain'],
     errands: ['errands'],
     kpis: ['kpis', 7],
@@ -74,6 +75,11 @@ describe('affected', () => {
     expect(names).toContain('issue12')
     expect(names).not.toContain('issue13')
     expect(names).not.toContain('errands')
+  })
+
+  test('the Issue titles are refetched by an Issue change, not by a hook event', () => {
+    expect(hits({ kind: 'issue', ref: 'issue_12' })).toContain('cards')
+    expect(hits({ kind: 'session', ref: 'issue_12' })).not.toContain('cards')
   })
 
   test('the band is never refetched by the stream: a read moves the visit marker', () => {
