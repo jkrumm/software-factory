@@ -26,14 +26,17 @@ const ORIGIN_WORD: Record<string, string> = {
 }
 
 interface Item {
+  id: string
   title: string
   repo: string
   origin: string
+  kind: string
   waitReason?: string | null
 }
 interface Flow {
   states: Record<State, { count: number; issues: Item[] }>
   closedRecently: Item[]
+  trend: { states: Record<State, number[]>; shipped: number[]; shippedBefore: number }
 }
 
 const flowOf = (apiUrl: string) => api<Flow>(apiUrl, '/v1/flow')
@@ -84,6 +87,90 @@ test('a card shows title, project, origin word, a reason and an age, and no id',
   await expect(card).toContainText(waiting.waitReason ?? '')
   await expect(card).toContainText(/just now|\d+ (min|h|d) ago/)
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+})
+
+test('a card shows a kind badge', async ({ page, apiUrl }) => {
+  const flow = await flowOf(apiUrl)
+  await page.goto('/flow')
+  const working = flow.states.working.issues[0]
+  if (!working) throw new Error('the seed has no working Issue')
+  const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
+  await expect(card).toContainText(working.kind.charAt(0).toUpperCase() + working.kind.slice(1))
+  // the column names the state, so a working card has no Lozenge of it
+  await expect(card).not.toContainText('Working')
+})
+
+test('a card opens its Issue page', async ({ page, apiUrl }) => {
+  const flow = await flowOf(apiUrl)
+  const working = flow.states.working.issues[0]
+  if (!working) throw new Error('the seed has no working Issue')
+  await page.goto('/flow')
+  const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
+  await expect(card.getByRole('link', { name: working.title })).toHaveAttribute('href', /\/issues\/\d+$/)
+  await card.click()
+  await expect(page).toHaveURL(new RegExp(`/issues/${working.id.replace('issue_', '')}$`))
+  await expect(page.getByRole('heading', { level: 1, name: working.title })).toBeVisible()
+})
+
+test('the stat row shows the API figures and a card opens its column', async ({ page, apiUrl }) => {
+  const flow = await flowOf(apiUrl)
+  await page.goto('/flow')
+  const row = page.getByRole('group', { name: 'Totals' })
+  const cards = row.locator('article')
+  await expect(cards).toHaveCount(4)
+  const shipped = flow.trend.shipped.reduce((a, b) => a + b, 0)
+  const expected: [string, number][] = [
+    ['Working', flow.states.working.count],
+    ['Waiting', flow.states.waiting.count],
+    ['Queued', flow.states.queued.count],
+    ['Shipped this week', shipped],
+  ]
+  for (const [i, [title, value]] of expected.entries()) {
+    await expect(cards.nth(i).getByRole('heading', { name: title })).toBeVisible()
+    await expect(cards.nth(i).getByText(String(value), { exact: true }).first()).toBeVisible()
+  }
+  await row.getByRole('link', { name: 'Working' }).click()
+  await expect(page).toHaveURL(/\/flow\?state=working$/)
+  await expect(page.getByRole('region')).toHaveCount(1)
+  await expect(heading(page, 'working')).toHaveText(`Working ${flow.states.working.count}`)
+  await page.goto('/flow')
+  await row.getByRole('link', { name: 'Shipped this week' }).click()
+  await expect(page).toHaveURL(/\/flow\?state=closed$/)
+})
+
+test('the header strip count opens the same view as the stat card', async ({ page, apiUrl }) => {
+  const flow = await flowOf(apiUrl)
+  await page.goto('/flow')
+  await page
+    .getByRole('navigation', { name: 'Issues in flight' })
+    .getByRole('link', { name: /working$/ })
+    .click()
+  await expect(page).toHaveURL(/\/flow\?state=working$/)
+  await expect(page.getByRole('region')).toHaveCount(1)
+  await expect(heading(page, 'working')).toHaveText(`Working ${flow.states.working.count}`)
+})
+
+test('every column header has its InfoHint, and no select shows on a wide screen', async ({ page }) => {
+  await page.goto('/flow')
+  for (const key of Object.keys(LABEL) as (keyof typeof LABEL)[]) {
+    const word = key === 'closed' ? 'Outcome' : LABEL[key]
+    await expect(region(page, key).getByRole('button', { name: `What ${word} means` })).toBeVisible()
+    // the hint is a sibling of the h2: the heading text stays the label and count
+    await expect(heading(page, key)).toHaveText(new RegExp(`^${LABEL[key]} \\d+$`))
+  }
+  await expect(page.locator('select:visible')).toHaveCount(0)
+})
+
+test('a project toggle in the sidebar narrows the board', async ({ page, apiUrl }) => {
+  const flow = await flowOf(apiUrl)
+  await page.goto('/flow')
+  await pick(page, 'Projects', 'argo')
+  await expect(page).toHaveURL(/[?&]project=argo/)
+  await expectCounts(
+    page,
+    countsOf(flow, (i) => i.repo === 'argo'),
+  )
+  await expect(page.locator('select:visible')).toHaveCount(0)
 })
 
 test('the filters narrow every column, write the URL, and clearing restores the counts', async ({ page, apiUrl }) => {

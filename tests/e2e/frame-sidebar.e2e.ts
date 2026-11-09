@@ -125,7 +125,7 @@ test('Flow: projects and origins toggle the URL and the board, All clears', asyn
   await link.click()
   await expect(page).toHaveURL(new RegExp(`project=${repo}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('region', { name: /^Queued/ }).getByRole('heading')).toHaveText(
+  await expect(page.getByRole('region', { name: /^Queued/ }).getByRole('heading', { level: 2 })).toHaveText(
     `Queued ${inRepo('queued')}`,
   )
 
@@ -150,7 +150,7 @@ test('Flow: ?state shows one column full width with a link back to all', async (
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   await page.goto('/flow?state=waiting')
   const region = page.getByRole('region', { name: /^Waiting/ })
-  await expect(region.getByRole('heading')).toHaveText(`Waiting ${flow.states.waiting.count}`)
+  await expect(region.getByRole('heading', { level: 2 })).toHaveText(`Waiting ${flow.states.waiting.count}`)
   await expect(page.getByRole('region')).toHaveCount(1)
   await expect(region.getByRole('listitem')).toHaveCount(flow.states.waiting.count)
   await expect(page.getByRole('region', { name: /^Working/ })).toHaveCount(0)

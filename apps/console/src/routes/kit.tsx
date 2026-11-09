@@ -27,7 +27,15 @@ import {
   StepRail,
 } from '@/components/kit'
 import { Button } from '@/components/ui/button'
-import { KIT_ISSUES, KIT_METERS, KIT_NOW, KIT_PROPERTIES, KIT_STATS, KIT_STEPS } from '@/components/kit/fixtures'
+import {
+  KIT_ISSUES,
+  KIT_ORIGIN,
+  KIT_METERS,
+  KIT_NOW,
+  KIT_PROPERTIES,
+  KIT_STATS,
+  KIT_STEPS,
+} from '@/components/kit/fixtures'
 
 /** The component kit on fixtures: reachable by URL only (no nav entry, no palette command), no queries. */
 export const Route = createFileRoute('/kit')({ component: Kit })
@@ -85,14 +93,17 @@ function Kit() {
 
       <Section title="Issue cards and rows">
         <Note>
-          The whole card is the link: hover it, tab to it, press the three dots that show on hover. The row is the dense
-          variant for lists, hairlines between rows and no box.
+          The whole card is the link: hover it, tab to it, press the three dots that show on hover. The kind is a badge
+          in the chip row, the origin a muted word; a card in a column that names the state (the working ones here)
+          leaves the Lozenge out. The row is the dense variant for lists, hairlines between rows and no box.
         </Note>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
           {KIT_ISSUES.map((i) => (
             <IssueCard
               key={i.key}
               {...view(i)}
+              origin={KIT_ORIGIN[i.key]}
+              showState={i.state !== 'working'}
               as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
               href={i.key === 'export-time' ? undefined : `#${i.key}`}
               onMenu={() => undefined}

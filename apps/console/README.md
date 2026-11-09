@@ -21,16 +21,30 @@ their keys).
 
 ## Flow
 
-`/flow` is the board of every Issue by state: Settling, Queued, Working, Waiting, Watching and Closed recently (the last
-24 hours), from `GET /v1/flow`, refreshed by the stream like every other screen. A card carries the title, the project,
-the origin as a word, the reason (a wait's reason, the queue's message, or a closed Issue's outcome) and its age; never an
-id, and it links nowhere yet. The project and origin filters live in the URL (`/flow?project=argo&origin=feedback`), so a
-filtered view is linkable, and each column header counts what the filters leave. `?state=working|waiting|queued|settling|watching|closed`
-shows only that column, full width as a grid of cards, with a "Show all states" link (it never filters rows; the strip's
-counts link to it); on a phone it picks the tab. Every column is a virtualised list
-(`@tanstack/react-virtual`): only the visible cards are in the DOM. From the `lg` breakpoint (1024px) the columns sit side
-by side in a horizontally scrolling board; below it the board is one list with a tab per state (Working first, or the first
-state with cards). The layout switches with `matchMedia`, so only one of the two is ever rendered.
+`/flow` fills the content area (no width cap). From the top: the header, a stat row, then the board of every Issue by state:
+Settling, Queued, Working, Waiting, Watching and Closed recently (the last 24 hours), from `GET /v1/flow`, refreshed by the
+stream like every other screen.
+
+**Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
+`trend` in the model) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
+are factory-wide, never narrowed by the filters; each opens `/flow?state=<state>` (Shipped: `closed`), the same view the
+header strip's counts open. Below `lg` the row scrolls sideways inside itself, snapping per card.
+
+**Cards.** A card is the kit `IssueCard`, the whole card a link to `/issues/<n>`: the title, a `KindBadge`, the project, the
+origin as a muted word, the reason (a wait's reason or the queue's message) and the age in mono; never an id. A column
+already names the state, so only Closed recently shows a Lozenge, the outcome (Done, Dropped, Healed, Cancelled).
+
+**Columns.** The header is the label and count as the `h2` ("Working 3"), an `InfoHint` for the state beside it (Closed
+recently: outcome) and a hairline under. From the `lg` breakpoint (1024px) the six columns share the width equally in a
+board that scrolls sideways inside itself when they do not fit (1280px), and the board fills the height under the stat
+row; every column is its own virtualised list (`@tanstack/react-virtual`): only the visible cards are in the DOM. Below
+`lg` the board is one list with a tab per state (Working first, or the first state with cards). The layout switches with
+`matchMedia`, so only one of the two is ever rendered.
+
+**Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
+(`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
+leave. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
+with a "Show all states" link (it never filters rows); on a phone it picks the tab.
 
 ## Chain
 

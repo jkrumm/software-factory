@@ -9,11 +9,13 @@ export function FlowList({
   cards,
   now,
   labelledBy,
+  showState,
   className,
 }: {
   cards: FlowCard[]
   now: number
   labelledBy: string
+  showState?: boolean
   className?: string
 }) {
   const scroller = useRef<HTMLDivElement>(null)
@@ -27,7 +29,7 @@ export function FlowList({
 
   if (cards.length === 0) return <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here</p>
   return (
-    <div ref={scroller} data-testid="flow-scroll" className={cn('overflow-y-auto', className)}>
+    <div ref={scroller} data-testid="flow-scroll" className={cn('-mx-1 overflow-y-auto px-1', className)}>
       <ul aria-labelledby={labelledBy} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((row) => {
           const card = cards[row.index]
@@ -40,7 +42,7 @@ export function FlowList({
               className="absolute top-0 left-0 w-full pb-2"
               style={{ transform: `translateY(${row.start}px)` }}
             >
-              <FlowCardView card={card} now={now} />
+              <FlowCardView card={card} now={now} showState={showState} />
             </li>
           )
         })}
