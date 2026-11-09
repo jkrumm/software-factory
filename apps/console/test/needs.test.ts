@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { NeedItem } from '@software-factory/contract'
 import {
-  decisionLine,
+  decisionParts,
   needsNote,
   repeatsTitle,
   defaultLine,
@@ -80,12 +80,16 @@ test('a recommendation names an option by its label, ignoring case and spaces, o
 })
 
 test('the decision line names the project and, when known, the Issue', () => {
-  expect(decisionLine('argo', 'Rotate keys')).toBe(
-    'A decision for you from the lead of argo, Issue Rotate keys: the lead hears your answer as a note and carries on',
-  )
-  expect(decisionLine('argo', null)).toBe(
-    'A decision for you from the lead of argo: the lead hears your answer as a note and carries on',
-  )
+  expect(decisionParts('argo', 'Rotate keys')).toEqual({
+    before: 'A decision for you from the lead of argo, Issue ',
+    issue: 'Rotate keys',
+    after: ': the lead hears your answer as a note and carries on',
+  })
+  expect(decisionParts('argo', null)).toEqual({
+    before: 'A decision for you from the lead of argo',
+    issue: null,
+    after: ': the lead hears your answer as a note and carries on',
+  })
 })
 
 test('only http and https links are external links', () => {

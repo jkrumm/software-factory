@@ -55,7 +55,7 @@ the Issue page (an item with no Issue is plain text) and a Fold for the rest the
 one line ("Nothing changed since 09:12"). The categories, labels, tones and words are pure logic in `src/lib/since.ts`.
 **The visit marker** lives on the server: the owner's read of `/v1/since` is what moves it (a new visit starts after 30
 quiet minutes; inside a visit every read returns the same band), so only this screen calls it, the query (`['since']`)
-never polls and never enters the persisted snapshot, and it refetches on the stream's changes and on window focus. A
+never polls, is never refetched by the stream (an open tab would keep the visit alive) and never enters the persisted snapshot, and it loads when the screen opens and when the window gets focus. A
 loading band is a skeleton of its height, and an error leaves the band out while the checkpoints show.
 
 The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every

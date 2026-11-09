@@ -73,11 +73,6 @@ export function decisionParts(
   return issueTitle ? { before: `${before}, Issue `, issue: issueTitle, after } : { before, issue: null, after }
 }
 
-export function decisionLine(project: string, issueTitle: string | null): string {
-  const { before, issue, after } = decisionParts(project, issueTitle)
-  return `${before}${issue ?? ''}${after}`
-}
-
 /** Whether the question is the card's title already (the title is the question, cut and without ids). */
 export function repeatsTitle(question: string, title: string): boolean {
   const cut = norm(title)

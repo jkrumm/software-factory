@@ -50,7 +50,7 @@ export const persister = createSyncStoragePersister({ storage: window.localStora
 
 /**
  * The "Since you were here" band. Reading it moves the server's visit marker, so only the Needs-you screen mounts this.
- * It does not poll (a tab left open would keep the visit alive for ever): the stream's changes and a focus refetch it.
+ * It does not poll and the stream's changes never refetch it (a tab left open would keep the visit alive for ever): it loads when the screen opens and when the window gets focus.
  * A refetch inside the visit returns the same band. Never persisted (`SNAPSHOT_EXCLUDED` in `main.tsx`).
  */
 export function useSince() {
