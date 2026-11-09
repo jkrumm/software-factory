@@ -20,6 +20,7 @@ import {
   fetchKpis,
   fetchMachine,
   fetchNeeds,
+  fetchSince,
 } from './api.ts'
 import { useLive } from './live.ts'
 import { pollEvery } from './policy.ts'
@@ -46,6 +47,19 @@ export const queryClient = new QueryClient({
 })
 
 export const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'console-snapshot' })
+
+/**
+ * The "Since you were here" band. Reading it moves the server's visit marker, so only the Needs-you screen mounts this.
+ * It does not poll (a tab left open would keep the visit alive for ever): the stream's changes and a focus refetch it.
+ * A refetch inside the visit returns the same band. Never persisted (`SNAPSHOT_EXCLUDED` in `main.tsx`).
+ */
+export function useSince() {
+  return useQuery({
+    queryKey: ['since'],
+    queryFn: ({ signal }) => fetchSince(signal),
+    refetchOnWindowFocus: true,
+  })
+}
 
 /** The options of the two first-screen queries, shared by the hooks and by the prefetch at boot. */
 export const needsQuery = { queryKey: ['needs'], queryFn: ({ signal }: { signal: AbortSignal }) => fetchNeeds(signal) }

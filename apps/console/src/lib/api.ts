@@ -21,6 +21,7 @@ import {
   ReadIssueDetail,
   SignalAck,
   SignalDismissed,
+  SinceModel,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
 
@@ -76,6 +77,8 @@ async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal)
 }
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
+/** What happened since the owner's last visit. The owner's read moves the visit marker: only the Needs-you screen calls it. */
+export const fetchSince = (signal?: AbortSignal) => getJson('/v1/since', SinceModel, signal)
 export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)

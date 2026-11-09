@@ -42,6 +42,7 @@ test('a reload waits while a field has focus or a textarea holds a draft', () =>
 describe('affected', () => {
   const keys = {
     needs: ['needs'],
+    since: ['since'],
     flow: ['flow'],
     chain: ['chain'],
     errands: ['errands'],
@@ -66,6 +67,7 @@ describe('affected', () => {
   test('an Issue event alters the lists, the aggregates and its own page, not another Issue', () => {
     const names = hits({ kind: 'issue', ref: 'issue_12' })
     expect(names).toContain('needs')
+    expect(names).toContain('since')
     expect(names).toContain('flow')
     expect(names).toContain('chain')
     expect(names).toContain('kpis')
@@ -78,6 +80,7 @@ describe('affected', () => {
     const names = hits({ kind: 'session', ref: 'issue_13' })
     expect(names).toEqual(expect.arrayContaining(['issue13', 'kpis', 'friction']))
     expect(names).not.toContain('needs')
+    expect(names).not.toContain('since')
     expect(names).not.toContain('flow')
     expect(names).not.toContain('chain')
     expect(names).not.toContain('issue12')

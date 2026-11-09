@@ -1,22 +1,48 @@
 import type { NeedItem } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
-import { Badge } from '@/components/ui/badge'
+import { Lozenge } from '@/components/kit'
+import { issueNumber, metaWords, projectOf, summaryLine } from '@/lib/needs'
 import { cn } from '@/lib/utils'
-import { issueNumber, originOf, waitingWords } from '@/lib/needs'
 import { BodyOf } from './bodies'
 
+const LINK =
+  'relative z-10 rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50'
+
+/** The project as a chip that opens Flow filtered to it; an item that names none shows the word, plain. */
+export function ProjectChip({ item }: { item: Pick<NeedItem, 'repo'> }) {
+  const chip =
+    'inline-flex h-5 shrink-0 items-center rounded-md bg-muted px-1.5 text-xs text-muted-foreground transition-colors'
+  if (item.repo === null) return <span className={chip}>{projectOf(item)}</span>
+  return (
+    <Link
+      to="/flow"
+      search={{ project: item.repo }}
+      className={cn(
+        chip,
+        'relative z-10 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+      )}
+    >
+      {item.repo}
+    </Link>
+  )
+}
+
 /**
- * One thing that waits on the owner, expandable in place. Opening it (a click or the deep link) scrolls it into view and
- * puts focus on its header. The ids stay in the DOM keys, never on screen.
+ * One thing that waits on the owner, expandable in place. The project leads, then the title; closed, the whole card is
+ * the click target (the title button is stretched over it, the links stay above). Opening it (a click or the deep link)
+ * scrolls it into view and puts focus on its title. The ids stay in the DOM keys, never on screen.
  */
 export function NeedCard({
   item,
+  issueTitle,
   open,
   onToggle,
   onSent,
 }: {
   item: NeedItem
+  /** the Issue's title where the Issue is known */
+  issueTitle: string | null
   open: boolean
   onToggle: () => void
   onSent: (message: string) => void
@@ -29,41 +55,52 @@ export function NeedCard({
     header.current?.focus({ preventScroll: true })
   }, [open])
 
+  const summary = summaryLine(item, issueTitle)
   return (
     <article
       ref={card}
       data-open={open}
-      className="scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors has-[h3>button:hover]:bg-accent"
+      className={cn(
+        'relative scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors',
+        !open && 'has-[h3>button:hover]:bg-accent',
+      )}
     >
-      <h3>
-        <button
-          ref={header}
-          type="button"
-          aria-expanded={open}
-          onClick={onToggle}
-          className="grid w-full gap-1 rounded-xl px-4 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <span className="font-medium">{item.title}</span>
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{originOf(item)}</span>
-            <span>{waitingWords(item.ageMs)}</span>
-            {item.stale ? <Badge variant="destructive">Stale</Badge> : null}
+      <div className="grid gap-1.5 px-4 py-3">
+        <div className="flex items-start gap-2">
+          <span className="flex h-6 items-center">
+            <ProjectChip item={item} />
           </span>
-          {open ? null : <span className={cn('line-clamp-2 text-sm text-muted-foreground')}>{item.summary}</span>}
-        </button>
-      </h3>
-      {open ? (
-        <div className="grid gap-4 border-t px-4 py-4">
-          <BodyOf item={item} onSent={onSent} />
-          {item.issue ? (
-            <Link
-              to="/issues/$id"
-              params={{ id: issueNumber(item.issue) }}
-              className="w-fit text-sm text-primary underline underline-offset-4"
+          <h3 className="min-w-0 flex-1 text-[15px] font-medium">
+            <button
+              ref={header}
+              type="button"
+              aria-expanded={open}
+              onClick={onToggle}
+              className={cn(
+                'cursor-pointer rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                !open && 'after:absolute after:inset-0 after:rounded-xl',
+              )}
             >
-              Open Issue
+              {item.title}
+            </button>
+          </h3>
+        </div>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <time className="relative z-10" dateTime={item.since} title={new Date(item.since).toLocaleString()}>
+            {metaWords(item)}
+          </time>
+          {item.stale ? <Lozenge state="waiting">Stale</Lozenge> : null}
+          {item.issue ? (
+            <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>
+              {issueTitle ?? 'Open Issue'}
             </Link>
           ) : null}
+        </p>
+        {open || summary === null ? null : <p className="line-clamp-2 text-sm text-muted-foreground">{summary}</p>}
+      </div>
+      {open ? (
+        <div className="grid gap-4 border-t px-4 py-4">
+          <BodyOf item={item} issueTitle={issueTitle} onSent={onSent} />
         </div>
       ) : null}
     </article>

@@ -85,6 +85,7 @@ const issueAffected: RootRule = (change, key) => {
 
 const BY_ROOT: Record<string, RootRule> = {
   needs: listsAffected,
+  since: listsAffected,
   flow: listsAffected,
   chain: listsAffected,
   errands: errandsAffected,
