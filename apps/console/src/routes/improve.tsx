@@ -8,7 +8,7 @@ import type {
 } from '@software-factory/contract'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { SidebarEntry, SidebarSection } from '@/components/sidebar'
+import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import {
@@ -65,8 +65,9 @@ function StatusBadge({ kpi }: { kpi: Kpi }) {
 }
 
 function WindowSwitch({ days }: { days: number }) {
+  const collapsed = useSidebarCollapsed()
   return (
-    <nav aria-label="Window" className="mb-6 flex gap-2 md:hidden">
+    <nav aria-label="Window" className={cn('mb-6 flex gap-2', !collapsed && 'md:hidden')}>
       {WINDOW_DAYS.map((choice) => (
         <Link
           key={choice}

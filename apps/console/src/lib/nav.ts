@@ -1,8 +1,8 @@
-import { FunnelIcon, GraphIcon, LightningIcon, TrendUpIcon, type Icon } from '@phosphor-icons/react'
+import { GraphIcon, KanbanIcon, LightningIcon, TrendUpIcon, type Icon } from '@phosphor-icons/react'
 
 export const NAV = [
   { to: '/needs-you', label: 'Needs you', icon: LightningIcon, key: 'N' },
-  { to: '/flow', label: 'Flow', icon: FunnelIcon, key: 'F' },
+  { to: '/flow', label: 'Flow', icon: KanbanIcon, key: 'F' },
   { to: '/chain', label: 'Chain', icon: GraphIcon, key: 'C' },
   { to: '/improve', label: 'Improve', icon: TrendUpIcon, key: 'I' },
 ] as const satisfies ReadonlyArray<{ to: string; label: string; icon: Icon; key: string }>

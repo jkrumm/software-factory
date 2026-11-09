@@ -6,7 +6,6 @@ import { PopoverTitle } from '@/components/ui/popover'
 import { useNow } from '@/lib/now'
 import { useAccounts } from '@/lib/queries'
 import { accountMeter, isExhausted, resetWords, usedPct, WARN_AT_PCT } from '@/lib/strip'
-import { cn } from '@/lib/utils'
 import { StripPopover } from './strip-popover'
 
 const toneOf = (pct: number | null) => (pct !== null && pct >= WARN_AT_PCT ? 'warn' : 'accent')
@@ -27,7 +26,7 @@ function Row({ label, hint, children }: { label: string; hint?: boolean; childre
 function Used({ name, pct, resets }: { name: string; pct: number; resets: string }) {
   return (
     <>
-      <Meter tooltip={false} name={name} value={pct / 100} tone={toneOf(pct)} valueText={`${pct} %`} />
+      <Meter tooltip={false} track="surface" name={name} value={pct / 100} tone={toneOf(pct)} valueText={`${pct} %`} />
       <p className="text-xs text-muted-foreground">{resets}</p>
     </>
   )
@@ -41,7 +40,7 @@ function AccountDetail({ quota, now }: { quota: ReadAccountQuota; now: Date }) {
   const fiveHour = usedPct(quota.fiveHourUsed)
   return (
     <>
-      <PopoverTitle>{quota.account}</PopoverTitle>
+      <PopoverTitle>Subscription {quota.account}</PopoverTitle>
       <dl className="mt-2 grid grid-cols-[7.5rem_1fr] items-start gap-x-3 gap-y-2.5">
         <Row label="This week">
           {weekly === null ? (
@@ -61,11 +60,11 @@ function AccountDetail({ quota, now }: { quota: ReadAccountQuota; now: Date }) {
             />
           )}
         </Row>
-        <Row label="Reading">
-          <span className={cn(!quota.fresh && 'text-[color:var(--vx-warn-solid)]')}>
-            {quota.fresh ? 'Fresh' : 'Stale'}
-          </span>
-        </Row>
+        {quota.fresh ? null : (
+          <Row label="Reading">
+            <span className="text-[color:var(--vx-warn-solid)]">Stale, the last figure is old</span>
+          </Row>
+        )}
         {isExhausted(quota, now) ? (
           <Row label="Limit">At its limit until {resetWords(quota.exhaustedUntil, now)}</Row>
         ) : null}
@@ -92,12 +91,9 @@ export function Accounts() {
               <>
                 <span className="max-w-28 truncate">{quota.account}</span>
                 <span className="w-16">
-                  <MeterBar value={(weeklyPct ?? 0) / 100} tone={warn ? 'warn' : 'accent'} />
+                  <MeterBar value={(weeklyPct ?? 0) / 100} tone={warn ? 'warn' : 'accent'} track="surface" />
                 </span>
-                <span className="min-w-[2.25ch] text-right">
-                  {weeklyPct === null ? '-' : weeklyPct}
-                  <span className="max-2xl:hidden">{weeklyPct === null ? '' : '%'}</span>
-                </span>
+                <span>{weeklyPct === null ? '-' : `${weeklyPct}%`}</span>
               </>
             }
           >

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { FlowCardView } from '@/components/flow/card'
 import { FlowList } from '@/components/flow/list'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { SidebarEntry, SidebarSection } from '@/components/sidebar'
+import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import {
   boardNote,
   boardOf,
@@ -125,6 +125,19 @@ function Flow() {
     <Page wide>
       <PageHeader title="Flow" note={boardNote(counts)} />
       <FlowSidebar data={data} filters={filters} />
+      <ActiveFilters
+        chips={(['project', 'origin'] as const).flatMap((name) => {
+          const value = filters[name]
+          if (!value) return []
+          return [
+            {
+              key: name,
+              label: `${name === 'project' ? 'Project' : 'Origin'}: ${name === 'origin' ? originWord(value) : value}`,
+              render: (props) => <Link to="/flow" search={{ ...filters, [name]: undefined }} {...props} />,
+            },
+          ]
+        })}
+      />
       <div className="mb-4 flex flex-wrap gap-3 md:hidden">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Project

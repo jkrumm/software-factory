@@ -41,11 +41,11 @@ export function Live() {
       }
     >
       <PopoverTitle>Connection</PopoverTitle>
-      <dl className="mt-2 grid grid-cols-[7.5rem_1fr] items-center gap-x-3 gap-y-1">
+      <dl className="mt-2 grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-1">
         <Row label="Stream">{streamWords(connection)}</Row>
         <Row label={eventLabel}>{eventAt > 0 ? age(eventAt) : none}</Row>
         <Row label="Server">{host ? <span className="font-mono">{host.version}</span> : none}</Row>
-        <Row label="Uptime">{host ? `up ${uptimeWords(host.startedAt, new Date(now))}` : none}</Row>
+        <Row label="Uptime">{host ? uptimeWords(host.startedAt, new Date(now)) : none}</Row>
       </dl>
     </StripPopover>
   )

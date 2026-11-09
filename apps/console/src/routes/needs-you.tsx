@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { NeedCard } from '@/components/needs/card'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { SidebarEntry, SidebarSection } from '@/components/sidebar'
+import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { KIND_LABEL } from '@/lib/needs'
 import { failureNote } from '@/lib/api'
 import { useNeeds } from '@/lib/queries'
@@ -85,7 +85,30 @@ function NeedsYou() {
           />
         ))}
       </SidebarSection>
+      <ActiveFilters
+        chips={
+          only
+            ? [
+                {
+                  key: 'kind',
+                  label: `Kind: ${KIND_LABEL[only]}`,
+                  render: (props) => <Link to="/needs-you" search={{}} {...props} />,
+                },
+              ]
+            : []
+        }
+      />
       {notice}
+      {only && data.counts[only] === 0 ? (
+        <EmptyState
+          title="Nothing of this kind waits."
+          action={
+            <Link to="/needs-you" search={{}} className="text-sm underline underline-offset-4">
+              Show everything that waits
+            </Link>
+          }
+        />
+      ) : null}
       <div className="grid gap-8">
         {NEED_KINDS.filter((kind) => !only || kind === only).map((kind) => {
           const items = data.items.filter((i) => i.kind === kind)

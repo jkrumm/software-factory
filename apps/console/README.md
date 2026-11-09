@@ -2,9 +2,22 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-navigation, connection chip, command palette, the status strip under the title (working / waiting / queued from
-`/v1/flow`, each account's weekly quota from `/v1/accounts`, the mini's load and swap from `/v1/machine`; the meters open
-the weekly reset and the 5-hour window), the Needs you screen, the Flow board, the Issue page and the Chain; the other screens come in later steps.
+a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, the Issue page, the Chain, Improve).
+
+**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the four screens with their
+keys (`g n`, `g f`, `g c`, `g i`) and counts, then the page's own section. A page fills that section with
+`<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): Flow's projects and origins,
+Needs you's kinds (`?kind=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
+select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the
+section is hidden, so a page shows its active filters as removable chips (`ActiveFilters`) and Improve keeps its window switch.
+
+**Header strip** (`components/status-strip.tsx`, `components/strip/`): working, waiting and queued from `/v1/flow`, each a
+link to `/flow?state=...`; one meter per subscription from `/v1/accounts`; the host's load, memory and swap with the last
+24 h and the busiest processes from `GET /v1/host`; and Live. Each meter and Live opens a popover. Live says `Live`,
+`Polling` while the event stream is closed, or `Offline` with the snapshot's age.
+
+**Palette** (`Mod+K`): Issues by title or number across projects, projects, artifacts and commands (theme, the screens with
+their keys).
 
 ## Flow
 
@@ -12,7 +25,9 @@ the weekly reset and the 5-hour window), the Needs you screen, the Flow board, t
 24 hours), from `GET /v1/flow`, refreshed by the stream like every other screen. A card carries the title, the project,
 the origin as a word, the reason (a wait's reason, the queue's message, or a closed Issue's outcome) and its age; never an
 id, and it links nowhere yet. The project and origin filters live in the URL (`/flow?project=argo&origin=feedback`), so a
-filtered view is linkable, and each column header counts what the filters leave. Every column is a virtualised list
+filtered view is linkable, and each column header counts what the filters leave. `?state=working|waiting|queued|settling|watching|closed`
+shows only that column, full width as a grid of cards, with a "Show all states" link (it never filters rows; the strip's
+counts link to it); on a phone it picks the tab. Every column is a virtualised list
 (`@tanstack/react-virtual`): only the visible cards are in the DOM. From the `lg` breakpoint (1024px) the columns sit side
 by side in a horizontally scrolling board; below it the board is one list with a tab per state (Working first, or the first
 state with cards). The layout switches with `matchMedia`, so only one of the two is ever rendered.
@@ -51,6 +66,7 @@ auth header and no base URL, and every response is parsed with the schema from `
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly six writes, the owner's answers (a Decision's answer, an
 artifact's verdict and comment, an Errand done, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+<<<<<<< HEAD
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the chip says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection
@@ -76,6 +92,10 @@ the entry holds the shell and the screens that are small; `@xyflow/react` and da
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
 service worker. A list is virtualised only where it can grow to hundreds (the Flow columns); the others hold a handful of rows.
 Keys must not carry a timestamp that moves with each answer, or the row is rebuilt on every refetch.
+=======
+`/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the active queries; while it is not open the
+queries poll every 15 s and the strip's Live says `Polling`.
+>>>>>>> d32a7e3 (fix(console): round 2 of the frame review - legends, popover sizing, phone strip, collapsed sidebar, evidence)
 
 ## Tokens
 
@@ -131,7 +151,7 @@ to `/artifacts/<id>`, where the answer is given. `tests/e2e/issue.e2e.ts` compar
 ## Kit
 
 `src/components/kit/` holds the Console's own components (StatCard, Lozenge, KindBadge, IssueCard and IssueRow,
-PropertyList, Section and Fold, StepRail, Meter, Sparkline and MiniBars, InfoHint, EmptyState, Skeleton), each on Basalt
+PropertyList, Section and Fold, StepRail, Meter and MeterBar, Sparkline, MiniBars and TimeChart (`kit/time-chart.tsx`, a time axis with a reference line), InfoHint, EmptyState, Skeleton), each on Basalt
 tokens alone, and `/kit` shows them together on fixtures (reachable by its address; it has no nav entry and makes no query).
 An InfoHint's text is the word's definition from `docs/language.md`: `scripts/language.ts` writes
 `src/lib/language.gen.ts` (`bun run --cwd apps/console language`) and `language:check` in `make check` fails when it is

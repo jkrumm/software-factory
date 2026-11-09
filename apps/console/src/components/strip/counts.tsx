@@ -26,10 +26,11 @@ export function Counts() {
             search={{ state } as never}
             className="inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            {/* the lamp's place is kept when it is dark, so the row does not shift */}
-            {state === 'working' ? (
-              <span aria-hidden="true" className={cn('size-2 rounded-full', count ? 'bg-good' : 'bg-transparent')} />
-            ) : null}
+            {/* only Working has a lamp; the slot is kept on all three so the figures line up */}
+            <span
+              aria-hidden="true"
+              className={cn('size-2 rounded-full', state === 'working' && count ? 'bg-good' : 'bg-transparent')}
+            />
             <span className="min-w-[1ch] text-right text-[13px] font-semibold text-foreground">{count ?? '-'}</span>{' '}
             {label}
           </Link>

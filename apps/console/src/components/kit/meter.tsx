@@ -14,6 +14,8 @@ export interface MeterProps {
   valueText?: string
   /** Whether the bar shows its value in a tooltip on hover and focus; off where the value is written beside it. */
   tooltip?: boolean
+  /** The track of the bar, see `MeterBarProps`. */
+  track?: 'tint' | 'surface'
   /** Overrides the tone the value picks (`meterTone`): the strip warns at 90 %, not at 70. */
   tone?: Tone
   className?: string
@@ -23,22 +25,27 @@ export interface MeterBarProps {
   /** 0 to 1. */
   value: number
   tone: Tone
+  /** `tint` is the fill's colour at 18 %; `surface` is the border step, for a bar on the chrome or a popover. */
+  track?: 'tint' | 'surface'
   className?: string
 }
 
+/** A fill is at least 2 px wide when there is any, so 3 % is still seen. */
+const fill = (value: number): string => {
+  const clamped = Math.max(0, Math.min(1, value))
+  return clamped > 0 ? `max(2px, ${clamped * 100}%)` : '0'
+}
+
 /** The bar alone, for a place that carries its own label and name: a track at 18 % of the fill's colour. Decorative. */
-export function MeterBar({ value, tone, className }: MeterBarProps) {
+export function MeterBar({ value, tone, track = 'tint', className }: MeterBarProps) {
   const mark = TONE_MARK[tone]
   return (
     <div
       aria-hidden="true"
       className={cn('h-1.5 w-full overflow-hidden rounded-full', className)}
-      style={{ background: mix(mark, 18) }}
+      style={{ background: track === 'surface' ? 'var(--vx-surface-border)' : mix(mark, 18) }}
     >
-      <div
-        className="h-full rounded-full"
-        style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: mark }}
-      />
+      <div className="h-full rounded-full" style={{ width: fill(value), background: mark }} />
     </div>
   )
 }
@@ -51,7 +58,7 @@ export function meterTone(value: number): Tone {
 }
 
 /** A thin rounded bar, its track a lighter step of the fill's own hue. Shows its value on hover and focus. */
-export function Meter({ value, label, name, valueText, tone, tooltip = true, className }: MeterProps) {
+export function Meter({ value, label, name, valueText, tone, tooltip = true, track, className }: MeterProps) {
   const [shown, setShown] = useState(false)
   const clamped = Math.max(0, Math.min(1, value))
   const text = valueText ?? `${Math.round(clamped * 100)} %`
@@ -72,7 +79,7 @@ export function Meter({ value, label, name, valueText, tone, tooltip = true, cla
         onFocus={() => setShown(true)}
         onBlur={() => setShown(false)}
       >
-        <MeterBar value={clamped} tone={tone ?? meterTone(clamped)} />
+        <MeterBar value={clamped} tone={tone ?? meterTone(clamped)} track={track} />
         {shown && tooltip ? (
           <ChartTooltip
             row={{ value: text, label: label ?? name ?? 'Meter' }}

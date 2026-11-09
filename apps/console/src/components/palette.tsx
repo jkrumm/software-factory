@@ -216,7 +216,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           value={query}
           onValueChange={setQuery}
         />
-        <CommandList className="h-80 max-h-80">
+        <CommandList className="max-h-96 min-h-52">
           <CommandEmpty>Nothing matches.</CommandEmpty>
           {result.issues.length > 0 ? (
             <CommandGroup heading={query.trim() === '' ? 'Recently active' : 'Issues'}>
@@ -293,7 +293,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </CommandGroup>
           ) : null}
         </CommandList>
-        <div className="flex items-center gap-4 px-3 py-2 text-xs text-muted-foreground">
+        <div className="hidden items-center gap-4 px-3 py-2 text-xs text-muted-foreground md:flex">
           <Hint keys="↑↓" label="move" />
           <Hint keys="↵" label="open" />
           <Hint keys="esc" label="close" />

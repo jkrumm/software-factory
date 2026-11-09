@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { SidebarEntry, SidebarSection } from '@/components/sidebar'
+import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { failureNote } from '@/lib/api'
 import { useChain } from '@/lib/queries'
@@ -73,6 +73,19 @@ function Chain() {
           />
         ))}
       </SidebarSection>
+      <ActiveFilters
+        chips={
+          filters.project
+            ? [
+                {
+                  key: 'project',
+                  label: `Project: ${filters.project}`,
+                  render: (props) => <Link to="/chain" search={{}} {...props} />,
+                },
+              ]
+            : []
+        }
+      />
       <div className="mb-4 flex flex-wrap gap-3 md:hidden">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Project

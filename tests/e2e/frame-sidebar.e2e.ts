@@ -81,6 +81,36 @@ test('it collapses to icons, keeps the choice across a reload and expands again'
   await expect(section(page, 'Projects')).toBeVisible()
 })
 
+test('collapsed, the active filters show as removable chips and the window switch stays', async ({ page }) => {
+  await page.goto('/flow?project=argo')
+  const chips = page.getByRole('group', { name: 'Active filters' })
+  await expect(chips).toBeHidden()
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+  await expect(chips.getByRole('link', { name: 'Remove filter Project: argo' })).toBeVisible()
+  await chips.getByRole('link', { name: 'Remove filter Project: argo' }).click()
+  await expect(page).not.toHaveURL(/project=/)
+  await expect(chips).toBeHidden()
+
+  await page.goto('/chain?project=pearl')
+  await expect(chips.getByRole('link', { name: 'Remove filter Project: pearl' })).toBeVisible()
+  await page.goto('/needs-you?kind=errand')
+  await expect(chips.getByRole('link', { name: 'Remove filter Kind: Errands' })).toBeVisible()
+  await page.goto('/improve')
+  await expect(page.getByRole('navigation', { name: 'Window' })).toBeVisible()
+  await expect(nav(page).getByRole('link', { name: /^Needs you/ })).toHaveAttribute('aria-label', /waiting/)
+  await page.getByRole('button', { name: 'Expand sidebar' }).click()
+})
+
+test('a kind with nothing waiting says so and links back', async ({ page, apiUrl }) => {
+  const { counts } = await api<{ counts: Record<keyof typeof KIND_WORD, number> }>(apiUrl, '/v1/needs')
+  const empty = (Object.keys(KIND_WORD) as (keyof typeof KIND_WORD)[]).find((k) => counts[k] === 0)
+  if (!empty) return
+  await page.goto(`/needs-you?kind=${empty}`)
+  await expect(page.getByText('Nothing of this kind waits.')).toBeVisible()
+  await page.getByRole('link', { name: 'Show everything that waits' }).click()
+  await expect(page).not.toHaveURL(/kind=/)
+})
+
 test('Flow: projects and origins toggle the URL and the board, All clears', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   const all = [...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently]

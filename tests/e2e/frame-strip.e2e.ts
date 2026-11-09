@@ -58,10 +58,9 @@ test.describe('the meters and their popovers', () => {
       await trigger.click()
       const popup = page.getByRole('dialog')
       await expect(popup).toBeVisible()
-      await expect(popup.getByText(account, { exact: true })).toBeVisible()
-      for (const row of ['This week', '5-hour window', 'Reading'])
+      await expect(popup.getByText(`Subscription ${account}`, { exact: true })).toBeVisible()
+      for (const row of ['This week', '5-hour window'])
         await expect(popup.getByText(row, { exact: true })).toBeVisible()
-      await expect(popup.getByText(/Fresh|Stale/)).toBeVisible()
       await expect(popup.getByRole('meter').first()).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(popup).toBeHidden()
@@ -100,13 +99,33 @@ test.describe('the meters and their popovers', () => {
       await expect(tip).toBeVisible()
       await expect(tip).toContainText(/\d\d:\d\d/)
     }
+    // the figures read "now" until a chart is pointed at, then that minute, marked with its time
+    await page.mouse.move(0, 0)
+    await expect(popup.getByText('now', { exact: true })).toHaveCount(6)
+    await charts.nth(1).hover({ position: { x: 100, y: 30 } })
+    await expect(popup.getByText(/^at \d\d:\d\d$/)).toHaveCount(3)
+    const tip = await popup.getByRole('status').boundingBox()
+    const frame = await popup.boundingBox()
+    expect(tip?.y ?? 0).toBeGreaterThanOrEqual((frame?.y ?? 0) + 40)
+    await page.mouse.move(0, 0)
+    await expect(popup.getByText(/^at \d\d:\d\d$/)).toHaveCount(0)
     await expect(popup.getByText('-24 h')).toHaveCount(3)
-    await expect(popup.getByText('now', { exact: true })).toHaveCount(3)
 
     for (const title of ['Top by CPU', 'Top by memory']) {
       const table = popup.locator('section', { has: page.getByRole('heading', { name: title }) })
       await expect(table.locator('tbody tr')).toHaveCount(8)
     }
+    const clipped = await popup
+      .locator('tbody td')
+      .evaluateAll(
+        (cells) =>
+          cells.filter(
+            (cell) =>
+              (cell as unknown as { scrollWidth: number }).scrollWidth >
+              (cell as unknown as { clientWidth: number }).clientWidth,
+          ).length,
+      )
+    expect(clipped).toBe(0)
     await page.keyboard.press('Escape')
     await expect(popup).toBeHidden()
   })
@@ -128,7 +147,7 @@ test.describe('the meters and their popovers', () => {
     await expect(popup.getByText('Last event')).toBeVisible()
     await expect(popup.getByText(/just now|\d+ min ago/)).toBeVisible()
     await expect(popup.getByText(host.version, { exact: true })).toBeVisible()
-    await expect(popup.getByText(/^up (\d+ d \d+ h|\d+ h \d+ min|\d+ min|under a minute)$/)).toBeVisible()
+    await expect(popup.getByText(/^(\d+ d \d+ h|\d+ h \d+ min|\d+ min|under a minute)$/)).toBeVisible()
   })
 })
 
@@ -201,17 +220,17 @@ test.describe('the palette', () => {
     for (const hint of ['move', 'open', 'close']) await expect(dialog(page).getByText(hint)).toBeVisible()
   })
 
-  test('keeps its size while the results change', async ({ page, apiUrl }) => {
-    const { word } = await world(apiUrl)
+  test('does not jump while typing a short query: it keeps its minimum height', async ({ page }) => {
     await page.goto('/needs-you')
-    await open(page)
-    const box = () => dialog(page).evaluate((el) => (el as { offsetHeight: number }).offsetHeight)
-    const empty = await box()
-    await dialog(page).getByRole('combobox').fill(word)
-    expect(await box()).toBe(empty)
-    await dialog(page).getByRole('combobox').fill('zzzzqqq')
+    await open(page, 'zzzzqqq')
     await expect(dialog(page).getByText('Nothing matches.')).toBeVisible()
-    expect(await box()).toBe(empty)
+    const height = () => dialog(page).evaluate((el) => (el as { offsetHeight: number }).offsetHeight)
+    const empty = await height()
+    expect(empty).toBeGreaterThan(250)
+    for (const query of ['go to f', 'go to fl', 'flow', 'zzzzqqq']) {
+      await dialog(page).getByRole('combobox').fill(query)
+      expect(await height(), query).toBe(empty)
+    }
   })
 })
 
@@ -251,6 +270,7 @@ test.describe('the strip at 1280 and on a phone', () => {
       await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
       const box = await strip(page).boundingBox()
       expect(box?.height ?? 0).toBeGreaterThan(40)
+      expect(box?.height ?? 999).toBeLessThan(100)
       expect(await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
     })
 

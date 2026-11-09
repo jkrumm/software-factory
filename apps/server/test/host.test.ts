@@ -11,7 +11,7 @@ import { hostPass } from '../src/app/loops/host.ts'
 
 const PS = `    1   0.1    12288 /sbin/launchd
   412  96.4  2411520 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-  733  41.2  1843200 /Users/test/.bun/bin/bun
+  733  41.2  1843200 /opt/tools/bin/bun
  1204  17.3  3145728 claude
 garbage line
    55   0,5      100 -zsh

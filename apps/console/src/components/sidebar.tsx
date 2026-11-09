@@ -1,9 +1,8 @@
-import { FactoryIcon, SidebarSimpleIcon } from '@phosphor-icons/react'
+import { FactoryIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
@@ -70,8 +69,43 @@ export function SidebarSection({ title, children }: { title: string; children: R
   )
 }
 
-const ENTRY =
-  'group flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] font-medium text-muted-foreground outline-none transition-colors duration-100 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:bg-accent aria-pressed:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground motion-reduce:transition-none'
+const ROW =
+  'group flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-[13px] font-medium text-muted-foreground outline-none transition-colors duration-100 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none'
+/** A toggle row: no filled block, a selected one gets a leading dot and heavier text. */
+const ENTRY = `${ROW} aria-pressed:font-semibold aria-pressed:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground`
+
+/** Whether the sidebar is collapsed to icons. */
+export const useSidebarCollapsed = (): boolean => useSidebar().collapsed
+
+interface FilterChip {
+  key: string
+  label: string
+  /** returns the link that clears this filter */
+  render: (props: { className: string; 'aria-label': string; children: ReactNode }) => ReactElement
+}
+
+/** The page's active filters as removable chips, for md+ while the sidebar is collapsed (its section is hidden then). */
+export function ActiveFilters({ chips }: { chips: FilterChip[] }) {
+  const collapsed = useSidebarCollapsed()
+  if (!collapsed || chips.length === 0) return null
+  return (
+    <div aria-label="Active filters" role="group" className="mb-4 hidden flex-wrap gap-2 md:flex">
+      {chips.map((chip) =>
+        chip.render({
+          className:
+            'inline-flex h-6 items-center gap-1 rounded-full bg-secondary px-2.5 text-xs text-secondary-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none',
+          'aria-label': `Remove filter ${chip.label}`,
+          children: (
+            <>
+              {chip.label}
+              <XIcon className="size-3" aria-hidden />
+            </>
+          ),
+        }),
+      )}
+    </div>
+  )
+}
 
 /** One toggle of a page section: a label and the count behind it. `render` returns the link or button that carries the props. */
 export function SidebarEntry({
@@ -98,8 +132,12 @@ export function SidebarEntry({
     ...(current ? { 'aria-current': 'page' as const } : {}),
     children: (
       <>
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full bg-primary opacity-0 group-aria-pressed:opacity-100 group-aria-[current=page]:opacity-100"
+        />
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        {count === undefined ? null : <span className="text-xs tabular-nums">{count}</span>}
+        {count === undefined ? null : <span className="text-xs font-normal tabular-nums">{count}</span>}
       </>
     ),
   })
@@ -134,13 +172,14 @@ function NavEntry({
   const chord = format(['G', item.key])
   const Icon = item.icon
   const shown = count ? count : null
+  const countWords = shown === null ? null : `${shown} ${countLabel}`
   const link = (
     <Link
       to={item.to}
-      aria-label={collapsed ? item.label : undefined}
+      aria-label={collapsed ? [item.label, countWords].filter(Boolean).join(', ') : undefined}
       className={cn(
-        ENTRY,
-        'relative data-[status=active]:bg-accent data-[status=active]:text-foreground',
+        ROW,
+        'relative data-[status=active]:bg-accent data-[status=active]:text-[color:var(--vx-accent)]',
         collapsed && 'justify-center px-0',
       )}
     >
@@ -153,20 +192,18 @@ function NavEntry({
           </kbd>
         </>
       )}
-      {shown === null ? null : prominent ? (
-        <Badge
-          aria-label={`${shown} ${countLabel}`}
+      {shown === null ? null : collapsed ? (
+        <span
+          aria-hidden
           className={cn(
-            'h-4 min-w-4 justify-center px-1 text-[11px] tabular-nums',
-            collapsed && 'absolute top-0 right-0',
+            'absolute top-1 right-2 size-1.5 rounded-full',
+            prominent ? 'bg-primary' : 'bg-muted-foreground',
           )}
-        >
-          {shown}
-        </Badge>
+        />
       ) : (
         <span
-          aria-label={`${shown} ${countLabel}`}
-          className={cn('text-xs tabular-nums', collapsed && 'absolute top-0 right-0.5 text-[10px]')}
+          aria-label={countWords ?? undefined}
+          className={cn('text-xs font-normal tabular-nums', prominent && 'font-semibold text-foreground')}
         >
           {shown}
         </span>
@@ -179,6 +216,7 @@ function NavEntry({
       <TooltipTrigger render={link} />
       <TooltipContent side="right">
         {item.label} {chord}
+        {countWords ? `, ${countWords}` : ''}
       </TooltipContent>
     </Tooltip>
   )
@@ -229,7 +267,7 @@ export function Sidebar({ needs }: { needs: number | null }) {
               type="button"
               aria-label={label}
               onClick={toggle}
-              className={cn(ENTRY, collapsed && 'justify-center px-0')}
+              className={cn(ROW, collapsed && 'justify-center px-0')}
             />
           }
         >

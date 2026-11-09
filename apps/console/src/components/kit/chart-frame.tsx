@@ -1,4 +1,12 @@
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { cn } from '@/lib/utils'
 
 /** One point of a chart as the tooltip and the hidden table say it. */
@@ -8,7 +16,17 @@ export interface ChartRow {
 }
 
 /** Value first and strong, label second. React text nodes only. */
-export function ChartTooltip({ row, left, className }: { row: ChartRow; left: number | string; className?: string }) {
+export function ChartTooltip({
+  row,
+  left,
+  top = -6,
+  className,
+}: {
+  row: ChartRow
+  left: number | string
+  top?: number
+  className?: string
+}) {
   return (
     <div
       role="status"
@@ -18,7 +36,7 @@ export function ChartTooltip({ row, left, className }: { row: ChartRow; left: nu
       )}
       style={{
         left,
-        top: -6,
+        top,
         background: 'var(--vx-tooltip-bg)',
         boxShadow: 'var(--vx-tooltip-shadow)',
       }}
@@ -33,6 +51,19 @@ export function ChartTooltip({ row, left, className }: { row: ChartRow; left: nu
 
 const TOOLTIP_EDGE = 48
 
+/** Inside the chart's box, on the side of the point with more room: never over a popover's edge. */
+function InsideTooltip({ row, x, width }: { row: ChartRow; x: number; width: number }) {
+  const right = x > width / 2
+  return (
+    <ChartTooltip
+      row={row}
+      left={right ? x - 10 : x + 10}
+      top={2}
+      className={right ? '-translate-x-full translate-y-0' : 'translate-x-0 translate-y-0'}
+    />
+  )
+}
+
 interface ChartFrameProps {
   height: number
   /** What the chart shows with its range, for the accessible name and the hidden table's caption. */
@@ -44,6 +75,13 @@ interface ChartFrameProps {
   anchorX: (index: number, width: number) => number
   /** The point a keyboard focus starts on. */
   initialIndex: number
+  /** Called whenever the point under the pointer or focus changes; null when it leaves. */
+  onActiveChange?: (index: number | null) => void
+  /**
+   * `above` puts the tooltip over the chart; `inside` keeps it within the chart's own box, at the side away from the
+   * point, for a chart that sits near the edge of a popover.
+   */
+  tooltip?: 'above' | 'inside'
   className?: string
   children: (chart: { width: number; active: number | null }) => ReactNode
 }
@@ -59,6 +97,8 @@ export function ChartFrame({
   indexAt,
   anchorX,
   initialIndex,
+  onActiveChange,
+  tooltip = 'above',
   className,
   children,
 }: ChartFrameProps) {
@@ -74,6 +114,8 @@ export function ChartFrame({
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => onActiveChange?.(active), [active, onActiveChange])
 
   const last = rows.length - 1
   const clamp = (index: number) => Math.max(0, Math.min(last, index))
@@ -111,8 +153,11 @@ export function ChartFrame({
       onKeyDown={onKeyDown}
     >
       {width > 0 ? children({ width, active }) : null}
-      {row && active !== null ? (
+      {row && active !== null && tooltip === 'above' ? (
         <ChartTooltip row={row} left={Math.max(TOOLTIP_EDGE, Math.min(width - TOOLTIP_EDGE, anchorX(active, width)))} />
+      ) : null}
+      {row && active !== null && tooltip === 'inside' ? (
+        <InsideTooltip row={row} x={anchorX(active, width)} width={width} />
       ) : null}
       <table className="sr-only">
         <caption>{summary}</caption>

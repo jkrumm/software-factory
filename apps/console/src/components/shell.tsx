@@ -77,24 +77,27 @@ export function Shell() {
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="flex shrink-0 items-center gap-3 border-b px-4 pt-[env(safe-area-inset-top)] md:min-h-12 md:px-8">
               <div className="min-w-0 flex-1">
-                <StatusStrip />
-              </div>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-11 shrink-0 md:size-8"
-                      aria-label="Open command palette"
-                      onClick={() => setPaletteOpen(true)}
-                    />
+                <StatusStrip
+                  trailing={
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-11 shrink-0 md:size-8"
+                            aria-label="Open command palette"
+                            onClick={() => setPaletteOpen(true)}
+                          />
+                        }
+                      >
+                        <MagnifyingGlassIcon className="size-5" />
+                      </TooltipTrigger>
+                      <TooltipContent>Command palette {format('Mod+K')}</TooltipContent>
+                    </Tooltip>
                   }
-                >
-                  <MagnifyingGlassIcon className="size-5" />
-                </TooltipTrigger>
-                <TooltipContent>Command palette {format('Mod+K')}</TooltipContent>
-              </Tooltip>
+                />
+              </div>
             </header>
             <main className="min-h-0 flex-1 overflow-y-auto">
               <Outlet />

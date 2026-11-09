@@ -24,6 +24,8 @@ export interface TimeChartProps {
   reference?: number
   format: (value: number) => string
   height?: number
+  /** Told when the point under the pointer changes (null when it leaves), so a figure beside the chart can follow it. */
+  onActiveChange?: (index: number | null) => void
   className?: string
 }
 
@@ -38,7 +40,16 @@ const clock = (ms: number): string => new Date(ms).toLocaleTimeString('en-GB', {
  * Readings over time on a true time axis: 2 px lines, hairline gridlines, an optional dashed reference, a crosshair and a
  * tooltip with the time and every series' value (pointer or arrow keys). The axis starts at zero. No animation.
  */
-export function TimeChart({ name, times, series, reference, format, height = 64, className }: TimeChartProps) {
+export function TimeChart({
+  name,
+  times,
+  series,
+  reference,
+  format,
+  height = 64,
+  onActiveChange,
+  className,
+}: TimeChartProps) {
   const n = times.length
   const first = times[0] ?? 0
   const span = (times[n - 1] ?? first) - first
@@ -72,6 +83,8 @@ export function TimeChart({ name, times, series, reference, format, height = 64,
       rows={rows}
       className={className}
       initialIndex={latest}
+      onActiveChange={onActiveChange}
+      tooltip="inside"
       indexAt={(x, width) => nearestTime(times, first + (span * (x - PAD_X)) / Math.max(1, width - 2 * PAD_X))}
       anchorX={xOf}
     >
