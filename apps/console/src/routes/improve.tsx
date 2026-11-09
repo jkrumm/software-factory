@@ -20,7 +20,7 @@ import {
   WrenchIcon,
 } from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Fold, MenuPopover, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
+import { Fold, InfoHint, MenuPopover, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
 import { buttonVariants } from '@/components/ui/button'
@@ -30,6 +30,7 @@ import {
   comparisonWords,
   DEFAULT_WINDOW,
   distanceWords,
+  FRICTION_GROUP_HINT,
   FRICTION_GROUP_LABEL,
   fixCard,
   fixClassRows,
@@ -42,6 +43,7 @@ import {
   historyValues,
   historyXLabels,
   kpiChange,
+  KPI_HINT,
   kpiFooter,
   lineTone,
   perIssueWords,
@@ -134,6 +136,7 @@ function KpiCard({ kpi, model }: { kpi: Kpi; model: KpiModel }) {
     <StatCard
       icon={KPI_ICON[kpi.key]}
       title={kpi.label}
+      hint={KPI_HINT[kpi.key]}
       subtitle={comparisonWords(model.days)}
       value={formatKpi(kpi)}
       delta={kpi.measured ? { value: change.text, direction: change.direction, tone: change.tone } : undefined}
@@ -167,6 +170,7 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
   const common = {
     icon: WrenchIcon,
     title: 'Fix commits per week',
+    hint: KPI_HINT.fix_commits,
     subtitle: 'This week against the one before',
     className: '@3xl:col-span-2',
   }
@@ -248,9 +252,13 @@ function FrictionGroup({
   const rows = counts.filter((c) => c.group === group)
   if (rows.length === 0) return null
   const title = FRICTION_GROUP_LABEL[group]
+  const hint = group in FRICTION_GROUP_HINT ? FRICTION_GROUP_HINT[group as keyof typeof FRICTION_GROUP_HINT] : null
   return (
     <div className={cn(PANEL, 'px-4 py-3')} style={PANEL_SHADOW}>
-      <h3 className="mb-1 text-sm font-medium">{title}</h3>
+      <h3 className="mb-1 flex items-center gap-0.5 text-sm font-medium">
+        {title}
+        {hint ? <InfoHint word={hint} className="-my-1" /> : null}
+      </h3>
       <ul aria-label={title} className="divide-y text-sm">
         {rows.map((row) => (
           <li key={row.key} className="flex items-baseline justify-between gap-4 py-1.5">

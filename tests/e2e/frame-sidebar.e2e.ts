@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
+import { expectHint } from './hints.ts'
 import { api, needsCount } from './seed.ts'
 
 /** The sidebar: logo and wordmark, the global nav with counts and keys, collapse, and the page's own section. */
@@ -183,6 +184,17 @@ test('Needs you: a kind in the sidebar shows only that kind, a second click show
   await link.click()
   await expect(page).not.toHaveURL(/kind=/)
   await expect(headings).toHaveCount(kinds.length)
+})
+
+test('Needs you: the sidebar kinds have an InfoHint beside the row, not inside the toggle', async ({ page }) => {
+  await page.goto('/needs-you')
+  const kinds = section(page, 'Kinds')
+  for (const word of ['review', 'decision', 'errand', 'held signal'] as const) {
+    await expectHint(kinds, word)
+  }
+  // a hint is a separate control: the toggles still hold only their label and count
+  await expect(kinds.getByRole('link').first().getByRole('button')).toHaveCount(0)
+  await expect(kinds.getByRole('link')).toHaveCount(5)
 })
 
 test('Chain: the sidebar lists the projects and toggles the filter', async ({ page }) => {

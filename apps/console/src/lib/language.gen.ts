@@ -6,6 +6,8 @@ export const LANGUAGE = {
   artifact: 'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
+  'avoidable touch':
+    'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   caller:
     "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), read (the surfaces)",
   cancelled: "Outcome: the owner's stop",
@@ -16,8 +18,11 @@ export const LANGUAGE = {
     'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
   claim:
     "A lead's place in its repo: leads: N plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
+  compacted: 'Session state: its context was just compacted, no turn since',
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",
+  cost: "Dollars the usage schema priced for an Issue's sessions, joined at read, never copied",
+  cycle: 'The time from an Issue filed to closed',
   decision:
     'One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review',
   'decision status': 'open, answered, or withdrawn (the Issue no longer waits for it: it closed or was cancelled)',
@@ -33,12 +38,18 @@ export const LANGUAGE = {
     "Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then factory-errand) passes it",
   event:
     'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way',
+  'first verification pass':
+    "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
+  'fix commit':
+    'A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week',
   flow: 'The read model of Issues by state over time; Chain is its graph',
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
+  gone: 'Session state: its session ended or its terminal is gone',
   healed: 'Outcome: an incident that went away before a lead started',
   'held signal':
     'Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it',
+  idle: 'Session state: its last turn ended',
   incident:
     'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
@@ -64,7 +75,12 @@ export const LANGUAGE = {
     'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, unknown_project, drain, load, memory, claim, window, cap',
   'queue state':
     'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
+  'queue wait':
+    'The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it',
   queued: 'State: ready, held back by capacity or a chain',
+  refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
+  regressed:
+    'A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall',
   report: 'For information, never waits. A spike is a Report with a verdict',
   review:
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
@@ -75,7 +91,7 @@ export const LANGUAGE = {
   screen:
     'The Judge looks at a held signal (the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most',
   'session state':
-    "What a lead's session is, derived from its hook events: starting (no hook yet), working, idle, compacted, walled (its account hit a limit), gone",
+    "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
   settler:
     'Who settled a Decision, in the order tried: policy, judge, default, owner; or orchestrator, answering for the owner',
   settling: 'State: triage is not done',
@@ -84,13 +100,15 @@ export const LANGUAGE = {
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   spec: 'A larger plan to review',
+  stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
+  starting: 'Session state: no hook yet',
   state:
     'Where an Issue is: settling (triage is not done), queued (ready, held back by capacity or a chain), working (a lead runs), waiting (a named wait), watching (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), closed. The only field a person reads to know what an Issue is doing',
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
-  touch: 'The owner acting on an Issue. Avoidable touch: one the factory should have settled',
+  touch: 'The owner acting on an Issue',
   triage:
     'Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped',
   'triage outcome':
@@ -101,10 +119,12 @@ export const LANGUAGE = {
   verify: 'The check that ends the watch: make verify, probes',
   wait: 'A pause with a named exit',
   waiting: 'State: a named wait',
+  walled: 'Session state: its account hit a limit',
   watch: 'The window after a ship',
   watching:
     'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass',
   window: "An account's 5-hour or weekly reset",
+  'window point': "A point of the five-hour Max window that an Issue's sessions used, per Issue",
   'work repo': 'A repo no project.yaml describes. The read token never sees its words',
   working: 'State: a lead runs',
   'worth asking': "The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent",

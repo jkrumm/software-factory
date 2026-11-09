@@ -29,6 +29,7 @@ export type IssueCardProps = Omit<IssueViewProps, 'since'> & {
 export function IssueCard({
   title,
   project,
+  projectAs,
   kind,
   state,
   reason,
@@ -65,7 +66,7 @@ export function IssueCard({
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <KindBadge kind={kind} />
-        <ProjectChip project={project} />
+        <ProjectChip project={project} as={projectAs} />
         {showState ? <Lozenge state={state}>{stateLabel}</Lozenge> : null}
         {origin ? <span className="text-xs text-muted-foreground">{origin}</span> : null}
       </div>

@@ -2,21 +2,25 @@ import { ArrowDownRightIcon, ArrowUpRightIcon, type Icon, MinusIcon } from '@pho
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { CardLink, type CardLinkProps, isLinked, LINKED_CARD } from './card-link'
+import { InfoHint, type InfoWord } from './info-hint'
 import { MenuButton } from './menu-button'
 import { MiniBars } from './mini-bars'
 import { Sparkline } from './sparkline'
 import { TONE_TEXT, TONE_TINT, type Tone } from './tone'
 
-/** A footer pair; a `null` value is a dash with `note` as its reason. */
+/** A footer pair; a `null` value is a dash with `note` as its reason. `hint` is the domain word its value carries an InfoHint for. */
 export interface FooterPair {
   label: string
   value: string | null
   note?: string
+  hint?: InfoWord
 }
 
 export interface StatCardProps extends CardLinkProps {
   icon: Icon
   title: string
+  /** A domain word the title carries an InfoHint for, after the title (above a stretched link). */
+  hint?: InfoWord
   /** Names the comparison: "Against the last 7 days". */
   subtitle: string
   /** The large figure; `null` is a value nobody counted, drawn as a dash with `valueNote` as the reason. */
@@ -98,6 +102,7 @@ function DeltaPill({ delta }: { delta: NonNullable<StatCardProps['delta']> }) {
 export function StatCard({
   icon: CardIcon,
   title,
+  hint,
   subtitle,
   value,
   valueNote,
@@ -146,14 +151,17 @@ export function StatCard({
           <CardIcon className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3
-            title={title}
-            className="truncate text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
-          >
-            <CardLink href={href} as={as}>
-              {title}
-            </CardLink>
-          </h3>
+          <div className="flex items-center gap-0.5">
+            <h3
+              title={title}
+              className="min-w-0 truncate text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
+            >
+              <CardLink href={href} as={as}>
+                {title}
+              </CardLink>
+            </h3>
+            {hint ? <InfoHint word={hint} className="relative z-10 -my-1" /> : null}
+          </div>
           <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
         {menu ?? (onMenu ? <MenuButton onClick={onMenu} label={`${title} options`} /> : null)}
@@ -213,6 +221,7 @@ export function StatCard({
                 ) : (
                   pair.value
                 )}
+                {pair.hint ? <InfoHint word={pair.hint} className="relative z-10 -my-1 ml-0.5 align-middle" /> : null}
               </dd>
             </div>
           ))}

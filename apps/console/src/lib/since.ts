@@ -1,9 +1,12 @@
 import type { SinceItem, SinceModel } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone.ts'
 import type { Origin } from './flow.ts'
+import type { LANGUAGE } from './language.gen.ts'
 import { agoWords } from './needs.ts'
 
 export { agoWords }
+
+type InfoWord = keyof typeof LANGUAGE
 
 /** The band's categories, in the order they read. */
 export const SINCE_KEYS = ['shipped', 'failed', 'dropped', 'judge', 'screen', 'filed', 'incidents'] as const
@@ -31,7 +34,13 @@ export const SINCE_TONE: Record<SinceKey, Tone> = {
 }
 
 /** The domain words a category carries an InfoHint for. */
-export const SINCE_HINT: Partial<Record<SinceKey, 'judge' | 'screen'>> = { judge: 'judge', screen: 'screen' }
+export const SINCE_HINT = {
+  failed: 'regressed',
+  dropped: 'dropped',
+  judge: 'judge',
+  screen: 'screen',
+  incidents: 'incident',
+} as const satisfies Partial<Record<SinceKey, InfoWord>>
 
 /** An origin as it reads inside a sentence: "2 you, 1 GitHub". */
 const ORIGIN_WORD = {
@@ -60,7 +69,7 @@ export interface SinceRow {
   label: string
   count: number
   tone: Tone
-  hint?: 'judge' | 'screen'
+  hint?: InfoWord
   /** the newest `SHOWN`, newest first */
   shown: SinceItem[]
   /** the rest of what arrived (the server sends the newest 8) */
@@ -84,7 +93,7 @@ export function sinceRows(model: SinceModel): SinceRow[] {
       label: SINCE_LABEL[key],
       count: category.count,
       tone: SINCE_TONE[key],
-      ...(SINCE_HINT[key] ? { hint: SINCE_HINT[key] } : {}),
+      ...(key in SINCE_HINT ? { hint: SINCE_HINT[key as keyof typeof SINCE_HINT] } : {}),
       shown: items.slice(0, SHOWN),
       folded: items.slice(SHOWN),
       more: Math.max(0, category.count - items.length),

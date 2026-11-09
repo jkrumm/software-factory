@@ -4,6 +4,7 @@ import type { Locator, Page } from '@playwright/test'
 import { SinceModel } from '@software-factory/contract'
 import { bearer } from '../scenarios/harness.ts'
 import { expect, test } from './fixtures.ts'
+import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 import { seedSince, type SeededSince } from './seed-since.ts'
 
@@ -188,6 +189,19 @@ test('a second page load inside the visit shows the same band', async ({ page, a
   expect(after.seen.getTime()).toBeGreaterThanOrEqual(started.seen.getTime())
 })
 
+test('Regressed, Dropped, Incidents, and the Judge and the screen, carry an InfoHint with the generated text', async ({
+  page,
+  apiUrl,
+}) => {
+  await openBand(page, apiUrl)
+  await expectHint(category(page, 'failed'), 'regressed')
+  await expectHint(category(page, 'dropped'), 'dropped')
+  await expectHint(category(page, 'incidents'), 'incident')
+  await expectHint(category(page, 'judge'), 'judge')
+  await expectHint(category(page, 'screen'), 'screen')
+  await expect(category(page, 'shipped').getByRole('button', { name: /^What / })).toHaveCount(0)
+})
+
 test('the visit rule: a read 31 minutes after the last starts a new visit; the read token and an agent move nothing', async ({
   apiUrl,
 }) => {
@@ -231,7 +245,7 @@ test.describe('the deep link, with the band above it', () => {
 
   async function expectOpenUnderBand(page: Page, title: string): Promise<void> {
     const article = page.locator('article').filter({ hasText: title })
-    await expect(article.getByRole('button').first()).toHaveAttribute('aria-expanded', 'true')
+    await expect(article.getByRole('heading').getByRole('link')).toHaveAttribute('aria-current', 'page')
     await expect(band(page)).toBeVisible()
     const above = await band(page).boundingBox()
     const card = await article.boundingBox()

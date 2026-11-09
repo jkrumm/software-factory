@@ -14,6 +14,17 @@ test('the words an InfoHint carries are defined', () => {
   expect(LANGUAGE.settling).toBe('State: triage is not done')
 })
 
+test('the session states and the words the screens hint have a key of their own', () => {
+  expect(LANGUAGE.gone).toBe('Session state: its session ended or its terminal is gone')
+  for (const word of ['starting', 'idle', 'compacted', 'walled'] as const)
+    expect(LANGUAGE[word]).toStartWith('Session state:')
+  // the first definition stays: `working` is the Issue state, not the session's
+  expect(LANGUAGE.working).toBe('State: a lead runs')
+  for (const word of ['regressed', 'stale', 'refusal', 'avoidable touch', 'window point'] as const) {
+    expect(LANGUAGE[word].length).toBeGreaterThan(10)
+  }
+})
+
 test('definitions are plain text', () => {
   for (const means of Object.values(LANGUAGE)) expect(means).not.toMatch(/[`*]|\|/)
 })

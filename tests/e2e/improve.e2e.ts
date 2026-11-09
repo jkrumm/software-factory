@@ -7,8 +7,11 @@ import {
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
+  FRICTION_GROUP_HINT,
+  FRICTION_GROUP_LABEL,
   historyLabels,
   kpiChange,
+  KPI_HINT,
   kpiFooter,
   perIssueWords,
   windowWords,
@@ -16,6 +19,7 @@ import {
 import type { Kpi, KpiModel } from '@software-factory/contract'
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
+import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 
 interface FrictionModel {
@@ -126,6 +130,27 @@ test('the definition of what is counted is one keyboard press away on every card
     await expect(page.getByText(kpi.definition, { exact: true })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByText(kpi.definition, { exact: true })).toHaveCount(0)
+  }
+})
+
+test('every KPI card title, the watches, and the friction words carry an InfoHint with the generated text', async ({
+  page,
+  apiUrl,
+}) => {
+  const [kpis] = await read(apiUrl, 7)
+  await page.goto('/improve')
+  for (const kpi of cardKpis(kpis)) await expectHint(cardOf(page, kpi.label), KPI_HINT[kpi.key])
+  await expectHint(cardOf(page, FIX_TITLE), KPI_HINT.fix_commits)
+  const first = kpis.kpis.find((k) => k.key === 'first_verification_passes')
+  if (!first?.measured) throw new Error('the first verification passes are not measured')
+  await expectHint(cardOf(page, first.label), 'watch')
+
+  const { counts } = await api<{ counts: { group: string }[] }>(apiUrl, '/v1/friction?days=7')
+  const groups = Object.keys(FRICTION_GROUP_HINT).filter((group) => counts.some((c) => c.group === group))
+  for (const group of groups) {
+    const word = FRICTION_GROUP_HINT[group as keyof typeof FRICTION_GROUP_HINT]
+    const label = FRICTION_GROUP_LABEL[group as keyof typeof FRICTION_GROUP_LABEL]
+    await expectHint(page.locator('h3', { hasText: label }), word)
   }
 })
 

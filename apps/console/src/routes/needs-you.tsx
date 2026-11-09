@@ -1,7 +1,7 @@
 import { NEED_KINDS, type NeedItem } from '@software-factory/contract'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
-import { InfoHint } from '@/components/kit'
+import { InfoHint, type InfoWord } from '@/components/kit'
 import { NeedCard } from '@/components/needs/card'
 import { SinceBand } from '@/components/needs/since-band'
 import { EmptyState, Page, PageHeader } from '@/components/page'
@@ -17,8 +17,13 @@ interface NeedsSearch {
   project?: string
 }
 
-/** The words an InfoHint defines for a kind's heading; Reviews need none. */
-const KIND_HINT = { decision: 'decision', errand: 'errand', held_signal: 'held signal' } as const
+/** The words an InfoHint defines for a kind's heading and its sidebar entry. */
+const KIND_HINT = {
+  review: 'review',
+  decision: 'decision',
+  errand: 'errand',
+  held_signal: 'held signal',
+} as const satisfies Record<NeedItem['kind'], InfoWord>
 
 const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -52,10 +57,6 @@ function NeedsYou() {
   const openedAt = useRef(Date.now())
 
   const filters: NeedsSearch = { ...(only ? { kind: only } : {}), ...(project ? { project } : {}) }
-  const select = (id: string | undefined) => {
-    setSent(null)
-    void navigate({ search: { ...(id ? { item: id } : {}), ...filters }, replace: true })
-  }
   const onSent = (message: string) => {
     setSent(message)
     void navigate({ search: filters, replace: true })
@@ -147,6 +148,7 @@ function NeedsYou() {
             key={kind}
             label={KIND_LABEL[kind]}
             count={kinds[kind]}
+            hint={KIND_HINT[kind]}
             pressed={only === kind}
             render={(props) => (
               <Link
@@ -243,7 +245,7 @@ function NeedsYou() {
                 <h2 id={`needs-${kind}`} className="text-sm font-medium text-muted-foreground">
                   {KIND_LABEL[kind]} <span className="tabular-nums">{items.length}</span>
                 </h2>
-                {kind === 'review' ? null : <InfoHint word={KIND_HINT[kind]} />}
+                <InfoHint word={KIND_HINT[kind]} />
               </div>
               {items.map((i) => (
                 <NeedCard
@@ -251,7 +253,8 @@ function NeedsYou() {
                   item={i}
                   issueTitle={i.issue ? (titles.get(i.issue) ?? null) : null}
                   open={openId === i.id}
-                  onToggle={() => select(openId === i.id ? undefined : i.id)}
+                  search={{ ...(openId === i.id ? {} : { item: i.id }), ...filters }}
+                  onVisit={() => setSent(null)}
                   onSent={onSent}
                 />
               ))}

@@ -1,6 +1,7 @@
 import { ArrowsCounterClockwiseIcon, DatabaseIcon, TextAlignLeftIcon, TimerIcon } from '@phosphor-icons/react'
 import type { ReadIssueDetail } from '@software-factory/contract'
 import { useState } from 'react'
+import { InfoHint } from '@/components/kit/info-hint'
 import { Lozenge } from '@/components/kit/lozenge'
 import { MiniBars } from '@/components/kit/mini-bars'
 import { Section } from '@/components/kit/section'
@@ -125,7 +126,10 @@ function Attempts({ issue, now }: { issue: Issue; now: number }) {
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-medium">Attempt {index + 1}</span>
-              <Lozenge tone={SESSION_TONES[session.state]}>{SESSION_STATE_WORDS[session.state]}</Lozenge>
+              <span className="inline-flex items-center gap-0.5">
+                <Lozenge tone={SESSION_TONES[session.state]}>{SESSION_STATE_WORDS[session.state]}</Lozenge>
+                {session.state === 'dead' ? <InfoHint word="gone" className="-my-1" /> : null}
+              </span>
               {session.wait ? (
                 <span className="text-muted-foreground">waiting for {session.wait.replaceAll('_', ' ')}</span>
               ) : null}

@@ -56,11 +56,14 @@ describe('sinceRows', () => {
     expect(rows.find((r) => r.key === 'shipped')?.tone).toBe('good')
   })
 
-  test('the Judge and the screen carry an InfoHint word, nothing else does', () => {
+  test('Regressed, Dropped, the Judge, the screen and Incidents carry an InfoHint word, nothing else does', () => {
     const hints = sinceRows(model()).map((r) => [r.key, r.hint])
     expect(hints.filter(([, hint]) => hint)).toEqual([
+      ['failed', 'regressed'],
+      ['dropped', 'dropped'],
       ['judge', 'judge'],
       ['screen', 'screen'],
+      ['incidents', 'incident'],
     ])
   })
 

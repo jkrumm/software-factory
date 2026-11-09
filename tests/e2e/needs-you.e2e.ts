@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { readState, statePathOf } from '../scenarios/fakes/hc-state.ts'
 import { sessionOf } from '../scenarios/flow.ts'
 import { expect, test } from './fixtures.ts'
+import { expectHint } from './hints.ts'
 import { api, holdSignal } from './seed.ts'
 
 /**
@@ -28,17 +29,20 @@ async function needNamed(apiUrl: string, title: string): Promise<Need> {
 
 const card = (page: Page, title: string) => page.locator('article').filter({ hasText: title })
 
+/** The card's title: a link to the item's deep link. */
+const titleOf = (page: Page, title: string) => card(page, title).getByRole('heading').getByRole('link')
+
 async function open(page: Page, title: string) {
   await page.goto('/needs-you')
-  await card(page, title).getByRole('button').first().click()
-  await expect(card(page, title).getByRole('button').first()).toHaveAttribute('aria-expanded', 'true')
+  await titleOf(page, title).click()
+  await expect(titleOf(page, title)).toHaveAttribute('aria-current', 'page')
 }
 
 test('a card header and the other pressable controls show a pointer, and the card reacts to hover', async ({
   page,
 }) => {
   await page.goto('/needs-you')
-  const header = card(page, 'Which logging library').getByRole('button').first()
+  const header = titleOf(page, 'Which logging library')
   await expect(header).toHaveCSS('cursor', 'pointer')
   const surface = card(page, 'Which logging library')
   const before = await surface.evaluate(
@@ -132,21 +136,73 @@ function requireBin(): string {
   return bin
 }
 
+test('every card title is a link to its deep link, and following it opens the card in place', async ({
+  page,
+  apiUrl,
+}) => {
+  const all = await needs(apiUrl)
+  await page.goto('/needs-you')
+  for (const need of all) {
+    await expect(page.getByRole('link', { name: need.title, exact: true }), need.id).toHaveAttribute(
+      'href',
+      `/needs-you?item=${need.id}`,
+    )
+  }
+  const first = all[0]
+  if (!first) throw new Error('nothing waits')
+  await page.getByRole('link', { name: first.title, exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/needs-you\\?item=${first.id}$`))
+  await expect(titleOf(page, first.title)).toHaveAttribute('aria-current', 'page')
+  // open, the same link is the page without the item: a click closes the card
+  await expect(titleOf(page, first.title)).toHaveAttribute('href', '/needs-you')
+  await titleOf(page, first.title).click()
+  await expect(page).toHaveURL(/\/needs-you$/)
+  await expect(titleOf(page, first.title)).not.toHaveAttribute('aria-current', 'page')
+})
+
+test('the kind headings and the kind entries of the sidebar carry an InfoHint with the generated text', async ({
+  page,
+}) => {
+  await page.goto('/needs-you')
+  const kinds = { review: 'Reviews', decision: 'Decisions', errand: 'Errands', held_signal: 'Held signals' } as const
+  const words = { review: 'review', decision: 'decision', errand: 'errand', held_signal: 'held signal' } as const
+  for (const kind of Object.keys(kinds) as (keyof typeof kinds)[]) {
+    await expectHint(page.locator(`main section[aria-labelledby="needs-${kind}"]`), words[kind])
+    await expectHint(page.locator('aside').getByRole('group', { name: 'Kinds' }), words[kind])
+  }
+})
+
+test('a stale card carries an InfoHint beside its Stale lozenge', async ({ page, apiUrl }) => {
+  const first = (await needs(apiUrl))[0]
+  if (!first) throw new Error('nothing waits')
+  // the seed holds nothing older than a day: the answer is read through, with this one item marked stale
+  await page.route('**/v1/needs*', async (route) => {
+    const response = await route.fetch()
+    const body = (await response.json()) as { items: (Need & { stale: boolean })[] }
+    for (const item of body.items) item.stale = item.id === first.id
+    await route.fulfill({ response, json: body })
+  })
+  await page.goto('/needs-you')
+  const stale = card(page, first.title)
+  await expect(stale.getByText('Stale', { exact: true })).toBeVisible()
+  await expectHint(stale, 'stale')
+})
+
 test('a deep link opens the item expanded and focused; the ntfy link lands on the same; a settled one says so', async ({
   page,
   apiUrl,
 }) => {
   const errand = await needNamed(apiUrl, 'Rotate the argo deploy key')
-  const expanded = () => card(page, 'Rotate the argo deploy key').getByRole('button').first()
+  const expanded = () => titleOf(page, 'Rotate the argo deploy key')
 
   await page.goto(`/needs-you?item=${errand.id}`)
-  await expect(expanded()).toHaveAttribute('aria-expanded', 'true')
+  await expect(expanded()).toHaveAttribute('aria-current', 'page')
   await expect(expanded()).toBeFocused()
   await expect(card(page, 'Rotate the argo deploy key').getByText(/Settings > Keys > Rotate/)).toBeVisible()
 
   await page.goto(`/checkpoints/${errand.id}`)
   await expect(page).toHaveURL(new RegExp(`/needs-you\\?item=${errand.id}$`))
-  await expect(expanded()).toHaveAttribute('aria-expanded', 'true')
+  await expect(expanded()).toHaveAttribute('aria-current', 'page')
 
   await page.goto('/needs-you?item=errand_gone')
   await expect(page.getByText('That one is already settled.')).toBeVisible()

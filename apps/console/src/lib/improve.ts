@@ -1,5 +1,16 @@
 import type { FindingClass, FixCommitsModel, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
+import type { LANGUAGE } from './language.gen'
+
+/** A word `docs/language.md` defines (the kit's `InfoWord`, without importing a component). */
+type InfoWord = keyof typeof LANGUAGE
+
+/** One key-value pair of a card footer; `hint` is the domain word its value is hinted by. */
+interface FooterPair {
+  label: string
+  value: string
+  hint?: InfoWord
+}
 
 export const WINDOW_DAYS = [7, 30, 90] as const
 export type WindowDays = (typeof WINDOW_DAYS)[number]
@@ -89,6 +100,24 @@ export function sampleWords(kpi: Pick<Kpi, 'key' | 'n'>): string {
   return `${kpi.n} ${kpi.n === 1 ? one : many}`
 }
 
+/** The domain word each KPI's title carries an InfoHint for. */
+export const KPI_HINT = {
+  avoidable_touches: 'avoidable touch',
+  asks: 'ask',
+  worth_asking: 'worth asking',
+  first_verification_passes: 'first verification pass',
+  refusals: 'refusal',
+  cycle_p50: 'cycle',
+  queue_wait_p50: 'queue wait',
+  queue_wait_p90: 'queue wait',
+  fix_commits: 'fix commit',
+  window_points: 'window point',
+  cost: 'cost',
+} as const satisfies Record<KpiKey, InfoWord>
+
+/** The word the sample noun of a KPI is hinted by, where the noun is a domain word of its own ("13 watches"). */
+export const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>
+
 export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   avoidable_touch: 'Avoidable touches',
   orchestrator_steer: 'The orchestrator steering leads',
@@ -102,6 +131,12 @@ export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   decision_settled: 'Decisions settled by default',
   signal: 'Signals',
 }
+
+/** The friction groups whose heading is a domain word a stranger would not know. */
+export const FRICTION_GROUP_HINT = {
+  avoidable_touch: 'avoidable touch',
+  refusal: 'refusal',
+} as const satisfies Partial<Record<FrictionCount['group'], InfoWord>>
 
 /** Per Issue closed, two decimals; "—" when none closed. */
 export const perIssueWords = (perIssue: number | null): string => (perIssue === null ? '—' : perIssue.toFixed(2))
@@ -264,12 +299,15 @@ export function historyXLabels(
 export const comparisonWords = (days: number): string => `Last ${days} days against the ${days} before`
 
 /** The footer pairs of a KPI card. */
-export function kpiFooter(
-  kpi: Pick<Kpi, 'key' | 'n' | 'measured' | 'target' | 'unit'>,
-): [{ label: string; value: string }, { label: string; value: string }] {
+export function kpiFooter(kpi: Pick<Kpi, 'key' | 'n' | 'measured' | 'target' | 'unit'>): [FooterPair, FooterPair] {
+  const hint = SAMPLE_HINT[kpi.key as keyof typeof SAMPLE_HINT]
   return [
     { label: 'Target', value: targetWords(kpi) },
-    { label: 'Counted', value: kpi.measured ? sampleWords(kpi) : 'The usage schema is not joined here' },
+    {
+      label: 'Counted',
+      value: kpi.measured ? sampleWords(kpi) : 'The usage schema is not joined here',
+      ...(hint && kpi.measured ? { hint } : {}),
+    },
   ]
 }
 
