@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
+import { FACTS_EXAMPLE, FACTS_KEYS } from '@software-factory/contract'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
 import { factsNote, filable, parsePlan, type PlanFile, rowStatuses } from '../../src/domains/planning/plan.ts'
 import { issueId } from '../../src/kernel/ids.ts'
@@ -25,6 +26,26 @@ describe('docs/plan.yaml', () => {
     expect(result.plan.rows.some((r) => r.issue === 149)).toBe(true)
     expect(result.plan.rows.some((r) => r.not_before !== undefined)).toBe(true)
     expect(result.warnings).toEqual([])
+  })
+
+  test('the example in docs/plan.md parses, and shows every key a new row can use', async () => {
+    const doc = await Bun.file(join(ROOT, 'docs', 'plan.md')).text()
+    const example = /```yaml\n([\s\S]*?)```/.exec(doc)?.[1]
+    expect(example).toBeDefined()
+    const result = parsed(example ?? '')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.warnings).toEqual([])
+    const used = new Set(result.plan.rows.flatMap((r) => Object.keys(r)))
+    for (const key of ['key', 'title', 'facts', 'kind', 'repo', 'after', 'not_before', 'issue'])
+      expect(used.has(key)).toBe(true)
+    const adopted = result.plan.rows.find((r) => r.issue !== undefined)
+    expect(adopted && Object.keys(adopted).sort()).toEqual(['issue', 'key'])
+    expect(result.plan.rows.some((r) => r.after?.some((on) => on.includes(':')))).toBe(true)
+    // the facts of a filed row follow the filing contract's keys
+    const filed = result.plan.rows.find((r) => r.key === 'export-paging')
+    expect(filed && Object.keys(filed.facts ?? {})).toEqual(FACTS_KEYS.map((k) => k.key))
+    expect(filed?.facts).toEqual(FACTS_EXAMPLE)
   })
 
   test('the retired stable_days is read, flagged and never evaluated', () => {

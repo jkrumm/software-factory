@@ -552,7 +552,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['project', 'show'],
     method: 'GET',
     path: '/projects/{name}',
-    summary: 'one project: its project.yaml in force and every plan row with its state',
+    summary: 'one project: its project.yaml in force and every plan row with its state (the plan format: docs/plan.md)',
     pathParams: ['name'],
     queryParams: [],
     body: false,

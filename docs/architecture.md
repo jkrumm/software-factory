@@ -263,7 +263,7 @@ last one is up, at once if it never ran, so a 6-hour loop still passes on a serv
 | Loop | Deterministic | agw workflow |
 |-|-|-|
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
-| `planning` | read projects, file plan rows whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
+| `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
 | `watch` | verify and probes | none |
 | `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is one note to each live lead (once per branch state and clean/dirty) and a `main-checkout` health line, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |

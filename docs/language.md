@@ -26,7 +26,7 @@ check, `docs/architecture.md`).
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue | |
 | **Origin** | Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory | Tool names on screen (never "HyperDX", "Beszel") |
 | **Project** | A repo the factory knows, described by its `project.yaml`. `signals:` says which automatic sources it listens to; a work repo listens to the owner only. `host:` names the host its alerts sit on (a key of `config/infra.json`'s hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's | Manifest |
-| **Plan** | A project's `docs/plan.yaml`: rows not yet filed. A row may target another repo | Wave, track, initiative |
+| **Plan** | A project's `docs/plan.yaml`: rows not yet filed (the format: `docs/plan.md`). A row may target another repo | Wave, track, initiative |
 | **Chain** | The dependency graph of Issues and plan rows, across projects. What decides what can run at once | Linked Issues |
 | **Queue state** | `run` (admission decides), `pace` (one lead per project, spending toward the weekly pace), `drain` (no new lead), for the whole queue or one project. The more restrictive of the two applies | |
 | **Queue reason** | Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: `chain`, `line`, `finalizing`, `unknown_project`, `drain`, `load`, `memory`, `claim`, `window`, `cap` | Hold (the memory and load hold) |
