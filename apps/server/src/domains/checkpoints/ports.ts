@@ -107,6 +107,8 @@ export interface AnnotationRecord {
   comment: string
   author: 'owner' | 'lead'
   at: Date
+  /** when the owner last changed the comment; null while it is as first written */
+  editedAt: Date | null
 }
 
 export interface VerdictRecord {
@@ -199,6 +201,11 @@ export interface CheckpointStore {
   revisions(id: ArtifactId): Promise<RevisionRecord[]>
   insertAnnotation(annotation: AnnotationRecord): Promise<boolean>
   annotationByKey(key: Key): Promise<AnnotationRecord | null>
+  annotation(id: string): Promise<AnnotationRecord | null>
+  /** true when the comment changed; the same comment again changes nothing */
+  editAnnotation(id: string, comment: string, key: Key, at: Date): Promise<boolean>
+  /** true when a row was removed */
+  deleteAnnotation(id: string): Promise<boolean>
   annotations(id: ArtifactId): Promise<AnnotationRecord[]>
   insertVerdict(verdict: VerdictRecord & { key: Key }): Promise<boolean>
   verdictByKey(key: Key): Promise<VerdictRecord | null>

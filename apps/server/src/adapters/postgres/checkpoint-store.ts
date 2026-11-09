@@ -104,6 +104,7 @@ const AnnotationRow = z.object({
   comment: z.string(),
   author: z.enum(['owner', 'lead']),
   at: z.date(),
+  edited_at: z.date().nullable(),
 })
 
 const VerdictRow = z.object({
@@ -215,6 +216,7 @@ const annotationOf = (raw: unknown): AnnotationRecord => {
     comment: row.comment,
     author: row.author,
     at: row.at,
+    editedAt: row.edited_at,
   }
 }
 
@@ -486,6 +488,24 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async annotationByKey(key) {
       const [row] = await tx`SELECT * FROM factory.annotations WHERE key = ${key}`
       return row ? annotationOf(row) : null
+    },
+
+    async annotation(id) {
+      const [row] = await tx`SELECT * FROM factory.annotations WHERE id = ${id}`
+      return row ? annotationOf(row) : null
+    },
+
+    async editAnnotation(id, comment, key, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.annotations SET comment = ${comment}, key = ${key}, edited_at = ${at}
+        WHERE id = ${id} AND comment IS DISTINCT FROM ${comment}
+        RETURNING id`
+      return rows.length === 1
+    },
+
+    async deleteAnnotation(id) {
+      const rows: unknown[] = await tx`DELETE FROM factory.annotations WHERE id = ${id} RETURNING id`
+      return rows.length === 1
     },
 
     async annotations(id) {

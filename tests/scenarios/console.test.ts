@@ -35,7 +35,7 @@ test('the Console listener starts when the build exists and serves the read slic
   const index = await fetch(consoleUrl)
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
-  // a write that is not one of the six answers never passes, and the client's own token buys nothing here
+  // a write that is not one of the eight answers never passes, and the client's own token buys nothing here
   const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: bearer() })
   expect(post.status).toBe(405)
 })
@@ -58,7 +58,7 @@ const write = (path: string, headers: Record<string, string> = {}, body: string 
     body,
   })
 
-test('the six answer verbs reach the API with the body; the API, not the listener, answers', async () => {
+test('the six POST answer verbs reach the API with the body; the API, not the listener, answers', async () => {
   for (const path of ANSWERS) {
     const reply = await write(path)
     // the API's own refusal of an unknown id or an empty answer, with its ErrorBody
@@ -117,6 +117,49 @@ test('a write is refused with the wrong type, cross-site, from a foreign origin 
   expect((await write(path, {}, JSON.stringify({ answer: 'x'.repeat(64 * 1024 + 1) }))).status).toBe(413)
   const ok = JSON.stringify({ answer: 'x'.repeat(60 * 1024) })
   expect(API_REFUSALS).toContain((await write(path, {}, ok)).status)
+})
+
+const ANNOTATION = '/v1/artifacts/artifact_none/annotations/annotation_none'
+
+const annotationWrite = (method: 'PATCH' | 'DELETE', headers: Record<string, string> = {}, body?: string) =>
+  fetch(`${consoleUrl}${ANNOTATION}`, {
+    method,
+    headers: method === 'PATCH' ? { 'content-type': 'application/json', ...headers } : headers,
+    body: method === 'PATCH' ? (body ?? '{"comment":"x"}') : undefined,
+  })
+
+test('an annotation is edited and deleted through the listener, on that path only, with the same guards', async () => {
+  for (const method of ['PATCH', 'DELETE'] as const) {
+    const reply = await annotationWrite(method)
+    expect(API_REFUSALS, method).toContain(reply.status)
+    expect(await reply.json(), method).toMatchObject({ code: expect.any(String) })
+    for (const site of ['cross-site', 'same-site', 'none']) {
+      expect((await annotationWrite(method, { 'sec-fetch-site': site })).status, `${method} ${site}`).toBe(403)
+    }
+    expect((await annotationWrite(method, { origin: 'https://evil.example.com' })).status, method).toBe(403)
+  }
+  expect((await annotationWrite('PATCH', { 'content-type': 'text/plain' })).status).toBe(415)
+  const big = JSON.stringify({ comment: 'x'.repeat(64 * 1024 + 1) })
+  expect((await annotationWrite('PATCH', {}, big)).status).toBe(413)
+  const refused: [string, string][] = [
+    ['PATCH', '/v1/artifacts/artifact_none/annotations'],
+    ['DELETE', '/v1/artifacts/artifact_none/annotations'],
+    ['PATCH', '/v1/artifacts/artifact_none/annotations/annotation_none/extra'],
+    ['DELETE', '/v1/artifacts/artifact_none'],
+    ['PATCH', '/v1/artifacts/artifact_none/verdict'],
+    ['PUT', ANNOTATION],
+    ['POST', ANNOTATION],
+    ['OPTIONS', ANNOTATION],
+    ['PATCH', '/v1/issues/issue_1'],
+  ]
+  for (const [method, path] of refused) {
+    const reply = await fetch(`${consoleUrl}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: method === 'GET' || method === 'OPTIONS' ? undefined : '{}',
+    })
+    expect(reply.status, `${method} ${path}`).toBe(405)
+  }
 })
 
 test('the main port is unchanged: it still wants a token, and an open Console buys nothing', async () => {

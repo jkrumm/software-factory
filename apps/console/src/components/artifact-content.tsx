@@ -1,12 +1,23 @@
 import { useEffect, useRef } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { parseFrameMessage } from '@/lib/artifact'
-import { clearHighlights, paintHighlights, scrollToQuote, selectionIn } from '@/lib/highlight'
+import { parseFrameMessage, type SelectionRect } from '@/lib/artifact'
+import {
+  clearHighlights,
+  clearPending,
+  paintHighlights,
+  paintPending,
+  scrollToQuote,
+  selectionIn,
+} from '@/lib/highlight'
 
 export interface Selected {
   quote: string
   path: string
+  /** where the passage is on screen (viewport coordinates) when it was selected */
+  rect: SelectionRect
+  /** the Markdown passage's range, so its position can follow the page's scroll; an HTML artifact's frame has none */
+  range?: Range
 }
 
 export interface ContentProps {
@@ -28,7 +39,7 @@ export interface ContentProps {
  * (`javascript:`, `data:` and the like become empty), and an image is never loaded (the Console's CSP is `img-src 'self'
  * data:`, and a network image would be a request the owner did not make): its alt text shows instead.
  */
-function MarkdownContent({ content, primary, quotes, focus, onSelect }: Omit<ContentProps, 'format'>) {
+function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }: Omit<ContentProps, 'format'>) {
   const root = useRef<HTMLDivElement>(null)
 
   // A selection is committed when the drag ends (mouse up, touch end, key up), or after it has rested for a moment (touch
@@ -39,7 +50,10 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect }: Omit<Con
     let timer: ReturnType<typeof setTimeout> | undefined
     const commit = () => {
       const selected = root.current && selectionIn(root.current)
-      if (selected) onSelect(selected)
+      if (!selected) return
+      // the comment box takes the real selection when it gets the focus, so the passage is painted on its own
+      paintPending(selected.range)
+      onSelect(selected)
     }
     const soon = (ms: number) => {
       clearTimeout(timer)
@@ -69,6 +83,11 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect }: Omit<Con
       document.removeEventListener('selectionchange', onChange)
     }
   }, [primary, onSelect])
+
+  useEffect(() => clearPending, [])
+  useEffect(() => {
+    if (cleared > 0) clearPending()
+  }, [cleared])
 
   useEffect(() => {
     if (!primary || !root.current) return
@@ -123,7 +142,20 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared }: Omi
         ready.current = true
         send({ type: 'factory.highlight', quotes: latest.current })
       }
-      if (message?.type === 'select' && primary) onSelect({ quote: message.quote, path: message.path })
+      if (message?.type === 'select' && primary) {
+        // the frame's rect is relative to its own viewport
+        const origin = frame.current?.getBoundingClientRect()
+        const { top, bottom, left } = message.rect
+        onSelect({
+          quote: message.quote,
+          path: message.path,
+          rect: {
+            top: top + (origin?.top ?? 0),
+            bottom: bottom + (origin?.top ?? 0),
+            left: left + (origin?.left ?? 0),
+          },
+        })
+      }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
@@ -148,7 +180,7 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared }: Omi
       sandbox={FRAME_SANDBOX}
       src="/frame.html"
       onLoad={() => send({ type: 'factory.render', html: content, annotate: primary })}
-      className="h-[70vh] w-full rounded-lg border bg-background"
+      className="h-[calc(100dvh-14rem)] min-h-96 w-full bg-background lg:h-full lg:min-h-0"
     />
   )
 }

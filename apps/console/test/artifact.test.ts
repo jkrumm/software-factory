@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  composerTop,
   groupAnnotations,
   headingPath,
   indexText,
@@ -35,10 +36,19 @@ describe('headingPath', () => {
 })
 
 describe('parseFrameMessage', () => {
-  const good = { type: 'factory.select', quote: 'a  quote', path: 'Options > Cost' }
+  const rect = { top: 120.5, bottom: 144, left: 32 }
+  const good = { type: 'factory.select', quote: 'a  quote', path: 'Options > Cost', rect }
   test('accepts exactly the select shape and normalises the quote', () => {
-    expect(parseFrameMessage(good)).toEqual({ type: 'select', quote: 'a quote', path: 'Options > Cost' })
-    expect(parseFrameMessage({ ...good, path: '' })).toEqual({ type: 'select', quote: 'a quote', path: '' })
+    expect(parseFrameMessage(good)).toEqual({ type: 'select', quote: 'a quote', path: 'Options > Cost', rect })
+    expect(parseFrameMessage({ ...good, path: '' })).toEqual({ type: 'select', quote: 'a quote', path: '', rect })
+  })
+  test('keeps only the rect fields it knows', () => {
+    expect(parseFrameMessage({ ...good, rect: { ...rect, right: 9 } })).toEqual({
+      type: 'select',
+      quote: 'a quote',
+      path: 'Options > Cost',
+      rect,
+    })
   })
   test('accepts the ready message', () => {
     expect(parseFrameMessage({ type: 'factory.ready' })).toEqual({ type: 'ready' })
@@ -58,6 +68,13 @@ describe('parseFrameMessage', () => {
       { ...good, path: 'p'.repeat(MAX_PATH + 1) },
       { ...good, quote: 7 },
       { type: 'factory.select', quote: 'q' },
+      { type: 'factory.select', quote: 'q', path: '' },
+      { ...good, rect: undefined },
+      { ...good, rect: null },
+      { ...good, rect: { top: 1, bottom: 2 } },
+      { ...good, rect: { ...rect, top: '1' } },
+      { ...good, rect: { ...rect, left: Number.NaN } },
+      { ...good, rect: { ...rect, bottom: Infinity } },
     ]) {
       expect(parseFrameMessage(data)).toBeNull()
     }
@@ -97,5 +114,19 @@ describe('groupAnnotations', () => {
     const g2 = { id: 'g2', path: 'global' }
     const u = { id: 'u', path: null }
     expect(groupAnnotations([a, g1], [g2, u])).toEqual({ general: [g1, g2], anchored: [a], unanchored: [u] })
+  })
+})
+
+describe('composerTop', () => {
+  const column = { top: 100, height: 900 }
+  test('is level with the selection, relative to the column', () => {
+    expect(composerTop(400, column, 200)).toBe(300)
+  })
+  test('stays on screen above and below the column', () => {
+    expect(composerTop(-50, column, 200)).toBe(8)
+    expect(composerTop(5000, column, 200)).toBe(900 - 200 - 8)
+  })
+  test('a box taller than the column sits at the top', () => {
+    expect(composerTop(500, column, 2000)).toBe(8)
   })
 })

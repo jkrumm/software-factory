@@ -7,7 +7,7 @@ export const LANGUAGE = {
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
   caller:
-    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar six routes, its own actor in the log), agent (a lead session), machine (the alert door), read (the surfaces)",
+    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), read (the surfaces)",
   cancelled: "Outcome: the owner's stop",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
   change:

@@ -8,6 +8,8 @@ import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import {
   annotateArtifact,
+  deleteAnnotation,
+  editAnnotation,
   answerDecision,
   askDecision,
   finishErrand,
@@ -172,6 +174,9 @@ const rows = async (table: string): Promise<number> => {
   const [row] = await db.sql.unsafe(`SELECT count(*)::int AS n FROM factory.${table}`)
   return Number((row as { n: number }).n)
 }
+
+const showAnnotations = async (artifactId: ArtifactId) =>
+  value(await showArtifact(deps, { artifactId, revision: null })).annotations.map((a) => a.annotation)
 
 const eventsOf = async (issueId: IssueId): Promise<string[]> =>
   (
@@ -795,6 +800,87 @@ describe('artifacts', () => {
     // Looked at on the revision it was made on, it is anchored again.
     const first = value(await showArtifact(deps, { artifactId: artifact.id, revision: 1 }))
     expect(first.annotations.every((a) => a.anchor === 'anchored')).toBe(true)
+  })
+
+  test('the owner edits and deletes an annotation; a repeat is harmless and another artifact is not found', async () => {
+    const issueId = await workingIssue()
+    const submit = async (title: string) =>
+      value(
+        await submitArtifact(deps, {
+          issueId,
+          attempt: 1,
+          raw: { kind: 'report', title, content: 'Retries are three.' },
+        }),
+      ).artifact
+    const artifact = await submit('Notes')
+    const other = await submit('Other')
+    const made = value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'owner',
+        raw: { quote: 'Retries are three', comment: 'make it five' },
+      }),
+    )
+    expect(made.issue).toBeNull()
+    const [stored] = await showAnnotations(artifact.id)
+    const id = stored?.id ?? ''
+    expect(stored?.editedAt).toBeNull()
+
+    const edit = (artifactId: ArtifactId, comment: unknown) =>
+      editAnnotation(deps, { artifactId, annotationId: id, raw: { comment } })
+    expect(value(await edit(artifact.id, '  make it four  '))).toMatchObject({ result: 'applied', issue: null })
+    const [edited] = await showAnnotations(artifact.id)
+    expect(edited).toMatchObject({ comment: 'make it four', quote: 'Retries are three' })
+    expect(edited?.editedAt).not.toBeNull()
+    expect(value(await edit(artifact.id, 'make it four'))).toMatchObject({ result: 'replayed' })
+    // the old words can be said again as a new comment after the edit
+    value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'owner',
+        raw: { quote: 'Retries are three', comment: 'make it five' },
+      }),
+    )
+    expect(await rows('annotations')).toBe(2)
+    // a lead's comment is not the owner's to edit
+    value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'lead',
+        raw: { quote: 'Retries are three', comment: 'three is the contract' },
+      }),
+    )
+    const leads = (await showAnnotations(artifact.id)).find((a) => a.author === 'lead')
+    expect(
+      errorOf(
+        await editAnnotation(deps, { artifactId: artifact.id, annotationId: leads?.id ?? '', raw: { comment: 'x' } }),
+      ),
+    ).toMatchObject({ kind: 'invalid' })
+    expect(await rows('annotations')).toBe(3)
+    expect(errorOf(await edit(artifact.id, '   '))).toMatchObject({ kind: 'missing_field' })
+    expect(errorOf(await edit(other.id, 'x'))).toMatchObject({ kind: 'not_found', what: 'annotation' })
+    expect(errorOf(await edit('artifact_none' as ArtifactId, 'x'))).toMatchObject({
+      kind: 'not_found',
+      what: 'artifact',
+    })
+    expect(
+      errorOf(
+        await editAnnotation(deps, { artifactId: artifact.id, annotationId: 'annotation_none', raw: { comment: 'x' } }),
+      ),
+    ).toMatchObject({ kind: 'not_found', what: 'annotation' })
+
+    const remove = (artifactId: ArtifactId) => deleteAnnotation(deps, { artifactId, annotationId: id })
+    expect(errorOf(await remove(other.id))).toMatchObject({ kind: 'not_found', what: 'annotation' })
+    expect(await rows('annotations')).toBe(3)
+    expect(value(await remove(artifact.id))).toMatchObject({ result: 'applied', issue: null })
+    expect(await rows('annotations')).toBe(2)
+    expect(value(await remove(artifact.id))).toMatchObject({ result: 'replayed' })
+    expect(errorOf(await remove('artifact_none' as ArtifactId))).toMatchObject({ kind: 'not_found', what: 'artifact' })
+    const shown = value(await showArtifact(deps, { artifactId: artifact.id, revision: null }))
+    expect(shown.annotations.map((a) => a.annotation.id)).not.toContain(id)
   })
 
   test('revising back to older content is a new revision; the latest content again is a replay', async () => {

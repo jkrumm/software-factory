@@ -5,6 +5,7 @@ import {
   type ArtifactId,
   type ArtifactKind,
   readAnnotation,
+  readComment,
   readSubmission,
   renderDecisionForm,
   type Verdict,
@@ -618,8 +619,44 @@ export function annotateArtifact(
       comment: annotation.comment,
       author: input.author,
       at: deps.clock.now(),
+      editedAt: null,
     })
     return ok(await written(checkpoints, artifact.id, 'applied', null))
+  })
+}
+
+/** The owner changes the comment of an annotation (not its quote, path or revision). The same comment again is a replay. */
+export function editAnnotation(
+  deps: CheckpointDeps,
+  input: { artifactId: ArtifactId; annotationId: string; raw: unknown },
+): Promise<CheckpointResult<ArtifactWritten>> {
+  const read = readComment(input.raw)
+  if (!read.ok) return Promise.resolve(read)
+  return deps.uow.run(async ({ checkpoints }) => {
+    const artifact = await checkpoints.artifact(input.artifactId)
+    if (!artifact) return err(notFound('artifact', input.artifactId))
+    const annotation = await checkpoints.annotation(input.annotationId)
+    if (!annotation || annotation.artifactId !== artifact.id) return err(notFound('annotation', input.annotationId))
+    if (annotation.author !== 'owner') return err({ kind: 'invalid', detail: 'only the owner edits their own comment' })
+    // The replay key follows the words, so the old text can be commented again as a new annotation.
+    const editKey = key('annotate-edit', annotation.id, digest(read.value))
+    const changed = await checkpoints.editAnnotation(annotation.id, read.value, editKey, deps.clock.now())
+    return ok(await written(checkpoints, artifact.id, changed ? 'applied' : 'replayed', null))
+  })
+}
+
+/** The owner removes an annotation. One that is already gone is a replay; one that belongs to another artifact is not found. */
+export function deleteAnnotation(
+  deps: CheckpointDeps,
+  input: { artifactId: ArtifactId; annotationId: string },
+): Promise<CheckpointResult<ArtifactWritten>> {
+  return deps.uow.run(async ({ checkpoints }) => {
+    const artifact = await checkpoints.artifact(input.artifactId)
+    if (!artifact) return err(notFound('artifact', input.artifactId))
+    const annotation = await checkpoints.annotation(input.annotationId)
+    if (annotation && annotation.artifactId !== artifact.id) return err(notFound('annotation', input.annotationId))
+    const removed = annotation ? await checkpoints.deleteAnnotation(annotation.id) : false
+    return ok(await written(checkpoints, artifact.id, removed ? 'applied' : 'replayed', null))
   })
 }
 

@@ -160,6 +160,8 @@ export const AnnotateBody = z
   })
   .meta({ id: 'AnnotateBody' })
 
+export const EditAnnotationBody = z.object({ comment: z.string().optional() }).meta({ id: 'EditAnnotationBody' })
+
 export const VerdictBody = z
   .object({
     verdict: z.enum(VERDICTS).optional(),
@@ -194,6 +196,7 @@ export const AnnotationView = z.object({
   comment: z.string(),
   author: z.enum(['owner', 'lead']),
   at: iso,
+  editedAt: iso.nullable(),
 })
 
 export const ArtifactDetail = z

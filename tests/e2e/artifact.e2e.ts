@@ -10,7 +10,14 @@ const seeded = (): SeededArtifacts => JSON.parse(process.env.E2E_ARTIFACTS ?? '{
 
 interface Detail {
   artifact: { title: string; issueId: string; revisions: { n: number }[] }
-  annotations: { quote: string; path: string | null; comment: string; revision: number }[]
+  annotations: {
+    id: string
+    quote: string
+    path: string | null
+    comment: string
+    revision: number
+    editedAt: string | null
+  }[]
   unanchored: { quote: string; path: string | null; comment: string }[]
   verdicts: { revision: number; verdict: string; note: string | null }[]
 }
@@ -34,6 +41,9 @@ const SELECT = (text: string) => `(() => {
   return false
 })()`
 
+/** The first selection's rect in the viewport of a page or a frame. */
+const RECT = `(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); return { top: r.top, bottom: r.bottom } })()`
+
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 
 test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a verdict the API records', async ({
@@ -49,10 +59,30 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await expect(header).toContainText('Waiting for your verdict')
   expect(await page.locator('body').innerText()).not.toMatch(/artifact_|issue_\d+|lead-\d+|#\d+/)
 
+  // Escape cancels the box, and the same passage can be chosen again
   await page.evaluate(SELECT(SPEC_QUOTE))
   const composer = page.getByRole('form', { name: 'Comment on the selection' })
   await expect(composer).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(composer).toBeHidden()
+  await expect.poll(() => page.evaluate('getSelection().isCollapsed')).toBe(true)
+
+  // The box opens in the comments column, level with the passage, and the passage stays painted while it is open.
+  await page.evaluate(SELECT(SPEC_QUOTE))
+  const passage = (await page.evaluate(RECT)) as { top: number; bottom: number }
+  await expect(composer).toBeVisible()
   await expect(composer).toContainText(SPEC_QUOTE)
+  const column = await region(page, 'Revision 1').boundingBox()
+  const box = await composer.boundingBox()
+  if (!column || !box) throw new Error('no boxes')
+  expect(box.x).toBeGreaterThanOrEqual(column.x + column.width - 1)
+  expect(box.x).toBeGreaterThan(1000)
+  expect(box.y).toBeGreaterThanOrEqual(passage.top - 24)
+  expect(box.y).toBeLessThanOrEqual(passage.bottom)
+  await expect(composer.getByRole('textbox', { name: 'Comment' })).toBeFocused()
+  await expect
+    .poll(() => page.evaluate("[...(CSS.highlights.get('annotation-pending') ?? [])].map((range) => range.toString())"))
+    .toEqual([SPEC_QUOTE])
   await composer.getByRole('textbox', { name: 'Comment' }).fill('Say why not Redis.')
   await composer.getByRole('button', { name: 'Add comment' }).click()
 
@@ -63,7 +93,57 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await expect
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
     .toEqual([SPEC_QUOTE])
+  await expect.poll(() => page.evaluate("CSS.highlights.has('annotation-pending')")).toBe(false)
   await listed.getByRole('button').first().click()
+
+  // a second comment, to be deleted
+  const second = 'The cost is one more table.'
+  await page.evaluate(SELECT(second))
+  await expect(composer).toContainText(second)
+  await composer.getByRole('textbox', { name: 'Comment' }).fill('Is one table really the cost?')
+  await composer.getByRole('button', { name: 'Add comment' }).click()
+  await expect(listed).toContainText('Is one table really the cost?')
+
+  // Edit: only the owner's own comments, in place; Escape keeps the old words; Save shows "edited"
+  const item = (text: string) => listed.getByRole('listitem').filter({ hasText: text })
+  const mine = item('Say why not Redis.')
+  await expect(mine.getByText(/edited/)).toHaveCount(0)
+  await mine.getByRole('button', { name: 'Edit comment' }).click()
+  const edit = listed.getByRole('form', { name: 'Edit comment' })
+  await expect(edit.getByRole('textbox', { name: 'Comment' })).toHaveValue('Say why not Redis.')
+  await edit.getByRole('textbox', { name: 'Comment' }).fill('half typed')
+  await page.keyboard.press('Escape')
+  await expect(edit).toBeHidden()
+  await expect(mine).toContainText('Say why not Redis.')
+  await mine.getByRole('button', { name: 'Edit comment' }).click()
+  // a half-typed edit survives clicking another comment
+  await edit.getByRole('textbox', { name: 'Comment' }).fill('Say why not Redis, with the cost.')
+  await item('Is one table really the cost?').getByRole('button').first().click()
+  await expect(edit.getByRole('textbox', { name: 'Comment' })).toHaveValue('Say why not Redis, with the cost.')
+  await edit.getByRole('button', { name: 'Save' }).click()
+  await expect(listed).toContainText('Say why not Redis, with the cost.')
+  await expect(listed).toContainText('edited')
+  await expect(listed).not.toContainText('half typed')
+  const edited = await detail(apiUrl, spec)
+  expect(edited.annotations.find((a) => a.quote === SPEC_QUOTE)).toMatchObject({
+    comment: 'Say why not Redis, with the cost.',
+    editedAt: expect.any(String),
+  })
+  expect(edited.annotations.find((a) => a.quote === second)?.editedAt).toBeNull()
+
+  // Delete: two steps; "Keep" changes nothing
+  const doomed = item('Is one table really the cost?')
+  await doomed.getByRole('button', { name: 'Delete comment' }).click()
+  await expect(doomed).toContainText('Delete comment?')
+  await doomed.getByRole('button', { name: 'Keep' }).click()
+  await expect(doomed).not.toContainText('Delete comment?')
+  await doomed.getByRole('button', { name: 'Delete comment' }).click()
+  await doomed.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(listed).not.toContainText('Is one table really the cost?')
+  await expect
+    .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
+    .toEqual([SPEC_QUOTE])
+  expect((await detail(apiUrl, spec)).annotations.map((a) => a.quote)).toEqual([SPEC_QUOTE])
 
   await page.getByRole('textbox', { name: 'General comment' }).fill('Overall: good direction.')
   await page.getByRole('button', { name: 'Add general comment' }).click()
@@ -86,7 +166,7 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
     expect.objectContaining({
       quote: SPEC_QUOTE,
       path: 'Queue storage > Options > Cost',
-      comment: 'Say why not Redis.',
+      comment: 'Say why not Redis, with the cost.',
     }),
   )
   expect(all).toContainEqual(
@@ -108,6 +188,12 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   const heard = (lead?.sent ?? []).filter((text) => text.includes('Good, but name the lock.'))
   expect(heard).toHaveLength(1)
   expect(heard[0]).toContain('With notes')
+  // What the lead reads with `factory artifact show` is the detail: the edited words, never the deleted comment.
+  const read = await detail(apiUrl, spec)
+  const words = [...read.annotations, ...read.unanchored].map((a) => a.comment)
+  expect(words).toContain('Say why not Redis, with the cost.')
+  expect(words).not.toContain('Say why not Redis.')
+  expect(words).not.toContain('Is one table really the cost?')
 })
 
 /** A throwaway server on a free port that counts every request it gets. */
@@ -185,8 +271,19 @@ test.describe('an HTML artifact', () => {
     if (!frame) throw new Error('no frame')
     const claim = 'The probe ships on Friday and nobody pays for it.'
     await expect.poll(() => frame.evaluate(SELECT(claim))).toBe(true)
+    const inFrame = (await frame.evaluate(RECT)) as { top: number; bottom: number }
     const composer = page.getByRole('form', { name: 'Comment on the selection' })
     await expect(composer).toContainText(claim)
+    // beside the passage: right of the frame, level with the passage (the frame's rect plus the frame's own position)
+    const frameBox = await page.locator('iframe[title="Artifact"]').boundingBox()
+    const box = await composer.boundingBox()
+    if (!frameBox || !box) throw new Error('no boxes')
+    expect(box.x).toBeGreaterThanOrEqual(frameBox.x + frameBox.width - 1)
+    expect(box.y).toBeGreaterThanOrEqual(frameBox.y + inFrame.top - 24)
+    expect(box.y).toBeLessThanOrEqual(frameBox.y + inFrame.bottom)
+    // the frame fills the page's height and width: no box, no border
+    expect(frameBox.height).toBeGreaterThan(900)
+    expect(frameBox.width).toBeGreaterThan(1100)
     // cancelled, the same passage can be chosen again
     await composer.getByRole('button', { name: 'Cancel' }).click()
     await expect(composer).toBeHidden()
@@ -268,4 +365,41 @@ test('a new revision keeps one anchored comment and moves the other to Unanchore
   await expect(left).toContainText('A failed row is retried at once.')
   await page.getByLabel('Compare with').selectOption('')
   await expect(page).not.toHaveURL(/compare=/)
+})
+
+const scrolls = async (page: Page) =>
+  (await page.evaluate(
+    '({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })',
+  )) as { scroll: number; client: number }
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('the document and its comments stack, nothing scrolls sideways, the comment box docks at the bottom', async ({
+    page,
+  }) => {
+    const { shotSpec, shotReport, revised } = seeded()
+    for (const path of [
+      `/artifacts/${shotSpec}`,
+      `/artifacts/${shotReport}`,
+      `/artifacts/${revised}?revision=2&compare=1`,
+    ]) {
+      await page.goto(path)
+      await expect(page.locator('main header').getByRole('heading', { level: 1 })).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      const widths = await scrolls(page)
+      expect(widths.scroll, `${path} scrolls sideways`).toBeLessThanOrEqual(widths.client)
+    }
+    await page.goto(`/artifacts/${shotSpec}`)
+    await expect(page.locator('main header').getByRole('heading', { level: 1 })).toBeVisible()
+    await page.evaluate(SELECT(SPEC_QUOTE))
+    const composer = page.getByRole('form', { name: 'Comment on the selection' })
+    await expect(composer).toBeVisible()
+    const box = await composer.boundingBox()
+    if (!box) throw new Error('no box')
+    expect(box.y + box.height).toBeGreaterThan(600)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+    await page.keyboard.press('Escape')
+    await expect(composer).toBeHidden()
+  })
 })

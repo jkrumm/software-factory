@@ -46,6 +46,7 @@ export {
   DecisionList,
   DecisionReply,
   DecisionView,
+  EditAnnotationBody,
   ErrandBody,
   ErrandDoneBody,
   ErrandList,

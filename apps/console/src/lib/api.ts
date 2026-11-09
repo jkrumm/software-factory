@@ -96,12 +96,12 @@ export const fetchIssueCards = (signal?: AbortSignal) =>
 /** The artifacts, newest first: what the command palette searches. */
 export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=200', ArtifactList, signal)
 
-/** Same-origin POST of a JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
-async function postJson<T>(path: string, body: unknown, schema: Schema<T>): Promise<T> {
+/** Same-origin write (POST, PATCH, DELETE) of an optional JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
+async function sendJson<T>(method: string, path: string, body: unknown, schema: Schema<T>): Promise<T> {
   const response = await fetch(path, {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    method,
+    headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   if (!response.ok) {
     const refusal = ErrorBody.safeParse(await response.json().catch(() => null))
@@ -109,6 +109,8 @@ async function postJson<T>(path: string, body: unknown, schema: Schema<T>): Prom
   }
   return schema.parse(await response.json())
 }
+
+const postJson = <T>(path: string, body: unknown, schema: Schema<T>) => sendJson('POST', path, body, schema)
 
 export const fetchDecision = (id: string, signal?: AbortSignal) =>
   getJson(`/v1/decisions/${encodeURIComponent(id)}`, DecisionView, signal)
@@ -146,3 +148,20 @@ export const postVerdict = (
   id: string,
   body: { verdict: keyof typeof VERDICT_WORDS; note?: string; revision: number },
 ) => postJson(`/v1/artifacts/${encodeURIComponent(id)}/verdict`, body, ArtifactReply)
+
+/** The owner's edit of an annotation's comment, and its removal: both answer with the artifact like a new annotation. */
+export const patchAnnotation = (id: string, annotationId: string, comment: string) =>
+  sendJson(
+    'PATCH',
+    `/v1/artifacts/${encodeURIComponent(id)}/annotations/${encodeURIComponent(annotationId)}`,
+    { comment },
+    ArtifactReply,
+  )
+
+export const deleteAnnotation = (id: string, annotationId: string) =>
+  sendJson(
+    'DELETE',
+    `/v1/artifacts/${encodeURIComponent(id)}/annotations/${encodeURIComponent(annotationId)}`,
+    undefined,
+    ArtifactReply,
+  )

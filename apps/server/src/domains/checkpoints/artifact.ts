@@ -68,6 +68,17 @@ export interface AnnotationInput {
   comment: string
 }
 
+/** Reads the new comment of an annotation: trimmed, not empty, not over the cap. */
+export function readComment(raw: unknown): Result<string, MissingFields> {
+  const body = isRecord(raw) ? raw : {}
+  const problems: string[] = []
+  const comment = filled(body.comment)?.trim() ?? ''
+  if (comment === '') problems.push('comment')
+  if (comment.length > MAX_COMMENT) problems.push(`comment (longer than ${MAX_COMMENT} characters)`)
+  if (problems.length > 0) return refused(problems, 'an annotation')
+  return ok(comment)
+}
+
 /** Reads an annotation: the quote it hangs on, an optional path hint (a heading path, a selector), and the comment. */
 export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFields> {
   const body = isRecord(raw) ? raw : {}

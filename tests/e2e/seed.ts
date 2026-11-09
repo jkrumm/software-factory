@@ -3,9 +3,9 @@ import { bearer } from '../scenarios/harness.ts'
 import type { Lab } from '../scenarios/planning/lab.ts'
 
 /** Calls the API on the main port as the owner; a refusal throws with the body. */
-export async function api<T = unknown>(url: string, path: string, body?: unknown): Promise<T> {
+export async function api<T = unknown>(url: string, path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`${url}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { 'content-type': 'application/json', ...bearer() },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
