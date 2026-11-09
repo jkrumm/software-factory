@@ -190,14 +190,16 @@ function sizeWords(unit: Kpi['unit'], size: number): string {
   return unit === 'share' ? `${Math.round(size * 100)} pts` : formatValue(unit, size)
 }
 
-/** How far `kpi` is from its target, in words; the verdict first when it is met, the missing reason when it has none. */
-export function distanceWords(kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target'>): string {
+/**
+ * How far `kpi` is from its target, in words; the verdict first when it is met. A KPI with no target to judge (a trend,
+ * an unset one) has no distance: the footer's Target pair says so once, so this is `null` and the card has no sub line.
+ */
+export function distanceWords(kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target'>): string | null {
   if (!kpi.measured) return 'Not measured'
   if (kpi.value === null) return 'No data'
   const { kind, min, max } = kpi.target
-  if (kind === 'trend') return 'Trend only'
   const met = meets(kpi.target, kpi.value)
-  if (met === null) return 'No target'
+  if (met === null) return null
   if (met) return `Met: ${targetWords(kpi)}`
   const outside = kind === 'at_least' || (kind === 'between' && min !== null && kpi.value < min) ? 'below' : 'above'
   const edge = outside === 'below' ? min : max
@@ -259,6 +261,19 @@ export function chartTarget(target: Kpi['target']): number | { min: number; max:
   if (kind === 'at_most' && max !== null) return max
   if (kind === 'between' && min !== null && max !== null) return { min, max }
   return undefined
+}
+
+/** Readings a line needs to be a trend and not a diagonal between two points. */
+const TREND_POINTS = 3
+
+/**
+ * Whether the card draws the history. Against a target, any reading is a place on the chart (the dot beside its line);
+ * without one the line alone must be a trend, so it takes at least three readings, never one diagonal.
+ */
+export function drawsHistory(kpi: Pick<Kpi, 'measured' | 'target' | 'history'>): boolean {
+  if (!kpi.measured) return false
+  const readings = kpi.history.filter((point) => point.value !== null).length
+  return chartTarget(kpi.target) === undefined ? readings >= TREND_POINTS : readings > 0
 }
 
 /** The history's readings for the chart, oldest first; a window with nothing counted stays a gap (`null`). */

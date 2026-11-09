@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
+import { COLUMN_EMPTY } from '../../apps/console/src/lib/column-empty.ts'
 import { api } from './seed.ts'
 
 /**
@@ -239,7 +240,29 @@ test('the filters narrow every column, write the URL, and clearing restores the 
   // a linked view applies, and a value the data does not have gives empty columns
   await page.goto('/flow?project=nowhere')
   await expectCounts(page, { settling: 0, queued: 0, working: 0, waiting: 0, watching: 0, closed: 0 })
-  await expect(page.getByText('Nothing here')).toHaveCount(6)
+  // an empty column says what is missing and what puts a card there, never a bare "Nothing here"
+  await expect(page.getByText('Nothing here')).toHaveCount(0)
+  for (const key of [...STATES, 'closed'] as const) {
+    const empty = COLUMN_EMPTY[key]
+    await expect(region(page, key).getByText(empty.title, { exact: true })).toBeVisible()
+    await expect(region(page, key).getByText(empty.cause, { exact: true })).toBeVisible()
+  }
+})
+
+test('the board sizes its columns by what they hold: an empty one is narrower than one with cards', async ({
+  page,
+  apiUrl,
+}) => {
+  const flow = await flowOf(apiUrl)
+  const empty = STATES.find((state) => flow.states[state].count === 0)
+  const full = STATES.find((state) => flow.states[state].count > 0)
+  if (!empty || !full) throw new Error('the seed leaves one column empty and one with cards')
+  await page.goto('/flow')
+  await expect(heading(page, full)).toBeVisible()
+  const width = async (state: State) => (await region(page, state).boundingBox())?.width ?? 0
+  expect(await width(empty)).toBeLessThan(await width(full))
+  // nothing is squeezed below what a card can read
+  expect(await width(full)).toBeGreaterThanOrEqual(240)
 })
 
 test('a new Issue appears in its column without a reload', async ({ page, apiUrl }) => {

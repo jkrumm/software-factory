@@ -3,11 +3,13 @@ import type { FlowModel } from '@software-factory/contract'
 import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@phosphor-icons/react'
 import { type ReactNode, useState } from 'react'
 import { FlowCardView } from '@/components/flow/card'
+import { EmptyColumn } from '@/components/flow/empty'
 import { FlowList } from '@/components/flow/list'
 import { InfoHint, type InfoWord, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import {
+  boardColumns,
   boardNote,
   boardOf,
   COLUMN_KEYS,
@@ -236,7 +238,7 @@ function Flow() {
             </Link>
           </ColumnHeader>
           {board[filters.state].length === 0 ? (
-            <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here</p>
+            <EmptyColumn column={filters.state} />
           ) : (
             <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-2">
               <ul
@@ -254,7 +256,7 @@ function Flow() {
         </section>
       ) : wide ? (
         <div className="-mx-1 min-h-[28rem] flex-1 overflow-x-auto px-1">
-          <div className="grid h-full grid-flow-col auto-cols-[minmax(15rem,1fr)] gap-4">
+          <div className="grid h-full gap-4" style={{ gridTemplateColumns: boardColumns(columns, counts) }}>
             {columns.map((key) => (
               <section key={key} aria-labelledby={`flow-${key}`} className="flex min-h-0 min-w-0 flex-col gap-2">
                 <ColumnHeader column={key} count={counts[key]} />
@@ -262,6 +264,7 @@ function Flow() {
                   cards={board[key]}
                   now={now}
                   labelledBy={`flow-${key}`}
+                  column={key}
                   showState={key === 'closed'}
                   className="min-h-0 flex-1"
                 />
@@ -298,6 +301,7 @@ function Flow() {
               cards={board[tab]}
               now={now}
               labelledBy={`flow-tab-${tab}`}
+              column={tab}
               showState={tab === 'closed'}
               className="max-h-[calc(100dvh-18rem)]"
             />

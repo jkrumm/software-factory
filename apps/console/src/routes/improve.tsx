@@ -30,6 +30,7 @@ import {
   comparisonWords,
   DEFAULT_WINDOW,
   distanceWords,
+  drawsHistory,
   FRICTION_GROUP_HINT,
   FRICTION_GROUP_LABEL,
   fixCard,
@@ -131,7 +132,7 @@ function WindowSection({ days }: { days: number }) {
 
 function KpiCard({ kpi, model }: { kpi: Kpi; model: KpiModel }) {
   const change = kpiChange(kpi)
-  const known = kpi.measured && kpi.history.some((point) => point.value !== null)
+  const known = drawsHistory(kpi)
   return (
     <StatCard
       icon={KPI_ICON[kpi.key]}
@@ -140,7 +141,7 @@ function KpiCard({ kpi, model }: { kpi: Kpi; model: KpiModel }) {
       subtitle={comparisonWords(model.days)}
       value={formatKpi(kpi)}
       delta={kpi.measured ? { value: change.text, direction: change.direction, tone: change.tone } : undefined}
-      sub={kpi.measured ? distanceWords(kpi) : undefined}
+      sub={kpi.measured ? (distanceWords(kpi) ?? undefined) : undefined}
       chart={
         known ? (
           <Sparkline

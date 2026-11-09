@@ -1,6 +1,7 @@
 import {
   comparisonWords,
   distanceWords,
+  drawsHistory,
   fixCard,
   fixClassRows,
   fixWeekLabel,
@@ -72,11 +73,15 @@ async function expectCards(page: Page, model: KpiModel) {
       await expect(chart).toHaveCount(0)
       continue
     }
-    await expect(card.getByText(distanceWords(kpi), { exact: true }).first()).toBeVisible()
+    const distance = distanceWords(kpi)
+    // no target to judge: the footer's Target pair says so, and the card says it nowhere else
+    if (distance === null) await expect(card.getByText(target.value, { exact: true })).toHaveCount(1)
+    else await expect(card.getByText(distance, { exact: true }).first()).toBeVisible()
     const change = kpiChange(kpi)
     await expect(card.locator('[data-tone]')).toHaveText(change.text)
     await expect(card.locator('[data-tone]')).toHaveAttribute('data-tone', change.tone)
-    if (kpi.history.some((point) => point.value !== null)) await expect(chart.locator('tbody tr')).toHaveCount(6)
+    if (drawsHistory(kpi)) await expect(chart.locator('tbody tr')).toHaveCount(6)
+    else await expect(chart).toHaveCount(0)
   }
 }
 
@@ -108,7 +113,9 @@ test('the KPIs with a history draw it: a tooltip per point names its window and 
   apiUrl,
 }) => {
   const [kpis] = await read(apiUrl, 7)
-  const withHistory = cardKpis(kpis).filter((k) => k.measured && k.history.filter((p) => p.value !== null).length > 1)
+  const withHistory = cardKpis(kpis).filter(
+    (k) => drawsHistory(k) && k.history.filter((p) => p.value !== null).length > 1,
+  )
   expect(withHistory.length, 'the seed gives some KPI a real history').toBeGreaterThanOrEqual(3)
   await page.goto('/improve')
   for (const kpi of withHistory.slice(0, 3)) {

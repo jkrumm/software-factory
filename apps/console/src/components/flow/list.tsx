@@ -1,20 +1,24 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRef } from 'react'
-import type { FlowCard } from '@/lib/flow'
+import type { ColumnKey, FlowCard } from '@/lib/flow'
 import { cn } from '@/lib/utils'
 import { FlowCardView } from './card'
+import { EmptyColumn } from './empty'
 
 /** A virtualised scroll list of cards: only the visible ones are in the DOM. Keyed by Issue, so an update re-renders in place. */
 export function FlowList({
   cards,
   now,
   labelledBy,
+  column,
   showState,
   className,
 }: {
   cards: FlowCard[]
   now: number
   labelledBy: string
+  /** which column or tab this is, for what its empty state says */
+  column: ColumnKey
   showState?: boolean
   className?: string
 }) {
@@ -27,7 +31,7 @@ export function FlowList({
     getItemKey: (index) => cards[index]?.key ?? index,
   })
 
-  if (cards.length === 0) return <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here</p>
+  if (cards.length === 0) return <EmptyColumn column={column} />
   return (
     <div ref={scroller} data-testid="flow-scroll" className={cn('-mx-1 overflow-y-auto px-1', className)}>
       <ul aria-labelledby={labelledBy} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>

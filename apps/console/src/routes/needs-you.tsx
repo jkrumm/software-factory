@@ -235,12 +235,16 @@ function NeedsYou() {
           }
         />
       ) : null}
-      <div className="grid gap-8">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8">
         {NEED_KINDS.map((kind) => {
           const items = visible.filter((i) => i.kind === kind)
           if (items.length === 0) return null
           return (
-            <section key={kind} aria-labelledby={`needs-${kind}`} className="grid gap-3">
+            <section
+              key={kind}
+              aria-labelledby={`needs-${kind}`}
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3"
+            >
               <div className="flex items-center gap-1">
                 <h2 id={`needs-${kind}`} className="text-sm font-medium text-muted-foreground">
                   {KIND_LABEL[kind]} <span className="tabular-nums">{items.length}</span>

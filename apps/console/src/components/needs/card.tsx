@@ -68,7 +68,7 @@ export function NeedCard({
       ref={card}
       data-open={open}
       className={cn(
-        'relative scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors',
+        'relative min-w-0 scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors',
         !open && 'has-[h3>a:hover]:bg-accent',
       )}
     >
@@ -77,7 +77,7 @@ export function NeedCard({
           <span className="flex h-6 items-center">
             <ProjectChip item={item} />
           </span>
-          <h3 className="min-w-0 flex-1 text-[15px] font-medium">
+          <h3 className="min-w-0 flex-1 text-[15px] font-medium [overflow-wrap:anywhere]">
             <Link
               ref={header}
               to="/needs-you"
@@ -116,7 +116,9 @@ export function NeedCard({
             </Link>
           ) : null}
         </p>
-        {open || summary === null ? null : <p className="line-clamp-2 text-sm text-muted-foreground">{summary}</p>}
+        {open || summary === null ? null : (
+          <p className="line-clamp-2 text-sm [overflow-wrap:anywhere] text-muted-foreground">{summary}</p>
+        )}
       </div>
       {open ? (
         <div className="grid gap-4 border-t px-4 py-4">
