@@ -128,7 +128,7 @@ hand-filed Issue; `factory project show` lists the project's `lanes` (leads and 
 
 ## Adopting an Issue
 
-A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`, `rd issue`). Nothing is filed for it; the
+A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`). Nothing is filed for it; the
 row is done when that Issue closes, so other rows can wait for it with `after`. An adopted row is `key` and `issue` and
 nothing else: `after`, `not_before`, `stable_days`, `repo`, `kind`, `seat` and `lane` are refused on it. Put the order on the Issue
 (`--after`), or on the rows that wait for it.

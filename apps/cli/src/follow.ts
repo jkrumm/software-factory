@@ -3,7 +3,8 @@ import { type SseEvent, StreamError, streamEvents } from '@software-factory/clie
 import { ErrorBody, ReadChange, StreamHello } from '@software-factory/contract'
 import { issueIdOf } from './body-schema.ts'
 import { EXIT, FactoryError, kindForStatus, usage } from './exit.ts'
-import { DEFAULT_URL, type Io, tokenOf } from './operation.ts'
+import { authHint, credentialOf } from './credentials.ts'
+import { DEFAULT_URL, type Io } from './operation.ts'
 import type { Format } from './output.ts'
 
 const BIN = 'factory'
@@ -74,7 +75,7 @@ function show(frame: SseEvent): Shown {
 }
 
 /** A refusal of the stream as the failure it is: 410 says to read again, 401/403 are auth as everywhere. */
-function refusal(error: StreamError): FactoryError {
+function refusal(error: StreamError, failure?: string): FactoryError {
   const body = ErrorBody.safeParse(error.body)
   const status = error.status ?? 0
   return new FactoryError(kindForStatus(status), body.success ? body.data.error : `HTTP ${status}`, {
@@ -83,7 +84,7 @@ function refusal(error: StreamError): FactoryError {
       status === 410
         ? `the cursor is unknown to the server: read the resources again (${BIN} read overview) and follow without --since`
         : status === 401
-          ? 'set FACTORY_TOKEN (FACTORY_READ_TOKEN reads only)'
+          ? authHint(failure)
           : '',
     details: { status },
   })
@@ -117,12 +118,13 @@ export async function follow(
   let cursor = input.since
   let wait = backoff.firstMs
   let connected = false
+  const credential = await credentialOf(io.env)
   while (!signal.aborted) {
     try {
       const events = streamEvents({
         base,
         path: '/v1/stream',
-        token: tokenOf(io.env),
+        token: credential.token,
         since: cursor,
         query: input.issue === undefined ? undefined : { issue: issueIdOf(input.issue) },
         signal,
@@ -141,7 +143,8 @@ export async function follow(
       }
     } catch (error) {
       if (!(error instanceof StreamError)) throw error
-      if (error.reason === 'refused' && !(connected && (error.status ?? 0) >= 500)) throw refusal(error)
+      if (error.reason === 'refused' && !(connected && (error.status ?? 0) >= 500))
+        throw refusal(error, credential.failure)
       if (error.reason === 'unreachable' && !connected) {
         throw new FactoryError('network', `server unreachable at ${base}: ${error.message}`, {
           hint: `is the server up? ${BIN} version works offline`,

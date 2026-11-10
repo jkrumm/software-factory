@@ -4,9 +4,9 @@ import type { OperationExtension } from './operation.ts'
 const POINTER = 'factory issue schema'
 
 const WHERE = [
-  'On the mini (the owner path): `rd issue <repo> <title> --facts @file [--after <id>] [--key <key>]`; rd carries the token.',
-  'rd has no --text flag: put prose into facts.what and facts.why.',
-  'A direct `factory issue new` needs FACTORY_TOKEN (the owner token); without it the server answers 401.',
+  'On the mini (the owner path): `factory issue new --repo <repo> --title <title> --facts @file [--after <id>] [--key <key>]`; with no token set the CLI resolves the owner token from the deployed release itself.',
+  'List what is filed with `factory issue list`; file a finding for another repo with `factory signal file --from agent:<repo> --title <title> --text <text>`.',
+  'Elsewhere, or as a lead (which keeps its own agent token): FACTORY_TOKEN must be set, else the server answers 401.',
 ]
 
 const factsShape = `{${FILING.facts.keys.map((k) => `"${k.key}": "..."`).join(', ')}}`
@@ -62,7 +62,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     jsonObjectFields: { facts: factsHint, seat: seatHint },
     statusHints: {
       400: pointerHint,
-      401: 'a direct factory call needs FACTORY_TOKEN (the owner token; FACTORY_READ_TOKEN reads only). On the mini file with: rd issue <repo> <title> --facts @file — rd carries the token',
+      401: 'filing needs the owner token. On the mini the CLI resolves it from the deployed release through secrets-run when FACTORY_TOKEN and FACTORY_READ_TOKEN are unset (a read token files nothing); elsewhere set FACTORY_TOKEN',
       422: pointerHint,
     },
   },

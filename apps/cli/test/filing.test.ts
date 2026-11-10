@@ -54,25 +54,28 @@ describe('the filing contract', () => {
     expect(Object.keys(FACTS_EXAMPLE)).toEqual(FACTS_KEYS.map((k) => k.key))
   })
 
-  test('issue new --help carries the keys, the example, the rd path and FACTORY_TOKEN', async () => {
+  test('issue new --help carries the keys, the example, the factory path and FACTORY_TOKEN', async () => {
     const { code, out } = await cli(['issue', 'new', '--help'])
     expect(code).toBe(0)
     for (const { key } of FACTS_KEYS) expect(out).toContain(key)
     expect(out).toContain(JSON.stringify(FACTS_EXAMPLE, null, 2))
-    expect(out).toContain('rd issue <repo> <title> --facts @file')
+    expect(out).toContain('factory issue new --repo <repo> --title <title> --facts @file')
+    expect(out).toContain('factory signal file --from agent:<repo>')
     expect(out).toContain('FACTORY_TOKEN')
     expect(out).toContain('not markdown')
+    expect(out).not.toMatch(/\brd\b/)
   })
 
   test('other commands keep their help', async () => {
-    expect((await cli(['issue', 'close', '--help'])).out).not.toContain('rd issue')
+    expect((await cli(['issue', 'close', '--help'])).out).not.toContain('factory issue new --repo')
   })
 
   test('issue schema prints the guide in plain and the contract in json, without the network', async () => {
     calls = 0
     const plain = await cli(['issue', 'schema'])
     expect(plain.code).toBe(0)
-    expect(plain.out).toContain('rd issue <repo> <title> --facts @file')
+    expect(plain.out).toContain('factory issue new --repo <repo> --title <title> --facts @file')
+    expect(plain.out).not.toMatch(/\brd\b/)
     const json = await cli(['issue', 'schema', '--format', 'json'])
     const contract = JSON.parse(json.out)
     expect(contract.facts.keys.map((k: { key: string }) => k.key)).toEqual(FACTS_KEYS.map((k) => k.key))
@@ -111,13 +114,15 @@ describe('the filing contract', () => {
     expect(errorLine(nothing.err).message).toContain('got null')
   })
 
-  test('a 401 on issue new points to rd issue; on another command the old hint stays', async () => {
+  test('a 401 names the token and secrets-run, never rd', async () => {
     answer = { status: 401, body: { error: 'a bearer token is required', code: 'unauthorized' } }
     const filing = await cli(['issue', 'new', '--repo', 'r', '--title', 't'])
     expect(filing.code).toBe(3)
-    expect(errorLine(filing.err).hint).toContain('rd issue')
-    const other = await cli(['health', 'get'])
-    expect(errorLine(other.err).hint).toBe('set FACTORY_TOKEN (FACTORY_READ_TOKEN reads only)')
+    expect(errorLine(filing.err).hint).toContain('secrets-run')
+    expect(errorLine(filing.err).hint).not.toMatch(/\brd\b/)
+    const other = await cli(['issue', 'list'])
+    expect(errorLine(other.err).hint).toContain('set FACTORY_TOKEN')
+    expect(errorLine(other.err).hint).not.toMatch(/\brd\b/)
   })
 
   test('a 422 on issue new points to issue schema', async () => {

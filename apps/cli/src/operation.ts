@@ -1,6 +1,7 @@
 import { send } from '@software-factory/client'
 import { ErrorBody, Health } from '@software-factory/contract'
 import type * as z from 'zod'
+import { authHint, type Credential, credentialOf, tokenFromEnv } from './credentials.ts'
 import { FactoryError, kindForStatus, usage } from './exit.ts'
 import { OPERATION_EXTENSIONS } from './filing.ts'
 import { issueIdOf, normalizeBody, validateBody } from './body-schema.ts'
@@ -102,9 +103,6 @@ export interface Invocation {
   flags: Readonly<Record<string, FlagValue>>
   format: Format
 }
-
-/** The bearer token of this process: the owner's, else the read token. None, nothing is sent and the server answers 401. */
-export const tokenOf = (env: Io['env']): string | undefined => env.FACTORY_TOKEN || env.FACTORY_READ_TOKEN || undefined
 
 const commandOf = (op: Operation) => `${op.command[0]} ${op.command[1]}`
 
@@ -257,13 +255,16 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
 export async function runOperation(op: Operation, invocation: Invocation, io: Io): Promise<void> {
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const { path, query, body } = await request(op, invocation, io)
+  // `GET /health` is open: it never waits for a token to be resolved.
+  const credential: Credential =
+    op.operationId === 'health.get' ? { token: tokenFromEnv(io.env) } : await credentialOf(io.env)
   const answer = await send({
     base,
     method: op.method,
     path,
     query,
     body,
-    token: tokenOf(io.env),
+    token: credential.token,
     timeoutMs: timeoutOf(op),
   })
   if (!answer.reached) {
@@ -292,8 +293,7 @@ export async function runOperation(op: Operation, invocation: Invocation, io: Io
   }
   const error = ErrorBody.safeParse(answer.json)
   const hint =
-    extensionOf(op)?.statusHints?.[answer.status] ??
-    (answer.status === 401 ? 'set FACTORY_TOKEN (FACTORY_READ_TOKEN reads only)' : undefined)
+    extensionOf(op)?.statusHints?.[answer.status] ?? (answer.status === 401 ? authHint(credential.failure) : undefined)
   throw new FactoryError(
     kind,
     error.success ? error.data.error : `HTTP ${answer.status}${answer.text ? `: ${answer.text.slice(0, 200)}` : ''}`,

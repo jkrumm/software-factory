@@ -9,7 +9,7 @@ The copies here are the source. Other repos install them.
 |-|-|-|-|-|
 | `herdr/jk-glance` | Herdr app sidebar mod: what needs the owner, what runs; feeds the pane header and the tab links | dotfiles `make herdr-app-setup` | `read needs`, `read overview`, `read issues`, `read sessions` | `FACTORY_TOKEN` from `.env.tpl` via `secrets-run` |
 | `claude-code/hooks.json` | The six Claude Code hook entries that report a factory session's events | dotfiles `make setup` (settings render) | `hook <event>` | none in the hook line; the 0600 hook socket |
-| `rd` (contract only) | `rd` in dotfiles files Issues, lists them, delivers session notes, reads the role table | dotfiles `make setup` | `health`, `role get`, `issue new`, `issue list`, `session note` | `FACTORY_TOKEN` from the release's `.env.tpl` via `secrets-run` (`role get` runs without it) |
+| `rd` (contract only) | `rd` in dotfiles delivers session notes and reads the role table; its `issue`, `issues` and `signal` verbs become passthroughs to `factory`, then retire | dotfiles `make setup` | `health`, `role get`, `issue new`, `issue list`, `session note` | `FACTORY_TOKEN` from the release's `.env.tpl` via `secrets-run` (`role get` runs without it) |
 | `hermes/fleet` | Hermes skill: reads fleet state, files signals | hermes-agent `make setup` | `read …`, `signal file` | `FACTORY_READ_TOKEN`, `FACTORY_SIGNAL_TOKEN` |
 
 ## Rules
