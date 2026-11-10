@@ -39,7 +39,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   a dead holder is reclaimed.
 - **Interactive Claude Code in herdr-core only.** Never headless `claude -p`.
 - **CLI contract = agw's:** `--format json|plain`, data on stdout, messages on stderr, the same exit codes
-  (`apps/cli/src/exit.ts`), never prompts. Commands are generated from the OpenAPI document
+  (`apps/cli/src/exit.ts`), never prompts; help and body validation derive from the contract schemas (`--schema` prints one). Commands are generated from the OpenAPI document
   (`apps/cli/src/generated/operations.ts`, never edited by hand; `make check` fails when it is stale); `hook`, `slot`,
   `deploy-lock`, `follow`, `role` and `issue schema` (the filing contract, offline) are hand-written. `rd --role` depends on `factory role get <role> --format json`
   printing exactly `{"role","tier","effort"}`; unknown is exit 4. A role is a tier (`haiku|sonnet|opus`, never a model id)

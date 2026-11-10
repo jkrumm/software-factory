@@ -411,10 +411,10 @@ describe('the command line of a generated command', () => {
     expect(result.err).toBe('')
     expect(result.out).toContain('usage: factory issue close <id> [flags]')
     expect(result.out).toContain('--attempt <integer>  required')
-    expect(result.out).toContain('--call <text>\n')
+    expect(result.out).toContain('--call <text>  1-128 characters')
     expect(result.out).toContain('--body <json>')
     const defer = await cli(['issue', 'defer', '-h'])
-    expect(defer.out).toContain('--after <text>  repeatable')
+    expect(defer.out).toContain('--after <issue-id>  repeatable')
   })
 
   test('the top-level help lists commands, not their flags', async () => {

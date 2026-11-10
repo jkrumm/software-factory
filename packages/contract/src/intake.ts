@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { ISSUE_ID_META } from './issues.ts'
 
 /** A NUL, or half of a surrogate pair: what Postgres cannot store in text or JSON. */
 // oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
@@ -272,10 +273,22 @@ export const DoorRouteInput = z
       .min(1)
       .max(64)
       .optional()
-      .describe('the Issue a lead sets the route for; required with the agent token, ignored for the owner'),
+      .meta({
+        ...ISSUE_ID_META,
+        description: 'the Issue a lead sets the route for; required with the agent token, ignored for the owner',
+      }),
   })
   .meta({ id: 'DoorRouteInput' })
 export type DoorRouteInput = z.output<typeof DoorRouteInput>
+
+/** The key of a door route: what `POST /door/routes/remove` names. */
+export const DoorRouteKey = z
+  .strictObject({
+    source: z.string().min(1),
+    monitor: z.string().min(1),
+    issue: z.string().min(1).max(64).optional().meta(ISSUE_ID_META),
+  })
+  .meta({ id: 'DoorRouteKey' })
 
 export const DoorRouteList = z
   .object({

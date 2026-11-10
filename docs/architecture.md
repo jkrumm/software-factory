@@ -303,7 +303,9 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 - **The CLI is generated** from the OpenAPI document (`apps/cli/scripts/generate.ts`), one command per operation, keeping
   agw's contract: `--format json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot,
   deploy-lock, follow, role and issue schema verbs are hand-written where their contracts demand it. Commands of the old CLI answer with
-  the way to the same thing (`apps/cli/src/retired.ts`).
+  the way to the same thing (`apps/cli/src/retired.ts`). A flag's help and the client-side validation of a body (bare Issue
+  numbers normalised to `issue_<n>`, every violated limit named, exit 2, nothing sent) derive from the contract schema of the
+  request body (`apps/cli/src/body-schema.ts`); `--schema` prints that body's JSON Schema.
 - **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
   (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is
   optional, all differ, and a caller whose token is unset does not exist. The orchestrator, the owner's delegate agent, is on

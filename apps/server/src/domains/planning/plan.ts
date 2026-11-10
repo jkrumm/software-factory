@@ -1,3 +1,4 @@
+import { PLAN_LIMITS } from '@software-factory/contract'
 import * as z from 'zod'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 import { issuesMessage } from './project.ts'
@@ -7,7 +8,7 @@ export const PLAN_KINDS = ['feature', 'bug', 'chore', 'docs', 'incident'] as con
 export type PlanKind = (typeof PLAN_KINDS)[number]
 
 /** `docs/plan.yaml` is read from the default branch like `project.yaml`; a larger file is a broken plan. */
-export const MAX_PLAN_BYTES = 64 * 1024
+export const MAX_PLAN_BYTES = PLAN_LIMITS.maxBytes
 
 export const PLAN_VERSION = 1
 

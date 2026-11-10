@@ -108,7 +108,7 @@ describe('follow', () => {
       FAST,
     )
     expect(requests[0]).toEqual({
-      path: '/v1/stream?issue=7&since=9.0',
+      path: '/v1/stream?issue=issue_7&since=9.0',
       authorization: 'Bearer read-t',
       lastEventId: '9.0',
     })

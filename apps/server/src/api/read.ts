@@ -2,6 +2,7 @@ import {
   ChangeList,
   ErrorBody,
   ReadAccountList,
+  ISSUE_ID_META,
   ReadAskList,
   ReadHealthList,
   ReadIssueCards,
@@ -101,7 +102,11 @@ export const readRoutes = (read: ReadApi | undefined) =>
         return Response.json(ReadSessionCards.parse({ sessions }))
       },
       {
-        query: z.object({ issue: z.string().optional(), role: z.string().optional(), live: z.enum(['1']).optional() }),
+        query: z.object({
+          issue: z.string().meta(ISSUE_ID_META).optional(),
+          role: z.string().optional(),
+          live: z.enum(['1']).optional(),
+        }),
         response: { 200: ReadSessionCards, ...errorResponses(400, 503) },
         detail: {
           operationId: 'read.sessions',
@@ -170,7 +175,7 @@ export const readRoutes = (read: ReadApi | undefined) =>
       {
         query: z.object({
           since: z.string().optional(),
-          issue: z.string().optional(),
+          issue: z.string().meta(ISSUE_ID_META).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
         response: { 200: ChangeList, ...withGone },
@@ -202,7 +207,7 @@ export const readRoutes = (read: ReadApi | undefined) =>
         }
       },
       {
-        query: z.object({ since: z.string().optional(), issue: z.string().optional() }),
+        query: z.object({ since: z.string().optional(), issue: z.string().meta(ISSUE_ID_META).optional() }),
         detail: { hide: true },
       },
     )

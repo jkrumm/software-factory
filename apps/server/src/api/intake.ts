@@ -5,6 +5,7 @@ import {
   DoorReportAck,
   DoorRoute,
   DoorRouteInput,
+  DoorRouteKey,
   DoorRouteList,
   ErrorBody,
   DismissRequest,
@@ -208,13 +209,7 @@ export const intakeRoutes = (api: IntakeApi) =>
       '/door/routes/remove',
       async ({ body, request }) => answer(await api.removeRoute(body, callerOf(request)), routeOf),
       {
-        body: z
-          .strictObject({
-            source: z.string().min(1),
-            monitor: z.string().min(1),
-            issue: z.string().min(1).max(64).optional(),
-          })
-          .meta({ id: 'DoorRouteKey' }),
+        body: DoorRouteKey,
         response: { 200: DoorRoute, ...errorResponses(400, 404, 422, 503) },
         detail: { operationId: 'door.route-remove', summary: 'Remove a monitor route' },
       },

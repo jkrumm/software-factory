@@ -15,6 +15,7 @@ import {
   ErrandList,
   ErrandReply,
   ErrorBody,
+  ISSUE_ID_META,
   PageList,
   PassReply,
   ReviseBody,
@@ -227,7 +228,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       },
       {
         query: z.object({
-          issue: z.string().optional(),
+          issue: z.string().meta(ISSUE_ID_META).optional(),
           status: z.enum(['open', 'answered', 'withdrawn']).optional(),
           worth: z.enum(['yes', 'no']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
@@ -341,7 +342,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       },
       {
         query: z.object({
-          issue: z.string().optional(),
+          issue: z.string().meta(ISSUE_ID_META).optional(),
           kind: z.enum(ARTIFACT_KINDS).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
@@ -569,7 +570,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       },
       {
         query: z.object({
-          issue: z.string().optional(),
+          issue: z.string().meta(ISSUE_ID_META).optional(),
           open: z.enum(['yes', 'no']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),

@@ -49,14 +49,13 @@ test('flags build the body: an unknown Issue is a 404 on stderr as one JSON line
   })
 })
 
-test('a form with missing fields is a 422 that names them in details.fields, exit 2', async () => {
+test('a form with missing fields is refused by the CLI from the contract, exit 2, before any call', async () => {
   const result = await cli(['issue', 'close', 'issue_1', '--attempt', '1'])
   expect(result.code).toBe(2)
   expect(result.out).toBe('')
   expect(errorLine(result.err)).toMatchObject({
     kind: 'usage',
-    code: 'invalid_request',
-    details: { status: 422, fields: ['outcome', 'reason'] },
+    message: 'issue close: outcome: required; reason: required',
   })
 })
 

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { IssueRefInput } from './issues.ts'
 import { EVENT_KINDS } from './spool.ts'
 
 /** Whether every string in a value, keys included, is one jsonb can store: no NUL, no lone surrogate. */
@@ -38,7 +39,6 @@ export type StopCheckBody = z.infer<typeof StopCheckBody>
 export const StopCheck = z.object({ sendBack: z.boolean(), message: z.string().nullable() }).meta({ id: 'StopCheck' })
 export type StopCheck = z.infer<typeof StopCheck>
 
-const IssueRef = z.string().regex(/^(issue_)?[1-9][0-9]*$/, 'an Issue is issue_<n> or <n>')
 const Call = z.string().trim().min(1).max(128).optional()
 const Reason = z.string().trim().min(1).max(4_000)
 
@@ -52,7 +52,7 @@ export const DeferBody = z
   .object({
     attempt: z.number().int().min(1),
     until: z.iso.datetime({ offset: true }).optional(),
-    after: z.array(IssueRef).min(1).max(20).optional(),
+    after: z.array(IssueRefInput).min(1).max(20).optional(),
     call: Call,
   })
   .refine((body) => (body.until === undefined) !== (body.after === undefined), 'give either until or after')

@@ -11,7 +11,11 @@ const healthResponses = {
 }
 
 const body = (properties: Record<string, unknown>, required: string[] = []) => ({
-  content: { 'application/json': { schema: { type: 'object', properties, required } } },
+  content: {
+    'application/json': {
+      schema: { $ref: '#/$defs/CloseBody', $defs: { CloseBody: { type: 'object', properties, required } } },
+    },
+  },
 })
 
 /** A tiny fixture API, as the OpenAPI document of a server would describe it: the generator's input, not the real routes. */
@@ -63,7 +67,7 @@ const fixture = (extra: Record<string, unknown> = {}) => ({
 })
 
 const operationsFrom = (document: unknown): Operation[] =>
-  operationsOf(document).map((op) => ({
+  operationsOf(document).map(({ bodySchema: _bodySchema, ...op }) => ({
     ...op,
     command: [op.command[0], op.command[1]],
     method: op.method as Operation['method'],

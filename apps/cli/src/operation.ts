@@ -3,6 +3,7 @@ import { ErrorBody, Health } from '@software-factory/contract'
 import type * as z from 'zod'
 import { FactoryError, kindForStatus, usage } from './exit.ts'
 import { OPERATION_EXTENSIONS } from './filing.ts'
+import { issueIdOf, normalizeBody, validateBody } from './body-schema.ts'
 import { type Format, plain, render } from './output.ts'
 
 export type FieldKind = 'string' | 'number' | 'integer' | 'boolean' | 'json'
@@ -16,7 +17,7 @@ export interface BodyField {
   kind: FieldKind
   /** an array of scalars: the flag may repeat (`--commit a --commit b`) */
   repeatable: boolean
-  /** the contract requires it (the server answers 422 when it is missing; the CLI does not check) */
+  /** the contract requires it (the CLI refuses a body without it when the operation has a `bodySchema`) */
   required: boolean
   /** a property with no type in the contract (`z.unknown()`): a value that is JSON for an object or array, else the text */
   untyped: boolean
@@ -45,12 +46,16 @@ export interface Operation {
   queryParams: readonly string[]
   /** the query parameters (a subset of `queryParams`) that are bare flags */
   queryFlags: readonly QueryFlag[]
+  /** the query parameters (a subset of `queryParams`) that name an Issue: `12` is sent as `issue_12` */
+  issueParams?: readonly string[]
   /** whether it takes a JSON body (`--body <json>` and one flag per property) */
   body: boolean
   /** the properties of the body object, one flag each */
   bodyFields: readonly BodyField[]
   /** body fields (names) that follow the path parameters as positional arguments, in order: `x-cli.args` of the route */
   args: readonly string[]
+  /** the contract schema of the request body: the source of the flags' help, `--schema` and the client-side validation */
+  bodySchema?: z.ZodType
   /** the contract schema of every answer it declares, by status */
   responses: Readonly<Record<number, z.ZodType>>
 }
@@ -191,7 +196,7 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
     const value = invocation.flags[name]
     if (typeof value !== 'string') continue
     const bare = op.queryFlags.find((flag) => flag.name === name)
-    query[name] = bare ? queryValue(op, bare, value) : value
+    query[name] = bare ? queryValue(op, bare, value) : op.issueParams?.includes(name) ? issueIdOf(value) : value
   }
   const raw = invocation.flags.body
   if (raw !== undefined && !op.body) throw usage(`${commandOf(op)} takes no --body`)
@@ -235,8 +240,12 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
     // The flags and positionals win over the keys of --body.
     body = { ...(isObject(body) ? body : {}), ...fields }
   }
-  // A missing required field is the server's to refuse (422 with the fields named), not the CLI's.
   if (op.body && body === undefined) body = {}
+  // The contract's own limits, checked before anything is sent: Issue ids are normalised, then every issue is named.
+  if (op.body) {
+    body = normalizeBody(op, body)
+    validateBody(op, body)
+  }
   return { path, query, body }
 }
 

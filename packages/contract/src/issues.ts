@@ -1,8 +1,14 @@
 import * as z from 'zod'
 import { QualityIssue } from './quality.ts'
 
+/** Marks a string as an Issue id for the CLI (help, and `12` written as `issue_12` before it is sent); no validation. */
+export const ISSUE_ID_META = { description: 'an Issue id', 'x-id': 'issue' } as const
+
 /** `issue_12` or the bare `12`: every Issue a client names in a body takes both. */
-export const IssueRefInput = z.string().regex(/^(issue_)?[1-9][0-9]*$/, 'an Issue is issue_<n> or <n>')
+export const IssueRefInput = z
+  .string()
+  .regex(/^(issue_)?[1-9][0-9]*$/, 'an Issue is issue_<n> or <n>')
+  .meta(ISSUE_ID_META)
 
 const Call = z.string().trim().min(1).max(128)
 /** the longest `text` an Issue is filed with */
