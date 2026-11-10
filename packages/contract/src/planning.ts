@@ -166,7 +166,7 @@ export type ReplanAnswer = z.infer<typeof ReplanAnswer>
 
 const ReplanEdgeOp = z.strictObject({
   issue: IssueRef,
-  after: z.array(IssueRef).min(1).max(20),
+  after: z.array(IssueRef).min(1).max(MAX_AFTER_IDS),
 })
 
 /**
