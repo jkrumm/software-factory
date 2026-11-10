@@ -1,5 +1,5 @@
 import type { TriageAnswer, TriageCandidate, TriageRequest } from '@software-factory/contract'
-import type { IssueId } from '../../kernel/ids.ts'
+import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 
 /** What triage knows of one Issue that is still `settling`. */
 export interface SettlingFacts {
@@ -11,6 +11,8 @@ export interface SettlingFacts {
   filedAt: Date
   /** a check, a job or a monitor filed it: the edges are known (none) */
   fromAlert: boolean
+  /** the filer stated the edges (`--after`, or `--alone` for none): they are final, triage adds none */
+  statedEdges: boolean
   /** the words it was filed with: the signal's text, empty when it has none */
   text: string
 }
@@ -21,13 +23,13 @@ export type Refined = 'feature' | 'bug' | 'chore' | 'docs'
 export const MAX_CANDIDATES = 40
 
 /**
- * Deterministic first. An incident, an Issue an alert filed (a failing check, a job, a monitor) and an Issue with nothing
- * open beside it in its repo need no edges: settle now. Anything else (a person's or an agent's request, a GitHub issue)
+ * Deterministic first. An incident, an Issue an alert filed (a failing check, a job, a monitor), an Issue whose filer
+ * stated its edges and an Issue with nothing open beside it in its repo need no edges from the model: settle now. Anything else (a person's or an agent's request, a GitHub issue)
  * asks `factory-triage` for the Issues it must wait for. An owner's or an agent's request is asked even with nothing open
  * beside it: triage may refine its kind.
  */
 export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'ask' {
-  if (facts.kind === 'incident' || facts.fromAlert) return 'now'
+  if (facts.kind === 'incident' || facts.fromAlert || facts.statedEdges) return 'now'
   if (refinable(facts)) return 'ask'
   return candidates.length === 0 ? 'now' : 'ask'
 }
@@ -58,18 +60,27 @@ export function settleRequest(
   }
 }
 
+/** An edge the answer named and the rules left out, with why. */
+export interface DroppedEdge {
+  issue: IssueId
+  why: string
+}
+
 export type SettleChecked =
-  | { ok: true; after: IssueId[]; reason: string; kind: Refined | undefined }
+  | { ok: true; after: IssueId[]; dropped: DroppedEdge[]; reason: string; kind: Refined | undefined }
   | { ok: false; why: string }
 
 /**
  * An answer is held to what it was shown (the workflow's guard, checked again here): only open Issues it saw, never the
- * Issue itself, none twice. A cycle or a blocker that closed meanwhile is refused later by planning's own use case.
+ * Issue itself, none twice. An edge that would make the Issue wait on one that (`waitsForIssue`: through the open chain)
+ * already waits on it, or on one filed after it, is dropped with its reason and the rest stand. A blocker that closed meanwhile is
+ * refused later by planning's own use case.
  */
 export function checkSettle(
   shown: readonly TriageCandidate[],
   facts: Pick<SettlingFacts, 'issue' | 'kind' | 'origin' | 'fromAlert'>,
   answer: TriageAnswer,
+  waitsForIssue: (blocker: IssueId) => boolean,
 ): SettleChecked {
   const issue = facts.issue
   if (answer.amend !== null) return { ok: false, why: 'a settle answer amends nothing' }
@@ -79,9 +90,16 @@ export function checkSettle(
     if (!seen.has(id)) return { ok: false, why: `${id} is not an Issue it was shown` }
   }
   if (new Set(answer.after).size !== answer.after.length) return { ok: false, why: 'an edge is named twice' }
+  const after: IssueId[] = []
+  const dropped: DroppedEdge[] = []
+  for (const id of answer.after as IssueId[]) {
+    if (issueNumber(id) > issueNumber(issue)) dropped.push({ issue: id, why: `${id} was filed after ${issue}` })
+    else if (waitsForIssue(id)) dropped.push({ issue: id, why: `${id} already waits for ${issue}` })
+    else after.push(id)
+  }
   const refined =
     refinable(facts) && answer.kind && REFINED_KINDS.includes(answer.kind) && answer.kind !== facts.kind
       ? (answer.kind as Refined)
       : undefined
-  return { ok: true, after: answer.after as IssueId[], reason: answer.reason, kind: refined }
+  return { ok: true, after, dropped, reason: answer.reason, kind: refined }
 }

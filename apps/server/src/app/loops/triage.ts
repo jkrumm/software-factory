@@ -1,5 +1,6 @@
 import type { TriageAnswer } from '@software-factory/contract'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
+import { cycleThrough } from '../../domains/planning/chain.ts'
 import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../domains/loops/ports.ts'
 import { checkSettle, MAX_CANDIDATES, type Refined, settleRequest, settleRule } from '../../domains/loops/settle.ts'
 import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
@@ -36,6 +37,8 @@ export interface TriagePass {
   /** settled with a kind `factory-triage` corrected */
   refined: number
   asked: number
+  /** edges of an answer left out: one that inverts an existing edge, one that names an Issue filed later */
+  dropped: number
   /** answers refused: an Issue it was not shown, a cycle, a blocker that closed */
   refused: number
   problems: string[]
@@ -91,13 +94,17 @@ async function settleAfter(
 
 async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): Promise<void> {
   const candidates = await deps.uow.run(async ({ loopReads }) =>
-    ok(await loopReads.openIssues(row.repo, row.issue, MAX_CANDIDATES)),
+    ok({
+      shown: await loopReads.openIssues(row.repo, row.issue, MAX_CANDIDATES),
+      chain: await loopReads.chainEdges(),
+    }),
   )
   if (!candidates.ok) {
     pass.problems.push(`${row.issue}: ${candidates.error.detail}`)
     return
   }
-  const shown = candidates.value
+  const { shown, chain } = candidates.value
+  const waitsForIssue = (blocker: IssueId) => cycleThrough(chain, row.issue, blocker) !== undefined
   if (settleRule(row, shown) === 'now') {
     await settleWithout(deps, row.issue, pass)
     return
@@ -125,7 +132,7 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
   // A replayed pass acts on the stored answer, never on a second call. The answer was shown the candidates of its own pass:
   // checked again against these, an Issue that closed since is simply no longer one it may name.
   if (plan.kind === 'answered') {
-    const checked = checkSettle(shown, row, plan.row.answer as TriageAnswer)
+    const checked = checkSettle(shown, row, plan.row.answer as TriageAnswer, waitsForIssue)
     if (checked.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.kind)
     else await settleWithout(deps, row.issue, pass)
     return
@@ -135,7 +142,8 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
 
   pass.asked++
   const answered = await deps.workflow.settle(settleRequest(row, shown, scrub), plan.key)
-  const checked = answered.ok ? checkSettle(shown, row, answered.value) : null
+  const checked = answered.ok ? checkSettle(shown, row, answered.value, waitsForIssue) : null
+  if (checked?.ok) pass.dropped += checked.dropped.length
   const recorded = await deps.uow.run(async ({ loops }) => {
     const at = deps.clock.now()
     if (!answered.ok) {
@@ -148,10 +156,11 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
     } else if (checked && !checked.ok) {
       await loops.finishCall(plan.key, { outcome: 'rejected', answer: answered.value, detail: checked.why, at })
     } else {
+      const dropped = checked?.ok ? checked.dropped : []
       await loops.finishCall(plan.key, {
         outcome: 'answered',
         answer: answered.value,
-        detail: answered.value.reason,
+        detail: [answered.value.reason, ...dropped.map((edge) => `dropped: ${edge.why}`)].join('; ').slice(0, 500),
         at,
       })
     }
@@ -171,7 +180,16 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
  * until the steward settles it after the timeout; nothing stays `settling` forever.
  */
 export async function triagePass(deps: TriageDeps): Out<TriagePass> {
-  const pass: TriagePass = { looked: 0, settled: 0, chained: 0, refined: 0, asked: 0, refused: 0, problems: [] }
+  const pass: TriagePass = {
+    looked: 0,
+    settled: 0,
+    chained: 0,
+    refined: 0,
+    asked: 0,
+    dropped: 0,
+    refused: 0,
+    problems: [],
+  }
   const settling = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.settling(PASS_LIMIT)))
   if (!settling.ok) return settling
   for (const row of settling.value) {
@@ -183,4 +201,4 @@ export async function triagePass(deps: TriageDeps): Out<TriagePass> {
 }
 
 export const triageSummary = (pass: TriagePass): string =>
-  `looked at ${pass.looked} settling; settled ${pass.settled}, chained ${pass.chained}, refined ${pass.refined}, asked ${pass.asked}, refused ${pass.refused}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} settling; settled ${pass.settled}, chained ${pass.chained}, refined ${pass.refined}, asked ${pass.asked}, dropped ${pass.dropped}, refused ${pass.refused}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

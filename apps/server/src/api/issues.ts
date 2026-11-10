@@ -150,6 +150,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           key: body.key,
           source: body.source ?? 'request',
           after,
+          alone: body.alone,
           actor: ownerActorOf(request),
         })
         if (!filed.ok) return fileFailure(filed.error)

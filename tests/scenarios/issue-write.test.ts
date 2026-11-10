@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { loopReads } from '../../apps/server/src/read/loops.ts'
 import { admit, fileIssue, must, run, settle } from './flow.ts'
 import { type LeadsWorld, startLeadsWorld } from './leads/support.ts'
 
@@ -107,4 +108,30 @@ test('a closed Issue refuses a lead verb, stores the refusal once and keeps its 
 
 test('writing Issues called neither hc nor agw', async () => {
   expect(await w.world.calls()).toEqual([])
+})
+
+test('stated edges are final: --after and --alone mark the filing, a plain filing is unstated', async () => {
+  const blocker = await fileIssue(w, { repo: 'example', title: 'the blocker', key: 'stated-0' })
+  const withAfter = await fileIssue(w, { repo: 'example', title: 'after it', key: 'stated-1', after: [blocker] })
+  const filedAlone = await must(w, [
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'alone',
+    '--key',
+    'stated-2',
+    '--alone',
+  ])
+  const alone = (filedAlone.json as { issue: string }).issue
+  const plain = await fileIssue(w, { repo: 'example', title: 'plain', key: 'stated-3' })
+
+  const rows = await loopReads(w.world.db.sql).settling(50)
+  const stated = (id: string) => rows.find((row) => row.issue === id)?.statedEdges
+  expect([withAfter, alone, plain, blocker].map(stated)).toEqual([true, true, false, false])
+  expect(await w.world.db.sql`SELECT after_issue FROM factory.planning_edges WHERE issue_id = ${withAfter}`).toEqual([
+    { after_issue: blocker },
+  ])
+  expect(await w.world.db.sql`SELECT 1 FROM factory.planning_edges WHERE issue_id = ${alone}`).toEqual([])
 })

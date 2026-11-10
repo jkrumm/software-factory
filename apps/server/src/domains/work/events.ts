@@ -27,6 +27,8 @@ export const PAYLOADS = {
     origin: z.enum(ORIGINS),
     /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
     seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
+    /** the filer stated the edges (`--after`, or `--alone` for none): they are final, settling adds none */
+    edges: z.literal('stated').optional(),
   }),
   /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind (old events carry none) */
   settled: z.object({ kind: z.enum(KINDS).optional() }),

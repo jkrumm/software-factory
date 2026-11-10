@@ -271,6 +271,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'key', flag: 'key', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'source', flag: 'source', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'after', flag: 'after', kind: 'string', repeatable: true, required: false, untyped: false },
+      { name: 'alone', flag: 'alone', kind: 'boolean', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     bodySchema: NewIssueBody,
