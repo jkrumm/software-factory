@@ -30,8 +30,10 @@ stream like every other screen.
 are factory-wide, never narrowed by the filters; each opens `/flow?state=<state>` (Shipped: `closed`), the same view the
 header strip's counts open. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
-**Cards.** A card is the kit `IssueCard`, the whole card a link to `/issues/<n>`: the title, a `KindBadge`, the project, the
-origin as a muted word, the reason (a wait's reason or the queue's message) and the age in mono; never an id. A column
+**Cards.** A card is the kit `IssueCard`, the whole card a link to `/issues/<n>`: a header with the kind as an
+icon (its name the tooltip), the project and the Issue number in mono (`#12`) and the origin as a muted word where it is
+not You; the title alone in an inset body; a footer with the reason (a wait's reason or the queue's message) and the age
+in mono. A column
 already names the state, so only Closed recently shows a Lozenge, the outcome (Done, Dropped, Healed, Cancelled).
 
 **Columns.** The header is the label and count as the `h2` ("Working 3"), an `InfoHint` for the state beside it (Closed
@@ -84,8 +86,8 @@ it. A blocked edge is solid warn and thick, labelled `blocks`; a satisfied one (
 labelled `done`, and the two arrive on separate handles of the node. An edge is one line (`Dependency` in `graph.tsx`): it turns early and carries its label on the final straight run, so the line runs through the label to the arrowhead; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
 plan row. A node is the kit `IssueCard` at a fixed 320 x 144 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
 link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
-with "Not filed yet" in the chip row, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
-date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). No id is on the page. Nodes with no edge
+with "Not filed yet" in the header, no number, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
+date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). An Issue node shows its number. Nodes with no edge
 and no date are not drawn: the header counts them ("N more items have no dependencies, so they are not drawn"), and the sidebar's per-project count is the nodes the graph draws for that project (`chainCounts` in `src/lib/chain.ts`, one source for both). `?project=argo` keeps that project's nodes
 and every node an edge joins them to, so an edge across projects stays readable. With no edge the graph part says "No
 dependencies". xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
