@@ -122,8 +122,10 @@ it does not.
   labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). Under it a schedule puts every
   row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",
   after a break mark on the axis).
-- **Improve**: one StatCard per KPI of `docs/product.md` with its target as a dashed line and the distance to it, the
-  last 7-day window against the one before; fix classes as stacked bars by week.
+- **Improve**: seven bands, each a Section with full rows of equal StatCards (a shared subgrid keeps header, figure and
+  chart level): Against target (a summary strip of one lamp tile per targeted KPI (status, figure, label, target; compact rows below 80rem, two lines on a phone), with "N of M targets met"), Quality, Pace and gates, Spend (all on one 4-column lattice), Fix commits (the stacked-bar card
+  beside its class table), Friction (balanced columns in one panel), then the held finding classes. Each KPI card has
+  its target as a dashed line and the distance to it, the last window against the one before.
 - **Artifact**: the document fills the page with its comments in a side panel; selecting a passage opens the comment
   box beside it; an annotation can be edited and deleted; revisions side by side. The shared templates follow these rules.
 

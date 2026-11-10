@@ -24,6 +24,7 @@ import {
   lineTone,
   sampleWords,
   targetStatus,
+  targetTally,
   targetWords,
   windowOf,
   windowWords,
@@ -307,4 +308,14 @@ test('the footer hints the watches of the first verification passes, and no othe
     kpiFooter({ key, n: 3, measured: true, target: { kind: 'trend', min: null, max: null }, unit: 'share' })
   expect(footer('first_verification_passes')[1]).toMatchObject({ value: '3 watches', hint: 'watch' })
   expect(footer('asks')[1].hint).toBeUndefined()
+})
+
+test('targetTally counts the met targets of those judged; trends, unset targets and gaps are not judged', () => {
+  const met = kpi({ value: 0.06 })
+  const missed = kpi({ value: 0.25 })
+  const trend = kpi({ target: { kind: 'trend', min: null, max: null } })
+  const gap = kpi({ value: null })
+  const unmeasured = kpi({ measured: false })
+  expect(targetTally([met, missed, met, trend, gap, unmeasured])).toEqual({ met: 2, judged: 3 })
+  expect(targetTally([trend, gap])).toEqual({ met: 0, judged: 0 })
 })

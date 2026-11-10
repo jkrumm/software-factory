@@ -53,6 +53,8 @@ export interface StatCardProps extends CardLinkProps {
   menu?: ReactNode
   onMenu?: () => void
   className?: string
+  /** The article's DOM id (an anchor target). */
+  id?: string
 }
 
 /** The en dash an uncounted figure shows. */
@@ -119,6 +121,7 @@ export function StatCard({
   href,
   as,
   className,
+  id,
 }: StatCardProps) {
   const linked = isLinked({ href, as })
   const picture =
@@ -139,6 +142,7 @@ export function StatCard({
       : null
   return (
     <article
+      id={id}
       className={cn(
         'group relative flex min-w-0 flex-col gap-1 rounded-xl bg-card p-1 text-card-foreground',
         // nothing to plot: the card is as tall as its figure and footer, not as its taller neighbour in a grid row
@@ -148,7 +152,7 @@ export function StatCard({
       )}
       style={{ boxShadow: 'var(--vx-shadow-card)' }}
     >
-      <header className="flex items-center gap-3 px-2.5 pt-2 pb-1">
+      <header className="flex items-start gap-3 px-2.5 pt-2 pb-1">
         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
           <CardIcon className="size-4" aria-hidden="true" />
         </span>
@@ -190,19 +194,23 @@ export function StatCard({
           {delta && !uncounted ? <DeltaPill delta={delta} /> : null}
         </div>
         {subLine ? <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{subLine}</p> : null}
-        {picture}
-        {xLabels ? (
-          <div className="relative flex h-4 justify-between text-xs text-muted-foreground tabular-nums">
-            <span>{xLabels[0]}</span>
-            <span
-              className={cn(nowFraction !== null && 'absolute -translate-x-1/2')}
-              style={nowFraction === null ? undefined : { left: `calc(8px + ${nowFraction} * (100% - 16px))` }}
-            >
-              {xLabels[1]}
-            </span>
-            <span className={cn(future && 'underline decoration-dashed decoration-1 underline-offset-4')}>
-              {xLabels[2]}
-            </span>
+        {picture || xLabels ? (
+          <div className="mt-auto flex flex-col gap-2">
+            {picture}
+            {xLabels ? (
+              <div className="relative flex h-4 justify-between text-xs text-muted-foreground tabular-nums">
+                <span>{xLabels[0]}</span>
+                <span
+                  className={cn(nowFraction !== null && 'absolute -translate-x-1/2')}
+                  style={nowFraction === null ? undefined : { left: `calc(8px + ${nowFraction} * (100% - 16px))` }}
+                >
+                  {xLabels[1]}
+                </span>
+                <span className={cn(future && 'underline decoration-dashed decoration-1 underline-offset-4')}>
+                  {xLabels[2]}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

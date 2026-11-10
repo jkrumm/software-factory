@@ -4,7 +4,6 @@ import {
   drawsHistory,
   fixCard,
   fixClassRows,
-  fixWeekLabel,
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
@@ -15,6 +14,12 @@ import {
   KPI_HINT,
   kpiFooter,
   perIssueWords,
+  shortDate,
+  STATUS_WORD,
+  summaryKpis,
+  targetStatus,
+  targetWords,
+  targetTally,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
 import type { Kpi, KpiModel } from '@software-factory/contract'
@@ -28,18 +33,27 @@ interface FrictionModel {
 }
 type FixModel = Parameters<typeof fixClassRows>[0] & { measured: boolean }
 
-/** The cards in the Console's own order, the headline measures first; the fix-commit card follows. */
+/** The cards in the Console's own order, band by band; the fix-commit card follows. */
 const CARD_ORDER = [
   'first_verification_passes',
   'avoidable_touches',
   'asks',
   'worth_asking',
-  'refusals',
   'queue_wait_p90',
   'queue_wait_p50',
   'cycle_p50',
+  'refusals',
   'window_points',
   'cost',
+]
+const BAND_HEADINGS = [
+  'Against target',
+  'Quality',
+  'Pace and gates',
+  'Spend',
+  'Fix commits',
+  'Friction',
+  'Held finding classes',
 ]
 const FIX_TITLE = 'Fix commits per week'
 
@@ -85,6 +99,31 @@ async function expectCards(page: Page, model: KpiModel) {
   }
 }
 
+test('the summary strip tiles every KPI with a target: its status word, the target in words, and a click scrolls to its card', async ({
+  page,
+  apiUrl,
+}) => {
+  const [kpis] = await read(apiUrl, 7)
+  const tiled = summaryKpis(kpis.kpis)
+  expect(tiled.length).toBeGreaterThanOrEqual(3)
+  await page.goto('/improve')
+  const strip = page.locator('[data-shot="improve-summary"]')
+  const { met, judged } = targetTally(tiled)
+  if (judged > 0) await expect(strip.getByText(`${met} of ${judged} targets met`, { exact: true })).toBeVisible()
+  else await expect(strip.getByText(/targets met$/)).toHaveCount(0)
+  await expect(strip.getByRole('link')).toHaveCount(tiled.length)
+  for (const kpi of tiled) {
+    const tile = strip.getByRole('link').filter({ hasText: kpi.label })
+    await expect(tile).toContainText(STATUS_WORD[targetStatus(kpi)])
+    await expect(tile).toContainText(formatKpi(kpi))
+    await expect(tile).toContainText(targetWords(kpi))
+  }
+  const last = tiled.at(-1)
+  if (!last) throw new Error('no tile')
+  await strip.getByRole('link').filter({ hasText: last.label }).click()
+  await expect(cardOf(page, last.label)).toBeInViewport()
+})
+
 const read = (apiUrl: string, days: number) =>
   Promise.all([api<KpiModel>(apiUrl, `/v1/kpis?days=${days}`), api<FrictionModel>(apiUrl, `/v1/friction?days=${days}`)])
 
@@ -98,7 +137,8 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   await expect(page.getByText(`Last 7 days, ${windowWords(kpis.window)}`, { exact: true })).toBeVisible()
 
   const grid = page.getByRole('group', { name: 'Key figures' })
-  await expect(grid.getByRole('heading')).toHaveText([...cardKpis(kpis).map((k) => k.label), FIX_TITLE])
+  await expect(grid.locator('article h3')).toHaveText([...cardKpis(kpis).map((k) => k.label), FIX_TITLE])
+  await expect(grid.getByRole('heading', { level: 2 })).toHaveText(BAND_HEADINGS)
   await expectCards(page, kpis)
 
   for (const count of friction.counts) {
@@ -249,10 +289,10 @@ test('fix commits by class read what the API says, the weeks oldest first, with 
   expect(model.measured).toBe(true)
   await page.goto('/improve')
   const region = page.getByRole('region', { name: 'Fix commits by class' })
-  await region.getByRole('button', { name: /Fix commits by class/ }).click()
+  await expect(region.getByRole('heading', { name: /^Fix commits by class/, level: 3 })).toBeVisible()
   const table = region.getByRole('table')
   const head = table.getByRole('columnheader')
-  await expect(head).toHaveText(['Class', ...fixWeeksOldestFirst(model).map(fixWeekLabel)])
+  await expect(head).toHaveText(['Class', ...fixWeeksOldestFirst(model).map((week) => shortDate(week.to))])
   for (const row of fixClassRows(model)) {
     const line = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: row.key, exact: true }) })
     await expect(line.getByRole('cell')).toHaveText(row.counts.map(String))

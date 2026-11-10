@@ -80,6 +80,53 @@ export function targetStatus(kpi: Pick<Kpi, 'value' | 'measured' | 'target'>): T
   return met ? 'met' : 'missed'
 }
 
+/** How many of the KPIs the targets judge are met: only a `met` or `missed` status counts as judged. */
+export function targetTally(kpis: readonly Pick<Kpi, 'value' | 'measured' | 'target'>[]): {
+  met: number
+  judged: number
+} {
+  const statuses = kpis.map(targetStatus)
+  return {
+    met: statuses.filter((s) => s === 'met').length,
+    judged: statuses.filter((s) => s === 'met' || s === 'missed').length,
+  }
+}
+
+/** The KPIs the summary strip tiles, in the Console's order: those whose target judges a reading (not a trend). */
+const SUMMARY_ORDER: readonly KpiKey[] = [
+  'first_verification_passes',
+  'avoidable_touches',
+  'asks',
+  'worth_asking',
+  'refusals',
+  'queue_wait_p90',
+  'queue_wait_p50',
+  'cycle_p50',
+  'window_points',
+  'cost',
+]
+
+export function summaryKpis<T extends Pick<Kpi, 'key' | 'target'>>(kpis: readonly T[]): T[] {
+  return SUMMARY_ORDER.flatMap((key) =>
+    kpis.filter((k) => k.key === key && ['at_least', 'at_most', 'between'].includes(k.target.kind)),
+  )
+}
+
+/** The one word of a summary tile's lamp. */
+export const STATUS_WORD: Record<TargetStatus, string> = {
+  met: 'Met',
+  missed: 'Missed',
+  no_data: 'No data',
+  not_measured: 'Not measured',
+  no_target: 'No target',
+  trend: 'Trend only',
+}
+
+/** The lamp's tone: the verdict where there is one, neutral otherwise. */
+export function statusTone(status: TargetStatus): Tone {
+  return status === 'met' ? 'good' : status === 'missed' ? 'bad' : 'neutral'
+}
+
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   asks: ['Issue', 'Issues'],
