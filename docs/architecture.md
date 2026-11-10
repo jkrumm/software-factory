@@ -145,7 +145,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **The claim deadlock** (`breakClaimDeadlocks` in `app/loops/steward.ts`). A working or watching Issue keeps its repo's
   claim; when it is after an Issue of the same repo that stays queued for lack of a claim, neither can move. The edge gets
   there by the owner (or the orchestrator on his behalf) naming it with `after` (`POST /planning/after`, which takes a
-  working or watching Issue too). Each steward pass takes the queue's `claim` refusals, reads the holders with an open
+  working or watching Issue too; `POST /planning/unafter` removes owner-set edges again). Each steward pass takes the queue's `claim` refusals, reads the holders with an open
   planning edge to one of them (`read/loops.ts`), and defers each: a `noted` and a `deferred` event by the steward, the
   reason in the `deferred` payload (`why`). The dependency wait frees the claim and the blocker is admitted; when it
   closes, the wake (`wakeDependents`) sends the holder back and it is counted as owed, served before new leads. One that

@@ -12,6 +12,8 @@ import {
   type ROW_STATES,
   SettleAnswer,
   SettleBody,
+  UnafterAnswer,
+  UnafterBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
@@ -47,6 +49,7 @@ export interface PlanningApi {
     Result<{ result: 'settled' | 'replayed' | 'ignored'; edges: number; state: string }, PlanningError | PortError>
   >
   after(input: { issue: IssueId; after: IssueId[] }): Promise<Result<{ edges: number }, PlanningError | PortError>>
+  unafter(input: { issue: IssueId; after: IssueId[] }): Promise<Result<{ removed: number }, PlanningError | PortError>>
   prio(input: {
     issue: IssueId
     value: number
@@ -77,6 +80,14 @@ export function failureOf(error: PlanningError | PortError): Failure {
         body: failure(`that closes a cycle: ${error.path.map(nameOf).join(' waits for ')}`, 'cycle', {
           path: error.path,
         }),
+      }
+    case 'unknown_edge':
+      return {
+        status: 404,
+        body: failure(
+          `${nameOf(error.issue)} does not wait for ${nameOf(error.after)} by an owner-set edge`,
+          'not_found',
+        ),
       }
     case 'unknown_project':
       return { status: 404, body: failure(`no project ${error.project}`, 'not_found') }
@@ -238,6 +249,34 @@ export const planningRoutes = (api?: PlanningApi) => {
         detail: {
           operationId: 'planning.after',
           summary: 'make a queued, working or watching Issue wait for others to close (refuses a cycle)',
+        },
+      },
+    )
+    .post(
+      '/planning/unafter',
+      async ({ body, status }) => {
+        if (!api) return status(503, unbound)
+        const issue = issueOf(body.issue)
+        if (!issue) return status(404, failure(`no ${body.issue}`, 'not_found'))
+        const after = body.after.map(issueOf)
+        if (after.some((id) => id === null)) return status(404, failure('an after is not an Issue id', 'not_found'))
+        const removed = await api.unafter({ issue, after: after.filter((id): id is IssueId => id !== null) })
+        if (!removed.ok) {
+          const out = failureOf(removed.error)
+          return out.status === 404
+            ? status(404, out.body)
+            : out.status === 409
+              ? status(409, out.body)
+              : status(503, out.body)
+        }
+        return status(200, UnafterAnswer.parse({ issue: body.issue, removed: removed.value.removed }))
+      },
+      {
+        body: UnafterBody,
+        response: { 200: UnafterAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'planning.unafter',
+          summary: 'remove after edges from a queued, working or watching Issue (refuses an edge it does not have)',
         },
       },
     )

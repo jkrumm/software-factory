@@ -119,6 +119,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/planning/pass', OWNER),
   rule('POST', '/planning/settle', OWNER),
   rule('POST', '/planning/after', OWNER),
+  rule('POST', '/planning/unafter', OWNER),
   rule('GET', '/capacity', OWNER),
   rule('POST', '/capacity/refresh', OWNER),
   rule('POST', '/capacity/admit', OWNER),

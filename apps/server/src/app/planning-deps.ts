@@ -28,6 +28,7 @@ export type PlanningError =
   | { kind: 'issue_closed'; issue: IssueId }
   | { kind: 'wrong_state'; issue: IssueId; detail: string }
   | { kind: 'cycle'; path: IssueId[] }
+  | { kind: 'unknown_edge'; issue: IssueId; after: IssueId }
   | { kind: 'unknown_project'; project: string }
   | { kind: 'version_conflict'; issue: IssueId }
   | { kind: 'refused'; detail: string }

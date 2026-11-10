@@ -139,6 +139,53 @@ export async function addAfter(
   })
 }
 
+const UNAFTER_STATES = ['settling', 'queued', 'working', 'watching', 'waiting']
+
+/**
+ * Removes the owner-set edges `issue -> after`. Refuses the whole set (nothing is removed) when one is not a stored,
+ * unsatisfied edge: a lead's own `deferred` wait is its event, not an edge. The removal is noted on the Issue.
+ */
+export async function removeAfter(
+  deps: PlanningDeps,
+  input: { issue: IssueId; after: readonly IssueId[] },
+): Promise<Result<{ removed: number }, PlanningError | PortError>> {
+  return deps.uow.run(async (stores) => {
+    await stores.capacity.lock()
+    const open = (await stores.reads.open()).find((row) => row.id === input.issue)
+    if (!open) {
+      const states = await stores.reads.statesOf([input.issue])
+      return err<PlanningError>(
+        states.has(input.issue)
+          ? { kind: 'issue_closed', issue: input.issue }
+          : { kind: 'unknown_issue', issue: input.issue },
+      )
+    }
+    if (!UNAFTER_STATES.includes(open.state)) {
+      return err<PlanningError>({
+        kind: 'wrong_state',
+        issue: input.issue,
+        detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only an open Issue has edges to remove`,
+      })
+    }
+    const stored = await stores.planning.edges()
+    const targets = [...new Set(input.after)]
+    for (const after of targets) {
+      const held = stored.some((edge) => edge.issue === input.issue && edge.after === after && !edge.satisfied)
+      if (!held) return err<PlanningError>({ kind: 'unknown_edge', issue: input.issue, after })
+    }
+    let removed = 0
+    for (const after of targets) if (await stores.planning.removeEdge({ issue: input.issue, after })) removed++
+    const names = targets.map((after) => `Issue ${issueNumber(after)}`).join(', ')
+    const noted = await recordIn(stores.work, deps, {
+      issueId: input.issue,
+      key: key('unafter', deps.ids.next('unafter')),
+      event: { kind: 'noted', payload: { text: `owner removed after edge(s): ${names}` }, actor: 'owner' },
+    })
+    if (!noted.ok) return err(lift(noted.error))
+    return ok({ removed })
+  })
+}
+
 export interface PrioInput {
   issue: IssueId
   value: number

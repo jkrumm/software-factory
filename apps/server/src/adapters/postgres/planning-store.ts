@@ -94,6 +94,13 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       return rows.length === 1
     },
 
+    async removeEdge({ issue, after }) {
+      const rows: unknown[] = await tx`
+        DELETE FROM factory.planning_edges
+        WHERE issue_id = ${issue} AND after_issue = ${after} AND satisfied_at IS NULL RETURNING issue_id`
+      return rows.length === 1
+    },
+
     async markSatisfied(edges, at) {
       for (const edge of edges) {
         await tx`
