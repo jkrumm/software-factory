@@ -185,7 +185,7 @@ export const YAML_OPTIONS = {
   maxAliasCount: PLAN_LIMITS.maxAliases,
 } as const
 
-const firstLine = (message: string): string => {
+export const firstLine = (message: string): string => {
   const line =
     message
       .split('\n')

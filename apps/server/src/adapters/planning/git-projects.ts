@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
-import { parseYamlText } from '@software-factory/contract/plan'
+import { firstLine, parseYamlText } from '@software-factory/contract/plan'
 import { MAX_PLAN_BYTES } from '../../domains/planning/plan.ts'
 import type { ProjectSource, RepoRef } from '../../domains/planning/ports.ts'
 import { isProjectDirName, MAX_PROJECT_BYTES } from '../../domains/planning/project.ts'
@@ -20,14 +20,6 @@ const PLAN_FILE = { path: 'docs/plan.yaml', max: MAX_PLAN_BYTES }
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
-const firstLine = (message: string): string => {
-  const line =
-    message
-      .split('\n')
-      .find((l) => l.trim() !== '')
-      ?.trim() ?? message
-  return line.length > 300 ? `${line.slice(0, 300)}…` : line
-}
 
 export { parseYamlText }
 
