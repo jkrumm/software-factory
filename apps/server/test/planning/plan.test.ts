@@ -153,6 +153,15 @@ describe('row states', () => {
     expect(filable(done).map((s) => s.key)).toEqual(['b'])
   })
 
+  test('a waiting row lists every unmet after, in order, and names a ref that is no row', () => {
+    const p = plan([row('a'), row('b'), row('c', { after: ['a', 'lib:ghost', 'b'] })])
+    const statuses = rowStatuses(facts({ app: p }, { 'app:b': 2 }, [[2, 'closed']]))
+    expect(stateOf(statuses, 'app', 'c')?.reason).toBe('after app:a, lib:ghost (no such row)')
+    expect(stateOf(rowStatuses(facts({ app: p })), 'app', 'c')?.reason).toBe(
+      'after app:a, lib:ghost (no such row), app:b',
+    )
+  })
+
   test('not_before waits for its time; an unknown project waits with the name; a row targets another repo', () => {
     const p = plan([
       row('later', { not_before: '2026-11-13' }),
@@ -187,7 +196,7 @@ describe('row states', () => {
     const cross = rowStatuses(facts({ app, lib }))
     expect(stateOf(cross, 'app', 'ship')).toMatchObject({ state: 'waiting', reason: 'after lib:api' })
     expect(stateOf(cross, 'lib', 'api')?.state).toBe('filable')
-    expect(stateOf(rowStatuses(facts({ app })), 'app', 'ship')?.reason).toBe('after lib:api: no such row')
+    expect(stateOf(rowStatuses(facts({ app })), 'app', 'ship')?.reason).toBe('after lib:api (no such row)')
 
     const a = plan([row('x', { after: ['lib:y'] })])
     const b = plan([row('y', { after: ['app:x'] })])

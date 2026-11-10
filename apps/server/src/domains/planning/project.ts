@@ -1,4 +1,5 @@
 import { DEFAULT_SLOT_RUN_MS, LaneName } from '@software-factory/contract'
+import { issuesMessage } from '@software-factory/contract/plan'
 import * as z from 'zod'
 
 export { DEFAULT_SLOT_RUN_MS }
@@ -219,14 +220,7 @@ export const defaultProject = (name: string): ProjectFile =>
 
 export type ProjectParse = { ok: true; project: ProjectFile } | { ok: false; message: string }
 
-const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…` : text)
-
-/** A zod error as one line: every issue with its path, clipped. */
-export const issuesMessage = (error: z.ZodError): string =>
-  clip(
-    error.issues.map((issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`).join('; '),
-    600,
-  )
+export { issuesMessage }
 
 /** A parsed YAML document as a project whose name is the directory's. Never throws. */
 export function parseProject(raw: unknown, directoryName: string): ProjectParse {

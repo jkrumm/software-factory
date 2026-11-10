@@ -73,15 +73,16 @@ const ISSUE_JOINS = (sql: SQL) => sql`
     SELECT max(e.at) AS updated_at, max(e.at) FILTER (WHERE e.to_state = 'closed') AS closed_at
     FROM factory.issue_events e WHERE e.issue_id = i.id AND e.result = 'applied') u ON true`
 
-async function listRows(sql: SQL, input: { scope: IssueScope; limit: number }): Promise<IssueRow[]> {
-  const where =
-    input.scope === 'open'
-      ? sql`WHERE i.state <> 'closed'`
-      : input.scope === 'closed'
-        ? sql`WHERE i.state = 'closed'`
-        : sql``
+async function listRows(sql: SQL, input: { scope: IssueScope; limit: number; repo?: string }): Promise<IssueRow[]> {
+  const scope =
+    input.scope === 'open' ? sql`i.state <> 'closed'` : input.scope === 'closed' ? sql`i.state = 'closed'` : sql`true`
+  // The card's `repoName` is the last path segment of the stored repo; filter before the limit.
+  const repo =
+    input.repo === undefined
+      ? sql`true`
+      : sql`(i.repo = ${input.repo}::text OR right(i.repo, length(${input.repo}::text) + 1) = '/' || ${input.repo}::text)`
   const rows: IssueRow[] = await sql`
-    SELECT ${ISSUE_COLUMNS(sql)} ${ISSUE_JOINS(sql)} ${where}
+    SELECT ${ISSUE_COLUMNS(sql)} ${ISSUE_JOINS(sql)} WHERE ${scope} AND ${repo}
     ORDER BY u.updated_at DESC, i.id DESC LIMIT ${input.limit}`
   return rows
 }
@@ -235,6 +236,7 @@ export async function listCards(
   input: {
     scope: IssueScope
     limit: number
+    repo?: string
     quota: ReadonlyMap<string, ReadAccountQuota>
     queue?: QueueOf
   },

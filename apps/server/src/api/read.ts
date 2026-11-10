@@ -56,13 +56,19 @@ export const readRoutes = (read: ReadApi | undefined) =>
       '/issues',
       async ({ request, query }) => {
         if (!read) return unavailable()
-        const issues = await read.issues({ ...surfaceOf(request), scope: query.state ?? 'open', limit: query.limit })
+        const issues = await read.issues({
+          ...surfaceOf(request),
+          scope: query.state ?? 'open',
+          limit: query.limit,
+          repo: query.repo,
+        })
         return Response.json(ReadIssueCards.parse({ issues }))
       },
       {
         query: z.object({
           state: z.enum(['open', 'closed', 'all']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
+          repo: z.string().min(1).max(200).optional(),
         }),
         response: { 200: ReadIssueCards, ...errorResponses(400, 503) },
         detail: { operationId: 'issue.list', summary: 'Issue cards, newest activity first' },
