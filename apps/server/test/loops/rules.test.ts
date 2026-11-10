@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { StewardAnswer, TriageAnswer } from '@software-factory/contract'
+import { cycleThrough } from '../../src/domains/planning/chain.ts'
 import { readDecisionForm } from '../../src/domains/checkpoints/decision.ts'
 import { type CallPolicy, type CallRow, planCall } from '../../src/domains/loops/calls.ts'
 import { checkSettle, settleRequest, settleRule, type SettlingFacts } from '../../src/domains/loops/settle.ts'
@@ -195,6 +196,7 @@ const settling = (over: Partial<SettlingFacts> = {}): SettlingFacts => ({
   origin: 'you',
   filedAt: NOW,
   fromAlert: false,
+  statedEdges: false,
   text: '',
   ...over,
 })
@@ -214,6 +216,12 @@ test('settle by rule when no edges are needed: an incident, an alert’s Issue, 
   expect(settleRule(settling({ origin: 'factory' }), [])).toBe('ask')
 })
 
+test('an Issue whose filer stated its edges settles by rule: the model is not asked for edges', () => {
+  expect(settleRule(settling({ statedEdges: true }), shown)).toBe('now')
+  expect(settleRule(settling({ statedEdges: true, origin: 'factory' }), shown)).toBe('now')
+  expect(settleRule(settling({ statedEdges: true, origin: 'github' }), shown)).toBe('now')
+})
+
 const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({
   amend: null,
   after: [],
@@ -223,23 +231,65 @@ const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({
   ...over,
 })
 
+const never = () => false
+
 test('edges are held to what the answer was shown: no unseen Issue, not itself, none twice, no amend', () => {
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12'] }))).toEqual({
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12'] }), never)).toEqual({
     ok: true,
     after: [id(12)],
+    dropped: [],
     reason: 'builds on it',
     kind: undefined,
   })
-  expect(checkSettle(shown, settling(), triaged({ after: [] }))).toMatchObject({ ok: true, after: [] })
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_99'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_20'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12', 'issue_12'] }))).toMatchObject({ ok: false })
-  expect(checkSettle(shown, settling(), triaged({ amend: 'issue_12' }))).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: [] }), never)).toMatchObject({ ok: true, after: [] })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_99'] }), never)).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_20'] }), never)).toMatchObject({ ok: false })
+  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12', 'issue_12'] }), never)).toMatchObject({
+    ok: false,
+  })
+  expect(checkSettle(shown, settling(), triaged({ amend: 'issue_12' }), never)).toMatchObject({ ok: false })
+})
+
+test('an edge that inverts the chain or names a later Issue is dropped with its reason; the rest stand', () => {
+  // issue_12 already waits for issue_20 (directly), issue_15 through issue_12 (transitively)
+  const chain = [
+    { issue: id(12), after: id(20), satisfied: false },
+    { issue: id(15), after: id(12), satisfied: false },
+  ]
+  const later = { id: id(30), title: 'Filed after it', kind: 'feature', state: 'queued' }
+  const open = [...shown, later, { id: id(11), title: 'Older', kind: 'chore', state: 'queued' }]
+  const waits = (edges: typeof chain) => (blocker: IssueId) => cycleThrough(edges, id(20), blocker) !== undefined
+  const checked = checkSettle(
+    open,
+    settling(),
+    triaged({ after: ['issue_12', 'issue_15', 'issue_30', 'issue_11'] }),
+    waits(chain),
+  )
+  expect(checked).toEqual({
+    ok: true,
+    after: [id(11)],
+    dropped: [
+      { issue: id(12), why: 'issue_12 already waits for issue_20' },
+      { issue: id(15), why: 'issue_15 already waits for issue_20' },
+      { issue: id(30), why: 'issue_30 was filed after issue_20' },
+    ],
+    reason: 'builds on it',
+    kind: undefined,
+  })
+  // a satisfied edge holds nobody back
+  expect(
+    checkSettle(
+      shown,
+      settling(),
+      triaged({ after: ['issue_12'] }),
+      waits([{ issue: id(12), after: id(20), satisfied: true }]),
+    ),
+  ).toMatchObject({ ok: true, after: [id(12)], dropped: [] })
 })
 
 test('a kind is refined only for an owner or agent request, and only to a different feature, bug, chore or docs', () => {
   const kindOf = (facts: Partial<SettlingFacts>, kind: TriageAnswer['kind']) => {
-    const checked = checkSettle(shown, settling(facts), triaged({ kind }))
+    const checked = checkSettle(shown, settling(facts), triaged({ kind }), never)
     return checked.ok ? checked.kind : 'refused'
   }
   expect(kindOf({}, 'docs')).toBe('docs')

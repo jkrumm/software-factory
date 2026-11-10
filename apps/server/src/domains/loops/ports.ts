@@ -153,6 +153,8 @@ export interface SettlingRow {
   origin: string
   filedAt: Date
   fromAlert: boolean
+  /** the filer stated its edges: triage adds none */
+  statedEdges: boolean
   text: string
 }
 

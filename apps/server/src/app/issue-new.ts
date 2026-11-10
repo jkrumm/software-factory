@@ -22,6 +22,8 @@ export interface NewIssueInput {
   key?: string | undefined
   source: 'request' | 'alert'
   after: readonly IssueId[]
+  /** waits for nothing, and says so: like a non-empty `after`, it states the edges, so settling adds none */
+  alone?: boolean | undefined
   /** who files it: the owner, or the orchestrator for him (a filing is not a touch either way) */
   actor: OwnerActor
 }
@@ -95,6 +97,7 @@ export async function fileNewIssue(
           kind: input.source === 'alert' ? 'incident' : 'feature',
           origin: input.source === 'alert' ? 'application' : 'you',
           ...(seat ? { seat } : {}),
+          ...(input.after.length > 0 || input.alone ? { edges: 'stated' as const } : {}),
         },
         actor: input.actor,
       },

@@ -17,6 +17,7 @@ const Settling = z.object({
   origin: z.string(),
   filed_at: z.date(),
   from_alert: z.boolean(),
+  stated_edges: z.boolean(),
   text: z.string(),
 })
 
@@ -119,6 +120,7 @@ export function loopReads(tx: SQL): LoopReads {
         SELECT i.id, i.repo,
           f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.payload->>'origin' AS origin, f.at AS filed_at,
           EXISTS (SELECT 1 FROM factory.intake_signals s WHERE s.issue_id = i.id AND s.alert IS NOT NULL) AS from_alert,
+          COALESCE(f.payload->>'edges' = 'stated', false) AS stated_edges,
           COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), '') AS text
         FROM factory.issues i
         JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
@@ -134,6 +136,7 @@ export function loopReads(tx: SQL): LoopReads {
           origin: row.origin,
           filedAt: row.filed_at,
           fromAlert: row.from_alert,
+          statedEdges: row.stated_edges,
           text: row.text,
         }
       })

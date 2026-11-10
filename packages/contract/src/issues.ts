@@ -33,6 +33,8 @@ export const NewIssueBody = z
     /** `request` is a person's ask; `alert` is something that broke */
     source: z.enum(['request', 'alert']).optional(),
     after: z.array(IssueRefInput).max(20).optional(),
+    /** the Issue waits for nothing; like `after`, this states its edges and settling adds none */
+    alone: z.boolean().optional(),
   })
   .meta({ id: 'NewIssueBody' })
 export type NewIssueBody = z.infer<typeof NewIssueBody>
