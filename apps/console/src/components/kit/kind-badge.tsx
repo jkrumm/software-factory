@@ -1,5 +1,6 @@
 import { BugIcon, FileTextIcon, type Icon, SirenIcon, SparkleIcon, WrenchIcon } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 export const ISSUE_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
 
@@ -28,5 +29,21 @@ export function KindBadge({ kind, className }: KindBadgeProps) {
       {kind.charAt(0).toUpperCase()}
       {kind.slice(1)}
     </Badge>
+  )
+}
+
+/** The Issue's kind as its icon alone: the name is its accessible name and its tooltip. */
+export function KindIcon({ kind, className }: KindBadgeProps) {
+  const Glyph = KIND_ICON[kind]
+  const name = kind.charAt(0).toUpperCase() + kind.slice(1)
+  return (
+    <span
+      role="img"
+      aria-label={name}
+      title={name}
+      className={cn('inline-grid size-5 shrink-0 place-items-center text-foreground/80', className)}
+    >
+      <Glyph className="size-4" aria-hidden="true" />
+    </span>
   )
 }

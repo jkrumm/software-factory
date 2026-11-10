@@ -87,6 +87,44 @@ for (const variant of VARIANTS) {
           await page.waitForLoadState('networkidle')
           await shot('kit-tall')
           await page.setViewportSize({ width, height })
+          // the first Issue card that opens an address, hovered, then focused by keyboard (tabbed to, so :focus-visible applies and the ring is asserted)
+          const card = page
+            .locator('article')
+            .filter({ has: page.locator('h3 a[href^="#"]') })
+            .first()
+          const clip = async (file: string) => {
+            await card.scrollIntoViewIfNeeded()
+            const box = await card.boundingBox()
+            if (!box) throw new Error('no card box')
+            await page.screenshot({
+              path: join(OUT, `${variant.name}-${file}.png`),
+              animations: 'disabled',
+              clip: {
+                x: Math.max(0, box.x - 16),
+                y: Math.max(0, box.y - 16),
+                width: box.width + 32,
+                height: box.height + 32,
+              },
+            })
+          }
+          await card.hover()
+          await clip('kit-card-hover')
+          await page.mouse.move(0, 0)
+          const link = card.getByRole('link').first()
+          await expect(card).toHaveCSS('outline-style', 'none')
+          // real keyboard focus: tab from the top of the page until the card's link has it
+          await page.evaluate('window.scrollTo(0, 0); document.activeElement?.blur()')
+          const href = await link.getAttribute('href')
+          for (
+            let presses = 0;
+            presses < 120 &&
+            (await page.evaluate('document.activeElement && document.activeElement.getAttribute("href")')) !== href;
+            presses++
+          )
+            await page.keyboard.press('Tab')
+          await expect(link).toBeFocused()
+          await expect(card).toHaveCSS('outline-style', 'solid')
+          await clip('kit-card-focus')
         }
       }
       // Needs you with one item open (the deep link of a page)

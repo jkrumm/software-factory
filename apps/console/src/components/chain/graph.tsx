@@ -72,10 +72,12 @@ function Card({ data }: NodeProps<CardNode>) {
       />
       <IssueCard
         raised
+        compact
         className={cn('chain-card h-full overflow-hidden', row && 'border border-dashed border-muted-foreground/50')}
         title={node.title}
         project={node.repo ?? 'No project'}
         kind={node.issueKind}
+        number={number ? Number(number) : null}
         state={state}
         stateLabel={label}
         origin={row ? 'Not filed yet' : undefined}

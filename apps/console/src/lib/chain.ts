@@ -2,7 +2,7 @@ import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contrac
 import { LOZENGE_STATES, type LozengeState } from '@/components/kit/lozenge'
 
 export const NODE_WIDTH = 320
-export const NODE_HEIGHT = 128
+export const NODE_HEIGHT = 144
 
 export interface ChainFilters {
   project?: string

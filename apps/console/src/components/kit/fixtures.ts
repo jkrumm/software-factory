@@ -11,17 +11,21 @@ const ago = (minutes: number): string => new Date(KIT_NOW - minutes * 60_000).to
 
 export interface KitIssue {
   key: string
+  /** The Issue's number; null for a plan row. */
+  number: number | null
+  /** A plan row has no age. */
   title: string
   project: string
   kind: IssueKind
   state: LozengeState
   reason: string | null
-  since: string
+  since: string | null
 }
 
 export const KIT_ISSUES: KitIssue[] = [
   {
     key: 'export-time',
+    number: 657,
     title: 'Show the export time on the board',
     project: 'pearl',
     kind: 'feature',
@@ -31,6 +35,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'login-crash',
+    number: 642,
     title: 'The login page crashes on submit',
     project: 'argo',
     kind: 'bug',
@@ -40,6 +45,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'database',
+    number: 618,
     title: 'Pick a database',
     project: 'argo',
     kind: 'chore',
@@ -49,6 +55,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'export-queue',
+    number: 631,
     title: 'Move the export job to the new queue',
     project: 'orion',
     kind: 'feature',
@@ -58,6 +65,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'host-down',
+    number: 660,
     title: 'The host stopped answering and three alerts fired',
     project: 'orion',
     kind: 'incident',
@@ -67,6 +75,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'export-schema',
+    number: 604,
     title: 'Publish the export schema',
     project: 'pearl',
     kind: 'docs',
@@ -76,6 +85,7 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'runbook',
+    number: 649,
     title: 'Write the restore runbook for the export store',
     project: 'argo',
     kind: 'docs',
@@ -85,12 +95,34 @@ export const KIT_ISSUES: KitIssue[] = [
   },
   {
     key: 'old-flags',
+    number: 622,
     title: 'Remove the feature flags that shipped last quarter',
     project: 'orion',
     kind: 'chore',
     state: 'queued',
     reason: 'Queued behind Move the export job to the new queue: the chain is not done',
     since: ago(30),
+  },
+  {
+    key: 'long-title',
+    number: 1042,
+    title:
+      'Make the export job resumable after a host restart, keep the partial files it already wrote, and report which rows were skipped when the same job is started again on the next scheduled run',
+    project: 'orion',
+    kind: 'bug',
+    state: 'working',
+    reason: 'Waiting for the export store to finish its nightly compaction before the next batch may start',
+    since: ago(260),
+  },
+  {
+    key: 'plan-row',
+    number: null,
+    title: 'Add the archive step to the export plan',
+    project: 'pearl',
+    kind: 'feature',
+    state: 'queued',
+    reason: 'Not before Nov 20',
+    since: null,
   },
 ]
 
@@ -104,6 +136,7 @@ export const KIT_ORIGIN: Record<string, string> = {
   'export-schema': 'Factory',
   runbook: 'Feedback',
   'old-flags': 'You',
+  'plan-row': 'Not filed yet',
 }
 
 export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omit<StatCardProps, 'icon'>> = {

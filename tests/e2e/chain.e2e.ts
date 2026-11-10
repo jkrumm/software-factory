@@ -19,7 +19,7 @@ interface Chain {
   edges: { from: string; to: string; closed: boolean }[]
 }
 
-const NO_IDS = /issue_\d+|row:|lead-\d+|#\d+/
+const NO_IDS = /issue_\d+|row:|lead-\d+/
 
 const chainOf = (apiUrl: string) => api<Chain>(apiUrl, '/v1/chain')
 const graph = (page: Page) => page.getByRole('region', { name: 'Dependency chain' })
@@ -131,7 +131,7 @@ test('an Issue node links to its page; a plan row does not link', async ({ page 
   await expect(page.getByRole('heading', { name: 'Choose the export format' })).toBeVisible()
 })
 
-test('no id is on the page', async ({ page }) => {
+test('no internal id is on the page (a card shows its number)', async ({ page }) => {
   await page.goto('/chain')
   await expect(graph(page).getByTestId('chain-node').first()).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(NO_IDS)

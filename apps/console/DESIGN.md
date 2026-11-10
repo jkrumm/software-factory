@@ -79,8 +79,8 @@ it does not.
 |-|-|
 | StatCard | **Header**: an icon tile, a title, a subtitle naming the comparison ("against the last 7 days"), a ⋯ menu. **Body**: a large tabular figure, a delta pill (↗ +4, good or bad by `higherIsBetter`), one sub line, then a sparkline or bars with three x labels (start, now, end), dashed where it is a target or the future. **Footer**: two key-value pairs. Card and body are separate surface steps |
 | Lozenge | A state as text on a 12 % tint of its tone; the tone comes from an explicit map, never from the words |
-| KindBadge | The Issue's kind (feature, bug, incident, chore, docs) as an outline badge with its icon |
-| IssueCard / IssueRow | Title (clamped), then a chip row: KindBadge, project chip, the origin as a muted word, and a Lozenge where no column already says the state (a Flow column card has none, Closed recently shows the outcome); the wait or queue reason with its icon; age in a fixed right column in mono; the whole card is a link; ⋯ on hover |
+| KindBadge | The Issue's kind (feature, bug, incident, chore, docs) as an outline badge with its icon; `KindIcon` is the icon alone with the kind as its name and tooltip (cards and rows) |
+| IssueCard / IssueRow | Card, built like a StatCard: the shell holds a header (KindIcon, project chip, the Issue number in mono, the origin as a muted word only when it is not You, a Lozenge where no column already says the state) and a footer (the wait or queue reason with its icon, the age in mono); the title sits alone in the inset body one surface step below, 13 px clamped to 3 lines; the whole card is a link; ⋯ on hover swaps with the Lozenge. `compact` (the Chain's node) clamps the title to 2 lines and the reason to 1. A plan row has no number and no age. The row is one dense line from 40 rem: icon, number, title, project, Lozenge, reason, age |
 | PropertyList | A definition list: a small label above its value, three columns from 40 rem; a missing value reads "None", muted |
 | Section / Fold | A section is a heading, a rule and space, never a box; a Fold is a full-width header button with a caret and a count |
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
@@ -112,11 +112,11 @@ it does not.
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
 - **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the board
-  across the full width; a column header has its count and an InfoHint; IssueCards open the Issue.
+  across the full width; a column header has its count and an InfoHint; IssueCards open the Issue and show its number.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain
   around it.
-- **Chain**: the graph fills the viewport on a canvas step, nodes are 320 x 128 IssueCards (an Issue opens its page; a plan
+- **Chain**: the graph fills the viewport on a canvas step, nodes are 320 x 144 IssueCards (an Issue opens its page; a plan
   row is the same card on a dashed outline, "Not filed yet", with its "Not before" date); a blocked edge is solid warn and
   labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). Under it a schedule puts every
   row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",

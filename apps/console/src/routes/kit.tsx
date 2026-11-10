@@ -17,6 +17,7 @@ import {
   IssueRow,
   ISSUE_KINDS,
   KindBadge,
+  KindIcon,
   LOZENGE_STATES,
   Lozenge,
   Meter,
@@ -64,6 +65,7 @@ function Kit() {
     title: i.title,
     project: i.project,
     kind: i.kind,
+    number: i.number,
     state: i.state,
     reason: i.reason,
     since: i.since,
@@ -157,9 +159,13 @@ function Kit() {
 
       <Section title="Issue cards and rows">
         <Note>
-          The whole card is the link: hover it, tab to it, press the three dots that show on hover. The kind is a badge
-          in the chip row, the origin a muted word; a card in a column that names the state (the working ones here)
-          leaves the Lozenge out. The row is the dense variant for lists, hairlines between rows and no box.
+          The whole card is the link: hover it, tab to it, press the three dots that show on hover (they swap with the
+          Lozenge). It is built like a StatCard: the header holds the kind as an icon (its name is the tooltip), the
+          project, the Issue number and the origin word; the title sits alone in the inset body, 13 px and clamped to
+          three lines; the footer holds the reason and the age. A card in a column that names the state (the working
+          ones here) leaves the Lozenge out. After them come a long title, a plan row (no number, no age) and a compact
+          card (the Chain's node: two-line title, one-line reason). The origin word is shown only where it is not You.
+          The row is the dense variant for lists, hairlines between rows and no box.
         </Note>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
           {KIT_ISSUES.map((i) => (
@@ -168,18 +174,35 @@ function Kit() {
               {...view(i)}
               origin={KIT_ORIGIN[i.key]}
               showState={i.state !== 'working'}
+              className={i.number === null ? 'border border-dashed border-muted-foreground/50' : undefined}
               as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
               href={i.key === 'export-time' ? undefined : `#${i.key}`}
               onMenu={() => undefined}
             />
           ))}
+          <IssueCard
+            project="argo"
+            kind="bug"
+            number={642}
+            state="waiting"
+            since={KIT_ISSUES[1]?.since ?? null}
+            now={KIT_NOW}
+            title="Compact: a title that runs to a second line to show where the clamp falls and what it cuts off"
+            reason="Waiting for the answer to a Decision: which session store to keep, and why the old one goes"
+            compact
+            raised
+            href="#compact"
+          />
         </div>
         <div className="mt-8 flex w-full flex-col">
-          {KIT_ISSUES.map((i) => (
-            <IssueRow key={i.key} {...view(i)} href={`#${i.key}`} onMenu={() => undefined} />
-          ))}
+          {KIT_ISSUES.flatMap((i) =>
+            i.since === null
+              ? []
+              : [<IssueRow key={i.key} {...view(i)} since={i.since} href={`#${i.key}`} onMenu={() => undefined} />],
+          )}
           <div aria-hidden="true" className="flex min-h-9 items-center gap-3 border-t px-3 py-1.5">
             <Skeleton height={16} width={16} rounded="rounded-sm" className="shrink-0" />
+            <Skeleton height={12} width={32} className="shrink-0" />
             <Skeleton height={14} width="30%" />
             <Skeleton height={14} width="10%" className="ml-auto" />
             <Skeleton height={14} width={64} className="shrink-0" />
@@ -200,10 +223,17 @@ function Kit() {
         </Section>
 
         <Section title="KindBadge">
-          <Note>The Issue's kind as an outline badge with its icon.</Note>
+          <Note>
+            The Issue's kind as an outline badge with its icon. KindIcon: the same icon alone, its name as a tooltip.
+          </Note>
           <div className="flex flex-wrap gap-2">
             {ISSUE_KINDS.map((kind) => (
               <KindBadge key={kind} kind={kind} />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {ISSUE_KINDS.map((kind) => (
+              <KindIcon key={kind} kind={kind} />
             ))}
           </div>
         </Section>
