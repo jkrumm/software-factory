@@ -142,14 +142,6 @@ export function historySpan(samples: readonly Pick<HostSample, 'at'>[]): number 
   return new Date(last.at).getTime() - new Date(first.at).getTime()
 }
 
-/** "N h of history" for a history younger than a day; null once it covers (nearly) the full 24 hours. */
-export function historyWords(samples: readonly Pick<HostSample, 'at'>[]): string | null {
-  const span = historySpan(samples)
-  if (span >= 23.5 * HOUR_MS) return null
-  if (span >= HOUR_MS) return `${Math.round(span / HOUR_MS)} h of history`
-  return `${Math.max(1, Math.round(span / MIN_MS))} min of history`
-}
-
 /** The stream in the owner's words. */
 export function streamWords(connection: { live: boolean; offline: boolean }): string {
   if (connection.offline) return 'No connection to the server'

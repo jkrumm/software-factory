@@ -4,7 +4,6 @@ import { meterTone } from '../src/components/kit/tone.ts'
 import {
   accountMeter,
   historySpan,
-  historyWords,
   hostMeters,
   isExhausted,
   machineWords,
@@ -139,12 +138,10 @@ test('uptimeWords: days and hours, hours and minutes, minutes, under a minute', 
   expect(uptimeWords(iso(-5000), now)).toBe('under a minute')
 })
 
-test('history: the span, "N h of history" for a young one and nothing for a full day; axis ends in hours or minutes', () => {
+test('history: the span of the samples; axis ends in hours or minutes', () => {
   const sample = (minutesAgo: number) => ({ at: new Date(now.getTime() - minutesAgo * 60_000).toISOString() })
   expect(historySpan([])).toBe(0)
-  expect(historyWords([sample(300), sample(0)])).toBe('5 h of history')
-  expect(historyWords([sample(40), sample(0)])).toBe('40 min of history')
-  expect(historyWords([sample(24 * 60), sample(0)])).toBeNull()
+  expect(historySpan([sample(300), sample(0)])).toBe(300 * 60_000)
   expect(spanLabel(24 * 3_600_000)).toBe('-24 h')
   expect(spanLabel(90 * 60_000)).toBe('-2 h')
   expect(spanLabel(20 * 60_000)).toBe('-20 min')
