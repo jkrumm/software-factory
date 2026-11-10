@@ -6,7 +6,8 @@ const POINTER = 'factory issue schema'
 
 const WHERE = [
   'On the mini (the owner path): `factory issue new --repo <repo> --title <title> --facts @file [--after <id>] [--key <key>]`; with no token set the CLI resolves the owner token from the deployed release itself.',
-  'List what is filed with `factory issue list [--repo <name>] [--state open|closed|all] --format plain` (one line per Issue); file a finding for another repo with `factory signal file --from agent:<repo> --title <title> --text <text>`.',
+  'List what is filed with `factory issue list [--repo <name>] [--state open|closed|all] --format plain` (one line per Issue); file a finding for another repo with `factory signal file --from agent:<your repo> --repo <that repo> --title <title> --text <text>` (without --repo the finding goes to the repo named in --from).',
+  'When the factory itself surprises you (a refusal --help did not predict, a hidden limit, an id format, a wrong state, a help text that misleads): report it once as a signal, `factory signal file --from agent:<your repo> --repo software-factory --title <what happened> --text <the command, the answer, what you expected>`. Triage merges duplicates into one Issue. Never file that Issue yourself with `factory issue new`, and never work around it silently.',
   'Elsewhere, or as a lead (which keeps its own agent token): FACTORY_TOKEN must be set, else the server answers 401.',
   'Several Issues that depend on each other, or that are filed over time: do not file them one by one. Write rows into the repo `docs/plan.yaml` (the server files each row as an Issue once its `after` rows are done).',
   'Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain`.',
@@ -60,6 +61,12 @@ const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 
 /** What a command says beyond its generated contract: help text, hints for a rejected field, hints per status. */
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {
   'project.show': { help: planLimitsHelp, plain: projectShowPlain },
+  'project.sync': {
+    help: "--fetch true asks every repo's remote for new commits first (the way to read a plan you just pushed); omitted or false, the default branch is read as last fetched. A fetching sync can take over 20 s.",
+  },
+  'issue.show': {
+    help: "An Issue's `after` edges are not in this answer: `factory read chain --format plain` lists what blocks each Issue (`blocking.issue_<n>`).",
+  },
   'issue.list': { plain: issueListPlain },
   'issue.new': {
     help: filingGuide(),

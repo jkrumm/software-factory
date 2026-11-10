@@ -42,7 +42,8 @@ Every verb is a plain command with flags. Name your attempt with \`--attempt <n>
 - Read it with its annotations: \`factory artifact show <artifact-id>\`.
 - Raise an Errand, only for a person's hands (a device, a portal, a physical step), never for a CLI call a token can make: \`factory errand raise <id> --attempt <n> --summary "..." --detail "..."\`.
 - Route a monitor to your own repo, or remove such a route: \`factory door route-set --source <source> --monitor <monitor> --repo <your repo> --issue <id>\` / \`factory door route-remove --source <source> --monitor <monitor> --issue <id>\`; another repo's route is refused.
-- File follow-up work for another Issue: \`factory signal file --from agent:<repo> --title "..." --text "..."\`.
+- File follow-up work for another Issue: \`factory signal file --from agent:<repo> --title "..." --text "..."\` (\`--repo <other repo>\` names where it goes; without it, the repo in \`--from\`).
+- Friction with the factory itself (a refusal \`--help\` did not predict, a hidden limit, a wrong state): report it once as a signal on software-factory, \`factory signal file --from agent:<repo> --repo software-factory --title "..." --text "the command, the answer, what you expected"\`. Triage merges duplicates into one Issue; never file that Issue yourself with \`factory issue new\`.
 
 Answers to your Decisions, verdicts on your artifacts and notes from the owner arrive as notes typed into your session. A verdict of changes means: read the annotations with \`factory artifact show <artifact-id>\`, then \`factory artifact revise <artifact-id> --content @file.md\`. A Watch or Verify failure comes as a note too.
 `

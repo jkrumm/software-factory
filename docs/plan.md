@@ -155,6 +155,19 @@ not have (or one already satisfied), naming it, and then removes none of the set
 planning pass start a queued Issue. The removal is recorded as a note on the Issue. A lead's own `deferred --after`
 wait is its event, not an edge: it is not removed here, and a waiting Issue stays waiting until it ends.
 
+## Changing an edge
+
+Which command depends on whether the row has an Issue yet (`factory project show <name> --format plain` prints each row's
+state):
+
+| Row state | Change the edge by |
+|-|-|
+| `waiting` or `filable` (no Issue yet) | editing the row's `after` in `docs/plan.yaml`, `factory plan check`, push, `factory project sync --fetch true` |
+| `open` (its Issue exists) | `factory planning after --issue <id> --after <id>` / `factory planning unafter --issue <id> --after <id>` on the Issue; editing the row's `after` changes nothing now |
+
+The Issue's edges are not in `factory issue show`; `factory read chain --format plain` lists what blocks each Issue
+(`blocking.issue_<n>`).
+
 ## Splitting a plan into rows
 
 - One row is one change that ships alone: its own lead, review, deploy and verify. If two halves could not be reverted
