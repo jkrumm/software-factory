@@ -173,11 +173,10 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
   }
 
-  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions.
-  const seat = await seatOf(deps, current)
-  if (!seat.ok) return fail(seat.error)
+  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions. The
+  // role table is not read: a seat the Issue carries is what ran, and for one without, the table may have changed since.
   const recorded = await deps.uow.run(({ work }) =>
-    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat.value),
+    recordStarted(work, deps, issue, attempt, row.terminal ?? name, current.seat),
   )
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }
@@ -194,14 +193,14 @@ async function recordStarted(
   issue: IssueId,
   attempt: number,
   terminal: string,
-  seat: { tier: Tier; effort: Effort },
+  seat: { tier: Tier; effort: Effort } | undefined,
 ) {
   const result = await recordIn(work, deps, {
     issueId: issue,
     key: key('lead_started', issue, attempt),
     event: {
       kind: 'lead_started',
-      payload: { attempt, terminal, seat: { tier: seat.tier, effort: seat.effort } },
+      payload: { attempt, terminal, ...(seat ? { seat: { tier: seat.tier, effort: seat.effort } } : {}) },
       actor: 'factory',
     },
   })

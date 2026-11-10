@@ -402,4 +402,19 @@ test('a seat is resolved at filing: tier and effort are kept, a role is stored w
   expect(b?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium', role: 'reviewer' })
   const shown = await v.run(['issue', 'show', String(byRole.json?.issue)])
   expect(shown.json).toMatchObject({ seat: { tier: 'sonnet', effort: 'medium', role: 'reviewer' }, ranOn: null })
+  // a repeated key files nothing and never reads the role table, so a role the table no longer has changes nothing
+  const replay = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Review one',
+    '--key',
+    'seat-2',
+    '--seat',
+    '{"role":"removed-since"}',
+  ])
+  expect(replay.code).toBe(0)
+  expect(replay.json).toMatchObject({ issue: byRole.json?.issue, filed: false })
 })

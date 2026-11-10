@@ -66,15 +66,21 @@ export async function fileNewIssue(
       ? err({ kind: 'repo_outside_roots', detail: located.error.detail })
       : located
   }
+  const request = key('request', input.key ?? deps.ids.next('request'))
   let seat: ResolvedSeat | undefined
   if (input.seat !== undefined) {
     const parsed = parseSeat(input.seat)
     if (!parsed.ok) return err({ kind: 'seat_refused', field: parsed.field, detail: parsed.detail })
-    const resolved = await resolveSeat(deps.roles, parsed.seat)
-    if (!resolved.ok) return resolved
-    seat = resolved.value
+    // A repeated key files nothing, so its replay never reads the role table: the Issue is there whatever the table says.
+    const before =
+      input.key === undefined ? null : await deps.uow.run(async ({ work }) => ok(await work.eventByKey(request)))
+    if (before !== null && !before.ok) return before
+    if (!before?.value) {
+      const resolved = await resolveSeat(deps.roles, parsed.seat)
+      if (!resolved.ok) return resolved
+      seat = resolved.value
+    }
   }
-  const request = key('request', input.key ?? deps.ids.next('request'))
   return deps.uow.run<NewIssued, NewIssueError>(async (stores) => {
     // The edges are checked against the open chain and then written: two filings at once must not both pass.
     await stores.capacity.lock()
