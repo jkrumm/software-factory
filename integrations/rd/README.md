@@ -4,6 +4,14 @@
 contract it keeps with the factory. The factory side of each verb is generated from the OpenAPI document
 (`role` is hand-written).
 
+**`rd` is not a second factory CLI.** On the host `factory` authenticates itself (no `FACTORY_TOKEN` and no
+`FACTORY_READ_TOKEN`: it resolves the owner token from the deployed release's `.env.tpl` through `secrets-run`; a set
+token, a lead's or the orchestrator's, always wins), so `factory issue new`, `factory issue list` and
+`factory signal file --from agent:<repo>` are the way to file and list. `rd` keeps only the owner's terminal verbs
+(`work`, `agents`, `read`, `say`, `reap`); its `issue`, `issues` and `signal` verbs are to become passthroughs to the
+factory, then retire. The wrapper below is what `rd` still does for `health`, `role get` and `session note` until it
+calls the bare CLI too.
+
 ## How every call runs
 
 On the dev host, never on the laptop:

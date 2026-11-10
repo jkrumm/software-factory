@@ -3,7 +3,8 @@ import { constants } from 'node:os'
 import { send } from '@software-factory/client'
 import { DEFAULT_SLOT_RUN_MS, Slot } from '@software-factory/contract'
 import { usage } from './exit.ts'
-import { DEFAULT_URL, type Io, tokenOf } from './operation.ts'
+import { credentialOf } from './credentials.ts'
+import { DEFAULT_URL, type Io } from './operation.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
 const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
@@ -131,7 +132,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   if (!program) throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
-  const token = tokenOf(io.env)
+  const { token, failure } = await credentialOf(io.env)
   const name = (input.name ?? program).slice(0, MAX_SLOT_NAME)
   const id = `${process.pid}-${crypto.randomUUID()}`
   const waitMs = number(io.env.FACTORY_SLOT_WAIT_MS, DEFAULT_SLOT_WAIT_MS)
@@ -157,7 +158,10 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     if (!answer.reached) return { kind: 'outage', why: answer.reason }
     if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}` }
     if (answer.status === 401 || answer.status === 403) {
-      return { kind: 'outage', why: `the server refused the token (${answer.status}): set FACTORY_TOKEN` }
+      return {
+        kind: 'outage',
+        why: `the server refused the token (${answer.status}): set FACTORY_TOKEN${failure ? ` (${failure})` : ''}`,
+      }
     }
     const parsed = Slot.safeParse(answer.json)
     if (!parsed.success)
