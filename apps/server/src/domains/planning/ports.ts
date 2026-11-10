@@ -2,6 +2,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Result } from '../../kernel/result.ts'
 import type { Edge } from './chain.ts'
 import type { OpenIssue } from './queue.ts'
+import type { ReplanTrigger } from './replan.ts'
 import type { RepoRead, StoredProject } from './sync.ts'
 
 /** A repo the factory may read as a project. */
@@ -41,6 +42,20 @@ export interface PlanningStore {
   /** `project:row key` → the Issue it was filed as */
   filedRows(): Promise<Map<string, IssueId>>
   recordFiledRow(row: { project: string; key: string; issue: IssueId; at: Date }): Promise<void>
+
+  /** the project's Replan whose Issue is not closed, if any */
+  openReplan(project: string): Promise<IssueId | null>
+  recordReplan(replan: {
+    issue: IssueId
+    project: string
+    trigger: ReplanTrigger
+    ask: string | null
+    at: Date
+  }): Promise<void>
+  /** the project an Issue is the Replan of, or null when it is not a Replan */
+  replanOf(issue: IssueId): Promise<{ project: string } | null>
+  /** whether the Issue's latest Spec has a `looks_good` or `with_notes` verdict on its latest revision */
+  specApproved(issue: IssueId): Promise<boolean>
 }
 
 /** An open Issue before its repo is resolved to a project. */
@@ -67,6 +82,16 @@ export interface TimerWait {
   until: string
 }
 
+/** A timed wait with open Issues held behind it (a chain head), as the long-wait read lists it. */
+export interface LongWaitRow {
+  issue: string
+  repo: string
+  title: string
+  since: Date
+  until: string
+  held: number
+}
+
 /**
  * What planning reads of the Issues, which another domain owns: read-only, implemented under `read/` on the same
  * transaction.
@@ -76,8 +101,12 @@ export interface IssueReads {
   open(): Promise<OpenIssueRow[]>
   /** of these Issues, which exist and which are closed */
   statesOf(ids: readonly IssueId[]): Promise<Map<IssueId, 'open' | 'closed'>>
+  /** of these Issues, the repo text each was filed for and whether it is open (an unknown Issue is absent) */
+  repoStatesOf(ids: readonly IssueId[]): Promise<Map<IssueId, { repo: string; state: 'open' | 'closed' }>>
   /** the Issues waiting on a dependency */
   dependencyWaits(): Promise<DependencyWait[]>
   /** the Issues waiting for a time */
   timerWaits(): Promise<TimerWait[]>
+  /** the timed waits of at least `thresholdMs` that other open Issues wait behind */
+  longWaits(thresholdMs: number): Promise<LongWaitRow[]>
 }

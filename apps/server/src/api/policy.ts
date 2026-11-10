@@ -15,7 +15,7 @@
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
- * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs, `ship`,
+ * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs (`replan` included: the server gates it on the Replan's approved Spec and its own project's Issues, while `/planning/after|unafter` and `cancel` stay owner only), `ship`,
  *   `quality`, a revision, its own session read, a note to a session, the signal it files, the test slots it takes and the
  *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
@@ -68,6 +68,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/issues/:id/defer', LEAD),
   rule('POST', '/v1/issues/:id/block', LEAD),
   rule('POST', '/v1/issues/:id/ask', LEAD),
+  rule('POST', '/v1/issues/:id/replan', LEAD),
   rule('POST', '/v1/issues/:id/artifacts', LEAD),
   rule('POST', '/v1/issues/:id/errands', LEAD),
   rule('POST', '/v1/artifacts/:id/revisions', LEAD),
@@ -120,6 +121,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/planning/settle', OWNER),
   rule('POST', '/planning/after', OWNER),
   rule('POST', '/planning/unafter', OWNER),
+  rule('POST', '/planning/replan', OWNER),
   rule('GET', '/capacity', OWNER),
   rule('POST', '/capacity/refresh', OWNER),
   rule('POST', '/capacity/admit', OWNER),

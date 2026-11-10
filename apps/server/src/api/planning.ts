@@ -9,6 +9,10 @@ import {
   ProjectList,
   ProjectSyncAnswer,
   ProjectView,
+  ReplanAnswer,
+  ReplanApplyAnswer,
+  ReplanApplyBody,
+  ReplanBody,
   type ROW_STATES,
   SettleAnswer,
   SettleBody,
@@ -19,6 +23,7 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { RowState } from '../domains/planning/plan.ts'
 import type { PlanningError } from '../app/planning-deps.ts'
+import type { ReplanApplyInput, ReplanOpResult, Replanned } from '../app/planning-replan.ts'
 import type { PassResult } from '../app/planning-pass.ts'
 import type { SyncResult } from '../app/planning-sync.ts'
 import type { ProjectState } from '../app/planning-views.ts'
@@ -50,6 +55,12 @@ export interface PlanningApi {
   >
   after(input: { issue: IssueId; after: IssueId[] }): Promise<Result<{ edges: number }, PlanningError | PortError>>
   unafter(input: { issue: IssueId; after: IssueId[] }): Promise<Result<{ removed: number }, PlanningError | PortError>>
+  replan(input: {
+    project: string
+    ask: string | undefined
+    actor: OwnerActor
+  }): Promise<Result<Replanned, PlanningError | PortError>>
+  applyReplan(input: ReplanApplyInput): Promise<Result<ReplanOpResult[], PlanningError | PortError>>
   prio(input: {
     issue: IssueId
     value: number
@@ -88,6 +99,25 @@ export function failureOf(error: PlanningError | PortError): Failure {
       }
     case 'unknown_project':
       return { status: 404, body: failure(`no project ${error.project}`, 'not_found') }
+    case 'not_a_replan':
+      return { status: 409, body: failure(`${nameOf(error.issue)} is not a Replan`, 'not_a_replan') }
+    case 'not_approved':
+      return {
+        status: 409,
+        body: failure(
+          `${nameOf(error.issue)} has no approved Spec: its latest Spec revision needs a Looks good or With notes verdict`,
+          'not_approved',
+        ),
+      }
+    case 'outside_project':
+      return {
+        status: 409,
+        body: failure(
+          `${error.issues.map(nameOf).join(', ')} not open Issues of project ${error.project} (a Replan changes its own project only); nothing was applied`,
+          'outside_project',
+          { issues: error.issues },
+        ),
+      }
     case 'version_conflict':
       return { status: 409, body: failure(`${nameOf(error.issue)} moved meanwhile; try again`, 'version_conflict') }
     case 'refused':
@@ -274,6 +304,79 @@ export const planningRoutes = (api?: PlanningApi) => {
         detail: {
           operationId: 'planning.unafter',
           summary: 'remove stored after edges from an open Issue (refuses an edge it does not have)',
+        },
+      },
+    )
+    .post(
+      '/planning/replan',
+      async ({ body, request, status }) => {
+        if (!api) return status(503, unbound)
+        const filed = await api.replan({ project: body.project, ask: body.ask, actor: ownerActorOf(request) })
+        if (!filed.ok) {
+          const out = failureOf(filed.error)
+          return out.status === 404
+            ? status(404, out.body)
+            : out.status === 409
+              ? status(409, out.body)
+              : status(503, out.body)
+        }
+        const { issue, filed: isNew, existing } = filed.value
+        return status(200, ReplanAnswer.parse({ issue: issue.id, filed: isNew, existing }))
+      },
+      {
+        body: ReplanBody,
+        response: { 200: ReplanAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'planning.replan',
+          summary:
+            "file the project's Replan: an Issue whose lead proposes plan changes as a Spec (one open per project; an ask is added to it)",
+          'x-cli': { args: ['project'] },
+        },
+      },
+    )
+    .post(
+      '/v1/issues/:id/replan',
+      async ({ params, body, status }) => {
+        if (!api) return status(503, unbound)
+        const issue = issueRef(params.id)
+        if (!issue) return status(404, failure(`no Issue ${params.id}`, 'not_found'))
+        const edges = (list: { issue: string; after: string[] }[]) =>
+          list.map((edge) => ({ issue: issueOf(edge.issue), after: edge.after.map(issueOf) }))
+        const add = edges(body.edges?.add ?? [])
+        const remove = edges(body.edges?.remove ?? [])
+        const cancel = (body.cancel ?? []).map((target) => ({ issue: issueOf(target.issue), reason: target.reason }))
+        const unknown = [...add, ...remove].some((edge) => edge.issue === null || edge.after.includes(null))
+        if (unknown || cancel.some((target) => target.issue === null)) {
+          return status(404, failure('an id in the body is not an Issue id', 'not_found'))
+        }
+        const applied = await api.applyReplan({
+          issue,
+          attempt: body.attempt,
+          call: body.call,
+          edges: {
+            add: add as ReplanApplyInput['edges']['add'],
+            remove: remove as ReplanApplyInput['edges']['remove'],
+          },
+          cancel: cancel as ReplanApplyInput['cancel'],
+        })
+        if (!applied.ok) {
+          const out = failureOf(applied.error)
+          return out.status === 404
+            ? status(404, out.body)
+            : out.status === 409
+              ? status(409, out.body)
+              : status(503, out.body)
+        }
+        return status(200, ReplanApplyAnswer.parse({ results: applied.value }))
+      },
+      {
+        params: z.object({ id: z.string() }),
+        body: ReplanApplyBody,
+        response: { 200: ReplanApplyAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'issue.replan',
+          summary:
+            'the Replan lead applies its approved Spec to its own project: body {"attempt":1,"edges":{"add":[{"issue":"issue_7","after":["issue_5"]}],"remove":[]},"cancel":[{"issue":"issue_9","reason":"..."}]}',
         },
       },
     )

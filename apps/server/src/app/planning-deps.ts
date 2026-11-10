@@ -32,3 +32,6 @@ export type PlanningError =
   | { kind: 'unknown_project'; project: string }
   | { kind: 'version_conflict'; issue: IssueId }
   | { kind: 'refused'; detail: string }
+  | { kind: 'not_a_replan'; issue: IssueId }
+  | { kind: 'not_approved'; issue: IssueId }
+  | { kind: 'outside_project'; project: string; issues: IssueId[] }

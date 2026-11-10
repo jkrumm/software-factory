@@ -19,6 +19,7 @@ import type { PlanningSettings } from './app/planning-settings.ts'
 import { projectSignals } from './app/planning-signals.ts'
 import { syncProjects } from './app/planning-sync.ts'
 import { projectStates } from './app/planning-views.ts'
+import { applyReplan, fileReplan } from './app/planning-replan.ts'
 import { projectOf } from './domains/planning/sync.ts'
 import { key } from './kernel/keys.ts'
 import { ok, type PortError, type Result } from './kernel/result.ts'
@@ -51,8 +52,10 @@ export function composePlanning(input: {
   writes: PlanningDeps
   roles: SeatRoles
   settings: PlanningSettings
+  /** a timed wait this long with Issues behind it gets a Replan; absent, no Replan is filed by the pass */
+  longWaitMs?: number
 }): PlanningComposition {
-  const { writes, roles, settings } = input
+  const { writes, roles, settings, longWaitMs } = input
   const sync = {
     ...writes,
     roles,
@@ -90,7 +93,7 @@ export function composePlanning(input: {
   async function pass(): Promise<string[]> {
     const problems: string[] = []
     const fetch = writes.clock.now().getTime() - fetchedAt >= FETCH_EVERY_MS
-    const planned = await planningPass(sync, { fetch })
+    const planned = await planningPass(sync, { fetch, ...(longWaitMs === undefined ? {} : { longWaitMs }) })
     if (!planned.ok) problems.push(`planning pass: ${planned.error.detail}`)
     else {
       if (fetch) fetchedAt = writes.clock.now().getTime()
@@ -106,10 +109,12 @@ export function composePlanning(input: {
     planning: {
       projects: () => projectStates(writes),
       sync: (options) => syncProjects(sync, options),
-      pass: (options) => planningPass(sync, options),
+      pass: (options) => planningPass(sync, { ...options, ...(longWaitMs === undefined ? {} : { longWaitMs }) }),
       settle: (request) => settleIssue(writes, request),
       after: (request) => addAfter(writes, { ...request, running: true }),
       unafter: (request) => removeAfter(writes, request),
+      replan: (request) => fileReplan(writes, { ...request, trigger: 'owner' }),
+      applyReplan: (request) => applyReplan(writes, request),
       prio: (request) =>
         setPrio(writes, {
           issue: request.issue,

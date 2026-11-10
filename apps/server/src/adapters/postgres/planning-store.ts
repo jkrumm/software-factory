@@ -46,6 +46,9 @@ function projectOf(raw: unknown): StoredProject {
 
 const EdgeRow = z.object({ issue_id: z.string(), after_issue: z.string(), satisfied: z.boolean() })
 const PrioRow = z.object({ issue_id: z.string(), value: z.number().int() })
+const ReplanRow = z.object({ issue_id: z.string() })
+const ReplanProjectRow = z.object({ project: z.string() })
+const VerdictRow = z.object({ verdict: z.string().nullable() })
 const FiledRow = z.object({ project: z.string(), row_key: z.string(), issue_id: z.string() })
 
 const idOf = (text: string): IssueId => {
@@ -141,6 +144,42 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       await tx`
         INSERT INTO factory.planning_filed_rows (project, row_key, issue_id, filed_at) VALUES (${project}, ${key}, ${issue}, ${at})
         ON CONFLICT (project, row_key) DO NOTHING`
+    },
+
+    async openReplan(project) {
+      const rows: unknown[] = await tx`
+        SELECT r.issue_id FROM factory.replans r JOIN factory.issues i ON i.id = r.issue_id
+        WHERE r.project = ${project} AND i.state <> 'closed' ORDER BY r.created_at DESC LIMIT 1`
+      const row = rows[0]
+      return row === undefined ? null : idOf(ReplanRow.parse(row).issue_id)
+    },
+
+    async recordReplan({ issue, project, trigger, ask, at }) {
+      await tx`
+        INSERT INTO factory.replans (issue_id, project, trigger, ask, created_at)
+        VALUES (${issue}, ${project}, ${trigger}, ${ask}, ${at})
+        ON CONFLICT (issue_id) DO NOTHING`
+    },
+
+    async replanOf(issue) {
+      const rows: unknown[] = await tx`SELECT project FROM factory.replans WHERE issue_id = ${issue}`
+      const row = rows[0]
+      return row === undefined ? null : { project: ReplanProjectRow.parse(row).project }
+    },
+
+    async specApproved(issue) {
+      const rows: unknown[] = await tx`
+        SELECT v.verdict
+        FROM factory.artifacts a
+        JOIN factory.artifact_revisions r
+          ON r.artifact_id = a.id AND r.n = (SELECT max(n) FROM factory.artifact_revisions WHERE artifact_id = a.id)
+        LEFT JOIN factory.verdicts v ON v.artifact_id = a.id AND v.revision = r.n
+        WHERE a.issue_id = ${issue} AND a.kind = 'spec'
+        ORDER BY a.created_at DESC, a.id DESC LIMIT 1`
+      const row = rows[0]
+      if (row === undefined) return false
+      const verdict = VerdictRow.parse(row).verdict
+      return verdict === 'looks_good' || verdict === 'with_notes'
     },
   }
 }
