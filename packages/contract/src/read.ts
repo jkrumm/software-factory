@@ -114,6 +114,8 @@ export const ReadIssueCard = z
     /** the Issue holding the repo claim this one waits behind, when it is known */
     heldBy: z.number().int().nullable(),
     waitingOnOwner: z.boolean(),
+    /** the seat the Issue asked its lead for; null when it asked for none (the lead role of the table) */
+    seat: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
   })
   .meta({ id: 'ReadIssueCard' })
 export type ReadIssueCard = z.infer<typeof ReadIssueCard>
@@ -284,6 +286,8 @@ export const ReadShipLine = z
 export type ReadShipLine = z.infer<typeof ReadShipLine>
 
 export const ReadIssueDetail = ReadIssueCard.extend({
+  /** the tier and effort the latest lead actually started on; null before one started (or for an older lead) */
+  ranOn: z.object({ tier: z.string(), effort: z.string() }).nullable(),
   /** how the Issue came to be: the signals routed to it, oldest first; empty for an Issue filed another way */
   triage: z.array(ReadTriageLine),
   /** the owner's notes to the lead, oldest first */

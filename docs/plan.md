@@ -51,6 +51,7 @@ a broken plan.
 | `title` | The filed Issue's title, up to 200 characters. Required unless the row adopts an Issue |
 | `facts` | What the filed Issue's lead reads, an object of the same shape as `factory issue schema` prints: `why`, `what`, `change`, `acceptance`, and any other key you add. Required unless the row adopts an Issue |
 | `kind` | `feature` (the default), `bug`, `chore`, `docs` or `incident` |
+| `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the role table's `lead` row. See Choosing the seat |
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
 | `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`) |
 | `not_before` | A date (`2026-12-01`, midnight UTC) or a datetime (`2026-12-01T09:00:00Z`; with no offset it is UTC). The row is not filed before then |
@@ -72,11 +73,23 @@ The planning loop runs on its own; `factory planning pass` runs one now. The Iss
 `facts`, `kind` and `repo`, and the lead sees `Plan row <key>.` before the facts. A row is filed once: its Issue is
 remembered by project and key.
 
+## Choosing the seat
+
+Every lead starts on the `lead` row of `config/roles.json` (sonnet, high). Name a `seat` when a row is worth a stronger
+lead (novel hard logic, a design that must hold) or a weaker one (a mechanical sweep). Two forms, never mixed:
+`{tier, effort}` (tier `haiku|sonnet|opus`, effort `low|medium|high|xhigh|max`; never a model id) or `{role}`, a row of
+the role table. A role is looked up when the Issue is filed and the result is kept, so a later table change does not move
+a filed Issue. A tier or effort outside the lists fails the plan's parse and the last valid plan stays; a role the table
+lacks at filing time files nothing, and the planning pass reports `<project>:<row>: seat.role: ...` until it is fixed.
+`factory issue new --seat '{"tier":"opus","effort":"high"}'` sets the same on a hand-filed Issue (422 naming the field
+when refused). `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
+the latest lead started on.
+
 ## Adopting an Issue
 
 A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`, `rd issue`). Nothing is filed for it; the
 row is done when that Issue closes, so other rows can wait for it with `after`. An adopted row is `key` and `issue` and
-nothing else: `after`, `not_before`, `stable_days`, `repo` and `kind` are refused on it. Put the order on the Issue
+nothing else: `after`, `not_before`, `stable_days`, `repo`, `kind` and `seat` are refused on it. Put the order on the Issue
 (`--after`), or on the rows that wait for it.
 
 `factory planning unafter --issue <id> --after <id>` (`--after` repeats) removes stored `after` edges (set by `planning after`,

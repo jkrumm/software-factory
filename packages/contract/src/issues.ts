@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { QualityIssue } from './quality.ts'
+import { SeatInput } from './seat.ts'
 
 /** Marks a string as an Issue id for the CLI (help, and `12` written as `issue_12` before it is sent); no validation. */
 export const ISSUE_ID_META = { description: 'an Issue id', 'x-id': 'issue' } as const
@@ -25,6 +26,8 @@ export const NewIssueBody = z
     title: z.string().trim().min(1).max(512),
     /** what the lead is told besides the title: a JSON object of named facts */
     facts: z.record(z.string(), z.unknown()).optional(),
+    /** the lead's tier and effort: `{tier, effort}` or `{role}`; checked by the server (422 `seat_refused`, naming the field) */
+    seat: SeatInput.optional(),
     text: Text.optional(),
     key: z.string().trim().min(1).max(200).optional(),
     /** `request` is a person's ask; `alert` is something that broke */

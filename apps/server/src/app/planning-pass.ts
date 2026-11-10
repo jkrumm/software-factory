@@ -15,6 +15,7 @@ import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, recordIn } from './issues.ts'
 import type { PlanningDeps, PlanningStores } from './planning-deps.ts'
+import { resolveSeat } from './seat.ts'
 import { type SyncDeps, type SyncResult, syncProjects } from './planning-sync.ts'
 
 /** The kinds a plan row may name are the Issue's own: this fails `tsc` when the two lists drift. */
@@ -70,7 +71,7 @@ export interface Filed {
  */
 async function fileRow(
   stores: PlanningStores,
-  deps: PlanningDeps,
+  deps: SyncDeps,
   at: { project: string; row: string },
 ): Promise<Result<Filed | null, PortError>> {
   const views = await planViews(stores, deps.clock.now())
@@ -86,10 +87,17 @@ async function fileRow(
 
 async function fileFor(
   stores: PlanningStores,
-  deps: PlanningDeps,
+  deps: SyncDeps,
   input: { source: string; row: PlanRow; target: StoredProject },
 ): Promise<Result<Filed | null, PortError>> {
   const { row, target, source } = input
+  // A role that no longer resolves files nothing; the pass names the row and the field, and the next pass tries again.
+  const seat = row.seat ? await resolveSeat(deps.roles, row.seat) : null
+  if (seat && !seat.ok) {
+    return err(
+      portError('refused', 'field' in seat.error ? `${seat.error.field}: ${seat.error.detail}` : seat.error.detail),
+    )
+  }
   const rowKey = key('plan', source, row.key)
   const filed = await fileIn(stores.work, deps, {
     key: rowKey,
@@ -100,6 +108,7 @@ async function fileFor(
         title: row.title ?? row.key,
         kind: row.kind ?? 'feature',
         origin: 'factory',
+        ...(seat?.ok ? { seat: seat.value } : {}),
       },
       actor: 'factory',
     },

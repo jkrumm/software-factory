@@ -45,7 +45,11 @@ test('start: admitted runs start_lead; the fake hc shows one terminal with its k
 
   const [started] = await w.world.db.sql`
     SELECT version, payload FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'lead_started'`
-  expect(started?.payload).toEqual({ attempt: 1, terminal: terminal?.address })
+  expect(started?.payload).toEqual({
+    attempt: 1,
+    terminal: terminal?.address,
+    seat: { tier: 'sonnet', effort: 'high' },
+  })
   const [effect] = await w.world.db
     .sql`SELECT done_at FROM factory.issue_effects WHERE key = ${`start_lead:${issue}:1`}`
   expect(effect?.done_at).not.toBeNull()

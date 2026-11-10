@@ -5,9 +5,12 @@ import { err, ok, portError, type PortError, type Result } from '../kernel/resul
 import type { WorkStore } from '../domains/work/ports.ts'
 import { fileIn, recordIn } from './issues.ts'
 import type { PlanningDeps } from './planning-deps.ts'
+import type { SeatRoles } from './seat.ts'
 
 export interface SyncDeps extends PlanningDeps {
   source: ProjectSource
+  /** the role table, for a plan row whose seat names a role */
+  roles: SeatRoles
 }
 
 export interface BrokenFile {

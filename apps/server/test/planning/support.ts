@@ -20,6 +20,14 @@ import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
 import { readIssues } from '../../src/read/planning.ts'
 import type { Actor } from '../../src/kernel/events.ts'
 
+/** The role table the planning tests file seats against. */
+export const ROLES = {
+  role: async (name: string) =>
+    name === 'deep'
+      ? ok({ tier: 'opus' as const, effort: 'max' as const })
+      : err(portError('refused', `no role "${name}"`)),
+}
+
 export const value = <T, E>(result: Result<T, E>): T => {
   if (!result.ok) throw new Error(`expected ok, got ${JSON.stringify(result.error)}`)
   return result.value
@@ -139,6 +147,7 @@ export async function startWorld(): Promise<World> {
       clock,
       ids: sequentialIds(),
       source,
+      roles: ROLES,
       host,
       accounts,
       limits: { leadsPerAccount: 2, loadCeiling: 60, memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 } },

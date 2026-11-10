@@ -97,9 +97,11 @@ export interface Repos {
   locate(repo: string): Promise<Result<string>>
 }
 
-/** The role table's `lead` row, as it is when the lead starts. */
+/** The role table, as it is when asked: the `lead` row when a lead starts, any row when an Issue is filed with a seat. */
 export interface Roles {
   lead(): Promise<Result<{ tier: Tier; effort: Effort }>>
+  /** a named row; `refused` for a role the table lacks, `unreadable` for a table that cannot be read */
+  role(name: string): Promise<Result<{ tier: Tier; effort: Effort }>>
 }
 
 /** Capacity's: the account a lead runs on, the repo claim it holds, the window that can run out. Package 3 brings the real ones. */

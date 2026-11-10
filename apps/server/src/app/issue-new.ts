@@ -1,4 +1,4 @@
-import { cleanText } from '@software-factory/contract'
+import { cleanText, parseSeat, type ResolvedSeat } from '@software-factory/contract'
 import { projectOf, repoTextOf } from '../domains/planning/sync.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { OwnerActor } from '../kernel/events.ts'
@@ -8,12 +8,15 @@ import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, type IssueWriteError, recordIn } from './issues.ts'
 import { addEdges } from './planning-chain.ts'
 import type { PlanningDeps, PlanningError } from './planning-deps.ts'
+import { resolveSeat, type SeatRefused, type SeatRoles } from './seat.ts'
 
 export interface NewIssueInput {
   /** an absolute path inside a source root, or a repo's directory name */
   repo: string
   title: string
   facts?: Record<string, unknown> | undefined
+  /** the lead's seat as the request gave it, unchecked: `{tier, effort}` or `{role}` */
+  seat?: Record<string, unknown> | undefined
   text?: string | undefined
   /** a repeated key files nothing again */
   key?: string | undefined
@@ -25,7 +28,7 @@ export interface NewIssueInput {
 
 export type NewIssueError =
   /** the repo is not a directory inside the allowed roots (`realpath` on both sides): nothing is stored */
-  { kind: 'repo_outside_roots'; detail: string } | PlanningError | IssueWriteError
+  { kind: 'repo_outside_roots'; detail: string } | SeatRefused | PlanningError | IssueWriteError
 
 export interface NewIssued {
   issue: Issue
@@ -36,6 +39,8 @@ export interface NewIssued {
 export interface NewIssueDeps extends PlanningDeps {
   /** the trust boundary: the repo's real path, or a refusal when it is outside the roots (`adapters/git/repos.ts`) */
   locate(repo: string): Promise<Result<string, PortError>>
+  /** the role table, for a seat that names a role */
+  roles: SeatRoles
 }
 
 /** What the lead reads of the request: the text, then the facts as `name: value` lines. */
@@ -61,6 +66,14 @@ export async function fileNewIssue(
       ? err({ kind: 'repo_outside_roots', detail: located.error.detail })
       : located
   }
+  let seat: ResolvedSeat | undefined
+  if (input.seat !== undefined) {
+    const parsed = parseSeat(input.seat)
+    if (!parsed.ok) return err({ kind: 'seat_refused', field: parsed.field, detail: parsed.detail })
+    const resolved = await resolveSeat(deps.roles, parsed.seat)
+    if (!resolved.ok) return resolved
+    seat = resolved.value
+  }
   const request = key('request', input.key ?? deps.ids.next('request'))
   return deps.uow.run<NewIssued, NewIssueError>(async (stores) => {
     // The edges are checked against the open chain and then written: two filings at once must not both pass.
@@ -75,6 +88,7 @@ export async function fileNewIssue(
           title: cleanText(input.title) || 'untitled',
           kind: input.source === 'alert' ? 'incident' : 'feature',
           origin: input.source === 'alert' ? 'application' : 'you',
+          ...(seat ? { seat } : {}),
         },
         actor: input.actor,
       },

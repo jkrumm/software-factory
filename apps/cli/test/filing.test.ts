@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { FACTS_EXAMPLE, FACTS_KEYS, NewIssueBody } from '@software-factory/contract'
+import { FACTS_EXAMPLE, FACTS_KEYS, FILING, NewIssueBody } from '@software-factory/contract'
 import { run } from '../src/run.ts'
 
 let server: ReturnType<typeof Bun.serve>
@@ -89,6 +89,15 @@ describe('the filing contract', () => {
     expect(error.message).toBe('issue new: --facts is not JSON')
     for (const word of ['why', 'what', 'change', 'acceptance', 'factory issue schema'])
       expect(error.hint).toContain(word)
+  })
+
+  test('the contract names the seat, and --seat must be a JSON object', async () => {
+    expect(NewIssueBody.safeParse({ repo: 'r', title: 't', seat: FILING.seat.example }).success).toBe(true)
+    const plain = await cli(['issue', 'schema'])
+    expect(plain.out).toContain('--seat')
+    const array = await cli(['issue', 'new', '--repo', 'r', '--title', 't', '--seat', '[1]'])
+    expect(array.code).toBe(2)
+    expect(errorLine(array.err).message).toBe('issue new: --seat must be a JSON object, got array')
   })
 
   test('--facts that is JSON but not an object is exit 2', async () => {

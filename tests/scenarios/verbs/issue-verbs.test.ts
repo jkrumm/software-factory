@@ -73,6 +73,25 @@ test('a repo outside the roots is 422 repo_outside_roots after realpath, and not
   expect(await v.issueCount()).toBe(1)
 })
 
+test('a seat outside the tiers, efforts and role table is 422 seat_refused naming the field, and nothing is stored', async () => {
+  const refusals: [string, string][] = [
+    ['{"tier":"gpt","effort":"high"}', 'seat.tier'],
+    ['{"tier":"opus","effort":"ultra"}', 'seat.effort'],
+    ['{"tier":"claude-opus-5","effort":"high"}', 'seat.tier'],
+    ['{"tier":"opus"}', 'seat.effort'],
+    ['{"role":"no-such-role"}', 'seat.role'],
+    ['{"role":"lead","tier":"opus","effort":"high"}', 'seat'],
+    ['{"tier":"opus","effort":"high","model":"x"}', 'seat.model'],
+  ]
+  for (const [seat, field] of refusals) {
+    const out = await v.run(['issue', 'new', '--repo', 'example', '--title', 'x', '--seat', seat])
+    expect(out.code).toBe(2)
+    expect(out.error?.code).toBe('seat_refused')
+    expect(out.error?.message.startsWith(`${field}:`)).toBe(true)
+  }
+  expect(await v.issueCount()).toBe(1)
+})
+
 test('after takes issue_5 and the bare number; each must exist and be open, else nothing is filed', async () => {
   const bare = await v.run(['issue', 'new', '--repo', 'example', '--title', 'Second', '--after', '1', '--key', 'a'])
   expect(bare.json).toMatchObject({ issue: 'issue_2', filed: true })
@@ -348,4 +367,39 @@ test('the orchestrator token files, notes, cancels and answers under its own nam
     })
     expect(refused.status).toBe(403)
   }
+})
+
+test('a seat is resolved at filing: tier and effort are kept, a role is stored with what it said, and issue show reports it', async () => {
+  const direct = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Hard one',
+    '--key',
+    'seat-1',
+    '--seat',
+    '{"tier":"opus","effort":"max"}',
+  ])
+  expect(direct.code).toBe(0)
+  const byRole = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Review one',
+    '--key',
+    'seat-2',
+    '--seat',
+    '{"role":"reviewer"}',
+  ])
+  expect(byRole.code).toBe(0)
+  const [a] = await v.events(String(direct.json?.issue), 'filed')
+  const [b] = await v.events(String(byRole.json?.issue), 'filed')
+  expect(a?.payload.seat).toEqual({ tier: 'opus', effort: 'max' })
+  expect(b?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium', role: 'reviewer' })
+  const shown = await v.run(['issue', 'show', String(byRole.json?.issue)])
+  expect(shown.json).toMatchObject({ seat: { tier: 'sonnet', effort: 'medium', role: 'reviewer' }, ranOn: null })
 })

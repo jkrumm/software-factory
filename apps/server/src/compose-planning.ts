@@ -13,6 +13,7 @@ import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
 import { planningPass } from './app/planning-pass.ts'
+import type { SeatRoles } from './app/seat.ts'
 import { standingPolicies } from './app/planning-policies.ts'
 import type { PlanningSettings } from './app/planning-settings.ts'
 import { projectSignals } from './app/planning-signals.ts'
@@ -46,9 +47,17 @@ export interface PlanningComposition {
  * Wires planning and capacity: the real adapters behind their ports, the use cases the routes call, the ports the other
  * packages take, and the loop that runs the planning pass and then the admission pass.
  */
-export function composePlanning(input: { writes: PlanningDeps; settings: PlanningSettings }): PlanningComposition {
-  const { writes, settings } = input
-  const sync = { ...writes, source: gitProjectSource({ roots: settings.repoRoots, timeoutMs: settings.gitTimeoutMs }) }
+export function composePlanning(input: {
+  writes: PlanningDeps
+  roles: SeatRoles
+  settings: PlanningSettings
+}): PlanningComposition {
+  const { writes, roles, settings } = input
+  const sync = {
+    ...writes,
+    roles,
+    source: gitProjectSource({ roots: settings.repoRoots, timeoutMs: settings.gitTimeoutMs }),
+  }
   const limits = {
     leadsPerAccount: settings.leadsPerAccount,
     loadCeiling: settings.loadCeiling,
