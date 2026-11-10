@@ -81,6 +81,10 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
           branch = EXCLUDED.branch, synced_at = EXCLUDED.synced_at`
     },
 
+    async removeProject(name) {
+      await tx`DELETE FROM factory.planning_projects WHERE name = ${name}`
+    },
+
     async edges() {
       const rows: unknown[] = await tx`
         SELECT issue_id, after_issue, satisfied_at IS NOT NULL AS satisfied FROM factory.planning_edges`

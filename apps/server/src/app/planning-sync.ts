@@ -24,6 +24,8 @@ export interface BrokenFile {
 export interface SyncResult {
   synced: number
   broken: BrokenFile[]
+  /** stored projects whose repo is gone from disk (or is a linked worktree); their rows are removed */
+  retired: string[]
   /** repos that could not be read this time; their rows are left as they were */
   errors: string[]
 }
@@ -50,9 +52,8 @@ export async function syncProjects(
   const discovered = await deps.source.discover()
   if (discovered.ok) discovered.value.forEach(add)
   else errors.push(`discover: ${discovered.error.detail}`)
-  for (const project of known.value.projects) {
-    add({ directory: project.name.split('~')[0] ?? project.name, path: project.repo })
-  }
+  const { living, retired } = await partitionStored(deps.source, known.value.projects)
+  living.forEach((project) => add({ directory: project.name.split('~')[0] ?? project.name, path: project.repo }))
   for (const repo of new Set(known.value.open.map((issue) => issue.repo))) {
     if (projectOf(known.value.projects, repo)) continue
     const resolved = await deps.source.resolve(repo)
@@ -68,7 +69,8 @@ export async function syncProjects(
   }
 
   const stored = await deps.uow.run(async ({ work, planning }) => {
-    const projects = await planning.projects()
+    for (const name of retired) await planning.removeProject(name)
+    const projects = (await planning.projects()).filter((p) => !retired.includes(p.name))
     const taken = new Map(projects.map((p) => [p.name, p.repo]))
     const broken: BrokenFile[] = []
     const now = deps.clock.now()
@@ -99,9 +101,21 @@ export async function syncProjects(
         })
       }
     }
-    return ok({ synced: reads.length, broken, errors })
+    return ok({ synced: reads.length, broken, retired, errors })
   })
   return stored
+}
+
+/** A stored project whose repo is gone (a deleted checkout, a worktree) is retired: never read, never planned. */
+async function partitionStored(
+  source: ProjectSource,
+  projects: readonly StoredProject[],
+): Promise<{ living: StoredProject[]; retired: string[] }> {
+  const present = await Promise.all(projects.map((project) => source.present(project.repo)))
+  return {
+    living: projects.filter((_, i) => present[i]),
+    retired: projects.filter((_, i) => !present[i]).map((project) => project.name),
+  }
 }
 
 /** One Issue per content of a broken `project.yaml`: the same content again finds that Issue, changed content that is still broken files another. */

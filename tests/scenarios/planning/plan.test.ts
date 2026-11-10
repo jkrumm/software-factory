@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { join } from 'node:path'
 import { AdmitAnswer, PlanningPassAnswer, ProjectList, ProjectView, QueueOrder } from '@software-factory/contract'
 import { must, tick } from '../flow.ts'
 import { type Lab, startLab } from './lab.ts'
@@ -53,7 +54,7 @@ const rowStates = (view: ProjectView) => view.plan?.rows.map((r) => [r.key, r.st
 
 test('projects are read from the default branch: leads, the slot limit and the signals', async () => {
   const synced = await lab.cli(['project', 'sync'])
-  expect(synced.json).toMatchObject({ synced: 2, broken: [], errors: [] })
+  expect(synced.json).toMatchObject({ synced: 2, broken: [], retired: [], errors: [] })
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => [p.name, p.source, p.leads, p.slotRun, p.branch])).toEqual([
     ['app', 'file', 1, null, 'origin/main'],
@@ -188,6 +189,25 @@ test('a broken project.yaml keeps the last valid one and files one Issue for tha
   const lib = await show('lib')
   expect(lib.leads).toBe(3)
   expect(lib.projectError?.message).toContain('leads')
+})
+
+test('a linked worktree beside its repo is not a project: sync lists the repo once and files nothing for the worktree', async () => {
+  const proc = Bun.spawn(
+    ['git', '-C', join(lab.root, 'app'), 'worktree', 'add', '-q', '-b', 'tune', join(lab.root, 'app-tune')],
+    {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  )
+  expect(await proc.exited).toBe(0)
+  const before = await issueCount()
+  const synced = await lab.cli(['project', 'sync'])
+  // lib's broken project.yaml from the test above is still broken; it is the only one the sync reports
+  expect(synced.json).toMatchObject({ synced: 2, retired: [], errors: [] })
+  expect((synced.json as { broken: { project: string }[] }).broken.map((b) => b.project)).toEqual(['lib'])
+  const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
+  expect(list.projects.map((p) => p.name)).toEqual(['app', 'lib'])
+  expect(await issueCount()).toBe(before)
 })
 
 test('planning never asked agw', async () => {

@@ -19,6 +19,8 @@ export interface ProjectSource {
   discover(): Promise<Result<RepoRef[]>>
   /** the repo a repo text names (a name or a path inside a root), if it is one */
   resolve(repo: string): Promise<Result<RepoRef | null>>
+  /** whether a stored repo is still a repo on disk: a directory with its own git directory, so a deleted checkout or a linked worktree is not */
+  present(path: string): Promise<boolean>
   /** reads both files from the default branch; `fetch` asks the remote first */
   read(repo: RepoRef, options: { fetch: boolean }): Promise<Result<RepoRead>>
 }
@@ -26,6 +28,8 @@ export interface ProjectSource {
 export interface PlanningStore {
   projects(): Promise<StoredProject[]>
   saveProject(project: StoredProject): Promise<void>
+  /** drops a project's row; the plan rows it filed stay recorded, so the repo coming back files none twice */
+  removeProject(name: string): Promise<void>
 
   edges(): Promise<Edge[]>
   /** false when the edge exists already */

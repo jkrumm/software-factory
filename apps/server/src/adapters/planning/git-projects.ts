@@ -123,7 +123,9 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
     )
   }
 
-  const isRepo = async (path: string): Promise<boolean> => (await stat(join(path, '.git')).catch(() => null)) !== null
+  /** A repo has its own git directory. A linked worktree has a `.git` file pointing at another repo's, so it is not one. */
+  const isRepo = async (path: string): Promise<boolean> =>
+    (await stat(join(path, '.git')).catch(() => null))?.isDirectory() === true
 
   /** The roots after `realpath`, so a path that went through a symlink (`/tmp`) still lies in its root. */
   const realRoots = (): Promise<string[]> => Promise.all(options.roots.map((root) => realpath(root).catch(() => root)))
@@ -177,6 +179,8 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
       if (!ref || !(await isRepo(ref.path))) return ok(null)
       return ok({ directory: basename(ref.path), path: ref.path })
     },
+
+    present: isRepo,
 
     async read(repo, { fetch }) {
       if (fetch) await git(repo.path, ['fetch', '--quiet', 'origin'])
