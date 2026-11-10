@@ -8,7 +8,8 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   tint, an icon or a mark; text beside a chart stays in the text tokens.
 - **Charts** (`Sparkline`, `MiniBars`, `Meter`) are hand-drawn SVG with no animation, a tooltip on hover and on keyboard
   focus (arrow keys, Home, End), and the numbers as an accessible name plus a visually hidden table. Their colours are the
-  semantic tones (accent, good, warn, bad, the quiet line), not a categorical palette, so the `dataviz` skill's palette
+  semantic tones (accent, good, warn, bad, the quiet line; a `Meter` is graphite and takes warn from 75 % and bad from
+  90 %, `meterTone`), not a categorical palette, so the `dataviz` skill's palette
   validator does not apply: each chart holds one series and carries no legend.
 - **`Sparkline`** takes `(number | null)[]` (a `null` breaks the line, never a zero; the tooltip says `emptyText`) and a `target`
   that is a number (one dashed line) or `{min, max}` (two dashed lines and a faint band). **`StackedBars`** stacks one

@@ -59,12 +59,63 @@ test.describe('the meters and their popovers', () => {
       const popup = page.getByRole('dialog')
       await expect(popup).toBeVisible()
       await expect(popup.getByText(`Subscription ${account}`, { exact: true })).toBeVisible()
-      for (const row of ['This week', '5-hour window'])
-        await expect(popup.getByText(row, { exact: true })).toBeVisible()
+      for (const row of ['This week', '5 h']) await expect(popup.getByText(row, { exact: true })).toBeVisible()
       await expect(popup.getByRole('meter').first()).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(popup).toBeHidden()
     }
+  })
+
+  /** The host's real load decides nothing here: the readings are seeded, so a busy machine cannot colour the strip. */
+  const seedReadings = async (page: Page, apiUrl: string, load: number, weeklyUsed: number) => {
+    await page.route('**/v1/machine', (route) =>
+      route.fulfill({
+        json: {
+          at: new Date().toISOString(),
+          load,
+          loadCeiling: 60,
+          memory: { swapoutMbPer300s: 10, swapUsedPct: 15 },
+          memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 },
+        },
+      }),
+    )
+    const { accounts } = await api<{ accounts: object[] }>(apiUrl, '/v1/accounts')
+    await page.route('**/v1/accounts', (route) =>
+      route.fulfill({ json: { accounts: accounts.map((quota) => ({ ...quota, weeklyUsed, exhaustedUntil: null })) } }),
+    )
+  }
+  const tones = (page: Page) =>
+    strip(page)
+      .locator('[data-tone]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-tone')))
+
+  test('at normal load no strip meter is coloured: every bar is graphite', async ({ page, apiUrl }) => {
+    await seedReadings(page, apiUrl, 6, 20)
+    await page.goto('/needs-you')
+    await expect(strip(page).locator('[data-host="load"]')).toHaveText(/Load\s*6$/)
+    const seen = await tones(page)
+    expect(seen.length).toBeGreaterThanOrEqual(4)
+    expect(new Set(seen)).toEqual(new Set(['neutral']))
+  })
+
+  test('a meter past 75 % of its ceiling takes the warn tone', async ({ page, apiUrl }) => {
+    // load 6 of 60 stays graphite; the account at 80 % of its week is warn
+    await seedReadings(page, apiUrl, 6, 80)
+    await page.goto('/needs-you')
+    await expect(strip(page).locator('[data-host="load"]')).toHaveText(/Load\s*6$/)
+    const seen = await tones(page)
+    expect(seen).toContain('warn')
+    expect(seen).not.toContain('bad')
+  })
+
+  test('a meter past 90 % of its ceiling takes the bad tone', async ({ page, apiUrl }) => {
+    // load 57 of 60 is 95 %, the account at 95 % of its week: both bad, memory and swap stay graphite
+    await seedReadings(page, apiUrl, 57, 95)
+    await page.goto('/needs-you')
+    await expect(strip(page).locator('[data-host="load"]')).toHaveText(/Load\s*57$/)
+    const seen = await tones(page)
+    expect(seen.filter((tone) => tone === 'bad').length).toBeGreaterThanOrEqual(2)
+    expect(seen).toContain('neutral')
   })
 
   test('an account meter opens from the keyboard', async ({ page, apiUrl }) => {
@@ -78,7 +129,7 @@ test.describe('the meters and their popovers', () => {
     await expect(page.getByRole('dialog')).toBeHidden()
   })
 
-  test('the host popover shows three charts with a tooltip and two process tables of eight rows', async ({ page }) => {
+  test('the host popover shows three charts with a tooltip and two process tables of five rows', async ({ page }) => {
     await page.goto('/needs-you')
     await expect(hostTrigger(page)).toBeVisible()
     for (const label of ['Load', 'Memory', 'Swap']) await expect(hostTrigger(page)).toContainText(label)
@@ -113,7 +164,7 @@ test.describe('the meters and their popovers', () => {
 
     for (const title of ['Top by CPU', 'Top by memory']) {
       const table = popup.locator('section', { has: page.getByRole('heading', { name: title }) })
-      await expect(table.locator('tbody tr')).toHaveCount(8)
+      await expect(table.locator('tbody tr')).toHaveCount(5)
     }
     const clipped = await popup
       .locator('tbody td')

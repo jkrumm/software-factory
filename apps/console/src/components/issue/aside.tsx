@@ -1,7 +1,7 @@
 import type { ReadIssueDetail } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { Lozenge, LOZENGE_STATES, type LozengeState } from '@/components/kit/lozenge'
-import { MeterBar, meterTone } from '@/components/kit/meter'
+import { MeterBar } from '@/components/kit/meter'
 import { PropertyList } from '@/components/kit/property-list'
 import { Section } from '@/components/kit/section'
 import { Skeleton } from '@/components/kit/skeleton'
@@ -30,9 +30,7 @@ function WeeklyQuota({ issue, now }: { issue: Issue; now: number }) {
           {meter.note ? ` (${meter.note})` : ''}
         </span>
       </p>
-      {meter.weeklyPct === null ? null : (
-        <MeterBar value={meter.weeklyPct / 100} tone={meterTone(meter.weeklyPct / 100)} track="surface" />
-      )}
+      {meter.weeklyPct === null ? null : <MeterBar value={meter.weeklyPct / 100} tone={meter.tone} track="surface" />}
     </div>
   )
 }

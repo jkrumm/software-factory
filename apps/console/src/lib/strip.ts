@@ -1,7 +1,5 @@
 import type { HostSample, MachineModel, ReadAccountQuota } from '@software-factory/contract'
-
-/** A share at or above this is drawn as a warning: the mock's marker sits at 95 %, a little before the wall. */
-export const WARN_AT_PCT = 90
+import { meterTone, type Tone } from '../components/kit/tone.ts'
 
 const clampPct = (used: number): number => Math.min(Math.max(Math.round(used), 0), 100)
 
@@ -9,7 +7,8 @@ const clampPct = (used: number): number => Math.min(Math.max(Math.round(used), 0
 export interface AccountMeter {
   account: string
   weeklyPct: number | null
-  warn: boolean
+  /** graphite until 75 %, warn from there, bad from 90 % or at the limit */
+  tone: Tone
   /** the reading is old, or the account is at its limit */
   note: string | null
 }
@@ -27,7 +26,7 @@ export function accountMeter(quota: ReadAccountQuota, now: Date): AccountMeter {
   return {
     account: quota.account,
     weeklyPct,
-    warn: exhausted || (weeklyPct !== null && weeklyPct >= WARN_AT_PCT),
+    tone: exhausted ? 'bad' : weeklyPct === null ? 'neutral' : meterTone(weeklyPct / 100),
     note: exhausted ? `at its limit until ${resetWords(quota.exhaustedUntil, now)}` : quota.fresh ? null : 'stale',
   }
 }
@@ -35,12 +34,12 @@ export function accountMeter(quota: ReadAccountQuota, now: Date): AccountMeter {
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** A reset in the owner's words and local time: "09:10" within a day, "Wednesday 16:00" after; "none" for no window. */
-export function resetWords(iso: string | null, now: Date): string {
+export function resetWords(iso: string | null, now: Date, weekday: 'long' | 'short' = 'long'): string {
   if (iso === null) return 'none'
   const at = new Date(iso)
   const time = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   if (at.getTime() - now.getTime() < DAY_MS) return time
-  return `${at.toLocaleDateString('en-GB', { weekday: 'long' })} ${time}`
+  return `${at.toLocaleDateString('en-GB', { weekday })} ${time}`
 }
 
 /** The host in two short phrases; a failed reading is said, not drawn as zero. */
@@ -60,7 +59,7 @@ export function machineWords(machine: Pick<MachineModel, 'load' | 'loadCeiling' 
   }
 }
 
-/** One host meter on the strip: a label, a bar from 0 to 1, the figure as it reads, and whether it is past its ceiling. */
+/** One host meter on the strip: a label, a bar from 0 to 1, the figure as it reads, and its tone on that fill. */
 export interface HostMeter {
   key: 'load' | 'memory' | 'swap'
   label: string
@@ -68,14 +67,14 @@ export interface HostMeter {
   fill: number | null
   /** "4.2", "62%"; "-" when unknown */
   text: string
-  warn: boolean
+  tone: Tone
 }
 
 const unit = (value: number): number => Math.min(Math.max(value, 0), 1)
 
 /**
- * Load and swap are drawn against their ceilings (a full bar is the wall), memory against the RAM. Warn is `machineWords`'
- * logic: load over its ceiling, swap in use or swapped out over theirs; memory has no ceiling.
+ * Load and swap are drawn against their ceilings (a full bar is the wall), memory against the RAM. The tone is `meterTone` on the
+ * fill; swap is also bad when swapped out over its ceiling.
  */
 export function hostMeters(
   machine: Pick<MachineModel, 'load' | 'loadCeiling' | 'memory' | 'memoryCeilings'> | undefined,
@@ -85,30 +84,31 @@ export function hostMeters(
   const memory = machine?.memory ?? null
   const ceilings = machine?.memoryCeilings
   const used = newest?.memoryUsedPct ?? null
+  const loadFill = load === null || !machine ? null : unit(load / machine.loadCeiling)
+  const memoryFill = used === null ? null : unit(used / 100)
+  const swapFill = memory === null || !ceilings ? null : unit(memory.swapUsedPct / ceilings.swapUsedPct)
+  const swappedOut = memory !== null && !!ceilings && memory.swapoutMbPer300s > ceilings.swapoutMbPer300s
   return [
     {
       key: 'load',
       label: 'Load',
-      fill: load === null || !machine ? null : unit(load / machine.loadCeiling),
+      fill: loadFill,
       text: load === null ? '-' : String(Math.round(load * 10) / 10),
-      warn: load !== null && !!machine && load > machine.loadCeiling,
+      tone: loadFill === null ? 'neutral' : meterTone(loadFill),
     },
     {
       key: 'memory',
       label: 'Memory',
-      fill: used === null ? null : unit(used / 100),
+      fill: memoryFill,
       text: used === null ? '-' : `${Math.round(used)}%`,
-      warn: false,
+      tone: memoryFill === null ? 'neutral' : meterTone(memoryFill),
     },
     {
       key: 'swap',
       label: 'Swap',
-      fill: memory === null || !ceilings ? null : unit(memory.swapUsedPct / ceilings.swapUsedPct),
+      fill: swapFill,
       text: memory === null ? '-' : `${Math.round(memory.swapUsedPct)}%`,
-      warn:
-        memory !== null &&
-        !!ceilings &&
-        (memory.swapUsedPct > ceilings.swapUsedPct || memory.swapoutMbPer300s > ceilings.swapoutMbPer300s),
+      tone: swappedOut ? 'bad' : swapFill === null ? 'neutral' : meterTone(swapFill),
     },
   ]
 }

@@ -30,3 +30,15 @@ export const TONE_MARK: Record<Tone, string> = {
 
 /** A mark colour at a share of its strength, over whatever sits behind. */
 export const mix = (colour: string, percent: number): string => `color-mix(in srgb, ${colour} ${percent}%, transparent)`
+
+/** A meter takes the warn tone from this share of its ceiling. */
+export const METER_WARN_AT = 0.75
+/** A meter takes the bad tone from this share of its ceiling. */
+export const METER_BAD_AT = 0.9
+
+/** Graphite below 75 %, warn from 75 %, bad from 90 %; a meter has no series colour. */
+export function meterTone(share: number): Tone {
+  if (share >= METER_BAD_AT) return 'bad'
+  if (share >= METER_WARN_AT) return 'warn'
+  return 'neutral'
+}

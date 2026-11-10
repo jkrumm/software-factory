@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { ReadAccountQuota } from '@software-factory/contract'
+import { meterTone } from '../src/components/kit/tone.ts'
 import {
   accountMeter,
   historySpan,
@@ -28,14 +29,22 @@ const quota = (over: Partial<ReadAccountQuota>): ReadAccountQuota => ({
   ...over,
 })
 
-test('accountMeter rounds the weekly share, warns near the wall and says when a reading is stale or at its limit', () => {
-  expect(accountMeter(quota({}), now)).toEqual({ account: 'a', weeklyPct: 46, warn: false, note: null })
-  expect(accountMeter(quota({ weeklyUsed: 90 }), now).warn).toBe(true)
+test('meterTone is graphite below 75 %, warn from 75 %, bad from 90 %', () => {
+  expect(meterTone(0.5)).toBe('neutral')
+  expect(meterTone(0.75)).toBe('warn')
+  expect(meterTone(0.89)).toBe('warn')
+  expect(meterTone(0.9)).toBe('bad')
+})
+
+test('accountMeter rounds the weekly share, tones it by the share and says when a reading is stale or at its limit', () => {
+  expect(accountMeter(quota({}), now)).toEqual({ account: 'a', weeklyPct: 46, tone: 'neutral', note: null })
+  expect(accountMeter(quota({ weeklyUsed: 80 }), now).tone).toBe('warn')
+  expect(accountMeter(quota({ weeklyUsed: 95 }), now).tone).toBe('bad')
   expect(accountMeter(quota({ weeklyUsed: 140 }), now).weeklyPct).toBe(100)
-  expect(accountMeter(quota({ weeklyUsed: null }), now)).toMatchObject({ weeklyPct: null, warn: false })
+  expect(accountMeter(quota({ weeklyUsed: null }), now)).toMatchObject({ weeklyPct: null, tone: 'neutral' })
   expect(accountMeter(quota({ fresh: false }), now).note).toBe('stale')
   const walled = accountMeter(quota({ exhaustedUntil: '2026-11-08T12:00:01.000Z' }), now)
-  expect(walled.warn).toBe(true)
+  expect(walled.tone).toBe('bad')
   expect(walled.note).toStartWith('at its limit until')
   expect(accountMeter(quota({ exhaustedUntil: '2026-11-08T11:00:00.000Z' }), now).note).toBeNull()
 })
@@ -84,25 +93,37 @@ const machine = (over: Partial<Parameters<typeof hostMeters>[0] & object> = {}) 
   ...over,
 })
 
-test('hostMeters draws load and swap against their ceilings, memory against the RAM, and warns past a ceiling', () => {
+test('hostMeters draws load and swap against their ceilings, memory against the RAM, and tones the fill', () => {
   const [load, memory, swap] = hostMeters(machine(), { memoryUsedPct: 62.4 })
-  expect(load).toEqual({ key: 'load', label: 'Load', fill: 0.1, text: '6', warn: false })
-  expect(memory).toEqual({ key: 'memory', label: 'Memory', fill: 0.624, text: '62%', warn: false })
-  expect(swap).toEqual({ key: 'swap', label: 'Swap', fill: 0.2, text: '15%', warn: false })
-  expect(hostMeters(machine({ load: 90 }), undefined)[0]).toMatchObject({ fill: 1, warn: true })
+  expect(load).toEqual({ key: 'load', label: 'Load', fill: 0.1, text: '6', tone: 'neutral' })
+  expect(memory).toEqual({ key: 'memory', label: 'Memory', fill: 0.624, text: '62%', tone: 'neutral' })
+  expect(swap).toEqual({ key: 'swap', label: 'Swap', fill: 0.2, text: '15%', tone: 'neutral' })
+  expect(hostMeters(machine({ load: 55 }), undefined)[0]).toMatchObject({ tone: 'bad' })
+  expect(hostMeters(machine({ load: 90 }), undefined)[0]).toMatchObject({ fill: 1, tone: 'bad' })
+  expect(hostMeters(machine(), { memoryUsedPct: 80 })[1]).toMatchObject({ tone: 'warn' })
+  expect(hostMeters(machine({ memory: { swapoutMbPer300s: 0, swapUsedPct: 37.5 } }), undefined)[2]).toMatchObject({
+    fill: 0.5,
+    tone: 'neutral',
+  })
   expect(hostMeters(machine({ memory: { swapoutMbPer300s: 0, swapUsedPct: 80 } }), undefined)[2]).toMatchObject({
     fill: 1,
-    warn: true,
+    tone: 'bad',
   })
-  expect(hostMeters(machine({ memory: { swapoutMbPer300s: 3000, swapUsedPct: 1 } }), undefined)[2]?.warn).toBe(true)
+  expect(hostMeters(machine({ memory: { swapoutMbPer300s: 3000, swapUsedPct: 1 } }), undefined)[2]?.tone).toBe('bad')
 })
 
-test('hostMeters says "-" for a reading it does not have and never warns on it', () => {
+test('at normal load every meter is neutral', () => {
+  const tones = hostMeters(machine({ load: 4.2 }), { memoryUsedPct: 62 }).map((m) => m.tone)
+  expect(tones).toEqual(['neutral', 'neutral', 'neutral'])
+  expect(accountMeter(quota({ weeklyUsed: 46, fresh: true }), now).tone).toBe('neutral')
+})
+
+test('hostMeters says "-" for a reading it does not have and never tones it', () => {
   const meters = hostMeters(machine({ load: null, memory: null }), undefined)
-  expect(meters.map((m) => [m.fill, m.text, m.warn])).toEqual([
-    [null, '-', false],
-    [null, '-', false],
-    [null, '-', false],
+  expect(meters.map((m) => [m.fill, m.text, m.tone])).toEqual([
+    [null, '-', 'neutral'],
+    [null, '-', 'neutral'],
+    [null, '-', 'neutral'],
   ])
   expect(hostMeters(undefined, undefined).every((m) => m.fill === null)).toBe(true)
 })

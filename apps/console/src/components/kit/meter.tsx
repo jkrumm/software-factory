@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChartTooltip } from './chart-frame'
-import { mix, TONE_MARK, type Tone } from './tone'
+import { meterTone, mix, TONE_MARK, type Tone } from './tone'
 import { cn } from '@/lib/utils'
 
 export interface MeterProps {
@@ -16,7 +16,7 @@ export interface MeterProps {
   tooltip?: boolean
   /** The track of the bar, see `MeterBarProps`. */
   track?: 'tint' | 'surface'
-  /** Overrides the tone the value picks (`meterTone`): the strip warns at 90 %, not at 70. */
+  /** Overrides the tone the value picks (`meterTone`): a caller whose ceiling is not the full bar. */
   tone?: Tone
   className?: string
 }
@@ -38,10 +38,12 @@ const fill = (value: number): string => {
 
 /** The bar alone, for a place that carries its own label and name: a track at 18 % of the fill's colour. Decorative. */
 export function MeterBar({ value, tone, track = 'tint', className }: MeterBarProps) {
-  const mark = TONE_MARK[tone]
+  // Graphite is a step of ink, not the hairline step: line2 vanishes on the surface track.
+  const mark = tone === 'neutral' ? mix('var(--vx-ink2)', 75) : TONE_MARK[tone]
   return (
     <div
       aria-hidden="true"
+      data-tone={tone}
       className={cn('h-1.5 w-full overflow-hidden rounded-full', className)}
       style={{ background: track === 'surface' ? 'var(--vx-surface-border)' : mix(mark, 18) }}
     >
@@ -50,12 +52,7 @@ export function MeterBar({ value, tone, track = 'tint', className }: MeterBarPro
   )
 }
 
-/** Accent below 70 %, warn from 70 %, bad from 90 %. */
-export function meterTone(value: number): Tone {
-  if (value >= 0.9) return 'bad'
-  if (value >= 0.7) return 'warn'
-  return 'accent'
-}
+export { meterTone }
 
 /** A thin rounded bar, its track a lighter step of the fill's own hue. Shows its value on hover and focus. */
 export function Meter({ value, label, name, valueText, tone, tooltip = true, track, className }: MeterProps) {

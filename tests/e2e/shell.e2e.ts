@@ -204,5 +204,5 @@ test('the strip shows the counts, each account weekly and the host, and opens th
   await expect(page.getByRole('dialog')).toContainText('Host, last 24 hours')
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: new RegExp(`^${accounts[0]?.account}, `) }).click()
-  await expect(page.getByRole('dialog')).toContainText('5-hour window')
+  await expect(page.getByRole('dialog')).toContainText('This week')
 })

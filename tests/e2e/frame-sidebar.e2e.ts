@@ -36,6 +36,7 @@ test('the logo and the wordmark are at the top', async ({ page }) => {
   const box = await page.getByTestId('sidebar-logo').boundingBox()
   expect(box?.width).toBe(28)
   expect(box?.height).toBe(28)
+  await expect(page.getByTestId('sidebar-logo')).toHaveAttribute('src', /\/icons\/icon-192\.png$/)
   await expect(aside(page).getByText('Factory', { exact: true })).toBeVisible()
 })
 
