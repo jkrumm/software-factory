@@ -136,7 +136,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   never held; `domains/capacity/lanes.ts`), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an
   account with room. The first that says no names itself and its numbers as the queue reason. It never spills to another
   account past a window or a cap; with every account closed it waits for the first opening. Owed Issues are served
-  before new ones.
+  before new ones. The gates (windows, lead cap, loaded) stay the factory's; only the order among the accounts that pass
+  them comes from the picker, `claude-account rank --lane bulk --json`, polled with the usage readings and stored in
+  `capacity_ranks`. A missing or stale rank (older than a reading may be) falls back to the lowest weekly use and shows
+  as the health line `account-rank`; it never blocks admission.
 - **The quiet lead** (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/loops/stall.ts`). A `working` Issue is
   no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
   turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (20 minutes),
@@ -332,7 +335,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   actor with `via: orchestrator`) count as steering too.
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, fix commits, kpis, host, since (the Console's "since you were here" band: `read/since.ts` counts what the event log, Decisions, Errands, signals and incidents say after a start; only the owner's read moves the one-row `console_visit` marker, `app/visit.ts`: a read 30 minutes after the last starts a new visit at the old `seen_at`, the first looks back 24 h) and
-  the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
+  the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `account-rank`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
   `GET /health` carries the heartbeat.
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
   hook's, not the API's.

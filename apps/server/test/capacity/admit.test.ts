@@ -494,3 +494,45 @@ describe('the ports other packages take', () => {
     expect(await queueMovedAt(world.db.sql)).toEqual(world.clock.now())
   })
 })
+
+describe('the picker rank', () => {
+  test('an ok rank is stored and orders the pick: its head is admitted though another account has lower weekly use', async () => {
+    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
+    world.ranker.rows = [
+      { account: 'a', reason: 'home', weight: 0.4 },
+      { account: 'b', reason: 'home', weight: 0.1 },
+    ]
+    await world.queued({ repo: 'solo' })
+    const result = await pass()
+    expect(result.admitted.map((a) => a.account)).toEqual(['a'])
+    expect(result.notes).toEqual([])
+    const [stored] = await world.db.sql`SELECT lane, ordering FROM factory.capacity_ranks`
+    expect(stored?.lane).toBe('bulk')
+    const ordering = typeof stored?.ordering === 'string' ? JSON.parse(stored.ordering) : stored?.ordering
+    expect(ordering.map((r: { account: string }) => r.account)).toEqual(['a', 'b'])
+  })
+
+  test('a failed rank read admits by lowest weekly use and puts a note in the pass notes', async () => {
+    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
+    world.ranker.fail = true
+    await world.queued({ repo: 'solo' })
+    const result = await pass()
+    expect(result.admitted.map((a) => a.account)).toEqual(['b'])
+    expect(result.notes).toEqual([expect.stringContaining('account rank read failed')])
+    expect(result.notes[0]).toContain('ordered by lowest weekly use')
+    expect(await world.db.sql`SELECT lane FROM factory.capacity_ranks`).toHaveLength(0)
+  })
+
+  test('a rank the poll stopped renewing goes stale and no longer orders the pick', async () => {
+    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
+    world.ranker.rows = [{ account: 'a', reason: 'home', weight: null }]
+    await world.queued({ repo: 'solo' })
+    value(await admissionPass(world.deps, { limit: 0 }))
+    world.ranker.fail = true
+    world.clock.advance(11 * 60_000)
+    // the readings are renewed by the poll, the rank is not: it is 11 minutes old
+    const result = await pass()
+    expect(result.admitted.map((a) => a.account)).toEqual(['b'])
+    expect(result.notes).toEqual([expect.stringContaining('account rank read failed')])
+  })
+})

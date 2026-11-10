@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { LoopView, ReadAccountQuota, ReadHealthLine } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import type { MainCheckoutLine } from '../domains/loops/checkout.ts'
+import { readRank } from './accounts.ts'
 import { LINE_TEXT_MAX } from './asks.ts'
 import { loopReads } from './loops.ts'
 import { cut, fallbackWords } from './plain.ts'
@@ -67,6 +68,16 @@ export async function readHealthLines(
         }),
       )
     }
+  }
+  const rank = await readRank(sql, now)
+  if (!rank?.fresh && input.accounts.some((a) => a.fresh)) {
+    lines.push(
+      line({
+        id: 'account-rank',
+        kind: 'account-rank',
+        text: `The account rank is unavailable or stale (last read ${rank ? `${rank.readAt.toISOString().slice(0, 16)}Z` : 'never'}): new leads are ordered by lowest weekly use`,
+      }),
+    )
   }
   for (const loop of sources.loops()) {
     if (!loop.lastError) continue

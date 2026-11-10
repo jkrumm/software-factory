@@ -1,6 +1,6 @@
 import { rootedRepos } from './adapters/git/repos.ts'
 import { basename } from 'node:path'
-import { claudeAccountSource } from './adapters/planning/claude-accounts.ts'
+import { claudeAccountRanker, claudeAccountSource } from './adapters/planning/claude-accounts.ts'
 import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import type { CapacityApi } from './api/capacity.ts'
@@ -71,6 +71,7 @@ export function composePlanning(input: {
     limits,
     host: hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs }),
     accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
+    ranker: claudeAccountRanker({ bin: settings.claudeAccountBin }),
   }
   const slots = { ...writes, slots: settings.slots }
 

@@ -1,8 +1,14 @@
-import { type AccountReading, POLL_EVERY_MS, standing } from '../domains/capacity/accounts.ts'
+import {
+  type AccountRank,
+  type AccountReading,
+  POLL_EVERY_MS,
+  RANK_LANE,
+  standing,
+} from '../domains/capacity/accounts.ts'
 import { checkAdmission, type RefusalKind } from '../domains/capacity/admission.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
-import type { AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
+import type { AccountRanker, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import type { Edge } from '../domains/planning/chain.ts'
@@ -26,6 +32,7 @@ export interface CapacityLimits {
 export interface CapacityDeps extends PlanningDeps {
   host: HostReader
   accounts: AccountSource
+  ranker: AccountRanker
   limits: CapacityLimits
 }
 
@@ -68,6 +75,8 @@ export interface Snapshot {
   prio: Map<IssueId, number>
   claims: Claim[]
   readings: AccountReading[]
+  /** the picker's order of accounts; null: none stored */
+  rank: AccountRank | null
   states: QueueStates
   assignments: Assignment[]
 }
@@ -93,14 +102,26 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   }
 }
 
-/** Polls the account picker and stores the readings as facts. */
-export async function refreshAccounts(deps: CapacityDeps): Promise<Result<AccountReading[], PortError>> {
+/**
+ * Polls the account picker and stores the readings as facts, with the picker's rank when it answers. A failed rank
+ * read leaves the stored rank to go stale and puts a note in `notes`: the readings are still stored and admission
+ * orders new leads by lowest weekly use.
+ */
+export async function refreshAccounts(
+  deps: CapacityDeps,
+  notes: string[] = [],
+): Promise<Result<AccountReading[], PortError>> {
   const at = deps.clock.now()
   const read = await deps.accounts.read(at)
   if (!read.ok) return read
+  const rank = await deps.ranker.read(at)
+  if (!rank.ok) {
+    notes.push(`account rank read failed (${rank.error.detail}): new leads are ordered by lowest weekly use`)
+  }
   const stored = await deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     await capacity.recordReadings(read.value)
+    if (rank.ok) await capacity.recordRank(rank.value)
     return ok(read.value)
   })
   return stored
@@ -112,8 +133,10 @@ export async function pollIfDue(deps: CapacityDeps): Promise<string[]> {
   const now = deps.clock.now().getTime()
   const newest = latest.ok ? Math.max(0, ...latest.value.map((r) => r.readAt.getTime())) : 0
   if (latest.ok && newest > 0 && now - newest < POLL_EVERY_MS) return []
-  const polled = await refreshAccounts(deps)
-  return polled.ok ? [] : [`account poll failed (${polled.error.detail}): admission goes on the readings it has`]
+  const notes: string[] = []
+  const polled = await refreshAccounts(deps, notes)
+  if (!polled.ok) notes.push(`account poll failed (${polled.error.detail}): admission goes on the readings it has`)
+  return notes
 }
 
 export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> {
@@ -127,6 +150,7 @@ export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Sna
     prio: await stores.planning.prios(),
     claims: await stores.capacity.claims(),
     readings: await stores.capacity.latestReadings(),
+    rank: await stores.capacity.latestRank(RANK_LANE),
     states: await stores.capacity.queueStates(),
     assignments: await stores.capacity.recentAssignments(),
   }
@@ -257,6 +281,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
       loaded,
       leadsByAccount,
       leadsPerAccount: limits.leadsPerAccount,
+      rank: snap.rank,
     })
     if (!verdict.admit) return { ...base, reason: verdict.refusal, account: null }
     claims.push({

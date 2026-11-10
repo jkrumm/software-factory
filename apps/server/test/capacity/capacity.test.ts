@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { type AccountReading, pickAccount, standing, WEEK_MS } from '../../src/domains/capacity/accounts.ts'
+import {
+  type AccountRank,
+  type AccountReading,
+  pickAccount,
+  READING_MAX_AGE_MS,
+  standing,
+  WEEK_MS,
+} from '../../src/domains/capacity/accounts.ts'
 import { type AdmissionInputs, checkAdmission } from '../../src/domains/capacity/admission.ts'
 import { type Claimant, claimRoom } from '../../src/domains/capacity/claims.ts'
 import {
@@ -442,5 +449,55 @@ describe('test slots', () => {
     expect(slotLines([{ ...rows[0], leasedUntil: at(3_600_000) } as SlotRow], at(20 * 60_000))).toEqual([
       'test slot 1 held by "make test" for 20 min, limit 30 min',
     ])
+  })
+})
+
+describe('the picker rank orders the open accounts, the gates stay', () => {
+  const hour = 3_600_000
+  const readings = [
+    reading('iu', { weeklyUsed: 80, weeklyResetsAt: at(32 * hour) }),
+    reading('me', { weeklyUsed: 54, weeklyResetsAt: at(46 * hour) }),
+    reading('me2', { weeklyUsed: 11, weeklyResetsAt: at(132 * hour) }),
+  ]
+  const rank = (accounts: string[], readAt = now): AccountRank => ({
+    lane: 'bulk',
+    order: accounts.map((account) => ({ account, reason: 'home', weight: null })),
+    at: readAt,
+    readAt,
+  })
+  const base = { readings, loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
+  const order = ['me', 'me2', 'iu']
+
+  test('the head of a fresh rank is picked over the account with the lowest weekly use', () => {
+    expect(pickAccount({ ...base, rank: rank(order) })).toMatchObject({ picked: { account: 'me' } })
+  })
+
+  test('an account at its lead cap or loaded since its sample is passed over to the next in the rank', () => {
+    const capped = new Map([['me', 2]])
+    expect(pickAccount({ ...base, rank: rank(order), leads: capped })).toMatchObject({ picked: { account: 'me2' } })
+    expect(pickAccount({ ...base, rank: rank(order), loaded: new Set(['me']) })).toMatchObject({
+      picked: { account: 'me2' },
+    })
+  })
+
+  test('an account absent from the rank goes after the ranked ones, by lowest weekly use', () => {
+    expect(pickAccount({ ...base, rank: rank(['iu']) })).toMatchObject({ picked: { account: 'iu' } })
+    expect(pickAccount({ ...base, rank: rank(['iu']), loaded: new Set(['iu']) })).toMatchObject({
+      picked: { account: 'me2' },
+    })
+  })
+
+  test('a stale or missing rank leaves the lowest weekly use', () => {
+    const stale = rank(order, at(-READING_MAX_AGE_MS - 1))
+    expect(pickAccount({ ...base, rank: stale })).toMatchObject({ picked: { account: 'me2' } })
+    expect(pickAccount({ ...base, rank: null })).toMatchObject({ picked: { account: 'me2' } })
+  })
+
+  test('a ranked account that is closed is still refused', () => {
+    const closed = [reading('me', { weeklyUsed: 96 }), ...readings.slice(2)]
+    expect(pickAccount({ ...base, readings: closed, rank: rank(order) })).toMatchObject({ picked: { account: 'me2' } })
+    expect(pickAccount({ ...base, readings: [closed[0] as AccountReading], rank: rank(order) })).toMatchObject({
+      picked: null,
+    })
   })
 })

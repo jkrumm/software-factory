@@ -70,6 +70,8 @@ const accountView = (a: AccountState): AccountView =>
     open: a.open,
     why: a.why,
     opensAt: iso(a.opensAt),
+    rank: a.rank,
+    rankReason: a.rankReason,
   })
 
 const entryView = (entry: QueueEntry) => ({
@@ -123,6 +125,13 @@ export const capacityRoutes = (api?: CapacityApi) => {
               urgent: claim.urgent,
               takenAt: claim.takenAt.toISOString(),
             })),
+            rank: s.rank && {
+              lane: s.rank.lane,
+              at: s.rank.at.toISOString(),
+              readAt: s.rank.readAt.toISOString(),
+              fresh: s.rankFresh,
+              order: s.rank.order,
+            },
             leadsPerAccount: api.limits.leadsPerAccount,
             queue: statesView(s.states),
             slots: {

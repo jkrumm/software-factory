@@ -1,6 +1,6 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { AccountReading } from './accounts.ts'
+import type { AccountRank, AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { MemoryReading } from './host.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
@@ -26,6 +26,9 @@ export interface CapacityStore {
   recordReadings(readings: readonly AccountReading[]): Promise<void>
   /** the newest reading of every account that ever had one */
   latestReadings(): Promise<AccountReading[]>
+  /** replaces the stored rank of its lane */
+  recordRank(rank: AccountRank): Promise<void>
+  latestRank(lane: string): Promise<AccountRank | null>
 
   claims(): Promise<Claim[]>
   takeClaim(claim: Claim): Promise<void>
@@ -57,6 +60,12 @@ export interface HostReader {
 export interface AccountSource {
   /** one poll; `at` is the poll's time, which a reading's `readAt` and `sampledAt` count from */
   read(at: Date): Promise<Result<AccountReading[]>>
+}
+
+/** The picker's order of accounts for a lane (`claude-account rank --lane <lane> --json`). */
+export interface AccountRanker {
+  /** one poll; `at` is the poll's time, which the rank's `readAt` is */
+  read(at: Date): Promise<Result<AccountRank>>
 }
 
 export type { PortError }

@@ -73,6 +73,9 @@ export const ReadAccountQuota = z
     weeklyResetsAt: iso.nullable(),
     exhaustedUntil: iso.nullable(),
     fresh: z.boolean(),
+    /** 1-based place in the picker's order for new leads; null: not ranked, or the rank is stale */
+    rank: z.number().int().nullable(),
+    rankReason: z.string().nullable(),
   })
   .meta({ id: 'ReadAccountQuota' })
 export type ReadAccountQuota = z.infer<typeof ReadAccountQuota>

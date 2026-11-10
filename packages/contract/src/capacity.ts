@@ -72,6 +72,9 @@ export const AccountView = z.object({
   open: z.boolean(),
   why: z.string().nullable(),
   opensAt: z.string().nullable(),
+  /** 1-based place in the order new leads are given accounts; null: not ranked, or the rank is stale */
+  rank: z.number().int().nullable(),
+  rankReason: z.string().nullable(),
 })
 
 export type AccountView = z.infer<typeof AccountView>
@@ -113,6 +116,17 @@ export const CapacityView = z
         takenAt: z.string(),
       }),
     ),
+    /** the picker's order of accounts for new leads (`claude-account rank`); null: none read yet */
+    rank: z
+      .object({
+        lane: z.string(),
+        at: z.string(),
+        readAt: z.string(),
+        /** false once the poll has not confirmed it for 10 minutes: new leads are ordered by lowest weekly use */
+        fresh: z.boolean(),
+        order: z.array(z.object({ account: z.string(), reason: z.string(), weight: z.number().nullable() })),
+      })
+      .nullable(),
     leadsPerAccount: z.number().int(),
     queue: QueueStatesView,
     slots: z.object({
