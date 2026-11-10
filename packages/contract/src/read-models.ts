@@ -13,7 +13,7 @@ const at = z.string().describe('an ISO timestamp')
 
 // -- needs ---------------------------------------------------------------------------------------------------------------
 
-export const NEED_KINDS = ['decision', 'review', 'errand', 'held_signal'] as const
+export const NEED_KINDS = ['decision', 'review', 'errand', 'held_signal', 'long_wait'] as const
 export type NeedKind = (typeof NEED_KINDS)[number]
 
 export const NeedItem = z
@@ -33,7 +33,7 @@ export const NeedItem = z
     defaultAt: at.nullable(),
     /** the Judge's reason for passing a Decision on, plain and cut; null for everything else and for a work-repo item the caller may not read */
     judge: z.string().nullable(),
-    link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal']), id: z.string() }),
+    link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal', 'issue']), id: z.string() }),
     /** the artifact under review a Decision was raised about; null for everything else */
     artifact: z.string().nullable(),
     /** where it came from, in the words of `SIGNAL_ORIGINS`: a held signal's own origin, else the Issue's; null when unknown */
@@ -42,6 +42,8 @@ export const NeedItem = z
     source: z.string().nullable(),
     /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
+    /** a long wait: why the Issue waits, when it ends and how many open Issues wait behind it; null for everything else */
+    wait: z.strictObject({ reason: z.literal('timer'), until: at, held: z.number().int().min(1) }).nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
     redacted: z.boolean(),
   })
@@ -58,6 +60,7 @@ export const NeedsModel = z
       review: z.number().int(),
       errand: z.number().int(),
       held_signal: z.number().int(),
+      long_wait: z.number().int(),
     }),
   })
   .meta({ id: 'NeedsModel' })

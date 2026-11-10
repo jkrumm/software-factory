@@ -72,7 +72,7 @@ check, `docs/architecture.md`).
 | **Revision** | One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each `revise` | |
 | **Annotation** | A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored" | |
 | **Page** | One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled | |
-| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands | Needs you, as a page title only |
+| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits | Needs you, as a page title only |
 
 ## Shipping
 
@@ -97,6 +97,7 @@ check, `docs/architecture.md`).
 | **Queue wait** | The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it | |
 | **Window point** | A point of the five-hour Max window that an Issue's sessions used, per Issue | |
 | **Cost** | Dollars the usage schema priced for an Issue's sessions, joined at read, never copied | |
+| **Long wait** | An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends | |
 | **Stale** | A Needs you item that has waited more than 24 hours | |
 | **Surface** | Console, Herdr, Iris, Argo, ntfy | |
 | **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |

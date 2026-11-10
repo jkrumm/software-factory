@@ -60,7 +60,7 @@ const item = (model: { items: NeedItem[] }, id: string) => {
 
 test('needs: the owner reads everything that waits, the read token gets the work repo’s words replaced', async () => {
   const owner = await needs('owner')
-  expect(owner.counts).toEqual({ decision: 1, review: 0, errand: 1, held_signal: 1 })
+  expect(owner.counts).toEqual({ decision: 1, review: 0, errand: 1, held_signal: 1, long_wait: 0 })
   expect(item(owner, 'decision_scn')).toMatchObject({
     issue: open,
     repo: 'argo',

@@ -63,6 +63,7 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   origin: null,
   source: null,
   sourceLink: null,
+  wait: null,
   work,
 })
 
@@ -87,7 +88,7 @@ test('needsModel under the read token: work-repo words are replaced, ids, kinds 
     since: '2026-11-07T10:00:00.000Z',
   })
   expect(read.items[0]).not.toHaveProperty('work')
-  expect(read.counts).toEqual({ decision: 2, review: 0, errand: 1, held_signal: 0 })
+  expect(read.counts).toEqual({ decision: 2, review: 0, errand: 1, held_signal: 0, long_wait: 0 })
 })
 
 test('redactSignals keeps ids, kinds, times and states and drops every word, the owner’s signals too', () => {

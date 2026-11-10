@@ -23,6 +23,7 @@ const KIND_HINT = {
   decision: 'decision',
   errand: 'errand',
   held_signal: 'held signal',
+  long_wait: 'long wait',
 } as const satisfies Record<NeedItem['kind'], InfoWord>
 
 const SELECT =

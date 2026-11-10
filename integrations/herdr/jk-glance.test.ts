@@ -15,9 +15,9 @@ const needs = (counts: object, items: object[] = []) => JSON.stringify({ at: 1, 
 
 test('parseNeeds: valid, invalid, empty', () => {
   const n = lib.parseNeeds(
-    needs({ decision: 1, review: 2, errand: 0, held_signal: 0 }, [{ id: 'a', title: 'T', ageMs: 5 }]),
+    needs({ decision: 1, review: 2, errand: 0, held_signal: 0, long_wait: 0 }, [{ id: 'a', title: 'T', ageMs: 5 }]),
   )
-  expect(n.counts).toEqual({ decision: 1, review: 2, errand: 0, held_signal: 0 })
+  expect(n.counts).toEqual({ decision: 1, review: 2, errand: 0, held_signal: 0, long_wait: 0 })
   expect(lib.needsTotal(n)).toBe(3)
   expect(lib.parseNeeds('')).toBeNull()
   expect(lib.parseNeeds('not json')).toBeNull()
@@ -125,9 +125,9 @@ test('labels for 0, 1 and many needs; running', () => {
   expect(lib.needsLabel(lib.parseNeeds(needs({})))).toBe('Nothing waits on you')
   expect(lib.needsLabel(null)).toBe('Nothing waits on you')
   expect(lib.needsLabel(lib.parseNeeds(needs({ decision: 1 })))).toBe('Needs you · 1')
-  expect(lib.needsLabel(lib.parseNeeds(needs({ decision: 2, review: 3, errand: 1, held_signal: 1 })))).toBe(
-    'Needs you · 7',
-  )
+  expect(
+    lib.needsLabel(lib.parseNeeds(needs({ decision: 2, review: 3, errand: 1, held_signal: 1, long_wait: 2 }))),
+  ).toBe('Needs you · 9')
   expect(lib.runningLabel({ working: 2, waiting: 0, queued: 4 })).toBe('Running · 2 working · 4 queued')
   expect(lib.runningLabel({ working: 1, waiting: 3, queued: 0 })).toBe('Running · 1 working · 0 queued · 3 waiting')
   expect(lib.runningLabel(null)).toBe('Running · 0 working · 0 queued')

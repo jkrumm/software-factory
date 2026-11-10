@@ -58,7 +58,13 @@ const Problem = ({ words }: { words: string | null }) =>
   ) : null
 
 /** The one line that says what this kind of thing is, with the word's definition beside it. */
-const Lead = ({ hint, children }: { hint: 'decision' | 'errand' | 'held signal'; children: ReactNode }) => (
+const Lead = ({
+  hint,
+  children,
+}: {
+  hint: 'decision' | 'errand' | 'held signal' | 'long wait'
+  children: ReactNode
+}) => (
   <p className="flex items-center gap-0.5 text-sm text-muted-foreground">
     <span>{children}</span>
     <InfoHint word={hint} />
@@ -88,6 +94,13 @@ const projectLink = (item: NeedItem): ReactNode =>
 const When = ({ item }: Pick<BodyProps, 'item'>) => (
   <time className="font-mono tabular-nums" dateTime={item.since} title={new Date(item.since).toLocaleString()}>
     {agoWords(item.ageMs)}
+  </time>
+)
+
+/** The until-time of a long wait, absolute and in the reader's locale. */
+const Until = ({ iso }: { iso: string }) => (
+  <time className="font-mono tabular-nums" dateTime={iso}>
+    {new Date(iso).toLocaleString()}
   </time>
 )
 
@@ -498,6 +511,26 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
   )
 }
 
+function LongWaitBody({ item, issueTitle }: BodyProps) {
+  const { wait } = item
+  return (
+    <div className="grid gap-4">
+      <Lead hint="long wait">Nothing for you to answer: this only shows the stall</Lead>
+      <PropertyList
+        items={[
+          { label: 'Issue', value: issueLink(item, issueTitle) },
+          { label: 'Deferred until', value: wait ? <Until iso={wait.until} /> : null },
+          {
+            label: 'Waiting behind it',
+            value: wait ? `${wait.held} open Issue${wait.held === 1 ? '' : 's'} wait behind it` : null,
+          },
+          { label: 'Held since', value: <When item={item} /> },
+        ]}
+      />
+    </div>
+  )
+}
+
 /** "an uptime check, Infrastructure": the source in a person's word and the origin as Flow words it. */
 function sourceWords(item: NeedItem): string {
   const origin = item.origin ? originWord(item.origin) : null
@@ -516,5 +549,7 @@ export function BodyOf(props: BodyProps) {
       return <ErrandBody {...props} />
     case 'held_signal':
       return <HeldSignalBody {...props} />
+    case 'long_wait':
+      return <LongWaitBody {...props} />
   }
 }

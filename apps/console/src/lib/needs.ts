@@ -42,9 +42,10 @@ export function agoWords(ms: number): string {
 
 /** How long an item has been there, in the verb of its kind: "Waiting 2 hours", "Raised 2 hours ago", "Received just now". */
 export function metaParts(item: Pick<NeedItem, 'kind' | 'ageMs'>): {
-  lead: 'Waiting' | 'Raised' | 'Received'
+  lead: 'Waiting' | 'Raised' | 'Received' | 'Held'
   age: string
 } {
+  if (item.kind === 'long_wait') return { lead: 'Held', age: spanWords(item.ageMs) }
   if (item.kind === 'errand') return { lead: 'Raised', age: agoWords(item.ageMs) }
   if (item.kind === 'held_signal') return { lead: 'Received', age: agoWords(item.ageMs) }
   return { lead: 'Waiting', age: spanWords(item.ageMs) }
@@ -100,6 +101,7 @@ export const KIND_LABEL = {
   review: 'Reviews',
   errand: 'Errands',
   held_signal: 'Held signals',
+  long_wait: 'Long waits',
 } as const satisfies Record<NeedItem['kind'], string>
 
 export const ARTIFACT_KIND_LABEL: Record<string, string> = {
@@ -165,7 +167,7 @@ export function visibleNeeds(items: readonly NeedItem[], filters: NeedFilters, k
 
 /** How many items of each kind, under the project filter alone. */
 export function kindCounts(items: readonly NeedItem[], project?: string): Record<NeedKind, number> {
-  const counts: Record<NeedKind, number> = { decision: 0, review: 0, errand: 0, held_signal: 0 }
+  const counts: Record<NeedKind, number> = { decision: 0, review: 0, errand: 0, held_signal: 0, long_wait: 0 }
   for (const item of items) if (!project || projectOf(item) === project) counts[item.kind] += 1
   return counts
 }
