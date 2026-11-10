@@ -10,7 +10,7 @@ import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
 import { giveSlotBack, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
-import { addAfter, settleIssue, setPrio } from './app/planning-chain.ts'
+import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
 import { planningPass } from './app/planning-pass.ts'
 import { standingPolicies } from './app/planning-policies.ts'
@@ -100,6 +100,7 @@ export function composePlanning(input: { writes: PlanningDeps; settings: Plannin
       pass: (options) => planningPass(sync, options),
       settle: (request) => settleIssue(writes, request),
       after: (request) => addAfter(writes, { ...request, running: true }),
+      unafter: (request) => removeAfter(writes, request),
       prio: (request) =>
         setPrio(writes, {
           issue: request.issue,

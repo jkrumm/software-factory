@@ -143,6 +143,8 @@ export {
   ROW_STATES,
   SettleAnswer,
   SettleBody,
+  UnafterAnswer,
+  UnafterBody,
 } from './planning.ts'
 export {
   FIX_CLASS_KEYS,

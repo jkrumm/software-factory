@@ -60,6 +60,7 @@ import {
   SignalDismissed,
   SignalList,
   SinceModel,
+  UnafterAnswer,
 } from '@software-factory/contract'
 import type { Operation } from '../operation.ts'
 
@@ -503,6 +504,33 @@ export const OPERATIONS: readonly Operation[] = [
     args: [],
     responses: {
       200: SettleAnswer,
+      400: ErrorBody,
+      401: ErrorBody,
+      403: ErrorBody,
+      404: ErrorBody,
+      409: ErrorBody,
+      422: ErrorBody,
+      500: ErrorBody,
+      503: ErrorBody,
+    },
+  },
+  {
+    operationId: 'planning.unafter',
+    command: ['planning', 'unafter'],
+    method: 'POST',
+    path: '/planning/unafter',
+    summary: 'remove stored after edges from an open Issue (refuses an edge it does not have)',
+    pathParams: [],
+    queryParams: [],
+    body: true,
+    queryFlags: [],
+    bodyFields: [
+      { name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: true, untyped: false },
+      { name: 'after', flag: 'after', kind: 'string', repeatable: true, required: true, untyped: false },
+    ],
+    args: [],
+    responses: {
+      200: UnafterAnswer,
       400: ErrorBody,
       401: ErrorBody,
       403: ErrorBody,

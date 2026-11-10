@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { planningPass } from '../../src/app/planning-pass.ts'
-import { addAfter, setPrio, settleIssue } from '../../src/app/planning-chain.ts'
+import { addAfter, removeAfter, setPrio, settleIssue } from '../../src/app/planning-chain.ts'
 import { projectSignals } from '../../src/app/planning-signals.ts'
 import { projectStates } from '../../src/app/planning-views.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
-import { type IssueId, issueId } from '../../src/kernel/ids.ts'
+import { type OpenIssue, orderQueue } from '../../src/domains/planning/queue.ts'
+import { type IssueId, issueId, issueNumber } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
+import { ok } from '../../src/kernel/result.ts'
 import { startWorld, value, type World } from './support.ts'
 
 let world: World
@@ -237,6 +239,48 @@ describe('the chain', () => {
       error: { kind: 'wrong_state' },
     })
     expect(value(await addAfter(world.deps, { issue: a, after: [b], running: true }))).toEqual({ edges: 1 })
+  })
+
+  test('unafter removes a stored edge, lets the Issue run, and notes it on the Issue', async () => {
+    const a = await world.queued({ repo: 'x' })
+    const b = await world.queued({ repo: 'x' })
+    value(await addAfter(world.deps, { issue: b, after: [a] }))
+    const held = await world.db.sql`SELECT issue_id FROM factory.planning_edges WHERE issue_id = ${b}`
+    expect(held).toHaveLength(1)
+    expect(value(await removeAfter(world.deps, { issue: b, after: [a] }))).toEqual({ removed: 1 })
+    expect(await world.db.sql`SELECT issue_id FROM factory.planning_edges WHERE issue_id = ${b}`).toHaveLength(0)
+    const [note] = await world.db.sql`
+      SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${b} AND kind = 'noted'`
+    expect(note?.text).toBe(`owner removed stored after edge(s): Issue ${issueNumber(a)}`)
+    const open = (id: IssueId): OpenIssue => ({
+      id,
+      project: 'x',
+      kind: 'feature',
+      state: 'queued',
+      waitReason: null,
+      finalizing: false,
+    })
+    const edges = value(await world.deps.uow.run(async ({ planning }) => ok(await planning.edges())))
+    const rows = orderQueue({ open: [open(b)], edges, prio: new Map() })
+    expect(rows[0]?.reason).toBeNull()
+  })
+
+  test('unafter refuses an unknown edge naming it, and removes none of a set holding one', async () => {
+    const [a, b, c] = [
+      await world.queued({ repo: 'x' }),
+      await world.queued({ repo: 'x' }),
+      await world.queued({ repo: 'x' }),
+    ]
+    expect(await removeAfter(world.deps, { issue: b, after: [a] })).toMatchObject({
+      ok: false,
+      error: { kind: 'unknown_edge', issue: b, after: a },
+    })
+    value(await addAfter(world.deps, { issue: b, after: [a] }))
+    expect(await removeAfter(world.deps, { issue: b, after: [a, c] })).toMatchObject({
+      ok: false,
+      error: { kind: 'unknown_edge', issue: b, after: c },
+    })
+    expect(await world.db.sql`SELECT issue_id FROM factory.planning_edges WHERE issue_id = ${b}`).toHaveLength(1)
   })
 
   test('a waiting Issue takes no edge', async () => {

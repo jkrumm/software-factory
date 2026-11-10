@@ -79,6 +79,12 @@ row is done when that Issue closes, so other rows can wait for it with `after`. 
 nothing else: `after`, `not_before`, `stable_days`, `repo` and `kind` are refused on it. Put the order on the Issue
 (`--after`), or on the rows that wait for it.
 
+`factory planning unafter --issue <id> --after <id>` (`--after` repeats) removes stored `after` edges (set by `planning after`,
+`issue new --after` or a settle) from an open Issue, the mirror of `planning after`. It refuses an edge the Issue does
+not have (or one already satisfied), naming it, and then removes none of the set. Removing the last edge lets the next
+planning pass start a queued Issue. The removal is recorded as a note on the Issue. A lead's own `deferred --after`
+wait is its event, not an edge: it is not removed here, and a waiting Issue stays waiting until it ends.
+
 ## Splitting a plan into rows
 
 - One row is one change that ships alone: its own lead, review, deploy and verify. If two halves could not be reverted

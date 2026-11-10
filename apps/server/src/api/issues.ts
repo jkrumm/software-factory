@@ -68,6 +68,7 @@ function fileFailure(error: NewIssueError | PortError): Response {
         status: 422,
       })
     case 'cycle':
+    case 'unknown_edge':
     case 'wrong_state':
     case 'unknown_project':
     case 'refused':

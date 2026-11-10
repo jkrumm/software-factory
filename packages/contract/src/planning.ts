@@ -117,6 +117,14 @@ export type AfterBody = z.infer<typeof AfterBody>
 export const AfterAnswer = z.object({ issue: IssueRef, edges: z.number().int() }).meta({ id: 'AfterAnswer' })
 export type AfterAnswer = z.infer<typeof AfterAnswer>
 
+export const UnafterBody = z
+  .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(20) })
+  .meta({ id: 'UnafterBody' })
+export type UnafterBody = z.infer<typeof UnafterBody>
+
+export const UnafterAnswer = z.object({ issue: IssueRef, removed: z.number().int() }).meta({ id: 'UnafterAnswer' })
+export type UnafterAnswer = z.infer<typeof UnafterAnswer>
+
 export const PrioBody = z
   .strictObject({
     value: z.number().int().min(-1000).max(1000),
