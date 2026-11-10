@@ -200,8 +200,6 @@ export interface LoopReads {
   openIssueIds(repo: string): Promise<IssueId[]>
   /** the Issues of the repo that are not closed, other than `excluding` */
   openIssues(repo: string, excluding: IssueId, limit: number): Promise<TriageCandidate[]>
-  /** the chain as stored: every edge, open or satisfied */
-  chainEdges(): Promise<{ issue: IssueId; after: IssueId; satisfied: boolean }[]>
   /** every open Issue that is not settling, with its priority and open blockers, for the queue loop */
   queueIssues(): Promise<QueueIssue[]>
   /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked */

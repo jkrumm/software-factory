@@ -134,4 +134,20 @@ test('stated edges are final: --after and --alone mark the filing, a plain filin
     { after_issue: blocker },
   ])
   expect(await w.world.db.sql`SELECT 1 FROM factory.planning_edges WHERE issue_id = ${alone}`).toEqual([])
+
+  const both = await run(w, [
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'both',
+    '--key',
+    'stated-4',
+    '--alone',
+    '--after',
+    blocker,
+  ])
+  expect(both.code).not.toBe(0)
+  expect(both.err).toContain('contradict')
 })

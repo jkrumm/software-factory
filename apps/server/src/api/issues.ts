@@ -135,6 +135,9 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
     .post(
       '/issues',
       async ({ body, request }) => {
+        if (body.alone && (body.after?.length ?? 0) > 0) {
+          return Response.json(failure('alone and after contradict each other: give one', 'refused'), { status: 422 })
+        }
         const after: IssueId[] = []
         for (const text of body.after ?? []) {
           const id = issueRef(text)

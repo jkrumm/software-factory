@@ -158,16 +158,6 @@ export function loopReads(tx: SQL): LoopReads {
       return rows.map((raw) => Candidate.parse(raw)).map((row) => ({ ...row, id: row.id as IssueId }))
     },
 
-    async chainEdges() {
-      const rows: { issue_id: string; after_issue: string; satisfied: boolean }[] = await tx`
-        SELECT issue_id, after_issue, satisfied_at IS NOT NULL AS satisfied FROM factory.planning_edges`
-      return rows.map((row) => ({
-        issue: row.issue_id as IssueId,
-        after: row.after_issue as IssueId,
-        satisfied: row.satisfied,
-      }))
-    },
-
     async queueIssues() {
       const rows: unknown[] = await tx`
         SELECT i.id, i.repo, i.state, f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.at AS filed_at,

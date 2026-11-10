@@ -11,7 +11,7 @@ import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { WriteDeps } from '../issues.ts'
-import { settleIssue } from '../planning-chain.ts'
+import { readChain, settleIssue } from '../planning-chain.ts'
 import type { PlanningDeps } from '../planning-deps.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { type Claimed, claimRound } from './claim.ts'
@@ -94,21 +94,24 @@ async function settleAfter(
 
 async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): Promise<void> {
   const candidates = await deps.uow.run(async ({ loopReads }) =>
-    ok({
-      shown: await loopReads.openIssues(row.repo, row.issue, MAX_CANDIDATES),
-      chain: await loopReads.chainEdges(),
-    }),
+    ok(await loopReads.openIssues(row.repo, row.issue, MAX_CANDIDATES)),
   )
   if (!candidates.ok) {
     pass.problems.push(`${row.issue}: ${candidates.error.detail}`)
     return
   }
-  const { shown, chain } = candidates.value
-  const waitsForIssue = (blocker: IssueId) => cycleThrough(chain, row.issue, blocker) !== undefined
+  const shown = candidates.value
   if (settleRule(row, shown) === 'now') {
     await settleWithout(deps, row.issue, pass)
     return
   }
+  // The chain as planning checks it, so what is dropped here is what planning would refuse as a cycle.
+  const chained = await readChain(deps.planning)
+  if (!chained.ok) {
+    pass.problems.push(`${row.issue}: ${chained.error.detail}`)
+    return
+  }
+  const waitsForIssue = (blocker: IssueId) => cycleThrough(chained.value, row.issue, blocker) !== undefined
 
   const now = deps.clock.now()
   const policy = policyOf(deps)

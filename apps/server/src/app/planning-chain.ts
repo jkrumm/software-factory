@@ -28,6 +28,11 @@ async function chainOf({ planning, reads }: PlanningStores): Promise<Edge[]> {
   ]
 }
 
+/** The chain as planning checks a new edge against it (stored edges and the leads' dependency waits), for a read outside a write. */
+export async function readChain(deps: PlanningDeps): Promise<Result<Edge[], PortError>> {
+  return deps.uow.run(async (stores) => ok(await chainOf(stores)))
+}
+
 /**
  * Adds the edges `issue -> after`: each blocker must exist and be open, and none may close a cycle through the open
  * edges or the leads' dependency waits. Refuses the whole set otherwise (nothing is stored).

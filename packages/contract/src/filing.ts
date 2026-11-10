@@ -60,12 +60,12 @@ export const FILING = {
     {
       flag: '--after',
       meaning:
-        'an Issue id, repeatable; held until those Issues close (each must exist and be open). Stated edges are final: settling asks the model for none and adds none',
+        'an Issue id, repeatable; held until those Issues close (each must exist and be open). Stated edges are final: settling asks the model for none and adds none (and, with no triage call, does not refine the kind)',
     },
     {
       flag: '--alone',
       meaning:
-        'the Issue waits for nothing, and says so: settling adds no edge. Without --after or --alone the edges are unstated and settling may chain the Issue after open ones; file with --alone when later edges (an Issue after this one) are yours to add',
+        'the Issue waits for nothing, and says so: settling adds no edge (not with --after). Without --after or --alone the edges are unstated and settling may chain the Issue after open ones; file with --alone when later edges (an Issue after this one) are yours to add',
     },
     { flag: '--key', meaning: 'a stable key: a replay returns the stored Issue and ignores --after' },
     { flag: '--source', meaning: 'request (a person asking; the default) or alert (something broke)' },
