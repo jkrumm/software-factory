@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { DependencyWait, IssueReads, OpenIssueRow, TimerWait } from '../domains/planning/ports.ts'
 import { type IssueId, issueId } from '../kernel/ids.ts'
+import { readLongWaits } from './long-waits.ts'
 
 const idOf = (text: string): IssueId => issueId(Number(text.slice('issue_'.length)))
 
@@ -66,6 +67,20 @@ export function readIssues(tx: SQL): IssueReads {
       )
     },
 
+    async repoStatesOf(ids) {
+      if (ids.length === 0) return new Map()
+      const rows: unknown[] = await tx`SELECT id, repo, state FROM factory.issues WHERE id IN ${tx([...ids])}`
+      return new Map(
+        rows.map((raw) => {
+          const row = z.object({ id: z.string(), repo: z.string(), state: z.string() }).parse(raw)
+          return [
+            idOf(row.id),
+            { repo: row.repo, state: row.state === 'closed' ? ('closed' as const) : ('open' as const) },
+          ] as const
+        }),
+      )
+    },
+
     async dependencyWaits() {
       const rows: unknown[] = await tx`
         SELECT i.id, e.wait
@@ -95,5 +110,7 @@ export function readIssues(tx: SQL): IssueReads {
         return { issue: idOf(row.id), since: row.wait.since, until: row.wait.until }
       })
     },
+
+    longWaits: (thresholdMs) => readLongWaits(tx, thresholdMs),
   }
 }

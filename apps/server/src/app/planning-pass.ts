@@ -8,13 +8,14 @@ import {
   rowStatuses,
   type RowStatus,
 } from '../domains/planning/plan.ts'
-import { repoTextOf, type StoredProject } from '../domains/planning/sync.ts'
+import { projectOf, repoTextOf, type StoredProject } from '../domains/planning/sync.ts'
 import type { Kind } from '../domains/work/issue.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, recordIn } from './issues.ts'
 import type { PlanningDeps, PlanningStores } from './planning-deps.ts'
+import { fileReplan } from './planning-replan.ts'
 import { resolveSeat } from './seat.ts'
 import { type SyncDeps, type SyncResult, syncProjects } from './planning-sync.ts'
 
@@ -206,13 +207,44 @@ async function wakeTimers(stores: PlanningStores, deps: PlanningDeps): Promise<R
 }
 
 /**
+ * Files a stalled Replan for every long wait (a timed wait of `longWaitMs` or more with Issues behind it) in a known
+ * project. While one is open for the project this files nothing, and its key makes a replayed pass a no-op. A wait whose
+ * repo is no project is skipped. Returns the errors, one per wait that failed.
+ */
+async function replanStalled(deps: PlanningDeps, longWaitMs: number): Promise<string[]> {
+  const read = await deps.uow.run(async (stores) =>
+    ok({ waits: await stores.reads.longWaits(longWaitMs), projects: await stores.planning.projects() }),
+  )
+  if (!read.ok) return [`replan: ${read.error.detail}`]
+  const errors: string[] = []
+  for (const wait of read.value.waits) {
+    const project = projectOf(read.value.projects, wait.repo)
+    if (!project) continue
+    const filed = await fileReplan(deps, {
+      project: project.name,
+      trigger: 'stalled',
+      stalled: {
+        issue: wait.issue,
+        title: wait.title,
+        since: wait.since.toISOString(),
+        until: wait.until,
+        held: wait.held,
+      },
+      actor: 'owner',
+    })
+    if (!filed.ok) errors.push(`replan ${project.name}: ${JSON.stringify(filed.error)}`)
+  }
+  return errors
+}
+
+/**
  * The planning part of a tick: read the projects, file the plan rows whose `after` rows have closed, mark the chain's
  * satisfied edges and wake the leads that waited on them or on a time. Every step is replay-safe, so a pass run twice does nothing
- * twice. A failing step is an entry in `errors`; the others still go.
+ * twice; a long wait with Issues behind it gets a Replan filed for its project. A failing step is an entry in `errors`; the others still go.
  */
 export async function planningPass(
   deps: SyncDeps,
-  options: { fetch: boolean } = { fetch: false },
+  options: { fetch: boolean; longWaitMs?: number } = { fetch: false },
 ): Promise<Result<PassResult, PortError>> {
   const errors: string[] = []
   const synced = await syncProjects(deps, options)
@@ -239,6 +271,7 @@ export async function planningPass(
     if (!timers.ok) return timers
     return ok({ satisfied, woken: [...dependents.value, ...timers.value] })
   })
+  if (options.longWaitMs !== undefined) errors.push(...(await replanStalled(deps, options.longWaitMs)))
   if (!chain.ok) {
     errors.push(`chain: ${chain.error.detail}`)
     return ok({ sync: synced.ok ? synced.value : null, filed, satisfied: 0, woken: [], errors })

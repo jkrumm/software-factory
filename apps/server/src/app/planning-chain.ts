@@ -148,11 +148,12 @@ const UNAFTER_STATES = ['settling', 'queued', 'working', 'watching', 'waiting']
 
 /**
  * Removes the stored edges `issue -> after` (from `planning after`, `issue new --after` or a settle). Refuses the whole set (nothing is removed) when one is not a stored,
- * unsatisfied edge: a lead's own `deferred` wait is its event, not an edge. The removal is noted on the Issue.
+ * unsatisfied edge: a lead's own `deferred` wait is its event, not an edge. The removal is noted on the Issue, by
+ * `actor` (the owner unless a caller says otherwise).
  */
 export async function removeAfter(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[] },
+  input: { issue: IssueId; after: readonly IssueId[]; actor?: OwnerActor | undefined },
 ): Promise<Result<{ removed: number }, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
     await stores.capacity.lock()
@@ -181,10 +182,11 @@ export async function removeAfter(
     let removed = 0
     for (const after of targets) if (await stores.planning.removeEdge({ issue: input.issue, after })) removed++
     const names = targets.map((after) => `Issue ${issueNumber(after)}`).join(', ')
+    const actor = input.actor ?? 'owner'
     const noted = await recordIn(stores.work, deps, {
       issueId: input.issue,
       key: key('unafter', deps.ids.next('unafter')),
-      event: { kind: 'noted', payload: { text: `owner removed stored after edge(s): ${names}` }, actor: 'owner' },
+      event: { kind: 'noted', payload: { text: `${actor} removed stored after edge(s): ${names}` }, actor },
     })
     if (!noted.ok) return err(lift(noted.error))
     return ok({ removed })

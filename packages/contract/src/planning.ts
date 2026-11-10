@@ -145,3 +145,62 @@ export const PrioAnswer = z
   .object({ issue: IssueRef, value: z.number().int(), recorded: z.boolean() })
   .meta({ id: 'PrioAnswer' })
 export type PrioAnswer = z.infer<typeof PrioAnswer>
+
+export const ReplanBody = z
+  .strictObject({
+    project: z.string().min(1),
+    /** what the owner wants the plan to take account of, in words */
+    ask: z.string().max(2000).optional(),
+  })
+  .meta({ id: 'ReplanBody' })
+export type ReplanBody = z.infer<typeof ReplanBody>
+
+export const ReplanAnswer = z
+  .object({ issue: IssueRef, filed: z.boolean(), existing: z.boolean() })
+  .meta({ id: 'ReplanAnswer' })
+export type ReplanAnswer = z.infer<typeof ReplanAnswer>
+
+const ReplanEdgeOp = z.strictObject({
+  issue: IssueRef,
+  after: z.array(IssueRef).min(1).max(20),
+})
+
+/**
+ * What a Replan's lead applies once the owner approved its Spec: edge changes and cancellations of the project's own
+ * Issues. At least one op; `call` makes a repeated call one change.
+ */
+export const ReplanApplyBody = z
+  .strictObject({
+    attempt: z.number().int().min(1),
+    call: z.string().trim().min(1).max(80).optional(),
+    edges: z
+      .strictObject({
+        add: z.array(ReplanEdgeOp).max(50).default([]),
+        remove: z.array(ReplanEdgeOp).max(50).default([]),
+      })
+      .optional(),
+    cancel: z
+      .array(z.strictObject({ issue: IssueRef, reason: z.string().trim().min(1).max(500) }))
+      .max(50)
+      .optional(),
+  })
+  .refine(
+    (body) => (body.edges?.add.length ?? 0) + (body.edges?.remove.length ?? 0) + (body.cancel?.length ?? 0) > 0,
+    'give at least one of edges.add, edges.remove or cancel',
+  )
+  .meta({ id: 'ReplanApplyBody' })
+export type ReplanApplyBody = z.infer<typeof ReplanApplyBody>
+
+export const ReplanApplyAnswer = z
+  .object({
+    results: z.array(
+      z.object({
+        op: z.enum(['add', 'remove', 'cancel']),
+        issue: IssueRef,
+        ok: z.boolean(),
+        detail: z.string().nullable(),
+      }),
+    ),
+  })
+  .meta({ id: 'ReplanApplyAnswer' })
+export type ReplanApplyAnswer = z.infer<typeof ReplanApplyAnswer>

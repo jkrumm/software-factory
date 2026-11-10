@@ -160,6 +160,19 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   others (unmet `planning_edges` and the `after` of dependency waits), is a Needs item of kind `long_wait`: the Issue, its
   until-time and the count held. A leaf is not listed. It is derived from the stored waits on every read, so it ends with the
   wait (a wake, a close, a new deferral) and no state of its own exists.
+- **A Replan** (`app/planning-replan.ts`, `factory.replans`). An ordinary `chore` Issue, `Replan: <project>`, whose lead reads
+  the plan and the open and recently closed Issues and proposes changes as a Spec with Decisions raised first; its first
+  note is `domains/planning/replan.ts` (facts, then the playbook), no model is called. The owner files it
+  (`POST /planning/replan`, `factory planning replan <project> [--ask ...]`), and the planning pass files one for the
+  project of each long wait (above) whose repo is a known project. One is open per project: a second call files nothing
+  and returns the open one (an owner's ask is added to it as a note), and the stalled key (head Issue and wait start)
+  makes a replayed pass, or the same wait after its Replan closed, a no-op. A failure of the step is an entry in the
+  pass's `errors`. The lead applies an approved proposal with `factory issue replan` (`POST /v1/issues/:id/replan`, a lead
+  verb; `applyReplan`): gated on the Issue being a Replan, the current attempt working it, its latest Spec revision
+  approved (`looks_good`/`with_notes`) and every dependent or cancel target being an Issue of the Replan's project, then
+  edges added and removed and Issues cancelled through `addAfter`, `removeAfter` and `cancelIssue` as the orchestrator
+  (the avoidable-touch counts read the owner alone). `/planning/after|unafter` and `cancel` stay owner only: a lead never
+  edits the chain except through an approved Spec.
 - **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
   then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
@@ -271,7 +284,7 @@ last one is up, at once if it never ran, so a 6-hour loop still passes on a serv
 | Loop | Deterministic | agw workflow |
 |-|-|-|
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
-| `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come | none |
+| `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come, file a Replan for a project whose chain head is in a long wait (one open per project) | none |
 | `watch` | verify and probes | none |
 | `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is one note to each live lead (once per branch state and clean/dirty) and a `main-checkout` health line, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |

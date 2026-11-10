@@ -162,6 +162,7 @@ async function main(): Promise<void> {
     writes,
     roles,
     settings: planningEnv,
+    longWaitMs: loadNeedsSettings(process.env).longWaitMs,
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots)

@@ -124,6 +124,21 @@ and the next read replaces it. `warnings` lists what is read but retired.
 The server reads the default branch: a plan on a feature branch, or not yet pushed, is not seen. `factory project sync
 --fetch true` reads the remote now instead of waiting for the next pass.
 
+## Replan
+
+A Replan is an Issue (`Replan: <project>`) whose lead rereads the plan against the open and recently closed Issues and
+proposes changes as a Spec: new, changed or dropped rows, `after` edges to add or remove, Issues to cancel or re-file.
+Every non-obvious choice is a Decision raised before the Spec is submitted. The owner files it with
+`factory planning replan <project> [--ask "..."]`; the planning pass files one when a timed wait of
+`FACTORY_LONG_WAIT_MS` or more has Issues behind it. One is open per project at a time; asking again while it is open
+adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
+project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
+that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks
+good or With notes verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
+blocker may be any open Issue). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
+a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
+approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone.
+
 ## What the server does not read
 
 A prose plan file (a `PLAN.md` in any directory, in any repo) is not read by the server and files nothing. Only

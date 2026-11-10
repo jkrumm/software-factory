@@ -73,6 +73,9 @@ function fileFailure(error: NewIssueError | PortError): Response {
     case 'unknown_edge':
     case 'wrong_state':
     case 'unknown_project':
+    case 'not_a_replan':
+    case 'not_approved':
+    case 'outside_project':
     case 'refused':
     case 'version_conflict':
     case 'key_taken':

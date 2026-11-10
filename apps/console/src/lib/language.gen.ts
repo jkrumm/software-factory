@@ -84,6 +84,8 @@ export const LANGUAGE = {
   refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
   regressed:
     'A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall',
+  replan:
+    "An Issue whose lead proposes changes to a project's plan as a Spec with Decisions, and applies them on the owner's verdict (factory issue replan, gated on the approved Spec and the project's own Issues). Filed by the owner (factory planning replan <project>) or by the planning pass when a long wait has Issues behind it; one open per project",
   report: 'For information, never waits. A spike is a Report with a verdict',
   review:
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
