@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { deriveSession } from '../../src/domains/leads/session.ts'
+import { issueDetail } from '../../src/read/issues.ts'
 import { startLead } from '../../src/app/leads-start.ts'
 import { startLead as startLeadEffect } from '../../src/domains/work/effects.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
@@ -27,6 +29,9 @@ const events = async (issue: IssueId, kind: string) =>
   w.db
     .sql`SELECT payload, version FROM factory.issue_events WHERE issue_id = ${issue} AND kind = ${kind} AND result = 'applied'`
 
+const detail = async (issue: IssueId) =>
+  issueDetail({ sql: w.db.sql, clock: w.deps.clock, deriveSession }, { id: issue, quota: new Map() })
+
 describe('start_lead', () => {
   test('makes the worktree, starts the terminal under its key with the brief, and records lead_started once', async () => {
     const issue = await w.admitted(['the owner said: be careful with the migration'])
@@ -45,7 +50,9 @@ describe('start_lead', () => {
     expect(started?.prompt).toContain('be careful with the migration')
     expect(started?.prompt).toContain('## Notes from the owner, recorded before you started')
     expect(started?.prompt).not.toContain('## Notes recorded before you started')
-    expect(await events(issue, 'lead_started')).toEqual([{ payload: { attempt: 1, terminal: 't1' }, version: 5 }])
+    expect(await events(issue, 'lead_started')).toEqual([
+      { payload: { attempt: 1, terminal: 't1', seat: { tier: 'sonnet', effort: 'high' } }, version: 5 },
+    ])
   })
 
   test('a replay finds the lead that runs: nothing is made or started twice, the fact is recorded once', async () => {
@@ -119,5 +126,34 @@ describe('start_lead', () => {
     expect(second?.prompt).toContain('The previous attempt')
     expect(second?.prompt).toContain('it has uncommitted changes')
     expect(second?.prompt).toContain('its terminal was lost')
+  })
+})
+
+describe('start_lead seats', () => {
+  test('an Issue filed with a seat starts its lead on it, records it, and reads it back as seat and ranOn', async () => {
+    const issue = await w.admitted([], { tier: 'opus', effort: 'high' })
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(w.terminals.started[0]).toMatchObject({ tier: 'opus', effort: 'high' })
+    expect(await events(issue, 'lead_started')).toEqual([
+      {
+        payload: { attempt: 1, terminal: expect.stringMatching(/^t\d+$/), seat: { tier: 'opus', effort: 'high' } },
+        version: 4,
+      },
+    ])
+    const shown = await detail(issue)
+    expect(shown?.seat).toEqual({ tier: 'opus', effort: 'high', role: null })
+    expect(shown?.ranOn).toEqual({ tier: 'opus', effort: 'high' })
+    expect(shown?.timeline.find((line) => line.kind === 'lead_started')?.text).toBe(
+      'A lead started on opus at high effort.',
+    )
+  })
+
+  test('an Issue without a seat starts on the lead role and reads seat null', async () => {
+    const issue = await w.admitted()
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(w.terminals.started[0]).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    const shown = await detail(issue)
+    expect(shown?.seat).toBeNull()
+    expect(shown?.ranOn).toEqual({ tier: 'sonnet', effort: 'high' })
   })
 })

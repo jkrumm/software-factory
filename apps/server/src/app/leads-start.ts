@@ -1,3 +1,4 @@
+import type { Effort, Tier } from '@software-factory/contract'
 import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
 import type { BriefSignal, LeadAttempt } from '../domains/leads/ports.ts'
@@ -120,7 +121,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       })
       if (!saved.ok) return saved
     }
-    const role = await deps.roles.lead()
+    const role = await seatOf(deps, current)
     if (!role.ok) return fail(role.error)
 
     const notes = notesBefore(history, attempt)
@@ -167,14 +168,23 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       ) {
         await leads.markTyped(brief, at, false)
       }
-      return recordStarted(work, deps, issue, attempt, started.value.address)
+      return recordStarted(work, deps, issue, attempt, started.value.address, role.value)
     })
     return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
   }
 
-  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions.
-  const recorded = await deps.uow.run(({ work }) => recordStarted(work, deps, issue, attempt, row.terminal ?? name))
+  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions. The
+  // role table is not read: a seat the Issue carries is what ran, and for one without, the table may have changed since.
+  const recorded = await deps.uow.run(({ work }) =>
+    recordStarted(work, deps, issue, attempt, row.terminal ?? name, current.seat),
+  )
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
+}
+
+/** The tier and effort the lead starts on: the Issue's seat as filed, else the table's `lead` row. */
+async function seatOf(deps: LeadDeps, issue: Issue): Promise<Result<{ tier: Tier; effort: Effort }, PortError>> {
+  if (!issue.seat) return deps.roles.lead()
+  return ok({ tier: issue.seat.tier, effort: issue.seat.effort })
 }
 
 async function recordStarted(
@@ -183,11 +193,16 @@ async function recordStarted(
   issue: IssueId,
   attempt: number,
   terminal: string,
+  seat: { tier: Tier; effort: Effort } | undefined,
 ) {
   const result = await recordIn(work, deps, {
     issueId: issue,
     key: key('lead_started', issue, attempt),
-    event: { kind: 'lead_started', payload: { attempt, terminal }, actor: 'factory' },
+    event: {
+      kind: 'lead_started',
+      payload: { attempt, terminal, ...(seat ? { seat: { tier: seat.tier, effort: seat.effort } } : {}) },
+      actor: 'factory',
+    },
   })
   return result.ok ? ok(undefined) : result
 }

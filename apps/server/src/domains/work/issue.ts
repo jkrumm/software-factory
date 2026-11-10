@@ -1,3 +1,4 @@
+import type { Effort, Tier } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 
 /** The Issue's states, and no others (`docs/architecture.md` §The Issue state machine). */
@@ -90,6 +91,8 @@ export interface Issue {
   title: string
   kind: Kind
   origin: Origin
+  /** the seat asked for at filing, resolved; absent: the lead row of the role table */
+  seat?: { tier: Tier; effort: Effort; role?: string }
   /** the lead number: 0 until admitted, one more with every admission */
   attempt: number
   /** how many times it shipped; the current watch is this number */

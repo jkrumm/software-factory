@@ -14,6 +14,7 @@ export {
   SessionNoteBody,
 } from './issues.ts'
 export * from './filing.ts'
+export * from './seat.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,

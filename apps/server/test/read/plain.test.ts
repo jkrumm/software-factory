@@ -116,6 +116,7 @@ const card = (visible: boolean): ReadIssueCard => ({
   closedAt: null,
   heldBy: null,
   waitingOnOwner: true,
+  seat: null,
 })
 
 const session = (visible: boolean): ReadSessionCard => ({
@@ -186,6 +187,7 @@ describe('the read token', () => {
   test('a detail loses timeline words, evidence notes and the text of its asks, and its sessions are redacted', () => {
     const detail: ReadIssueDetail = {
       ...card(true),
+      ranOn: null,
       timeline: [{ at: '2026-11-07T10:00:00.000Z', kind: 'asked', text: 'secret words', session: 'lead-12-1' }],
       evidence: [{ kind: 'review', link: 'https://secret', note: 'secret', at: '2026-11-07T10:00:00.000Z' }],
       asks: [

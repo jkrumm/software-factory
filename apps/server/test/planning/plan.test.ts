@@ -72,6 +72,19 @@ describe('docs/plan.yaml', () => {
     })
     expect(bad([{ key: 'a' }])).toMatchObject({ ok: false, message: expect.stringContaining('title is required') })
     expect(bad([{ key: 'a', issue: 5, after: ['b'] }, row('b')])).toMatchObject({ ok: false })
+    expect(bad([row('a', { seat: { tier: 'gpt', effort: 'high' } })])).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('seat.tier'),
+    })
+    expect(bad([row('a', { seat: { role: 'lead', effort: 'high' } })])).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('seat:'),
+    })
+    expect(bad([{ key: 'a', issue: 5, seat: { role: 'lead' } }])).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('no seat'),
+    })
+    expect(parsePlan({ version: 1, rows: [row('a', { seat: { role: 'lead' } })] }).ok).toBe(true)
   })
 
   test('the facts become the first note the lead reads', () => {

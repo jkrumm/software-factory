@@ -1,4 +1,4 @@
-import { PLAN_LIMITS } from '@software-factory/contract'
+import { PLAN_LIMITS, PlanSeat } from '@software-factory/contract'
 import * as z from 'zod'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 import { issuesMessage } from './project.ts'
@@ -46,6 +46,8 @@ export const PlanRow = z
     facts: z.record(z.string(), z.unknown()).optional(),
     /** what the Issue is; default `feature` */
     kind: z.enum(PLAN_KINDS).optional(),
+    /** the tier and effort its lead starts on: `{tier, effort}` or `{role}`; default the table's lead role */
+    seat: PlanSeat.optional(),
     /** a project name; default: the project whose plan this is */
     repo: z.string().regex(PROJECT_NAME, 'a project name').optional(),
     /** rows that must be done first, in this file or in another project's plan */
@@ -58,7 +60,7 @@ export const PlanRow = z
   })
   .superRefine((row, ctx) => {
     if (row.issue !== undefined) {
-      for (const field of ['after', 'not_before', 'stable_days', 'repo', 'kind'] as const) {
+      for (const field of ['after', 'not_before', 'stable_days', 'repo', 'kind', 'seat'] as const) {
         if (row[field] !== undefined)
           ctx.addIssue({ code: 'custom', message: `row ${row.key}: an adopted row (issue) has no ${field}` })
       }

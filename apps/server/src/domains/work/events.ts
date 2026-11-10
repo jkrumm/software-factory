@@ -1,3 +1,4 @@
+import { EFFORTS, TIERS } from '@software-factory/contract'
 import * as z from 'zod'
 import type { Actor } from '../../kernel/events.ts'
 import { idOf, type IssueId } from '../../kernel/ids.ts'
@@ -19,13 +20,25 @@ export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_appli
  */
 export const PAYLOADS = {
   /** triage made it an Issue: it begins `settling` */
-  filed: z.object({ repo: text, title: text, kind: z.enum(KINDS), origin: z.enum(ORIGINS) }),
+  filed: z.object({
+    repo: text,
+    title: text,
+    kind: z.enum(KINDS),
+    origin: z.enum(ORIGINS),
+    /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
+    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
+  }),
   /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind (old events carry none) */
   settled: z.object({ kind: z.enum(KINDS).optional() }),
   /** capacity lets a lead start: the next attempt */
   admitted: z.object({}),
   /** the attempt's lead runs in its terminal */
-  lead_started: z.object({ attempt, terminal: text }),
+  lead_started: z.object({
+    attempt,
+    terminal: text,
+    /** what the lead started on (old events carry none) */
+    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS) }).optional(),
+  }),
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),
   /** an amend or a note reaches the lead */

@@ -44,7 +44,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `deploy-lock`, `follow`, `role` and `issue schema` (the filing contract, offline) are hand-written. `rd --role` depends on `factory role get <role> --format json`
   printing exactly `{"role","tier","effort"}`; unknown is exit 4. A role is a tier (`haiku|sonnet|opus`, never a model id)
   and an effort, in `config/roles.json`, changed only on measured data. The table governs the terminals the factory spawns
-  (the lead, `rd --role`). A lead's in-session subagents take model and effort from the global agent files in dotfiles
+  (the lead, `rd --role`); an Issue's or plan row's `seat` overrides the lead row for that Issue. A lead's in-session subagents take model and effort from the global agent files in dotfiles
   (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`.
 - **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; the repo's `bunfig.toml` (and `~/.bunfig.toml`) sets
   `exact` and a 3-day release-age cooldown, never exclude a package from it). oxlint and oxfmt, no Biome. No Effect (NL11).

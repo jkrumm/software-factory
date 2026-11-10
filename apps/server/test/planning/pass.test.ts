@@ -117,6 +117,33 @@ describe('the plan files its rows', () => {
     ])
   })
 
+  test('a row with a seat files an Issue that carries it: tier and effort as given, a role resolved from the table', async () => {
+    world.source.add('app', {
+      project: PROJECT('app'),
+      plan: plan('p1', [
+        row('direct', { seat: { tier: 'opus', effort: 'high' } }),
+        row('named', { seat: { role: 'deep' } }),
+        row('plain'),
+      ]),
+    })
+    value(await planningPass(world.deps))
+    const filed = await world.db.sql`
+      SELECT payload->'seat' AS seat FROM factory.issue_events WHERE kind = 'filed' ORDER BY issue_id`
+    expect(filed.map((e: { seat: unknown }) => e.seat)).toEqual([
+      { tier: 'opus', effort: 'high' },
+      { tier: 'opus', effort: 'max', role: 'deep' },
+      null,
+    ])
+  })
+
+  test('a row whose role does not resolve files nothing and the pass names the field', async () => {
+    world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('lost', { seat: { role: 'gone' } })]) })
+    const pass = value(await planningPass(world.deps))
+    expect(pass.filed).toEqual([])
+    expect(pass.errors).toEqual([expect.stringContaining('app:lost: seat.role:')])
+    expect(await issues()).toEqual([])
+  })
+
   test('a row may target another repo: its Issue is filed there', async () => {
     world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('far', { repo: 'lib' })]) })
     world.source.add('lib', { project: PROJECT('lib') })

@@ -26,6 +26,11 @@ export function filingGuide(): string {
     'Example facts:',
     JSON.stringify(FILING.facts.example, null, 2),
     '',
+    `seat is ${FILING.seat.shape}.`,
+    `  tier: ${FILING.seat.tiers.join(', ')}; effort: ${FILING.seat.efforts.join(', ')}`,
+    ...FILING.seat.notes.map((line) => `  ${line}`),
+    `  --seat '${JSON.stringify(FILING.seat.example)}'   --seat '${JSON.stringify(FILING.seat.roleExample)}'`,
+    '',
     '--facts @file reads the file, - reads stdin; the file must be JSON, not markdown.',
     '',
     'Flags:',
@@ -40,6 +45,7 @@ export function filingGuide(): string {
 export const filingContract = () => ({ ...FILING, where: WHERE })
 
 const factsHint = `facts is one JSON object: ${factsShape} (markdown is not JSON); print the full contract with: ${POINTER}`
+const seatHint = `seat is one JSON object: {"tier": "opus", "effort": "high"} or {"role": "lead"}; print the full contract with: ${POINTER}`
 const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER}`
 
 const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases (a plan over either is broken; format in docs/plan.md)`
@@ -49,7 +55,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
   'project.show': { help: planLimitsHelp },
   'issue.new': {
     help: filingGuide(),
-    jsonObjectFields: { facts: factsHint },
+    jsonObjectFields: { facts: factsHint, seat: seatHint },
     statusHints: {
       400: pointerHint,
       401: 'a direct factory call needs FACTORY_TOKEN (the owner token; FACTORY_READ_TOKEN reads only). On the mini file with: rd issue <repo> <title> --facts @file — rd carries the token',

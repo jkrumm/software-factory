@@ -1,3 +1,4 @@
+import type { ResolvedSeat } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
@@ -27,7 +28,7 @@ import type { Clock } from '../../src/kernel/clock.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
-import { err, ok, type PortError, type Result } from '../../src/kernel/result.ts'
+import { err, ok, portError, type PortError, type Result } from '../../src/kernel/result.ts'
 
 export const BASE = Date.parse('2026-11-07T10:00:00Z')
 
@@ -163,7 +164,7 @@ export interface World {
   seatError: PortError | null
   windowReset: Date | null
   /** files, settles and admits an Issue in the repo `example`; returns its id */
-  admitted(notes?: string[]): Promise<IssueId>
+  admitted(notes?: string[], seat?: ResolvedSeat): Promise<IssueId>
   event(issue: IssueId, name: string, event: AnyIssueEvent): Promise<unknown>
   /** empties every table and every fake */
   reset(): Promise<void>
@@ -227,7 +228,15 @@ export async function startWorld(): Promise<World> {
   const repos: Repos = {
     locate: async (repo) => (world.repoError ? err(world.repoError) : ok(`/roots/${repo}`)),
   }
-  const roles: Roles = { lead: async () => ok({ tier: 'sonnet' as const, effort: 'high' as const }) }
+  const roles: Roles = {
+    lead: async () => ok({ tier: 'sonnet' as const, effort: 'high' as const }),
+    role: async (name) =>
+      name === 'lead'
+        ? ok({ tier: 'sonnet' as const, effort: 'high' as const })
+        : name === 'deep'
+          ? ok({ tier: 'opus' as const, effort: 'max' as const })
+          : err(portError('refused', `no role "${name}"`)),
+  }
   const seats: Seats = {
     seat: async () => (world.seatError ? err(world.seatError) : ok({ account: 'default' })),
   }
@@ -256,13 +265,13 @@ export async function startWorld(): Promise<World> {
     if (!result.ok) throw new Error(`event ${name}: ${JSON.stringify(result.error)}`)
     return result.value
   }
-  world.admitted = async (notes = []) => {
+  world.admitted = async (notes = [], seat) => {
     const filed = await uow.run(({ work }) =>
       fileIn(work, world.deps, {
         key: key('filed', world.deps.ids.next('signal')),
         event: {
           kind: 'filed',
-          payload: { repo: 'example', title: 'the probe fails', kind: 'bug', origin: 'you' },
+          payload: { repo: 'example', title: 'the probe fails', kind: 'bug', origin: 'you', ...(seat ? { seat } : {}) },
           actor: 'factory',
         },
       }),

@@ -38,7 +38,7 @@ interface IssueRow {
   state: ReadIssueCard['state']
   wait_reason: string | null
   outcome: string | null
-  filed: { title?: unknown; kind?: unknown } | null
+  filed: { title?: unknown; kind?: unknown; seat?: unknown } | null
   created_at: Date
   updated_at: Date
   closed_at: Date | null
@@ -50,6 +50,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
+
+/** The seat a `filed` payload asked for, or null for an Issue that asked for none. */
+function seatOf(value: unknown): ReadIssueCard['seat'] {
+  if (!isRecord(value)) return null
+  const tier = text(value.tier)
+  const effort = text(value.effort)
+  return tier && effort ? { tier, effort, role: text(value.role) } : null
+}
 
 const ISSUE_COLUMNS = (sql: SQL) => sql`
   i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed,
@@ -185,6 +193,7 @@ function cardOf(input: {
     heldBy: extras.heldBy.get(row.id) ?? null,
     waitingOnOwner:
       open && ((row.state === 'waiting' && OWNER_WAITS.has(row.wait_reason ?? '')) || extras.asking.has(row.id)),
+    seat: seatOf(row.filed?.seat),
   }
 }
 
@@ -303,5 +312,18 @@ export async function issueDetail(
     loadArtifacts(sql, row.id),
     loadShipping(sql, row.id),
   ])
-  return { ...card, triage, notes, timeline, evidence, asks, artifacts, shipping, sessions }
+  const started = events.findLast((event) => event.kind === 'lead_started')
+  const ranOn = isRecord(started?.payload) ? seatOf(started.payload.seat) : null
+  return {
+    ...card,
+    ranOn: ranOn && { tier: ranOn.tier, effort: ranOn.effort },
+    triage,
+    notes,
+    timeline,
+    evidence,
+    asks,
+    artifacts,
+    shipping,
+    sessions,
+  }
 }

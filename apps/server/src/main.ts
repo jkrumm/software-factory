@@ -61,6 +61,7 @@ import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
 import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
+import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
 import { composePlanning } from './compose-planning.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
@@ -156,8 +157,10 @@ async function main(): Promise<void> {
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
   })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
+  const roles = fileRoles(leadSettings.rolesFile)
   const planning = composePlanning({
     writes,
+    roles,
     settings: planningEnv,
   })
   const checkout = leadCheckoutOf(uow)
@@ -554,7 +557,7 @@ async function main(): Promise<void> {
     planning: planning.planning,
     issues: composeIssues({
       writes,
-      filing: { ...writes, locate: (repo) => repos.locate(repo) },
+      filing: { ...writes, locate: (repo) => repos.locate(repo), roles },
       checkpoints,
     }),
     capacity: planning.capacity,

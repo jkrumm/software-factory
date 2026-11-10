@@ -11,6 +11,14 @@ const field = (payload: unknown, name: string): string | null => {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+/** `opus at high effort` from a payload's seat, or null when it carries none. */
+function seatWords(payload: unknown): string | null {
+  const seat = isRecord(payload) ? payload.seat : null
+  const tier = field(seat, 'tier')
+  const effort = field(seat, 'effort')
+  return tier && effort ? `${tier} at ${effort} effort` : null
+}
+
 const after = (lead: string, quoted: string | null): string =>
   quoted ? `${lead}: ${cut(plainText(quoted))}` : `${lead}.`
 
@@ -34,7 +42,7 @@ export function describeEvent(kind: string, payload: unknown): string {
     case 'admitted':
       return 'A lead was admitted.'
     case 'lead_started':
-      return 'A lead started.'
+      return seatWords(payload) ? `A lead started on ${seatWords(payload)}.` : 'A lead started.'
     case 'lead_gone':
       return after('The lead ended', field(payload, 'detail'))
     case 'noted':

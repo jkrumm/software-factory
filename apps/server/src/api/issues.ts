@@ -59,6 +59,8 @@ function fileFailure(error: NewIssueError | PortError): Response {
   switch (error.kind) {
     case 'repo_outside_roots':
       return Response.json(failure(error.detail, 'repo_outside_roots'), { status: 422 })
+    case 'seat_refused':
+      return Response.json(failure(`${error.field}: ${error.detail}`, 'seat_refused'), { status: 422 })
     case 'unknown_issue': {
       const named = 'issue' in error ? error.issue : error.issueId
       return Response.json(failure(`after: no Issue ${named}`, 'unknown_after'), { status: 422 })
@@ -143,6 +145,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           repo: body.repo,
           title: body.title,
           facts: body.facts,
+          seat: body.seat,
           text: body.text,
           key: body.key,
           source: body.source ?? 'request',
@@ -163,7 +166,8 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         response: { 200: NewIssueAnswer, ...errorResponses(400, 409, 422, 503) },
         detail: {
           operationId: 'issue.new',
-          summary: 'the owner files an Issue: a repo, a title, optional text, facts and Issues it waits for',
+          summary:
+            'the owner files an Issue: a repo, a title, optional text, facts, a lead seat and Issues it waits for',
         },
       },
     )
