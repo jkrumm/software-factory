@@ -26,6 +26,8 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   never nests in an `<a>`. `href` makes an `<a>`; `as` takes a router link: `as={(p) => <Link to="/flow" {...p} />}`.
 - **InfoHint** reads `src/lib/language.gen.ts`, generated from `docs/language.md` by `scripts/language.ts`.
 - **StatCard** takes `hint` (after its title) and a `hint` on a footer pair.
-- **IssueCard** takes `since: null` for a card with no age (a plan row: the column is left out), `stateLabel` for the
+- **IssueCard** is a StatCard-shaped card: the shell holds the header (`KindIcon`, project chip, the `number` as `#657` in
+  mono, the origin word, which Flow passes only when it is not You, the Lozenge) and the footer (reason, age in mono); the title sits alone in the inset body, 13 px
+  clamped to 3 lines. It takes `compact` (the Chain's node: 2-line title, 1-line reason, for a fixed shorter card), `number` (none for a plan row), `since: null` for a card with no age (a plan row: none shown), `stateLabel` for the
   Lozenge's words, `reasonIcon` and `reasonTitle` where the reason line's icon or hover text is not the state's, and
   `projectAs`, a router link that turns the project chip into a link above the stretched card link.

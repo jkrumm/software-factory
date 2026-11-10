@@ -76,7 +76,7 @@ test('every column is present with a heading and its count equals the API', asyn
   await expect(page.getByText(`${open} open, ${flow.closedRecently.length} closed in the last day`)).toBeVisible()
 })
 
-test('a card shows title, project, origin word, a reason and an age, and no id', async ({ page, apiUrl }) => {
+test('a card shows title, project, origin word, a reason, an age and its number', async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
   await page.goto('/flow')
   const waiting = flow.states.waiting.issues.find((i) => i.waitReason)
@@ -84,19 +84,24 @@ test('a card shows title, project, origin word, a reason and an age, and no id',
   const card = region(page, 'waiting').getByRole('listitem').filter({ hasText: waiting.title })
   await expect(card).toBeVisible()
   await expect(card).toContainText(waiting.repo)
-  await expect(card).toContainText(ORIGIN_WORD[waiting.origin] ?? waiting.origin)
+  // the default origin (You) is noise and is not shown
+  const origin = ORIGIN_WORD[waiting.origin] ?? waiting.origin
+  if (origin !== 'You') await expect(card).toContainText(origin)
   await expect(card).toContainText(waiting.waitReason ?? '')
   await expect(card).toContainText(/just now|\d+ (min|h|d) ago/)
-  expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+  await expect(card).toContainText(`#${waiting.id.replace('issue_', '')}`)
+  expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+/)
 })
 
-test('a card shows a kind badge', async ({ page, apiUrl }) => {
+test('a card shows its kind as an icon', async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
   await page.goto('/flow')
   const working = flow.states.working.issues[0]
   if (!working) throw new Error('the seed has no working Issue')
   const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
-  await expect(card).toContainText(working.kind.charAt(0).toUpperCase() + working.kind.slice(1))
+  await expect(
+    card.getByRole('img', { name: working.kind.charAt(0).toUpperCase() + working.kind.slice(1) }),
+  ).toBeVisible()
   // the column names the state, so a working card has no Lozenge of it
   await expect(card).not.toContainText('Working')
 })
@@ -108,6 +113,8 @@ test('a card opens its Issue page', async ({ page, apiUrl }) => {
   await page.goto('/flow')
   const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
   await expect(card.getByRole('link', { name: working.title })).toHaveAttribute('href', /\/issues\/\d+$/)
+  // the link is the card itself: no ⋯ is needed to open it
+  await expect(card.getByRole('button')).toHaveCount(0)
   await card.click()
   await expect(page).toHaveURL(new RegExp(`/issues/${working.id.replace('issue_', '')}$`))
   await expect(page.getByRole('heading', { level: 1, name: working.title })).toBeVisible()

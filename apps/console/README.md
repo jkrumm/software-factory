@@ -82,7 +82,7 @@ fills the rest of the height and the full width on a canvas step (at least 28 re
 sits under it; the graph fits again whenever the canvas resizes (centred, never above 140 %, so a graph of two cards fills the canvas; on a phone it starts at 90 % at the top left, so the graph is panned, with the zoom controls at the top right). An arrow runs from the blocker into the node that runs after
 it. A blocked edge is solid warn and thick, labelled `blocks`; a satisfied one (the blocker has closed) is dashed and quiet,
 labelled `done`, and the two arrive on separate handles of the node. An edge is one line (`Dependency` in `graph.tsx`): it turns early and carries its label on the final straight run, so the line runs through the label to the arrowhead; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
-plan row. A node is the kit `IssueCard` at a fixed 320 x 128 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
+plan row. A node is the kit `IssueCard` at a fixed 320 x 144 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
 link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
 with "Not filed yet" in the chip row, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
 date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). No id is on the page. Nodes with no edge

@@ -17,6 +17,8 @@ export interface IssueViewProps extends CardLinkProps {
   state: LozengeState
   /** The wait or queue reason, or a closed Issue's outcome; none: no line. */
   reason?: string | null
+  /** The Issue's number, shown as `#657` in mono. Omitted or null (a plan row): none. */
+  number?: number | null
   /** When it entered its state (ISO). */
   since: string
   /** The clock the age is read against (ms), so a screen has one `now`. */
@@ -85,6 +87,24 @@ export function ProjectChip({ project, as }: { project: string; as?: LinkRender 
   })
 }
 
+/** The age as a mono `<time>`; the absolute time is its title. */
+export function Age({ since, now, className }: { since: string; now: number; className?: string }) {
+  return (
+    <time
+      dateTime={since}
+      title={new Date(since).toLocaleString()}
+      className={cn('font-mono text-xs tabular-nums text-muted-foreground', className)}
+    >
+      {ageWords(Math.max(0, now - Date.parse(since)))}
+    </time>
+  )
+}
+
+/** The Issue number in mono. */
+export function IssueNumber({ number, className }: { number: number; className?: string }) {
+  return <span className={cn('font-mono text-xs tabular-nums text-foreground', className)}>#{number}</span>
+}
+
 /** The fixed right column: the age in mono, swapped for the ⋯ button on hover or focus. The absolute time is the title. */
 export function AgeColumn({
   since,
@@ -95,16 +115,11 @@ export function AgeColumn({
 }: Pick<IssueViewProps, 'since' | 'now' | 'onMenu'> & { title: string; className?: string }) {
   return (
     <div className={cn('relative flex h-6 w-24 shrink-0 items-center justify-end', className)}>
-      <time
-        dateTime={since}
-        title={new Date(since).toLocaleString()}
-        className={cn(
-          'font-mono text-xs tabular-nums text-muted-foreground transition-opacity',
-          onMenu && 'group-focus-within:opacity-0 group-hover:opacity-0',
-        )}
-      >
-        {ageWords(Math.max(0, now - Date.parse(since)))}
-      </time>
+      <Age
+        since={since}
+        now={now}
+        className={cn('transition-opacity', onMenu && 'group-focus-within:opacity-0 group-hover:opacity-0')}
+      />
       {onMenu ? (
         <MenuButton
           onClick={onMenu}

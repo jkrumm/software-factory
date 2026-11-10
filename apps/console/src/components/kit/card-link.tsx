@@ -14,8 +14,12 @@ export interface CardLinkProps {
 /** The classes that make a card's own element cover the whole card: a stretched link, so nothing nests inside an <a>. */
 const STRETCHED = 'outline-none after:absolute after:inset-0 after:rounded-[inherit] after:content-[""]'
 
-/** The classes of a card that is a link: pointer, hover, and a focus ring on the stretched link. */
-export const LINKED_CARD = 'cursor-pointer transition-colors hover:bg-accent'
+/**
+ * The classes of a card that is a link: pointer, hover, and a keyboard focus ring on the stretched link. The ring is an
+ * outline, not a `ring-*` utility: a card's own inline `box-shadow` (its depth) would override a ring.
+ */
+export const LINKED_CARD =
+  'cursor-pointer transition-colors hover:bg-accent has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-ring/60'
 
 /** Whether the pair makes a link at all. */
 export const isLinked = ({ href, as }: CardLinkProps): boolean => href !== undefined || as !== undefined
