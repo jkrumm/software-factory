@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { FACTS_EXAMPLE, FACTS_KEYS } from '@software-factory/contract'
+import { FACTS_EXAMPLE, FACTS_KEYS, MAX_AFTER_IDS, PLAN_LIMITS } from '@software-factory/contract'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
 import { factsNote, filable, parsePlan, type PlanFile, rowStatuses } from '../../src/domains/planning/plan.ts'
 import { issueId } from '../../src/kernel/ids.ts'
@@ -69,6 +69,18 @@ describe('docs/plan.yaml', () => {
       ok: false,
       message: expect.stringContaining('no lane'),
     })
+  })
+
+  test('a row with more after keys than issue new accepts is refused, naming the row and its count', () => {
+    const keys = (n: number) => Array.from({ length: n }, (_, i) => `d${i}`)
+    const rows = (n: number) => [...keys(n).map((k) => row(k)), row('top', { after: keys(n) })]
+    expect(parsePlan({ version: 1, rows: rows(MAX_AFTER_IDS) }).ok).toBe(true)
+    const result = parsePlan({ version: 1, rows: rows(MAX_AFTER_IDS + 1) })
+    expect(result.ok).toBe(false)
+    const message = result.ok ? '' : result.message
+    expect(message).toContain(`row top: ${MAX_AFTER_IDS + 1} after keys`)
+    expect(message).toContain('transitive reduction')
+    expect(PLAN_LIMITS.maxAfter).toBe(MAX_AFTER_IDS)
   })
 
   test('a duplicate key, an unknown after, a self wait, a cycle and a row without a title are refused', () => {

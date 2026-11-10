@@ -72,6 +72,12 @@ export const PlanRow = z
       ctx.addIssue({ code: 'custom', message: `row ${row.key}: title is required unless issue is set` })
     if (row.facts === undefined)
       ctx.addIssue({ code: 'custom', message: `row ${row.key}: facts is required unless issue is set` })
+    const afterCount = row.after?.length ?? 0
+    if (afterCount > PLAN_LIMITS.maxAfter)
+      ctx.addIssue({
+        code: 'custom',
+        message: `row ${row.key}: ${afterCount} after keys, at most ${PLAN_LIMITS.maxAfter} (issue new refuses more); remove edges already implied through other rows (a transitive reduction)`,
+      })
   })
 export type PlanRow = z.output<typeof PlanRow>
 

@@ -52,7 +52,7 @@ const factsHint = `facts is one JSON object: ${factsShape} (markdown is not JSON
 const seatHint = `seat is one JSON object: {"tier": "opus", "effort": "high"} or {"role": "lead"}; print the full contract with: ${POINTER}`
 const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER}`
 
-const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases (a plan over either is broken; format in docs/plan.md)`
+const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases, at most ${PLAN_LIMITS.maxAfter} "after" keys per row (a plan over any is broken; format in docs/plan.md)`
 
 /** What a command says beyond its generated contract: help text, hints for a rejected field, hints per status. */
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {

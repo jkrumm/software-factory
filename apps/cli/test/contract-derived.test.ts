@@ -104,6 +104,8 @@ describe('help and validation derived from the contract', () => {
 
   test('project show --help states the plan limits', async () => {
     const { out } = await cli(['project', 'show', '--help'])
-    expect(out).toContain(`at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases`)
+    expect(out).toContain(
+      `at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases, at most ${PLAN_LIMITS.maxAfter} "after" keys per row`,
+    )
   })
 })

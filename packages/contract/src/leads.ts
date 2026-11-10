@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { IssueRefInput } from './issues.ts'
+import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 import { EVENT_KINDS } from './spool.ts'
 
 /** Whether every string in a value, keys included, is one jsonb can store: no NUL, no lone surrogate. */
@@ -52,7 +52,7 @@ export const DeferBody = z
   .object({
     attempt: z.number().int().min(1),
     until: z.iso.datetime({ offset: true }).optional(),
-    after: z.array(IssueRefInput).min(1).max(20).optional(),
+    after: z.array(IssueRefInput).min(1).max(MAX_AFTER_IDS).optional(),
     call: Call,
   })
   .refine((body) => (body.until === undefined) !== (body.after === undefined), 'give either until or after')

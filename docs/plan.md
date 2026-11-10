@@ -55,7 +55,7 @@ a broken plan.
 | `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the role table's `lead` row. See Choosing the seat |
 | `lane` | A resource class inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See Lanes |
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
-| `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`) |
+| `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`). At most 20 per row (the most `issue new --after` accepts); a plan with more is broken. Drop edges already implied through other rows (a transitive reduction): if `c` waits for `b` and `b` for `a`, `c` needs no `after: [a]` |
 | `not_before` | A date (`2026-12-01`, midnight UTC) or a datetime (`2026-12-01T09:00:00Z`; with no offset it is UTC). The row is not filed before then |
 | `issue` | Adopts an Issue you filed by hand: its number (`149`). See below |
 | `stable_days` | Retired. Read so an old file parses, flagged as a warning, never evaluated. Do not write it |

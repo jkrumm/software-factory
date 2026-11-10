@@ -6,6 +6,7 @@ export {
   IssueAnswerBody,
   ISSUE_ID_META,
   IssueRefInput,
+  MAX_AFTER_IDS,
   NEW_ISSUE_TEXT_MAX,
   NewIssueAnswer,
   NewIssueBody,

@@ -4,6 +4,9 @@ import { QualityIssue } from './quality.ts'
 import { SeatInput } from './seat.ts'
 
 /** Marks a string as an Issue id for the CLI (help, and `12` written as `issue_12` before it is sent); no validation. */
+/** The most Issues one request (issue new, settle, after, defer) or one plan row may wait for; the plan check and the API share it. */
+export const MAX_AFTER_IDS = 20
+
 export const ISSUE_ID_META = { description: 'an Issue id', 'x-id': 'issue' } as const
 
 /** `issue_12` or the bare `12`: every Issue a client names in a body takes both. */
@@ -35,7 +38,7 @@ export const NewIssueBody = z
     key: z.string().trim().min(1).max(200).optional(),
     /** `request` is a person's ask; `alert` is something that broke */
     source: z.enum(['request', 'alert']).optional(),
-    after: z.array(IssueRefInput).max(20).optional(),
+    after: z.array(IssueRefInput).max(MAX_AFTER_IDS).optional(),
     /** the Issue waits for nothing; like `after`, this states its edges and settling adds none */
     alone: z.boolean().optional(),
   })

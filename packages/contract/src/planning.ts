@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { ISSUE_ID_META } from './issues.ts'
+import { ISSUE_ID_META, MAX_AFTER_IDS } from './issues.ts'
 
 /** An Issue as the API names it: `issue_<n>`, the number being "Issue 286". */
 export const IssueRef = z
@@ -8,7 +8,7 @@ export const IssueRef = z
   .meta(ISSUE_ID_META)
 
 /** The limits of a project's `docs/plan.yaml`: a plan over either is broken. The server enforces them, the CLI states them. */
-export const PLAN_LIMITS = { maxBytes: 64 * 1024, maxAliases: 100 } as const
+export const PLAN_LIMITS = { maxBytes: 64 * 1024, maxAliases: 100, maxAfter: MAX_AFTER_IDS } as const
 
 export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
 
@@ -104,7 +104,7 @@ export const SettleBody = z
   .object({
     issue: IssueRef,
     /** the Issues it must wait for; none is a known answer too */
-    after: z.array(IssueRef).max(20).default([]),
+    after: z.array(IssueRef).max(MAX_AFTER_IDS).default([]),
   })
   .meta({ id: 'SettleBody' })
 export type SettleBody = z.infer<typeof SettleBody>
@@ -121,7 +121,7 @@ export const SettleAnswer = z
 export type SettleAnswer = z.infer<typeof SettleAnswer>
 
 export const AfterBody = z
-  .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(20) })
+  .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(MAX_AFTER_IDS) })
   .meta({ id: 'AfterBody' })
 export type AfterBody = z.infer<typeof AfterBody>
 
@@ -129,7 +129,7 @@ export const AfterAnswer = z.object({ issue: IssueRef, edges: z.number().int() }
 export type AfterAnswer = z.infer<typeof AfterAnswer>
 
 export const UnafterBody = z
-  .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(20) })
+  .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(MAX_AFTER_IDS) })
   .meta({ id: 'UnafterBody' })
 export type UnafterBody = z.infer<typeof UnafterBody>
 
