@@ -39,3 +39,18 @@ and its tone, the sub line and both footer values are what `src/lib/improve.ts` 
 the hidden table behind each chart holds the six windows, that a Not-measured KPI has no chart and says why, that the
 tooltip of a chart names the window and its count, and that the fix card's total, change, legend, busiest class and table
 of weeks by class are the API's. The page computes only differences; every number comes from the API's figures.
+
+## Rebalanced (Issue 665)
+
+The shots above are v1. `rebalanced-<viewport>-<theme>-improve.png` are the same screen after the rebalance: full-page
+shots at 1800×1200, 1280×800 and 390×844, dark and light, taken from the built Console against the e2e server (the 7-day
+window); the 1280 shots are cut at 3000 px and the phone shots at 5200, which is inside Friction. The concept, the five
+rounds and what was left on purpose are in `docs/design/improve.md`.
+
+Compared each round: v1 beside the round's shot, the owner's references 01 to 03 (a row of equal cards, aligned figure
+and footer lines), the previous round, and `basalt-ui shot` with `shot detect` on the built Console, the shots read by an
+isolated reviewer subagent each round (briefed with basalt's `basalt-design-reviewer`). The reviewer's last pass found no
+ragged row, no orphan card and no unequal height at 1800 or 1280; it left a P2 on Friction's column tails (a group cannot
+split across columns without losing its heading), and the detector's known findings: the delta pill's light-scheme
+contrast (4.15 to 4.22 against 4.5), the StatCard's five font sizes and the legend swatch's 3 px radius, which belong to the
+kit and the tone tokens, not to this route.
