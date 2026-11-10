@@ -249,7 +249,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       issue: wait.issue,
       repo: wait.repo,
       title: plain(wait.title, 120),
-      summary: `Deferred until ${wait.until}; ${wait.held === 1 ? '1 open Issue waits' : `${wait.held} open Issues wait`} behind it.`,
+      summary: `Deferred to a later time; ${wait.held === 1 ? '1 open Issue waits' : `${wait.held} open Issues wait`} behind it.`,
       defaultAt: null,
       judge: null,
       link: { type: 'issue', id: wait.issue },

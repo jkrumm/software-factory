@@ -98,7 +98,7 @@ describe('a timed wait with Issues behind it', () => {
         redacted: false,
       }),
     ])
-    expect(model.items[0]?.summary).toContain(at(1.5 * HOUR).toISOString())
+    expect(model.items[0]?.summary).not.toContain('T01:00')
     expect(model.items[0]?.summary).toContain('3 open Issues')
   })
 
