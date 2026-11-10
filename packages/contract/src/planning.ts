@@ -76,6 +76,8 @@ export const ProjectSyncAnswer = z
   .object({
     synced: z.number().int(),
     broken: z.array(BrokenFile),
+    /** stored projects whose repo is gone from disk (or is a linked worktree); their rows are removed */
+    retired: z.array(z.string()),
     /** repos that could not be read this time; their rows are left as they were */
     errors: z.array(z.string()),
   })

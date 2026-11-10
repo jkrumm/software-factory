@@ -109,3 +109,29 @@ describe('the git source', () => {
     expect(value(await source().resolve('/etc'))).toBeNull()
   })
 })
+
+describe('a linked worktree', () => {
+  test('beside its repo is not a project: discover lists the repo once, resolve and present refuse the worktree', async () => {
+    const own = await realpath(await mkdtemp('/tmp/factory-worktree-'))
+    try {
+      const path = join(own, 'app')
+      await mkdir(path, { recursive: true })
+      await git(path, 'init', '-q', '-b', 'main')
+      await writeFile(join(path, 'project.yaml'), 'apiVersion: factory/v2\nname: app\n')
+      await git(path, 'add', '-A')
+      await git(path, 'commit', '-q', '-m', 'init')
+      const worktree = join(own, 'app-plan-tune')
+      await git(path, 'worktree', 'add', '-q', '-b', 'tune', worktree)
+      const beside = gitProjectSource({ roots: [own], timeoutMs: 20_000 })
+      expect(value(await beside.discover()).map((r) => r.directory)).toEqual(['app'])
+      expect(value(await beside.resolve('app-plan-tune'))).toBeNull()
+      expect(value(await beside.resolve(worktree))).toBeNull()
+      expect(value(await beside.resolve('app'))).toEqual({ directory: 'app', path })
+      expect(await beside.present(path)).toBe(true)
+      expect(await beside.present(worktree)).toBe(false)
+      expect(await beside.present(join(own, 'gone'))).toBe(false)
+    } finally {
+      await rm(own, { recursive: true, force: true })
+    }
+  })
+})

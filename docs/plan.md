@@ -121,6 +121,10 @@ prints the project's `project.yaml` in force and every plan row with its state, 
 plan that does not parse shows `planError` with the file's message and keeps the last valid plan in force; fix the file
 and the next read replaces it. `warnings` lists what is read but retired.
 
+A project is a repo with its own `.git` directory directly under a repo root. A linked worktree (`.git` is a file) is
+never one, and a stored project whose directory is gone, or is a worktree, is retired on the next sync (`retired` in the
+answer): its row is removed and nothing is filed for it; the rows it filed stay recorded.
+
 The server reads the default branch: a plan on a feature branch, or not yet pushed, is not seen. `factory project sync
 --fetch true` reads the remote now instead of waiting for the next pass.
 

@@ -64,6 +64,11 @@ export class FakeSource implements ProjectSource {
     return ok(hit?.ref ?? null)
   }
 
+  /** a repo the test removed (`repos.delete`) is gone from disk; one that merely fails to read is still there */
+  async present(path: string) {
+    return this.repos.has(path)
+  }
+
   async read(repo: RepoRef) {
     this.reads.push(repo.path)
     const entry = this.repos.get(repo.path)

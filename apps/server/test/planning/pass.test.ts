@@ -71,6 +71,24 @@ describe('syncing the projects', () => {
     expect((await states())[0]?.project.source).toBe('file')
   })
 
+  test('a stored project whose repo is gone is retired and never planned; the rows it filed stay recorded', async () => {
+    world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('a')]) })
+    world.source.add('app-tune', { project: PROJECT('app-tune'), plan: plan('p1', [row('a'), row('b')]) })
+    value(await planningPass(world.deps))
+    expect((await states()).map((s) => s.project.name)).toEqual(['app', 'app-tune'])
+    expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued', 'issue_3:queued'])
+
+    world.source.repos.delete('/src/app-tune')
+    await world.send(issueId(3), 'cancelled', 'cancelled', { reason: 'phantom' }, 'owner')
+    const pass = value(await planningPass(world.deps))
+    expect(pass.sync).toMatchObject({ synced: 1, retired: ['app-tune'], errors: [] })
+    expect(pass.filed).toEqual([])
+    expect((await states()).map((s) => s.project.name)).toEqual(['app'])
+    const filedRows = await world.db.sql`SELECT project FROM factory.planning_filed_rows WHERE project = 'app-tune'`
+    expect(filedRows.length).toBe(2)
+    expect(value(await syncProjects(world.deps, { fetch: false })).retired).toEqual([])
+  })
+
   test('a broken project.yaml keeps the last valid content and files one Issue per content, settled', async () => {
     world.source.add('app', { project: PROJECT('app', '{"leads":3}') })
     value(await syncProjects(world.deps, { fetch: false }))
