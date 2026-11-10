@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   CheckCircleIcon,
   HourglassIcon,
+  ProhibitIcon,
   QueueIcon,
   RocketLaunchIcon,
   TrayIcon,
@@ -23,6 +24,7 @@ import {
   Meter,
   PropertyList,
   Section,
+  SinceRow,
   Skeleton,
   Sparkline,
   StackedBars,
@@ -207,6 +209,42 @@ function Kit() {
             <Skeleton height={14} width="10%" className="ml-auto" />
             <Skeleton height={14} width={64} className="shrink-0" />
           </div>
+        </div>
+      </Section>
+
+      <Section title="SinceRow">
+        <Note>
+          One thing that happened, as a compact line with no box: an icon for what happened, the number, the title
+          clamped to one line, the project and the age. Hover it or reach it with the keyboard and a popover opens to
+          its side with the full title, what happened, the outcome and the links; a tap opens it on a touch screen.
+        </Note>
+        <div className="grid max-w-md">
+          <SinceRow
+            icon={RocketLaunchIcon}
+            tone="good"
+            outcome="Shipped and verified"
+            happened="It was deployed and the watch after the deploy passed."
+            title="Show the retention banner on the dashboard for accounts that cancelled in the last thirty days"
+            number="24"
+            project="orion"
+            at={new Date(KIT_NOW - 125 * 60_000).toISOString()}
+            now={KIT_NOW}
+          >
+            <a href="#since" className="text-[length:var(--vx-text-sm)] underline underline-offset-4">
+              Open the Issue
+            </a>
+          </SinceRow>
+          <SinceRow
+            icon={ProhibitIcon}
+            tone="neutral"
+            outcome="Dropped"
+            happened="Its lead gave it up, with a reason; nothing shipped."
+            title="Drop the legacy importer"
+            number="27"
+            project="orion"
+            at={new Date(KIT_NOW - 40 * 60_000).toISOString()}
+            now={KIT_NOW}
+          />
         </div>
       </Section>
 

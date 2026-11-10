@@ -4,6 +4,7 @@ import { readState, statePathOf } from '../scenarios/fakes/hc-state.ts'
 import { sessionOf } from '../scenarios/flow.ts'
 import { expect, test } from './fixtures.ts'
 import { expectHint } from './hints.ts'
+import { textWithoutBand } from './screen-text.ts'
 import { api, holdSignal } from './seed.ts'
 
 /**
@@ -64,7 +65,7 @@ test('the list groups what waits and the open cards show everything the owner de
   }
   await expect(card(page, 'Which logging library').getByText('Waiting 2 hours')).toBeVisible()
   const everything = async () => {
-    const text = await page.locator('body').innerText()
+    const text = await textWithoutBand(page)
     expect(text).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
     expect(text).not.toMatch(/\b(decision|errand|artifact|signal|issue)_[a-z0-9]+/)
     for (const need of all) expect(text).not.toContain(need.id)

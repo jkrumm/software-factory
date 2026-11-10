@@ -33,6 +33,17 @@ export const SINCE_TONE: Record<SinceKey, Tone> = {
   incidents: 'warn',
 }
 
+/** What happened to an item of a category, as one sentence for its popover; the category's label is the outcome. */
+export const SINCE_HAPPENED: Record<SinceKey, string> = {
+  shipped: 'It was deployed and the watch after the deploy passed.',
+  failed: 'Production regressed while it was watched after the deploy.',
+  dropped: 'Its lead gave it up, with a reason; nothing shipped.',
+  judge: 'The Judge settled a Decision on it before it reached you.',
+  screen: 'The screen turned it away before it reached you.',
+  filed: 'It was filed as a new Issue.',
+  incidents: 'An incident was opened for it.',
+}
+
 /** The domain words a category carries an InfoHint for. */
 export const SINCE_HINT = {
   failed: 'regressed',

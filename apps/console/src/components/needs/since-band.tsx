@@ -1,37 +1,79 @@
 import type { SinceItem } from '@software-factory/contract'
+import {
+  ArrowCounterClockwiseIcon,
+  FunnelIcon,
+  type Icon,
+  PlusCircleIcon,
+  ProhibitIcon,
+  RocketLaunchIcon,
+  ScalesIcon,
+  SirenIcon,
+} from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
-import { Fold, InfoHint, Section, Skeleton } from '@/components/kit'
+import { Fold, InfoHint, Section, SinceRow as SinceRowView, Skeleton } from '@/components/kit'
 import { TONE_TEXT, TONE_TINT } from '@/components/kit/tone'
 import { useMediaQuery } from '@/lib/media'
 import { issueNumber } from '@/lib/needs'
 import { useSince } from '@/lib/queries'
-import { agoWords, isQuiet, type SinceRow, sinceRows, visitWords } from '@/lib/since'
+import { isQuiet, SINCE_HAPPENED, type SinceKey, type SinceRow, sinceRows, visitWords } from '@/lib/since'
 import { cn } from '@/lib/utils'
 
 const absolute = (iso: string): string => new Date(iso).toLocaleString()
 
-function Items({ items, now }: { items: SinceItem[]; now: number }) {
+/** What happened, as an icon, per category. */
+const SINCE_ICON: Record<SinceKey, Icon> = {
+  shipped: RocketLaunchIcon,
+  failed: ArrowCounterClockwiseIcon,
+  dropped: ProhibitIcon,
+  judge: ScalesIcon,
+  screen: FunnelIcon,
+  filed: PlusCircleIcon,
+  incidents: SirenIcon,
+}
+
+/** The categories whose Issue has verification evidence worth a link of its own. */
+const HAS_EVIDENCE: ReadonlySet<SinceKey> = new Set(['shipped', 'failed'])
+
+const POPOVER_LINK =
+  'inline-flex items-center gap-1 rounded-sm text-[length:var(--vx-text-sm)] underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
+
+/** One compact row per item; the popover beside it holds the full title, the facts and the links. */
+function Items({ row, items, now }: { row: SinceRow; items: SinceItem[]; now: number }) {
+  const wide = useMediaQuery('(min-width: 768px)')
   return (
-    <ul className="grid gap-2">
+    <ul className="grid">
       {items.map((item) => (
-        <li key={`${item.issue ?? 'none'}-${item.at}-${item.title}`} className="grid min-w-0 gap-0.5">
-          {item.issue ? (
-            <Link
-              to="/issues/$id"
-              params={{ id: issueNumber(item.issue) }}
-              className="line-clamp-2 rounded-sm text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              {item.title}
-            </Link>
-          ) : (
-            <span className="line-clamp-2 text-sm">{item.title}</span>
-          )}
-          <span className="flex min-w-0 gap-1 text-xs text-muted-foreground">
-            {item.repo ? <span className="truncate">{item.repo} &middot;</span> : null}
-            <time dateTime={item.at} title={absolute(item.at)} className="shrink-0 font-mono tabular-nums">
-              {agoWords(now - Date.parse(item.at))}
-            </time>
-          </span>
+        <li key={`${item.issue ?? 'none'}-${item.at}-${item.title}`} className="min-w-0">
+          <SinceRowView
+            icon={SINCE_ICON[row.key]}
+            tone={row.tone}
+            outcome={row.label}
+            happened={SINCE_HAPPENED[row.key]}
+            title={item.title}
+            number={item.issue ? issueNumber(item.issue) : null}
+            project={item.repo}
+            at={item.at}
+            now={now}
+            side={wide ? 'right' : 'bottom'}
+          >
+            {item.issue ? (
+              <>
+                <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={POPOVER_LINK}>
+                  Open the Issue
+                </Link>
+                {HAS_EVIDENCE.has(row.key) ? (
+                  <Link
+                    to="/issues/$id"
+                    params={{ id: issueNumber(item.issue) }}
+                    search={{ tab: 'evidence' }}
+                    className={POPOVER_LINK}
+                  >
+                    Verification evidence
+                  </Link>
+                ) : null}
+              </>
+            ) : null}
+          </SinceRowView>
         </li>
       ))}
     </ul>
@@ -67,10 +109,10 @@ function Category({ row, now }: { row: SinceRow; now: number }) {
       <div className="grid gap-0.5">
         <Figure row={row} />
       </div>
-      {row.shown.length > 0 ? <Items items={row.shown} now={now} /> : null}
+      {row.shown.length > 0 ? <Items row={row} items={row.shown} now={now} /> : null}
       {row.folded.length > 0 ? (
         <Fold title={`${row.folded.length} more`}>
-          <Items items={row.folded} now={now} />
+          <Items row={row} items={row.folded} now={now} />
         </Fold>
       ) : null}
       {row.more > 0 ? <p className="text-xs text-muted-foreground">and {row.more} more</p> : null}
@@ -96,7 +138,7 @@ function CompactBand({ rows, now }: { rows: SinceRow[]; now: number }) {
             {listed.map((row) => (
               <div key={row.key} className="grid gap-2">
                 <h3 className="text-xs font-medium text-muted-foreground">{row.label}</h3>
-                <Items items={[...row.shown, ...row.folded]} now={now} />
+                <Items row={row} items={[...row.shown, ...row.folded]} now={now} />
                 {row.more > 0 ? <p className="text-xs text-muted-foreground">and {row.more} more</p> : null}
               </div>
             ))}
@@ -138,7 +180,7 @@ export function SinceBand({ now }: { now: number }) {
   return (
     <Section title="Since you were here" aside={visit} className="mb-8">
       {wide ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-6 gap-y-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-6 gap-y-6">
           {rows.map((row) => (
             <Category key={row.key} row={row} now={now} />
           ))}
