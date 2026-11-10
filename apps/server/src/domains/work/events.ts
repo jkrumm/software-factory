@@ -1,4 +1,4 @@
-import { EFFORTS, LaneName, TIERS } from '@software-factory/contract'
+import { EFFORTS, LaneName, MAX_AFTER_IDS, TIERS } from '@software-factory/contract'
 import * as z from 'zod'
 import type { Actor } from '../../kernel/events.ts'
 import { idOf, type IssueId } from '../../kernel/ids.ts'
@@ -63,7 +63,7 @@ export const PAYLOADS = {
   deferred: z.union([
     z.object({ attempt, until: z.iso.datetime({ offset: true }) }),
     // `why` is the steward's: it defers a holder behind the Issue that waits for the claim the holder keeps
-    z.object({ attempt, after: z.array(issueRef).min(1).max(20), why: text.optional() }),
+    z.object({ attempt, after: z.array(issueRef).min(1).max(MAX_AFTER_IDS), why: text.optional() }),
   ]),
   /** a machine cause stopped the work: the steward's to end */
   stalled: z.object({ attempt, cause: z.enum(['wall', 'unreported', 'blocked']), detail: text }),

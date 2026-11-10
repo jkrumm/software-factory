@@ -3,10 +3,10 @@ import { LaneName } from './lane.ts'
 import { QualityIssue } from './quality.ts'
 import { SeatInput } from './seat.ts'
 
-/** Marks a string as an Issue id for the CLI (help, and `12` written as `issue_12` before it is sent); no validation. */
 /** The most Issues one request (issue new, settle, after, defer) or one plan row may wait for; the plan check and the API share it. */
 export const MAX_AFTER_IDS = 20
 
+/** Marks a string as an Issue id for the CLI (help, and `12` written as `issue_12` before it is sent); no validation. */
 export const ISSUE_ID_META = { description: 'an Issue id', 'x-id': 'issue' } as const
 
 /** `issue_12` or the bare `12`: every Issue a client names in a body takes both. */
