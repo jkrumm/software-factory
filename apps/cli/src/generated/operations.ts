@@ -519,7 +519,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['planning', 'unafter'],
     method: 'POST',
     path: '/planning/unafter',
-    summary: 'remove after edges from a queued, working or watching Issue (refuses an edge it does not have)',
+    summary: 'remove stored after edges from an open Issue (refuses an edge it does not have)',
     pathParams: [],
     queryParams: [],
     body: true,

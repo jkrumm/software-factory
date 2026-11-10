@@ -251,7 +251,7 @@ describe('the chain', () => {
     expect(await world.db.sql`SELECT issue_id FROM factory.planning_edges WHERE issue_id = ${b}`).toHaveLength(0)
     const [note] = await world.db.sql`
       SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${b} AND kind = 'noted'`
-    expect(note?.text).toBe(`owner removed after edge(s): Issue ${issueNumber(a)}`)
+    expect(note?.text).toBe(`owner removed stored after edge(s): Issue ${issueNumber(a)}`)
     const open = (id: IssueId): OpenIssue => ({
       id,
       project: 'x',

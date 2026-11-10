@@ -67,9 +67,8 @@ function fileFailure(error: NewIssueError | PortError): Response {
       return Response.json(failure(`after: ${error.issue} is closed: nothing can wait for it`, 'after_closed'), {
         status: 422,
       })
-    case 'unknown_edge':
-      return Response.json(failure(`${error.issue} does not wait for ${error.after}`, 'not_found'), { status: 404 })
     case 'cycle':
+    case 'unknown_edge':
     case 'wrong_state':
     case 'unknown_project':
     case 'refused':

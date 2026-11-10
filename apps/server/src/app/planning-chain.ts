@@ -142,7 +142,7 @@ export async function addAfter(
 const UNAFTER_STATES = ['settling', 'queued', 'working', 'watching', 'waiting']
 
 /**
- * Removes the owner-set edges `issue -> after`. Refuses the whole set (nothing is removed) when one is not a stored,
+ * Removes the stored edges `issue -> after` (from `planning after`, `issue new --after` or a settle). Refuses the whole set (nothing is removed) when one is not a stored,
  * unsatisfied edge: a lead's own `deferred` wait is its event, not an edge. The removal is noted on the Issue.
  */
 export async function removeAfter(
@@ -179,7 +179,7 @@ export async function removeAfter(
     const noted = await recordIn(stores.work, deps, {
       issueId: input.issue,
       key: key('unafter', deps.ids.next('unafter')),
-      event: { kind: 'noted', payload: { text: `owner removed after edge(s): ${names}` }, actor: 'owner' },
+      event: { kind: 'noted', payload: { text: `owner removed stored after edge(s): ${names}` }, actor: 'owner' },
     })
     if (!noted.ok) return err(lift(noted.error))
     return ok({ removed })

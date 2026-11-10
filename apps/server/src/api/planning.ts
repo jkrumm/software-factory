@@ -85,7 +85,7 @@ export function failureOf(error: PlanningError | PortError): Failure {
       return {
         status: 404,
         body: failure(
-          `${nameOf(error.issue)} does not wait for ${nameOf(error.after)} by an owner-set edge`,
+          `${nameOf(error.issue)} does not wait for ${nameOf(error.after)} by a stored edge`,
           'not_found',
         ),
       }
@@ -276,7 +276,7 @@ export const planningRoutes = (api?: PlanningApi) => {
         response: { 200: UnafterAnswer, ...errorResponses(400, 404, 409, 422, 503) },
         detail: {
           operationId: 'planning.unafter',
-          summary: 'remove after edges from a queued, working or watching Issue (refuses an edge it does not have)',
+          summary: 'remove stored after edges from an open Issue (refuses an edge it does not have)',
         },
       },
     )
