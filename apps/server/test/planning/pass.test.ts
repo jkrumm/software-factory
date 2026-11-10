@@ -241,7 +241,7 @@ describe('the chain', () => {
     expect(value(await addAfter(world.deps, { issue: a, after: [b], running: true }))).toEqual({ edges: 1 })
   })
 
-  test('unafter removes an owner-set edge, lets the Issue run, and notes it on the Issue', async () => {
+  test('unafter removes a stored edge, lets the Issue run, and notes it on the Issue', async () => {
     const a = await world.queued({ repo: 'x' })
     const b = await world.queued({ repo: 'x' })
     value(await addAfter(world.deps, { issue: b, after: [a] }))
