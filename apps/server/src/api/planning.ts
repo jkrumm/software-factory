@@ -84,10 +84,7 @@ export function failureOf(error: PlanningError | PortError): Failure {
     case 'unknown_edge':
       return {
         status: 404,
-        body: failure(
-          `${nameOf(error.issue)} does not wait for ${nameOf(error.after)} by a stored edge`,
-          'not_found',
-        ),
+        body: failure(`${nameOf(error.issue)} does not wait for ${nameOf(error.after)} by a stored edge`, 'not_found'),
       }
     case 'unknown_project':
       return { status: 404, body: failure(`no project ${error.project}`, 'not_found') }
