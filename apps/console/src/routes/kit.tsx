@@ -251,7 +251,7 @@ function Kit() {
         </Section>
 
         <Section title="Meter">
-          <Note>Accent below 70 %, warn from 70 %, bad from 90 %. Hover or focus a bar for its value.</Note>
+          <Note>Graphite below 75 %, warn from 75 %, bad from 90 %. Hover or focus a bar for its value.</Note>
           <div className="flex flex-col gap-1">
             {KIT_METERS.map((m) => (
               <Meter key={m.label} {...m} />

@@ -2,15 +2,15 @@ import type { HostProcess } from '@software-factory/contract'
 import { type ReactNode, useState } from 'react'
 import { EmptyState } from '@/components/kit/empty-state'
 import { TimeChart, type TimeSeries } from '@/components/kit/time-chart'
-import { TONE_MARK } from '@/components/kit/tone'
 import { PopoverTitle } from '@/components/ui/popover'
 import { useHost, useMachine } from '@/lib/queries'
-import { historySpan, historyWords, spanLabel } from '@/lib/strip'
+import { historySpan, spanLabel } from '@/lib/strip'
 import { cn } from '@/lib/utils'
 
-const PROCESS_ROWS = 8
-const MEMORY_MARK = TONE_MARK.accent
-const SWAP_MARK = 'var(--vx-ink2)'
+const PROCESS_ROWS = 5
+/** The charts are graphite: memory and load in ink, swap one step lighter. */
+const INK_MARK = 'var(--vx-ink2)'
+const SWAP_MARK = 'var(--vx-faint)'
 
 const clock = (ms: number): string => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 const oneDecimal = (value: number): string => String(Math.round(value * 10) / 10)
@@ -24,7 +24,6 @@ function ChartRow({
   figures,
   when,
   hovering,
-  note,
   children,
 }: {
   title: string
@@ -33,7 +32,6 @@ function ChartRow({
   /** Which reading the figures are: "now", or "at 22:59" for the point under the pointer. */
   when: string
   hovering: boolean
-  note?: string
   children: ReactNode
 }) {
   return (
@@ -44,7 +42,6 @@ function ChartRow({
         <p className={cn('text-xs tabular-nums', hovering ? 'font-medium text-foreground' : 'text-muted-foreground')}>
           {when}
         </p>
-        {note ? <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{note}</p> : null}
       </div>
       <div className="min-w-0">
         {children}
@@ -58,7 +55,20 @@ function ChartRow({
   )
 }
 
-function Figure({ value, swatch, label, small }: { value: string; swatch?: string; label?: string; small?: boolean }) {
+function Figure({
+  value,
+  ceiling,
+  swatch,
+  label,
+  small,
+}: {
+  value: string
+  /** The wall the figure is measured against, muted after it ("6.2 / 60"). */
+  ceiling?: string
+  swatch?: string
+  label?: string
+  small?: boolean
+}) {
   return (
     <p
       className={cn(
@@ -74,6 +84,7 @@ function Figure({ value, swatch, label, small }: { value: string; swatch?: strin
         />
       ) : null}
       {value}
+      {ceiling ? <span className="text-xs font-normal text-muted-foreground">/ {ceiling}</span> : null}
       {label ? <span className="text-xs font-normal text-muted-foreground">{label}</span> : null}
     </p>
   )
@@ -131,30 +142,33 @@ export default function HostDetail() {
   const memory: TimeSeries = {
     name: 'Memory',
     values: column((s) => s.memoryUsedPct),
-    tone: 'accent',
-    mark: MEMORY_MARK,
+    tone: 'neutral',
+    mark: INK_MARK,
     area: true,
   }
   const swap: TimeSeries = { name: 'Swap', values: column((s) => s.swapUsedPct), tone: 'neutral', mark: SWAP_MARK }
   const ceilings = machine?.memoryCeilings
-  const history = historyWords(samples)
 
   return (
     <>
       <PopoverTitle>Host, last 24 hours</PopoverTitle>
-      <div className="mt-3 flex flex-col gap-4">
+      <div className="mt-3 flex flex-col gap-3">
         <ChartRow
           title="Load"
           span={span}
           when={when}
           hovering={hovering}
-          figures={<Figure value={shown?.load == null ? '-' : oneDecimal(shown.load)} />}
-          note={machine ? `ceiling ${machine.loadCeiling}` : undefined}
+          figures={
+            <Figure
+              value={shown?.load == null ? '-' : oneDecimal(shown.load)}
+              ceiling={String(machine?.loadCeiling ?? '')}
+            />
+          }
         >
           <TimeChart
             name="Load"
             times={times}
-            series={[{ name: 'Load', values: column((s) => s.load), tone: 'accent', area: true }]}
+            series={[{ name: 'Load', values: column((s) => s.load), tone: 'neutral', mark: INK_MARK, area: true }]}
             reference={machine?.loadCeiling}
             format={oneDecimal}
             onActiveChange={setHover}
@@ -169,19 +183,19 @@ export default function HostDetail() {
             <>
               <Figure
                 value={shown?.memoryUsedPct == null ? '-' : percent(shown.memoryUsedPct)}
-                swatch={MEMORY_MARK}
+                swatch={INK_MARK}
                 small
                 label="memory"
               />
               <Figure
                 value={shown?.swapUsedPct == null ? '-' : percent(shown.swapUsedPct)}
+                ceiling={ceilings ? `${ceilings.swapUsedPct} %` : undefined}
                 swatch={SWAP_MARK}
                 small
                 label="swap"
               />
             </>
           }
-          note={ceilings ? `swap ceiling ${ceilings.swapUsedPct} %` : undefined}
         >
           <TimeChart
             name="Memory and swap"
@@ -197,20 +211,31 @@ export default function HostDetail() {
           span={span}
           when={when}
           hovering={hovering}
-          figures={<Figure value={shown?.swapoutMbPer300s == null ? '-' : mebibytes(shown.swapoutMbPer300s)} />}
-          note={ceilings ? `per 5 min, ceiling ${ceilings.swapoutMbPer300s.toLocaleString('en-GB')}` : 'per 5 min'}
+          figures={
+            <Figure
+              value={shown?.swapoutMbPer300s == null ? '-' : mebibytes(shown.swapoutMbPer300s)}
+              ceiling={ceilings?.swapoutMbPer300s.toLocaleString('en-GB')}
+            />
+          }
         >
           <TimeChart
             name="Swapped out"
             times={times}
-            series={[{ name: 'Swapped out', values: column((s) => s.swapoutMbPer300s), tone: 'accent', area: true }]}
+            series={[
+              {
+                name: 'Swapped out',
+                values: column((s) => s.swapoutMbPer300s),
+                tone: 'neutral',
+                mark: INK_MARK,
+                area: true,
+              },
+            ]}
             reference={ceilings?.swapoutMbPer300s}
             format={mebibytes}
             onActiveChange={setHover}
           />
         </ChartRow>
       </div>
-      {history ? <p className="mt-3 text-xs text-muted-foreground">{history}</p> : null}
       <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 min-[36rem]:grid-cols-2">
         <Processes title="Top by CPU" rows={host.topByCpu} value={(p) => `${oneDecimal(p.cpuPct)} %`} />
         <Processes title="Top by memory" rows={host.topByMemory} value={(p) => mebibytes(p.memoryMb)} />

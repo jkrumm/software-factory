@@ -18,12 +18,12 @@ export function Host() {
     <StripPopover
       label="Host: load, memory and swap"
       className="w-[34rem]"
-      triggerClassName="gap-3"
-      trigger={hostMeters(machine, newest).map(({ key, label, fill, text, warn }) => (
+      triggerClassName="gap-2 min-[1280px]:gap-4"
+      trigger={hostMeters(machine, newest).map(({ key, label, fill, text, tone }) => (
         <span key={key} className="inline-flex items-center gap-1.5" data-host={key}>
           {label}
-          <span className="w-8 2xl:w-12">
-            <MeterBar value={fill ?? 0} tone={warn ? 'warn' : 'accent'} track="surface" />
+          <span className="w-6 min-[1280px]:w-8 2xl:w-12">
+            <MeterBar value={fill ?? 0} tone={tone} track="surface" />
           </span>
           <span>{text}</span>
         </span>

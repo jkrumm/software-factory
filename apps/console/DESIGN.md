@@ -55,12 +55,13 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 
 ## The frame
 
-- **Sidebar.** A logo slot and the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
+- **Sidebar.** The logo slot is the app icon, the metallic tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
   key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects with
   counts and origins as toggles, Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
 - **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (working, waiting, queued, each a link to
-  Flow filtered to it); one meter per subscription (window used, popover with a formatted table and the reset time); host
-  meters for load, memory and swap (popover with the last 24 h as charts and the top processes); Live (a dot; popover with
+  Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
+  window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
+  ceilings and the top five processes); Live (a dot; popover with
   the stream's state, the last event's age, the server's version and uptime).
 - **Everything that names a thing links to it.** An Issue title anywhere opens the Issue page; a project opens Flow
   filtered; an origin links out to its source (the GitHub issue, the alert).
@@ -83,12 +84,14 @@ it does not.
 | PropertyList | A definition list: a small label above its value, three columns from 40 rem; a missing value reads "None", muted |
 | Section / Fold | A section is a heading, a rule and space, never a box; a Fold is a full-width header button with a caret and a count |
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
-| Meter, Sparkline, MiniBars | Hand-drawn SVG on tokens, hover tooltip, no animation |
+| Meter, Sparkline, MiniBars | Hand-drawn SVG on tokens, hover tooltip, no animation. A Meter is graphite, warn from 75 %, bad from 90 % (`meterTone`) |
 | InfoHint | A small ⓘ beside a domain word; its text is that word's definition generated from `docs/language.md`, never retyped |
 | EmptyState, Skeleton | One sentence and an icon tile; skeletons at the final height so nothing jumps |
 
 ## Rules
 
+- A meter is graphite; it takes the warn tone from 75 % and the bad tone from 90 % of its ceiling, and no series colour
+  otherwise. Colour in the chrome is state only.
 - No coloured left bar on a card, a block or a quote. No gradient, no glow, no emoji.
 - Colour carries state only through the tone map; text is never in a series colour. Load the `dataviz` skill before any
   chart; every chart has a hover tooltip and a table or numbers beside it. Raw colours fail
