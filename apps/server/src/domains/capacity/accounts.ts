@@ -32,6 +32,28 @@ export interface AccountReading {
 export const isFresh = (reading: AccountReading, now: Date): boolean =>
   now.getTime() - reading.readAt.getTime() <= READING_MAX_AGE_MS
 
+/** The lane whose order of accounts the factory takes from the picker's rank. */
+export const RANK_LANE = 'bulk'
+
+export interface RankedAccount {
+  account: string
+  reason: string
+  weight: number | null
+}
+
+/** The picker's order of the accounts that may take work in a lane, best first. Ineligible accounts are absent. */
+export interface AccountRank {
+  lane: string
+  order: RankedAccount[]
+  /** when the picker computed it */
+  at: Date
+  /** when the poll read it */
+  readAt: Date
+}
+
+export const rankIsFresh = (rank: AccountRank, now: Date): boolean =>
+  now.getTime() - rank.readAt.getTime() <= READING_MAX_AGE_MS
+
 /** Where an account stands: open now, or closed until a time, or closed with no time anyone can name. */
 export type Standing = { open: true } | { open: false; until: Date | null; why: string }
 
@@ -97,12 +119,15 @@ export interface PickInput {
   leadsPerAccount: number
   now: Date
   pace?: boolean
+  /** the picker's order; a missing or stale rank leaves the order to the lowest weekly use */
+  rank?: AccountRank | null
 }
 
 export type Pick = { picked: AccountReading } | { picked: null; why: string; opensAt: Date | null; capped: boolean }
 
 /**
- * The open account with the least weekly use among the fresh readings, below its lead cap. An account takes one new
+ * The first open account in the picker's fresh rank (accounts it does not list come after, by least weekly use), else
+ * the one with the least weekly use, among the fresh readings, below its lead cap. An account takes one new
  * lead per sample: while a lead started after the latest sample is not in it yet, the account is not offered again.
  * Never spills: with nothing open the answer names why and, when a reading says so, when the first account opens.
  */
@@ -116,7 +141,14 @@ export function pickAccount(input: PickInput): Pick {
   const open = standings.filter((s) => s.standing.open).map((s) => s.reading)
   const free = open.filter((r) => !input.loaded.has(r.account))
   const room = free.filter((r) => (input.leads.get(r.account) ?? 0) < input.leadsPerAccount)
-  const best = room.sort((a, b) => (a.weeklyUsed ?? 0) - (b.weeklyUsed ?? 0) || a.account.localeCompare(b.account))[0]
+  const byUse = (a: AccountReading, b: AccountReading) =>
+    (a.weeklyUsed ?? 0) - (b.weeklyUsed ?? 0) || a.account.localeCompare(b.account)
+  const order = input.rank && rankIsFresh(input.rank, now) ? input.rank.order.map((r) => r.account) : null
+  const place = (r: AccountReading): number => {
+    const index = order ? order.indexOf(r.account) : -1
+    return index < 0 ? Number.MAX_SAFE_INTEGER : index
+  }
+  const best = room.sort((a, b) => place(a) - place(b) || byUse(a, b))[0]
   if (best) return { picked: best }
   if (free.length > 0) {
     return {

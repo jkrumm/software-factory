@@ -23,6 +23,17 @@ const ReadingRow = z.object({
   exhausted_until: z.date().nullable(),
 })
 
+const RankDbRow = z.object({
+  lane: z.string(),
+  read_at: z.date(),
+  picked_at: z.date(),
+  // the driver hands jsonb back as text
+  ordering: z.preprocess(
+    (v) => (typeof v === 'string' ? JSON.parse(v) : v),
+    z.array(z.object({ account: z.string(), reason: z.string(), weight: z.number().nullable() })),
+  ),
+})
+
 const ClaimRow = z.object({
   issue_id: z.string(),
   repo: z.string(),
@@ -109,6 +120,21 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           exhaustedUntil: r.exhausted_until,
         }
       })
+    },
+
+    async recordRank(rank) {
+      await tx`
+        INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
+        VALUES (${rank.lane}, ${rank.readAt}, ${rank.at}, ${JSON.stringify(rank.order)}::jsonb)
+        ON CONFLICT (lane) DO UPDATE
+          SET read_at = EXCLUDED.read_at, picked_at = EXCLUDED.picked_at, ordering = EXCLUDED.ordering`
+    },
+
+    async latestRank(lane) {
+      const [raw] = await tx`SELECT lane, read_at, picked_at, ordering FROM factory.capacity_ranks WHERE lane = ${lane}`
+      if (!raw) return null
+      const row = RankDbRow.parse(raw)
+      return { lane: row.lane, order: row.ordering, at: row.picked_at, readAt: row.read_at }
     },
 
     async claims() {

@@ -1,4 +1,4 @@
-import { type AccountReading, pickAccount } from './accounts.ts'
+import { type AccountReading, type AccountRank, pickAccount } from './accounts.ts'
 import { type Claimant, claimRoom } from './claims.ts'
 import {
   describeLoad,
@@ -51,6 +51,8 @@ export interface AdmissionInputs {
   /** leads that hold a claim on each account */
   leadsByAccount: ReadonlyMap<string, number>
   leadsPerAccount: number
+  /** the picker's order of accounts; the gates above stay, only the pick among open accounts follows it */
+  rank?: AccountRank | null
 }
 
 export type Admission = { admit: true; account: AccountReading } | { admit: false; refusal: Refusal }
@@ -95,6 +97,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     leadsPerAccount: input.leadsPerAccount,
     now: input.now,
     pace,
+    rank: input.rank,
   })
   if (pick.picked) return { admit: true, account: pick.picked }
   return pick.capped ? no('cap', pick.why) : no('window', pick.why, pick.opensAt)

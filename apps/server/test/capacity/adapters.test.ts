@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { claudeAccountSource } from '../../src/adapters/planning/claude-accounts.ts'
+import { claudeAccountRanker, claudeAccountSource } from '../../src/adapters/planning/claude-accounts.ts'
 import { hostReader } from '../../src/adapters/planning/host.ts'
 import { value } from '../planning/support.ts'
 
@@ -167,5 +167,71 @@ describe('the account picker', () => {
       ok: false,
       error: { kind: 'unreadable' },
     })
+  })
+})
+
+describe('the account rank', () => {
+  const at = new Date('2026-11-10T14:51:00Z')
+  const printed = (body: object) => script('rank', `echo '${JSON.stringify(body)}'`)
+  const reply = (extra: object = {}) => ({
+    lane: 'bulk',
+    order: [
+      { account: 'me', reason: 'home', weight: 0.147 },
+      { account: 'iu', reason: 'spill' },
+    ],
+    at: '2026-11-10T14:50:58.394Z',
+    ...extra,
+  })
+
+  test('the order, the reasons and the picker time come through; a missing weight is null', async () => {
+    const rank = value(await claudeAccountRanker({ bin: await printed(reply()) }).read(at))
+    expect(rank).toEqual({
+      lane: 'bulk',
+      order: [
+        { account: 'me', reason: 'home', weight: 0.147 },
+        { account: 'iu', reason: 'spill', weight: null },
+      ],
+      at: new Date('2026-11-10T14:50:58.394Z'),
+      readAt: at,
+    })
+  })
+
+  test('it asks the picker for its lane', async () => {
+    const bin = await script('rank-args', `printf '{"lane":"%s","order":[],"at":"2026-11-10T14:50:58.394Z"}' "$3"`)
+    expect(value(await claudeAccountRanker({ bin }).read(at)).lane).toBe('bulk')
+    expect(value(await claudeAccountRanker({ bin, lane: 'fast' }).read(at)).lane).toBe('fast')
+  })
+
+  test('a shape that drifted or a reply for another lane is unreadable', async () => {
+    for (const body of [
+      reply({ order: [{ account: 'me' }] }),
+      reply({ order: [{ account: 'bad id!', reason: 'home' }] }),
+      reply({ at: 'yesterday' }),
+      reply({ lane: 'fast' }),
+      { lane: 'bulk' },
+    ]) {
+      expect(await claudeAccountRanker({ bin: await printed(body) }).read(at)).toMatchObject({
+        ok: false,
+        error: { kind: 'unreadable' },
+      })
+    }
+    expect(await claudeAccountRanker({ bin: await script('junk-rank', 'echo nope') }).read(at)).toMatchObject({
+      ok: false,
+      error: { kind: 'unreadable' },
+    })
+  })
+
+  test('a picker that is missing, fails or hangs is an error result', async () => {
+    expect(await claudeAccountRanker({ bin: join(dir, 'nope') }).read(at)).toMatchObject({
+      ok: false,
+      error: { kind: 'gone' },
+    })
+    expect(await claudeAccountRanker({ bin: await script('rank-fails', 'exit 3') }).read(at)).toMatchObject({
+      ok: false,
+      error: { kind: 'gone', detail: expect.stringContaining('exited 3') },
+    })
+    expect(
+      await claudeAccountRanker({ bin: await script('rank-hangs', 'sleep 5'), timeoutMs: 100 }).read(at),
+    ).toMatchObject({ ok: false, error: { kind: 'timeout' } })
   })
 })

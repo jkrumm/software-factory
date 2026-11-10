@@ -23,6 +23,8 @@ const quota = (over: Partial<ReadAccountQuota>): ReadAccountQuota => ({
   weeklyResetsAt: null,
   exhaustedUntil: null,
   fresh: true,
+  rank: null,
+  rankReason: null,
   ...over,
 })
 

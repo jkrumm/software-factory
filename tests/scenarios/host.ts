@@ -37,7 +37,10 @@ EOT
 `
 
 const PICKER = (host: string) => `#!/bin/sh
-cat "${host}/accounts.json"
+case "$1" in
+  rank) cat "${host}/rank.json";;
+  *) cat "${host}/accounts.json";;
+esac
 `
 
 /** The server's view of the fake host: the picker, `sysctl`, the account registry and an immediate memory sample. */
@@ -68,6 +71,15 @@ export async function setAccounts(bin: string, rows: AccountRow[]): Promise<void
         age_s: 0,
         exhausted_until: null,
       })),
+    }),
+  )
+  // the rule's order for the bulk lane: the rows in the order given
+  await writeFile(
+    join(host, 'rank.json'),
+    JSON.stringify({
+      lane: 'bulk',
+      order: rows.filter((row) => row.enabled ?? true).map((row) => ({ account: row.id, reason: 'home' })),
+      at: new Date().toISOString(),
     }),
   )
   await writeFile(

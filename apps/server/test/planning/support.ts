@@ -7,9 +7,9 @@ import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import type { CapacityDeps } from '../../src/app/capacity-admit.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import type { SyncDeps } from '../../src/app/planning-sync.ts'
-import type { AccountReading } from '../../src/domains/capacity/accounts.ts'
+import type { AccountRank, AccountReading, RankedAccount } from '../../src/domains/capacity/accounts.ts'
 import type { MemoryReading } from '../../src/domains/capacity/host.ts'
-import type { AccountSource, HostReader } from '../../src/domains/capacity/ports.ts'
+import type { AccountRanker, AccountSource, HostReader } from '../../src/domains/capacity/ports.ts'
 import type { ProjectSource, RepoRef } from '../../src/domains/planning/ports.ts'
 import type { RepoRead } from '../../src/domains/planning/sync.ts'
 import type { AnyIssueEvent, EventKind, IssueEvent } from '../../src/domains/work/events.ts'
@@ -103,6 +103,17 @@ export class FakeAccounts implements AccountSource {
   }
 }
 
+export class FakeRanker implements AccountRanker {
+  rows: RankedAccount[] = []
+  fail = false
+  reads = 0
+  async read(at: Date) {
+    this.reads++
+    if (this.fail) return err(portError('gone', 'the rank is not printed'))
+    return ok<AccountRank>({ lane: 'bulk', order: this.rows, at: new Date(at.getTime() - 30_000), readAt: at })
+  }
+}
+
 export const account = (
   name: string,
   extra: Partial<AccountReading> = {},
@@ -124,6 +135,7 @@ export interface World {
   source: FakeSource
   host: FakeHost
   accounts: FakeAccounts
+  ranker: FakeRanker
   deps: CapacityDeps & SyncDeps
   reset(): Promise<void>
   stop(): Promise<void>
@@ -149,6 +161,7 @@ export async function startWorld(): Promise<World> {
   const source = new FakeSource()
   const host = new FakeHost()
   const accounts = new FakeAccounts()
+  const ranker = new FakeRanker()
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     planning: postgresPlanningStore(tx),
@@ -161,6 +174,7 @@ export async function startWorld(): Promise<World> {
     source,
     host,
     accounts,
+    ranker,
     deps: {
       uow,
       clock,
@@ -169,6 +183,7 @@ export async function startWorld(): Promise<World> {
       roles: ROLES,
       host,
       accounts,
+      ranker,
       limits: { leadsPerAccount: 2, loadCeiling: 60, memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 } },
     },
     async reset() {
@@ -182,6 +197,9 @@ export async function startWorld(): Promise<World> {
       accounts.rows = [account('me')]
       accounts.fail = false
       accounts.reads = 0
+      ranker.rows = []
+      ranker.fail = false
+      ranker.reads = 0
       clock.set(new Date('2026-11-07T12:00:00Z'))
       world.deps.ids = sequentialIds()
     },

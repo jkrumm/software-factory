@@ -62,6 +62,9 @@ beforeAll(async () => {
   await sql`
     INSERT INTO factory.capacity_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used, exhausted_until)
     VALUES ('max1', ${NOW}, true, true, 40, 50, '2026-11-07T13:00:00.000Z')`
+  await sql`
+    INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
+    VALUES ('bulk', ${NOW}, ${NOW}, ${JSON.stringify([{ account: 'max1', reason: 'home', weight: 0.2 }])}::jsonb)`
 
   const read = createReader({
     sql,
@@ -209,8 +212,28 @@ describe('as the owner', () => {
         weeklyResetsAt: null,
         exhaustedUntil: '2026-11-07T13:00:00.000Z',
         fresh: true,
+        rank: 1,
+        rankReason: 'home',
       },
     ])
+  })
+
+  test('a missing or stale rank is a health line while a reading is fresh, and the accounts carry no rank', async () => {
+    const kindsOf = async () => (await json('/v1/health')).body.health.map((line: { kind: string }) => line.kind).sort()
+    try {
+      await db.sql`UPDATE factory.capacity_ranks SET read_at = '2026-11-07T11:00:00.000Z'`
+      expect(await kindsOf()).toEqual(['account', 'account-rank', 'door'])
+      expect((await json('/v1/accounts')).body.accounts[0]).toMatchObject({ rank: null, rankReason: null })
+      await db.sql`DELETE FROM factory.capacity_ranks`
+      const line = (await json('/v1/health')).body.health.find((l: { kind: string }) => l.kind === 'account-rank')
+      expect(line.id).toBe('account-rank')
+      expect(line.text).toContain('last read never')
+    } finally {
+      await db.sql`DELETE FROM factory.capacity_ranks`
+      await db.sql`
+        INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
+        VALUES ('bulk', ${NOW}, ${NOW}, ${JSON.stringify([{ account: 'max1', reason: 'home', weight: 0.2 }])}::jsonb)`
+    }
   })
 
   test('/v1/overview carries counts, lists, issues, builtAt, version, now, accounts and queue', async () => {
