@@ -55,6 +55,7 @@ export const LANGUAGE = {
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
   judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue",
+  lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
   line: "Stop the line: while a repo's alert is unsolved, only its fix is admitted",
   'long wait':
@@ -75,7 +76,7 @@ export const LANGUAGE = {
     "A repo the factory knows, described by its project.yaml. signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's",
   promote: "A held signal becomes work: the owner's or the Judge's call",
   'queue reason':
-    'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, unknown_project, drain, load, memory, claim, window, cap',
+    'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, unknown_project, drain, load, memory, lane, claim, window, cap',
   'queue state':
     'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
   'queue wait':

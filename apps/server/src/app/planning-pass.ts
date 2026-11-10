@@ -110,6 +110,7 @@ async function fileFor(
         kind: row.kind ?? 'feature',
         origin: 'factory',
         ...(seat?.ok ? { seat: seat.value } : {}),
+        ...(row.lane ? { lane: row.lane } : {}),
       },
       actor: 'factory',
     },

@@ -13,6 +13,7 @@ const OpenRow = z.object({
   wait_reason: z.string().nullable(),
   kind: z.string(),
   finalizing: z.boolean(),
+  lane: z.string().nullable(),
   since: z.coerce.date().nullable(),
 })
 
@@ -40,6 +41,7 @@ export function readIssues(tx: SQL): IssueReads {
           EXISTS (
             SELECT 1 FROM factory.issue_effects f
             WHERE f.issue_id = i.id AND f.kind = 'finalize' AND f.done_at IS NULL AND f.cancelled_at IS NULL) AS finalizing,
+          (SELECT e.payload->>'lane' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'filed' LIMIT 1) AS lane,
           (SELECT x.at FROM factory.issue_events x WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state ORDER BY x.version DESC LIMIT 1) AS since
         FROM factory.issues i WHERE i.state <> 'closed' ORDER BY i.id`
       return rows.map((raw): OpenIssueRow => {
@@ -51,6 +53,7 @@ export function readIssues(tx: SQL): IssueReads {
           waitReason: row.wait_reason,
           kind: row.kind,
           finalizing: row.finalizing,
+          lane: row.lane,
           since: row.since,
         }
       })

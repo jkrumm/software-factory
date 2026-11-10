@@ -1,4 +1,4 @@
-import { PLAN_LIMITS, PlanSeat } from '@software-factory/contract'
+import { LaneName, PLAN_LIMITS, PlanSeat } from '@software-factory/contract'
 import * as z from 'zod'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 import { issuesMessage } from './project.ts'
@@ -48,6 +48,8 @@ export const PlanRow = z
     kind: z.enum(PLAN_KINDS).optional(),
     /** the tier and effort its lead starts on: `{tier, effort}` or `{role}`; default the table's lead role */
     seat: PlanSeat.optional(),
+    /** the resource class its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */
+    lane: LaneName.optional(),
     /** a project name; default: the project whose plan this is */
     repo: z.string().regex(PROJECT_NAME, 'a project name').optional(),
     /** rows that must be done first, in this file or in another project's plan */
@@ -60,7 +62,7 @@ export const PlanRow = z
   })
   .superRefine((row, ctx) => {
     if (row.issue !== undefined) {
-      for (const field of ['after', 'not_before', 'stable_days', 'repo', 'kind', 'seat'] as const) {
+      for (const field of ['after', 'not_before', 'stable_days', 'repo', 'kind', 'seat', 'lane'] as const) {
         if (row[field] !== undefined)
           ctx.addIssue({ code: 'custom', message: `row ${row.key}: an adopted row (issue) has no ${field}` })
       }
@@ -123,14 +125,24 @@ export type PlanFile = z.output<typeof PlanFile>
 
 export type PlanParse = { ok: true; plan: PlanFile; warnings: string[] } | { ok: false; message: string }
 
-/** A parsed YAML document as a plan. Never throws. */
-export function parsePlan(raw: unknown): PlanParse {
+/**
+ * A parsed YAML document as a plan. Never throws. `lanes` are the lanes the plan's project declares: a row naming
+ * another lane is a warning (the lane is then unlimited within `leads`), never a broken plan. A row aimed at another
+ * project (`repo`) is not checked here: this parse does not know that project's lanes.
+ */
+export function parsePlan(raw: unknown, lanes: readonly string[] = []): PlanParse {
   const parsed = PlanFile.safeParse(raw)
   if (!parsed.success) return { ok: false, message: issuesMessage(parsed.error) }
-  const warnings = parsed.data.rows
+  const retired = parsed.data.rows
     .filter((row) => row.stable_days !== undefined)
     .map((row) => `row ${row.key}: stable_days is retired and ignored (memory is the limit, not a stable week)`)
-  return { ok: true, plan: parsed.data, warnings }
+  const unknown = parsed.data.rows
+    .filter((row) => row.lane !== undefined && row.repo === undefined && !lanes.includes(row.lane))
+    .map(
+      (row) =>
+        `row ${row.key}: lane ${row.lane} is not declared in project.yaml lanes (${lanes.length > 0 ? lanes.join(', ') : 'none declared'}): it is unlimited within leads`,
+    )
+  return { ok: true, plan: parsed.data, warnings: [...retired, ...unknown] }
 }
 
 export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const

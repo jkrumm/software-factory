@@ -117,6 +117,7 @@ const card = (visible: boolean): ReadIssueCard => ({
   heldBy: null,
   waitingOnOwner: true,
   seat: null,
+  lane: null,
 })
 
 const session = (visible: boolean): ReadSessionCard => ({

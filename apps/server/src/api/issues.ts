@@ -152,6 +152,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           title: body.title,
           facts: body.facts,
           seat: body.seat,
+          lane: body.lane,
           text: body.text,
           key: body.key,
           source: body.source ?? 'request',

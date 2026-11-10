@@ -47,6 +47,15 @@ export const FILING = {
     example: { tier: 'opus', effort: 'high' } as const,
     roleExample: { role: 'lead' } as const,
   },
+  lane: {
+    shape:
+      "optional; a resource class inside the repo, a lowercase word like `apple`; the repo's `project.yaml` `lanes: {apple: 1}` caps how many leads of that lane run at once",
+    notes: [
+      'A lane the repo does not declare is unlimited within `leads`; an Issue in a full lane stays queued and the queue order names the lane and the Issue holding it.',
+      'Use it when work inside one repo is not equally heavy (Apple builds next to cheap server rows); never as a fake `after` edge.',
+    ],
+    example: 'apple',
+  },
   text: {
     maxChars: NEW_ISSUE_TEXT_MAX,
     meaning: 'optional prose shown to the lead before the facts',
@@ -56,6 +65,7 @@ export const FILING = {
     { flag: '--title', meaning: 'the Issue title' },
     { flag: '--facts', meaning: 'the facts object as JSON; @file reads a file, - reads stdin' },
     { flag: '--seat', meaning: 'optional lead seat as JSON: {"tier":"opus","effort":"high"} or {"role":"lead"}' },
+    { flag: '--lane', meaning: "optional resource class, capped by the repo's `lanes:` in project.yaml (`apple`)" },
     { flag: '--text', meaning: `optional prose before the facts, up to ${NEW_ISSUE_TEXT_MAX} characters` },
     {
       flag: '--after',

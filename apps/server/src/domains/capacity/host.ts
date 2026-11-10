@@ -22,16 +22,48 @@ export const DEFAULT_SWAP_CEILING_PCT = 75
 /** The 1-minute load average above which no new lead is admitted. */
 export const DEFAULT_LOAD_CEILING = 60
 
-/** A new lead waits while a reading is above either ceiling. Running leads and resumes are never touched. */
-export const overMemory = (reading: MemoryReading, ceilings: MemoryCeilings): boolean =>
-  reading.swapoutMbPer300s > ceilings.swapoutMbPer300s || reading.swapUsedPct > ceilings.swapUsedPct
+/**
+ * Memory that leads of a heavy lane are expected to take (a booted simulator is ~18 GiB), which the reading does not
+ * show yet when the lead has only just started: the lanes' `memory` of the running leads and of the candidate.
+ */
+export interface Reserved {
+  mib: number
+  /** the same as a share of RAM, percent */
+  pct: number
+}
+
+/** A reservation as a share of RAM (one decimal), or null when nothing is reserved or the RAM is not known. */
+export function reservedOf(mib: number, ramMib: number | null): Reserved | null {
+  if (mib <= 0 || ramMib === null || ramMib <= 0) return null
+  return { mib, pct: Math.round((mib / ramMib) * 1000) / 10 }
+}
+
+/**
+ * A new lead waits while a reading is above either ceiling; the reserved share of RAM counts as swap in use, so a host
+ * that is about to take a heavy lane's memory is already full. Running leads and resumes are never touched.
+ */
+export const overMemory = (
+  reading: MemoryReading,
+  ceilings: MemoryCeilings,
+  reserved: Reserved | null = null,
+): boolean =>
+  reading.swapoutMbPer300s > ceilings.swapoutMbPer300s ||
+  reading.swapUsedPct + (reserved?.pct ?? 0) > ceilings.swapUsedPct
 
 export const overLoad = (load: number, ceiling: number): boolean => load > ceiling
 
 /** The reason's numbers: what was read and what the ceilings are. */
-export const describeMemory = (reading: MemoryReading, ceilings: MemoryCeilings): string =>
-  `swapouts ${reading.swapoutMbPer300s} MiB/300s (ceiling ${ceilings.swapoutMbPer300s}), ` +
-  `swap ${reading.swapUsedPct}% of RAM (ceiling ${ceilings.swapUsedPct}%)`
+export const describeMemory = (
+  reading: MemoryReading,
+  ceilings: MemoryCeilings,
+  reserved: Reserved | null = null,
+): string => {
+  const read = `swapouts ${reading.swapoutMbPer300s} MiB/300s (ceiling ${ceilings.swapoutMbPer300s}), `
+  const swap = `swap ${reading.swapUsedPct}% of RAM (ceiling ${ceilings.swapUsedPct}%)`
+  if (!reserved) return `${read}${swap}`
+  const gib = Math.round((reserved.mib / 1024) * 10) / 10
+  return `${read}${swap}, plus ${gib} GiB reserved by lanes (${reserved.pct}% of RAM)`
+}
 
 export const describeLoad = (load: number, ceiling: number): string =>
   `load average ${Math.round(load * 10) / 10} (ceiling ${ceiling})`

@@ -7,9 +7,11 @@ import {
   memoryReadingOf,
   overLoad,
   overMemory,
+  reservedOf,
   swapUsedBytes,
 } from '../../src/domains/capacity/host.ts'
 import { holdsClaim } from '../../src/domains/capacity/claims.ts'
+import { laneRoom } from '../../src/domains/capacity/lanes.ts'
 import {
   releaseSlot,
   SLOT_LEASE_MS,
@@ -257,6 +259,8 @@ describe('admission', () => {
     holders: [],
     owed: [],
     candidate: claimant(1),
+    lane: null,
+    reserved: null,
     load: 3,
     loadCeiling: 60,
     memory: { swapoutMbPer300s: 0, swapUsedPct: 10 },
@@ -313,9 +317,78 @@ describe('admission', () => {
     })
   })
 
+  test('a full lane says lane before the repo claims and the account, and names who holds it', () => {
+    const full = { name: 'apple', cap: 1, holders: [id(9)] }
+    const verdict = checkAdmission(inputs({ leads: 2, lane: full }))
+    expect(verdict).toMatchObject({ admit: false, refusal: { kind: 'lane' } })
+    expect(!verdict.admit && verdict.refusal.message).toBe('lane apple is full (1 of 1): Issue 9')
+    // the sharper reason wins over a full repo; without a lane the repo's claims speak
+    expect(checkAdmission(inputs({ holders: [claimant(8)], lane: full }))).toMatchObject({ refusal: { kind: 'lane' } })
+    expect(checkAdmission(inputs({ holders: [claimant(8)] }))).toMatchObject({ refusal: { kind: 'claim' } })
+    // the lane before the account
+    expect(
+      checkAdmission(inputs({ leads: 2, lane: full, accounts: [reading('a', { fiveHourUsed: 99 })] })),
+    ).toMatchObject({ refusal: { kind: 'lane' } })
+    expect(checkAdmission(inputs({ leads: 2, lane: { ...full, holders: [] } })).admit).toBe(true)
+  })
+
   test('every account at its cap says cap, with the window of none', () => {
     const verdict = checkAdmission(inputs({ leadsByAccount: new Map([['a', 2]]) }))
     expect(verdict).toMatchObject({ admit: false, refusal: { kind: 'cap' } })
+  })
+})
+
+describe('lanes reserve host memory', () => {
+  const ceilings = { swapoutMbPer300s: 2048, swapUsedPct: 75 }
+  const idle = { swapoutMbPer300s: 0, swapUsedPct: 10 }
+
+  test('a reservation is a share of RAM, and none without a RAM reading or a memory', () => {
+    expect(reservedOf(18 * 1024, 32_768)).toEqual({ mib: 18_432, pct: 56.3 })
+    expect(reservedOf(0, 32_768)).toBeNull()
+    expect(reservedOf(18 * 1024, null)).toBeNull()
+  })
+
+  test('the reserved share counts as swap in use, and the reason names it', () => {
+    const reserved = reservedOf(2 * 18 * 1024, 32_768)
+    expect(overMemory(idle, ceilings, null)).toBe(false)
+    expect(overMemory(idle, ceilings, reservedOf(18 * 1024, 32_768))).toBe(false)
+    expect(overMemory(idle, ceilings, reserved)).toBe(true)
+    expect(describeMemory(idle, ceilings, reserved)).toBe(
+      'swapouts 0 MiB/300s (ceiling 2048), swap 10% of RAM (ceiling 75%), plus 36 GiB reserved by lanes (112.5% of RAM)',
+    )
+  })
+
+  test('admission says memory, with the reservation, when the lanes already fill the host', () => {
+    const verdict = checkAdmission({
+      now,
+      state: 'run',
+      leads: 2,
+      holders: [],
+      owed: [],
+      candidate: claimant(1),
+      lane: null,
+      reserved: reservedOf(2 * 18 * 1024, 32_768),
+      load: 3,
+      loadCeiling: 60,
+      memory: idle,
+      memoryCeilings: ceilings,
+      accounts: [reading('a')],
+      loaded: new Set(),
+      leadsByAccount: new Map(),
+      leadsPerAccount: 2,
+    })
+    expect(verdict).toMatchObject({ admit: false, refusal: { kind: 'memory' } })
+    expect(!verdict.admit && verdict.refusal.message).toContain('36 GiB reserved by lanes')
+  })
+})
+
+describe('lanes', () => {
+  test('room is left under the cap; a fix and an uncapped lane are never held', () => {
+    const lane = { name: 'apple', cap: 2, holders: [id(1)] }
+    expect(laneRoom({ lane, urgent: false })).toEqual({ granted: true })
+    expect(laneRoom({ lane: { ...lane, holders: [id(1), id(2)] }, urgent: false })).toMatchObject({ granted: false })
+    expect(laneRoom({ lane: { ...lane, holders: [id(1), id(2)] }, urgent: true })).toEqual({ granted: true })
+    expect(laneRoom({ lane: null, urgent: false })).toEqual({ granted: true })
   })
 })
 

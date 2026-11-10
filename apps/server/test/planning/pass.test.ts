@@ -154,6 +154,19 @@ describe('the plan files its rows', () => {
     ])
   })
 
+  test('a row with a lane files an Issue that carries it, and the plan warns about a lane the project lacks', async () => {
+    world.source.add('app', {
+      project: PROJECT('app', '{"lanes":{"apple":1}}'),
+      plan: plan('p1', [row('mac', { lane: 'apple' }), row('typo', { lane: 'appel' }), row('plain')]),
+    })
+    value(await planningPass(world.deps))
+    const filed = await world.db.sql`
+      SELECT payload->>'lane' AS lane FROM factory.issue_events WHERE kind = 'filed' ORDER BY issue_id`
+    expect(filed.map((e: { lane: unknown }) => e.lane)).toEqual(['apple', 'appel', null])
+    const [stored] = await world.db.sql`SELECT plan_warnings FROM factory.planning_projects WHERE name = 'app'`
+    expect(stored?.plan_warnings).toEqual([expect.stringContaining('row typo: lane appel is not declared')])
+  })
+
   test('a row whose role does not resolve files nothing and the pass names the field', async () => {
     world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('lost', { seat: { role: 'gone' } })]) })
     const pass = value(await planningPass(world.deps))

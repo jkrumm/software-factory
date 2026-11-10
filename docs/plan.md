@@ -22,6 +22,7 @@ rows:
   - key: export-docs
     kind: docs
     title: Document the paged export
+    lane: docs
     after: [export-paging, intake]
     not_before: 2026-12-01
     facts:
@@ -52,6 +53,7 @@ a broken plan.
 | `facts` | What the filed Issue's lead reads, an object of the same shape as `factory issue schema` prints: `why`, `what`, `change`, `acceptance`, and any other key you add. Required unless the row adopts an Issue |
 | `kind` | `feature` (the default), `bug`, `chore`, `docs` or `incident` |
 | `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the role table's `lead` row. See Choosing the seat |
+| `lane` | A resource class inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See Lanes |
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
 | `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`) |
 | `not_before` | A date (`2026-12-01`, midnight UTC) or a datetime (`2026-12-01T09:00:00Z`; with no offset it is UTC). The row is not filed before then |
@@ -85,11 +87,50 @@ lacks at filing time files nothing, and the planning pass reports `<project>:<ro
 when refused). `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
 the latest lead started on.
 
+## Lanes
+
+`leads: N` caps the leads in a repo, but work inside one repo is not equally heavy: server rows are cheap, an Apple row
+runs xcodebuild and a simulator on the one mini. Give each kind of row a `lane` and cap the heavy lane in the repo's
+`project.yaml`:
+
+```yaml
+leads: 2
+lanes:
+  apple: 1
+```
+
+With that file, two rows in lane `apple` and one without a lane run as: one apple Issue and the lane-less Issue start
+side by side, and the second apple Issue stays queued until the first closes. The queue order (`factory queue order`) and
+`factory issue show` say so, the lane before the repo's claims: `lane apple is full (1 of 1): Issue 643`. `factory issue new --lane apple` sets the lane on a
+hand-filed Issue; `factory project show` lists the project's `lanes` (leads and memory) and `factory issue show` the Issue's `lane`.
+
+- **Scope is the repo.** A lane's cap counts the leads of that lane in the one repo whose `project.yaml` declares it. The
+  host-wide Apple toolchain is already serialised by the shared Apple slot (`factory slot`); a lane keeps the second
+  Apple lead from building cold in its own worktree while it queues for that slot. Another repo's Apple leads are not
+  counted, so each repo states its own cap; a host-wide lane would couple one repo's file to another repo's admission.
+- **A heavy lane reserves host memory.** `lanes: {apple: {leads: 1, memory: 18GiB}}` (`MiB` or `GiB`) makes every running
+  lead of the lane count 18 GiB against the host's memory ceiling: admission adds the reserved share of RAM, for the
+  running leads of every repo and for the candidate's own lane, to the swap share before it compares with the ceiling,
+  and a refusal says so (`plus 36 GiB reserved by lanes (112.5% of RAM)`, kind `memory`). The gate only stops *new*
+  leads, and a running lead's heavy step (a booted simulator, one run took about 18 GiB) shows in the reading only after
+  it started, so the reservation covers the lead that has just been admitted. It is held for as long as the lead holds
+  its claim, so it can count a step twice (reserved and already resident); that errs on the side of waiting. Without a
+  RAM reading nothing is reserved and the pass notes it.
+- **An undeclared lane is unlimited** within `leads`. A row naming a lane the project does not declare is a plan
+  **warning**, not a broken plan; the lane then limits nothing (a typo is visible in `factory project show`).
+- **What counts as running:** a lead holding its claim, and a resumed lead working without one. A lead waiting on a
+  Decision, a review, an Errand, a timer or a dependency has given its claim back and its lane place with it, so another
+  lead of the lane may start meanwhile; when the wait ends the lead takes its lane place back before it is told, and
+  waits (like for a repo claim) while the lane is full.
+- **A fix is never held by a lane** (an `incident` Issue has its own place beyond `leads`; production is red).
+- A lane is a cap, not an order: it never replaces `after`, and a row that needs what another shipped still says `after`.
+- The lane is fixed when the Issue is filed. An adopted row (`issue`) has no `lane`.
+
 ## Adopting an Issue
 
 A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`, `rd issue`). Nothing is filed for it; the
 row is done when that Issue closes, so other rows can wait for it with `after`. An adopted row is `key` and `issue` and
-nothing else: `after`, `not_before`, `stable_days`, `repo`, `kind` and `seat` are refused on it. Put the order on the Issue
+nothing else: `after`, `not_before`, `stable_days`, `repo`, `kind`, `seat` and `lane` are refused on it. Put the order on the Issue
 (`--after`), or on the rows that wait for it.
 
 `factory planning unafter --issue <id> --after <id>` (`--after` repeats) removes stored `after` edges (set by `planning after`,
@@ -103,7 +144,8 @@ wait is its event, not an edge: it is not removed here, and a waiting Issue stay
 - One row is one change that ships alone: its own lead, review, deploy and verify. If two halves could not be reverted
   or deployed apart, they are one row.
 - Rows that are independent carry no `after`. Add `after` only where the second row needs what the first one shipped,
-  never to put independent rows in a line: the server runs them side by side when the repo's `leads` allow it.
+  never to put independent rows in a line: the server runs them side by side when the repo's `leads` allow it. To keep
+  heavy rows (Apple builds) from running together while cheap rows run alongside, give them a `lane` (see Lanes).
 - Write the gate in the row: the row's `acceptance` states the check that proves it done (a command, a test, an
   observable fact), because the lead ships by stating each line met or not met.
 - The `facts` carry everything the lead needs. It cannot see this plan or the session that wrote it: exact paths, scope

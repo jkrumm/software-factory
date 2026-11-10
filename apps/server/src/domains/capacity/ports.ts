@@ -47,6 +47,8 @@ export interface CapacityStore {
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */
 export interface HostReader {
   memory(): Promise<Result<MemoryReading>>
+  /** the machine's RAM in MiB, for the memory that lanes reserve as a share of it */
+  ramMib(): Promise<Result<number>>
   /** the 1-minute load average */
   load(): Promise<Result<number>>
 }

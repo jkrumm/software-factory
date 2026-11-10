@@ -6,10 +6,10 @@ import { factsNote, filable, parsePlan, type PlanFile, rowStatuses } from '../..
 import { issueId } from '../../src/kernel/ids.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..', '..')
-const parsed = (text: string) => {
+const parsed = (text: string, lanes: string[] = []) => {
   const yaml = parseYamlText(text)
   if (!yaml.ok) throw new Error(yaml.message)
-  return parsePlan(yaml.value)
+  return parsePlan(yaml.value, lanes)
 }
 const plan = (rows: object[]): PlanFile => {
   const result = parsePlan({ version: 1, rows })
@@ -32,12 +32,12 @@ describe('docs/plan.yaml', () => {
     const doc = await Bun.file(join(ROOT, 'docs', 'plan.md')).text()
     const example = /```yaml\n([\s\S]*?)```/.exec(doc)?.[1]
     expect(example).toBeDefined()
-    const result = parsed(example ?? '')
+    const result = parsed(example ?? '', ['docs'])
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.warnings).toEqual([])
     const used = new Set(result.plan.rows.flatMap((r) => Object.keys(r)))
-    for (const key of ['key', 'title', 'facts', 'kind', 'repo', 'after', 'not_before', 'issue'])
+    for (const key of ['key', 'title', 'facts', 'kind', 'lane', 'repo', 'after', 'not_before', 'issue'])
       expect(used.has(key)).toBe(true)
     const adopted = result.plan.rows.find((r) => r.issue !== undefined)
     expect(adopted && Object.keys(adopted).sort()).toEqual(['issue', 'key'])
@@ -53,6 +53,22 @@ describe('docs/plan.yaml', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.warnings.some((w) => w.includes('stable_days is retired'))).toBe(true)
+  })
+
+  test('a lane the project does not declare is a warning, not a broken plan; a bad name or an adopted row is refused', () => {
+    const rows = [row('a', { lane: 'apple' }), row('b', { lane: 'web' }), row('c')]
+    const result = parsePlan({ version: 1, rows }, ['apple'])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.warnings).toEqual([expect.stringContaining('row b: lane web is not declared')])
+    expect(result.plan.rows.map((r) => r.lane)).toEqual(['apple', 'web', undefined])
+    const undeclared = parsePlan({ version: 1, rows })
+    expect(undeclared.ok && undeclared.warnings).toHaveLength(2)
+    expect(parsePlan({ version: 1, rows: [row('a', { lane: 'Apple Build' })] }).ok).toBe(false)
+    expect(parsePlan({ version: 1, rows: [{ key: 'a', issue: 5, lane: 'apple' }] })).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('no lane'),
+    })
   })
 
   test('a duplicate key, an unknown after, a self wait, a cycle and a row without a title are refused', () => {
