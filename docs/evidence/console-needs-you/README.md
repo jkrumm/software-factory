@@ -24,7 +24,23 @@ sidebar of 02 and the figure-over-label rhythm of 03 for the band, and keeps the
 The reviewer ran without `basalt-ui shot` metrics (the Console's Playwright shots stand in for them, as DESIGN.md says),
 so its craft scores were by eye.
 
+## Issue 660: the band's entries as rows with a popover
+
+The owner's note on the card version: "those are not cards. Hovering them may show a pop up on the side to see more
+details and the full title." Each entry is now a `SinceRow` (icon for what happened, number, title on one line, project,
+age); hover, keyboard focus or a tap opens a popover to its side with the full title, what happened, the outcome and the
+links. The owner's reference images (`design-refs/console`) are not on this host, so each round was scored against
+`DESIGN.md` and the previous round (the card version above); `basalt-ui shot` is not installed here either, so the
+reviewer (a subagent briefed with `basalt-design-reviewer.md`) judged the Playwright shots by eye.
+
+| Round | Looked at | Findings | Changed |
+|-|-|-|-|
+| 1 (lead) | 1800 dark `row-open`, 1800 light band, phone band and `row-open` | The project was not on the row at any width (a container query on a stale build); the popover's time read "11/10/2026, 10:37:29 PM" beside a 24 h header; the phone popover flips above a low row | Project in the row from 20 rem; the popover's "When" is 24 h with the month as a word |
+| 2 (reviewer subagent) | 1800 dark and light, 1280, 390 | P1: no project in the row (the stale build), no keyboard-focus shot. P2: the "When" format, 5 text sizes (unmeasured), an empty number slot. P3: capture clock, plain links | An en dash for a missing number; `row-focus` shots; Tab goes from the row into the popover's links (the row keeps its focus ring) |
+| 3 (reviewer) | all shots | P1: no `row-focus` at 1280. P2: a title clipped at 1800 when the project shares the line, "Swap" clipped in the frame's strip at 390. P3: a capture-clock difference between shots | `row-focus` added at 1280. Left: the clip (the popover holds the full title), the strip (the frame's) |
+| 4 (reviewer, last) | all shots | Dark and light: no P0, no P1. P2: the clip and the strip, as above. P3: the capture clock; Tab into the popover's links is in the e2e, not in a shot | None |
+
 ## Files
 
 `<viewport>-<shot>.png`: `band` (the screen on its first view), `band-open` (phone, the Fold open), `decision-open` (option
-cards), `errand-open`, `held-open` (source, link and when), `filtered` (`?project=argo`).
+cards), `errand-open`, `held-open` (source, link and when), `filtered` (`?project=argo`), `row-open` (a row's popover: hover, a tap on the phone), `row-focus` (keyboard focus on a row, 1800 and 1280).

@@ -52,8 +52,11 @@ with a "Show all states" link (it never filters rows); on a phone it picks the t
 
 `/needs-you` opens with the **Since you were here** band, then the checkpoints. The band is `GET /v1/since`: one figure and
 label per category (Shipped and verified, Regressed, Dropped, Settled by the Judge, Turned away, New Issues
-with its by-origin words, Incidents), a quiet figure when a category is empty, the newest three items of each as links to
-the Issue page (an item with no Issue is plain text) and a Fold for the rest the server sent. When every count is zero it is
+with its by-origin words, Incidents), a quiet figure when a category is empty, the newest three items of each as compact `SinceRow`s (an
+icon for what happened, the number, the title clamped to one line, the project, the age; no card) and a Fold for the rest
+the server sent. A row is a button: hovering it, focusing it with the keyboard or tapping it opens a popover to its side
+with the full title, what happened, the outcome and the links (the Issue, and for shipped and regressed ones its
+verification evidence). When every count is zero it is
 one line ("Nothing changed since 09:12"). The categories, labels, tones and words are pure logic in `src/lib/since.ts`.
 **The visit marker** lives on the server: the owner's read of `/v1/since` is what moves it (a new visit starts after 30
 quiet minutes; inside a visit every read returns the same band), so only this screen calls it, the query (`['since']`)

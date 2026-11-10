@@ -81,6 +81,7 @@ it does not.
 | Lozenge | A state as text on a 12 % tint of its tone; the tone comes from an explicit map, never from the words |
 | KindBadge | The Issue's kind (feature, bug, incident, chore, docs) as an outline badge with its icon; `KindIcon` is the icon alone with the kind as its name and tooltip (cards and rows) |
 | IssueCard / IssueRow | Card, built like a StatCard: the shell holds a header (KindIcon, project chip, the Issue number in mono, the origin as a muted word only when it is not You, a Lozenge where no column already says the state) and a footer (the wait or queue reason with its icon, the age in mono); the title sits alone in the inset body one surface step below, 13 px clamped to 3 lines; the whole card is a link; ⋯ on hover swaps with the Lozenge. `compact` (the Chain's node) clamps the title to 2 lines and the reason to 1. A plan row has no number and no age. The row is one dense line from 40 rem: icon, number, title, project, Lozenge, reason, age |
+| SinceRow | One thing that happened, as a compact line with no box: an icon tinted by its tone for what happened, the Issue number in mono, the title clamped to one line, the project, the age. It is a button, not a link: hovering or keyboard-focusing it opens a popover to its side (below on a phone, where a tap opens it) with the full title, what happened, the outcome and the links; Escape closes it |
 | PropertyList | A definition list: a small label above its value, three columns from 40 rem; a missing value reads "None", muted |
 | Section / Fold | A section is a heading, a rule and space, never a box; a Fold is a full-width header button with a caret and a count |
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
@@ -108,7 +109,7 @@ it does not.
 ## The screens
 
 - **Needs you**: a "Since you were here" band on top (what shipped, what failed, what the Judge settled and the screen
-  turned away, what is new, since the owner's last visit). Then the checkpoints, project first and then title. A Decision
+  turned away, what is new, since the owner's last visit). Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
 - **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the board

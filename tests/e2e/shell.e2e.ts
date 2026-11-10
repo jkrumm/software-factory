@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures.ts'
+import { textWithoutBand } from './screen-text.ts'
 import { badge, chip } from './shell-support.ts'
 import { api, holdSignal, needsCount } from './seed.ts'
 
@@ -19,7 +20,7 @@ test('the root redirects to Needs you, the badge is the API count and no id leak
   await expect(page).toHaveURL(/\/needs-you$/)
   await expect(badge(page)).toHaveText(String(count))
   await expect(page.getByText(`${count} need you`, { exact: true })).toBeVisible()
-  expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+  expect(await textWithoutBand(page)).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 
 test('the four screens open from the navigation and from G then N, F, C, I', async ({ page }) => {

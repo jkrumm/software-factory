@@ -103,6 +103,8 @@ async function reveal(box: Locator): Promise<void> {
 }
 
 const issueHref = (issue: string) => `/issues/${issue.replace('issue_', '')}`
+/** The row's `#N`, matched whole so `#12` never finds `#123`. */
+const numberOf = (issue: string): RegExp => new RegExp(`#${issue.replace('issue_', '')}(?!\\d)`)
 
 async function openBand(page: Page, apiUrl: string): Promise<void> {
   await arm(apiUrl)
@@ -138,38 +140,92 @@ test('every figure on the band equals the count in the event log since the visit
     await expect(breakdown).toContainText(`${n} ${ORIGIN_WORD[origin] ?? origin}`)
   }
 
-  // the items link to their Issue pages; the Issues from before the visit appear nowhere
-  const links = async (key: Key) => {
-    await reveal(category(page, key))
-    return category(page, key).locator('a')
-  }
-  for (const issue of seed.after.shipped)
-    await expect((await links('shipped')).and(page.locator(`[href="${issueHref(issue)}"]`))).toHaveCount(1)
-  await expect((await links('failed')).and(page.locator(`[href="${issueHref(seed.after.failed)}"]`))).toHaveCount(1)
-  await expect((await links('dropped')).and(page.locator(`[href="${issueHref(seed.after.dropped)}"]`))).toHaveCount(1)
-  await expect((await links('judge')).and(page.locator(`[href="${issueHref(seed.after.judge)}"]`))).toHaveCount(1)
-  await expect((await links('screen')).and(page.locator(`[href="${issueHref(seed.after.screen)}"]`))).toHaveCount(1)
-  await expect((await links('incidents')).and(page.locator(`[href="${issueHref(seed.after.incident)}"]`))).toHaveCount(
-    1,
-  )
+  // each item is a row carrying its Issue number; the Issues from before the visit appear nowhere
+  const rowOf = (key: Key, issue: string) => category(page, key).getByRole('button', { name: numberOf(issue) })
+  for (const key of keys) await reveal(category(page, key))
+  for (const issue of seed.after.shipped) await expect(rowOf('shipped', issue)).toHaveCount(1)
+  await expect(rowOf('failed', seed.after.failed)).toHaveCount(1)
+  await expect(rowOf('dropped', seed.after.dropped)).toHaveCount(1)
+  await expect(rowOf('judge', seed.after.judge)).toHaveCount(1)
+  await expect(rowOf('screen', seed.after.screen)).toHaveCount(1)
+  await expect(rowOf('incidents', seed.after.incident)).toHaveCount(1)
   await expect(category(page, 'screen').getByText('The status page flickers')).toBeVisible()
   await expect(category(page, 'judge').getByText('Keep the banner for one week?')).toBeVisible()
   await expect(category(page, 'shipped').getByText('Show the retention banner')).toBeVisible()
-  await expect(category(page, 'shipped').getByRole('link', { name: 'Show the retention banner' })).toHaveAttribute(
-    'href',
-    issueHref(seed.after.shipped[0] ?? ''),
-  )
-  for (const key of keys) await reveal(category(page, key))
   for (const issue of seed.before)
-    await expect(band(page).locator(`[href="${issueHref(issue)}"]`), issue).toHaveCount(0)
+    await expect(band(page).getByRole('button', { name: numberOf(issue) }), issue).toHaveCount(0)
   await expect(band(page).getByText(/^Early:/)).toHaveCount(0)
   await expect(band(page).getByText('A duplicate complaint')).toHaveCount(0)
   await expect(band(page).getByText('Name the cache after the repo?')).toHaveCount(0)
 
-  // an item opens its Issue page
-  await category(page, 'dropped').getByRole('link', { name: 'Drop the legacy importer' }).click()
+  // an item opens its Issue page, through the link in its popover
+  await category(page, 'dropped')
+    .getByRole('button', { name: /Drop the legacy importer/ })
+    .click()
+  await page.getByRole('dialog').getByRole('link', { name: 'Open the Issue' }).click()
   await expect(page).toHaveURL(new RegExp(`${issueHref(seed.after.dropped)}$`))
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Drop the legacy importer')
+})
+
+test('a row opens a popover on hover and on keyboard focus: the full title, what happened, the outcome and its links', async ({
+  page,
+  apiUrl,
+}) => {
+  await openBand(page, apiUrl)
+  const shipped = seed.after.shipped[0] ?? ''
+  const row = category(page, 'shipped').getByRole('button', { name: numberOf(shipped) })
+  const popup = page.getByRole('dialog')
+  const href = issueHref(shipped)
+
+  // an entry is a row, not a card: one line, no article, no link of its own
+  await expect(row).toBeVisible()
+  expect(await row.evaluate((el) => el.tagName)).toBe('BUTTON')
+  expect((await row.boundingBox())?.height ?? 99).toBeLessThan(40)
+  await expect(category(page, 'shipped').locator('article')).toHaveCount(0)
+
+  // hover opens it to the row's side, and leaving it closes it
+  await row.hover()
+  await expect(popup).toBeVisible()
+  await expect(popup.getByRole('heading', { name: 'Show the retention banner' })).toBeVisible()
+  await expect(popup).toContainText('What happened')
+  await expect(popup).toContainText('It was deployed and the watch after the deploy passed.')
+  await expect(popup).toContainText('Shipped and verified')
+  await expect(popup.getByRole('link', { name: 'Open the Issue' })).toHaveAttribute('href', href)
+  await expect(popup.getByRole('link', { name: 'Verification evidence' })).toHaveAttribute(
+    'href',
+    `${href}?tab=evidence`,
+  )
+  const rowBox = await row.boundingBox()
+  const popupBox = await popup.boundingBox()
+  expect(rowBox && popupBox && popupBox.x >= rowBox.x + rowBox.width - 1).toBe(true)
+  await page.mouse.move(2, 2)
+  await expect(popup).toBeHidden()
+
+  // the keyboard arrives at it and the popover opens; Escape closes it
+  await row.focus()
+  await expect(popup).toBeVisible()
+  // the row keeps its focus ring; Tab goes into the popover's links
+  await expect(row).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(popup.getByRole('link', { name: 'Open the Issue' })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(row).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(popup).toBeHidden()
+  // and Enter opens it from the row
+  await row.focus()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Enter')
+  await expect(popup).toBeVisible()
+  await expect(popup.getByRole('link', { name: 'Open the Issue' })).toBeVisible()
+
+  // a category without evidence has the Issue link alone
+  await page.keyboard.press('Escape')
+  await category(page, 'dropped')
+    .getByRole('button', { name: numberOf(seed.after.dropped) })
+    .click()
+  await expect(popup.getByRole('link', { name: 'Open the Issue' })).toBeVisible()
+  await expect(popup.getByRole('link', { name: 'Verification evidence' })).toHaveCount(0)
 })
 
 test('a second page load inside the visit shows the same band', async ({ page, apiUrl }) => {
@@ -305,31 +361,31 @@ const SHOTS = [
     variant: 'desktop-xl-dark',
     viewport: { width: 1800, height: 1200 },
     colorScheme: 'dark',
-    shots: ['band', 'decision-open', 'errand-open', 'held-open', 'filtered'],
+    shots: ['band', 'row-open', 'row-focus', 'decision-open', 'errand-open', 'held-open', 'filtered'],
   },
   {
     variant: 'desktop-xl-light',
     viewport: { width: 1800, height: 1200 },
     colorScheme: 'light',
-    shots: ['band', 'filtered', 'decision-open'],
+    shots: ['band', 'row-open', 'row-focus', 'filtered', 'decision-open'],
   },
   {
     variant: 'desktop-dark',
     viewport: { width: 1280, height: 800 },
     colorScheme: 'dark',
-    shots: ['band', 'filtered', 'decision-open'],
+    shots: ['band', 'row-open', 'row-focus', 'filtered', 'decision-open'],
   },
   {
     variant: 'phone-dark',
     viewport: { width: 390, height: 844 },
     colorScheme: 'dark',
-    shots: ['band', 'band-open', 'filtered', 'decision-open'],
+    shots: ['band', 'band-open', 'row-open', 'filtered', 'decision-open'],
   },
 ] as const
 
 for (const { variant, viewport, colorScheme, shots } of SHOTS) {
   test.describe(`screenshots ${variant}`, () => {
-    test.use({ viewport, colorScheme })
+    test.use({ viewport, colorScheme, hasTouch: viewport.width < 768 })
 
     test('the band, an open Decision, Errand and held signal, and a project filter', async ({ page, apiUrl }) => {
       await arm(apiUrl)
@@ -345,6 +401,8 @@ for (const { variant, viewport, colorScheme, shots } of SHOTS) {
       const targets = {
         band: '/needs-you',
         'band-open': '/needs-you',
+        'row-open': '/needs-you',
+        'row-focus': '/needs-you',
         'decision-open': `/needs-you?item=${pick('decision', 'Which logging library').id}`,
         'errand-open': `/needs-you?item=${pick('errand', 'Rotate the argo deploy key').id}`,
         'held-open': `/needs-you?item=${pick('held_signal').id}`,
@@ -359,7 +417,27 @@ for (const { variant, viewport, colorScheme, shots } of SHOTS) {
         await expect(band(page).locator('time').first()).toContainText('3 hours ago')
         // the phone keeps the items in a Fold
         if (name === 'band-open') await band(page).getByRole('button', { name: 'Show what changed' }).click()
-        if (name.endsWith('-open') && name !== 'band-open')
+        if (name === 'row-focus') {
+          // the keyboard arrives: the ring on the row and the popover beside it
+          await band(page)
+            .getByRole('button', { name: numberOf(seed.after.shipped[0] ?? '') })
+            .first()
+            .focus()
+          await expect(page.getByRole('dialog')).toBeVisible()
+          await expect(page.locator('button:focus-visible')).toHaveCount(1)
+        }
+        if (name === 'row-open') {
+          // the phone keeps the items in a Fold, and a tap opens the popover; a wide screen hovers
+          const phone = viewport.width < 768
+          if (phone) await band(page).getByRole('button', { name: 'Show what changed' }).click()
+          const row = band(page).getByRole('button', {
+            name: new RegExp(`Shipped and verified #${(seed.after.shipped[0] ?? '').replace('issue_', '')}(?!\\d)`),
+          })
+          await (phone ? row.tap() : row.hover())
+          await expect(page.getByRole('dialog')).toBeVisible()
+          await expect(page.getByRole('dialog').getByRole('heading')).toBeVisible()
+        }
+        if (name.endsWith('-open') && name !== 'band-open' && name !== 'row-open' && name !== 'row-focus')
           await expect(page.locator('article[data-open="true"]')).toBeVisible()
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
