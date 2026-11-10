@@ -48,7 +48,7 @@ const clampLimit = (limit: number | undefined): number => Math.min(Math.max(limi
 /** The read API as the routes use it: every answer is built here, whole, from the stored facts. */
 export interface ReadApi {
   overview(input: Surface): Promise<ReadOverview>
-  issues(input: Surface & { scope: IssueScope; limit?: number }): Promise<ReadIssueCard[]>
+  issues(input: Surface & { scope: IssueScope; limit?: number; repo?: string }): Promise<ReadIssueCard[]>
   /** `issue_12` or `12`; null when there is no such Issue or the text is no Issue */
   issue(input: Surface & { id: string }): Promise<ReadIssueDetail | null>
   sessions(input: Surface & { issue?: string; role?: string; live?: boolean }): Promise<ReadSessionCard[] | null>
@@ -136,10 +136,11 @@ export function createReader(deps: ReadDeps): ReadApi {
     overview,
     sessions,
 
-    async issues({ redact, scope, limit }) {
+    async issues({ redact, scope, limit, repo }) {
       const cards = await listCards(deps, {
         scope,
         limit: clampLimit(limit),
+        ...(repo === undefined ? {} : { repo }),
         quota: await quotaOf(),
         queue: queueOf,
       })

@@ -1,12 +1,15 @@
 import { FILING, PLAN_LIMITS } from '@software-factory/contract'
 import type { OperationExtension } from './operation.ts'
+import { issueListPlain, projectShowPlain } from './plain-forms.ts'
 
 const POINTER = 'factory issue schema'
 
 const WHERE = [
   'On the mini (the owner path): `factory issue new --repo <repo> --title <title> --facts @file [--after <id>] [--key <key>]`; with no token set the CLI resolves the owner token from the deployed release itself.',
-  'List what is filed with `factory issue list`; file a finding for another repo with `factory signal file --from agent:<repo> --title <title> --text <text>`.',
+  'List what is filed with `factory issue list [--repo <name>] [--state open|closed|all] --format plain` (one line per Issue); file a finding for another repo with `factory signal file --from agent:<repo> --title <title> --text <text>`.',
   'Elsewhere, or as a lead (which keeps its own agent token): FACTORY_TOKEN must be set, else the server answers 401.',
+  'Several Issues that depend on each other, or that are filed over time: do not file them one by one. Write rows into the repo `docs/plan.yaml` (the server files each row as an Issue once its `after` rows are done).',
+  'Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain`.',
 ]
 
 const factsShape = `{${FILING.facts.keys.map((k) => `"${k.key}": "..."`).join(', ')}}`
@@ -56,7 +59,8 @@ const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 
 
 /** What a command says beyond its generated contract: help text, hints for a rejected field, hints per status. */
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {
-  'project.show': { help: planLimitsHelp },
+  'project.show': { help: planLimitsHelp, plain: projectShowPlain },
+  'issue.list': { plain: issueListPlain },
   'issue.new': {
     help: filingGuide(),
     jsonObjectFields: { facts: factsHint, seat: seatHint },

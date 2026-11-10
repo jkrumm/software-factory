@@ -136,6 +136,15 @@ describe('as the owner', () => {
     expect((await json('/v1/issues?state=nope')).status).toBe(422)
   })
 
+  test('repo narrows the list before the limit; an unknown repo is an empty list', async () => {
+    const argo = (await json('/v1/issues?repo=argo')).body.issues
+    expect(argo.map((c: { repoName: string }) => c.repoName)).toEqual(['argo'])
+    expect((await json('/v1/issues?repo=chat&limit=1')).body.issues.map((c: { id: number }) => c.id)).toEqual([2])
+    const none = await json('/v1/issues?repo=nope')
+    expect(none.status).toBe(200)
+    expect(none.body.issues).toEqual([])
+  })
+
   test('/v1/issues/{id} accepts issue_1 and 1 and has timeline, asks and sessions', async () => {
     const a = await json('/v1/issues/issue_2')
     const b = await json('/v1/issues/2')

@@ -2,7 +2,7 @@
 
 A project's `docs/plan.yaml` is its plan: the work not yet filed, as rows. The server reads it from the repo's default
 branch, files each row as an Issue when the row may start, and tracks the row until that Issue closes. This page is the
-one description of the format. The schema is `PlanFile` in `apps/server/src/domains/planning/plan.ts`; the example below
+one description of the format. The schema is `PlanFile` in `packages/contract/src/plan-file.ts`; the example below
 is parsed against it by `apps/server/test/planning/plan.test.ts`, so it cannot drift.
 
 ## The file
@@ -15,10 +15,14 @@ rows:
   - key: export-paging
     title: Page the account export
     facts:
-      why: The export button times out on large accounts, so support exports them by hand.
-      what: src/export/stream.ts and its test; nothing in the UI.
-      change: Write the export in pages of 500 rows in src/export/stream.ts instead of one query.
-      acceptance: Exporting a 100k-row fixture in test/export.test.ts finishes in under 5 s and make check passes.
+      why: |-
+        The export button times out on large accounts, so support exports them by hand.
+      what: |-
+        src/export/stream.ts and its test; nothing in the UI.
+      change: |-
+        Write the export in pages of 500 rows in src/export/stream.ts instead of one query.
+      acceptance: |-
+        Exporting a 100k-row fixture in test/export.test.ts finishes in under 5 s and make check passes.
   - key: export-docs
     kind: docs
     title: Document the paged export
@@ -26,20 +30,32 @@ rows:
     after: [export-paging, intake]
     not_before: 2026-12-01
     facts:
-      why: Support still describes the one-query export.
-      what: docs/export.md only.
-      change: Describe the paged export and its 500-row page.
-      acceptance: docs/export.md names the page size and make check passes.
+      why: |-
+        Support still describes the one-query export.
+      what: |-
+        docs/export.md only.
+      change: |-
+        Describe the paged export and its 500-row page.
+      acceptance: |-
+        docs/export.md names the page size and make check passes.
   - key: console-seed
     repo: software-factory
     after: [other-project:schema-change]
     title: Seed the Console fixtures
     facts:
-      why: The Console needs the new schema in its fixtures.
-      what: apps/console/fixtures only.
-      change: Regenerate the fixtures from the new schema.
-      acceptance: The Console tests pass on the regenerated fixtures.
+      why: |-
+        The Console needs the new schema in its fixtures.
+      what: |-
+        apps/console/fixtures only.
+      change: |-
+        Regenerate the fixtures from the new schema.
+      acceptance: |-
+        The Console tests pass on the regenerated fixtures.
 ```
+
+A one-line fact that contains `: ` (a colon and a space) is not a string to YAML but a nested mapping, and the file does not
+parse: quote it or write it as a block scalar, as the example does (`why: |-` and the text indented below; `|-` keeps no
+trailing newline).
 
 `version` is `1`. `rows` has at least one row. Unknown keys anywhere are refused: the file is strict. A file over 64 KiB, or with more than 100 YAML aliases, is
 a broken plan.
@@ -155,12 +171,27 @@ wait is its event, not an edge: it is not removed here, and a waiting Issue stay
 
 ## Checking a plan
 
+Before pushing:
+
+```
+factory plan check docs/plan.yaml
+```
+
+reads the file offline (no server, no token) and prints every problem with its line and column
+(`docs/plan.yaml:12:5: ...`), exit 2 when there is one; `-` reads stdin, `--format json` prints the problems as data. It
+applies the same schema the server does, plus a warning for a lane the repo's `project.yaml` does not declare.
+`factory plan schema` prints this page. After pushing, `factory project sync --fetch true` reads the remote now and
+`factory project show <name> --format plain` prints one line per row (`factory issue list --repo <name> --state open
+--format plain` lists the open Issues of the repo).
+
 ```
 factory project show <name>
 ```
 
-prints the project's `project.yaml` in force and every plan row with its state, its Issue and, for a waiting row, why. A
-plan that does not parse shows `planError` with the file's message and keeps the last valid plan in force; fix the file
+prints the project's `project.yaml` in force and every plan row with its state, its Issue and, for a waiting row, why:
+`after a, b` lists every `after` row not yet done, in `after` order, and a name that is no row reads
+`ghost (no such row)` (`after a, ghost (no such row)`). A
+plan that does not parse shows `planError` with the file's message and its position in the plan (`rows.3.after.0: ...`), and keeps the last valid plan in force; fix the file
 and the next read replaces it. `warnings` lists what is read but retired.
 
 A project is a repo with its own `.git` directory directly under a repo root. A linked worktree (`.git` is a file) is

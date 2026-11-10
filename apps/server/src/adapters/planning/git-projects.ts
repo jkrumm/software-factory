@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
-import { PLAN_LIMITS } from '@software-factory/contract'
-import { parse, YAMLParseError } from 'yaml'
+import { firstLine, parseYamlText } from '@software-factory/contract/plan'
 import { MAX_PLAN_BYTES } from '../../domains/planning/plan.ts'
 import type { ProjectSource, RepoRef } from '../../domains/planning/ports.ts'
 import { isProjectDirName, MAX_PROJECT_BYTES } from '../../domains/planning/project.ts'
@@ -21,41 +20,7 @@ const PLAN_FILE = { path: 'docs/plan.yaml', max: MAX_PLAN_BYTES }
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
-const firstLine = (message: string): string => {
-  const line =
-    message
-      .split('\n')
-      .find((l) => l.trim() !== '')
-      ?.trim() ?? message
-  return line.length > 300 ? `${line.slice(0, 300)}…` : line
-}
-
-/**
- * The hardened YAML read of the project and plan files: YAML 1.2 core, one document, no merge keys, duplicate keys
- * refused, at most 100 aliases. Whatever is wrong comes back as one message with a position where the parser has one.
- */
-export function parseYamlText(text: string): { ok: true; value: unknown } | { ok: false; message: string } {
-  try {
-    const value: unknown = parse(text, {
-      version: '1.2',
-      schema: 'core',
-      merge: false,
-      uniqueKeys: true,
-      maxAliasCount: PLAN_LIMITS.maxAliases,
-      logLevel: 'error',
-    })
-    return { ok: true, value }
-  } catch (error) {
-    if (error instanceof YAMLParseError) {
-      const at = error.linePos?.[0]
-      return {
-        ok: false,
-        message: `${error.code}${at ? ` at line ${at.line}, column ${at.col}` : ''}: ${firstLine(error.message)}`,
-      }
-    }
-    return { ok: false, message: `YAML: ${firstLine(error instanceof Error ? error.message : String(error))}` }
-  }
-}
+export { parseYamlText }
 
 /**
  * Reads `project.yaml` and `docs/plan.yaml` from the default branch of git repos, as last fetched: a feature branch

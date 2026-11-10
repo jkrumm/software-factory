@@ -1393,7 +1393,7 @@ export const OPERATIONS: readonly Operation[] = [
     path: '/v1/issues',
     summary: 'Issue cards, newest activity first',
     pathParams: [],
-    queryParams: ['state', 'limit'],
+    queryParams: ['state', 'limit', 'repo'],
     body: false,
     queryFlags: [],
     bodyFields: [],

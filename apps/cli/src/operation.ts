@@ -69,6 +69,8 @@ export interface OperationExtension {
   jsonObjectFields?: Readonly<Record<string, string>>
   /** the hint of a failing answer, by status; wins over the default */
   statusHints?: Readonly<Record<number, string>>
+  /** the plain rendering of a 2xx answer, instead of the generic `key<TAB>value` lines; empty prints nothing */
+  plain?: (data: unknown) => string
 }
 
 export const extensionOf = (op: Operation): OperationExtension | undefined => OPERATION_EXTENSIONS[op.operationId]
@@ -281,7 +283,9 @@ export async function runOperation(op: Operation, invocation: Invocation, io: Io
         hint: 'the server and the CLI are from different releases',
       })
     }
-    io.out(render(invocation.format, parsed.data, plain(parsed.data)))
+    const text = (extensionOf(op)?.plain ?? plain)(parsed.data)
+    if (invocation.format === 'plain' && text === '') return
+    io.out(render(invocation.format, parsed.data, text))
     return
   }
   const kind = kindForStatus(answer.status)
