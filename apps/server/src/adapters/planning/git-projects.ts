@@ -20,7 +20,6 @@ const PLAN_FILE = { path: 'docs/plan.yaml', max: MAX_PLAN_BYTES }
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
-
 export { parseYamlText }
 
 /**
