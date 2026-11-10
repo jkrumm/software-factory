@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
+import { PLAN_LIMITS } from '@software-factory/contract'
 import { parse, YAMLParseError } from 'yaml'
 import { MAX_PLAN_BYTES } from '../../domains/planning/plan.ts'
 import type { ProjectSource, RepoRef } from '../../domains/planning/ports.ts'
@@ -40,7 +41,7 @@ export function parseYamlText(text: string): { ok: true; value: unknown } | { ok
       schema: 'core',
       merge: false,
       uniqueKeys: true,
-      maxAliasCount: 100,
+      maxAliasCount: PLAN_LIMITS.maxAliases,
       logLevel: 'error',
     })
     return { ok: true, value }

@@ -1,4 +1,4 @@
-import { FILING } from '@software-factory/contract'
+import { FILING, PLAN_LIMITS } from '@software-factory/contract'
 import type { OperationExtension } from './operation.ts'
 
 const POINTER = 'factory issue schema'
@@ -42,8 +42,11 @@ export const filingContract = () => ({ ...FILING, where: WHERE })
 const factsHint = `facts is one JSON object: ${factsShape} (markdown is not JSON); print the full contract with: ${POINTER}`
 const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER}`
 
+const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases (a plan over either is broken; format in docs/plan.md)`
+
 /** What a command says beyond its generated contract: help text, hints for a rejected field, hints per status. */
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {
+  'project.show': { help: planLimitsHelp },
   'issue.new': {
     help: filingGuide(),
     jsonObjectFields: { facts: factsHint },

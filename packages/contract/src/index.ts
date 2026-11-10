@@ -4,6 +4,7 @@ export * from './read-models.ts'
 export {
   CancelBody,
   IssueAnswerBody,
+  ISSUE_ID_META,
   IssueRefInput,
   NEW_ISSUE_TEXT_MAX,
   NewIssueAnswer,
@@ -82,6 +83,7 @@ export {
   DoorReportAck,
   DoorRoute,
   DoorRouteInput,
+  DoorRouteKey,
   DoorRouteList,
   DoorSource,
   FEEDBACK_ROUTE_SOURCE,
@@ -133,6 +135,7 @@ export {
   BrokenFile,
   FetchQuery,
   IssueRef,
+  PLAN_LIMITS,
   PlanningPassAnswer,
   PlanRowStatus,
   PrioAnswer,

@@ -1,7 +1,14 @@
 import * as z from 'zod'
+import { ISSUE_ID_META } from './issues.ts'
 
 /** An Issue as the API names it: `issue_<n>`, the number being "Issue 286". */
-export const IssueRef = z.string().regex(/^issue_[1-9][0-9]*$/, 'an Issue id like issue_286')
+export const IssueRef = z
+  .string()
+  .regex(/^issue_[1-9][0-9]*$/, 'an Issue id like issue_286')
+  .meta(ISSUE_ID_META)
+
+/** The limits of a project's `docs/plan.yaml`: a plan over either is broken. The server enforces them, the CLI states them. */
+export const PLAN_LIMITS = { maxBytes: 64 * 1024, maxAliases: 100 } as const
 
 export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
 

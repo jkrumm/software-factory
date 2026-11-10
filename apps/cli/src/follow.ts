@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import { type SseEvent, StreamError, streamEvents } from '@software-factory/client'
 import { ErrorBody, ReadChange, StreamHello } from '@software-factory/contract'
+import { issueIdOf } from './body-schema.ts'
 import { EXIT, FactoryError, kindForStatus, usage } from './exit.ts'
 import { DEFAULT_URL, type Io, tokenOf } from './operation.ts'
 import type { Format } from './output.ts'
@@ -123,7 +124,7 @@ export async function follow(
         path: '/v1/stream',
         token: tokenOf(io.env),
         since: cursor,
-        query: input.issue === undefined ? undefined : { issue: input.issue },
+        query: input.issue === undefined ? undefined : { issue: issueIdOf(input.issue) },
         signal,
       })
       for await (const frame of events) {

@@ -56,7 +56,7 @@ describe('operationsOf', () => {
               { name: 'id', in: 'path' },
               { name: 'wake', in: 'query' },
             ],
-            requestBody: {},
+            requestBody: { content: { 'application/json': { schema: { $ref: '#/$defs/CloseBody' } } } },
             responses: {
               '200': { description: '', content: { 'application/json': { schema: { $ref: '#/$defs/Health' } } } },
             },

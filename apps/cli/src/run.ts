@@ -1,6 +1,7 @@
 import { type ParseArgsOptionsConfig, parseArgs } from 'node:util'
 import type { RoleEntry } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
+import { bodyJsonSchema, fieldNotes, KIND_HINT } from './body-schema.ts'
 import { deployLockVerb } from './deploy-lock.ts'
 import { doorTokenVerb } from './door.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
@@ -125,32 +126,31 @@ const FIRST_STAGE = {
   help: { type: 'boolean', short: 'h' },
 } as const satisfies ParseArgsOptionsConfig
 
-const KIND_HINT = {
-  string: '<text>',
-  number: '<number>',
-  integer: '<integer>',
-  boolean: '[true|false]',
-  json: '<json>',
-} as const
-
-const flagHelp = (field: BodyField): string =>
-  [
+const flagHelp = (op: Operation, field: BodyField): string => {
+  if (op.bodySchema) {
+    const { hint, notes } = fieldNotes(op, field)
+    return [`--${field.flag} ${hint}`, field.required ? 'required' : '', ...notes].filter(Boolean).join('  ')
+  }
+  return [
     `--${field.flag} ${field.untyped ? '<text|json>' : KIND_HINT[field.kind]}`,
     field.required ? 'required' : '',
     field.repeatable ? 'repeatable' : '',
   ]
     .filter(Boolean)
     .join('  ')
+}
 
 /** `factory issue close --help`: the usage line, the summary and every flag with its marks. */
 function commandHelp(op: Operation): string {
   const flags = [
     ...op.queryParams.map((name) => {
       const bare = op.queryFlags.find((flag) => flag.name === name)
+      if (op.issueParams?.includes(name)) return `--${name} <issue-id>  issue_<n> or a bare <n>`
       return bare?.boolean ? `--${name} [true|false]` : bare ? `--${name}` : `--${name} <text>`
     }),
-    ...op.bodyFields.filter((field) => !op.args.includes(field.name)).map(flagHelp),
+    ...op.bodyFields.filter((field) => !op.args.includes(field.name)).map((field) => flagHelp(op, field)),
     ...(op.body ? ['--body <json>  the whole body as JSON; a flag overrides its key'] : []),
+    ...(op.body && op.bodySchema ? ["--schema  print the body's JSON Schema and exit"] : []),
     '--format json|plain',
   ]
   const extra = extensionOf(op)?.help
@@ -176,6 +176,7 @@ function optionsOf(op: Operation): ParseArgsOptionsConfig {
     format: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
     body: { type: 'string' },
+    schema: { type: 'boolean' },
     ...Object.fromEntries(op.queryParams.map((name) => [name, { type: 'string' }])),
     // A boolean takes `--flag`, `--flag true` and `--flag false`, which parseArgs' boolean type cannot: see `bareFlagsIn`.
     ...Object.fromEntries(
@@ -283,6 +284,11 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
       const parsed = parseOperation(op, argv)
       if (parsed.values.help) {
         io.out(commandHelp(op))
+        return EXIT.ok
+      }
+      if (parsed.values.schema) {
+        if (!op.body || !op.bodySchema) throw usage(`${op.command.join(' ')} takes no body`)
+        io.out(JSON.stringify(bodyJsonSchema(op), null, 2))
         return EXIT.ok
       }
       const given = parsed.values.format

@@ -17,13 +17,14 @@ export const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operation
 export const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot', 'follow']
 
 /** Flags the CLI itself owns (`run.ts`); a query parameter or a body property may not take one. */
-export const RESERVED_FLAGS = ['format', 'help', 'body']
+export const RESERVED_FLAGS = ['format', 'help', 'body', 'schema']
 
 const OPERATION_ID = /^([a-z][a-z0-9-]*)\.([a-z][a-z0-9-]*)$/
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
 const SCHEMA_REF = /^#\/\$defs\/([A-Za-z][A-Za-z0-9]*)$/
 
 const Parameter = z.object({ name: z.string(), in: z.string(), schema: z.unknown().optional() })
+const namesIssue = (schema: unknown): boolean => isJson(schema) && schema['x-id'] === 'issue'
 /** `detail['x-cli']` of a route: the body fields that are positional arguments after the path parameters. */
 const CliExtension = z.object({ args: z.array(z.string()) })
 const Response = z.object({
@@ -49,9 +50,13 @@ interface Generated {
   pathParams: string[]
   queryParams: string[]
   queryFlags: QueryFlag[]
+  /** the query parameters (names) that name an Issue: `x-id: issue` in the contract */
+  issueParams: string[]
   body: boolean
   bodyFields: BodyField[]
   args: string[]
+  /** the contract schema of the request body */
+  bodySchema: string | null
   responses: [number, string][]
 }
 
@@ -170,6 +175,13 @@ const contractSchema = (id: string): boolean => {
   return value instanceof z.ZodType && z.globalRegistry.get(value)?.id === id
 }
 
+/** The `$ref` of the JSON request body's schema, or nothing. */
+function bodyRefOf(requestBody: unknown): string | undefined {
+  if (!isJson(requestBody) || !isJson(requestBody.content)) return undefined
+  const media = requestBody.content['application/json']
+  return isJson(media) && isJson(media.schema) && typeof media.schema.$ref === 'string' ? media.schema.$ref : undefined
+}
+
 /** Every operation of the document, checked; throws one message per broken operation. */
 export function operationsOf(document: unknown): Generated[] {
   const doc = Document.parse(document)
@@ -200,8 +212,16 @@ export function operationsOf(document: unknown): Generated[] {
         }
         responses.push([Number(status), name])
       }
+      const bodyRef = bodyRefOf(op.requestBody)
+      const bodyName = bodyRef ? SCHEMA_REF.exec(bodyRef)?.[1] : undefined
+      if (op.requestBody !== undefined && (!bodyName || !contractSchema(bodyName))) {
+        problems.push(
+          `${where}: the request body is not a contract schema with .meta({ id }) (${bodyRef || 'no $ref'})`,
+        )
+      }
       const queries = (op.parameters ?? []).filter((p) => p.in === 'query')
       const queryParams = queries.map((p) => p.name)
+      const issueParams = queries.filter((p) => namesIssue(p.schema)).map((p) => p.name)
       const queryFlags = queries.flatMap((p) => queryFlagOf(p.name, p.schema) ?? [])
       for (const name of queryParams.filter((q) => RESERVED_FLAGS.includes(q))) {
         problems.push(`${where}: query parameter "${name}" is a flag the CLI owns`)
@@ -241,9 +261,11 @@ export function operationsOf(document: unknown): Generated[] {
         pathParams,
         queryParams,
         queryFlags,
+        issueParams,
         body: op.requestBody !== undefined,
         bodyFields,
         args,
+        bodySchema: bodyName && contractSchema(bodyName) ? bodyName : null,
         responses,
       })
     }
@@ -266,7 +288,11 @@ const fieldText = (field: BodyField): string =>
 
 /** The file's text: deterministic, so a rerun on the same document writes the same bytes. */
 export function render(operations: Generated[]): string {
-  const schemas = [...new Set(operations.flatMap((op) => op.responses.map(([, name]) => name)))].sort()
+  const schemas = [
+    ...new Set(
+      operations.flatMap((op) => [...op.responses.map(([, name]) => name), ...(op.bodySchema ? [op.bodySchema] : [])]),
+    ),
+  ].sort()
   const entries = operations.map((op) =>
     [
       '  {',
@@ -278,9 +304,11 @@ export function render(operations: Generated[]): string {
       `    pathParams: ${list(op.pathParams)},`,
       `    queryParams: ${list(op.queryParams)},`,
       `    body: ${String(op.body)},`,
+      ...(op.issueParams.length ? [`    issueParams: ${list(op.issueParams)},`] : []),
       `    queryFlags: [${op.queryFlags.map(flagText).join(', ')}],`,
       `    bodyFields: [${op.bodyFields.map(fieldText).join(', ')}],`,
       `    args: ${list(op.args)},`,
+      ...(op.bodySchema ? [`    bodySchema: ${op.bodySchema},`] : []),
       `    responses: { ${op.responses.map(([status, name]) => `${status}: ${name}`).join(', ')} },`,
       '  },',
     ].join('\n'),

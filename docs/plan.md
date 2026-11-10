@@ -40,7 +40,7 @@ rows:
       acceptance: The Console tests pass on the regenerated fixtures.
 ```
 
-`version` is `1`. `rows` has at least one row. Unknown keys anywhere are refused: the file is strict. A file over 64 KiB is
+`version` is `1`. `rows` has at least one row. Unknown keys anywhere are refused: the file is strict. A file over 64 KiB, or with more than 100 YAML aliases, is
 a broken plan.
 
 ## A row
