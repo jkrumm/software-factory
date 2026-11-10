@@ -38,7 +38,7 @@ interface IssueRow {
   state: ReadIssueCard['state']
   wait_reason: string | null
   outcome: string | null
-  filed: { title?: unknown; kind?: unknown; seat?: unknown } | null
+  filed: { title?: unknown; kind?: unknown; seat?: unknown; lane?: unknown } | null
   created_at: Date
   updated_at: Date
   closed_at: Date | null
@@ -194,6 +194,7 @@ function cardOf(input: {
     waitingOnOwner:
       open && ((row.state === 'waiting' && OWNER_WAITS.has(row.wait_reason ?? '')) || extras.asking.has(row.id)),
     seat: seatOf(row.filed?.seat),
+    lane: text(row.filed?.lane),
   }
 }
 

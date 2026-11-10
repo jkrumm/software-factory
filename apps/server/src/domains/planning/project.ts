@@ -1,4 +1,4 @@
-import { DEFAULT_SLOT_RUN_MS } from '@software-factory/contract'
+import { DEFAULT_SLOT_RUN_MS, LaneName } from '@software-factory/contract'
 import * as z from 'zod'
 
 export { DEFAULT_SLOT_RUN_MS }
@@ -84,6 +84,37 @@ const Hygiene = z
     path: ['reason'],
   })
 
+const LANE_MEMORY = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
+const MAX_LANE_MEMORY_MIB = 1024 * 1024
+
+/** One lane: a cap on its leads, or `{leads, memory}` with the host memory each running lead of the lane reserves (`18GiB`). */
+const Lane = z
+  .union([
+    z.number().int().min(1).max(8),
+    // a stored project is read back through this schema: its lanes are already `{leads, memoryMib}`
+    z.strictObject({ leads: z.number().int().min(1).max(8), memoryMib: z.number().int().min(0).nullable() }),
+    z.strictObject({
+      leads: z.number().int().min(1).max(8),
+      memory: z
+        .string()
+        .regex(LANE_MEMORY, 'a size like 18GiB or 512MiB')
+        .refine((text) => laneMemoryMib(text) <= MAX_LANE_MEMORY_MIB, 'at most 1 TiB')
+        .optional(),
+    }),
+  ])
+  .transform((lane) => {
+    if (typeof lane === 'number') return { leads: lane, memoryMib: null }
+    if ('memoryMib' in lane) return lane
+    return { leads: lane.leads, memoryMib: lane.memory === undefined ? null : laneMemoryMib(lane.memory) }
+  })
+
+/** `18GiB` or `512MiB` as MiB; 0 for anything else. */
+function laneMemoryMib(text: string): number {
+  const match = LANE_MEMORY.exec(text)
+  if (!match?.[1]) return 0
+  return Math.round(Number(match[1]) * (match[2] === 'GiB' ? 1024 : 1))
+}
+
 /** First match wins. */
 const ShipRule = z.strictObject({
   paths: z.array(z.string().min(1)).min(1),
@@ -164,6 +195,12 @@ export const ProjectFile = z
       .default(() => [{ paths: ['**'], via: 'push' as const }]),
     /** how many leads may work in the repo at once (one more for a fix while the line is stopped) */
     leads: z.number().int().min(1).max(8).default(1),
+    /**
+     * resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory:
+     * 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and
+     * this does not declare is unlimited within `leads`; a cap above `leads` limits nothing.
+     */
+    lanes: z.record(LaneName, Lane).default({}),
     slots: Slots.default({}),
     hygiene: Hygiene.default(() => Hygiene.parse({})),
     signals: Signals.default({}),

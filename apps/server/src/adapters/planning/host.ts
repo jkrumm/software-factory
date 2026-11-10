@@ -13,6 +13,8 @@ export interface HostOptions {
   now?: () => number
 }
 
+const MIB = 1024 * 1024
+
 const count = (name: string, value: string): Result<number, PortError> => {
   const n = Number(value)
   return Number.isFinite(n) && n >= 0 ? ok(n) : err(portError('unreadable', `${name} is not a number: ${value}`))
@@ -75,6 +77,14 @@ export function hostReader(options: HostOptions): HostReader {
       })
       last = sample
       return ok(reading)
+    },
+
+    async ramMib() {
+      const text = await sysctl('hw.memsize')
+      if (!text.ok) return text
+      const bytes = count('hw.memsize', text.value)
+      if (!bytes.ok) return bytes
+      return bytes.value > 0 ? ok(Math.round(bytes.value / MIB)) : err(portError('unreadable', 'hw.memsize is 0'))
     },
 
     async load() {

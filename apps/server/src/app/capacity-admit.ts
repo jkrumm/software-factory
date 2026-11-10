@@ -1,6 +1,7 @@
 import { type AccountReading, POLL_EVERY_MS, standing } from '../domains/capacity/accounts.ts'
 import { checkAdmission, type RefusalKind } from '../domains/capacity/admission.ts'
-import type { MemoryCeilings, MemoryReading } from '../domains/capacity/host.ts'
+import { type MemoryCeilings, type MemoryReading, reservedOf } from '../domains/capacity/host.ts'
+import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
@@ -32,6 +33,8 @@ export interface CapacityDeps extends PlanningDeps {
 export interface HostInputs {
   load: number | null
   memory: MemoryReading | null
+  /** the machine's RAM in MiB; null: the lanes' memory cannot be counted */
+  ramMib: number | null
   notes: string[]
 }
 
@@ -74,13 +77,20 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   const notes: string[] = []
   const load = await deps.host.load()
   const memory = await deps.host.memory()
+  const ram = await deps.host.ramMib()
   if (!load.ok) notes.push(`load reading failed (${load.error.detail}): new leads are admitted without it`)
   if (!memory.ok) {
     notes.push(
       `memory reading failed (${memory.error.detail}): new leads are admitted without it, the next pass reads again`,
     )
   }
-  return { load: load.ok ? load.value : null, memory: memory.ok ? memory.value : null, notes }
+  if (!ram.ok) notes.push(`RAM reading failed (${ram.error.detail}): the memory that lanes reserve is not counted`)
+  return {
+    load: load.ok ? load.value : null,
+    memory: memory.ok ? memory.value : null,
+    ramMib: ram.ok ? ram.value : null,
+    notes,
+  }
 }
 
 /** Polls the account picker and stores the readings as facts. */
@@ -139,6 +149,54 @@ const claimantOf = (issue: IssueId, kind: string, since: Date | null = null): Cl
 })
 
 /**
+ * The candidate's lane with the repo's cap on it and the Issues running in it: the repo's claim holders and the leads
+ * that work without a claim (owed, a resumed wait) both count, since both are leads at work. Null when the Issue has no
+ * lane or the project declares no cap on it (an undeclared lane is unlimited within `leads`).
+ */
+function laneOf(
+  candidate: IssueId,
+  project: StoredProject,
+  claims: readonly Claim[],
+  owed: readonly (OpenIssueRow & { project: string | null })[],
+  laneByIssue: ReadonlyMap<IssueId, string | null>,
+): LaneInput | null {
+  const name = laneByIssue.get(candidate)
+  const cap = name ? project.project.lanes[name]?.leads : undefined
+  if (!name || cap === undefined) return null
+  const holders = [
+    ...claims.filter((c) => c.repo === project.repo).map((c) => c.issue),
+    ...owed.filter((o) => o.project === project.name).map((o) => o.id),
+  ].filter((id) => id !== candidate && laneByIssue.get(id) === name)
+  return { name, cap, holders }
+}
+
+/**
+ * The host memory the lanes reserve for this candidate's admission, in MiB: every running lead (a claim holder or an owed
+ * lead, in any repo, since memory is the host's) whose lane declares a `memory`, and the candidate's own lane. The
+ * reading shows the memory a lead has taken; this is what a lead that has just started is about to take.
+ */
+function reservedMib(
+  candidate: IssueId,
+  candidateProject: StoredProject,
+  claims: readonly Claim[],
+  owed: readonly (OpenIssueRow & { project: string | null })[],
+  projects: readonly StoredProject[],
+  laneByIssue: ReadonlyMap<IssueId, string | null>,
+): number {
+  const memoryOf = (issue: IssueId, project: StoredProject | undefined): number => {
+    const lane = laneByIssue.get(issue)
+    return (lane && project?.project.lanes[lane]?.memoryMib) || 0
+  }
+  const byRepo = new Map(projects.map((p) => [p.repo, p]))
+  const byName = new Map(projects.map((p) => [p.name, p]))
+  const running = [
+    ...claims.map((c) => memoryOf(c.issue, byRepo.get(c.repo))),
+    ...owed.map((o) => memoryOf(o.id, o.project === null ? undefined : byName.get(o.project))),
+  ]
+  return running.reduce((sum, mib) => sum + mib, 0) + memoryOf(candidate, candidateProject)
+}
+
+/**
  * Every queued Issue in queue order with the reason it stays queued, or nothing when it may be admitted. Each Issue is
  * decided as if the ones before it were admitted (they take a claim and an account), so the reasons of the later ones
  * are the ones they would meet in turn. Pure: the snapshot and the host readings are passed in.
@@ -163,6 +221,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
     }
   }
   const repoOf = new Map(snap.issues.map((i) => [i.id, i.repo]))
+  const laneByIssue = new Map(snap.issues.map((i) => [i.id, i.lane]))
   const projectByName = new Map(snap.projects.map((p) => [p.name, p]))
   const owed = snap.issues.filter((i) => holdsClaim(i.state, i.waitReason) && !taken.has(i.id) && i.project !== null)
 
@@ -182,6 +241,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
     for (const claim of claims)
       if (claim.account) leadsByAccount.set(claim.account, (leadsByAccount.get(claim.account) ?? 0) + 1)
     const verdict = checkAdmission({
+      lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
       state: effectiveState(snap.states, project.name),
       leads: project.project.leads,
@@ -192,6 +252,7 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
       loadCeiling: limits.loadCeiling,
       memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
+      reserved: reservedOf(reservedMib(issue.id, project, claims, owed, snap.projects, laneByIssue), host.ramMib),
       accounts: snap.readings,
       loaded,
       leadsByAccount,
@@ -332,7 +393,7 @@ export async function queueView(
  * claims. A deadlock is a deadlock whatever the load is, and the steward calls this every pass.
  */
 export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: IssueId; repo: string }[], PortError>> {
-  const noHost: HostInputs = { load: null, memory: null, notes: [] }
+  const noHost: HostInputs = { load: null, memory: null, ramMib: null, notes: [] }
   const viewed = await deps.uow.run(async (stores) => {
     const snap = await snapshotOf(stores, deps.clock.now())
     return ok(evaluateQueue(snap, noHost, deps.limits))
@@ -380,7 +441,7 @@ export interface ResumeClaim {
  * **The claim on resume.** The machine has no claim wait, so the wait is here, at the one place that matters: a lead
  * whose wait ended (an answer, a verdict, a timer, a wake) takes its repo's claim back before anyone tells it so. The
  * `note_lead` effect that ends the wait calls this first and answers `refused` while the repo is full, which the
- * outbox retries with its backoff, so no lead works in a repo without a place. Only the repo's claims are looked at: a
+ * outbox retries with its backoff, so no lead works in a repo without a place (or beside another lead of a capped lane). Only the repo's claims are looked at: a
  * resume is never kept out by the load, the memory or an account's window, and it keeps the account it was admitted
  * on. Meanwhile admission counts the Issue as owed, so no new lead takes the place it waits for.
  */
@@ -401,6 +462,17 @@ export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<R
           i.project === project.name && holdsClaim(i.state, i.waitReason) && !snap.claims.some((s) => s.issue === i.id),
       )
       .map((i) => claimantOf(i.id, i.kind, i.since))
+    // A lead back from a wait gave its lane place up with its claim, so a lead of the lane may have started meanwhile.
+    // Only the lane's claim holders count here: another owed lead of the lane would otherwise wait for this one.
+    const laneFree = laneRoom({
+      lane: laneOf(issue, project, snap.claims, [], new Map(snap.issues.map((i) => [i.id, i.lane]))),
+      urgent: row.kind === 'incident',
+    })
+    if (!laneFree.granted) {
+      return err(
+        portError('refused', `Issue ${issueNumber(issue)} waits for its lane in ${project.name}: ${laneFree.message}`),
+      )
+    }
     const room = claimRoom({
       leads: project.project.leads,
       holders: snap.claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),

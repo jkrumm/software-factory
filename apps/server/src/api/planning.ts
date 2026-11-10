@@ -137,6 +137,7 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
     branch: project.branch,
     syncedAt: project.syncedAt?.toISOString() ?? null,
     leads: project.project.leads,
+    lanes: project.project.lanes,
     slotRun: project.project.slots.run ?? null,
     signals: project.project.signals,
     projectError: project.projectError,

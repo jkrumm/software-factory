@@ -83,8 +83,12 @@ export class FakeHost implements HostReader {
   async load() {
     return this.loadValue
   }
+  ramMibValue: Result<number> = ok(32_768)
   async memory() {
     return this.memoryValue
+  }
+  async ramMib() {
+    return this.ramMibValue
   }
 }
 
@@ -123,10 +127,20 @@ export interface World {
   deps: CapacityDeps & SyncDeps
   reset(): Promise<void>
   stop(): Promise<void>
-  file(input: { repo: string; title?: string; kind?: IssueEvent<'filed'>['payload']['kind'] }): Promise<IssueId>
+  file(input: {
+    repo: string
+    title?: string
+    kind?: IssueEvent<'filed'>['payload']['kind']
+    lane?: string
+  }): Promise<IssueId>
   send(issue: IssueId, name: string, kind: EventKind, payload: object, actor?: Actor): Promise<string>
   /** file, settle and return the Issue */
-  queued(input: { repo: string; title?: string; kind?: IssueEvent<'filed'>['payload']['kind'] }): Promise<IssueId>
+  queued(input: {
+    repo: string
+    title?: string
+    kind?: IssueEvent<'filed'>['payload']['kind']
+    lane?: string
+  }): Promise<IssueId>
 }
 
 export async function startWorld(): Promise<World> {
@@ -164,6 +178,7 @@ export async function startWorld(): Promise<World> {
       source.reads = []
       host.loadValue = ok(1)
       host.memoryValue = ok({ swapoutMbPer300s: 0, swapUsedPct: 10 })
+      host.ramMibValue = ok(32_768)
       accounts.rows = [account('me')]
       accounts.fail = false
       accounts.reads = 0
@@ -183,6 +198,7 @@ export async function startWorld(): Promise<World> {
               title: input.title ?? 'a change',
               kind: input.kind ?? 'feature',
               origin: 'you',
+              ...(input.lane ? { lane: input.lane } : {}),
             },
             actor: 'factory',
           },

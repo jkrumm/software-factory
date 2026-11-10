@@ -130,10 +130,13 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 ## Capacity and leads
 
 - **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
-  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings), the repo's claims
-  (`leads: N` plus one for a fix; `pace` allows one), then an account with room. The first that says no names itself and
-  its numbers as the queue reason. It never spills to another account past a window or a cap; with every account closed it
-  waits for the first opening. Owed Issues are served before new ones.
+  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the memory that a
+  lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"), the
+  candidate's lane (`lanes: {apple: 1}` in `project.yaml` caps the leads of a resource class inside the repo, a fix is
+  never held; `domains/capacity/lanes.ts`), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an
+  account with room. The first that says no names itself and its numbers as the queue reason. It never spills to another
+  account past a window or a cap; with every account closed it waits for the first opening. Owed Issues are served
+  before new ones.
 - **The quiet lead** (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/loops/stall.ts`). A `working` Issue is
   no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
   turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (20 minutes),

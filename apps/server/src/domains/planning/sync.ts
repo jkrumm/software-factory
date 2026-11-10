@@ -112,7 +112,7 @@ export function synced(input: {
   } else if (plan.state === 'unreadable') {
     next.planError = { message: plan.message, sha: plan.sha }
   } else {
-    const parsed = parsePlan(plan.value)
+    const parsed = parsePlan(plan.value, Object.keys(next.project.lanes))
     if (parsed.ok) {
       Object.assign(next, { plan: parsed.plan, planSha: plan.sha, planError: null, planWarnings: parsed.warnings })
     } else {

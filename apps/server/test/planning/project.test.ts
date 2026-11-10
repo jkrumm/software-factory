@@ -24,6 +24,28 @@ describe('project.yaml', () => {
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
   })
 
+  test('lanes cap the leads of a resource class: none by default, a lane name and a cap of 1 to 8', () => {
+    const parse = (lanes: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nlanes: ${lanes}`), 'lab')
+    expect(defaultProject('lab').lanes).toEqual({})
+    const ok = parse('{ apple: 1, web-ui: 3 }')
+    expect(ok.ok && ok.project.lanes).toEqual({
+      apple: { leads: 1, memoryMib: null },
+      'web-ui': { leads: 3, memoryMib: null },
+    })
+    const heavy = parse('{ apple: { leads: 1, memory: 18GiB }, sim: { leads: 2, memory: 512MiB }, web: { leads: 2 } }')
+    expect(heavy.ok && heavy.project.lanes).toEqual({
+      apple: { leads: 1, memoryMib: 18_432 },
+      sim: { leads: 2, memoryMib: 512 },
+      web: { leads: 2, memoryMib: null },
+    })
+    expect(parse('{ apple: { leads: 1, memory: 18 } }').ok).toBe(false)
+    expect(parse('{ apple: { leads: 1, memory: 2000000GiB } }').ok).toBe(false)
+    expect(parse('{ apple: { leads: 1, ram: 4GiB } }').ok).toBe(false)
+    expect(parse('{ apple: 0 }').ok).toBe(false)
+    expect(parse('{ apple: 9 }').ok).toBe(false)
+    expect(parse('{ Apple: 1 }').ok).toBe(false)
+  })
+
   test('hygiene.check defaults on; false needs a reason, and an unknown key is an error', () => {
     const parse = (hygiene: string) =>
       parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: ${hygiene}`), 'lab')

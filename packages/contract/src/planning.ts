@@ -42,6 +42,8 @@ export const ProjectView = z
     syncedAt: z.string().nullable(),
     /** how many leads may work in the repo at once */
     leads: z.number().int(),
+    /** the repo's lanes: how many leads of each run at once, and the host memory (MiB) each running lead reserves, if any */
+    lanes: z.record(z.string(), z.object({ leads: z.number().int(), memoryMib: z.number().int().nullable() })),
     /** the test-slot run limit, `45m`; null: the default */
     slotRun: z.string().nullable(),
     /** the automatic sources the project listens to; a work repo lists none and hears the owner only */

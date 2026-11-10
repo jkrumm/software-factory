@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { LaneName } from './lane.ts'
 import { QualityIssue } from './quality.ts'
 import { SeatInput } from './seat.ts'
 
@@ -28,6 +29,8 @@ export const NewIssueBody = z
     facts: z.record(z.string(), z.unknown()).optional(),
     /** the lead's tier and effort: `{tier, effort}` or `{role}`; checked by the server (422 `seat_refused`, naming the field) */
     seat: SeatInput.optional(),
+    /** the resource class it runs in; the repo's `project.yaml` `lanes:` caps how many leads of a lane run at once */
+    lane: LaneName.optional(),
     text: Text.optional(),
     key: z.string().trim().min(1).max(200).optional(),
     /** `request` is a person's ask; `alert` is something that broke */

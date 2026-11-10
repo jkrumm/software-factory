@@ -49,6 +49,7 @@ test('hostWatch: one ps serves readers within the cache; a failed ps gives empty
   const host = {
     load: async () => ({ ok: true as const, value: 1.5 }),
     memory: async () => ({ ok: false as const, error: { kind: 'gone' as const, detail: 'x' } }),
+    ramMib: async () => ({ ok: true as const, value: 4096 }),
   }
   let t = 0
   const watch = hostWatch({ host, sysctlBin: sysctl, psBin: ps, now: () => t })

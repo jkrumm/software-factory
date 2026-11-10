@@ -116,6 +116,8 @@ export const ReadIssueCard = z
     waitingOnOwner: z.boolean(),
     /** the seat the Issue asked its lead for; null when it asked for none (the lead role of the table) */
     seat: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
+    /** the resource class the Issue was filed in (the repo's `lanes:` cap it); null for none */
+    lane: z.string().nullable(),
   })
   .meta({ id: 'ReadIssueCard' })
 export type ReadIssueCard = z.infer<typeof ReadIssueCard>

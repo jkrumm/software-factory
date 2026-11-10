@@ -188,3 +188,13 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   whose existing :443 grant lets `tag:mac`, `tag:phone` and `tag:tablet` reach the mini; servers and TVs cannot connect. The
   login header check and the deploy's own `tailscale serve` call go. The listener forwards only reads and the owner's answer
   verbs and never starts a session.
+- **NL27 A lane caps one kind of work inside a repo, per repo (Issue 647, 2026-11-10).** `leads: N` was the only
+  concurrency control, so a repo with cheap and heavy rows either ran everything in a line or faked `after` edges. An
+  Issue or plan row may carry `lane: <name>`; `project.yaml` `lanes: {apple: 1}` caps the leads of that lane, admission
+  refuses with kind `lane` before the claim check (a full lane is the sharper reason) and names the Issue holding it, an undeclared lane is unlimited and a
+  plan naming one gets a warning, and a fix is never held. The scope is the repo, not the host: the host-wide Apple
+  toolchain is already one lock (the Apple slot), a lane only keeps a second Apple lead from building cold while it queues
+  for that slot, and a host-wide lane would make one repo's file change another repo's admission. A host-wide lane stays
+  open if two Apple repos are measured fighting for the mini. The owner's measurement (one booted simulator ~18 GiB, load 279,
+  swap 18.7 of 19.4 GiB with ten leads, 2026-11-10) added a lane's `memory`: running leads of the lane reserve it against
+  the memory ceiling, because the admission gate sees a heavy step only after it has started.

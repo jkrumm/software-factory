@@ -1,4 +1,4 @@
-import { EFFORTS, TIERS } from '@software-factory/contract'
+import { EFFORTS, LaneName, TIERS } from '@software-factory/contract'
 import * as z from 'zod'
 import type { Actor } from '../../kernel/events.ts'
 import { idOf, type IssueId } from '../../kernel/ids.ts'
@@ -27,6 +27,8 @@ export const PAYLOADS = {
     origin: z.enum(ORIGINS),
     /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
     seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
+    /** the resource class it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
+    lane: LaneName.optional(),
     /** the filer stated the edges (`--after`, or `--alone` for none): they are final, settling adds none */
     edges: z.literal('stated').optional(),
   }),

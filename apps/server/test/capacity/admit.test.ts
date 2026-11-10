@@ -16,7 +16,7 @@ import { setPrio } from '../../src/app/planning-chain.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
 import { issueId } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
-import { ok } from '../../src/kernel/result.ts'
+import { err, ok, portError } from '../../src/kernel/result.ts'
 import { account, startWorld, value, type World } from '../planning/support.ts'
 
 let world: World
@@ -28,16 +28,18 @@ afterAll(async () => {
   await world.stop()
 })
 
-const PROJECT = (name: string, leads = 1) => ({
+const PROJECT = (name: string, leads = 1, lanes: Record<string, number | object> = {}) => ({
   state: 'text' as const,
   sha: `sha-${name}`,
-  value: { apiVersion: 'factory/v2', name, leads },
+  value: { apiVersion: 'factory/v2', name, leads, lanes },
 })
 
 beforeEach(async () => {
   await world.reset()
   world.source.add('app', { project: PROJECT('app', 2) })
   world.source.add('solo', { project: PROJECT('solo', 1) })
+  world.source.add('lab', { project: PROJECT('lab', 2, { apple: 1 }) })
+  world.source.add('sim', { project: PROJECT('sim', 3, { apple: { leads: 2, memory: '18GiB' } }) })
   value(await syncProjects(world.deps, { fetch: false }))
 })
 
@@ -72,6 +74,74 @@ describe('admission', () => {
     const after = await pass()
     expect(after.admitted.map((a) => a.issue)).toEqual([three])
     expect(await state(3)).toBe('working')
+  })
+
+  test('lanes: {apple: 1} with leads: 2 starts one apple Issue and the lane-less one, and the second apple Issue waits until the first closes', async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c')]
+    const [apple1, apple2, plain] = [
+      await world.queued({ repo: 'lab', lane: 'apple' }),
+      await world.queued({ repo: 'lab', lane: 'apple' }),
+      await world.queued({ repo: 'lab' }),
+    ]
+    const first = await pass()
+    expect(first.admitted.map((a) => a.issue)).toEqual([apple1, plain])
+    expect(first.queue.find((e) => e.issue === apple2)?.reason).toMatchObject({
+      kind: 'lane',
+      message: 'lane apple is full (1 of 1): Issue 1',
+    })
+    expect(await state(2)).toBe('queued')
+    // the cap is on the lane, not on the repo: a third lane-less place is not taken by it
+    expect((await pass()).admitted).toEqual([])
+
+    await world.send(apple1, 'lead_started', 'lead_started', { attempt: 1, terminal: 't1' })
+    await world.send(apple1, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
+    nextSample()
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([apple2])
+    expect(await state(2)).toBe('working')
+  })
+
+  test("a heavy lane's memory counts as host memory: leads of the lane reserve it while they run, and every next lead meets it", async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c')]
+    // RAM 32 GiB, swap 10%: one apple lead (18 GiB = 56%) fits under 75%, a second one on top (112%) does not
+    const [one, two, plain] = [
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+      await world.queued({ repo: 'sim' }),
+    ]
+    const first = await pass()
+    expect(first.admitted.map((a) => a.issue)).toEqual([one, plain])
+    expect(first.queue.find((e) => e.issue === two)?.reason).toMatchObject({
+      kind: 'memory',
+      message: expect.stringContaining('36 GiB reserved by lanes (112.5% of RAM)'),
+    })
+    // the lane's leads: 2 would have let it in: the memory is what keeps it out
+    await world.send(one, 'lead_started', 'lead_started', { attempt: 1, terminal: 't1' })
+    await world.send(one, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
+    nextSample()
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([two])
+    // without a RAM reading nothing is reserved, and the pass says so
+    world.host.ramMibValue = err(portError('gone', 'no sysctl'))
+    await world.queued({ repo: 'sim', lane: 'apple' })
+    nextSample()
+    const blind = await pass()
+    expect(blind.notes.some((n) => n.includes('RAM reading failed'))).toBe(true)
+    expect(blind.admitted).toHaveLength(1)
+  })
+
+  test('a lane the project does not declare is unlimited within leads, and a fix is not held by a full lane', async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c')]
+    const [one, two] = [
+      await world.queued({ repo: 'lab', lane: 'web' }),
+      await world.queued({ repo: 'lab', lane: 'web' }),
+    ]
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([one, two])
+    const fix = await world.queued({ repo: 'lab', lane: 'apple', kind: 'incident' })
+    const held = await world.queued({ repo: 'lab', lane: 'apple' })
+    nextSample()
+    // production of lab is red: only the fix runs, and the apple lane is empty anyway
+    const result = await pass()
+    expect(result.admitted.map((a) => a.issue)).toEqual([fix])
+    expect(result.queue.find((e) => e.issue === held)?.reason?.kind).not.toBe('lane')
   })
 
   test('each lead is admitted on an account; one account takes one new lead per sample', async () => {
@@ -262,6 +332,26 @@ describe('claims and the claim on resume', () => {
     expect(reasons(result)[three]).toBe('claim')
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'held' })
+  })
+
+  test('a lead back from a wait takes its lane place back too: refused while another lead of a capped lane works, granted when it closes', async () => {
+    world.accounts.rows = [account('a'), account('b')]
+    const one = await world.queued({ repo: 'lab', lane: 'apple' })
+    const two = await world.queued({ repo: 'lab', lane: 'apple' })
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([one])
+    await asked()
+    nextSample()
+    // Issue 1 gave its claim, and with it its lane place, back: Issue 2 runs in the lane meanwhile
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([two])
+
+    await world.send(one, 'answered', 'answered', { decision: 'd1', answer: 'the first' }, 'owner')
+    const refused = await resumeClaim(world.deps, one)
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'refused' } })
+    expect(!refused.ok && refused.error.detail).toContain('lane apple is full (1 of 1): Issue 2')
+
+    await world.send(two, 'lead_started', 'lead_started', { attempt: 1, terminal: 't2' })
+    await world.send(two, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
   })
 
   test('three owed leads and one free claim: the earliest wait end takes it, the others take the following ones, a replay takes nothing twice', async () => {

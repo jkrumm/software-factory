@@ -10,6 +10,7 @@ export const QUEUE_REASONS = [
   'drain',
   'load',
   'memory',
+  'lane',
   'claim',
   'window',
   'cap',
