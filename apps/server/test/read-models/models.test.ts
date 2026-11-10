@@ -59,7 +59,7 @@ describe('the empty database', () => {
   test('every model answers with zero counts, never an error', async () => {
     const needs = NeedsModel.parse(needsModel(await readNeeds(sql, NOW), { redact: false }))
     expect(needs.items).toEqual([])
-    expect(needs.counts).toEqual({ decision: 0, review: 0, errand: 0, held_signal: 0 })
+    expect(needs.counts).toEqual({ decision: 0, review: 0, errand: 0, held_signal: 0, long_wait: 0 })
 
     const flow = FlowModel.parse(await readFlow(sql, { now: NOW }))
     expect(Object.values(flow.states).map((c) => c.count)).toEqual([0, 0, 0, 0, 0])
@@ -238,7 +238,7 @@ describe('the fixture', () => {
   test('needs: what reached the owner, newest first within a kind, the default time, stale, plain words', async () => {
     const scoped = await readNeeds(sql, NOW)
     const owner = NeedsModel.parse(needsModel(scoped, { redact: false }))
-    expect(owner.counts).toEqual({ decision: 1, review: 1, errand: 1, held_signal: 2 })
+    expect(owner.counts).toEqual({ decision: 1, review: 1, errand: 1, held_signal: 2, long_wait: 0 })
     expect(owner.items.map((i) => [i.kind, i.id])).toEqual([
       ['decision', 'decision_1'],
       ['review', 'artifact_1'],

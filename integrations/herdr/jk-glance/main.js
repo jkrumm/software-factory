@@ -43,6 +43,7 @@ function parseNeeds(text) {
     review: num(c.review),
     errand: num(c.errand),
     held_signal: num(c.held_signal),
+    long_wait: num(c.long_wait),
   }
   const items = d.items.filter((i) => i && typeof i === 'object')
   return { items, counts }

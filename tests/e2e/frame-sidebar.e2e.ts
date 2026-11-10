@@ -16,7 +16,13 @@ interface Flow {
   states: Record<(typeof STATES)[number], { count: number; issues: { repo: string; origin: string }[] }>
   closedRecently: { repo: string; origin: string }[]
 }
-const KIND_WORD = { decision: 'Decisions', review: 'Reviews', errand: 'Errands', held_signal: 'Held signals' } as const
+const KIND_WORD = {
+  decision: 'Decisions',
+  review: 'Reviews',
+  errand: 'Errands',
+  held_signal: 'Held signals',
+  long_wait: 'Long waits',
+} as const
 
 const aside = (page: Page) => page.locator('aside')
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' })
@@ -172,7 +178,7 @@ test('Needs you: a kind in the sidebar shows only that kind, a second click show
   const kind = kinds[0]
   if (!kind) throw new Error('no kind waits')
   await page.goto('/needs-you')
-  await expect(section(page, 'Kinds').getByRole('link')).toHaveCount(5)
+  await expect(section(page, 'Kinds').getByRole('link')).toHaveCount(6)
   const link = toggle(page, 'Kinds', new RegExp(`^${KIND_WORD[kind]}\\s*${counts[kind]}$`))
   await link.click()
   await expect(page).toHaveURL(new RegExp(`kind=${kind}`))
@@ -189,12 +195,12 @@ test('Needs you: a kind in the sidebar shows only that kind, a second click show
 test('Needs you: the sidebar kinds have an InfoHint beside the row, not inside the toggle', async ({ page }) => {
   await page.goto('/needs-you')
   const kinds = section(page, 'Kinds')
-  for (const word of ['review', 'decision', 'errand', 'held signal'] as const) {
+  for (const word of ['review', 'decision', 'errand', 'held signal', 'long wait'] as const) {
     await expectHint(kinds, word)
   }
   // a hint is a separate control: the toggles still hold only their label and count
   await expect(kinds.getByRole('link').first().getByRole('button')).toHaveCount(0)
-  await expect(kinds.getByRole('link')).toHaveCount(5)
+  await expect(kinds.getByRole('link')).toHaveCount(6)
 })
 
 test('Chain: the sidebar lists the projects and toggles the filter', async ({ page }) => {

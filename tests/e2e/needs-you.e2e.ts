@@ -336,7 +336,7 @@ test.describe('nothing waits', () => {
         json: {
           at: new Date().toISOString(),
           items: [],
-          counts: { decision: 0, review: 0, errand: 0, held_signal: 0 },
+          counts: { decision: 0, review: 0, errand: 0, held_signal: 0, long_wait: 0 },
         },
       }),
     )

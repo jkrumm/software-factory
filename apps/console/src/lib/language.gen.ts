@@ -57,8 +57,11 @@ export const LANGUAGE = {
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue",
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
   line: "Stop the line: while a repo's alert is unsolved, only its fix is admitted",
+  'long wait':
+    'An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends',
   loop: 'A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills',
-  needs: 'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands',
+  needs:
+    'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits',
   origin: 'Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory',
   outcome:
     "How a closed Issue ended: done, dropped (its lead gave it up, with a reason), healed (an incident that went away before a lead started), cancelled (the owner's stop)",

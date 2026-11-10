@@ -50,6 +50,8 @@ export interface ReadModelDeps {
   /** the owner's visit marker; absent, `GET /v1/since` moves nothing and reads from the stored start */
   visits?: UnitOfWork<{ visits: VisitStore }>
   now?: () => Date
+  /** how long a timed wait with Issues behind it must last to reach Needs you; absent, the default (`FACTORY_LONG_WAIT_MS`) */
+  longWaitMs?: number
 }
 
 /** `QueueReason` of the contract from the capacity use case's entries (`main.ts` binds it). */
@@ -95,7 +97,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/needs',
       async ({ request }) => {
         if (!deps) return unavailable
-        const needs = await readNeeds(deps.sql, now())
+        const needs = await readNeeds(deps.sql, now(), { longWaitMs: deps.longWaitMs })
         return Response.json(NeedsModel.parse(needsModel(needs, { redact: caller(request) === 'read' })))
       },
       {

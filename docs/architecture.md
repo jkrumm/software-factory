@@ -155,6 +155,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **The timer wake** (`wakeTimers` in `app/planning-pass.ts`). Every planning pass wakes each timer wait whose `until`
   has passed, as `wakeDependents` does for dependency waits: a `woken` event by the factory, keyed by the wait's version,
   so a replayed pass wakes once and a wait overdue by days ends on the first pass.
+- **A long wait is told** (`read/long-waits.ts`, read by `readNeeds`). A timed wait lasting `FACTORY_LONG_WAIT_MS` or more
+  (default one hour, from the event that began it to its `until`) of an Issue that open Issues wait behind, directly or through
+  others (unmet `planning_edges` and the `after` of dependency waits), is a Needs item of kind `long_wait`: the Issue, its
+  until-time and the count held. A leaf is not listed. It is derived from the stored waits on every read, so it ends with the
+  wait (a wake, a close, a new deferral) and no state of its own exists.
 - **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
   then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are

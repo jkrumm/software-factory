@@ -32,6 +32,7 @@ import { postgresQualityStore } from './adapters/quality/store.ts'
 import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
+import { loadNeedsSettings } from './read/needs-settings.ts'
 import { join } from 'node:path'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
@@ -580,6 +581,7 @@ async function main(): Promise<void> {
       queueReasons,
       machine,
       visits: uow,
+      longWaitMs: loadNeedsSettings(process.env).longWaitMs,
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })

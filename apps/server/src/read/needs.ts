@@ -1,6 +1,8 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
+import { readLongWaits } from './long-waits.ts'
+import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
 
@@ -18,7 +20,7 @@ export interface ScopedNeeds {
   items: ScopedNeed[]
 }
 
-const KIND_ORDER: readonly NeedKind[] = ['decision', 'review', 'errand', 'held_signal']
+const KIND_ORDER: readonly NeedKind[] = ['decision', 'review', 'errand', 'held_signal', 'long_wait']
 
 /** The needs as the contract has them; for the read token every work-repo item loses its title and summary. */
 export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): NeedsModel {
@@ -42,6 +44,7 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
       review: count('review'),
       errand: count('errand'),
       held_signal: count('held_signal'),
+      long_wait: count('long_wait'),
     },
   }
 }
@@ -108,10 +111,12 @@ const SignalRow = z.object({
 
 /**
  * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open),
- * Concepts and Specs under review, open Errands of Issues still open, and held signals. Read-only SQL.
+ * Concepts and Specs under review, open Errands of Issues still open, held signals, and the long timed waits other Issues
+ * wait behind (`longWaitMs` and up). Read-only SQL.
  */
-export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
+export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: number } = {}): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
+  const longWaits = await readLongWaits(sql, options.longWaitMs ?? DEFAULT_LONG_WAIT_MS)
 
   const decisions: unknown[] = await sql`
     SELECT d.id, d.issue_id, d.repo, d.question, d.artifact_id, d.recommendation, d.asked_at, d.no_answer,
@@ -169,6 +174,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         origin: row.origin,
         source: null,
         sourceLink: null,
+        wait: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -190,6 +196,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         origin: row.origin,
         source: null,
         sourceLink: null,
+        wait: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -210,6 +217,7 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         origin: row.origin,
         source: null,
         sourceLink: null,
+        wait: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
@@ -230,9 +238,28 @@ export async function readNeeds(sql: SQL, now: Date): Promise<ScopedNeeds> {
         origin: row.origin,
         source: sourceWords(row.source, row.origin),
         sourceLink: row.link,
+        wait: null,
         work: isWorkRepo(row.repo, open),
       }
     }),
+    ...longWaits.map((wait): ScopedNeed => ({
+      ...base(wait.since),
+      kind: 'long_wait',
+      id: wait.issue,
+      issue: wait.issue,
+      repo: wait.repo,
+      title: plain(wait.title, 120),
+      summary: `Deferred until ${wait.until}; ${wait.held === 1 ? '1 open Issue waits' : `${wait.held} open Issues wait`} behind it.`,
+      defaultAt: null,
+      judge: null,
+      link: { type: 'issue', id: wait.issue },
+      artifact: null,
+      origin: wait.origin,
+      source: null,
+      sourceLink: null,
+      wait: { reason: 'timer', until: wait.until, held: wait.held },
+      work: isWorkRepo(wait.repo, open),
+    })),
   ]
   return { at: now, items: items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)) }
 }
