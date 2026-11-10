@@ -287,8 +287,13 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      'e775bd5e96d937be88b3da77d4d2556fd7285ce4d0e3998a1140c680297f86ac',
+      '795d7e9baca12058160860bf7344e46cecfd67ff8780ddc8b7a24de0d20f8d86',
     )
+  })
+
+  test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {
+    expect(STANDING_ORDERS).toContain('factory signal file --from agent:<repo> --repo software-factory')
+    expect(STANDING_ORDERS).toContain('never file that Issue yourself')
   })
 
   test('the standing orders state the merge rule', () => {

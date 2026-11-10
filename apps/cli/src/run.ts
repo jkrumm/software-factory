@@ -66,6 +66,21 @@ const HAND_WRITTEN: readonly [string, string][] = [
   ['hook <event>', 'the Claude Code hook (reads FACTORY_SESSION; never fails the session)'],
 ]
 
+/** `factory plan check --help`: the hand-written verb's usage line and summary; null when argv asks for no help or names no such verb. */
+function handWrittenHelp(argv: readonly string[]): string | null {
+  const end = argv.indexOf('--')
+  const own = end === -1 ? argv : argv.slice(0, end)
+  if (!own.includes('--help') && !own.includes('-h')) return null
+  const row = HAND_WRITTEN.find(([usage]) => {
+    const words = usage
+      .split(' ')
+      .filter((word, i, all) => !/^[<[-]/.test(word) && all.slice(0, i).every((w) => !/^[<[-]/.test(w)))
+    return words.length > 0 && words.every((word, i) => own[i] === word)
+  })
+  // `hook` keeps stdout empty; `issue schema` is itself the help text
+  return row && row[0] !== 'hook <event>' && row[0] !== 'issue schema' ? `usage: ${BIN} ${row[0]}\n\n${row[1]}\n` : null
+}
+
 const help = (operations: readonly Operation[]): string => {
   const rows: [string, string][] = [
     ...HAND_WRITTEN,
@@ -276,6 +291,11 @@ function issueSchemaVerb(argv: readonly string[], io: Io): number {
 /** Runs one invocation and returns its exit code. Nothing asks anything. `operations` is the generated table (a test passes its own). */
 export async function run(argv: string[], io: Io, operations: readonly Operation[] = OPERATIONS): Promise<number> {
   try {
+    const verbHelp = handWrittenHelp(argv)
+    if (verbHelp) {
+      io.out(verbHelp)
+      return EXIT.ok
+    }
     // `slot run` passes everything after `--` to its command, so it reads its own arguments.
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)

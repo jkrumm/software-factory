@@ -83,7 +83,7 @@ export const DEFAULT_URL = 'http://127.0.0.1:7793'
  * records the call; these wait a little longer than the server does, so the server's answer is the one that comes back.
  */
 export const LONG_OPERATION_TIMEOUT_MS = 300_000
-const LONG_OPERATIONS: ReadonlySet<string> = new Set(['issue.ship', 'loop.run'])
+const LONG_OPERATIONS: ReadonlySet<string> = new Set(['issue.ship', 'loop.run', 'project.sync', 'planning.pass'])
 
 export const timeoutOf = (op: Operation): number | undefined =>
   LONG_OPERATIONS.has(op.operationId) ? LONG_OPERATION_TIMEOUT_MS : undefined

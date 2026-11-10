@@ -229,10 +229,12 @@ describe('runOperation', () => {
     })
   })
 
-  test('the ship and a loop pass wait past the transport default; the rest keep it', () => {
+  test('the ship, a loop pass and a project sync wait past the transport default; the rest keep it', () => {
     const named = (operationId: string): Operation => ({ ...op, operationId })
     expect(timeoutOf(named('issue.ship'))).toBe(LONG_OPERATION_TIMEOUT_MS)
     expect(timeoutOf(named('loop.run'))).toBe(LONG_OPERATION_TIMEOUT_MS)
+    expect(timeoutOf(named('project.sync'))).toBe(LONG_OPERATION_TIMEOUT_MS)
+    expect(timeoutOf(named('planning.pass'))).toBe(LONG_OPERATION_TIMEOUT_MS)
     expect(timeoutOf(named('issue.note'))).toBeUndefined()
   })
 

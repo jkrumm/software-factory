@@ -60,10 +60,26 @@ describe('the filing contract', () => {
     for (const { key } of FACTS_KEYS) expect(out).toContain(key)
     expect(out).toContain(JSON.stringify(FACTS_EXAMPLE, null, 2))
     expect(out).toContain('factory issue new --repo <repo> --title <title> --facts @file')
-    expect(out).toContain('factory signal file --from agent:<repo>')
+    expect(out).toContain('factory signal file --from agent:<your repo> --repo <that repo>')
+    // the friction route: one signal on software-factory, never an Issue filed by the agent
+    expect(out).toContain('factory signal file --from agent:<your repo> --repo software-factory')
+    expect(out).toContain('Never file that Issue yourself')
     expect(out).toContain('FACTORY_TOKEN')
     expect(out).toContain('not markdown')
     expect(out).not.toMatch(/\brd\b/)
+  })
+
+  test('every hand-written verb answers --help with its usage line, exit 0', async () => {
+    for (const [argv, usage] of [
+      [['plan', 'schema', '--help'], 'usage: factory plan schema'],
+      [['plan', 'check', '--help'], 'usage: factory plan check [file]'],
+      [['deploy-lock', '--help'], 'usage: factory deploy-lock --project <name> -- <cmd>'],
+      [['role', 'get', '--help'], 'usage: factory role get <role>'],
+    ] as const) {
+      const { code, out } = await cli([...argv])
+      expect(code).toBe(0)
+      expect(out).toContain(usage)
+    }
   })
 
   test('other commands keep their help', async () => {
