@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs'
 import { ApiError } from '@/lib/api'
 import { checkpointTally, TAB_KEYS, TAB_LABEL, type TabKey, tabCounts, tabOf } from '@/lib/issue-page'
 import { useNow } from '@/lib/now'
+import { useScreen } from '@/lib/screen'
 import { chainQuery, PREFETCH_STALE_MS, prefetchDetail, queryClient, useIssue } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -37,7 +38,9 @@ function IssuePage() {
   const { tab } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const now = useNow(30_000)
-  const { data, error } = useIssue(id)
+  const issue = useIssue(id)
+  const { data, error } = issue
+  const screen = useScreen(issue)
 
   if (!data) {
     if (error instanceof ApiError && error.status === 404)
@@ -46,7 +49,7 @@ function IssuePage() {
           <EmptyState title="No such Issue">It may have a different number than the link says.</EmptyState>
         </Page>
       )
-    if (error)
+    if (screen === 'failed')
       return (
         <Page wide>
           <EmptyState title="This Issue is not available">
