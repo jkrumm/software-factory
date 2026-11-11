@@ -161,7 +161,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   ended with background work in flight (a subagent, a check, a shell: the Stop hook lists it and `turn_ended` carries
   `backgroundTasks`, `SessionView.backgroundTasks`) is waiting, not quiet: it is nudged only after
   `FACTORY_STEWARD_IDLE_BACKGROUND_MS` (90 minutes, past the longest implementer wait measured), as a frozen task, and
-  self-watch's `lead_idle` uses the same two thresholds. The wakes are counted from the events alone (steward notes that
+  self-watch's `lead_idle` uses the same two thresholds. Work the Stop hook did not list counts the same, read live (`countLiveWork`, once the lead has been quiet
+  past the plain threshold, for the steward and self-watch alike): a test slot held or queued by a command started in the lead's worktree (`capacity_slots.cwd`,
+  `slotLiveIn`), or a queued or in-progress CI run of its branch (`CiLive`, `githubCiLive`; an unreadable source is not
+  live). When that work ends the plain threshold applies again. The wakes are counted from the events alone (steward notes that
   begin with `IDLE_NOTE`), `maxWakes` per attempt and each after another threshold of quiet; after that `factory-steward` is
   asked, and its answer can only be one more such note: a quiet lead is never stalled or turned into a Decision (the options
   of one, pause, drop, a fresh lead, are applied by nothing); self-watch files it for the owner's side.

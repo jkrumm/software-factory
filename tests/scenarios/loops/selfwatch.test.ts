@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { join } from 'node:path'
+import { bearer } from '../harness.ts'
 import { hook, must, sessionOf } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { runLoop, working } from './support.ts'
@@ -91,7 +92,7 @@ beforeAll(async () => {
       FACTORY_GITHUB_API_URL: github.url,
       FACTORY_SELFWATCH_GRACE_MS: String(GRACE_MS),
       FACTORY_STEWARD_IDLE_MS: String(IDLE_MS),
-      FACTORY_STEWARD_IDLE_BACKGROUND_MS: String(IDLE_MS),
+      FACTORY_STEWARD_IDLE_BACKGROUND_MS: '3600000',
     },
   })
   // a leads loop with an interval that never fires in a test, and a tick judged stale after three seconds
@@ -396,18 +397,33 @@ test('wait_overdue: a timer and a dependency wait past their exit and grace are 
   await must(lab, ['issue', 'cancel', stays, '--reason', 'done'])
 })
 
-test('lead_idle: a lead quiet past the steward threshold is filed, a lead in its turn is not', async () => {
+/** The lead's last turn ended with nothing listed as background work (a turn the owner typed is let through the Stop hook). */
+async function goQuiet(issue: string): Promise<void> {
+  const session = sessionOf(issue)
+  await hook(lab.world, 'stop', session, { stop_hook_active: false, background_tasks: [{ status: 'running' }] })
+  await hook(lab.world, 'user-prompt-submit', session, { session_id: `c-${issue}` })
+  await hook(lab.world, 'stop', session, { stop_hook_active: false, background_tasks: [] })
+}
+
+test('lead_idle: a lead quiet past the steward threshold is filed; a lead in its turn, or with a slot run of its own live, is not', async () => {
   const busy = await working(lab, REPO, 'the lead that is busy')
   const quiet = await working(lab, REPO, 'the lead that went quiet')
-  for (const issue of [busy, quiet]) {
+  const slotted = await working(lab, REPO, 'the lead that waits on its slot run')
+  for (const issue of [busy, quiet, slotted]) {
     const session = sessionOf(issue)
     await hook(lab.world, 'session-start', session, { source: 'startup', session_id: `c-${issue}` })
     await hook(lab.world, 'user-prompt-submit', session, { session_id: `c-${issue}` })
   }
-  await hook(lab.world, 'stop', sessionOf(quiet), {
-    stop_hook_active: false,
-    background_tasks: [{ status: 'running' }],
+  await goQuiet(quiet)
+  await goQuiet(slotted)
+  const [attempt] =
+    await sql()`SELECT worktree_path FROM factory.lead_attempts WHERE issue_id = ${slotted} AND attempt = 1`
+  const put = await fetch(`${lab.server.url}/slots/sw-live`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', ...bearer() },
+    body: JSON.stringify({ name: 'make', cwd: attempt.worktree_path as string }),
   })
+  expect(put.status).toBe(200)
 
   await Bun.sleep(IDLE_MS + 300)
   await pass()
@@ -419,12 +435,15 @@ test('lead_idle: a lead quiet past the steward threshold is filed, a lead in its
   expect(filed?.text).toContain(`${quiet} (`)
   expect(filed?.text).toContain('idle since')
   expect(filed?.text).not.toContain(busy)
+  expect(filed?.text).not.toContain(slotted)
+  await fetch(`${lab.server.url}/slots/sw-live`, { method: 'DELETE', headers: bearer() })
 
   // the lead takes a new turn: the condition clears
   await hook(lab.world, 'user-prompt-submit', sessionOf(quiet), { session_id: 'again' })
   expect(await pass()).toContain('cleared 1')
   await must(lab, ['issue', 'cancel', busy, '--reason', 'done'])
   await must(lab, ['issue', 'cancel', quiet, '--reason', 'done'])
+  await must(lab, ['issue', 'cancel', slotted, '--reason', 'done'])
 })
 
 /** An Issue that regressed after its ship: the ship's stored commits evidence says what the ship carried. */

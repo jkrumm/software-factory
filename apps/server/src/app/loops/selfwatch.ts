@@ -33,7 +33,7 @@ import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
-import { loadIdle } from './steward.ts'
+import { countLiveWork, type LiveWorkDeps, loadIdle } from './steward.ts'
 
 export type SelfwatchStores = {
   work: WorkStore
@@ -57,6 +57,9 @@ export interface SelfwatchDeps {
   /** the same for a lead whose last turn ended with background work in flight */
   idleBackgroundMs: number
   ci: CiRuns
+  /** the lead's live work, as the steward counts it (`countLiveWork`) */
+  slots: LiveWorkDeps['slots']
+  ciLive: LiveWorkDeps['ciLive']
   migrations: MigrationFiles
   /** migration numbers two applied files share (`SHARED_NUMBERS`) */
   sharedNumbers: ReadonlySet<string>
@@ -94,6 +97,7 @@ async function idleLeads(deps: SelfwatchDeps): Out<IdleLead[]> {
     if (!loaded.ok) return loaded
     const idle = loaded.value
     if (!idle || idle.facts.repo !== deps.repo) continue
+    await countLiveWork({ ...deps, rules: { idleLeadMs: deps.idleLeadMs } }, idle)
     found.push({
       issue: id,
       title: idle.facts.title,

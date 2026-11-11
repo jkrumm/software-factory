@@ -18,6 +18,8 @@ export interface SlotRow {
   peakRssMib: number | null
   /** why a waiter is still waiting, as of its last call */
   why: string | null
+  /** the caller's working directory, when it sent one */
+  cwd: string | null
 }
 
 /** What the memory rule is given: the learned peak of the caller's step, the host's free memory, and the base the extras are measured from. */
@@ -90,6 +92,7 @@ export function touchSlots(
     slots: number
     runMs: number
     fit: SlotFit
+    cwd?: string | undefined
     rssMib?: number | undefined
     peakRssMib?: number | undefined
   },
@@ -123,6 +126,7 @@ export function touchSlots(
         rssMib: null,
         peakRssMib: null,
         why: null,
+        cwd: input.cwd ?? null,
       }
   const others = kept.filter((row) => row.id !== input.id)
   const view = (row: SlotRow, ahead: number, why: string | null = null): SlotView => ({
@@ -187,4 +191,20 @@ export function slotLines(rows: readonly SlotRow[], now: Date): string[] {
         `test slot ${row.slot} held by "${row.name}" for ${Math.floor((now.getTime() - (row.grantedAt?.getTime() ?? 0)) / 60_000)} min, limit ${Math.round((row.runMs ?? 0) / 60_000)} min`,
     )
   return [...held, ...waits]
+}
+
+/**
+ * Whether a slot is held or asked for (the waiter still polls) by a command started in `dir` or below it: the live work
+ * of the lead whose worktree `dir` is.
+ */
+export function slotLiveIn(rows: readonly SlotRow[], dir: string, now: Date): boolean {
+  const root = dir.replace(/\/+$/, '')
+  return rows.some(
+    (row) =>
+      row.cwd !== null &&
+      (row.cwd === root || row.cwd.startsWith(`${root}/`)) &&
+      (row.slot === null
+        ? row.seenAt.getTime() >= now.getTime() - WAITER_TTL_MS
+        : (row.leasedUntil?.getTime() ?? 0) >= now.getTime()),
+  )
 }

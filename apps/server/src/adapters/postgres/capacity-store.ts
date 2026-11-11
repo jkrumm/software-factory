@@ -62,6 +62,7 @@ const SlotDbRow = z.object({
   rss_mib: z.number().int().nullable(),
   peak_rss_mib: z.number().int().nullable(),
   why: z.string().nullable(),
+  cwd: z.string().nullable(),
 })
 
 const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
@@ -248,6 +249,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           rssMib: r.rss_mib,
           peakRssMib: r.peak_rss_mib,
           why: r.why,
+          cwd: r.cwd,
         }
       })
     },
@@ -258,9 +260,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       for (const r of rows) {
         await tx`
           INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
-             peak_rss_mib, why)
+             peak_rss_mib, why, cwd)
           VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
-                  ${r.rssMib}, ${r.peakRssMib}, ${r.why})`
+                  ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd})`
       }
     },
 

@@ -26,6 +26,7 @@ import {
   type SlotRow,
   type SlotFit,
   slotLines,
+  slotLiveIn,
   touchSlots,
   WAITER_TTL_MS,
 } from '../../src/domains/capacity/slots.ts'
@@ -462,6 +463,7 @@ describe('test slots', () => {
         rssMib: null,
         peakRssMib: null,
         why: null,
+        cwd: null,
       }))
     const cases: { name: string; holders: number; fit: Partial<SlotFit>; granted: boolean; why?: string }[] = [
       { name: 'a lone step is always granted', holders: 0, fit: { freeMib: 100 }, granted: true },
@@ -568,6 +570,41 @@ describe('test slots', () => {
     expect(slotLines([{ ...rows[0], leasedUntil: at(3_600_000) } as SlotRow], at(20 * 60_000))).toEqual([
       'test slot 1 held by "make test" for 20 min, limit 30 min',
     ])
+  })
+})
+
+describe('a slot is live work of the lead whose worktree its command started in', () => {
+  const row = (extra: Partial<SlotRow>): SlotRow => ({
+    id: 'x',
+    name: 'make',
+    requestedAt: now,
+    seenAt: now,
+    slot: 1,
+    leasedUntil: at(SLOT_LEASE_MS),
+    grantedAt: now,
+    runMs: 1_800_000,
+    rssMib: null,
+    peakRssMib: null,
+    why: null,
+    cwd: '/w/factory-1-1/apps/server',
+    ...extra,
+  })
+
+  test('a holder in the worktree or below it, a waiter that still asks', () => {
+    expect(slotLiveIn([row({})], '/w/factory-1-1', now)).toBe(true)
+    expect(slotLiveIn([row({ cwd: '/w/factory-1-1' })], '/w/factory-1-1/', now)).toBe(true)
+    expect(
+      slotLiveIn([row({ slot: null, leasedUntil: null, seenAt: at(-WAITER_TTL_MS + 1) })], '/w/factory-1-1', now),
+    ).toBe(true)
+  })
+
+  test('not another worktree with the same prefix, no directory, an expired lease, a waiter that gave up', () => {
+    expect(slotLiveIn([row({ cwd: '/w/factory-1-10' })], '/w/factory-1-1', now)).toBe(false)
+    expect(slotLiveIn([row({ cwd: null })], '/w/factory-1-1', now)).toBe(false)
+    expect(slotLiveIn([row({ leasedUntil: at(-1) })], '/w/factory-1-1', now)).toBe(false)
+    expect(
+      slotLiveIn([row({ slot: null, leasedUntil: null, seenAt: at(-WAITER_TTL_MS - 1) })], '/w/factory-1-1', now),
+    ).toBe(false)
   })
 })
 

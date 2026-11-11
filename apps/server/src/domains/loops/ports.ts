@@ -323,6 +323,11 @@ export interface CiRuns {
   latest(repo: string, branch: string | null): Promise<Result<{ branch: string; runs: CiRun[] }, PortError>>
 }
 
+/** Whether a branch has a workflow run that is queued or in progress (called outside any transaction). */
+export interface CiLive {
+  running(repo: string, branch: string): Promise<Result<boolean, PortError>>
+}
+
 /**
  * The migration files of a repo at its default branch and on the refs that can still merge: every branch that is not a
  * lead's and the lead branches of the `scope` Issues (called outside any transaction).

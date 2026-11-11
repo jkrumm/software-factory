@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { CiRuns } from '../../domains/loops/ports.ts'
+import type { CiLive, CiRuns } from '../../domains/loops/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { parseRemote } from '../intake/github.ts'
 import { gitIn } from '../quality/git.ts'
@@ -17,6 +17,7 @@ const WorkflowRuns = z.looseObject({
       id: z.number().int(),
       name: z.string().nullish(),
       head_sha: z.string(),
+      status: z.string().nullish(),
       conclusion: z.string().nullish(),
       html_url: z.string(),
       created_at: z.string(),
@@ -35,11 +36,8 @@ export interface GithubCiOptions {
   fetch?: typeof fetch
 }
 
-/**
- * The newest completed workflow runs of a branch of the repo's GitHub origin. Reads only; a missing token, an origin
- * that is not github.com, a status other than 200 or a body that does not parse is an error naming it, never a body.
- */
-export function githubCiRuns(options: GithubCiOptions): CiRuns {
+/** The GitHub reads both adapters share: one GET with the token, and the `owner/name` of a repo's origin. */
+function githubReader(options: GithubCiOptions) {
   const api = options.apiUrl.replace(/\/+$/, '')
   const doFetch = options.fetch ?? fetch
 
@@ -66,18 +64,34 @@ export function githubCiRuns(options: GithubCiOptions): CiRuns {
     return parsed.success ? ok(parsed.data) : err(portError('unreadable', 'github answered with an unexpected body'))
   }
 
+  async function slugOf(repo: string): Promise<Result<string, PortError>> {
+    if (!options.token) return err(portError('refused', 'no token'))
+    const located = await options.locate(repo)
+    if (!located.ok) return located
+    const done = await gitIn(located.value, ['remote', 'get-url', 'origin'], {
+      timeoutMs: REMOTE_TIMEOUT_MS,
+      ...(options.run ? { run: options.run } : {}),
+    }).catch(() => undefined)
+    const remote = done?.exitCode === 0 ? parseRemote(done.stdout.trim()) : undefined
+    if (!remote) return err(portError('refused', `${repo} has no github.com origin`))
+    return ok(`${remote.owner}/${remote.name}`)
+  }
+
+  return { api, read, slugOf }
+}
+
+/**
+ * The newest completed workflow runs of a branch of the repo's GitHub origin. Reads only; a missing token, an origin
+ * that is not github.com, a status other than 200 or a body that does not parse is an error naming it, never a body.
+ */
+export function githubCiRuns(options: GithubCiOptions): CiRuns {
+  const { api, read, slugOf } = githubReader(options)
+
   return {
     async latest(repo, branch) {
-      if (!options.token) return err(portError('refused', 'no token'))
-      const located = await options.locate(repo)
-      if (!located.ok) return located
-      const done = await gitIn(located.value, ['remote', 'get-url', 'origin'], {
-        timeoutMs: REMOTE_TIMEOUT_MS,
-        ...(options.run ? { run: options.run } : {}),
-      }).catch(() => undefined)
-      const remote = done?.exitCode === 0 ? parseRemote(done.stdout.trim()) : undefined
-      if (!remote) return err(portError('refused', `${repo} has no github.com origin`))
-      const slug = `${remote.owner}/${remote.name}`
+      const found = await slugOf(repo)
+      if (!found.ok) return found
+      const slug = found.value
 
       let ref = branch
       if (!ref) {
@@ -107,6 +121,30 @@ export function githubCiRuns(options: GithubCiOptions): CiRuns {
             : [],
         ),
       })
+    },
+  }
+}
+
+/** A workflow run in one of these statuses is not finished: GitHub's `completed` is the only end. */
+const FINISHED = 'completed'
+
+/**
+ * Whether any workflow run of a branch is queued or in progress (the newest page of runs, any status). Reads only; the
+ * errors are `githubCiRuns`'s, and a branch with no run is a plain no.
+ */
+export function githubCiLive(options: GithubCiOptions): CiLive {
+  const { api, read, slugOf } = githubReader(options)
+
+  return {
+    async running(repo, branch) {
+      const found = await slugOf(repo)
+      if (!found.ok) return found
+      const runs = await read(
+        `${api}/repos/${found.value}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=${RUNS_PAGE_SIZE}`,
+        WorkflowRuns,
+      )
+      if (!runs.ok) return runs
+      return ok(runs.value.workflow_runs.some((run) => run.status && run.status !== FINISHED))
     },
   }
 }
