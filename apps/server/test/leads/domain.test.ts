@@ -302,7 +302,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '22848237489c988d32c08b6e4dfa3e703362be2ffdbabbf84fe24efbfbdde008',
+      'fd5d13f0f538db9ffb026fdc815af6e0df365e927289834dd63cf1671e4429b3',
     )
   })
 
@@ -357,7 +357,8 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain('git rebase origin/master')
     expect(STANDING_ORDERS).toContain('next free migration number')
     expect(STANDING_ORDERS).toContain('`make merge-guard`')
-    expect(STANDING_ORDERS).toContain('let CI finish green on that exact pushed head')
+    expect(STANDING_ORDERS).toContain('factory merge-lock --project <repo> -- sh -c')
+    expect(STANDING_ORDERS).toContain("the repo's guard has `--wait`")
     expect(STANDING_ORDERS).toContain('a head with no finished green CI run')
     expect(STANDING_ORDERS).toContain('gh pr checks <n>')
   })

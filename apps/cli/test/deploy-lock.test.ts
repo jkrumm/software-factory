@@ -172,3 +172,48 @@ describe('factory deploy-lock', () => {
     }
   })
 })
+
+describe('factory merge-lock', () => {
+  const startMerge = (project: string, cmd: string[], env: Record<string, string> = {}) =>
+    Bun.spawn(['bun', BIN, 'merge-lock', '--project', project, '--', ...cmd], {
+      env: { ...process.env, FACTORY_DEPLOY_LOCK_DIR: locks, FACTORY_DEPLOY_LOCK_POLL_MS: '20', ...env },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+  const finish = async (proc: ReturnType<typeof startMerge>) => ({
+    code: await proc.exited,
+    err: await new Response(proc.stderr).text(),
+  })
+
+  test('serialises two merge windows of one project, and a deploy lock does not block it', async () => {
+    const deploy = start('app', marker('d', '0.6'))
+    while ((await marksOf()).length === 0) await Bun.sleep(10)
+    const first = startMerge('app', marker('a', '0.4'))
+    while ((await marksOf()).length < 2) await Bun.sleep(10)
+    const second = startMerge('app', marker('b', '0'))
+    expect((await finish(first)).code).toBe(0)
+    expect((await finish(second)).code).toBe(0)
+    await deploy.done
+    const lines = await marksOf()
+    expect(lines.indexOf('a end')).toBeLessThan(lines.indexOf('b start'))
+    expect(lines.indexOf('a start')).toBeLessThan(lines.indexOf('d end'))
+    expect(await Bun.file(join(locks, 'app.merge.lock')).exists()).toBe(false)
+  })
+
+  test('a live holder and a tiny wait: exit 75 naming the merge lock', async () => {
+    const holder = Bun.spawn(['sleep', '60'])
+    sleepers.push(holder)
+    await mkdir(locks, { recursive: true })
+    await symlink(String(holder.pid), join(locks, 'app.merge.lock'))
+    const result = await finish(startMerge('app', marker('b', '0'), { FACTORY_MERGE_LOCK_WAIT_MS: '100' }))
+    expect(result.code).toBe(75)
+    expect(result.err).toContain('merge lock for app')
+    expect(await marksOf()).toEqual([])
+  })
+
+  test('a missing --project is a usage error naming merge-lock', async () => {
+    const result = await finish(startMerge('../x', ['true']))
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('merge-lock')
+  })
+})

@@ -6,9 +6,15 @@ import type { Io } from './operation.ts'
 import { EX_TEMPFAIL, exitCodeOf, signalGroup } from './slot.ts'
 
 const USAGE = 'usage: deploy-lock --project <name> -- <cmd> [args…]'
+const MERGE_USAGE = 'usage: merge-lock --project <name> -- <cmd> [args…]'
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 /** How long a caller waits for a live holder (`FACTORY_DEPLOY_LOCK_WAIT_MS`). */
 const DEFAULT_WAIT_MS = 30 * 60_000
+/** A merge lock is held across a CI run (~17 min), so a queue of leads waits longer (`FACTORY_MERGE_LOCK_WAIT_MS`). */
+const DEFAULT_MERGE_WAIT_MS = 90 * 60_000
+
+/** The two locks of a project: the deploy and the merge window (rebase, push, CI, merge). Each is its own file. */
+export type LockKind = 'deploy' | 'merge'
 /** How often a waiter looks again (`FACTORY_DEPLOY_LOCK_POLL_MS`). */
 const DEFAULT_POLL_MS = 2_000
 
@@ -106,15 +112,25 @@ function release(lock: string): void {
  * every `FACTORY_DEPLOY_LOCK_POLL_MS`, 2 s); past that, and whenever the lock cannot be created or read, it is one stderr
  * line and exit 75 without running the command. **Closed always:** there is no server call and no open-on-outage mode.
  * The lock is a symlink to the holder's pid in `FACTORY_DEPLOY_LOCK_DIR` (default `~/.local/state/factory/deploy-locks`).
+ * `kind: 'merge'` (`factory merge-lock`) is the same lock under `<project>.merge.lock`: the one merge window of a project,
+ * so leads rebase, wait for CI and merge one at a time instead of rebasing against each other's merges forever. It waits
+ * up to `FACTORY_MERGE_LOCK_WAIT_MS` (90 min).
  */
-export async function deployLock(input: { project: string; command: string[] }, io: Io): Promise<number> {
+export async function deployLock(
+  input: { project: string; command: string[]; kind?: LockKind },
+  io: Io,
+): Promise<number> {
+  const kind = input.kind ?? 'deploy'
   const [program, ...args] = input.command
-  if (!program || !NAME.test(input.project)) throw usage(USAGE)
+  if (!program || !NAME.test(input.project)) throw usage(kind === 'merge' ? MERGE_USAGE : USAGE)
 
   const dir = io.env.FACTORY_DEPLOY_LOCK_DIR || join(io.env.HOME || homedir(), '.local/state/factory/deploy-locks')
-  const waitMs = number(io.env.FACTORY_DEPLOY_LOCK_WAIT_MS, DEFAULT_WAIT_MS)
+  const waitMs =
+    kind === 'merge'
+      ? number(io.env.FACTORY_MERGE_LOCK_WAIT_MS, DEFAULT_MERGE_WAIT_MS)
+      : number(io.env.FACTORY_DEPLOY_LOCK_WAIT_MS, DEFAULT_WAIT_MS)
   const pollMs = number(io.env.FACTORY_DEPLOY_LOCK_POLL_MS, DEFAULT_POLL_MS)
-  const lock = join(dir, `${input.project}.lock`)
+  const lock = join(dir, kind === 'merge' ? `${input.project}.merge.lock` : `${input.project}.lock`)
 
   let child: ReturnType<typeof Bun.spawn> | undefined
   let stopped: NodeJS.Signals | undefined
@@ -130,7 +146,7 @@ export async function deployLock(input: { project: string; command: string[] }, 
     try {
       mkdirSync(dir, { recursive: true })
     } catch (error) {
-      io.err(`factory: deploy lock for ${input.project}: cannot create ${dir}: ${reason(error)}; not running\n`)
+      io.err(`factory: ${kind} lock for ${input.project}: cannot create ${dir}: ${reason(error)}; not running\n`)
       return EX_TEMPFAIL
     }
     const deadline = Date.now() + waitMs
@@ -141,13 +157,13 @@ export async function deployLock(input: { project: string; command: string[] }, 
         break
       }
       if ('failed' in outcome) {
-        io.err(`factory: deploy lock for ${input.project}: ${outcome.failed}; not running\n`)
+        io.err(`factory: ${kind} lock for ${input.project}: ${outcome.failed}; not running\n`)
         return EX_TEMPFAIL
       }
       if (stopped) return 128 + (constants.signals[stopped] ?? 1)
       if (Date.now() >= deadline) {
         io.err(
-          `factory: deploy lock for ${input.project} still held by pid ${outcome.held} after ${Math.round(waitMs / 1000)}s; not running\n`,
+          `factory: ${kind} lock for ${input.project} still held by pid ${outcome.held} after ${Math.round(waitMs / 1000)}s; not running\n`,
         )
         return EX_TEMPFAIL
       }
@@ -175,8 +191,10 @@ export async function deployLock(input: { project: string; command: string[] }, 
   }
 }
 
-/** `deploy-lock --project <name> -- <cmd> [args…]`: the words after `deploy-lock`, split at the first `--`. */
-export async function deployLockVerb(words: readonly string[], io: Io): Promise<number> {
+/** `deploy-lock` / `merge-lock --project <name> -- <cmd> [args…]`: the words after the verb, split at the first `--`. */
+export async function deployLockVerb(words: readonly string[], io: Io, kind: LockKind = 'deploy'): Promise<number> {
+  const verb = kind === 'merge' ? 'merge-lock' : 'deploy-lock'
+  const help = kind === 'merge' ? MERGE_USAGE : USAGE
   const split = words.indexOf('--')
   const options = split === -1 ? words : words.slice(0, split)
   const command = split === -1 ? [] : words.slice(split + 1)
@@ -185,8 +203,8 @@ export async function deployLockVerb(words: readonly string[], io: Io): Promise<
     const word = options[i]
     if (word === '--project' && options[i + 1] !== undefined) project = options[++i]
     else if (word?.startsWith('--project=')) project = word.slice('--project='.length)
-    else throw usage(`deploy-lock: unknown argument ${word}`, USAGE)
+    else throw usage(`${verb}: unknown argument ${word}`, help)
   }
-  if (project === undefined) throw usage('deploy-lock: --project is required', USAGE)
-  return deployLock({ project, command }, io)
+  if (project === undefined) throw usage(`${verb}: --project is required`, help)
+  return deployLock({ project, command, kind }, io)
 }

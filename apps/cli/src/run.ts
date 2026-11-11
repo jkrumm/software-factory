@@ -51,6 +51,10 @@ const HAND_WRITTEN: readonly [string, string][] = [
     'run <cmd> holding the host-local deploy lock of <name> (waits for a live holder; exit 75: no lock in time or unreadable, closed)',
   ],
   [
+    'merge-lock --project <name> -- <cmd>',
+    'run <cmd> holding the host-local merge lock of <name>, the one rebase-push-CI-merge window of a repo (waits up to 90 min for a live holder; exit 75: no lock in time or unreadable, closed)',
+  ],
+  [
     'follow [--issue <id>] [--since <cursor>] [--until-closed]',
     'the change stream, one line per change; Ctrl-C exits 0; --until-closed ends when --issue closes',
   ],
@@ -304,6 +308,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     // `slot run` passes everything after `--` to its command, so it reads its own arguments.
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)
+    if (argv[0] === 'merge-lock') return await deployLockVerb(argv.slice(1), io, 'merge')
     if (argv[0] === 'follow') return await followVerb(argv.slice(1), io)
     if (argv[0] === 'retro') return await retroVerb(argv.slice(1), io)
     if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)

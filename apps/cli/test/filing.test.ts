@@ -74,6 +74,7 @@ describe('the filing contract', () => {
       [['plan', 'schema', '--help'], 'usage: factory plan schema'],
       [['plan', 'check', '--help'], 'usage: factory plan check [file]'],
       [['deploy-lock', '--help'], 'usage: factory deploy-lock --project <name> -- <cmd>'],
+      [['merge-lock', '--help'], 'usage: factory merge-lock --project <name> -- <cmd>'],
       [['role', 'get', '--help'], 'usage: factory role get <role>'],
     ] as const) {
       const { code, out } = await cli([...argv])
