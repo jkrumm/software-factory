@@ -59,6 +59,25 @@
   color-scheme: light;
 }
 
+/*
+ * Text in a tone (`kit/tone.ts` TONE_TEXT). Dark takes the mark colour as is; light pulls it toward the ink so the text
+ * holds AA (4.5:1) on its own 12 % tint over the page, card and selected row. Derived from tokens: no colour literal here.
+ */
+:root,
+:root[data-theme='dark'] {
+  --vx-good-text: var(--vx-good-solid);
+  --vx-warn-text: var(--vx-warn-solid);
+  --vx-bad-text: var(--vx-bad-solid);
+  --vx-accent-text: var(--vx-accent);
+}
+
+:root[data-theme='light'] {
+  --vx-good-text: color-mix(in srgb, var(--vx-ink) 25%, var(--vx-good-solid));
+  --vx-warn-text: color-mix(in srgb, var(--vx-ink) 25%, var(--vx-warn-solid));
+  --vx-bad-text: color-mix(in srgb, var(--vx-ink) 25%, var(--vx-bad-solid));
+  --vx-accent-text: color-mix(in srgb, var(--vx-ink) 25%, var(--vx-accent));
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

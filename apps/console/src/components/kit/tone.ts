@@ -1,12 +1,12 @@
 /** The tones the kit paints state with. A tone is chosen by the caller or an explicit map, never derived from a word. */
 export type Tone = 'good' | 'warn' | 'bad' | 'accent' | 'neutral'
 
-/** Text in a tone: used on a tint of the same tone, never as a series colour. */
+/** Text in a tone: used on a tint of the same tone, never as a series colour. The `-text` tokens (styles/index.css) are darker than the mark colour in the light scheme so it holds AA. */
 export const TONE_TEXT: Record<Tone, string> = {
-  good: 'text-[color:var(--vx-good-solid)]',
-  warn: 'text-[color:var(--vx-warn-solid)]',
-  bad: 'text-[color:var(--vx-bad-solid)]',
-  accent: 'text-[color:var(--vx-accent)]',
+  good: 'text-[color:var(--vx-good-text)]',
+  warn: 'text-[color:var(--vx-warn-text)]',
+  bad: 'text-[color:var(--vx-bad-text)]',
+  accent: 'text-[color:var(--vx-accent-text)]',
   neutral: 'text-[color:var(--vx-ink2)]',
 }
 
