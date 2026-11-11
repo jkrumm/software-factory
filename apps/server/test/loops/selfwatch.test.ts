@@ -3,6 +3,9 @@ import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import { fingerprintOf } from '../../src/domains/intake/rules.ts'
 import {
   ciFindings,
+  confirmedHeartbeat,
+  DATABASE_RECHECK_GAP_MS,
+  DATABASE_RECHECKS,
   evidenceHash,
   heartbeatFindings,
   idleFindings,
@@ -12,7 +15,7 @@ import {
   signalText,
   waitFindings,
 } from '../../src/domains/loops/selfwatch.ts'
-import type { CiRun, Finding, SelfwatchRow } from '../../src/domains/loops/selfwatch-model.ts'
+import type { CiRun, Finding, HeartbeatFact, SelfwatchRow } from '../../src/domains/loops/selfwatch-model.ts'
 import { isInert } from '../../src/domains/quality/evidence.ts'
 
 const NOW = new Date('2026-11-08T12:00:00Z')
@@ -213,6 +216,52 @@ test('heartbeat_stale: a class per reason, never while ok', () => {
   expect(evidenceHash(restarted[0] as Finding)).toBe(evidenceHash(tick[0] as Finding))
   const database = heartbeatFindings({ ok: false, reason: 'connection refused', tickAt: null, queueMovedAt: null }, NOW)
   expect(database.map((f) => f.subject)).toEqual(['database'])
+})
+
+const beat = (reason: string | null): HeartbeatFact => ({
+  ok: reason === null,
+  reason,
+  tickAt: null,
+  queueMovedAt: null,
+})
+
+test('confirmedHeartbeat: one slow database answer on a loaded host is not a stale heartbeat', async () => {
+  const slow = beat('the database did not answer within 2000 ms')
+  const reads = [slow, beat(null)]
+  const pauses: number[] = []
+  const got = await confirmedHeartbeat(
+    async () => reads.shift() as HeartbeatFact,
+    async (ms) => void pauses.push(ms),
+  )
+  expect(got.ok).toBe(true)
+  expect(pauses).toEqual([DATABASE_RECHECK_GAP_MS])
+})
+
+test('confirmedHeartbeat: a database that misses every read stays stale, after a bounded number of reads', async () => {
+  let reads = 0
+  const got = await confirmedHeartbeat(
+    async () => {
+      reads++
+      return beat('the database did not answer within 2000 ms')
+    },
+    async () => {},
+  )
+  expect(got.ok).toBe(false)
+  expect(reads).toBe(1 + DATABASE_RECHECKS)
+})
+
+test('confirmedHeartbeat: a tick problem or a healthy beat is read once', async () => {
+  for (const reason of ['no tick has succeeded yet', 'the last successful tick was 400 s ago', null]) {
+    let reads = 0
+    await confirmedHeartbeat(
+      async () => {
+        reads++
+        return beat(reason)
+      },
+      async () => {},
+    )
+    expect(reads).toBe(1)
+  }
 })
 
 test('a signal text is at most eight lines', () => {
