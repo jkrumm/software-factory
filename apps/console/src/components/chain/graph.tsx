@@ -1,3 +1,4 @@
+import { useIsPeeked } from '@/components/peek/use-peeked'
 import {
   BaseEdge,
   ControlButton,
@@ -47,6 +48,7 @@ function Card({ data }: NodeProps<CardNode>) {
   const { node, waitsFor } = data
   const now = useNow(60_000)
   const number = issueNumber(node)
+  const peeked = useIsPeeked(number)
   const row = node.kind === 'row'
   const { state, label } = lozengeOf(node)
   const reason = reasonOf(node, waitsFor, now)
@@ -81,6 +83,7 @@ function Card({ data }: NodeProps<CardNode>) {
         project={node.repo ?? 'No project'}
         kind={node.issueKind}
         number={number ? Number(number) : null}
+        selected={peeked}
         state={state}
         stateLabel={label}
         origin={row ? 'Not filed yet' : undefined}

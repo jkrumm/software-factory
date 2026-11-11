@@ -55,7 +55,7 @@ const KIND_ICON: Record<string, Icon> = {
   closed: FlagCheckeredIcon,
 }
 
-export function Activity({ issue, now }: { issue: ReadIssueDetail; now: number }) {
+export function Activity({ issue, now, narrow }: { issue: ReadIssueDetail; now: number; narrow?: boolean }) {
   if (issue.timeline.length === 0) return <EmptyState title="Nothing has happened to this Issue yet." />
   const groups = activityGroups({
     timeline: issue.timeline,
@@ -75,6 +75,7 @@ export function Activity({ issue, now }: { issue: ReadIssueDetail; now: number }
       {groups.map((group) => (
         <Section key={group.key} title={group.title} level={3}>
           <StepRail
+            wrap={narrow}
             steps={group.steps.map(({ kind, ...step }) => ({
               ...step,
               icon: step.failed ? undefined : (KIND_ICON[kind] ?? CircleIcon),

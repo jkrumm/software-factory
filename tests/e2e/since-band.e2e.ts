@@ -158,11 +158,14 @@ test('every figure on the band equals the count in the event log since the visit
   await expect(band(page).getByText('A duplicate complaint')).toHaveCount(0)
   await expect(band(page).getByText('Name the cache after the repo?')).toHaveCount(0)
 
-  // an item opens its Issue page, through the link in its popover
+  // an item opens its Issue in the peek, through the link in its popover; the page is "Open full page"
   await category(page, 'dropped')
     .getByRole('button', { name: /Drop the legacy importer/ })
     .click()
   await page.getByRole('dialog').getByRole('link', { name: 'Open the Issue' }).click()
+  const panel = page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
+  await expect(panel.getByRole('heading', { level: 1 })).toContainText('Drop the legacy importer')
+  await panel.getByRole('link', { name: 'Open full page' }).click()
   await expect(page).toHaveURL(new RegExp(`${issueHref(seed.after.dropped)}$`))
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Drop the legacy importer')
 })

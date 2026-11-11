@@ -19,6 +19,14 @@ link to `/flow?state=...`; one meter per subscription from `/v1/accounts`; the h
 **Palette** (`Mod+K`): Issues by title or number across projects, projects, artifacts and commands (theme, the screens with
 their keys).
 
+**Peek** (`components/peek/`, kit `Peek`): a plain click on any link to an Issue or an artifact opens it in a right-side
+panel over the current page (`?peek=issues/<n>` or `?peek=artifacts/<id>`, with `peekTab` and `peekRevision`), and the page
+underneath stays mounted. One document-level click handler (`PeekHost`) serves every screen: modifier and middle clicks,
+links with a `target` or `data-peek="off"`, and every link on the Issue's or an artifact's own page keep going to the full
+page. Escape, the close button and the browser's back close it; opening pushes one history entry and swapping what it shows
+replaces it, so closing is one step. Escape yields to an open popover or the palette, and in a field it only leaves the
+field. The address logic is pure (`lib/peek.ts`); the panel's content is its own chunk. The rules: `DESIGN.md` "The peek".
+
 ## Flow
 
 `/flow` fills the content area (no width cap). From the top: the header, a stat row, then the board of every Issue by state:

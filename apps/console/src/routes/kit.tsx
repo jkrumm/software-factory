@@ -22,6 +22,7 @@ import {
   LOZENGE_STATES,
   Lozenge,
   Meter,
+  Peek,
   PropertyList,
   Section,
   SinceRow,
@@ -63,6 +64,7 @@ function Word({ word, children }: { word: InfoHintProps['word']; children: strin
 
 function Kit() {
   const [folded, setFolded] = useState(true)
+  const [peeking, setPeeking] = useState(false)
   const view = (i: (typeof KIT_ISSUES)[number]) => ({
     title: i.title,
     project: i.project,
@@ -324,6 +326,32 @@ function Kit() {
             {KIT_METERS.map((m) => (
               <Meter key={m.label} {...m} />
             ))}
+          </div>
+        </Section>
+
+        <Section title="Peek">
+          <Note>
+            A side panel over the page it was opened from, positioned in its parent. Not modal. In the Console a plain
+            click on any Issue or artifact link opens it.
+          </Note>
+          <div className="relative h-72 overflow-hidden rounded-xl bg-card">
+            <div className="flex h-full items-center justify-center">
+              <Button variant="outline" onClick={() => setPeeking(true)}>
+                Open the peek
+              </Button>
+            </div>
+            {peeking ? (
+              <Peek
+                label="Issue 12"
+                tag="Issue 12"
+                onClose={() => setPeeking(false)}
+                page={(props) => <a href="/kit" {...props} />}
+              >
+                <p className="px-4 py-2 text-[length:var(--vx-text-sm)] text-muted-foreground">
+                  The Issue's own view goes here.
+                </p>
+              </Peek>
+            ) : null}
           </div>
         </Section>
 

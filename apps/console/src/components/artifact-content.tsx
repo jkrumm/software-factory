@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { parseFrameMessage, type SelectionRect } from '@/lib/artifact'
+import { cn } from '@/lib/utils'
 import {
   clearHighlights,
   clearPending,
@@ -33,6 +34,8 @@ export interface ContentProps {
   onSelect: (selected: Selected) => void
   /** rises whenever the composer closes: the frame drops its selection, so the same passage can be chosen again */
   cleared: number
+  /** the content sits in a panel that scrolls as one (the peek): the frame takes its own height, not the column's */
+  stacked?: boolean
 }
 
 /**
@@ -137,7 +140,7 @@ const FRAME_SANDBOX = 'allow-scripts'
  * write follows only the owner's submit in the Console's own UI. The parent keys this component on the revision, so a new
  * revision is a new frame.
  */
-function HtmlContent({ content, primary, quotes, focus, onSelect, cleared }: Omit<ContentProps, 'format'>) {
+function HtmlContent({ content, primary, quotes, focus, onSelect, cleared, stacked }: Omit<ContentProps, 'format'>) {
   const frame = useRef<HTMLIFrameElement>(null)
   const ready = useRef(false)
   const latest = useRef(quotes)
@@ -192,7 +195,7 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared }: Omi
       sandbox={FRAME_SANDBOX}
       src="/frame.html"
       onLoad={() => send({ type: 'factory.render', html: content, annotate: primary })}
-      className="h-[calc(100dvh-14rem)] min-h-96 w-full bg-background lg:h-full lg:min-h-0"
+      className={cn('h-[calc(100dvh-14rem)] min-h-96 w-full bg-background', !stacked && 'lg:h-full lg:min-h-0')}
     />
   )
 }

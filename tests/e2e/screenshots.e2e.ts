@@ -212,6 +212,39 @@ for (const variant of VARIANTS) {
       }
     })
 
+    test('the peek: an Issue over Flow and the Chain, an artifact over Needs you, the panel on each tab', async ({
+      page,
+    }) => {
+      const shotFull = (name: string) =>
+        page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })
+      const ids = JSON.parse(process.env.E2E_HISTORY ?? '{}') as { rich: string }
+      const { shotSpec } = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { shotSpec: string }
+      const rich = ids.rich.replace('issue_', '')
+      const { middle: chained } = JSON.parse(process.env.E2E_CHAIN ?? '{}') as { middle: string }
+      const middle = chained.replace('issue_', '')
+      const open = async (path: string) => {
+        await page.goto(path)
+        await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
+        await expect(page.getByRole('dialog').and(page.locator('[data-peek-panel]'))).toBeVisible()
+        await expect(
+          page.getByRole('dialog').and(page.locator('[data-peek-panel]')).getByRole('heading').first(),
+        ).toBeVisible()
+        await page.waitForLoadState('networkidle')
+      }
+      await open(`/flow?peek=issues/${rich}`)
+      await shotFull('peek-flow-issue')
+      await open(`/flow?peek=issues/${rich}&peekTab=activity`)
+      await shotFull('peek-flow-issue-activity')
+      await open(`/chain?peek=issues/${middle}&peekTab=checkpoints`)
+      await shotFull('peek-chain-issue')
+      await open(`/needs-you?peek=artifacts/${shotSpec}`)
+      await shotFull('peek-needs-artifact')
+      // the comments sit under the document: scroll the panel to them
+      await page.getByRole('complementary', { name: 'Comments' }).scrollIntoViewIfNeeded()
+      await page.getByRole('complementary', { name: 'Comments' }).getByText('Select text').scrollIntoViewIfNeeded()
+      await shotFull('peek-needs-artifact-comments')
+    })
+
     test('the header strip closed, each popover open, and the palette with a query', async ({ page, apiUrl }) => {
       const shot = (name: string) =>
         page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { IssueCard } from '@/components/kit'
+import { useIsPeeked } from '@/components/peek/use-peeked'
 import type { FlowCard } from '@/lib/flow'
 import { originWord } from '@/lib/flow'
 
@@ -9,6 +10,7 @@ import { originWord } from '@/lib/flow'
  */
 export function FlowCardView({ card, now, showState = false }: { card: FlowCard; now: number; showState?: boolean }) {
   const origin = originWord(card.origin)
+  const selected = useIsPeeked(card.number)
   return (
     <IssueCard
       title={card.title}
@@ -16,6 +18,7 @@ export function FlowCardView({ card, now, showState = false }: { card: FlowCard;
       projectAs={(props) => <Link to="/flow" search={{ project: card.repo }} {...props} />}
       kind={card.kind}
       number={card.number}
+      selected={selected}
       state={card.state}
       showState={showState}
       origin={origin === 'You' ? undefined : origin}

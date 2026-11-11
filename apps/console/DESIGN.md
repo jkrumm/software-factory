@@ -64,8 +64,9 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
   window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
   ceilings and the top five processes); Live (a dot; popover with
   the stream's state, the last event's age, the server's version and uptime).
-- **Everything that names a thing links to it.** An Issue title anywhere opens the Issue page; a project opens Flow
-  filtered; an origin links out to its source (the GitHub issue, the alert).
+- **Everything that names a thing links to it.** An Issue title or an artifact anywhere opens it in the **peek**, a panel on
+  the right of the page you are on (below); a modifier-click, "Open full page" in the panel, or a link on the Issue's own
+  page opens the page; a project opens Flow filtered; an origin links out to its source (the GitHub issue, the alert).
 - **The palette** finds Issues by title or number across projects, projects, artifacts and commands, each row with an icon,
   the highlighted match, a muted reference and a kind column; it shows each command's key.
 
@@ -83,12 +84,32 @@ it does not.
 | KindBadge | The Issue's kind (feature, bug, incident, chore, docs) as an outline badge with its icon; `KindIcon` is the icon alone with the kind as its name and tooltip (cards and rows) |
 | IssueCard / IssueRow | Card, built like a StatCard: the shell holds a header (KindIcon, project chip, the Issue number in mono, the origin as a muted word only when it is not You, a Lozenge where no column already says the state) and a footer (the wait or queue reason with its icon, the age in mono); the title sits alone in the inset body one surface step below, 13 px clamped to 3 lines; the whole card is a link; ⋯ on hover swaps with the Lozenge. `compact` (the Chain's node) clamps the title to 2 lines and the reason to 1. A plan row has no number and no age. The row is one dense line from 40 rem: icon, number, title, project, Lozenge, reason, age |
 | SinceRow | One thing that happened, as a compact line with no box: an icon tinted by its tone for what happened, the Issue number in mono, the title clamped to one line, the project, the age. It is a button, not a link: hovering or keyboard-focusing it opens a popover to its side (below on a phone, where a tap opens it) with the full title, what happened, the outcome and the links; Escape closes it |
+| Peek | A right-side panel over the page it was opened from, up to 52 rem wide (the whole content area on a phone), on the `popover` surface step with the overlay shadow, never a border or a scrim. Its header is a mono tag ("Issue 12"), "Open full page" and a close button (tooltip "Close (Esc)"); the body scrolls on its own and holds the Issue's or the artifact's own view in its narrow form (the properties under the tabs; the comments under the document). Not modal: the page behind stays live, so another card swaps what the panel shows. Focus moves in on open and back to the link that opened it |
 | PropertyList | A definition list: a small label above its value, three columns from 40 rem; a missing value reads "None", muted |
 | Section / Fold | A section is a heading, a rule and space, never a box; a Fold is a full-width header button with a caret and a count |
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
 | Meter, Sparkline, MiniBars | Hand-drawn SVG on tokens, hover tooltip, no animation. A Meter is graphite, warn from 75 %, bad from 90 % (`meterTone`) |
 | InfoHint | A small ⓘ beside a domain word; its text is that word's definition generated from `docs/language.md`, never retyped |
 | EmptyState, Skeleton | One sentence and an icon tile. A skeleton is a quiet block at the final height of what it stands for (`components/skeletons.tsx` holds one per screen, built from the kit's `Skeleton`: a collapsed Needs-you card is 72 to 98 px, a StatCard 273, a board card about 120, the artifact's comments panel 24 rem), so nothing jumps when the content arrives; the screen is `aria-busy` and named. It never reads "Loading" as text |
+
+## The peek
+
+The decision of Issue 664: a **side panel, not a modal**. A centred modal hides the board it was opened from and wants a
+click out; the panel leaves the board (and the Chain graph) readable beside it, lets the next card swap the panel in one
+click, and keeps the working screen where it was.
+
+- **Address.** `?peek=issues/<n>` or `?peek=artifacts/<id>` on any page, with `peekTab` (the Issue's tab) and `peekRevision`
+  (the artifact's). A reload or a shared link restores it. Navigating to another page drops it.
+- **One handler.** A plain click on any link to `/issues/<n>` or `/artifacts/<id>` opens the peek (`components/peek/host.tsx`),
+  so no screen wires it and a new link gets it free. Not intercepted: a modifier or middle click, a link with a `target`
+  or `data-peek="off"`, a comparison (`compare=`), and every link on the Issue's or an artifact's own page (it is already the
+  full view). The palette still goes to the page.
+- **History.** Opening from a closed panel pushes one entry; swapping replaces it. Escape, the close button and the
+  browser's back all close it, and Escape and the button step back the one entry, so the list is exactly as it was: the page
+  underneath stays mounted, keeping its scroll, filters and virtualised columns. Escape belongs to an open popover, the
+  palette or a menu first, and in a field it only leaves the field.
+- **Narrow form.** The views do not size to the viewport inside it: the Issue's properties stack under the tabs, the stat
+  figures take two columns, the artifact's comments stack under its document.
 
 ## Rules
 

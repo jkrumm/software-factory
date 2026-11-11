@@ -106,7 +106,7 @@ test('a card shows its kind as an icon', async ({ page, apiUrl }) => {
   await expect(card).not.toContainText('Working')
 })
 
-test('a card opens its Issue page', async ({ page, apiUrl }) => {
+test('a card is a link to its Issue page (a plain click opens the peek, peek.e2e.ts)', async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
   const working = flow.states.working.issues[0]
   if (!working) throw new Error('the seed has no working Issue')
@@ -115,8 +115,7 @@ test('a card opens its Issue page', async ({ page, apiUrl }) => {
   await expect(card.getByRole('link', { name: working.title })).toHaveAttribute('href', /\/issues\/\d+$/)
   // the link is the card itself: no ⋯ is needed to open it
   await expect(card.getByRole('button')).toHaveCount(0)
-  await card.click()
-  await expect(page).toHaveURL(new RegExp(`/issues/${working.id.replace('issue_', '')}$`))
+  await page.goto(`/issues/${working.id.replace('issue_', '')}`)
   await expect(page.getByRole('heading', { level: 1, name: working.title })).toBeVisible()
 })
 
