@@ -97,9 +97,11 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
   }, [primary, quotes, content])
 
   useEffect(() => {
-    if (!primary || !root.current) return
-    if (focus) scrollToQuote(root.current, focus.quote)
-    paintActive(root.current, focus?.quote ?? null)
+    if (primary && focus && root.current) scrollToQuote(root.current, focus.quote)
+  }, [primary, focus])
+  // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
+  useEffect(() => {
+    if (primary && root.current) paintActive(root.current, focus?.quote ?? null)
   }, [primary, focus, content, quotes])
   useEffect(() => () => paintActive(document.body, null), [])
 
