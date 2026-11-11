@@ -203,8 +203,8 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   master red for 4 h, a force-pushed rebase merged with no CI run on it, and a red-master fix queued 3 h 14 min behind a full
   repo. The rules: `scripts/merge-guard.ts` refuses a head with no finished green `ci.yml` run on its exact sha (`--wait`
   polls for it; `--allow-red` never skips it); a master run still running is no refusal, because the head contains
-  `origin/master` and its green CI proved that combination, but a red one is; a ship records the PR head's CI as `ci`
-  evidence and counts red or missing as friction (`unproven_ci`), never refusing (NL23); the Watch does not pass while the
+  `origin/master` and its green CI proved that combination, but a red one is; a ship of a PR-shipping project records the PR head's CI as `ci`
+  evidence (a push-shipping project records none) and counts red or missing as friction (`unproven_ci`), never refusing (NL23); the Watch does not pass while the
   default branch's run for the landed commit runs or is red; a failing default-branch check is filed as an `incident`
   (the fix's place beyond `leads`, lane-exempt, the line stops) and the leads with an open PR in the repo are noted once.
   The per-account lead cap still holds an urgent fix back; raising it would put a fourth lead on one Max account, so it

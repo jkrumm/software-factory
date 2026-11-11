@@ -215,7 +215,8 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   friction (`unstated_acceptance`) like an unreviewed one. The pull request the commits landed through is read from GitHub
   (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
   when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red
-  or missing one is counted as friction (`unproven_ci`). `evidence.ts` decides whether the paths deploy at all; its inert paths
+  or missing one is counted as friction (`unproven_ci`). A project that ships by push (no `via: pr` rule) or has no
+  `project.yaml` records no `ci` evidence and asks GitHub nothing. `evidence.ts` decides whether the paths deploy at all; its inert paths
   equal `scripts/verify.sh`'s.
 - **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
   their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`
