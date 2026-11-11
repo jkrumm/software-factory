@@ -45,12 +45,13 @@ const exists = (path: string): boolean => {
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
-/** The pid a lock names, or why it cannot be read (the lock is then never reclaimed). */
-function holderOf(lock: string): { pid: number } | { unreadable: string } {
+/** The pid a lock names, `gone` when it was released a moment ago, or why it cannot be read (never reclaimed). */
+function holderOf(lock: string): { pid: number } | { gone: true } | { unreadable: string } {
   let target: string
   try {
     target = readlinkSync(lock)
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { gone: true }
     return { unreadable: reason(error) }
   }
   return /^[0-9]+$/.test(target) && Number(target) > 0
@@ -60,10 +61,11 @@ function holderOf(lock: string): { pid: number } | { unreadable: string } {
 
 /**
  * One try at the lock, a symlink to our pid (`symlinkSync` is atomic and the pid is in place from the first moment).
- * `taken`: ours. `held`: a live process has it. `failed`: it cannot be created or read, the caller stops (closed).
+ * `taken`: ours. `held`: a live process has it. `retry`: it was released or retaken while we looked, look again at once.
+ * `failed`: it cannot be created or read, the caller stops (closed).
  * A holder that is dead is reclaimed, one reclaimer at a time (`<lock>.reclaim`, a `mkdir`).
  */
-function tryTake(lock: string): 'taken' | { held: number } | { failed: string } {
+function tryTake(lock: string): 'taken' | 'retry' | { held: number } | { failed: string } {
   try {
     symlinkSync(String(process.pid), lock)
     return 'taken'
@@ -71,6 +73,7 @@ function tryTake(lock: string): 'taken' | { held: number } | { failed: string } 
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return { failed: `cannot create ${lock}: ${reason(error)}` }
   }
   const holder = holderOf(lock)
+  if ('gone' in holder) return 'retry'
   if ('unreadable' in holder) return { failed: `cannot read ${lock}: ${holder.unreadable}` }
   if (alive(holder.pid)) return { held: holder.pid }
 
@@ -87,12 +90,16 @@ function tryTake(lock: string): 'taken' | { held: number } | { failed: string } 
     if (exists(lock)) {
       const again = holderOf(lock)
       if ('unreadable' in again) return { failed: `cannot read ${lock}: ${again.unreadable}` }
-      if (alive(again.pid)) return { held: again.pid }
-      rmSync(lock, { force: true })
+      if ('pid' in again) {
+        if (alive(again.pid)) return { held: again.pid }
+        rmSync(lock, { force: true })
+      }
     }
     symlinkSync(String(process.pid), lock)
     return 'taken'
   } catch (error) {
+    // Taking needs no reclaim lock, so another caller may have taken it since the removal: look again.
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'retry'
     return { failed: `cannot take ${lock}: ${reason(error)}` }
   } finally {
     rmdirSync(reclaim)
@@ -155,6 +162,10 @@ export async function deployLock(
       if (outcome === 'taken') {
         held = true
         break
+      }
+      if (outcome === 'retry') {
+        if (stopped) return 128 + (constants.signals[stopped] ?? 1)
+        continue
       }
       if ('failed' in outcome) {
         io.err(`factory: ${kind} lock for ${input.project}: ${outcome.failed}; not running\n`)
