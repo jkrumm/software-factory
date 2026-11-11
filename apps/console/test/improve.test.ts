@@ -19,6 +19,7 @@ import {
   historyLabels,
   historyXLabels,
   kpiChange,
+  partWords,
   KPI_HINT,
   kpiFooter,
   lineTone,
@@ -44,6 +45,7 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   target: { kind: 'between', min: 0.05, max: 0.07 },
   measured: true,
   definition: '',
+  parts: [],
   history: history(0.3, 0.28, 0.4, 0.22, 0.2, 0.25),
   ...over,
 })
@@ -318,4 +320,17 @@ test('targetTally counts the met targets of those judged; trends, unset targets 
   const unmeasured = kpi({ measured: false })
   expect(targetTally([met, missed, met, trend, gap, unmeasured])).toEqual({ met: 2, judged: 3 })
   expect(targetTally([trend, gap])).toEqual({ met: 0, judged: 0 })
+})
+
+test('the parts of a breakdown KPI are listed in its own unit', () => {
+  const queued = kpi({
+    key: 'queue_time',
+    unit: 'ms',
+    parts: [
+      { key: 'chain', label: 'Held by an after edge', value: 5 * 3_600_000, unit: 'ms' },
+      { key: 'capacity', label: 'Capacity', value: 90_000, unit: 'ms' },
+    ],
+  })
+  expect(partWords(queued)).toEqual(['Held by an after edge: 5.0 h', 'Capacity: 2 min'])
+  expect(partWords(kpi({}))).toEqual([])
 })

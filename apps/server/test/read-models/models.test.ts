@@ -75,7 +75,7 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(13)
+    expect(kpis.kpis.map((k) => k.key)).toHaveLength(23)
     for (const kpi of kpis.kpis) expect(kpi.value).toBeNull()
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
 

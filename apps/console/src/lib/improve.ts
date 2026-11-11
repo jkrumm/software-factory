@@ -150,6 +150,16 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   fix_commits: ['Issue', 'Issues'],
   window_points: ['Issue', 'Issues'],
   cost: ['Issue', 'Issues'],
+  queue_time: ['queue interval', 'queue intervals'],
+  idle_capacity: ['hour', 'hours'],
+  working_share: ['interval', 'intervals'],
+  dropped_after_lead: ['Issue', 'Issues'],
+  amend_rate: ['signal', 'signals'],
+  nudges_acted: ['nudge', 'nudges'],
+  forced_note_delay_p50: ['note', 'notes'],
+  errands_turned_away: ['Errand', 'Errands'],
+  regression_cause: ['watch', 'watches'],
+  first_watch_dwell_p50: ['watch', 'watches'],
 }
 
 /** What a KPI's sample was: "13 Issues", "1 Decision". */
@@ -173,7 +183,21 @@ export const KPI_HINT = {
   fix_commits: 'fix commit',
   window_points: 'window point',
   cost: 'cost',
+  queue_time: 'queue wait',
+  idle_capacity: 'idle',
+  working_share: 'working',
+  dropped_after_lead: 'dropped',
+  amend_rate: 'amend',
+  nudges_acted: 'steward',
+  forced_note_delay_p50: 'delivery',
+  errands_turned_away: 'turn away',
+  regression_cause: 'regressed',
+  first_watch_dwell_p50: 'watch',
 } as const satisfies Record<KpiKey, InfoWord>
+
+/** The breakdown of a KPI as the "what is counted" popover lists it: one line per part, in the KPI's unit. */
+export const partWords = (kpi: Pick<Kpi, 'parts'>): string[] =>
+  kpi.parts.map((part) => `${part.label}: ${formatValue(part.unit, part.value)}`)
 
 /** The word the sample noun of a KPI is hinted by, where the noun is a domain word of its own ("13 watches"). */
 export const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>

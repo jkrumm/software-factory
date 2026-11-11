@@ -9,6 +9,7 @@ import { filingContract, filingGuide } from './filing.ts'
 import { followVerb } from './follow.ts'
 import { OPERATIONS } from './generated/operations.ts'
 import { planVerb } from './plan.ts'
+import { retroVerb } from './retro.ts'
 import { type BodyField, extensionOf, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
 import { type Format, render } from './output.ts'
 import { retiredHint } from './retired.ts'
@@ -52,6 +53,10 @@ const HAND_WRITTEN: readonly [string, string][] = [
   [
     'follow [--issue <id>] [--since <cursor>] [--until-closed]',
     'the change stream, one line per change; Ctrl-C exits 0; --until-closed ends when --issue closes',
+  ],
+  [
+    'retro [--days <n>] [--digests <dir>] [--no-transcripts]',
+    "the weekly retro's bundle as JSON: GET /v1/retro plus a pass over the lead transcripts (no model)",
   ],
   [
     'door token new <source> [--rotate]',
@@ -300,6 +305,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)
     if (argv[0] === 'follow') return await followVerb(argv.slice(1), io)
+    if (argv[0] === 'retro') return await retroVerb(argv.slice(1), io)
     if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)
     if (argv[0] === 'plan' && (argv[1] === 'schema' || argv[1] === 'check')) return await planVerb(argv.slice(1), io)
     if (argv[0] === 'door' && argv[1] === 'token') return doorTokenVerb(argv.slice(2), io)

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { fileIssue } from '../flow.ts'
+import { RETRO_TITLE } from '../../../apps/server/src/domains/loops/retro.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { runLoop } from './support.ts'
 
@@ -137,6 +138,7 @@ test('the first pass counts only the new core, files each pattern over its rate 
   expect(signals.map((s) => s.title)).toEqual([
     'Friction: A noted event was refused: not allowed here',
     'Friction: Watches that ended in a regression',
+    RETRO_TITLE,
   ])
   const refusal = signals[0]
   if (!refusal) throw new Error('no signal for the refusals')
@@ -157,13 +159,15 @@ test('the first pass counts only the new core, files each pattern over its rate 
   expect(pass?.filed.map((f) => f.count).sort()).toEqual([1, 5])
   expect(pass?.over_budget).toEqual([])
   expect(pass?.failed).toEqual([])
-  expect(await frictionIssues()).toBe(2)
+  // the two patterns and the weekly retro
+  expect(await frictionIssues()).toBe(3)
+  expect(ran.summary).toContain('retro filed (new)')
 })
 
 test('a second run in the same week is not due and files nothing', async () => {
   const ran = await runLoop(lab, 'friction')
   expect(ran.summary).toContain('not due (last pass ')
-  expect(await filedSignals()).toHaveLength(2)
+  expect(await filedSignals()).toHaveLength(3)
   expect(await passes()).toHaveLength(1)
 })
 
@@ -178,7 +182,9 @@ test('a pass a week later amends the open Issue of a pattern with what it counte
   expect(ran.error).toBeNull()
   expect(ran.summary).toContain('filed 2 signal(s)')
   expect(await passes()).toHaveLength(2)
-  expect(await frictionIssues()).toBe(2)
+  // the retro signal amends last week's still-open retro Issue
+  expect(await frictionIssues()).toBe(3)
+  expect(ran.summary).toContain('retro amended (repeat)')
 
   const notes = await notesOn(first.issue_id)
   expect(notes).toHaveLength(1)

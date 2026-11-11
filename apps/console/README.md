@@ -107,15 +107,14 @@ are computed from the seed time).
 ## Improve
 
 `/improve` fills the content area (`Page fluid`). One grid of kit `StatCard`s, one per KPI of `docs/product.md`, in the Console's own order
-(the headline measures first: first verification passes, avoidable touches, asks, worth asking, refusals, queue wait p90 and p50, cycle p50, window
-points, cost), then the fix-commit card, which spans two columns where the grid has them. A KPI card's header is an icon,
+(the headline measures first, in the bands Quality, Pace and gates, Where time goes, The loops and Spend, `KPI_KEYS` in `packages/contract`: first verification passes, avoidable touches, asks, worth asking, the first watch's dwell and its regressions by cause, refusals, queue wait p90 and p50, cycle p50, queued time by reason, idle capacity, working share, drops after a lead started, signals that amended an Issue, steward nudges acted on, forced note delay, Errands turned away, window points, cost), then the fix-commit card, which spans two columns where the grid has them. A KPI card's header is an icon,
 the label and "Last 7 days against the 7 before"; its figure is `formatKpi`; its pill is the change against
 `history[length - 2]` in the unit's words, toned by the target (higher is better for `at_least`, lower for `at_most`, toward
 the range for `between`, neutral for a trend or no target); its sub line is the distance to the target in words; its
 chart is the six windows of `Kpi.history` as a `Sparkline` with the target dashed (two lines for a range), the line broken
 at a window with nothing counted and toned good, bad or quiet by the current verdict; its footer is Target and Counted. A KPI
 the API does not measure (cost and window points while the usage schema is not joined) shows "Not measured", no chart, and
-says why in the footer. The ⋯ menu opens "What is counted", the KPI's `definition`. The fix-commit card shows the newest
+says why in the footer. The ⋯ menu opens "What is counted", the KPI's `definition` and, for a breakdown (`Kpi.parts`: queued time by reason, time by state, regressions by cause), one line per part in the KPI's unit. The fix-commit card shows the newest
 week's total with the change against the week before (fewer is better), `StackedBars` by week (oldest left) with the legend
 of class totals, and "Total in the shown weeks" and "Busiest class"; the table of weeks by class sits under a Fold. Friction
 and the held finding classes follow. Every number comes from `/v1/kpis` and `/v1/fix-commits`; the page only subtracts. The

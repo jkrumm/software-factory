@@ -59,6 +59,7 @@ import {
   kpiChange,
   KPI_HINT,
   kpiFooter,
+  partWords,
   lineTone,
   mibWords,
   msWords,
@@ -95,9 +96,13 @@ const QUALITY: readonly KpiKey[] = [
   'worth_asking',
   'specs_per_100',
   'owner_decisions_per_100',
+  'first_watch_dwell_p50',
+  'regression_cause',
 ]
 const PACE_AND_GATES: readonly KpiKey[] = ['queue_wait_p90', 'queue_wait_p50', 'cycle_p50', 'refusals']
 const SPEND: readonly KpiKey[] = ['window_points', 'cost']
+const FLOW: readonly KpiKey[] = ['queue_time', 'idle_capacity', 'working_share', 'dropped_after_lead']
+const LOOPS: readonly KpiKey[] = ['amend_rate', 'nudges_acted', 'forced_note_delay_p50', 'errands_turned_away']
 
 /** Every card band shares one lattice: 1 column, 2 from `@3xl`, 4 from `@7xl`. */
 const LATTICE = 'grid-cols-1 @3xl:grid-cols-2 @7xl:grid-cols-4'
@@ -119,6 +124,16 @@ const KPI_ICON: Record<KpiKey, Icon> = {
   window_points: GaugeIcon,
   cost: CurrencyDollarIcon,
   fix_commits: WrenchIcon,
+  queue_time: HourglassIcon,
+  idle_capacity: GaugeIcon,
+  working_share: TimerIcon,
+  dropped_after_lead: ProhibitIcon,
+  amend_rate: ScalesIcon,
+  nudges_acted: ChatCircleDotsIcon,
+  forced_note_delay_p50: TimerIcon,
+  errands_turned_away: HandPointingIcon,
+  regression_cause: SealCheckIcon,
+  first_watch_dwell_p50: TimerIcon,
 }
 
 /** A surface card that is not a StatCard: a panel step with the faint card shadow, no border. */
@@ -192,6 +207,13 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
       menu={
         <MenuPopover label={`${kpi.label}: what is counted`} title="What is counted">
           {kpi.definition}
+          {kpi.parts.length > 0 ? (
+            <ul className="mt-2 list-disc pl-4">
+              {partWords(kpi).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
         </MenuPopover>
       }
     />
@@ -859,6 +881,8 @@ function Improve() {
           <SummaryStrip model={model} />
           <KpiBand title="Quality" keys={QUALITY} model={model} shot="improve-target" />
           <KpiBand title="Pace and gates" keys={PACE_AND_GATES} model={model} shot="improve-pace" />
+          <KpiBand title="Where time goes" keys={FLOW} model={model} shot="improve-flow" />
+          <KpiBand title="The loops" keys={LOOPS} model={model} shot="improve-loops" />
           <KpiBand
             title="Spend"
             keys={SPEND}

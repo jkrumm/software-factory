@@ -74,6 +74,11 @@ Read in 7-day windows, on the Console's Improve screen.
 | Fix commits per week, by class | measured from the first pass of the `fix-classes` loop, four weeks on Improve | falling |
 | Specs, and Decisions the owner answered himself, per 100 Issues | not measured | trend only; two near-zero lines mean the path is silent |
 | Window points per Issue | not measured | trend only |
+| Queued time by reason, idle capacity behind a queue, working share of a lead's time, Issues dropped or cancelled after a lead started | from the event log and the capacity readings | trend only |
+| Signals that amended an Issue, steward nudges a lead acted on, forced note delivery delay, Errands the screen turned away | from the intake, the event log and the delivery log | trend only |
+| First watch dwell, regressed first watches by cause | from the watch tables | read beside first verification passes |
+
+Each is a count over the window that SQL can repeat (`read/kpis-flow.ts`, `apps/server/test/read-models/kpis-flow.test.ts`); a breakdown (queued time by reason) is the KPI's `parts`. What no table holds (seconds by tool category, idle gaps, tool errors, `make check` runs) is the transcript pass of `factory retro`. The friction loop's weekly pass files one Issue whose lead reads that bundle, writes a Report (the numbers against last week, the patterns in a sample of transcripts, the ledger of earlier retro signals with what each number did) and files one marked signal per change (`docs/architecture.md`, the `friction` loop).
 
 ### Fix classes
 
