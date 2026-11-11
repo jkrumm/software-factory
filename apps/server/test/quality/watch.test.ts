@@ -185,6 +185,7 @@ test('two runs of one red target that differ by a drift line are inherited; a ne
   expect(inheritedOf(drift(['macos 26.1 pending', 'tailscale 1.90 behind']).replace('exit 2', 'exit 1'))).toBe(true)
   // a line the baseline never had is the change's
   expect(inheritedOf(drift(['macos 26.1 pending', 'weatherorb build broke']))).toBeUndefined()
+  expect(inheritedOf(drift(['macos 26.1 pending', 'tailscale 1.90 behind', 'node 24.1 behind']))).toBeUndefined()
   expect(inheritedOf('exit 1: a test broke')).toBeUndefined()
   // a cut marker is no line, and a run that printed nothing is compared whole
   expect(inheritedOf(`${drift(['macos 26.1 pending'])}\n[… 12 lines cut]`)).toBe(true)
