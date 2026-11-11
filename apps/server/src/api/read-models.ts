@@ -238,7 +238,16 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async ({ query, request }) => {
         if (!deps) return unavailable
         const redact = caller(request) === 'read'
-        return Response.json(RetroModel.parse(await readRetro(deps.sql, { now: now(), days: days(query), redact })))
+        return Response.json(
+          RetroModel.parse(
+            await readRetro(deps.sql, {
+              now: now(),
+              days: days(query),
+              redact,
+              capacityConstants: deps.capacityConstants,
+            }),
+          ),
+        )
       },
       {
         query: DaysQuery,
@@ -246,7 +255,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.retro',
           summary:
-            'what the weekly retro reads from the database over the last days (1 to 90, default 7): the KPI table with its history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of the earlier retro signals; `factory retro` adds the transcript pass',
+            'what the weekly retro reads from the database over the last days (1 to 90, default 7): the KPI table with its history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of the earlier retro signals, the capacity loop’s figures with the one setting to change; `factory retro` adds the transcript pass',
         },
       },
     )
