@@ -130,7 +130,8 @@ a real server and Postgres with fake `hc` and `agw`), then typechecks and builds
 `factory` is installed: one lease on the host's test slots for the whole check, "queued for a test slot" on stderr while it waits,
 a wait past 45 min exits 75 without running. `make deploy`,
 `make rollback` and `make verify` act on the mini only; `DRY_RUN=1` prints the plan, `FACTORY_REF=<branch>` proves a branch
-live before it is merged. CI runs `make check` on `ubuntu-latest`.
+live before it is merged. A rollback target is started up to `RESTART_ATTEMPTS` (3) times, `RESTART_PAUSE_SECS` (20) apart,
+before the deploy gives up and removes the plist: a Postgres lock timeout at start (issue 830) clears by itself. CI runs `make check` on `ubuntu-latest`.
 
 **Merging.** Parallel leads share one master, so before a lead merges its PR it rebases on the current `origin/master`,
 takes the next free migration number if it adds a migration (`make check` prints it; `scripts/merge-guard.ts
