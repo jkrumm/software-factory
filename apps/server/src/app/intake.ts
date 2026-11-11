@@ -803,10 +803,12 @@ export function createIntake(deps: IntakeDeps) {
     if (lead) {
       const issue = await uow.run(async (s) => ok(await loadIssue(s.work, `issue_${lead[1]}` as IssueId)))
       if (!issue.ok) return issue
-      if (issue.value) return ok(`agent:${repoNameOf(issue.value.repo)}`)
+      // a second directory of a taken name is stored by its path, which is no source name: the filer keeps what it typed
+      if (issue.value && !issue.value.repo.startsWith('/')) return ok(`agent:${issue.value.repo}`)
     }
     const named = await repoNameFor(who)
-    return named.ok ? ok(`agent:${named.value}`) : named
+    if (!named.ok) return named
+    return ok(named.value.startsWith('/') ? from : `agent:${named.value}`)
   }
 
   async function file(body: SignalRequest, caller: RequestCaller): Out<Triaged> {
