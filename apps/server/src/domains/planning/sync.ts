@@ -138,3 +138,14 @@ export function projectOf(projects: readonly StoredProject[], repo: string): Sto
     .filter((p) => repo === p.repo || repo.startsWith(`${p.repo}/`))
     .sort((a, b) => b.repo.length - a.repo.length)[0]
 }
+
+/**
+ * The name a repo text goes by when no project claims it: a name as it is; a path, or a linked worktree below one
+ * (`<repo>/.claude/worktrees/<name>`), by the directory name of its main checkout. Never a path, so one project is one
+ * string wherever it is stored or counted.
+ */
+export function repoNameOf(text: string): string {
+  if (!text.startsWith('/')) return text
+  const main = (text.split('/.claude/worktrees/')[0] ?? text).replace(/\/+$/, '')
+  return main.slice(main.lastIndexOf('/') + 1) || text
+}

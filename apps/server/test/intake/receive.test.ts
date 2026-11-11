@@ -56,7 +56,14 @@ const makeUow = () =>
   postgresUnitOfWork(db.sql, (tx) => ({ work: postgresWorkStore(tx), intake: postgresIntakeStore(tx) }))
 
 const projectPort: ProjectSignals = {
-  find: (repo) => Promise.resolve(ok(projects.find((p) => p.repo === repo) ?? null)),
+  // the way planning finds one: by name, or by a path (or a worktree below it) under `/src/<name>`
+  find: (repo) =>
+    Promise.resolve(
+      ok(
+        projects.find((p) => p.repo === repo || repo === `/src/${p.repo}` || repo.startsWith(`/src/${p.repo}/`)) ??
+          null,
+      ),
+    ),
   polled: () => Promise.resolve(ok(projects)),
 }
 const topology: IntakeTopology = {
@@ -1058,5 +1065,62 @@ describe('the token decides the trust, the claimed from only lowers it', () => {
     )
     expect(filed.outcome).toBe('filed')
     expect(await intake.list('held')).toEqual({ ok: true, value: [] })
+  })
+})
+
+describe('a repo is stored as its project name, never as a path', () => {
+  const request = (from: string, repo: string | null, title: string): SignalRequest => ({
+    from,
+    kind: 'request',
+    title,
+    text: '',
+    repo,
+    probe: false,
+  })
+  const MAIN = '/src/argo'
+
+  test('a name, a path and a worktree path file on one project, with a source named after it', async () => {
+    const byName = done(await intake.file(request('agent:argo', 'argo', 'Add a rollback'), 'agent'))
+    const byPath = done(await intake.file(request('agent:argo', MAIN, 'Show the queue age'), 'agent'))
+    const byWorktree = done(
+      await intake.file(request('agent:argo', `${MAIN}/.claude/worktrees/factory-9-1`, 'Count the retries'), 'agent'),
+    )
+    expect([byName, byPath, byWorktree].map((t) => t.outcome)).toEqual(['filed', 'filed', 'filed'])
+    expect((await issues()).map((i: { repo: string }) => i.repo)).toEqual(['argo', 'argo', 'argo'])
+    expect(await db.sql`SELECT DISTINCT repo, source FROM factory.intake_signals`).toEqual([
+      { repo: 'argo', source: 'agent:argo' },
+    ])
+    expect(await db.sql`SELECT payload->>'repo' AS repo FROM factory.issue_events WHERE kind = 'filed'`).toEqual([
+      { repo: 'argo' },
+      { repo: 'argo' },
+      { repo: 'argo' },
+    ])
+  })
+
+  test('the same words by name and by path are one signal: the fingerprint is the project name', async () => {
+    done(await intake.file(request('agent:argo', 'argo', 'Add a rollback'), 'agent'))
+    const again = done(await intake.file(request('agent:argo', MAIN, 'Add a rollback'), 'agent'))
+    expect(again.outcome).not.toBe('filed')
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('a lead names its worktree as its source and files as its Issue project; a path as source files as the project', async () => {
+    const first = done(await intake.file(request('agent:argo', 'argo', 'Add a rollback'), 'agent'))
+    const lead = `agent:factory-${first.issue?.slice('issue_'.length)}-1`
+    done(await intake.file(request(lead, 'vps', 'Count the retries'), 'agent'))
+    done(await intake.file(request('agent:fr', MAIN, 'Show the queue age'), 'agent'))
+    expect(await db.sql`SELECT source, repo FROM factory.intake_signals ORDER BY received_at, id`).toEqual([
+      { source: 'agent:argo', repo: 'argo' },
+      { source: 'agent:argo', repo: 'vps' },
+      { source: 'agent:fr', repo: 'argo' },
+    ])
+  })
+
+  test('a path that no project owns is dropped as an unknown project and stores no path', async () => {
+    const dropped = done(
+      await intake.file(request('agent:argo', '/elsewhere/thing/.claude/worktrees/x', 'Something odd'), 'agent'),
+    )
+    expect(dropped.outcome).toBe('dropped')
+    expect(await db.sql`SELECT repo FROM factory.intake_signals WHERE repo LIKE '/%'`).toEqual([])
   })
 })
