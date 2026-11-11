@@ -28,6 +28,11 @@ export interface SessionView {
   idleSince: Date | null
   /** a `limit_stop` with no turn after it: the account's window is spent */
   walled: boolean
+  /**
+   * an `idle` session whose last turn ended with background work in flight (a subagent, a shell, a monitor, as the Stop hook
+   * listed it): it pauses until that work wakes it, so it is waiting, not quiet. A later turn, or a session that is not idle, clears it.
+   */
+  backgroundTasks: boolean
   claudeSession: string | null
   transcriptPath: string | null
 }
@@ -98,6 +103,7 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
     text(start.payload.source) === 'compact' &&
     !sorted.slice(lastStart + 1).some((fact) => fact.kind === 'turn_started' || fact.kind === 'turn_ended')
 
+  const lastEnd = current.findLast((fact) => fact.kind === 'turn_ended')
   const lastTurn = turnStarts.at(-1)
   const previousTurn = turnStarts.at(-2)
   const last = sorted.at(-1)
@@ -112,6 +118,7 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
     lastEventAt: last?.at ?? null,
     idleSince: quietSince(state, current),
     walled,
+    backgroundTasks: state === 'idle' && lastEnd?.payload.backgroundTasks === true,
     claudeSession: text(start?.payload.claudeSessionId),
     transcriptPath: text(start?.payload.transcriptPath),
   }

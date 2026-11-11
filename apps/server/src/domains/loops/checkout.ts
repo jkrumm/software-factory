@@ -1,4 +1,4 @@
-import type { IssueId } from '../../kernel/ids.ts'
+import { type IssueId, issueId } from '../../kernel/ids.ts'
 
 /** A repo's main checkout as the steward reads it: the branch (null: detached HEAD), the default branch (null: unknown), the tracked paths with uncommitted changes. */
 export interface MainCheckoutLook {
@@ -24,13 +24,27 @@ export interface MainCheckoutLine {
   repo: string
   text: string
   since: Date
-  /** the live Issues of the repo, which were noted */
+  /** the live Issues of the repo (the line is as visible as the first) */
   issues: IssueId[]
+  /** the one lead the checkout can be named to (its branch is that lead's branch), the one that was noted; null: the owner's surface only */
+  noted: IssueId | null
   kind: MainCheckoutKind
   fingerprint: string
 }
 
 const SHOWN_PATHS = 3
+
+/**
+ * The live lead a main checkout can be named to: its branch is a lead branch (`factory/<n>-<attempt>`) of one of the repo's
+ * live Issues. A default or another branch, a detached HEAD and dirty paths name no session (the owner and the plan-owning
+ * session also work there), so they stay on the health line and reach no lead.
+ */
+export function checkoutOwner(finding: Pick<MainCheckoutFinding, 'branch'>, live: readonly IssueId[]): IssueId | null {
+  // `leadBranch` in `domains/leads/names.ts` makes these names; a domain reads no other, so the shape is repeated here.
+  const match = finding.branch === null ? null : /^factory\/([1-9][0-9]*)-[1-9][0-9]*$/.exec(finding.branch)
+  const owner = match?.[1] ? issueId(Number(match[1])) : null
+  return owner && live.includes(owner) ? owner : null
+}
 
 /**
  * A main checkout is shared: a lead works in its own worktree. Off its default branch (when that is known) or holding

@@ -201,7 +201,7 @@ test('a steward Decision reaches the owner only when policy, the Judge and the d
   expect(asked.at(0)?.input).toMatchObject({ repo: 'app', recommendation: 'try again', options: expect.any(Array) })
 })
 
-test('a later stall of the same Issue is a new Decision, and a lead that is gone is never given one', async () => {
+test('the same stall after an answered Decision is not asked again, a stall after news is, and a lead that is gone is never given a Decision', async () => {
   const issue = await blocked(lab, 'app', 'blocked again and again', 'recurring block qwerty')
   await script(stewardScript, [{ match: 'qwerty', answer: DECISION('Should the recurring block stop the Issue?') }])
   await script(askScript, [
@@ -215,17 +215,31 @@ test('a later stall of the same Issue is a new Decision, and a lead that is gone
       },
     },
   ])
-  for (const round of [1, 2]) {
-    const stewarded = await runLoop(lab, 'steward')
-    expect(stewarded.summary).toContain('Decisions 1')
-    await lab.cli(['checkpoint', 'pass'])
-    expect(await state(lab, issue)).toMatchObject({ state: 'working' })
-    if (round === 1) await block(lab, issue, 'recurring block qwerty')
-  }
-  const decisions = DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions.filter(
-    (d) => d.issueId === issue,
-  )
-  expect(decisions).toHaveLength(2)
+  const decisionsOf = async () =>
+    DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions.filter((d) => d.issueId === issue)
+
+  // round 1: the Judge answers; the lead resumes and blocks again with the same words
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 1')
+  await lab.cli(['checkpoint', 'pass'])
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+  await block(lab, issue, 'recurring block qwerty')
+
+  // the same stall after an answered Decision is not a second question: no Decision, no call, the Issue stays blocked
+  const calls = (await callsOf(lab, 'factory-steward')).length
+  for (let pass = 0; pass < 2; pass++) expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 0')
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'blocked' })
+  expect((await callsOf(lab, 'factory-steward')).length).toBe(calls)
+  expect(await decisionsOf()).toHaveLength(1)
+
+  // a word from the owner is news: the note is delivered, and a block that follows is a new Decision
+  await must(lab, ['issue', 'note', issue, 'the cache is fixed, try again'])
+  expect((await runLoop(lab, 'steward')).summary).toContain('woken 1')
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+  await block(lab, issue, 'recurring block qwerty')
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 1')
+  await lab.cli(['checkpoint', 'pass'])
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+  expect(await decisionsOf()).toHaveLength(2)
 
   // a lead that is gone: the steward may requeue it, never raise a Decision (an answer would not start a new attempt)
   const gone = await working(lab, 'app', 'the lead vanished')

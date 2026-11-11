@@ -2,7 +2,7 @@ import type { StewardAnswer } from '@software-factory/contract'
 import { scrub } from '../../kernel/scrub.ts'
 import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
-import { judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
+import { checkoutOwner, judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
 import type { ClaimHolder, LoopReads, LoopStore, MainCheckouts, StewardWorkflow } from '../../domains/loops/ports.ts'
 import {
   checkAnswer,
@@ -15,6 +15,9 @@ import {
   idleNote,
   type IdleFacts,
   MAX_ROUNDS,
+  type RepeatedStall,
+  SAME_STALL,
+  sameWords,
   STEWARD_DETAIL,
   type StallCause,
   type StallFacts,
@@ -110,6 +113,39 @@ function lineOf(record: AppliedRecord): string {
   return `v${record.version} ${record.kind}${said ? `: ${said.replace(/\s+/g, ' ').slice(0, 160)}` : ''}`
 }
 
+/**
+ * The stall the steward's last Decision on this attempt answered, when this one is the same: same cause, a detail that
+ * reads alike, and no word from a person (the owner or the orchestrator) and no reopening since the answer. A re-ship of the
+ * same change against the same failing check, or the lead blocking again on the same reason, is one question, not a new one.
+ */
+export function repeatedStall(
+  id: IssueId,
+  history: readonly AppliedRecord[],
+  cause: StallCause,
+  detail: string,
+): RepeatedStall | null {
+  const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
+  const asked = history.findLast(
+    (record) => record.kind === 'asked' && record.actor === 'steward' && record.version > lastAdmitted,
+  )
+  if (!asked) return null
+  const answered = history.find((record) => record.kind === 'answered' && record.version > asked.version)
+  if (!answered) return null
+  const news = history.some(
+    (record) =>
+      record.version > answered.version &&
+      (record.kind === 'reopened' ||
+        (record.kind === 'noted' && (record.actor === 'owner' || record.actor === 'orchestrator'))),
+  )
+  if (news) return null
+  const before = replay(
+    id,
+    history.filter((record) => record.version < asked.version),
+  ).wait
+  if (before?.reason !== cause || !('detail' in before)) return null
+  return sameWords(before.detail, detail) >= SAME_STALL ? { answeredAt: answered.version } : null
+}
+
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */
 export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallFacts | null {
   const cause = stallCause(issue)
@@ -135,6 +171,7 @@ export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallF
         record.version > lastAdmitted &&
         field(record.payload, 'detail').startsWith(STEWARD_DETAIL),
     ).length,
+    repeatOf: repeatedStall(issue.id, history, cause, wait.detail),
     notes: history
       .filter((record) => record.kind === 'noted' && record.version > wait.told)
       .map((record) => field(record.payload, 'text')),
@@ -372,10 +409,6 @@ export interface Idle {
 const isIdleNote = (record: AppliedRecord): boolean =>
   record.kind === 'noted' && field(record.payload, 'text').startsWith(IDLE_NOTE)
 
-/** The stall a quiet lead's Decision is raised from; like a wake, it ends one idle episode and begins the next. */
-const isIdleStall = (record: AppliedRecord): boolean =>
-  record.kind === 'stalled' && field(record.payload, 'detail').startsWith(IDLE_STALL)
-
 /**
  * A working Issue whose lead session went quiet: its turn ended, no tool runs, nothing was reported since the turn began
  * (`working` and mid-turn sessions are never read here). Null for every other Issue.
@@ -396,12 +429,11 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
     const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
     const wakes = history.filter((record) => record.version > lastAdmitted && isIdleNote(record))
     const lastWake = wakes.at(-1)
-    const lastStall = history.findLast((record) => record.version > lastAdmitted && isIdleStall(record))
     const last = history.findLast((record) => !isIdleNote(record))
     const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
     const quietSince = lastWake && lastWake.at > view.idleSince ? lastWake.at : view.idleSince
     return ok({
-      idle: { idleSince: view.idleSince, quietSince, wakes: wakes.length, lastEvent },
+      idle: { idleSince: view.idleSince, quietSince, wakes: wakes.length, lastEvent, background: view.backgroundTasks },
       facts: {
         issue: id,
         repo: issue.repo,
@@ -409,13 +441,14 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
         kind: issue.kind,
         cause: 'unreported',
         detail: `${IDLE_STALL} since ${view.idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
-        // the idle episode: the version of the last wake or idle stall, so a later episode is a new subject of the workflow
-        since: Math.max(lastWake?.version ?? 0, lastStall?.version ?? 0) || issue.version,
+        // the idle episode: the version of the last wake, so a later episode is a new subject of the workflow
+        since: lastWake?.version || issue.version,
         stalledAt: view.idleSince,
         attempt: issue.attempt,
         restarts: issue.restarts,
         regressions: issue.regressions,
         stewardWakes: wakes.length,
+        repeatOf: null,
         notes: [],
         history: history.slice(-HISTORY_LINES).map(lineOf),
         windowOpen: null,
@@ -437,38 +470,15 @@ async function noteIdle(deps: StewardDeps, facts: StallFacts, text: string, note
   })
 }
 
-/** A Decision is only raised from a stall: the quiet lead's Issue is stalled `unreported` first, as a second stop would. */
-async function stallIdle(deps: StewardDeps, facts: StallFacts): Out<boolean> {
-  return deps.uow.run(async ({ work }) => {
-    const stalled = await recordIn(work, deps, {
-      issueId: facts.issue,
-      key: key('unreported', 'idle', facts.issue, facts.attempt, facts.since),
-      event: {
-        kind: 'stalled',
-        payload: { attempt: facts.attempt, cause: 'unreported', detail: facts.detail.slice(0, 500) },
-        actor: 'factory',
-      },
-    })
-    if (!stalled.ok) return err(portError('refused', JSON.stringify(stalled.error)))
-    return ok(stalled.value.result === 'applied' || stalled.value.result === 'replayed')
-  })
-}
-
-/** A Decision is only raised from a stall: the quiet lead's Issue is stalled `unreported` first, as a second stop would. */
-async function raiseIdle(deps: StewardDeps, facts: StallFacts, form: unknown): Out<Acted> {
-  const stalled = await stallIdle(deps, facts)
-  if (!stalled.ok) return stalled
-  if (!stalled.value) return ok('nothing')
-  const raised = await raise(deps, facts, form)
-  return raised.ok ? ok(raised.value ? 'decision' : 'nothing') : raised
-}
-
-/** What the workflow's answer comes to for a quiet lead: a note typed to it, a Decision (after the stall), or nothing. */
+/**
+ * What the workflow's answer comes to for a quiet lead: a note typed to it, or nothing. Never a Decision: a quiet lead is a
+ * session still working on its Issue, and the options of a Decision about it (pause, drop, start a fresh lead) are ones no
+ * part of the factory applies. The self-watch loop files a quiet lead for the owner's side.
+ */
 async function answerIdle(deps: StewardDeps, idle: Idle, checked: Checked, minutes: number): Out<Acted> {
-  if (checked.kind === 'decision') return raiseIdle(deps, idle.facts, checked.form)
   if (checked.kind !== 'wake') return ok('nothing')
   const { facts } = idle
-  const text = idleNote(minutes, idle.idle.lastEvent, checked.note ?? checked.reason)
+  const text = idleNote(minutes, idle.idle.lastEvent, checked.note ?? checked.reason, idle.idle.background)
   const noted = await noteIdle(deps, facts, text, key('noted', 'steward', 'idle-ask', facts.issue, facts.since))
   return noted.ok ? ok(noted.value ? 'woken' : 'nothing') : noted
 }
@@ -483,13 +493,10 @@ function tally(pass: StewardPass, id: IssueId, acted: Result<Acted, PortError>):
 async function askIdle(deps: StewardDeps, idle: Idle, minutes: number, pass: StewardPass): Promise<void> {
   const asking = await ask(deps, idle.facts)
   if (!asking.ok) return tally(pass, idle.facts.issue, asking)
-  if (asking.value.kind === 'wait') return
+  // Asked out without a usable answer: the lead is left to its own turn, and self-watch has filed it.
+  if (asking.value.kind !== 'act') return
   pass.asked++
-  const checked: Checked =
-    asking.value.kind === 'act'
-      ? asking.value.checked
-      : { kind: 'decision', form: fallbackDecision(idle.facts), reason: 'no usable answer' }
-  tally(pass, idle.facts.issue, await answerIdle(deps, idle, checked, minutes))
+  tally(pass, idle.facts.issue, await answerIdle(deps, idle, asking.value.checked, minutes))
 }
 
 /** One working Issue: the lead gets a nudge naming the Issue's last event, `maxWakes` times; after that the workflow is asked. */
@@ -554,9 +561,9 @@ async function noteOnce(
 
 /**
  * The main checkout of a repo with a live lead (`working` or `watching`), read once per pass from local refs: off its
- * default branch, or with tracked uncommitted changes, it is a health line and one note to each live lead of the repo
- * (once per branch state and clean/dirty, not per changed path). A lead's work belongs in its worktree. A repo that
- * cannot be read is a problem and leaves no line.
+ * default branch, or with tracked uncommitted changes, it is a health line, and one note (once per branch state and
+ * clean/dirty, not per changed path) to the lead whose branch it is, when its branch is a live lead's. No other lead can act
+ * on it, so no other lead hears it. A repo that cannot be read is a problem and leaves no line.
  */
 async function noteMainCheckouts(deps: StewardDeps, pass: StewardPass): Promise<void> {
   const live = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.liveRepos(PASS_LIMIT)))
@@ -568,13 +575,16 @@ async function noteMainCheckouts(deps: StewardDeps, pass: StewardPass): Promise<
   for (const { repo, issues } of live.value) {
     const finding = await findMainCheckout(deps, pass, repo)
     if (!finding) continue
-    lines.push({ repo, issues, since: deps.clock.now(), ...finding })
-    for (const issueId of issues) {
+    // One note per checkout state, to the lead whose branch it is; no other lead can act on it. Every other state (the
+    // default branch with dirty files, a branch of the owner's or of the plan-owning session) is the health line alone.
+    const owner = checkoutOwner(finding, issues)
+    lines.push({ repo, issues, since: deps.clock.now(), noted: owner, ...finding })
+    if (owner) {
       await noteOnce(
         deps,
         pass,
-        issueId,
-        key('noted', 'steward', 'main-checkout', issueId, finding.fingerprint),
+        owner,
+        key('noted', 'steward', 'main-checkout', owner, finding.fingerprint),
         finding.text,
       )
     }

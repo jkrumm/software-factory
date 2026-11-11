@@ -40,6 +40,8 @@ const Env = z.object({
   FACTORY_STEWARD_MIN_STALL_MS: ms.optional(),
   /** a working Issue whose lead session has been quiet this long with nothing reported is nudged by the steward */
   FACTORY_STEWARD_IDLE_MS: ms.optional(),
+  /** the same, for a lead whose last turn ended with background work in flight (a subagent, a check): it waits, so it is nudged much later */
+  FACTORY_STEWARD_IDLE_BACKGROUND_MS: ms.optional(),
   /** the steward asks `factory-steward` again after a failed or refused answer this long on */
   FACTORY_STEWARD_RETRY_MS: ms.optional(),
   /** an Issue still settling this long after it was filed is settled with no edges by the steward */
@@ -57,6 +59,7 @@ export interface LoopSettings {
   tickMs: number
   minStallMs: number
   idleLeadMs: number
+  idleBackgroundMs: number
   retryMs: number
   queueGapMs: number
   settleTimeoutMs: number
@@ -147,6 +150,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     tickMs,
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,
     idleLeadMs: e.FACTORY_STEWARD_IDLE_MS ?? DEFAULT_STEWARD_RULES.idleLeadMs,
+    idleBackgroundMs: e.FACTORY_STEWARD_IDLE_BACKGROUND_MS ?? DEFAULT_STEWARD_RULES.idleBackgroundMs,
     retryMs: e.FACTORY_STEWARD_RETRY_MS ?? 10 * 60_000,
     queueGapMs: e.FACTORY_QUEUE_GAP_MS ?? 30 * 60_000,
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,

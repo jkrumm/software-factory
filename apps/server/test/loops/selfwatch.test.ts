@@ -160,8 +160,14 @@ test('wait_overdue: a dependency once every Issue it is after closed more than t
 })
 
 test('lead_idle: idle past the threshold only', () => {
-  const lead = (idle: number) => ({ issue: 'issue_3', title: 'Slow work', lead: 'lead-3-1', idleSince: minutes(idle) })
-  const found = idleFindings([lead(25), lead(5)], NOW, 20 * 60_000)
+  const lead = (idle: number) => ({
+    issue: 'issue_3',
+    title: 'Slow work',
+    lead: 'lead-3-1',
+    idleSince: minutes(idle),
+    background: false,
+  })
+  const found = idleFindings([lead(25), lead(5)], NOW, { idleLeadMs: 20 * 60_000, idleBackgroundMs: 90 * 60_000 })
   expect(found).toHaveLength(1)
   expect(found[0]?.subject).toBe('lead-3-1')
   expect(found[0]?.facts.join('\n')).toContain('threshold: 20 min')
@@ -301,11 +307,11 @@ test('titles of different subjects have different fingerprints, and one subject 
     ),
     ...idleFindings(
       [
-        { issue: 'issue_1', title: 'Alpha work', lead: 'lead-1-1', idleSince: minutes(90) },
-        { issue: 'issue_2', title: 'Beta work', lead: 'lead-2-1', idleSince: minutes(90) },
+        { issue: 'issue_1', title: 'Alpha work', lead: 'lead-1-1', idleSince: minutes(90), background: false },
+        { issue: 'issue_2', title: 'Beta work', lead: 'lead-2-1', idleSince: minutes(90), background: false },
       ],
       NOW,
-      60_000,
+      { idleLeadMs: 60_000, idleBackgroundMs: 60_000 },
     ),
     ...heartbeatFindings({ ok: false, reason: 'no tick has succeeded yet', tickAt: null, queueMovedAt: null }, NOW),
   ].map((f) => fingerprintOf('software-factory', f.title))

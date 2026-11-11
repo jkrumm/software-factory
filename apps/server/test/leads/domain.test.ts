@@ -109,6 +109,21 @@ describe('session state, derived from the hook events', () => {
     expect(view).toMatchObject({ state: 'idle', idleSince: new Date(T0 + 3000), turns: 1 })
   })
 
+  test('an idle session whose last turn ended with background work in flight is waiting, until a turn starts', () => {
+    const waiting = [
+      fact('session_started', 0),
+      fact('turn_started', 1),
+      fact('turn_ended', 2, { backgroundTasks: true }),
+    ]
+    expect(deriveSession(waiting)).toMatchObject({ state: 'idle', backgroundTasks: true })
+    expect(deriveSession([...waiting, fact('turn_started', 3)])).toMatchObject({
+      state: 'working',
+      backgroundTasks: false,
+    })
+    expect(deriveSession([...waiting, fact('turn_started', 3), fact('turn_ended', 4)]).backgroundTasks).toBe(false)
+    expect(deriveSession([...waiting, fact('session_ended', 3)]).backgroundTasks).toBe(false)
+  })
+
   test('events are ordered by time, then arrival', () => {
     const started = (n: number) => ({ ...fact('turn_started', 5), seq: n })
     const ended = (n: number) => ({ ...fact('turn_ended', 5), seq: n })

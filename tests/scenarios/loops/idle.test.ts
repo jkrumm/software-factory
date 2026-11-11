@@ -8,7 +8,8 @@ import { callsOf, eventsOf, runLoop, script, state, working } from './support.ts
 /**
  * A working Issue whose lead went quiet, against the real server and Postgres with the fake agw: the steward nudges it
  * with a note naming the Issue's last event, never while a tool runs, and asks the workflow once the wakes are spent.
- * The idle threshold is 0 here, so the first pass after a turn ends counts as idle.
+ * The idle thresholds are 0 here, so the first pass after a turn ends counts as idle (`idle-background.test.ts` holds the
+ * longer one for a lead that waits on background work).
  */
 let lab: Lab
 let dir: string
@@ -27,6 +28,7 @@ beforeAll(async () => {
       FACTORY_LEADS_PER_ACCOUNT: '16',
       FACTORY_STEWARD_MIN_STALL_MS: '0',
       FACTORY_STEWARD_IDLE_MS: '0',
+      FACTORY_STEWARD_IDLE_BACKGROUND_MS: '0',
       FACTORY_FAKE_STEWARD_SCRIPT: stewardScript,
       FACTORY_FAKE_ASK_SCRIPT: askScript,
     },
@@ -75,7 +77,7 @@ test('a lead running a tool is never woken, and an idle one is woken with its la
   expect(notes[0]).toContain('your session has been idle')
   expect(notes[0]).toContain('The last event on the Issue: v')
   expect(notes[0]).toContain('a note')
-  expect(notes[0]).toContain('background tasks')
+  expect(notes[0]).toContain('background work still running')
   expect(await state(lab, issue)).toMatchObject({ state: 'working', wait: null })
   expect(await callsOf(lab, 'factory-steward')).toEqual([])
 
@@ -132,34 +134,25 @@ const DECISION = {
   },
 }
 
-test('a Decision raised for a quiet lead ends one episode: the lead going quiet again is asked about again', async () => {
-  const issue = await working(lab, 'app', 'the glorp lead goes quiet twice')
+test('a quiet lead is never turned into a stall or a Decision: the answer that asks for one is dropped', async () => {
+  const issue = await working(lab, 'app', 'the glorp lead goes quiet')
   const session = await open(issue)
   await script(stewardScript, [{ match: 'glorp', answer: DECISION }])
-  await script(askScript, [
-    {
-      match: 'quiet lead',
-      verdict: {
-        verdict: 'answer',
-        answer: 'try again',
-        reason: 'the plan says to retry',
-        source: 'plan: docs/plan.md',
-      },
-    },
-  ])
+  await goQuiet(session)
 
-  for (const episode of [1, 2]) {
-    await goQuiet(session)
-    // the first episode spends the two wakes; the second finds them spent and asks at once
-    if (episode === 1) for (let wake = 0; wake < 2; wake++) await runLoop(lab, 'steward')
+  for (let wake = 0; wake < 2; wake++) await runLoop(lab, 'steward')
+  for (let pass = 0; pass < 2; pass++) {
     const ran = await runLoop(lab, 'steward')
-    expect(ran.summary).toContain('Decisions 1')
-    expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'decision' })
-    await lab.cli(['checkpoint', 'pass'])
-    expect(await state(lab, issue)).toMatchObject({ state: 'working' })
-    await hook(lab.world, 'user-prompt-submit', session, { session_id: `again-${episode}` })
+    expect(ran.error).toBeNull()
+    expect(ran.summary).toContain('Decisions 0')
   }
-  expect((await callsOf(lab, 'factory-steward')).filter((call) => call.input.issue === issue)).toHaveLength(2)
+  expect(await state(lab, issue)).toMatchObject({ state: 'working', wait: null })
+  // the workflow was asked once, and nothing but the two wakes came of it
+  expect((await callsOf(lab, 'factory-steward')).filter((call) => call.input.issue === issue)).toHaveLength(1)
+  expect(await idleNotes(issue)).toHaveLength(2)
+  const kinds = (await eventsOf(lab, issue)).map((event) => event.kind)
+  expect(kinds).not.toContain('stalled')
+  expect(kinds).not.toContain('asked')
 })
 
 test('a lead that deferred before going quiet is not nudged', async () => {

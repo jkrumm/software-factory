@@ -12,6 +12,8 @@ import {
   fallbackDecision,
   IDLE_NOTE,
   type IdleFacts,
+  SAME_STALL,
+  sameWords,
   type StallFacts,
   stallRequest,
 } from '../../src/domains/loops/stall.ts'
@@ -33,6 +35,7 @@ const stall = (over: Partial<StallFacts> = {}): StallFacts => ({
   restarts: 0,
   regressions: 0,
   stewardWakes: 0,
+  repeatOf: null,
   notes: [],
   history: [],
   windowOpen: null,
@@ -320,6 +323,7 @@ const idle = (over: Partial<IdleFacts> = {}): IdleFacts => ({
   quietSince: new Date(NOW.getTime() - 30 * 60_000),
   wakes: 0,
   lastEvent: 'v7 regressed: the probe failed',
+  background: false,
   ...over,
 })
 
@@ -341,6 +345,53 @@ test('a quiet lead is woken with a note naming the last event, twice per attempt
   expect(first.detail).toContain('background tasks')
   expect(decideIdle(idle({ wakes: 1 }), NOW, rules)).toMatchObject({ kind: 'wake' })
   expect(decideIdle(idle({ wakes: 2 }), NOW, rules)).toEqual({ kind: 'ask' })
+})
+
+test('a lead waiting on background work is nudged only past the longer threshold, and told so', () => {
+  const waiting = (minutes: number, over: Partial<IdleFacts> = {}) =>
+    idle({
+      background: true,
+      idleSince: new Date(NOW.getTime() - minutes * 60_000),
+      quietSince: new Date(NOW.getTime() - minutes * 60_000),
+      ...over,
+    })
+  // 67 minutes is the longest wait on an implementer the burn-in measured
+  expect(decideIdle(waiting(67), NOW, rules)).toMatchObject({ kind: 'wait' })
+  const late = decideIdle(waiting(95), NOW, rules)
+  expect(late).toMatchObject({ kind: 'wake' })
+  if (late.kind !== 'wake') throw new Error('unreachable')
+  expect(late.detail).toContain('background work still running')
+  // the second wake waits another background threshold, not the short one
+  expect(
+    decideIdle(waiting(95, { wakes: 1, quietSince: new Date(NOW.getTime() - 30 * 60_000) }), NOW, rules),
+  ).toMatchObject({
+    kind: 'wait',
+  })
+})
+
+test('a repeated stall that a Decision settled is not asked again; a note from a person still ends it', () => {
+  const repeat = stall({ repeatOf: { answeredAt: 14 } })
+  expect(decideStall(repeat, NOW, rules)).toMatchObject({ kind: 'wait' })
+  expect(decideStall(stall(), NOW, rules)).toEqual({ kind: 'ask' })
+  expect(decideStall({ ...repeat, notes: ['use the v2 endpoint'] }, NOW, rules)).toMatchObject({ kind: 'wake' })
+})
+
+test('two stall details read alike by their words, whatever the digits', () => {
+  expect(
+    sameWords(
+      'regressed 3 times: make verify failed on macOS 26.7.2',
+      'regressed 14 times: make verify failed on macOS 26.7.3',
+    ),
+  ).toBe(1)
+  expect(
+    sameWords(
+      'Holding until the macOS update lands, as answered. No change: make verify red only on that pending update.',
+      'make verify is red only because of the pending macOS update; holding until it lands',
+    ),
+  ).toBeGreaterThanOrEqual(SAME_STALL)
+  expect(
+    sameWords('waiting for the staging database', 'the migration number clashes with another branch'),
+  ).toBeLessThan(SAME_STALL)
 })
 
 test('the next wake waits another threshold from the last one', () => {

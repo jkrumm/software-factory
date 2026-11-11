@@ -143,12 +143,22 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   as the health line `account-rank`; it never blocks admission.
 - **The quiet lead** (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/loops/stall.ts`). A `working` Issue is
   no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
-  turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (20 minutes),
+  turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (10 minutes),
   gets a `noted` event by the steward that names the Issue's last event (a regression, a note) and tells the lead to
-  check its background tasks and report. A session mid-turn, whatever a tool in it is doing, is never read. The wakes are
-  counted from the events alone (steward notes that begin with `IDLE_NOTE`), `maxWakes` per attempt and each after another
-  threshold of quiet; after that `factory-steward` is asked as for an `unreported` stall. Its `wake` is one more such
-  note; its `raise_decision` first stalls the Issue as `unreported` (a Decision is only raised from a stall), then raises it.
+  check its background tasks and report. A session mid-turn, whatever a tool in it is doing, is never read. A turn that
+  ended with background work in flight (a subagent, a check, a shell: the Stop hook lists it and `turn_ended` carries
+  `backgroundTasks`, `SessionView.backgroundTasks`) is waiting, not quiet: it is nudged only after
+  `FACTORY_STEWARD_IDLE_BACKGROUND_MS` (90 minutes, past the longest implementer wait measured), as a frozen task, and
+  self-watch's `lead_idle` uses the same two thresholds. The wakes are counted from the events alone (steward notes that
+  begin with `IDLE_NOTE`), `maxWakes` per attempt and each after another threshold of quiet; after that `factory-steward` is
+  asked, and its answer can only be one more such note: a quiet lead is never stalled or turned into a Decision (the options
+  of one, pause, drop, a fresh lead, are applied by nothing); self-watch files it for the owner's side.
+- **A repeated stall is not asked twice** (`repeatedStall` in `app/loops/steward.ts`, `decideStall`). A stall of the same
+  cause as the one the steward's last Decision of this attempt answered, whose detail reads alike (`sameWords`: the share of
+  words, digits dropped, at least `SAME_STALL`), with no `noted` by the owner or the orchestrator and no `reopened` since
+  the answer, stays stalled and asks nothing: the lead blocking again on the same reason, or a re-ship of the same change
+  against the same failing check, is one question with one answer. A note delivered while it waited, or a changed detail, is
+  news and ends it as before.
 - **The claim deadlock** (`breakClaimDeadlocks` in `app/loops/steward.ts`). A working or watching Issue keeps its repo's
   claim; when it is after an Issue of the same repo that stays queued for lack of a claim, neither can move. The edge gets
   there by the owner (or the orchestrator on his behalf) naming it with `after` (`POST /planning/after`, which takes a
@@ -302,7 +312,7 @@ last one is up, at once if it never ran, so a 6-hour loop still passes on a serv
 | `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come, file a Replan for a project whose chain head is in a long wait (one open per project) | none |
 | `watch` | verify and probes | none |
 | `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
-| `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is one note to each live lead (once per branch state and clean/dirty) and a `main-checkout` health line, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |
+| `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is a `main-checkout` health line and, when its branch is a live lead's (`factory/<n>-<attempt>`), one note to that lead (once per branch state and clean/dirty); a branch no lead owns names no session and reaches no lead, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new-or-already-settled (open and last-day closed Issues), likely `after` edges |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |
 | `friction` | the week's counts (`read/friction.ts`), cut at the newest import (`import_issues.imported_at`: the old core's history is never counted), against the rules in `domains/loops/friction.ts`: a rate per Issue closed with a minimum sample of 10 closed, or a bare count for the serious patterns (stall, lead lost, undelivered note, regression); retired mechanisms (the review gate, NL23) are skipped. One signal per pattern over its rule, 5 at most, filed on this repo through intake with the evidence Issues; a pattern whose Issue is open amends it with a note (intake's fingerprint). Due once a week, read from `friction_passes` | none |

@@ -91,6 +91,7 @@ beforeAll(async () => {
       FACTORY_GITHUB_API_URL: github.url,
       FACTORY_SELFWATCH_GRACE_MS: String(GRACE_MS),
       FACTORY_STEWARD_IDLE_MS: String(IDLE_MS),
+      FACTORY_STEWARD_IDLE_BACKGROUND_MS: String(IDLE_MS),
     },
   })
   // a leads loop with an interval that never fires in a test, and a tick judged stale after three seconds
