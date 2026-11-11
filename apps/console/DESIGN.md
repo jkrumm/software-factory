@@ -133,7 +133,13 @@ it does not.
   around it.
 - **Chain**: the graph fills the viewport on a canvas step, nodes are 320 x 144 IssueCards (an Issue opens its page; a plan
   row is the same card on a dashed outline, "Not filed yet", with its "Not before" date); a blocked edge is solid warn and
-  labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). Under it a schedule puts every
+  labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). **A chain of more than 60 nodes
+  opens collapsed** (`lib/chain-collapse.ts`): every open Issue, the plan rows that may file now (20 per project), and the 6 newest
+  closed Issues beside them are cards; the rest of a project's plan is folded into **group nodes** of the card's size, a dashed
+  card (a plan row's outline) with the count, "Not filed yet" and its reason ("Wait for open Issues to close", "3 steps from
+  filing"), one group per after-depth (four and more share the last), plus one for the closed Issues past the budget. A group is a
+  button that opens in place into its rows; "Fold all" closes them. Folds never show an internal id; the page note says how many
+  nodes are folded. Smaller chains are drawn whole. Under it a schedule puts every
   row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",
   after a break mark on the axis).
 - **Improve**: seven bands, each a Section with full rows of equal StatCards (a shared subgrid keeps header, figure and

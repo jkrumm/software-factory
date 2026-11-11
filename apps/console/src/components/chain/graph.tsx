@@ -1,5 +1,6 @@
 import {
   BaseEdge,
+  ControlButton,
   Controls,
   getSmoothStepPath,
   Handle,
@@ -15,13 +16,12 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ClockIcon, HourglassIcon } from '@phosphor-icons/react'
+import { ClockIcon, CornersOutIcon, HourglassIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
 import type { ChainModel } from '@software-factory/contract'
 import { IssueCard } from '@/components/kit'
 import {
-  type ChainView,
   edgeText,
   isBlocked,
   issueNumber,
@@ -32,12 +32,15 @@ import {
   stateWord,
   waitsForWords,
 } from '@/lib/chain'
+import { type ChainGroup, type CollapsedView } from '@/lib/chain-collapse'
 import { layoutOf } from '@/lib/chain-layout'
+import { GroupCard, groupTitle } from './group-card'
 import { useNow } from '@/lib/now'
 import { cn } from '@/lib/utils'
 
 type ChainNode = ChainModel['nodes'][number]
 type CardNode = Node<{ node: ChainNode; waitsFor: string | null }, 'chain'>
+type GroupNode = Node<{ group: ChainGroup; onOpen: (id: string) => void }, 'folded'>
 
 /** An Issue is the kit's card and a link to its page; a plan row is the same card on a dashed outline, not a link. */
 function Card({ data }: NodeProps<CardNode>) {
@@ -93,7 +96,39 @@ function Card({ data }: NodeProps<CardNode>) {
   )
 }
 
-const NODE_TYPES = { chain: Card }
+/** A folded group: the node's size, a dashed card that opens in place when clicked. */
+function Group({ data }: NodeProps<GroupNode>) {
+  return (
+    <div
+      data-testid="chain-group"
+      data-bucket={data.group.bucket}
+      className="pointer-events-auto"
+      style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
+    >
+      <Handle
+        id="blocked"
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className="opacity-0"
+        style={{ top: '68%' }}
+      />
+      <Handle
+        id="done"
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className="opacity-0"
+        style={{ top: '32%' }}
+      />
+      <GroupCard group={data.group} onOpen={data.onOpen} />
+      <Handle type="source" position={Position.Right} isConnectable={false} className="opacity-0" />
+    </div>
+  )
+}
+
+/** `folded`, not `group`: xyflow styles a node of type `group` as a framed box of its own. */
+const NODE_TYPES = { chain: Card, folded: Group }
 
 type DependencyEdge = Edge<{ blocked: boolean }, 'dependency'>
 
@@ -157,6 +192,8 @@ const CONTROLS_PAD = 56
 const MAX_FIT_ZOOM = 1.4
 const PHONE_WIDTH = 640
 const PHONE_FLOOR_ZOOM = 0.9
+/** A big graph (a chain of hundreds of nodes) is not shrunk past this on a desktop, where a card is still a card: the rest is panned to. */
+const DESKTOP_FLOOR_ZOOM = 0.5
 const FIT = { padding: 0.15, maxZoom: MAX_FIT_ZOOM }
 
 interface Bounds {
@@ -164,6 +201,8 @@ interface Bounds {
   y: number
   w: number
   h: number
+  /** the top of the first column: where a graph too big to fit starts, so the screen opens on the first nodes and not on empty canvas */
+  top: number
 }
 
 /** Centres the graph at the largest zoom that shows it whole (never above 1.4: a graph of two cards fills the canvas instead of floating in it); on a phone it stays legible and starts at the top left. */
@@ -174,7 +213,15 @@ function fitTo(setViewport: ReactFlowInstance['setViewport'], size: { width: num
   const room = size.width - left - PAD
   const whole = Math.min(MAX_FIT_ZOOM, room / b.w, (size.height - 2 * PAD) / b.h)
   if (size.width < PHONE_WIDTH && whole < PHONE_FLOOR_ZOOM) {
-    void setViewport({ x: PAD - b.x * PHONE_FLOOR_ZOOM, y: PAD - b.y * PHONE_FLOOR_ZOOM, zoom: PHONE_FLOOR_ZOOM })
+    void setViewport({ x: PAD - b.x * PHONE_FLOOR_ZOOM, y: PAD - b.top * PHONE_FLOOR_ZOOM, zoom: PHONE_FLOOR_ZOOM })
+    return
+  }
+  if (whole < DESKTOP_FLOOR_ZOOM) {
+    void setViewport({
+      x: left - b.x * DESKTOP_FLOOR_ZOOM,
+      y: PAD - b.y * DESKTOP_FLOOR_ZOOM,
+      zoom: DESKTOP_FLOOR_ZOOM,
+    })
     return
   }
   void setViewport({
@@ -184,20 +231,36 @@ function fitTo(setViewport: ReactFlowInstance['setViewport'], size: { width: num
   })
 }
 
-/** Fits the graph again whenever the canvas changes size (the window, the sidebar, the phone turning); the fit control does the same. */
-function Viewport({ bounds }: { bounds: Bounds }) {
+/** Brings a group that was just opened into view at the floor zoom: its first row near the top, a rank of context to its left. */
+function focusOn(setViewport: ReactFlowInstance['setViewport'], size: { width: number; height: number }, box: Bounds) {
+  if (size.width === 0 || size.height === 0) return
+  const zoom = size.width < PHONE_WIDTH ? PHONE_FLOOR_ZOOM : DESKTOP_FLOOR_ZOOM
+  void setViewport({ x: Math.min(size.width * 0.3, 400) - box.x * zoom, y: PAD - box.y * zoom, zoom })
+}
+
+/**
+ * Fits the graph again whenever the canvas changes size (the window, the sidebar, the phone turning) or its nodes change;
+ * after a group was opened it shows that group instead. The fit control is ours (xyflow's own fit would run beside it and
+ * ignore the floor zoom).
+ */
+function Viewport({ bounds, focus }: { bounds: Bounds; focus: Bounds | null }) {
   const { setViewport } = useReactFlow()
   const width = useStore((state) => state.width)
   const height = useStore((state) => state.height)
   useEffect(() => {
-    fitTo(setViewport, { width, height }, bounds)
-  }, [width, height, bounds, setViewport])
+    if (focus) focusOn(setViewport, { width, height }, focus)
+    else fitTo(setViewport, { width, height }, bounds)
+  }, [width, height, bounds, focus, setViewport])
   return (
-    <Controls
-      position={width < PHONE_WIDTH ? 'top-right' : 'bottom-left'}
-      showInteractive={false}
-      onFitView={() => fitTo(setViewport, { width, height }, bounds)}
-    />
+    <Controls position={width < PHONE_WIDTH ? 'top-right' : 'bottom-left'} showInteractive={false} showFitView={false}>
+      <ControlButton
+        title="Fit view"
+        aria-label="Fit view"
+        onClick={() => fitTo(setViewport, { width, height }, bounds)}
+      >
+        <CornersOutIcon />
+      </ControlButton>
+    </Controls>
   )
 }
 
@@ -242,11 +305,31 @@ function Legend() {
 }
 
 /** The dependency graph: blockers on the left, an arrow into the node that waits. A blocked edge is solid and labelled "blocks", a satisfied one dashed and labelled "done". */
-export default function ChainGraph({ view, resetKey }: { view: ChainView; resetKey: string }) {
-  const { nodes, edges, bounds } = useMemo(() => {
-    const placed = layoutOf(view.nodes, view.edges)
-    const byId = new Map(view.nodes.map((node) => [node.id, node]))
-    const nodes: CardNode[] = view.nodes.map((node) => ({
+export default function ChainGraph({
+  view,
+  resetKey,
+  onOpen,
+  focus,
+}: {
+  view: CollapsedView
+  resetKey: string
+  onOpen: (id: string) => void
+  /** the rows of the group opened last, to bring into view; none: fit the whole graph */
+  focus: string[]
+}) {
+  const { nodes, edges, bounds, focusBox } = useMemo(() => {
+    const placed = layoutOf([...view.nodes, ...view.groups], view.edges)
+    const byId = new Map<string, { title: string }>(view.nodes.map((node) => [node.id, node]))
+    for (const group of view.groups) byId.set(group.id, { title: groupTitle(group) })
+    const groups: GroupNode[] = view.groups.map((group) => ({
+      id: group.id,
+      type: 'folded',
+      position: placed.get(group.id) ?? { x: 0, y: 0 },
+      data: { group, onOpen },
+      ariaRole: 'group',
+      ariaLabel: `${groupTitle(group)}, ${group.repo || 'no project'}, folded`,
+    }))
+    const cards: CardNode[] = view.nodes.map((node) => ({
       id: node.id,
       type: 'chain',
       position: placed.get(node.id) ?? { x: 0, y: 0 },
@@ -273,19 +356,38 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
         markerEnd: { type: MarkerType.ArrowClosed, color: blocked ? 'var(--vx-warn-solid)' : 'var(--vx-faint)' },
       }
     })
+    const nodes: (CardNode | GroupNode)[] = [...cards, ...groups]
     const xs = nodes.map((node) => node.position.x)
     const ys = nodes.map((node) => node.position.y)
     const x = Math.min(...xs)
     const y = Math.min(...ys)
-    const bounds: Bounds = { x, y, w: Math.max(...xs) + NODE_WIDTH - x, h: Math.max(...ys) + NODE_HEIGHT - y }
-    return { nodes, edges, bounds }
-  }, [view])
+    const top = Math.min(...nodes.filter((node) => node.position.x === x).map((node) => node.position.y))
+    const bounds: Bounds = { x, y, top, w: Math.max(...xs) + NODE_WIDTH - x, h: Math.max(...ys) + NODE_HEIGHT - y }
+    const focused = focus.flatMap((id) => {
+      const at = placed.get(id)
+      return at ? [at] : []
+    })
+    const focusBox: Bounds | null =
+      focused.length === 0
+        ? null
+        : {
+            x: Math.min(...focused.map((at) => at.x)),
+            y: Math.min(...focused.map((at) => at.y)),
+            top: 0,
+            w: 0,
+            h: 0,
+          }
+    return { nodes, edges, bounds, focusBox }
+  }, [view, onOpen, focus])
 
   return (
     <div
       role="region"
       aria-label="Dependency chain"
-      className="relative min-h-[30rem] min-w-0 flex-1 overflow-hidden chain-canvas rounded-xl md:min-h-[28rem]"
+      className={cn(
+        'relative min-h-[30rem] min-w-0 flex-1 overflow-hidden chain-canvas rounded-xl md:min-h-[28rem]',
+        view.groups.length > 0 && 'md:min-h-[min(44rem,70vh)]',
+      )}
     >
       <div className="absolute inset-0">
         <ReactFlow
@@ -296,7 +398,7 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
           nodeTypes={NODE_TYPES}
           edgeTypes={EDGE_TYPES}
           fitViewOptions={FIT}
-          minZoom={0.2}
+          minZoom={0.1}
           maxZoom={2}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -305,7 +407,7 @@ export default function ChainGraph({ view, resetKey }: { view: ChainView; resetK
           elementsSelectable={false}
           proOptions={{ hideAttribution: true }}
         >
-          <Viewport bounds={bounds} />
+          <Viewport bounds={bounds} focus={focusBox} />
         </ReactFlow>
       </div>
       <Legend />
